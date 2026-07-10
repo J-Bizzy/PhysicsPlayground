@@ -12,6 +12,7 @@
 
 import Foundation
 import Observation
+import PhysicsCore
 import simd
 
 @MainActor

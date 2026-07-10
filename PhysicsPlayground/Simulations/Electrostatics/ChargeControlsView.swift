@@ -10,6 +10,7 @@
 //  added or grabbed, marked with a white halo in the scene.
 //
 
+import PhysicsCore
 import SwiftUI
 
 struct ChargeControlsView: View {

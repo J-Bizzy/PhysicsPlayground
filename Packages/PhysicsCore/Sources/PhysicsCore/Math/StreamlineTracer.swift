@@ -1,6 +1,6 @@
 //
 //  StreamlineTracer.swift
-//  Physics Playground — Core kernel
+//  PhysicsCore — Math
 //
 //  Domain-agnostic streamline integration: traces curves that follow the
 //  direction of any vector field F(r), by 4th-order Runge–Kutta on the
@@ -17,24 +17,26 @@
 import Foundation
 import simd
 
-nonisolated enum StreamlineTracer {
-    nonisolated struct Config {
+public enum StreamlineTracer {
+    public struct Config: Sendable {
         /// Arc length advanced per RK4 step, in meters.
-        var stepSize = 0.008
-        var maxSteps = 320
+        public var stepSize = 0.008
+        public var maxSteps = 320
         /// A line ends when it comes this close to any of `stopCenters`
         /// (e.g. the charges field lines terminate on).
-        var stopCenters: [SIMD3<Double>] = []
-        var stopRadius = 0.04
+        public var stopCenters: [SIMD3<Double>] = []
+        public var stopRadius = 0.04
         /// Lines also end when they wander this far from `boundsCenter`
         /// ("off to infinity" as far as the room is concerned).
-        var boundsCenter: SIMD3<Double> = .zero
-        var boundsRadius = 0.85
+        public var boundsCenter: SIMD3<Double> = .zero
+        public var boundsRadius = 0.85
+
+        public init() {}
     }
 
     /// Integrates a single streamline from `seed`, following sign·F/|F|.
     /// Returns points spaced ~stepSize apart.
-    static func streamline(
+    public static func streamline(
         from seed: SIMD3<Double>,
         sign: Double,
         field: (SIMD3<Double>) -> SIMD3<Double>,
@@ -80,7 +82,7 @@ nonisolated enum StreamlineTracer {
     /// `count` directions spread nearly uniformly over a unit sphere
     /// (Fibonacci lattice — the standard trick for even spherical coverage).
     /// The usual seeding pattern for streamlines radiating from a point.
-    static func fibonacciSphere(count: Int) -> [SIMD3<Double>] {
+    public static func fibonacciSphere(count: Int) -> [SIMD3<Double>] {
         let goldenAngle = Double.pi * (3 - 5.0.squareRoot())
         return (0..<count).map { i in
             let y = 1 - 2 * (Double(i) + 0.5) / Double(count)

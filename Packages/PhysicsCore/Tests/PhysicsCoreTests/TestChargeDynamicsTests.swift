@@ -1,6 +1,6 @@
 //
 //  TestChargeDynamicsTests.swift
-//  PhysicsPlaygroundTests
+//  PhysicsCoreTests
 //
 //  Tests for the velocity-Verlet probe integrator. Because the integrator
 //  takes the field as a closure, we can feed it analytic fields with exact
@@ -9,11 +9,16 @@
 
 import XCTest
 import simd
-@testable import PhysicsPlayground
+@testable import PhysicsCore
 
 final class TestChargeDynamicsTests: XCTestCase {
 
     typealias Probe = TestChargeDynamics.ProbeState
+
+    // Realistic probe values (10 nC, 0.5 g) — the same ones the app's
+    // FieldModel uses, inlined here so PhysicsCore tests stay app-independent.
+    private let probeChargeMagnitude = 1e-8
+    private let probeMass = 5e-4
 
     /// Zero field → Newton's first law: straight line at constant velocity.
     func testZeroFieldGivesUniformMotion() {
@@ -57,8 +62,8 @@ final class TestChargeDynamicsTests: XCTestCase {
     /// justifies choosing velocity Verlet.
     func testEnergyConservationNearPointCharge() {
         let source = PointCharge(position: .zero, charge: -1e-6)
-        let q = FieldModel.probeChargeMagnitude
-        let m = FieldModel.probeMass
+        let q = probeChargeMagnitude
+        let m = probeMass
 
         func totalEnergy(_ state: Probe) -> Double {
             let kinetic = 0.5 * m * simd_length_squared(state.velocity)
@@ -92,7 +97,7 @@ final class TestChargeDynamicsTests: XCTestCase {
         for _ in 0..<200 {
             state = TestChargeDynamics.step(
                 state,
-                chargeToMassRatio: FieldModel.probeChargeMagnitude / FieldModel.probeMass,
+                chargeToMassRatio: probeChargeMagnitude / probeMass,
                 dt: 0.005
             ) { ElectricField.vector(at: $0, dueTo: source) }
         }

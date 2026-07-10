@@ -1,6 +1,6 @@
 //
 //  EquipotentialSurfaceTests.swift
-//  PhysicsPlaygroundTests
+//  PhysicsCoreTests
 //
 //  Tests for the marching-tetrahedra equipotential extractor. The strongest
 //  check exploits the exact geometry: for a single point charge, V = level
@@ -9,7 +9,7 @@
 
 import XCTest
 import simd
-@testable import PhysicsPlayground
+@testable import PhysicsCore
 
 final class EquipotentialSurfaceTests: XCTestCase {
 

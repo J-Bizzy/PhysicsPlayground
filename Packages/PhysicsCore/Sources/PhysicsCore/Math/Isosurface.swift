@@ -1,6 +1,6 @@
 //
 //  Isosurface.swift
-//  Physics Playground — Core kernel
+//  PhysicsCore — Math
 //
 //  Domain-agnostic isosurface extraction: triangulates the set of points
 //  where any scalar field f(r) equals a chosen level, via marching
@@ -20,11 +20,11 @@
 import Foundation
 import simd
 
-nonisolated enum Isosurface {
+public enum Isosurface {
     /// Flat triangle list (every 3 consecutive points form one triangle) for
     /// the isosurface f = `level` inside the box. Triangles are wound so the
     /// right-hand-rule normal points along `outwardDirection`.
-    static func triangles(
+    public static func triangles(
         level: Double,
         scalar: (SIMD3<Double>) -> Double,
         outwardDirection: (SIMD3<Double>) -> SIMD3<Double>,

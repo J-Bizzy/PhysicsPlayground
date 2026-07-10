@@ -1,6 +1,6 @@
 //
-//  PhysicsPlaygroundTests.swift
-//  PhysicsPlaygroundTests
+//  ElectricFieldTests.swift
+//  PhysicsCoreTests
 //
 //  Unit tests for the physics layer. These exercise Coulomb's Law and
 //  superposition directly — no RealityKit, no rendering — which is exactly
@@ -9,7 +9,7 @@
 
 import XCTest
 import simd
-@testable import PhysicsPlayground
+@testable import PhysicsCore
 
 final class ElectricFieldTests: XCTestCase {
 

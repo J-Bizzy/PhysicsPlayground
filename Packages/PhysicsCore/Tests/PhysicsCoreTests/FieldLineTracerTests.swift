@@ -1,6 +1,6 @@
 //
 //  FieldLineTracerTests.swift
-//  PhysicsPlaygroundTests
+//  PhysicsCoreTests
 //
 //  Tests for the RK4 field-line tracer. Like all physics tests these run
 //  on plain Swift values — no rendering involved.
@@ -8,7 +8,7 @@
 
 import XCTest
 import simd
-@testable import PhysicsPlayground
+@testable import PhysicsCore
 
 final class FieldLineTracerTests: XCTestCase {
 

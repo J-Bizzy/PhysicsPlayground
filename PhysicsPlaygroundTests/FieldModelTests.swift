@@ -4,10 +4,11 @@
 //
 //  Tests for the multi-charge app state: add/remove/select behavior and the
 //  selected-charge bindings the control panels use. Superposition math itself
-//  is covered in PhysicsPlaygroundTests.
+//  is covered in PhysicsCore's ElectricFieldTests.
 //
 
 import XCTest
+import PhysicsCore
 import simd
 @testable import PhysicsPlayground
 

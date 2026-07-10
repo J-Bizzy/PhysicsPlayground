@@ -1,10 +1,10 @@
 //
 //  FieldLineTracer.swift
-//  Physics Playground — Electrostatics module
+//  PhysicsCore — Electromagnetism
 //
 //  Electric field lines are streamlines of E, so this wrapper owns only the
 //  electrostatics *policy* — where lines seed and where they terminate —
-//  and delegates the RK4 integration to Core's StreamlineTracer.
+//  and delegates the RK4 integration to Math's StreamlineTracer.
 //
 //  Seeding: every charge gets a small Fibonacci sphere of seed points.
 //  Positives are traced along +E (field lines begin there); negatives are
@@ -17,20 +17,22 @@
 import Foundation
 import simd
 
-nonisolated enum FieldLineTracer {
-    nonisolated struct Config {
+public enum FieldLineTracer {
+    public struct Config: Sendable {
         /// Arc length advanced per RK4 step, in meters.
-        var stepSize = 0.008
-        var maxSteps = 320
+        public var stepSize = 0.008
+        public var maxSteps = 320
         /// Seeds start this far from the charge center…
-        var seedRadius = 0.05
+        public var seedRadius = 0.05
         /// …and a line ends when it comes this close to any charge.
         /// Must be smaller than seedRadius or lines would die at birth.
-        var terminationRadius = 0.04
+        public var terminationRadius = 0.04
         /// Lines also end when they wander this far from `boundsCenter`.
-        var boundsCenter: SIMD3<Double> = .zero
-        var boundsRadius = 0.85
-        var seedsPerCharge = 14
+        public var boundsCenter: SIMD3<Double> = .zero
+        public var boundsRadius = 0.85
+        public var seedsPerCharge = 14
+
+        public init() {}
 
         var streamlineConfig: StreamlineTracer.Config {
             var config = StreamlineTracer.Config()
@@ -45,7 +47,7 @@ nonisolated enum FieldLineTracer {
 
     /// Traces all field lines for the given charges. Each returned line is a
     /// polyline of points spaced ~stepSize apart.
-    static func trace(charges: [PointCharge], config: Config) -> [[SIMD3<Double>]] {
+    public static func trace(charges: [PointCharge], config: Config) -> [[SIMD3<Double>]] {
         var lines: [[SIMD3<Double>]] = []
         for charge in charges {
             let direction: Double = charge.isPositive ? 1 : -1
@@ -59,7 +61,7 @@ nonisolated enum FieldLineTracer {
     }
 
     /// Integrates a single line from `seed`, following sign·E/|E|.
-    static func traceLine(
+    public static func traceLine(
         from seed: SIMD3<Double>,
         sign: Double,
         charges: [PointCharge],
@@ -75,7 +77,7 @@ nonisolated enum FieldLineTracer {
         )
     }
 
-    static func fibonacciSphere(count: Int) -> [SIMD3<Double>] {
+    public static func fibonacciSphere(count: Int) -> [SIMD3<Double>] {
         StreamlineTracer.fibonacciSphere(count: count)
     }
 }

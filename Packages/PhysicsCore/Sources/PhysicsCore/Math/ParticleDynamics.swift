@@ -1,6 +1,6 @@
 //
 //  ParticleDynamics.swift
-//  Physics Playground — Core kernel
+//  PhysicsCore — Math
 //
 //  Domain-agnostic particle kinematics: velocity Verlet over an arbitrary
 //  acceleration field a(r). Every simulation that moves a particle under a
@@ -22,19 +22,19 @@
 import Foundation
 import simd
 
-nonisolated enum ParticleDynamics {
-    nonisolated struct State: Equatable {
-        var position: SIMD3<Double>
-        var velocity: SIMD3<Double>
+public enum ParticleDynamics {
+    public struct State: Equatable, Sendable {
+        public var position: SIMD3<Double>
+        public var velocity: SIMD3<Double>
 
-        init(position: SIMD3<Double>, velocity: SIMD3<Double> = .zero) {
+        public init(position: SIMD3<Double>, velocity: SIMD3<Double> = .zero) {
             self.position = position
             self.velocity = velocity
         }
     }
 
     /// Advances the particle by one velocity-Verlet step of length `dt`.
-    static func step(
+    public static func step(
         _ state: State,
         dt: Double,
         acceleration: (SIMD3<Double>) -> SIMD3<Double>
@@ -49,7 +49,7 @@ nonisolated enum ParticleDynamics {
 
     /// Advances by `dt` split into `substeps` Verlet steps — call this per
     /// rendered frame so accuracy doesn't depend on the display frame rate.
-    static func step(
+    public static func step(
         _ state: State,
         dt: Double,
         substeps: Int,
