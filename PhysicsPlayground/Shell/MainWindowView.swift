@@ -14,11 +14,16 @@ struct MainWindowView: View {
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
-        if let module = appModel.activeModule {
-            ModuleHostView(module: module)
-                .id(module.id)
-        } else {
-            HubView()
+        // The NavigationStack is what gives the window a top bar: without a
+        // navigation context, visionOS silently drops topBarLeading/trailing
+        // toolbar items (the back and reset buttons).
+        NavigationStack {
+            if let module = appModel.activeModule {
+                ModuleHostView(module: module)
+                    .id(module.id)
+            } else {
+                HubView()
+            }
         }
     }
 }
