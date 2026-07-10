@@ -14,6 +14,7 @@
 
 import SwiftUI
 import RealityKit
+import RenderKit
 
 struct FieldSpaceView: View {
     @Environment(FieldModel.self) private var model

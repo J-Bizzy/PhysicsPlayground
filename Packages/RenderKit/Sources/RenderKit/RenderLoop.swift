@@ -1,6 +1,6 @@
 //
 //  RenderLoop.swift
-//  Physics Playground — Core kernel
+//  RenderKit
 //
 //  The observation-driven render loop every simulation renderer uses:
 //  run the render closure once inside withObservationTracking, get told the
@@ -14,16 +14,18 @@ import Foundation
 import Observation
 
 @MainActor
-final class RenderLoop {
+public final class RenderLoop {
     private var render: (@MainActor () -> Void)?
 
+    public init() {}
+
     /// Renders now, then re-renders on every observed change until `stop()`.
-    func start(_ render: @escaping @MainActor () -> Void) {
+    public func start(_ render: @escaping @MainActor () -> Void) {
         self.render = render
         tick()
     }
 
-    func stop() {
+    public func stop() {
         render = nil
     }
 

@@ -1,6 +1,6 @@
 //
 //  Grabbable.swift
-//  Physics Playground — Core kernel
+//  RenderKit
 //
 //  Everything about making entities grabbable with visionOS 26's
 //  ManipulationComponent, in one place:
@@ -18,10 +18,10 @@ import SwiftUI
 import simd
 
 @MainActor
-enum Grabbable {
+public enum Grabbable {
     /// Makes an entity grabbable with gaze+pinch or direct touch. The
     /// collision shape is bigger than the visible mesh so it's easy to grab.
-    static func configure(_ entity: ModelEntity, collisionRadius: Float) {
+    public static func configure(_ entity: ModelEntity, collisionRadius: Float) {
         ManipulationComponent.configureEntity(
             entity,
             collisionShapes: [.generateSphere(radius: collisionRadius)]
@@ -39,14 +39,16 @@ enum Grabbable {
 /// Routes manipulation events to per-entity callbacks. Positions are in
 /// scene (immersive-space) coordinates.
 @MainActor
-final class ManipulationRouter {
-    var onBegin: ((_ entityName: String, _ position: SIMD3<Float>) -> Void)?
-    var onMove: ((_ entityName: String, _ position: SIMD3<Float>) -> Void)?
-    var onEnd: ((_ entityName: String, _ position: SIMD3<Float>) -> Void)?
+public final class ManipulationRouter {
+    public var onBegin: ((_ entityName: String, _ position: SIMD3<Float>) -> Void)?
+    public var onMove: ((_ entityName: String, _ position: SIMD3<Float>) -> Void)?
+    public var onEnd: ((_ entityName: String, _ position: SIMD3<Float>) -> Void)?
+
+    public init() {}
 
     /// Subscribes to the three lifecycle events; retain the returned
     /// subscriptions for as long as the scene lives.
-    func subscriptions(for content: RealityViewContent) -> [EventSubscription] {
+    public func subscriptions(for content: RealityViewContent) -> [EventSubscription] {
         [
             content.subscribe(to: ManipulationEvents.WillBegin.self) { [weak self] event in
                 self?.onBegin?(event.entity.name, event.entity.position(relativeTo: nil))

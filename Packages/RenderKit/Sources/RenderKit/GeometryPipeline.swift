@@ -1,6 +1,6 @@
 //
 //  GeometryPipeline.swift
-//  Physics Playground — Core kernel
+//  RenderKit
 //
 //  A coalescing background worker for expensive geometry (streamline
 //  tracing, isosurface marching, trail meshes). The frame-rate contract for
@@ -14,13 +14,13 @@
 import Foundation
 
 @MainActor
-final class GeometryPipeline<Job: Sendable, Output: Sendable> {
+public final class GeometryPipeline<Job: Sendable, Output: Sendable> {
     private let compute: @Sendable (Job) -> Output
     private let apply: @MainActor (Output) -> Void
     private var pendingJob: Job?
     private var isRunning = false
 
-    init(
+    public init(
         compute: @escaping @Sendable (Job) -> Output,
         apply: @escaping @MainActor (Output) -> Void
     ) {
@@ -28,7 +28,7 @@ final class GeometryPipeline<Job: Sendable, Output: Sendable> {
         self.apply = apply
     }
 
-    func submit(_ job: Job) {
+    public func submit(_ job: Job) {
         pendingJob = job
         guard !isRunning else { return }
         isRunning = true

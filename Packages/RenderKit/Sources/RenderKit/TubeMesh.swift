@@ -1,6 +1,6 @@
 //
 //  TubeMesh.swift
-//  Physics Playground — Core kernel
+//  RenderKit
 //
 //  Builds one MeshResource containing any set of polylines as thin tubes.
 //  A single mesh in a single ModelEntity keeps the draw count at 1 no
@@ -16,8 +16,8 @@ import Foundation
 import RealityKit
 import simd
 
-@MainActor enum TubeMesh {
-    static func tube(lines: [[SIMD3<Float>]], radius: Float = 0.0016, sides: Int = 5) -> MeshResource? {
+@MainActor public enum TubeMesh {
+    public static func tube(lines: [[SIMD3<Float>]], radius: Float = 0.0016, sides: Int = 5) -> MeshResource? {
         var positions: [SIMD3<Float>] = []
         var normals: [SIMD3<Float>] = []
         var indices: [UInt32] = []

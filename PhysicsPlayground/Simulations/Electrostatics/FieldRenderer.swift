@@ -16,6 +16,7 @@
 import Foundation
 import PhysicsCore
 import RealityKit
+import RenderKit
 import SwiftUI
 import simd
 
