@@ -1,9 +1,9 @@
 //
 //  FieldRenderer.swift
-//  Physics Playground — Electrostatics module
+//  Physics Playground — Electromagnetism module
 //
-//  Translates electrostatics state into RealityKit entities, built on the
-//  Core kernel: RenderLoop (observation-driven re-render), VectorFieldArrows
+//  Translates electrostatics state into RealityKit entities, built on
+//  RenderKit: RenderLoop (observation-driven re-render), VectorFieldArrows
 //  (pooled arrow grid), GeometryPipeline (background line/shell rebuilds
 //  with coalescing), TubeMesh (field lines), Grabbable (manipulation).
 //
@@ -37,14 +37,15 @@ final class FieldRenderer {
     /// Entity name for the probe (charges use their UUID string).
     static let probeEntityName = "probe"
 
-    // MARK: Visual constants (the app's "legend" — keep consistent everywhere)
-    static let positiveColor = UIColor.systemRed
-    static let negativeColor = UIColor.systemBlue
-    static let probePositiveColor = UIColor.systemGreen
-    static let probeNegativeColor = UIColor.systemPurple
-    static let lineColor = UIColor(red: 0.45, green: 0.85, blue: 1.0, alpha: 1)
-    static let positiveShellColor = UIColor.systemOrange
-    static let negativeShellColor = UIColor.systemIndigo
+    // MARK: Visual constants — always the DesignTokens conventions, so the
+    // in-space entities and the shell-rendered legend can never drift apart.
+    static let positiveColor = DesignTokens.Palette.positiveUI
+    static let negativeColor = DesignTokens.Palette.negativeUI
+    static let probePositiveColor = DesignTokens.Palette.probePositiveUI
+    static let probeNegativeColor = DesignTokens.Palette.probeNegativeUI
+    static let lineColor = DesignTokens.Palette.fieldLineUI
+    static let positiveShellColor = DesignTokens.Palette.positiveShellUI
+    static let negativeShellColor = DesignTokens.Palette.negativeShellUI
     static let chargeRadius: Float = 0.03
     static let probeRadius: Float = 0.018
     /// Arrows are hidden inside this distance of a charge, where the 1/r²
@@ -281,7 +282,7 @@ final class FieldRenderer {
         setAccessibilityLabel(on: sphere, for: charge)
 
         // Translucent halo shown on the selected charge (the one the sliders edit).
-        var haloMaterial = UnlitMaterial(color: .white)
+        var haloMaterial = UnlitMaterial(color: DesignTokens.Palette.selectionHaloUI)
         haloMaterial.blending = .transparent(opacity: 0.25)
         let halo = ModelEntity(
             mesh: .generateSphere(radius: Self.chargeRadius * 1.35),

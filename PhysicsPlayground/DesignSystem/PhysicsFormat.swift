@@ -1,6 +1,6 @@
 //
 //  PhysicsFormat.swift
-//  Physics Playground — Core kernel
+//  Physics Playground — Design system
 //
 //  Number formatting for stats panels across all simulations: physics
 //  values span many orders of magnitude, so the house style is readable

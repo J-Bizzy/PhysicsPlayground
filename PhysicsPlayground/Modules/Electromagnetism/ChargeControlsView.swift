@@ -1,6 +1,6 @@
 //
 //  ChargeControlsView.swift
-//  PhysicsPlayground
+//  Physics Playground — Electromagnetism module
 //
 //  The charge editing controls, shared by the main window and the floating
 //  in-space panel so the two can never drift apart. `compact` trims labels
@@ -29,7 +29,7 @@ struct ChargeControlsView: View {
                     Label("Add +", systemImage: "plus.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .tint(.red)
+                .tint(DesignTokens.Palette.positive)
                 .accessibilityLabel("Add positive charge")
 
                 Button {
@@ -38,7 +38,7 @@ struct ChargeControlsView: View {
                     Label("Add −", systemImage: "minus.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .tint(.blue)
+                .tint(DesignTokens.Palette.negative)
                 .accessibilityLabel("Add negative charge")
             }
             .buttonStyle(.borderedProminent)
@@ -91,7 +91,7 @@ struct ChargeControlsView: View {
                     )
                     .frame(maxWidth: .infinity)
                 }
-                .tint(model.probeIsPositive ? .green : .purple)
+                .tint(model.probeIsPositive ? DesignTokens.Palette.probePositive : DesignTokens.Palette.probeNegative)
                 .disabled(model.charges.isEmpty)
                 .accessibilityHint("A small charge that accelerates along the field")
 

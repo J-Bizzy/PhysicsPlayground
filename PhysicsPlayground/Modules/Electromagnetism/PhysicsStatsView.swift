@@ -1,6 +1,6 @@
 //
 //  PhysicsStatsView.swift
-//  Physics Playground — Electrostatics module
+//  Physics Playground — Electromagnetism module
 //
 //  Live physics readout anchored to the test charge: the field, potential,
 //  force, acceleration, and speed at its current position, updating every

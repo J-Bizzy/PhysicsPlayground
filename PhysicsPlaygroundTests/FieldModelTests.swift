@@ -226,4 +226,29 @@ final class FieldModelTests: XCTestCase {
         XCTAssertEqual(model.probeStatus, .captured,
                        "a positive probe falling into a negative charge must be captured")
     }
+
+    // MARK: Reset (the shell's Reset button calls this via the descriptor)
+
+    func testResetRestoresFreshlyEnteredState() {
+        let model = FieldModel()
+        model.addCharge(positive: false)
+        model.addCharge(positive: true)
+        model.dropProbe()
+        model.showArrows = false
+        model.showLines = false
+        model.probeIsPositive = false
+
+        model.reset()
+
+        XCTAssertEqual(model.charges.count, 1)
+        XCTAssertTrue(model.charges[0].isPositive)
+        XCTAssertEqual(model.charges[0].position, FieldModel.regionCenter)
+        XCTAssertEqual(model.selectedChargeID, model.charges[0].id)
+        XCTAssertNil(model.probe)
+        XCTAssertEqual(model.probeStatus, .none)
+        XCTAssertTrue(model.probeIsPositive)
+        XCTAssertTrue(model.showArrows)
+        XCTAssertTrue(model.showLines)
+        XCTAssertTrue(model.showEquipotentials)
+    }
 }

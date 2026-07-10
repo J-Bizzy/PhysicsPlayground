@@ -1,6 +1,6 @@
 //
 //  FieldSpaceView.swift
-//  Physics Playground — Electrostatics module
+//  Physics Playground — Electromagnetism module
 //
 //  The electrostatics immersive scene, hosted by PlaygroundSpaceView.
 //  RealityView's make closure installs the entity tree; from then on

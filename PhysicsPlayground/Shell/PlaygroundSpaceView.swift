@@ -1,11 +1,11 @@
 //
 //  PlaygroundSpaceView.swift
-//  Physics Playground
+//  Physics Playground — Shell
 //
 //  The single shared immersive space. Its content is whatever the active
-//  simulation's descriptor builds; `.id(sim.id)` gives each simulation its
-//  own view identity so per-sim @State (like renderers) is rebuilt cleanly
-//  on switch, while sim *models* live on in AppModel.
+//  module's descriptor builds; `.id(module.id)` gives each module its own
+//  view identity so per-module @State (like renderers) is rebuilt cleanly
+//  on switch, while module *models* live on in AppModel.
 //
 
 import SwiftUI
@@ -17,9 +17,9 @@ struct PlaygroundSpaceView: View {
 
     var body: some View {
         Group {
-            if let simulation = appModel.activeSimulation {
-                simulation.makeScene()
-                    .id(simulation.id)
+            if let module = appModel.activeModule {
+                module.makeScene()
+                    .id(module.id)
             }
         }
         .onAppear { appModel.isImmersiveSpaceOpen = true }

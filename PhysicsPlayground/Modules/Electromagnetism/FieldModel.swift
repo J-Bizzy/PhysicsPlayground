@@ -1,6 +1,6 @@
 //
 //  FieldModel.swift
-//  Physics Playground — Electrostatics module
+//  Physics Playground — Electromagnetism module
 //
 //  The single source of truth for app state, shared between the SwiftUI
 //  control window, the in-space panels, and the immersive scene. It owns the
@@ -79,9 +79,24 @@ final class FieldModel {
     private var placementIndex = 1
 
     init() {
+        charges = []
+        reset()
+    }
+
+    /// Returns the module to its freshly-entered state: one positive charge
+    /// at the home center, no probe, all display layers on. Wired to the
+    /// shell's Reset button through the module descriptor.
+    func reset() {
         let first = PointCharge(position: Self.regionCenter, charge: Self.defaultMagnitude)
         charges = [first]
         selectedChargeID = first.id
+        probe = nil
+        probeStatus = .none
+        probeIsPositive = true
+        showArrows = true
+        showLines = true
+        showEquipotentials = true
+        placementIndex = 1
     }
 
     var selectedCharge: PointCharge? {
