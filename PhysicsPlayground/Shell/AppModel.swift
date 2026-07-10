@@ -32,4 +32,13 @@ final class AppModel {
         electromagnetism = model
         return model
     }
+
+    private var kinematics: KinematicsModel?
+
+    var kinematicsModel: KinematicsModel {
+        if let kinematics { return kinematics }
+        let model = KinematicsModel()
+        kinematics = model
+        return model
+    }
 }

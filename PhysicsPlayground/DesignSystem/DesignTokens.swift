@@ -29,6 +29,9 @@ enum DesignTokens {
         static let positiveShellUI: UIColor = .systemOrange
         static let negativeShellUI: UIColor = .systemIndigo
         static let selectionHaloUI: UIColor = .white
+        static let projectileUI: UIColor = .systemOrange
+        static let predictedArcUI: UIColor = .white
+        static let launcherUI: UIColor = .systemGray
 
         // SwiftUI twins — used by controls, legends, and hub cards.
         static let positive = Color(uiColor: positiveUI)
@@ -39,11 +42,14 @@ enum DesignTokens {
         static let positiveShell = Color(uiColor: positiveShellUI)
         static let negativeShell = Color(uiColor: negativeShellUI)
         static let selectionHalo = Color(uiColor: selectionHaloUI)
+        static let projectile = Color(uiColor: projectileUI)
+        static let predictedArc = Color(uiColor: predictedArcUI)
         /// The bright end of the arrow-strength ramp (see VectorFieldArrows).
         static let arrowStrong = Color.yellow
 
         // Module accent colors, one per catalog entry.
         static let electromagnetismAccent = Color.yellow
+        static let kinematicsAccent = Color.orange
     }
 
     // MARK: Panel metrics

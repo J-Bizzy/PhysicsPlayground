@@ -76,6 +76,7 @@ enum ModuleCatalog {
     static func all(appModel: AppModel) -> [ModuleDescriptor] {
         [
             ElectromagnetismModule.descriptor(appModel: appModel),
+            KinematicsModule.descriptor(appModel: appModel),
         ]
     }
 }
