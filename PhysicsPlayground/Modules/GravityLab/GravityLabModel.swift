@@ -27,18 +27,40 @@ import simd
 @MainActor
 @Observable
 final class GravityLabModel {
+    // MARK: Modes
+
+    enum Mode: Equatable {
+        /// The solar system: Sun-centered, 1 AU = 0.35 m.
+        case solarSystem
+        /// Earth–Moon–satellite: Lagrange laboratory, Moon's orbit = 0.5 m.
+        case lagrange
+    }
+
+    private(set) var mode: Mode = .solarSystem
+
     // MARK: Scale mappings (the only two numbers between sim and room)
 
-    /// Room meters per astronomical unit.
+    /// Room meters per astronomical unit (solar system mode).
     nonisolated static let metersPerAU = 0.35
+    /// Real Earth–Moon separation, m.
+    nonisolated static let earthMoonSeparation = 3.844e8
+    /// Room meters for the Earth–Moon separation (Lagrange mode).
+    nonisolated static let metersPerEarthMoon = 0.5
     /// Simulated days per real second at 1× speed.
     nonisolated static let daysPerSecond = 3.0
-    /// Sim m/s per display m/s when throwing: tuned so a relaxed ~0.35 m/s
-    /// hand toss imparts roughly Earth's orbital speed (~30 km/s).
-    nonisolated static let throwVelocityScale = 8.6e4
+    /// Sim m/s per display m/s when throwing, per mode: tuned so a relaxed
+    /// ~0.35 m/s hand toss imparts roughly the natural orbital speed of
+    /// each scene (~30 km/s solar, ~1 km/s around Earth).
+    nonisolated static let solarThrowVelocityScale = 8.6e4
+    nonisolated static let lagrangeThrowVelocityScale = 2.9e3
 
-    nonisolated static let displayToSim = CelestialBody.astronomicalUnit / metersPerAU
-    nonisolated static let simToDisplay = metersPerAU / CelestialBody.astronomicalUnit
+    var throwVelocityScale: Double {
+        mode == .solarSystem ? Self.solarThrowVelocityScale : Self.lagrangeThrowVelocityScale
+    }
+
+    /// Sim meters per display meter (mode-dependent).
+    private(set) var displayToSim = CelestialBody.astronomicalUnit / metersPerAU
+    var simToDisplay: Double { 1 / displayToSim }
 
     // MARK: Budgets & integration limits
 
@@ -231,6 +253,7 @@ final class GravityLabModel {
         guard bodies.contains(where: { $0.id == id }) else { return }
         heldID = id
         selectedID = id
+        capturedPointName = nil
         holdSamples.removeAll()
         hold(id: id, at: displayPoint, timestamp: timestamp)
     }
@@ -238,7 +261,7 @@ final class GravityLabModel {
     /// `displayPoint` is in room coordinates relative to the system center.
     func hold(id: UUID, at displayPoint: SIMD3<Double>, timestamp: Double = CACurrentMediaTime()) {
         guard let index = bodies.firstIndex(where: { $0.id == id }) else { return }
-        bodies[index].body.position = displayPoint * Self.displayToSim
+        bodies[index].body.position = displayPoint * displayToSim
         bodies[index].body.velocity = .zero
         guard heldID == id else { return }
         holdSamples.append((timestamp, displayPoint))
@@ -250,7 +273,7 @@ final class GravityLabModel {
         let window = holdSamples.filter { timestamp - $0.time < 0.12 }
         guard let first = window.first, let last = window.last,
               last.time - first.time > 0.02 else { return .zero }
-        return Self.throwVelocityScale * (last.position - first.position) / (last.time - first.time)
+        return throwVelocityScale * (last.position - first.position) / (last.time - first.time)
     }
 
     func release(id: UUID, timestamp: Double = CACurrentMediaTime()) {
@@ -263,21 +286,110 @@ final class GravityLabModel {
         bodies[index].body.velocity = currentHandVelocity(timestamp: timestamp)
         bodies[index].trail.removeAll()
         bodies[index].lastTrailPosition = nil
+
+        // Lagrange mode: releasing near one of the five points matches the
+        // body's velocity to the rotating frame ("station insertion"), so
+        // the user can experience which points actually hold — L4/L5 do,
+        // L1/L2/L3 drift off within days. Real dynamics from then on.
+        if mode == .lagrange, let (name, point) = nearestLagrangePoint(
+            to: bodies[index].body.position, within: 0.06 * displayToSim) {
+            if let pair = earthMoonPair() {
+                bodies[index].body.position = point
+                bodies[index].body.velocity = Lagrange.corotatingVelocity(
+                    at: point, primary: pair.primary, secondary: pair.secondary)
+                capturedPointName = name
+            }
+        } else {
+            capturedPointName = nil
+        }
     }
 
     var heldBodyID: UUID? { heldID }
 
     /// Predicted path (sim coordinates) of the held body if released with
     /// the current hand velocity — the "orbit you're about to create".
+    /// Lookahead matches the scene: ~600 days solar, ~17 days Earth–Moon.
     func heldPrediction(timestamp: Double = CACurrentMediaTime()) -> [SIMD3<Double>] {
         guard let heldID, let index = bodies.firstIndex(where: { $0.id == heldID }) else { return [] }
         var snapshot = bodies.map(\.body)
         snapshot[index].velocity = currentHandVelocity(timestamp: timestamp)
         return NBody.predictedPath(
             bodies: snapshot, of: index,
-            dt: 12 * 3600, steps: 1200, pointStride: 6,
+            dt: mode == .solarSystem ? 12 * 3600 : 1200,
+            steps: 1200, pointStride: 6,
             gravitationalConstant: effectiveG
         )
+    }
+
+    // MARK: Lagrange mode
+
+    /// Which point the satellite was inserted at, for the explanation.
+    private(set) var capturedPointName: String?
+
+    private func earthMoonPair() -> (primary: CelestialBody, secondary: CelestialBody)? {
+        guard mode == .lagrange,
+              let earth = bodies.first(where: { $0.body.name == "Earth" })?.body,
+              let moon = bodies.first(where: { $0.body.name == "Moon" })?.body
+        else { return nil }
+        return (earth, moon)
+    }
+
+    /// The five points for the live Earth–Moon geometry — they co-rotate
+    /// with the Moon as it orbits.
+    var lagrangePoints: [(name: String, position: SIMD3<Double>)] {
+        guard let pair = earthMoonPair() else { return [] }
+        return Lagrange.points(primary: pair.primary, secondary: pair.secondary,
+                               gravitationalConstant: effectiveG).all
+    }
+
+    private func nearestLagrangePoint(
+        to position: SIMD3<Double>, within radius: Double
+    ) -> (String, SIMD3<Double>)? {
+        lagrangePoints
+            .map { ($0.name, $0.position) }
+            .min { simd_distance($0.1, position) < simd_distance($1.1, position) }
+            .flatMap { simd_distance($0.1, position) < radius ? $0 : nil }
+    }
+
+    static let lagrangeExplanations: [String: String] = [
+        "L1": "L1 balances Earth's pull, the Moon's pull, and the orbit's rotation — but it's a saddle point: any nudge grows, so real L1 missions burn fuel for station-keeping. Watch your satellite slide off within days.",
+        "L2": "L2 sits beyond the Moon, where the combined pull of both bodies speeds a satellite up to match the Moon's orbit. Unstable like L1 — the Sun–Earth L2 is where JWST lives, on a slowly maintained halo orbit.",
+        "L3": "L3 hides on the far side of Earth from the Moon — the science-fiction 'counter-Earth' spot. It's the most weakly unstable of the three colinear points, but still won't hold without correction.",
+        "L4": "L4 leads the Moon by 60°, forming an equilateral triangle — and it's genuinely stable: displaced satellites orbit *around* the point (watch the trail 'tadpole'). Jupiter's L4/L5 hold thousands of Trojan asteroids.",
+        "L5": "L5 trails the Moon by 60° — the mirror of L4 and just as stable. Proposed home for space colonies since the 1970s precisely because things parked here stay.",
+    ]
+
+    /// Rebuilds the scene as Earth–Moon–satellite at Lagrange scale
+    /// (the Moon's real orbit becomes half a meter of room).
+    func enterLagrangeMode() {
+        mode = .lagrange
+        displayToSim = Self.earthMoonSeparation / Self.metersPerEarthMoon
+        bodies.removeAll()
+        heldID = nil
+        holdSamples.removeAll()
+        capturedPointName = nil
+        simulatedDays = 0
+        timeScale = 1
+        isPaused = false
+
+        let (earth, moon) = Lagrange.earthMoonSystem(gravitationalConstant: effectiveG)
+        bodies.append(OrbitingBody(id: UUID(), body: earth, displayRadius: 0.045))
+        bodies.append(OrbitingBody(id: UUID(), body: moon, displayRadius: 0.018))
+
+        // The satellite starts near (not at) L4 — grab it and place it.
+        var satellite = CelestialBody(name: "Satellite", mass: 1e3, radius: 5)
+        let l4 = Lagrange.points(primary: earth, secondary: moon,
+                                 gravitationalConstant: effectiveG).l4
+        satellite.position = l4 + SIMD3(0.06 * Self.earthMoonSeparation, 0, 0)
+        satellite.velocity = Lagrange.corotatingVelocity(at: satellite.position,
+                                                         primary: earth, secondary: moon)
+        let orbiting = OrbitingBody(id: UUID(), body: satellite, displayRadius: 0.008)
+        bodies.append(orbiting)
+        selectedID = orbiting.id
+    }
+
+    func exitLagrangeMode() {
+        reset()
     }
 
     // MARK: Stepping
@@ -311,7 +423,7 @@ final class GravityLabModel {
     /// Trail points are dropped by distance traveled (about 8 mm of room
     /// space) so trails look smooth at every time scale.
     private func appendTrailPoints() {
-        let spacing = 0.008 * Self.displayToSim
+        let spacing = 0.008 * displayToSim
         for index in bodies.indices where bodies[index].id != heldID {
             let position = bodies[index].body.position
             if let last = bodies[index].lastTrailPosition,
@@ -335,7 +447,7 @@ final class GravityLabModel {
             for other in (index + 1)..<bodies.count {
                 let a = bodies[index], b = bodies[other]
                 if a.id == heldID || b.id == heldID { continue }
-                let distance = simd_distance(a.body.position, b.body.position) * Self.simToDisplay
+                let distance = simd_distance(a.body.position, b.body.position) * simToDisplay
                 if distance < 0.85 * (a.displayRadius + b.displayRadius) {
                     let merged = NBody.merged(a.body, b.body)
                     let survivor = OrbitingBody(
@@ -413,6 +525,9 @@ final class GravityLabModel {
 
     /// Sun + Earth on its real orbit — the module's opening scene.
     func reset() {
+        mode = .solarSystem
+        displayToSim = CelestialBody.astronomicalUnit / Self.metersPerAU
+        capturedPointName = nil
         bodies.removeAll()
         heldID = nil
         holdSamples.removeAll()

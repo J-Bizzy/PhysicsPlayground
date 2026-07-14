@@ -38,7 +38,8 @@ final class GravityLabRenderer {
     let selectedAnchor = Entity()
 
     private let systemRoot = Entity()
-    private let scale = Float(GravityLabModel.simToDisplay)
+    /// Mode-dependent (AU scale vs. Earth–Moon scale); refreshed per render.
+    private var scale: Float = 1
 
     private let bodyPool: EntityPool<ModelEntity>
     private var bodyMaterialKeys: [String]
@@ -145,6 +146,90 @@ final class GravityLabRenderer {
 
         selectedAnchor.components.set(BillboardComponent())
         systemRoot.addChild(selectedAnchor)
+
+        // Lagrange point markers: five small diamonds with labels,
+        // co-rotating with the Moon (positions written every render).
+        let markerMesh = MeshResource.generateSphere(radius: 0.009)
+        var markerMaterial = UnlitMaterial(color: DesignTokens.Palette.targetUI)
+        markerMaterial.blending = .transparent(opacity: 0.85)
+        for name in ["L1", "L2", "L3", "L4", "L5"] {
+            let marker = ModelEntity(mesh: markerMesh, materials: [markerMaterial])
+            let labelMesh = MeshResource.generateText(
+                name, extrusionDepth: 0.001, font: .systemFont(ofSize: 0.02, weight: .semibold))
+            let label = ModelEntity(
+                mesh: labelMesh,
+                materials: [UnlitMaterial(color: DesignTokens.Palette.targetUI)])
+            let bounds = labelMesh.bounds
+            label.position = [-(bounds.min.x + bounds.max.x) / 2, 0.016, 0]
+            let labelPivot = Entity()
+            labelPivot.components.set(BillboardComponent())
+            labelPivot.addChild(label)
+            marker.addChild(labelPivot)
+            marker.isEnabled = false
+            var accessibility = AccessibilityComponent()
+            accessibility.isAccessibilityElement = true
+            accessibility.label = "Lagrange point \(name)"
+            marker.components.set(accessibility)
+            lagrangeMarkers.append(marker)
+            systemRoot.addChild(marker)
+        }
+
+        // The starfield sky: an inward-facing sphere with a procedurally
+        // generated star texture. Visible through the progressive
+        // immersion portal; harmless if the user stays mostly in the room.
+        Task { [weak self] in
+            await self?.installSky()
+        }
+    }
+
+    private var lagrangeMarkers: [ModelEntity] = []
+
+    // MARK: Starfield
+
+    private func installSky() async {
+        guard let image = Self.starfieldImage(width: 1536, height: 768, starCount: 1200) else { return }
+        guard let texture = try? await TextureResource(
+            image: image, options: .init(semantic: .color)) else { return }
+        var material = UnlitMaterial()
+        material.color = .init(texture: .init(texture))
+        let sky = ModelEntity(mesh: .generateSphere(radius: 24), materials: [material])
+        // Negative scale turns the sphere inside out so we see its interior.
+        sky.scale = SIMD3(-1, 1, 1)
+        sky.position = [0, 1.4, 0]
+        root.addChild(sky)
+    }
+
+    /// A quiet star map: mostly faint points, a few bright ones, the
+    /// subtlest cool/warm tint variation. No nebulas, no noise — calm.
+    private static func starfieldImage(width: Int, height: Int, starCount: Int) -> CGImage? {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        context.setFillColor(CGColor(red: 0.01, green: 0.01, blue: 0.03, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+
+        var generator = SystemRandomNumberGenerator()
+        for _ in 0..<starCount {
+            let x = Double.random(in: 0..<Double(width), using: &generator)
+            let y = Double.random(in: 0..<Double(height), using: &generator)
+            // Brightness heavily skewed toward faint stars.
+            let magnitude = pow(Double.random(in: 0...1, using: &generator), 3)
+            let radius = 0.5 + magnitude * 1.6
+            let warm = Double.random(in: -0.06...0.06, using: &generator)
+            context.setFillColor(CGColor(
+                red: min(1, 0.75 + magnitude * 0.25 + warm),
+                green: 0.78 + magnitude * 0.22,
+                blue: min(1, 0.82 + magnitude * 0.18 - warm),
+                alpha: 0.35 + magnitude * 0.65
+            ))
+            context.fillEllipse(in: CGRect(
+                x: x - radius, y: y - radius, width: radius * 2, height: radius * 2))
+        }
+        return context.makeImage()
     }
 
     private static func makeArrow(color: UIColor) -> Arrow {
@@ -177,11 +262,25 @@ final class GravityLabRenderer {
 
     private func render(_ model: GravityLabModel) {
         frameCounter &+= 1
+        scale = Float(model.simToDisplay)
         syncBodies(model)
         syncTrails(model)
         syncPrediction(model)
         syncVectors(model)
         syncMergeFlash(model)
+        syncLagrangeMarkers(model)
+    }
+
+    private func syncLagrangeMarkers(_ model: GravityLabModel) {
+        let points = model.mode == .lagrange ? model.lagrangePoints : []
+        for (index, marker) in lagrangeMarkers.enumerated() {
+            guard index < points.count else {
+                marker.isEnabled = false
+                continue
+            }
+            marker.isEnabled = true
+            marker.position = SIMD3<Float>(points[index].position) * scale
+        }
     }
 
     private func syncBodies(_ model: GravityLabModel) {

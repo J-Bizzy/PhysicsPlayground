@@ -27,7 +27,8 @@ struct GravityLabControlsView: View {
                             model.spawn(preset)
                         }
                         .buttonStyle(.bordered)
-                        .disabled(model.bodies.count >= GravityLabModel.bodyBudget)
+                        .disabled(model.bodies.count >= GravityLabModel.bodyBudget
+                                  || model.mode == .lagrange)
                         .accessibilityLabel("Spawn \(preset.displayName) on its real orbit")
                     }
                 }
@@ -72,14 +73,55 @@ struct GravityLabControlsView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(DesignTokens.Palette.gravityAccent)
-                .disabled(model.bodies.count >= GravityLabModel.bodyBudget)
+                .disabled(model.bodies.count >= GravityLabModel.bodyBudget
+                          || model.mode == .lagrange)
+            }
+
+            PanelSection("Lagrange points") {
+                if model.mode == .solarSystem {
+                    Text("Five places where a satellite can ride along with the Moon's orbit — two of them for free, forever.")
+                        .font(DesignTokens.TypeScale.label)
+                        .foregroundStyle(.secondary)
+                    Button {
+                        model.enterLagrangeMode()
+                    } label: {
+                        Label("Enter Lagrange mode", systemImage: "circle.hexagongrid")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(DesignTokens.Palette.gravityAccent)
+                    .accessibilityHint("Replaces the scene with Earth, the Moon, and a satellite you can park at the five points")
+                } else {
+                    Text("Drop the satellite near a marker — its velocity is matched to the rotating frame, then real gravity decides. L4 and L5 hold; L1, L2, and L3 shed it within days.")
+                        .font(DesignTokens.TypeScale.label)
+                        .foregroundStyle(.secondary)
+                    if let captured = model.capturedPointName,
+                       let explanation = GravityLabModel.lagrangeExplanations[captured] {
+                        Divider()
+                        Text("Parked at \(captured)")
+                            .font(DesignTokens.TypeScale.sectionHeader)
+                            .foregroundStyle(DesignTokens.Palette.target)
+                        Text(explanation)
+                            .font(DesignTokens.TypeScale.label)
+                            .foregroundStyle(.secondary)
+                    }
+                    Button {
+                        model.exitLagrangeMode()
+                    } label: {
+                        Label("Back to the solar system", systemImage: "sun.max")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
 
             PanelSection("Physics") {
-                labeledSlider(
-                    "Sun mass", value: $model.sunMassMultiplier,
-                    range: 0.1...5, format: "×%.1f"
-                )
+                if model.mode == .solarSystem {
+                    labeledSlider(
+                        "Sun mass", value: $model.sunMassMultiplier,
+                        range: 0.1...5, format: "×%.1f"
+                    )
+                }
                 labeledSlider(
                     "Gravity (G)", value: $model.gMultiplier,
                     range: 0.1...5, format: "×%.1f"
@@ -201,24 +243,55 @@ struct GravityLabDataPanel: View {
 
     /// F = G·M·m/r², color-coded, every value live.
     private func equation(_ readout: GravityLabModel.Readout, name: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            (Text("F").foregroundColor(DesignTokens.Palette.forceVector).bold()
-                + Text(" = G · ")
-                + Text("M").foregroundColor(DesignTokens.Palette.sunColor).bold()
-                + Text(" · ")
-                + Text("m").foregroundColor(DesignTokens.Palette.gravityAccent).bold()
-                + Text(" / ")
-                + Text("r").foregroundColor(DesignTokens.Palette.fieldLine).bold()
-                + Text("²"))
+        let f = AttributedString("F")
+        var fMutable = f
+        fMutable.foregroundColor = DesignTokens.Palette.forceVector
+        fMutable.font = .system(size: UIFont.labelFontSize, weight: .bold)
+
+        let eq = AttributedString(" = G · ")
+
+        let mSun = AttributedString("M")
+        var mSunMutable = mSun
+        mSunMutable.foregroundColor = DesignTokens.Palette.sunColor
+        mSunMutable.font = .system(size: UIFont.labelFontSize, weight: .bold)
+
+        let dot = AttributedString(" · ")
+
+        let m = AttributedString("m")
+        var mMutable = m
+        mMutable.foregroundColor = DesignTokens.Palette.gravityAccent
+        mMutable.font = .system(size: UIFont.labelFontSize, weight: .bold)
+
+        let div = AttributedString(" / ")
+
+        let r = AttributedString("r")
+        var rMutable = r
+        rMutable.foregroundColor = DesignTokens.Palette.fieldLine
+        rMutable.font = .system(size: UIFont.labelFontSize, weight: .bold)
+
+        let squared = AttributedString("²")
+
+        let forceString = AttributedString(PhysicsFormat.scientific(readout.forceNewtons) + " N")
+        var forceStringMutable = forceString
+        forceStringMutable.foregroundColor = DesignTokens.Palette.forceVector
+
+        let middleDot1 = AttributedString("  ·  ")
+
+        let rString = AttributedString("r = " + PhysicsFormat.fixed(readout.distanceAU) + " AU")
+        var rStringMutable = rString
+        rStringMutable.foregroundColor = DesignTokens.Palette.fieldLine
+
+        let middleDot2 = AttributedString("  ·  ")
+
+        let mString = AttributedString("m = " + PhysicsFormat.scientific(readout.massKg) + " kg")
+        var mStringMutable = mString
+        mStringMutable.foregroundColor = DesignTokens.Palette.gravityAccent
+
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(fMutable + eq + mSunMutable + dot + mMutable + div + rMutable + squared)
                 .font(DesignTokens.TypeScale.control)
-            (Text(PhysicsFormat.scientific(readout.forceNewtons) + " N")
-                .foregroundColor(DesignTokens.Palette.forceVector)
-                + Text("  ·  ")
-                + Text("r = " + PhysicsFormat.fixed(readout.distanceAU) + " AU")
-                .foregroundColor(DesignTokens.Palette.fieldLine)
-                + Text("  ·  ")
-                + Text("m = " + PhysicsFormat.scientific(readout.massKg) + " kg")
-                .foregroundColor(DesignTokens.Palette.gravityAccent))
+
+            Text(forceStringMutable + middleDot1 + rStringMutable + middleDot2 + mStringMutable)
                 .font(DesignTokens.TypeScale.footnote)
         }
         .accessibilityLabel(
@@ -242,3 +315,4 @@ struct GravityLabDataPanel: View {
         .accessibilityLabel("\(label): \(value) \(unit)")
     }
 }
+

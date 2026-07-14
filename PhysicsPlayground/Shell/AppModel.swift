@@ -13,8 +13,15 @@ import Observation
 @MainActor
 @Observable
 final class AppModel {
-    var activeModuleID: String?
+    var activeModuleID: String? {
+        didSet {
+            immersionStyle = activeModule?.immersionStyle ?? .mixed
+        }
+    }
     var isImmersiveSpaceOpen = false
+    /// Driven by the active module's descriptor; bound to the shared
+    /// immersive space's style selection.
+    var immersionStyle: ImmersionStyle = .mixed
 
     var activeModule: ModuleDescriptor? {
         guard let activeModuleID else { return nil }

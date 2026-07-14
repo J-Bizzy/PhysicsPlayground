@@ -44,7 +44,7 @@ final class GravityLabModelTests: XCTestCase {
         }
         let held = model.bodies.first { $0.id == earth.id }!
         XCTAssertEqual(simd_distance(held.body.position,
-                                     holdPoint * GravityLabModel.displayToSim),
+                                     holdPoint * model.displayToSim),
                        0, accuracy: 1.0)
         XCTAssertEqual(held.body.velocity, .zero)
     }
@@ -63,7 +63,7 @@ final class GravityLabModelTests: XCTestCase {
 
         let released = model.bodies.first { $0.id == earth.id }!
         XCTAssertEqual(released.body.velocity.z,
-                       -0.3 * GravityLabModel.throwVelocityScale,
+                       -0.3 * model.throwVelocityScale,
                        accuracy: 1.0)
     }
 
@@ -79,7 +79,7 @@ final class GravityLabModelTests: XCTestCase {
             + earth.body.mass * SIMD3<Double>.zero  // held Earth is at rest
 
         // Park Earth exactly on Venus and let go without motion.
-        let venusDisplay = venus.body.position * GravityLabModel.simToDisplay
+        let venusDisplay = venus.body.position * model.simToDisplay
         model.grab(id: earth.id, at: venusDisplay, timestamp: 80)
         model.release(id: earth.id, timestamp: 80.1)
         model.step(dt: 1.0 / 90.0)
@@ -142,6 +142,61 @@ final class GravityLabModelTests: XCTestCase {
         // but the escape speed at 1 AU has grown by √2.
         let readout = try! XCTUnwrap(model.readout(for: earth))
         XCTAssertEqual(readout.escapeSpeedKmPerS, 42.1 * 2.0.squareRoot(), accuracy: 0.5)
+    }
+
+    // MARK: Lagrange mode
+
+    func testLagrangeModeSetsUpEarthMoonSatelliteAtNewScale() {
+        let model = GravityLabModel()
+        model.enterLagrangeMode()
+
+        XCTAssertEqual(model.mode, .lagrange)
+        XCTAssertEqual(model.bodies.count, 3)
+        XCTAssertEqual(model.primaryBody?.body.name, "Earth")
+        XCTAssertEqual(model.displayToSim,
+                       GravityLabModel.earthMoonSeparation / GravityLabModel.metersPerEarthMoon,
+                       accuracy: 1)
+        XCTAssertEqual(model.lagrangePoints.count, 5)
+    }
+
+    /// Dropping the satellite on L4 inserts it with the co-rotating
+    /// velocity — and it then genuinely stays near the moving L4.
+    func testSatelliteDroppedOnL4IsCapturedAndStays() {
+        let model = GravityLabModel()
+        model.enterLagrangeMode()
+        let satellite = model.bodies.first { $0.body.name == "Satellite" }!
+        let l4 = model.lagrangePoints.first { $0.name == "L4" }!.position
+
+        model.grab(id: satellite.id, at: l4 * model.simToDisplay, timestamp: 300)
+        model.release(id: satellite.id, timestamp: 300.1)
+
+        XCTAssertEqual(model.capturedPointName, "L4")
+        let inserted = model.bodies.first { $0.id == satellite.id }!
+        XCTAssertGreaterThan(simd_length(inserted.body.velocity), 1,
+                             "co-rotating insertion is not zero velocity")
+
+        // A simulated week: the satellite must track the moving L4.
+        for _ in 0..<200 {
+            model.step(dt: 1.0 / 90.0)
+        }
+        let currentL4 = model.lagrangePoints.first { $0.name == "L4" }!.position
+        let now = model.bodies.first { $0.id == satellite.id }!
+        let separation = GravityLabModel.earthMoonSeparation
+        XCTAssertLessThan(simd_distance(now.body.position, currentL4), 0.1 * separation)
+    }
+
+    func testLagrangeSpawnsAreBlockedAndExitRestoresSolarSystem() {
+        let model = GravityLabModel()
+        model.enterLagrangeMode()
+        model.exitLagrangeMode()
+
+        XCTAssertEqual(model.mode, .solarSystem)
+        XCTAssertEqual(model.bodies.count, 2)
+        XCTAssertEqual(model.primaryBody?.body.name, "Sun")
+        XCTAssertEqual(model.displayToSim,
+                       CelestialBody.astronomicalUnit / GravityLabModel.metersPerAU,
+                       accuracy: 1)
+        XCTAssertNil(model.capturedPointName)
     }
 
     func testResetRestoresOpeningScene() {

@@ -20,7 +20,8 @@ enum GravityLabModule {
             blurb: "A real solar system in your room — grab planets, throw them into new orbits, and watch Newton's laws answer instantly.",
             icon: "sun.max.fill",
             accent: DesignTokens.Palette.gravityAccent,
-            firstRunHint: "Pinch Earth and drag — the white line shows the orbit you're about to create. Release gently for an ellipse, throw hard to escape the Sun.",
+            immersionStyle: .progressive,
+            firstRunHint: "Pinch Earth and drag — the white line shows the orbit you're about to create. Release gently for an ellipse, throw hard to escape the Sun. Turn the crown to dim your room into deep space.",
             legend: legend,
             realWorld: GravityLabRealWorld.story,
             makeControls: {
@@ -57,6 +58,10 @@ enum GravityLabModule {
         LegendItem(
             swatch: .symbol("arrow.up.right", DesignTokens.Palette.velocityVector),
             text: "Vectors on the selected body: blue velocity, orange acceleration, red force toward the Sun (lengths log-scaled)"
+        ),
+        LegendItem(
+            swatch: .fill(DesignTokens.Palette.target),
+            text: "Lagrange markers (L1–L5) — drop the satellite on one and see which points actually hold it"
         ),
         LegendItem(
             swatch: .symbol("clock", .secondary),

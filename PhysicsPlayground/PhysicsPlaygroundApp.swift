@@ -3,9 +3,10 @@
 //  Physics Playground
 //
 //  Two scenes: a window that shows either the simulation catalog (the hub)
-//  or the active simulation's controls, and ONE shared ImmersiveSpace whose
-//  content switches with the active simulation. `.mixed` immersion keeps
-//  passthrough on, so every simulation happens in the user's real room.
+//  or the active module's controls, and ONE shared ImmersiveSpace whose
+//  content switches with the active module. Immersion style follows the
+//  module: .mixed keeps passthrough for room-scale modules; Gravity Lab
+//  asks for .progressive, so turning the crown opens its starfield.
 //
 
 import SwiftUI
@@ -25,6 +26,9 @@ struct PhysicsPlaygroundApp: App {
             PlaygroundSpaceView()
                 .environment(appModel)
         }
-        .immersionStyle(selection: .constant(.mixed), in: .mixed)
+        .immersionStyle(
+            selection: Bindable(appModel).immersionStyle,
+            in: .mixed, .progressive
+        )
     }
 }

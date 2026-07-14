@@ -26,6 +26,10 @@ struct ModuleDescriptor: Identifiable {
     let icon: String
     /// From DesignTokens.Palette — never an ad-hoc color.
     let accent: Color
+    /// How the shared immersive space presents this module: .mixed keeps
+    /// the room (default); .progressive lets the crown open into a full
+    /// environment the module renders (Gravity Lab's starfield).
+    var immersionStyle: ImmersionStyle = .mixed
     /// One sentence, shown once per module until dismissed.
     let firstRunHint: String
     /// Rendered by the shell in the shared legend style.
