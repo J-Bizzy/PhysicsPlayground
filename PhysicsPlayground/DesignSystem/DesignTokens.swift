@@ -32,6 +32,7 @@ enum DesignTokens {
         static let projectileUI: UIColor = .systemOrange
         static let predictedArcUI: UIColor = .white
         static let launcherUI: UIColor = .systemGray
+        static let targetUI: UIColor = .systemMint
 
         // SwiftUI twins — used by controls, legends, and hub cards.
         static let positive = Color(uiColor: positiveUI)
@@ -44,6 +45,7 @@ enum DesignTokens {
         static let selectionHalo = Color(uiColor: selectionHaloUI)
         static let projectile = Color(uiColor: projectileUI)
         static let predictedArc = Color(uiColor: predictedArcUI)
+        static let target = Color(uiColor: targetUI)
         /// The bright end of the arrow-strength ramp (see VectorFieldArrows).
         static let arrowStrong = Color.yellow
 

@@ -3,19 +3,23 @@
 //  PhysicsCore — Kinematics
 //
 //  Projectile flight under uniform gravity, with optional quadratic air
-//  drag F = ½ρ·Cd·A·v² opposing the velocity — the physically correct
-//  model at sports-ball speeds.
+//  drag F = ½ρ·Cd·A·|v−w|² opposing the air-relative velocity (w is the
+//  wind) — the physically correct model at sports-ball speeds.
 //
 //  Two faces, deliberately kept together so they can check each other:
 //    · closed-form drag-free formulas (range, apex, flight time) — the
 //      textbook results, used for live stats and as test oracles;
-//    · RK4 simulation from launch to landing — the only correct option
-//      once drag (velocity-dependent!) is on.
-//  With drag off the simulation must reproduce the formulas; the unit
-//  tests hold it to that.
+//    · RK4 simulation from any launch point to landing, with optional
+//      floor bounces — the only correct option once drag (velocity-
+//      dependent!) is on.
+//  With drag off and a ground-level launch the simulation must reproduce
+//  the formulas; the unit tests hold it to that.
 //
-//  Conventions: launch point is the origin, +y is up, the ground is the
-//  y = 0 plane, all units SI.
+//  Conventions: +y is up, the ground is the y = 0 plane, all units SI.
+//  Bounces reflect the vertical velocity scaled by the projectile's
+//  restitution and keep `tangentialRetention` of the horizontal speed —
+//  a simplification (no spin, no surface model) that still reproduces the
+//  familiar e²-per-bounce decay of rebound heights.
 //
 
 import Foundation
@@ -25,18 +29,29 @@ public enum ProjectileMotion {
     /// kg/m³ at sea level, 15 °C.
     public static let seaLevelAirDensity = 1.225
 
+    /// Horizontal speed kept through a bounce (rolling/skidding losses).
+    public static let tangentialRetention = 0.8
+
+    /// A bounce weaker than this vertical speed (m/s) is a landing.
+    public static let restSpeed = 0.3
+
     /// The drag half of the model; nil everywhere means "in a vacuum".
     public struct Drag: Equatable, Sendable {
         public var projectile: Projectile
         public var airDensity: Double
+        /// Wind velocity in m/s; drag opposes motion *through the air*.
+        public var wind: SIMD3<Double>
 
-        public init(projectile: Projectile, airDensity: Double = ProjectileMotion.seaLevelAirDensity) {
+        public init(projectile: Projectile,
+                    airDensity: Double = ProjectileMotion.seaLevelAirDensity,
+                    wind: SIMD3<Double> = .zero) {
             self.projectile = projectile
             self.airDensity = airDensity
+            self.wind = wind
         }
     }
 
-    // MARK: Closed forms (drag-free; angles in radians)
+    // MARK: Closed forms (drag-free, launched from ground level; radians)
 
     /// R = v²·sin 2θ / g — horizontal distance back to launch height.
     public static func dragFreeRange(speed: Double, angle: Double, gravity: Double) -> Double {
@@ -54,9 +69,9 @@ public enum ProjectileMotion {
         2 * speed * sin(angle) / gravity
     }
 
-    // MARK: Acceleration
+    // MARK: Acceleration & bounce
 
-    /// a = (0, −g, 0) − (ρ·Cd·A / 2m)·|v|·v
+    /// a = (0, −g, 0) − (ρ·Cd·A / 2m)·|v−w|·(v−w)
     public static func acceleration(
         velocity: SIMD3<Double>,
         gravity: Double,
@@ -64,56 +79,79 @@ public enum ProjectileMotion {
     ) -> SIMD3<Double> {
         var a = SIMD3<Double>(0, -gravity, 0)
         if let drag {
-            let speed = simd_length(velocity)
+            let relative = velocity - drag.wind
+            let speed = simd_length(relative)
             if speed > 0 {
                 let k = 0.5 * drag.airDensity * drag.projectile.dragCoefficient
                     * drag.projectile.crossSectionalArea / drag.projectile.mass
-                a -= (k * speed) * velocity
+                a -= (k * speed) * relative
             }
         }
         return a
+    }
+
+    /// Velocity after a floor bounce: vertical reflected and scaled by the
+    /// restitution, horizontal scaled by `tangentialRetention`.
+    public static func bounce(velocity: SIMD3<Double>, restitution: Double) -> SIMD3<Double> {
+        SIMD3(
+            velocity.x * tangentialRetention,
+            -velocity.y * restitution,
+            velocity.z * tangentialRetention
+        )
     }
 
     /// Speed at which drag balances weight for a falling projectile:
     /// v_t = √(2mg / ρ·Cd·A).
     public static func terminalSpeed(projectile: Projectile, gravity: Double,
                                      airDensity: Double = seaLevelAirDensity) -> Double {
-        (2 * projectile.mass * gravity
+        guard gravity > 0 else { return 0 }
+        return (2 * projectile.mass * gravity
             / (airDensity * projectile.dragCoefficient * projectile.crossSectionalArea)).squareRoot()
     }
 
     // MARK: Simulation
 
     public struct Trajectory: Sendable {
-        /// Sampled flight path from launch to (interpolated) landing.
+        /// Sampled path from launch through any bounces.
         public var points: [SIMD3<Double>]
-        /// Seconds aloft. If the projectile never landed within
-        /// `maxDuration`, this is the simulated span and `landed` is false.
+        /// Seconds to *first* ground contact (the textbook flight time).
+        /// If the projectile never landed within `maxDuration`, this is the
+        /// simulated span and `landed` is false.
         public var flightTime: Double
-        /// Horizontal distance from launch to landing (or to the last
-        /// simulated point).
+        /// Horizontal distance from launch to first ground contact.
         public var range: Double
-        /// Greatest height above the launch point.
+        /// Greatest height above the ground during the whole path.
         public var apexHeight: Double
         public var landed: Bool
+        /// First ground contact, if any.
+        public var landingPoint: SIMD3<Double>?
+        /// Ground contacts that turned into bounces (excludes the final rest).
+        public var bounceCount: Int
     }
 
-    /// Integrates a launch from the origin until it crosses back through
-    /// y = 0 (the landing point is linearly interpolated inside the final
-    /// step, so range/flightTime don't quantize to the step size).
+    /// Integrates a launch from `start` until the flight ends: at the
+    /// first ground contact when `maxBounces` is 0, otherwise bouncing
+    /// with `restitution` until the bounce budget or the energy runs out.
+    /// Ground crossings are linearly interpolated inside the step, so
+    /// range and flight time don't quantize to the step size.
     public static func simulate(
+        from start: SIMD3<Double> = .zero,
         launchVelocity: SIMD3<Double>,
         gravity: Double,
         drag: Drag? = nil,
+        restitution: Double = 0,
+        maxBounces: Int = 0,
         timeStep: Double = 1.0 / 240.0,
         maxDuration: Double = 30,
         pointStride: Int = 4
     ) -> Trajectory {
-        var state = ParticleDynamics.State(position: .zero, velocity: launchVelocity)
+        var state = ParticleDynamics.State(position: start, velocity: launchVelocity)
         var points = [state.position]
-        var apex = 0.0
+        var apex = max(start.y, 0)
         var time = 0.0
         var step = 0
+        var firstContact: (point: SIMD3<Double>, time: Double)?
+        var bounces = 0
 
         while time < maxDuration {
             let previous = state
@@ -124,19 +162,27 @@ public enum ProjectileMotion {
             step += 1
             apex = max(apex, state.position.y)
 
-            // Crossed the ground going down: interpolate the landing.
+            // Crossed the ground going down.
             if state.position.y < 0, state.velocity.y < 0 {
                 let dip = previous.position.y - state.position.y
                 let fraction = dip > 0 ? previous.position.y / dip : 0
-                let landing = previous.position + fraction * (state.position - previous.position)
-                points.append(landing)
-                return Trajectory(
-                    points: points,
-                    flightTime: time - timeStep + fraction * timeStep,
-                    range: simd_length(SIMD2(landing.x, landing.z)),
-                    apexHeight: apex,
-                    landed: true
-                )
+                let contact = previous.position + fraction * (state.position - previous.position)
+                let contactTime = time - timeStep + fraction * timeStep
+                points.append(SIMD3(contact.x, 0, contact.z))
+                if firstContact == nil {
+                    firstContact = (contact, contactTime)
+                }
+
+                let reboundSpeed = -state.velocity.y * restitution
+                if bounces < maxBounces, reboundSpeed > restSpeed {
+                    bounces += 1
+                    state = ParticleDynamics.State(
+                        position: SIMD3(contact.x, 0, contact.z),
+                        velocity: bounce(velocity: state.velocity, restitution: restitution)
+                    )
+                    continue
+                }
+                break
             }
 
             if step % pointStride == 0 {
@@ -144,14 +190,29 @@ public enum ProjectileMotion {
             }
         }
 
-        // Ran out the clock (e.g. lunar gravity with a hard throw).
+        if let firstContact {
+            return Trajectory(
+                points: points,
+                flightTime: firstContact.time,
+                range: simd_length(SIMD2(firstContact.point.x - start.x,
+                                         firstContact.point.z - start.z)),
+                apexHeight: apex,
+                landed: true,
+                landingPoint: SIMD3(firstContact.point.x, 0, firstContact.point.z),
+                bounceCount: bounces
+            )
+        }
+
+        // Ran out the clock (zero-g, or lunar gravity with a hard throw).
         points.append(state.position)
         return Trajectory(
             points: points,
             flightTime: time,
-            range: simd_length(SIMD2(state.position.x, state.position.z)),
+            range: simd_length(SIMD2(state.position.x - start.x, state.position.z - start.z)),
             apexHeight: apex,
-            landed: false
+            landed: false,
+            landingPoint: nil,
+            bounceCount: bounces
         )
     }
 }

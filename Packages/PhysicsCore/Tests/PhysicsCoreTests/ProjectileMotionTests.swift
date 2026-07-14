@@ -133,4 +133,80 @@ final class ProjectileMotionTests: XCTestCase {
         let capped = ProjectileMotion.simulate(launchVelocity: v, gravity: 1.62, maxDuration: 0.5)
         XCTAssertFalse(capped.landed)
     }
+
+    // MARK: Launch height, bounces, wind
+
+    /// Horizontal launch from height h: t = √(2h/g), R = v·t — the other
+    /// classic closed form, now that launches can start anywhere.
+    func testHorizontalLaunchFromHeightMatchesClosedForm() {
+        let g = 9.81, h = 1.5, speed = 3.0
+        let trajectory = ProjectileMotion.simulate(
+            from: SIMD3(0, h, 0),
+            launchVelocity: SIMD3(speed, 0, 0),
+            gravity: g
+        )
+        let expectedTime = (2 * h / g).squareRoot()
+        XCTAssertTrue(trajectory.landed)
+        XCTAssertEqual(trajectory.flightTime, expectedTime, accuracy: expectedTime * 1e-3)
+        XCTAssertEqual(trajectory.range, speed * expectedTime, accuracy: speed * expectedTime * 1e-3)
+        XCTAssertEqual(trajectory.apexHeight, h, accuracy: 1e-9,
+                       "a horizontal launch never rises above its start")
+    }
+
+    /// Dropped from 1 m with restitution e, the first rebound peaks at
+    /// ≈ e² meters — the definition of the coefficient of restitution.
+    func testBounceReboundHeightIsRestitutionSquared() {
+        let e = 0.82
+        let trajectory = ProjectileMotion.simulate(
+            from: SIMD3(0, 1, 0),
+            launchVelocity: .zero,
+            gravity: 9.81,
+            restitution: e,
+            maxBounces: 1
+        )
+        XCTAssertEqual(trajectory.bounceCount, 1)
+        // Rebound apex: highest point after the first ground contact.
+        guard let landing = trajectory.landingPoint,
+              let contactIndex = trajectory.points.firstIndex(where: { $0.y == 0 && simd_distance($0, landing) < 1e-9 })
+        else { return XCTFail("no landing recorded") }
+        let reboundApex = trajectory.points[contactIndex...].map(\.y).max() ?? 0
+        XCTAssertEqual(reboundApex, e * e, accuracy: 0.02,
+                       "rebound height must be ≈ e² of the drop height")
+    }
+
+    /// A weak bounce (below the rest threshold) ends the flight instead of
+    /// bouncing forever.
+    func testFeebleBouncesComeToRest() {
+        let trajectory = ProjectileMotion.simulate(
+            from: SIMD3(0, 0.001, 0),
+            launchVelocity: SIMD3(1, 0, 0),
+            gravity: 9.81,
+            restitution: 0.8,
+            maxBounces: 10
+        )
+        XCTAssertTrue(trajectory.landed)
+        XCTAssertEqual(trajectory.bounceCount, 0,
+                       "a near-ground skim rebounds slower than the rest threshold")
+    }
+
+    /// With air on, a tailwind carries the ball farther and a headwind
+    /// shortens the flight; with air OFF wind must do nothing at all.
+    func testWindOnlyActsThroughDrag() {
+        let g = 9.81
+        let v = launchVelocity(speed: 8, angleDegrees: 45)
+
+        func range(wind: SIMD3<Double>, air: Bool) -> Double {
+            ProjectileMotion.simulate(
+                launchVelocity: v, gravity: g,
+                drag: air ? ProjectileMotion.Drag(projectile: .basketball, wind: wind) : nil
+            ).range
+        }
+
+        let calm = range(wind: .zero, air: true)
+        XCTAssertGreaterThan(range(wind: SIMD3(6, 0, 0), air: true), calm)
+        XCTAssertLessThan(range(wind: SIMD3(-6, 0, 0), air: true), calm)
+        XCTAssertEqual(range(wind: SIMD3(6, 0, 0), air: false),
+                       range(wind: .zero, air: false), accuracy: 1e-12,
+                       "vacuum flights must ignore wind entirely")
+    }
 }

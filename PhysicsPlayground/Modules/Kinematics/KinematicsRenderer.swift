@@ -2,17 +2,25 @@
 //  KinematicsRenderer.swift
 //  Physics Playground — Kinematics module
 //
-//  Renders the 1:10 tabletop diorama: a plate with real-meter tick lines,
-//  the launcher (barrel + grabbable aim bead), the live predicted arc,
-//  and pooled projectiles with strobe-dot trails.
+//  Renders room-scale projectile motion at 1:1 — physics space IS the
+//  room. The free-floating launcher (grab its body to move it, pinch the
+//  bead to aim), the predicted arc, pooled balls with strobe-dot trails
+//  and floor shadows (the depth cue that makes mid-air height readable),
+//  and scoreable hoops with floating counters.
 //
 //  Frame-rate contract: pools are built once (EntityPool); per-frame work
-//  is transform writes only. The predicted-arc tube mesh rebuilds only
-//  when an aim input actually changes.
+//  is transform writes only. The predicted-arc tube rebuilds only when an
+//  aim input actually changes; hoop score text only when a score lands.
+//
+//  Grabbable entities are pooled, so each slot's NAME is reassigned to
+//  the flight/ring it currently shows — manipulation events map back to
+//  model objects by that name. While the hand owns an entity, the render
+//  loop must not write its transform (the isManipulating* fields below).
 //
 
 import Foundation
 import PhysicsCore
+import QuartzCore
 import RealityKit
 import RenderKit
 import SwiftUI
@@ -24,123 +32,159 @@ final class KinematicsRenderer {
     let root = Entity()
     var subscriptions: [EventSubscription] = []
 
-    /// While the user is dragging the aim bead, the manipulation system
-    /// owns its position — the render loop must not fight it.
-    var isManipulatingBead = false
-
+    static let launcherName = "launcher"
     static let aimBeadName = "aimBead"
 
-    /// Where the diorama sits in the room (launch point = this position).
-    static let dioramaPosition = SIMD3<Float>(-0.55, 0.95, -1.05)
+    // Manipulation ownership — set by the space view's router callbacks.
+    var isManipulatingLauncher = false
+    var isManipulatingBead = false
+    var manipulatingBallID: UUID?
+    var manipulatingRingID: UUID?
 
-    private static let barrelLength: Float = 0.07
-    private static let beadDistance: Float = 0.10
-    private static let baseProjectileRadius: Float = 0.01
-    /// Small balls are enlarged to stay visible (legend says so).
-    private static let minimumDisplayRadius: Float = 0.005
+    private static let barrelLength = Float(KinematicsModel.barrelLength)
+    private static let beadDistance: Float = 0.42
+    private static let baseBallRadius: Float = 0.05
+    private static let baseShadowRadius: Float = 0.05
 
-    private let scale = Float(KinematicsModel.displayScale)
-    private let dioramaRoot = Entity()
+    private let launcherBase: ModelEntity
     private let barrel: ModelEntity
     private let bead: ModelEntity
     private let arcEntity = ModelEntity()
     private let arcMaterial: UnlitMaterial
-    private let projectilePool: EntityPool<ModelEntity>
+
+    private let ballPool: EntityPool<ModelEntity>
+    private var ballMaterialKeys: [String] = []
     private let dotPool: EntityPool<Void>
+    private let shadowPool: EntityPool<Void>
+
+    private struct RingSlot {
+        let tube: ModelEntity
+        let scoreText: Entity
+        var appliedID: UUID?
+        var appliedScore = -1
+        var flashUntil = 0.0
+    }
+    private let ringPool: EntityPool<ModelEntity>
+    private var ringSlots: [RingSlot] = []
+    private let ringMaterial: UnlitMaterial
+    private let ringFlashMaterial: UnlitMaterial
+
     private let renderLoop = RenderLoop()
     private var model: KinematicsModel?
 
     // Change detection: the arc tube only rebuilds when these differ.
-    private var lastAim: SIMD3<Double>?
-    private var lastSpeed: Double?
-    private var lastGravity: Double?
-    private var lastAir: Bool?
-    private var lastKind: KinematicsModel.ProjectileKind?
+    private struct ArcInputs: Equatable {
+        var aim: SIMD3<Double>
+        var speed: Double
+        var launcher: SIMD3<Double>
+        var gravity: Double
+        var air: Bool
+        var windSpeed: Double
+        var windDirection: Double
+        var projectile: Projectile
+    }
+    private var lastArcInputs: ArcInputs?
 
     init() {
-        dioramaRoot.position = Self.dioramaPosition
-        root.addChild(dioramaRoot)
-
-        // Plate: top surface exactly at physics ground level (y = 0).
-        let plateLength = Float(KinematicsModel.tableMaxX - KinematicsModel.tableMinX) * scale
-        let plateDepth = Float(2 * KinematicsModel.tableHalfDepth) * scale
-        let plate = ModelEntity(
-            mesh: .generateBox(size: [plateLength, 0.03, plateDepth], cornerRadius: 0.008),
-            materials: [SimpleMaterial(color: UIColor(white: 0.22, alpha: 1), roughness: 0.9, isMetallic: false)]
-        )
-        plate.position = [Float(KinematicsModel.tableMinX + KinematicsModel.tableMaxX) / 2 * scale, -0.015, 0]
-        dioramaRoot.addChild(plate)
-
-        // Tick lines across the plate every real meter downrange.
-        var tickMaterial = UnlitMaterial(color: .white)
-        tickMaterial.blending = .transparent(opacity: 0.28)
-        let tickMesh = MeshResource.generateBox(size: [0.0015, 0.0008, plateDepth])
-        for meter in 0...Int(KinematicsModel.tableMaxX) {
-            let tick = ModelEntity(mesh: tickMesh, materials: [tickMaterial])
-            tick.position = [Float(meter) * scale, 0.0005, 0]
-            dioramaRoot.addChild(tick)
-        }
-
-        // Launcher: a small base disc, a barrel from the muzzle along the
-        // aim direction (projectiles emerge from its tip), and the aim bead.
+        // Launcher: grabbable base sphere, barrel, aim bead — siblings at
+        // room coordinates so manipulation never fights a parent transform.
         let launcherMaterial = SimpleMaterial(
             color: DesignTokens.Palette.launcherUI, roughness: 0.4, isMetallic: true)
-        let base = ModelEntity(
-            mesh: .generateCylinder(height: 0.006, radius: 0.024),
-            materials: [launcherMaterial]
-        )
-        base.position = [0, 0.003, 0]
-        dioramaRoot.addChild(base)
+        launcherBase = ModelEntity(
+            mesh: .generateSphere(radius: 0.05), materials: [launcherMaterial])
+        launcherBase.name = Self.launcherName
+        Grabbable.configure(launcherBase, collisionRadius: 0.09)
+        Self.setAccessibility(on: launcherBase, label: "Launcher. Drag to move it anywhere in the room.")
+        root.addChild(launcherBase)
 
         barrel = ModelEntity(
-            mesh: .generateCylinder(height: Self.barrelLength, radius: 0.008),
+            mesh: .generateCylinder(height: Self.barrelLength, radius: 0.02),
             materials: [launcherMaterial]
         )
-        dioramaRoot.addChild(barrel)
+        root.addChild(barrel)
 
         bead = ModelEntity(
-            mesh: .generateSphere(radius: 0.011),
+            mesh: .generateSphere(radius: 0.035),
             materials: [UnlitMaterial(color: DesignTokens.Palette.projectileUI)]
         )
         bead.name = Self.aimBeadName
-        Grabbable.configure(bead, collisionRadius: 0.035)
-        var beadAccessibility = AccessibilityComponent()
-        beadAccessibility.isAccessibilityElement = true
-        beadAccessibility.label = "Aim bead. Drag to point the launcher."
-        bead.components.set(beadAccessibility)
-        dioramaRoot.addChild(bead)
+        Grabbable.configure(bead, collisionRadius: 0.06)
+        Self.setAccessibility(on: bead, label: "Aim bead. Drag to point the launcher.")
+        root.addChild(bead)
 
         // Predicted arc.
         var arcMaterial = UnlitMaterial(color: DesignTokens.Palette.predictedArcUI)
         arcMaterial.blending = .transparent(opacity: 0.5)
         self.arcMaterial = arcMaterial
-        dioramaRoot.addChild(arcEntity)
+        root.addChild(arcEntity)
 
-        // Pools: identical meshes shared across slots, sized per flight by
-        // scaling the container.
-        let projectileMesh = MeshResource.generateSphere(radius: Self.baseProjectileRadius)
-        let projectileMaterial = SimpleMaterial(
-            color: DesignTokens.Palette.projectileUI, roughness: 0.4, isMetallic: false)
-        projectilePool = EntityPool(budget: KinematicsModel.flightBudget) { container in
-            let sphere = ModelEntity(mesh: projectileMesh, materials: [projectileMaterial])
-            var accessibility = AccessibilityComponent()
-            accessibility.isAccessibilityElement = true
-            accessibility.label = "Projectile"
-            sphere.components.set(accessibility)
+        // Balls: unit sphere scaled per projectile, grabbable for throwing.
+        let ballMesh = MeshResource.generateSphere(radius: Self.baseBallRadius)
+        ballPool = EntityPool(budget: KinematicsModel.flightBudget) { container in
+            let sphere = ModelEntity(
+                mesh: ballMesh,
+                materials: [SimpleMaterial(color: DesignTokens.Palette.projectileUI,
+                                           roughness: 0.5, isMetallic: false)]
+            )
+            Grabbable.configure(sphere, collisionRadius: Self.baseBallRadius * 1.6)
+            Self.setAccessibility(on: sphere, label: "Ball. Grab and throw it.")
             container.addChild(sphere)
             return sphere
         }
-        dioramaRoot.addChild(projectilePool.root)
+        ballMaterialKeys = Array(repeating: "", count: ballPool.budget)
+        root.addChild(ballPool.root)
 
+        // Strobe dots.
         var dotMaterial = UnlitMaterial(color: DesignTokens.Palette.projectileUI)
         dotMaterial.blending = .transparent(opacity: 0.7)
-        let dotMesh = MeshResource.generateSphere(radius: 0.0035)
+        let dotMesh = MeshResource.generateSphere(radius: 0.008)
         dotPool = EntityPool(
             budget: KinematicsModel.flightBudget * KinematicsModel.dotsPerFlight
         ) { container in
             container.addChild(ModelEntity(mesh: dotMesh, materials: [dotMaterial]))
         }
-        dioramaRoot.addChild(dotPool.root)
+        root.addChild(dotPool.root)
+
+        // Floor shadows: flat discs under airborne balls — the depth cue
+        // that makes height over the real floor readable.
+        var shadowMaterial = UnlitMaterial(color: .black)
+        shadowMaterial.blending = .transparent(opacity: 0.22)
+        let shadowMesh = MeshResource.generateCylinder(height: 0.002, radius: Self.baseShadowRadius)
+        shadowPool = EntityPool(budget: KinematicsModel.flightBudget) { container in
+            container.addChild(ModelEntity(mesh: shadowMesh, materials: [shadowMaterial]))
+        }
+        root.addChild(shadowPool.root)
+
+        // Hoops: torus via TubeMesh circle, score text floating above.
+        ringMaterial = UnlitMaterial(color: DesignTokens.Palette.targetUI)
+        var flash = UnlitMaterial(color: .systemGreen)
+        flash.blending = .transparent(opacity: 0.95)
+        ringFlashMaterial = flash
+
+        let circle: [SIMD3<Float>] = (0...32).map { index in
+            let angle = 2 * Float.pi * Float(index) / 32
+            return SIMD3(cos(angle), 0, sin(angle)) * Float(KinematicsModel.ringRadius)
+        }
+        let ringMesh = TubeMesh.tube(lines: [circle], radius: 0.02, sides: 8)
+        let capturedRingMaterial = ringMaterial
+        ringPool = EntityPool(budget: KinematicsModel.ringBudget) { container in
+            let tube = ModelEntity(
+                mesh: ringMesh ?? MeshResource.generateSphere(radius: 0.05),
+                materials: [capturedRingMaterial]
+            )
+            Grabbable.configure(tube, collisionRadius: 0.2)
+            Self.setAccessibility(on: tube, label: "Hoop. Drag to place it; balls passing down through it score.")
+            container.addChild(tube)
+            return tube
+        }
+        for slot in ringPool.slots {
+            let text = Entity()
+            text.position = [0, 0.3, 0]
+            text.components.set(BillboardComponent())
+            slot.entity.addChild(text)
+            ringSlots.append(RingSlot(tube: slot.payload, scoreText: text))
+        }
+        root.addChild(ringPool.root)
     }
 
     // MARK: Render loop
@@ -153,62 +197,93 @@ final class KinematicsRenderer {
         }
     }
 
-    /// Converts a scene-space point (e.g. from a manipulation event) into
-    /// physics space, in real meters relative to the muzzle.
-    func physicsPoint(fromWorld world: SIMD3<Float>) -> SIMD3<Double> {
-        SIMD3<Double>(world - Self.dioramaPosition) / KinematicsModel.displayScale
-    }
-
     private func render(_ model: KinematicsModel) {
-        let aim = model.aimDirection
-        let aimDisplay = SIMD3<Float>(aim)
+        // Reading the nonce arms re-rendering for the hoop flash fade.
+        _ = model.ringFlashNonce
 
-        // Launcher follows the aim; the bead too, unless the hand owns it.
-        barrel.orientation = VectorFieldArrows.rotationFromYAxis(to: aimDisplay)
-        barrel.position = (Self.barrelLength / 2) * aimDisplay
+        let aim = SIMD3<Float>(model.aimDirection)
+        let launcher = SIMD3<Float>(model.launcherPosition)
+
+        if !isManipulatingLauncher {
+            launcherBase.position = launcher
+        }
+        barrel.orientation = VectorFieldArrows.rotationFromYAxis(to: aim)
+        barrel.position = launcher + (Self.barrelLength / 2) * aim
         if !isManipulatingBead {
-            bead.position = Self.beadDistance * aimDisplay
+            bead.position = launcher + Self.beadDistance * aim
         }
 
         // Predicted arc — rebuild only when an input actually changed.
-        if aim != lastAim || model.launchSpeed != lastSpeed || model.gravity != lastGravity
-            || model.airResistance != lastAir || model.kind != lastKind {
-            let points = model.prediction.points.map { SIMD3<Float>($0) * scale }
-            if let mesh = TubeMesh.tube(lines: [points], radius: 0.0018) {
+        let arcInputs = ArcInputs(
+            aim: model.aimDirection, speed: model.launchSpeed,
+            launcher: model.launcherPosition, gravity: model.gravity,
+            air: model.airResistance, windSpeed: model.windSpeed,
+            windDirection: model.windDirectionDegrees, projectile: model.projectile
+        )
+        if arcInputs != lastArcInputs {
+            let points = model.prediction.points.map { SIMD3<Float>($0) }
+            if let mesh = TubeMesh.tube(lines: [points], radius: 0.004) {
                 arcEntity.model = ModelComponent(mesh: mesh, materials: [arcMaterial])
             } else {
                 arcEntity.model = nil
             }
-            lastAim = aim
-            lastSpeed = model.launchSpeed
-            lastGravity = model.gravity
-            lastAir = model.airResistance
-            lastKind = model.kind
+            lastArcInputs = arcInputs
         }
 
         syncFlights(model.flights)
+        syncRings(model.rings)
     }
 
+    // MARK: Balls, dots, shadows
+
     private func syncFlights(_ flights: [KinematicsModel.Flight]) {
-        for (index, slot) in projectilePool.slots.enumerated() {
+        for (index, slot) in ballPool.slots.enumerated() {
             guard index < flights.count else {
                 slot.entity.isEnabled = false
                 continue
             }
             let flight = flights[index]
-            slot.entity.isEnabled = flight.status != .offTable
-            slot.entity.position = SIMD3<Float>(flight.state.position) * scale
-            slot.entity.scale = SIMD3<Float>(
-                repeating: displayRadius(for: flight.kind) / Self.baseProjectileRadius)
+            slot.entity.isEnabled = true
+
+            // The slot represents this flight now: rename so manipulation
+            // events route to the right model object.
+            if slot.payload.name != flight.id.uuidString {
+                slot.payload.name = flight.id.uuidString
+            }
+            applyBallMaterial(for: flight.projectile, at: index, slot: slot)
+
+            let radius = max(Float(flight.projectile.diameter / 2), 0.008)
+            slot.entity.scale = SIMD3<Float>(repeating: radius / Self.baseBallRadius)
+
+            if flight.id == manipulatingBallID {
+                // Hand owns the sphere; leave both transforms alone.
+            } else {
+                slot.entity.position = SIMD3<Float>(flight.state.position)
+                // Undo any offset the manipulation system left on the child.
+                slot.payload.position = .zero
+            }
+
+            // Shadow directly below, hidden once the ball rests on the floor.
+            let shadow = shadowPool.slots[index]
+            let onFloor = flight.status == .rested || flight.status == .rolling
+            shadow.entity.isEnabled = !onFloor
+            if !onFloor {
+                shadow.entity.position = SIMD3(
+                    Float(flight.state.position.x), 0.001, Float(flight.state.position.z))
+                shadow.entity.scale = SIMD3<Float>(repeating: radius / Self.baseShadowRadius)
+            }
+        }
+        for index in flights.count..<ballPool.budget {
+            ballPool.slots[index].entity.isEnabled = false
+            shadowPool.slots[index].entity.isEnabled = false
         }
 
-        // Strobe dots, flattened across flights in order.
         var dotIndex = 0
         for flight in flights {
             for dot in flight.dots where dotIndex < dotPool.budget {
                 let slot = dotPool.slots[dotIndex]
                 slot.entity.isEnabled = true
-                slot.entity.position = SIMD3<Float>(dot) * scale
+                slot.entity.position = SIMD3<Float>(dot)
                 dotIndex += 1
             }
         }
@@ -217,7 +292,80 @@ final class KinematicsRenderer {
         }
     }
 
-    private func displayRadius(for kind: KinematicsModel.ProjectileKind) -> Float {
-        max(Float(kind.projectile.diameter / 2) * scale, Self.minimumDisplayRadius)
+    private func applyBallMaterial(for projectile: Projectile, at index: Int, slot: EntityPool<ModelEntity>.Slot) {
+        guard ballMaterialKeys[index] != projectile.name else { return }
+        ballMaterialKeys[index] = projectile.name
+        slot.payload.model?.materials = [Self.ballMaterial(for: projectile)]
+    }
+
+    private static func ballMaterial(for projectile: Projectile) -> SimpleMaterial {
+        let color: UIColor = switch projectile.name {
+        case Projectile.tableTennisBall.name: .white
+        case Projectile.golfBall.name: UIColor(white: 0.92, alpha: 1)
+        case Projectile.cannonball.name: UIColor(white: 0.18, alpha: 1)
+        case Projectile.basketball.name: DesignTokens.Palette.projectileUI
+        default: .systemTeal
+        }
+        return SimpleMaterial(color: color, roughness: 0.5, isMetallic: false)
+    }
+
+    // MARK: Hoops
+
+    private func syncRings(_ rings: [KinematicsModel.Ring]) {
+        let now = CACurrentMediaTime()
+        for index in 0..<ringPool.budget {
+            let poolSlot = ringPool.slots[index]
+            guard index < rings.count else {
+                poolSlot.entity.isEnabled = false
+                continue
+            }
+            let ring = rings[index]
+            poolSlot.entity.isEnabled = true
+
+            if ringSlots[index].appliedID != ring.id {
+                ringSlots[index].appliedID = ring.id
+                ringSlots[index].appliedScore = -1
+                ringSlots[index].tube.name = ring.id.uuidString
+            }
+            if ring.id != manipulatingRingID {
+                poolSlot.entity.position = SIMD3<Float>(ring.position)
+                ringSlots[index].tube.position = .zero
+            }
+
+            // Score text + a brief green flash when it changes.
+            if ringSlots[index].appliedScore != ring.score {
+                if ringSlots[index].appliedScore >= 0 {
+                    ringSlots[index].flashUntil = now + 0.45
+                }
+                ringSlots[index].appliedScore = ring.score
+                setScoreText(ringSlots[index].scoreText, score: ring.score)
+            }
+            let flashing = now < ringSlots[index].flashUntil
+            ringSlots[index].tube.model?.materials = [flashing ? ringFlashMaterial : ringMaterial]
+        }
+    }
+
+    private func setScoreText(_ entity: Entity, score: Int) {
+        entity.children.removeAll()
+        guard score > 0 else { return }
+        let mesh = MeshResource.generateText(
+            "\(score)",
+            extrusionDepth: 0.004,
+            font: .systemFont(ofSize: 0.12, weight: .bold)
+        )
+        let text = ModelEntity(mesh: mesh, materials: [UnlitMaterial(color: DesignTokens.Palette.targetUI)])
+        // generateText's origin is the baseline start; center it.
+        let bounds = mesh.bounds
+        text.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
+        entity.addChild(text)
+    }
+
+    // MARK: Helpers
+
+    private static func setAccessibility(on entity: Entity, label: String) {
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = LocalizedStringResource(stringLiteral: label)
+        entity.components.set(accessibility)
     }
 }

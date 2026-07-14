@@ -16,10 +16,10 @@ enum KinematicsModule {
         ModuleDescriptor(
             id: id,
             title: "Projectile Motion",
-            blurb: "Aim, fire, and walk around real trajectories — then flip on air resistance and see why golf balls have dimples.",
+            blurb: "Throw real balls across your room — slow time, hang hoops in mid-air, and try every gravity from zero-g to Jupiter.",
             icon: "paperplane.fill",
             accent: DesignTokens.Palette.kinematicsAccent,
-            firstRunHint: "Pinch the orange bead in front of the launcher and drag to aim — the white arc previews the flight. Fire when it looks right.",
+            firstRunHint: "Grab any ball and throw it — physics takes over the instant you let go. For precise launches, drag the launcher anywhere and pinch its orange bead to aim.",
             legend: legend,
             realWorld: KinematicsRealWorld.story,
             makeControls: {
@@ -42,20 +42,24 @@ enum KinematicsModule {
 
     private static let legend: [LegendItem] = [
         LegendItem(
+            swatch: .fill(DesignTokens.Palette.projectile),
+            text: "Balls at their real sizes — grab and throw any of them, anywhere"
+        ),
+        LegendItem(
             swatch: .stroke(DesignTokens.Palette.kinematicsAccent),
-            text: "Aim bead — pinch and drag it to point the launcher"
+            text: "Aim bead — pinch and drag to point the launcher; grab the launcher body to move it"
         ),
         LegendItem(
             swatch: .line(DesignTokens.Palette.predictedArc),
-            text: "Predicted arc for the current aim, speed, and air setting"
+            text: "Predicted arc from the launcher, bounces included"
         ),
         LegendItem(
             swatch: .fill(DesignTokens.Palette.projectile),
-            text: "Projectile and its strobe dots — one dot per 1/15 s, so wider spacing means faster"
+            text: "Strobe dots — one per 1/15 s of simulated time, so wider spacing means faster (honest even in slow motion)"
         ),
         LegendItem(
-            swatch: .symbol("ruler", .secondary),
-            text: "The scene is a 1:10 diorama; plate lines are 1 real meter apart. Panel numbers are true values. (Small balls are drawn enlarged to stay visible.)"
+            swatch: .stroke(DesignTokens.Palette.target),
+            text: "Hoop — anything passing down through it scores; the dark disc under each ball marks the spot below it"
         ),
     ]
 }

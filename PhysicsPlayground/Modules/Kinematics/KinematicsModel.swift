@@ -2,78 +2,129 @@
 //  KinematicsModel.swift
 //  Physics Playground — Kinematics module
 //
-//  App state for projectile motion. All physics happens in true SI units
-//  in "physics space" — launch point at the origin, +y up, +x downrange,
-//  ground at y = 0 — and only the renderer scales it down to the 1:10
-//  tabletop diorama. Panel numbers are therefore always real-world values.
+//  App state for room-scale projectile motion: physics space IS the room
+//  (1:1, immersive-space coordinates, the real floor at y = 0), so every
+//  number on the panels is literally true of what you're looking at.
 //
-//  In-flight projectiles step with RK4 (drag is velocity-dependent, so
-//  velocity Verlet doesn't apply). Each flight drops "strobe dots" at
-//  equal time intervals — the classic strobe-photo view of kinematics:
-//  wider spacing means faster.
+//  Two ways to launch:
+//    · grab any ball and THROW it — release velocity is estimated from
+//      the hand's last ~0.1 s of motion, optionally amplified by the
+//      throw boost for small rooms;
+//    · the free-floating launcher — grab its body to move it anywhere,
+//      pinch-drag the bead to aim, Fire for repeatable, precise launches.
+//
+//  Flights bounce on the floor with each ball's real restitution, then
+//  roll briefly to rest. Time can be slowed or paused: physics steps in
+//  simulated time (strobe dots stay equal-Δt in *simulated* time, so
+//  slow motion never lies about speed). Floating hoops score any ball
+//  that passes down through them.
 //
 
 import Foundation
 import Observation
 import PhysicsCore
+import QuartzCore
 import simd
 
 @MainActor
 @Observable
 final class KinematicsModel {
-    // MARK: Diorama geometry (physics meters; display = physics × displayScale)
-
-    nonisolated static let displayScale = 0.1
-    /// Table bounds. The launch point is at x = 0; the plate runs a little
-    /// behind it and 12.5 m downrange (1.25 m at diorama scale).
-    nonisolated static let tableMinX = -1.5
-    nonisolated static let tableMaxX = 12.5
-    nonisolated static let tableHalfDepth = 3.6
-
     // MARK: Control ranges
 
-    nonisolated static let speedRange = 1.0...10.0          // m/s
-    nonisolated static let elevationRangeDegrees = 5.0...85.0
-    nonisolated static let maxAzimuthDegrees = 30.0
-    nonisolated static let gravityRange = 1.0...30.0        // m/s²
+    nonisolated static let speedRange = 0.5...15.0            // m/s
+    nonisolated static let elevationRangeDegrees = -85.0...85.0
+    nonisolated static let gravityRange = 0.0...30.0          // m/s²
     nonisolated static let gravityPresets: [(name: String, value: Double)] = [
-        ("Moon", 1.62), ("Earth", 9.81), ("Jupiter", 24.79),
+        ("Zero-g", 0), ("Moon", 1.62), ("Earth", 9.81), ("Jupiter", 24.79),
     ]
+    nonisolated static let windSpeedRange = 0.0...15.0        // m/s
+    nonisolated static let timeScaleRange = 0.1...2.0
+    nonisolated static let throwBoostRange = 1.0...3.0
+    nonisolated static let customMassRange = 0.005...5.0      // kg
+    nonisolated static let customDiameterRange = 0.02...0.35  // m
 
     // MARK: Budgets (degrade by not drawing, never by dropping frames)
 
-    nonisolated static let flightBudget = 8
-    nonisolated static let dotsPerFlight = 60
-    /// Strobe interval: one dot per 1/15 s of flight.
+    nonisolated static let flightBudget = 12
+    nonisolated static let dotsPerFlight = 40
+    /// Strobe interval in *simulated* seconds.
     nonisolated static let dotInterval = 1.0 / 15.0
+    nonisolated static let ringBudget = 3
+
+    // MARK: Room bounds & launcher
+
+    /// Flights beyond this radius from the room origin are gone for good.
+    nonisolated static let escapeRadius = 30.0
+    nonisolated static let launcherHome = SIMD3<Double>(-0.6, 1.1, -1.2)
+    /// Barrel length: balls launch from the muzzle tip.
+    nonisolated static let barrelLength = 0.28
+    nonisolated static let ballSpawnPoint = SIMD3<Double>(0.15, 1.25, -0.9)
+    nonisolated static let ringRadius = 0.23                  // regulation-ish rim
+    nonisolated static let ringSpawnPoint = SIMD3<Double>(0.7, 1.6, -1.5)
 
     // MARK: Projectile selection
 
     enum ProjectileKind: String, CaseIterable, Identifiable {
-        case tableTennisBall, basketball, golfBall, cannonball
-
+        case tableTennisBall, basketball, golfBall, cannonball, custom
         var id: String { rawValue }
 
-        var projectile: Projectile {
+        var displayName: String {
             switch self {
-            case .tableTennisBall: .tableTennisBall
-            case .basketball: .basketball
-            case .golfBall: .golfBall
-            case .cannonball: .cannonball
+            case .tableTennisBall: "Table-tennis ball"
+            case .basketball: "Basketball"
+            case .golfBall: "Golf ball"
+            case .cannonball: "Cannonball"
+            case .custom: "Custom ball"
             }
         }
     }
 
-    // MARK: Launch state
+    var kind: ProjectileKind = .basketball
+    /// The custom ball, editable live (smooth-sphere Cd, mid restitution).
+    var customMass = 0.25
+    var customDiameter = 0.10
 
-    var launchSpeed = 7.0
+    var projectile: Projectile {
+        switch kind {
+        case .tableTennisBall: .tableTennisBall
+        case .basketball: .basketball
+        case .golfBall: .golfBall
+        case .cannonball: .cannonball
+        case .custom: Projectile(
+            name: "Custom ball", mass: customMass, diameter: customDiameter,
+            dragCoefficient: 0.47, restitution: 0.6)
+        }
+    }
+
+    // MARK: Environment
+
     var gravity = 9.81
     var airResistance = false
-    var kind: ProjectileKind = .basketball
-    /// Unit aim vector from the muzzle (+x downrange, +y up).
-    private(set) var aimDirection = KinematicsModel.direction(elevationDegrees: 45, azimuthDegrees: 0)
+    var windSpeed = 0.0
+    /// Wind heading in degrees; 0 blows toward +x, 90 toward +z.
+    var windDirectionDegrees = 0.0
 
-    // MARK: Aiming
+    var wind: SIMD3<Double> {
+        let heading = windDirectionDegrees * .pi / 180
+        return windSpeed * SIMD3(cos(heading), 0, sin(heading))
+    }
+
+    private func drag(for projectile: Projectile) -> ProjectileMotion.Drag? {
+        airResistance ? ProjectileMotion.Drag(projectile: projectile, wind: wind) : nil
+    }
+
+    // MARK: Time control
+
+    var timeScale = 1.0
+    var isPaused = false
+
+    // MARK: Launcher
+
+    var launcherPosition = KinematicsModel.launcherHome
+    var launchSpeed = 6.0
+    /// Unit aim vector. Negative elevation is allowed — the launcher can
+    /// sit high and fire downward.
+    private(set) var aimDirection = KinematicsModel.direction(elevationDegrees: 45, azimuthDegrees: 0)
 
     nonisolated static func direction(elevationDegrees: Double, azimuthDegrees: Double) -> SIMD3<Double> {
         let elevation = elevationDegrees * .pi / 180
@@ -97,41 +148,48 @@ final class KinematicsModel {
     func setAim(elevationDegrees: Double, azimuthDegrees: Double) {
         let elevation = min(max(elevationDegrees, Self.elevationRangeDegrees.lowerBound),
                             Self.elevationRangeDegrees.upperBound)
-        let azimuth = min(max(azimuthDegrees, -Self.maxAzimuthDegrees), Self.maxAzimuthDegrees)
-        aimDirection = Self.direction(elevationDegrees: elevation, azimuthDegrees: azimuth)
+        aimDirection = Self.direction(elevationDegrees: elevation, azimuthDegrees: azimuthDegrees)
     }
 
-    /// Aim from the in-space bead drag: `point` is where the user's hand
-    /// is, in physics space relative to the muzzle. Elevation and azimuth
-    /// are clamped so the launcher can't point into the table or off it.
+    /// Aim from the bead drag: `point` is the hand in room space; aim from
+    /// the launcher toward it (azimuth free — fire anywhere in the room).
     func aim(toward point: SIMD3<Double>) {
-        guard simd_length(point) > 0.05 else { return }
-        let direction = simd_normalize(point)
+        let offset = point - launcherPosition
+        guard simd_length(offset) > 0.05 else { return }
+        let direction = simd_normalize(offset)
         setAim(
             elevationDegrees: asin(max(-1, min(1, direction.y))) * 180 / .pi,
             azimuthDegrees: atan2(direction.z, direction.x) * 180 / .pi
         )
     }
 
-    // MARK: Derived launch quantities
-
-    var launchVelocity: SIMD3<Double> { launchSpeed * aimDirection }
-
-    var drag: ProjectileMotion.Drag? {
-        airResistance ? ProjectileMotion.Drag(projectile: kind.projectile) : nil
+    func moveLauncher(to point: SIMD3<Double>) {
+        var clamped = point
+        clamped.y = max(clamped.y, 0.15)
+        launcherPosition = clamped
     }
 
-    /// The live predicted trajectory for the current aim — a few hundred
-    /// RK4 steps, microseconds of work, so it's fine to recompute on read.
+    var muzzlePoint: SIMD3<Double> {
+        launcherPosition + Self.barrelLength * aimDirection
+    }
+
+    /// The live predicted trajectory from the launcher, bounces included —
+    /// a few hundred RK4 steps, microseconds, fine to recompute on read.
     var prediction: ProjectileMotion.Trajectory {
         ProjectileMotion.simulate(
-            launchVelocity: launchVelocity, gravity: gravity, drag: drag, maxDuration: 12
+            from: muzzlePoint,
+            launchVelocity: launchSpeed * aimDirection,
+            gravity: gravity,
+            drag: drag(for: projectile),
+            restitution: projectile.restitution,
+            maxBounces: 4,
+            maxDuration: 12
         )
     }
 
     var terminalSpeed: Double? {
         airResistance
-            ? ProjectileMotion.terminalSpeed(projectile: kind.projectile, gravity: gravity)
+            ? ProjectileMotion.terminalSpeed(projectile: projectile, gravity: gravity)
             : nil
     }
 
@@ -139,16 +197,31 @@ final class KinematicsModel {
 
     struct Flight: Identifiable, Equatable {
         let id: UUID
-        let kind: ProjectileKind
+        var projectile: Projectile
         var state: ParticleDynamics.State
         var elapsed = 0.0
         var maxHeight = 0.0
         var nextDotTime = KinematicsModel.dotInterval
-        /// Strobe positions at equal time intervals.
         var dots: [SIMD3<Double>] = []
+        var bounces = 0
+        /// Where this arc began, for the range readout.
+        var launchPoint = SIMD3<Double>.zero
+        var wasThrown = false
+        /// Each flight can score each hoop once (a real rim has a net —
+        /// a ball bouncing back up and through again shouldn't re-score).
+        var scoredRings: Set<UUID> = []
 
-        enum Status: Equatable { case flying, landed, offTable }
-        var status: Status = .flying
+        enum Status: Equatable {
+            /// Hovering, waiting to be grabbed (fresh "ball to throw").
+            case staged
+            /// In the user's hand.
+            case held
+            case flying
+            /// On the floor, shedding the last of its speed.
+            case rolling
+            case rested
+        }
+        var status: Status = .staged
     }
 
     private(set) var flights: [Flight] = []
@@ -158,91 +231,288 @@ final class KinematicsModel {
         var range: Double
         var apexHeight: Double
         var flightTime: Double
-        var wentOffTable: Bool
+        var wasThrown: Bool
     }
 
     private(set) var lastFlight: FlightSummary?
 
-    func fire() {
+    /// Hand-motion samples for the ball currently being held.
+    private var holdSamples: [(time: Double, position: SIMD3<Double>)] = []
+    private var heldFlightID: UUID?
+    /// Release-velocity multiplier — ×1 is a physically honest throw.
+    var throwBoost = 1.0
+
+    private func insertFlight(_ flight: Flight) {
         if flights.count >= Self.flightBudget {
-            flights.removeFirst()
+            // Evict settled balls before airborne ones.
+            if let index = flights.firstIndex(where: { $0.status == .rested || $0.status == .staged }) {
+                flights.remove(at: index)
+            } else {
+                flights.removeFirst()
+            }
         }
-        flights.append(Flight(
+        flights.append(flight)
+    }
+
+    /// Fires the launcher.
+    func fire() {
+        var flight = Flight(
             id: UUID(),
-            kind: kind,
-            state: ParticleDynamics.State(position: .zero, velocity: launchVelocity)
+            projectile: projectile,
+            state: ParticleDynamics.State(
+                position: muzzlePoint,
+                velocity: launchSpeed * aimDirection
+            )
+        )
+        flight.status = .flying
+        flight.maxHeight = muzzlePoint.y
+        flight.launchPoint = muzzlePoint
+        insertFlight(flight)
+    }
+
+    /// Spawns a fresh ball hovering by the panel, ready to grab and throw.
+    func spawnBall() {
+        let stagedCount = flights.filter { $0.status == .staged }.count
+        let angle = Double(stagedCount) * 2.4
+        let offset = SIMD3(cos(angle) * 0.12, Double(stagedCount) * 0.02, sin(angle) * 0.12)
+        insertFlight(Flight(
+            id: UUID(),
+            projectile: projectile,
+            state: ParticleDynamics.State(position: Self.ballSpawnPoint + offset)
         ))
     }
 
     func clearFlights() {
         flights.removeAll()
         lastFlight = nil
+        heldFlightID = nil
+        holdSamples.removeAll()
     }
 
-    /// Advances every in-flight projectile by one rendered frame. Two RK4
-    /// substeps per frame; a stalled frame is clamped so debugger pauses
-    /// don't become one giant physics leap.
-    func step(dt: Double) {
-        guard flights.contains(where: { $0.status == .flying }) else { return }
-        let frameDt = min(dt, 1.0 / 30.0)
+    // MARK: Throwing
 
-        for index in flights.indices where flights[index].status == .flying {
-            var flight = flights[index]
-            let drag = airResistance
-                ? ProjectileMotion.Drag(projectile: flight.kind.projectile)
-                : nil
+    func grabBall(id: UUID) {
+        guard let index = flights.firstIndex(where: { $0.id == id }) else { return }
+        heldFlightID = id
+        holdSamples.removeAll()
+        flights[index].status = .held
+        // A re-thrown ball starts a fresh flight record.
+        flights[index].dots.removeAll()
+        flights[index].elapsed = 0
+        flights[index].nextDotTime = Self.dotInterval
+        flights[index].bounces = 0
+        flights[index].scoredRings.removeAll()
+    }
 
-            let previous = flight.state
-            let substep = frameDt / 2
-            for _ in 0..<2 {
-                flight.state = Integrators.rk4Step(flight.state, dt: substep) { _, velocity in
-                    ProjectileMotion.acceleration(velocity: velocity, gravity: gravity, drag: drag)
+    /// `timestamp` defaults to the wall clock; tests inject exact times.
+    func holdBall(id: UUID, at position: SIMD3<Double>, timestamp: Double = CACurrentMediaTime()) {
+        guard let index = flights.firstIndex(where: { $0.id == id }) else { return }
+        flights[index].state = ParticleDynamics.State(position: position)
+        guard heldFlightID == id else { return }
+        holdSamples.append((timestamp, position))
+        if holdSamples.count > 16 {
+            holdSamples.removeFirst()
+        }
+    }
+
+    /// Releases the held ball with the hand's velocity over the final
+    /// ~0.1 s of motion (endpoint estimate over the sample window).
+    func releaseBall(id: UUID, timestamp: Double = CACurrentMediaTime()) {
+        guard let index = flights.firstIndex(where: { $0.id == id }) else { return }
+        defer {
+            heldFlightID = nil
+            holdSamples.removeAll()
+        }
+
+        let now = timestamp
+        let window = holdSamples.filter { now - $0.time < 0.12 }
+        guard let first = window.first, let last = window.last,
+              last.time - first.time > 0.02
+        else {
+            // No meaningful motion: the ball just hovers where released.
+            flights[index].status = .staged
+            return
+        }
+
+        let velocity = throwBoost * (last.position - first.position) / (last.time - first.time)
+        flights[index].state.velocity = velocity
+        flights[index].status = .flying
+        flights[index].maxHeight = flights[index].state.position.y
+        flights[index].launchPoint = flights[index].state.position
+        flights[index].wasThrown = true
+    }
+
+    // MARK: Hoops
+
+    struct Ring: Identifiable, Equatable {
+        let id: UUID
+        var position: SIMD3<Double>
+        var score = 0
+    }
+
+    private(set) var rings: [Ring] = []
+    /// Bumped shortly after a score so observers re-render the flash off.
+    private(set) var ringFlashNonce = 0
+
+    var totalScore: Int { rings.reduce(0) { $0 + $1.score } }
+
+    func addRing() {
+        guard rings.count < Self.ringBudget else { return }
+        let offset = SIMD3(Double(rings.count) * 0.55, Double(rings.count) * 0.15, 0)
+        rings.append(Ring(id: UUID(), position: Self.ringSpawnPoint + offset))
+    }
+
+    func removeLastRing() {
+        guard !rings.isEmpty else { return }
+        rings.removeLast()
+    }
+
+    func moveRing(id: UUID, to point: SIMD3<Double>) {
+        guard let index = rings.firstIndex(where: { $0.id == id }) else { return }
+        var clamped = point
+        clamped.y = max(clamped.y, 0.3)
+        rings[index].position = clamped
+    }
+
+    /// Returns the hoops newly scored by this segment of flight.
+    private func checkRings(
+        previous: SIMD3<Double>,
+        current: SIMD3<Double>,
+        ballRadius: Double,
+        alreadyScored: Set<UUID>
+    ) -> Set<UUID> {
+        var newlyScored: Set<UUID> = []
+        for index in rings.indices where !alreadyScored.contains(rings[index].id) {
+            let ring = rings[index]
+            // Downward pass through the ring's horizontal plane…
+            guard previous.y > ring.position.y, current.y <= ring.position.y else { continue }
+            let fraction = (previous.y - ring.position.y) / (previous.y - current.y)
+            let crossing = previous + fraction * (current - previous)
+            // …inside the rim (ball center comfortably within the ring).
+            let planar = SIMD2(crossing.x - ring.position.x, crossing.z - ring.position.z)
+            if simd_length(planar) < Self.ringRadius - ballRadius * 0.5 {
+                rings[index].score += 1
+                newlyScored.insert(ring.id)
+                let generation = ringFlashNonce
+                Task { [weak self] in
+                    try? await Task.sleep(for: .milliseconds(450))
+                    guard let self, self.ringFlashNonce == generation else { return }
+                    self.ringFlashNonce += 1
                 }
             }
-            let previousElapsed = flight.elapsed
-            flight.elapsed += frameDt
-            flight.maxHeight = max(flight.maxHeight, flight.state.position.y)
-
-            // Strobe dots at exact multiples of dotInterval, interpolated
-            // inside the frame so their spacing genuinely encodes speed.
-            while flight.elapsed >= flight.nextDotTime, flight.dots.count < Self.dotsPerFlight {
-                let fraction = (flight.nextDotTime - previousElapsed) / frameDt
-                flight.dots.append(
-                    previous.position + fraction * (flight.state.position - previous.position)
-                )
-                flight.nextDotTime += Self.dotInterval
-            }
-
-            if flight.state.position.y <= 0, flight.state.velocity.y < 0 {
-                // Landed: interpolate the touchdown inside the frame.
-                let dip = previous.position.y - flight.state.position.y
-                let fraction = dip > 0 ? previous.position.y / dip : 0
-                let landing = previous.position + fraction * (flight.state.position - previous.position)
-                flight.state = ParticleDynamics.State(position: landing)
-                flight.elapsed = previousElapsed + fraction * frameDt
-                flight.status = .landed
-                lastFlight = FlightSummary(
-                    projectileName: flight.kind.projectile.name,
-                    range: simd_length(SIMD2(landing.x, landing.z)),
-                    apexHeight: flight.maxHeight,
-                    flightTime: flight.elapsed,
-                    wentOffTable: false
-                )
-            } else if flight.state.position.x < Self.tableMinX
-                        || flight.state.position.x > Self.tableMaxX
-                        || abs(flight.state.position.z) > Self.tableHalfDepth {
-                // Left the diorama mid-air ("off the table").
-                flight.status = .offTable
-                lastFlight = FlightSummary(
-                    projectileName: flight.kind.projectile.name,
-                    range: simd_length(SIMD2(flight.state.position.x, flight.state.position.z)),
-                    apexHeight: flight.maxHeight,
-                    flightTime: flight.elapsed,
-                    wentOffTable: true
-                )
-            }
-            flights[index] = flight
         }
+        return newlyScored
+    }
+
+    // MARK: Stepping
+
+    /// Advances every active flight by one rendered frame, in simulated
+    /// time (dt × timeScale). Two RK4 substeps per frame; stalled frames
+    /// are clamped so debugger pauses don't become physics leaps.
+    func step(dt: Double) {
+        guard !isPaused else { return }
+        guard flights.contains(where: { $0.status == .flying || $0.status == .rolling }) else { return }
+        let frameDt = min(dt, 1.0 / 30.0) * timeScale
+
+        for index in flights.indices {
+            switch flights[index].status {
+            case .flying: stepFlying(index: index, dt: frameDt)
+            case .rolling: stepRolling(index: index, dt: frameDt)
+            default: continue
+            }
+        }
+
+        flights.removeAll {
+            simd_length($0.state.position) > Self.escapeRadius
+        }
+    }
+
+    private func stepFlying(index: Int, dt: Double) {
+        var flight = flights[index]
+        let drag = drag(for: flight.projectile)
+        let previous = flight.state
+        let substep = dt / 2
+        for _ in 0..<2 {
+            flight.state = Integrators.rk4Step(flight.state, dt: substep) { _, velocity in
+                ProjectileMotion.acceleration(velocity: velocity, gravity: gravity, drag: drag)
+            }
+        }
+        let previousElapsed = flight.elapsed
+        flight.elapsed += dt
+        flight.maxHeight = max(flight.maxHeight, flight.state.position.y)
+
+        flight.scoredRings.formUnion(checkRings(
+            previous: previous.position,
+            current: flight.state.position,
+            ballRadius: flight.projectile.diameter / 2,
+            alreadyScored: flight.scoredRings
+        ))
+
+        // Strobe dots at exact simulated-time intervals, interpolated
+        // inside the frame so their spacing genuinely encodes speed.
+        while flight.elapsed >= flight.nextDotTime, flight.dots.count < Self.dotsPerFlight {
+            let fraction = (flight.nextDotTime - previousElapsed) / dt
+            flight.dots.append(
+                previous.position + fraction * (flight.state.position - previous.position)
+            )
+            flight.nextDotTime += Self.dotInterval
+        }
+
+        // Floor contact (ball center at its radius above y = 0).
+        let floor = flight.projectile.diameter / 2
+        if flight.state.position.y <= floor, flight.state.velocity.y < 0 {
+            let dip = previous.position.y - flight.state.position.y
+            let fraction = dip > 0 ? (previous.position.y - floor) / dip : 0
+            let contact = previous.position + fraction * (flight.state.position - previous.position)
+            let contactTime = previousElapsed + fraction * dt
+
+            if flight.bounces == 0 {
+                lastFlight = FlightSummary(
+                    projectileName: flight.projectile.name,
+                    range: simd_length(SIMD2(contact.x - flight.launchPoint.x,
+                                             contact.z - flight.launchPoint.z)),
+                    apexHeight: flight.maxHeight,
+                    flightTime: contactTime,
+                    wasThrown: flight.wasThrown
+                )
+            }
+
+            let reboundSpeed = -flight.state.velocity.y * flight.projectile.restitution
+            if reboundSpeed > ProjectileMotion.restSpeed {
+                flight.bounces += 1
+                flight.state = ParticleDynamics.State(
+                    position: SIMD3(contact.x, floor, contact.z),
+                    velocity: ProjectileMotion.bounce(
+                        velocity: flight.state.velocity,
+                        restitution: flight.projectile.restitution
+                    )
+                )
+            } else {
+                flight.state = ParticleDynamics.State(
+                    position: SIMD3(contact.x, floor, contact.z),
+                    velocity: SIMD3(flight.state.velocity.x, 0, flight.state.velocity.z)
+                )
+                flight.status = simd_length(flight.state.velocity) > 0.05 ? .rolling : .rested
+            }
+        }
+        flights[index] = flight
+    }
+
+    /// Rolling: horizontal exponential decay (simplified rolling friction)
+    /// until the ball stops.
+    private func stepRolling(index: Int, dt: Double) {
+        var flight = flights[index]
+        let decay = exp(-1.5 * dt)
+        var velocity = flight.state.velocity * decay
+        velocity.y = 0
+        var position = flight.state.position + dt * velocity
+        position.y = flight.projectile.diameter / 2
+        flight.state = ParticleDynamics.State(position: position, velocity: velocity)
+        if simd_length(velocity) < 0.05 {
+            flight.state.velocity = .zero
+            flight.status = .rested
+        }
+        flights[index] = flight
     }
 
     // MARK: Reset
@@ -250,12 +520,20 @@ final class KinematicsModel {
     /// Returns the module to its freshly-entered state. Wired to the
     /// shell's Reset button through the module descriptor.
     func reset() {
-        flights.removeAll()
-        lastFlight = nil
-        launchSpeed = 7.0
+        clearFlights()
+        rings.removeAll()
+        launcherPosition = Self.launcherHome
+        launchSpeed = 6.0
         gravity = 9.81
         airResistance = false
+        windSpeed = 0
+        windDirectionDegrees = 0
+        timeScale = 1.0
+        isPaused = false
+        throwBoost = 1.0
         kind = .basketball
+        customMass = 0.25
+        customDiameter = 0.10
         aimDirection = Self.direction(elevationDegrees: 45, azimuthDegrees: 0)
     }
 }
