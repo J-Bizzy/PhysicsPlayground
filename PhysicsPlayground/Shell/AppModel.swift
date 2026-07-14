@@ -41,4 +41,13 @@ final class AppModel {
         kinematics = model
         return model
     }
+
+    private var gravityLab: GravityLabModel?
+
+    var gravityLabModel: GravityLabModel {
+        if let gravityLab { return gravityLab }
+        let model = GravityLabModel()
+        gravityLab = model
+        return model
+    }
 }

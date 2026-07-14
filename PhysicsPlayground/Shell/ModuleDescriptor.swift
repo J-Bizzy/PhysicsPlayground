@@ -77,6 +77,7 @@ enum ModuleCatalog {
         [
             ElectromagnetismModule.descriptor(appModel: appModel),
             KinematicsModule.descriptor(appModel: appModel),
+            GravityLabModule.descriptor(appModel: appModel),
         ]
     }
 }

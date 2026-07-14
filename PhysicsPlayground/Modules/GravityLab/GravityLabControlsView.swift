@@ -1,0 +1,244 @@
+//
+//  GravityLabControlsView.swift
+//  Physics Playground — Gravity Lab module
+//
+//  The Gravity Lab control panel content: spawn real planets, build a
+//  custom one, bend the rules (Sun mass, G), tune trails and vectors,
+//  and read the live orbital data. The shell adds the hint, legend, and
+//  real-world button around it.
+//
+
+import PhysicsCore
+import SwiftUI
+
+struct GravityLabControlsView: View {
+    @Environment(GravityLabModel.self) private var model
+
+    private let presetColumns = [GridItem(.adaptive(minimum: 92), spacing: 8)]
+
+    var body: some View {
+        @Bindable var model = model
+
+        VStack(spacing: DesignTokens.Panel.sectionSpacing) {
+            PanelSection("Bodies") {
+                LazyVGrid(columns: presetColumns, spacing: 8) {
+                    ForEach(GravityLabModel.Preset.allCases) { preset in
+                        Button(preset.displayName) {
+                            model.spawn(preset)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(model.bodies.count >= GravityLabModel.bodyBudget)
+                        .accessibilityLabel("Spawn \(preset.displayName) on its real orbit")
+                    }
+                }
+
+                Button(role: .destructive) {
+                    model.removeSelected()
+                } label: {
+                    Label("Remove selected body", systemImage: "trash")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.selectedBody == nil || model.selectedBody?.id == model.primaryBody?.id)
+
+                Text("\(model.bodies.count) of \(GravityLabModel.bodyBudget) bodies. Grab any of them — or the Sun.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            PanelSection("Custom planet") {
+                labeledSlider(
+                    "Distance", value: $model.customDistanceAU,
+                    range: 0.3...4.5, format: "%.2f AU"
+                )
+                labeledSlider(
+                    "Mass", value: $model.customMassExponent,
+                    range: 22...28, format: "10^%.1f kg"
+                )
+                labeledSlider(
+                    "Speed", value: $model.customSpeedFactor,
+                    range: 0.4...1.6, format: "×%.2f circular"
+                )
+                if model.customSpeedFactor >= 1.414 {
+                    Text("×1.41 (√2) of circular speed is escape velocity — this one leaves.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Button {
+                    model.spawnCustom()
+                } label: {
+                    Label("Spawn", systemImage: "plus.circle.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Palette.gravityAccent)
+                .disabled(model.bodies.count >= GravityLabModel.bodyBudget)
+            }
+
+            PanelSection("Physics") {
+                labeledSlider(
+                    "Sun mass", value: $model.sunMassMultiplier,
+                    range: 0.1...5, format: "×%.1f"
+                )
+                labeledSlider(
+                    "Gravity (G)", value: $model.gMultiplier,
+                    range: 0.1...5, format: "×%.1f"
+                )
+                Picker("Trails", selection: $model.trailLength) {
+                    ForEach(GravityLabModel.TrailLength.allCases) { length in
+                        Text(length.rawValue.capitalized).tag(length)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel("Trail length")
+
+                Toggle("Velocity vector (blue)", isOn: $model.showVelocityVector)
+                Toggle("Acceleration vector (orange)", isOn: $model.showAccelerationVector)
+                Toggle("Force vector (red)", isOn: $model.showForceVector)
+            }
+            .font(DesignTokens.TypeScale.control)
+
+            PanelSection {
+                GravityLabDataPanel(compact: false)
+            }
+        }
+    }
+
+    private func labeledSlider(
+        _ label: String, value: Binding<Double>,
+        range: ClosedRange<Double>, format: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\(label): \(String(format: format, value.wrappedValue))")
+                .font(DesignTokens.TypeScale.control.monospacedDigit())
+            Slider(value: value, in: range)
+                .accessibilityLabel(label)
+                .accessibilityValue(String(format: format, value.wrappedValue))
+        }
+    }
+}
+
+// MARK: - Live orbital data + the equation, for the selected body
+
+struct GravityLabDataPanel: View {
+    @Environment(GravityLabModel.self) private var model
+    /// Compact = the in-space floating panel; full = the window section.
+    var compact: Bool
+
+    var body: some View {
+        @Bindable var model = model
+
+        VStack(alignment: .leading, spacing: DesignTokens.Panel.rowSpacing) {
+            if compact {
+                Text(model.selectedBody?.body.name ?? "—")
+                    .font(DesignTokens.TypeScale.sectionHeader)
+            } else {
+                HStack {
+                    Text("Orbital data")
+                        .font(DesignTokens.TypeScale.sectionHeader)
+                    Spacer()
+                    Picker("Body", selection: Binding(
+                        get: { model.selectedBody?.id },
+                        set: { if let id = $0 { model.select(id: id) } }
+                    )) {
+                        ForEach(model.bodies) { orbiting in
+                            Text(orbiting.body.name).tag(Optional(orbiting.id))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityLabel("Selected body")
+                }
+            }
+
+            if let selected = model.selectedBody,
+               let readout = model.readout(for: selected) {
+                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 7) {
+                    row("Distance", PhysicsFormat.fixed(readout.distanceAU), "AU")
+                    row("Speed", PhysicsFormat.fixed(readout.speedKmPerS), "km/s")
+                    row("Escape speed", PhysicsFormat.fixed(readout.escapeSpeedKmPerS), "km/s")
+                    if let period = readout.periodDays {
+                        row("Period",
+                            period < 1000 ? PhysicsFormat.fixed(period) : PhysicsFormat.fixed(period / 365.25),
+                            period < 1000 ? "days" : "years")
+                    }
+                    if !compact {
+                        row("Mass", PhysicsFormat.scientific(readout.massKg), "kg")
+                        row("Acceleration", PhysicsFormat.scientific(readout.accelerationMS2), "m/s²")
+                        row("Kinetic E", PhysicsFormat.scientific(readout.kineticEnergy), "J")
+                        row("Potential E", PhysicsFormat.scientific(readout.potentialEnergy), "J")
+                        row("Total E", PhysicsFormat.scientific(readout.totalEnergy), "J")
+                    }
+                }
+
+                boundBadge(readout)
+                equation(readout, name: selected.body.name)
+            } else if model.selectedBody?.id == model.primaryBody?.id {
+                Text("The Sun anchors the system — grab it and drag to see every orbit follow. Select a planet for orbital data.")
+                    .font(DesignTokens.TypeScale.label)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Grab a body to select it.")
+                    .font(DesignTokens.TypeScale.label)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func boundBadge(_ readout: GravityLabModel.Readout) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(readout.isBound ? Color.green : Color.red)
+                .frame(width: 10, height: 10)
+            Text(readout.isBound
+                 ? "Bound orbit — total energy is negative"
+                 : "Escaping! Faster than escape velocity — total energy is positive")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// F = G·M·m/r², color-coded, every value live.
+    private func equation(_ readout: GravityLabModel.Readout, name: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            (Text("F").foregroundColor(DesignTokens.Palette.forceVector).bold()
+                + Text(" = G · ")
+                + Text("M").foregroundColor(DesignTokens.Palette.sunColor).bold()
+                + Text(" · ")
+                + Text("m").foregroundColor(DesignTokens.Palette.gravityAccent).bold()
+                + Text(" / ")
+                + Text("r").foregroundColor(DesignTokens.Palette.fieldLine).bold()
+                + Text("²"))
+                .font(DesignTokens.TypeScale.control)
+            (Text(PhysicsFormat.scientific(readout.forceNewtons) + " N")
+                .foregroundColor(DesignTokens.Palette.forceVector)
+                + Text("  ·  ")
+                + Text("r = " + PhysicsFormat.fixed(readout.distanceAU) + " AU")
+                .foregroundColor(DesignTokens.Palette.fieldLine)
+                + Text("  ·  ")
+                + Text("m = " + PhysicsFormat.scientific(readout.massKg) + " kg")
+                .foregroundColor(DesignTokens.Palette.gravityAccent))
+                .font(DesignTokens.TypeScale.footnote)
+        }
+        .accessibilityLabel(
+            "Newton's law of gravitation. Force \(PhysicsFormat.scientific(readout.forceNewtons)) newtons at \(PhysicsFormat.fixed(readout.distanceAU)) astronomical units."
+        )
+    }
+
+    private func row(_ label: String, _ value: String, _ unit: String) -> some View {
+        GridRow {
+            Text(label)
+                .font(DesignTokens.TypeScale.label)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(DesignTokens.TypeScale.control.monospacedDigit())
+                .gridColumnAlignment(.trailing)
+            Text(unit)
+                .font(DesignTokens.TypeScale.label)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value) \(unit)")
+    }
+}

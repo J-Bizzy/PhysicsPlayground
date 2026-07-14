@@ -49,9 +49,34 @@ enum DesignTokens {
         /// The bright end of the arrow-strength ramp (see VectorFieldArrows).
         static let arrowStrong = Color.yellow
 
+        // Gravity Lab
+        static let velocityVectorUI: UIColor = .systemBlue
+        static let accelerationVectorUI: UIColor = .systemOrange
+        static let forceVectorUI: UIColor = .systemRed
+        static let velocityVector = Color(uiColor: velocityVectorUI)
+        static let accelerationVector = Color(uiColor: accelerationVectorUI)
+        static let forceVector = Color(uiColor: forceVectorUI)
+        static let sunColor = Color(uiColor: celestialUI("Sun"))
+
+        /// Celestial body colors, keyed by preset name (custom = teal).
+        static func celestialUI(_ name: String) -> UIColor {
+            switch name {
+            case "Sun": UIColor(red: 1.0, green: 0.85, blue: 0.45, alpha: 1)
+            case "Mercury": .systemGray
+            case "Venus": UIColor(red: 0.85, green: 0.72, blue: 0.52, alpha: 1)
+            case "Earth": .systemBlue
+            case "Moon": UIColor(white: 0.75, alpha: 1)
+            case "Mars": UIColor(red: 0.83, green: 0.4, blue: 0.26, alpha: 1)
+            case "Jupiter": UIColor(red: 0.82, green: 0.64, blue: 0.46, alpha: 1)
+            case "Asteroid": UIColor(white: 0.55, alpha: 1)
+            default: .systemTeal
+            }
+        }
+
         // Module accent colors, one per catalog entry.
         static let electromagnetismAccent = Color.yellow
         static let kinematicsAccent = Color.orange
+        static let gravityAccent = Color.indigo
     }
 
     // MARK: Panel metrics
