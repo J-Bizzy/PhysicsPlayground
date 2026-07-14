@@ -2,10 +2,11 @@
 //  HubView.swift
 //  Physics Playground — Hub
 //
-//  The module catalog: a grid of cards, one per physics module. Picking a
-//  card activates the module and opens the shared immersive space. This
-//  window-based catalog is the hub's first form — the walk-through hub
-//  space comes once there are multiple modules to walk between.
+//  The window half of the hub. The real menu floats in the room
+//  (HubSpaceView): this window opens that space on launch, explains the
+//  gesture, and keeps a plain list of the exhibits — the path for
+//  VoiceOver users and anyone who'd rather tap a button than pinch a
+//  bubble.
 //
 
 import SwiftUI
@@ -14,70 +15,73 @@ struct HubView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
 
-    private let columns = [GridItem(.adaptive(minimum: 210), spacing: 16)]
-
     var body: some View {
         ScrollView {
             VStack(spacing: DesignTokens.Panel.sectionSpacing) {
                 VStack(spacing: 6) {
                     Text("Physics Playground")
                         .font(DesignTokens.TypeScale.screenTitle)
-                    Text("Pick a simulation and it appears in your room.")
+                    Text("The exhibits are floating around you — look at a bubble and pinch to step inside.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
                 .accessibilityElement(children: .combine)
 
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(ModuleCatalog.all(appModel: appModel)) { module in
-                        ModuleCard(module: module) {
-                            enter(module)
+                if !appModel.isImmersiveSpaceOpen {
+                    Button {
+                        Task {
+                            _ = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
                         }
+                    } label: {
+                        Label("Show the exhibits", systemImage: "sparkles")
+                            .font(.title3)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityHint("Places the menu bubbles in your room")
+                }
+
+                PanelSection("Exhibits") {
+                    ForEach(ModuleCatalog.all(appModel: appModel)) { module in
+                        Button {
+                            appModel.activeModuleID = module.id
+                        } label: {
+                            HStack(spacing: DesignTokens.Panel.rowSpacing) {
+                                Image(systemName: module.icon)
+                                    .font(.title3)
+                                    .foregroundStyle(module.accent)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(module.title)
+                                        .font(DesignTokens.TypeScale.sectionHeader)
+                                    Text(module.blurb)
+                                        .font(DesignTokens.TypeScale.footnote)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(module.title). \(module.blurb)")
+                        .accessibilityHint("Opens this exhibit")
                     }
                 }
             }
             .padding(DesignTokens.Panel.outerPadding)
         }
-    }
-
-    private func enter(_ module: ModuleDescriptor) {
-        appModel.activeModuleID = module.id
-        Task {
+        .task {
+            // The spatial menu is the hub — bring it up on arrival.
             if !appModel.isImmersiveSpaceOpen {
                 _ = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
             }
         }
-    }
-}
-
-private struct ModuleCard: View {
-    let module: ModuleDescriptor
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: DesignTokens.Panel.rowSpacing) {
-                Image(systemName: module.icon)
-                    .font(.system(size: 34))
-                    .foregroundStyle(module.accent)
-                Text(module.title)
-                    .font(DesignTokens.TypeScale.cardTitle)
-                Text(module.blurb)
-                    .font(DesignTokens.TypeScale.label)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3, reservesSpace: true)
-                    .multilineTextAlignment(.leading)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(DesignTokens.Panel.padding)
-        }
-        .buttonStyle(.plain)
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cornerRadius)
-        )
-        .hoverEffect()
-        .accessibilityLabel("\(module.title). \(module.blurb)")
-        .accessibilityHint("Opens this simulation in your room")
     }
 }
