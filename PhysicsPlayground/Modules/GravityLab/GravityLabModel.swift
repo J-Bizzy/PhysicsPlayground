@@ -124,6 +124,17 @@ final class GravityLabModel {
     var showVelocityVector = true
     var showAccelerationVector = false
     var showForceVector = true
+    /// Drifting particles that trace the local field direction.
+    var showFieldParticles = false
+    /// The rubber-sheet picture — conceptual, and labeled as such.
+    var showSpacetimeGrid = false
+
+    /// The scene's natural length: 1 AU in solar mode, the Earth–Moon
+    /// separation in Lagrange mode. Visualizations normalize against the
+    /// field strength at this distance from the primary.
+    var characteristicLength: Double {
+        mode == .solarSystem ? CelestialBody.astronomicalUnit : Self.earthMoonSeparation
+    }
 
     /// Total simulated time, in days (shown on the time panel).
     private(set) var simulatedDays = 0.0
@@ -539,6 +550,8 @@ final class GravityLabModel {
         showVelocityVector = true
         showAccelerationVector = false
         showForceVector = true
+        showFieldParticles = false
+        showSpacetimeGrid = false
         simulatedDays = 0
         customCount = 0
         customDistanceAU = 1.5

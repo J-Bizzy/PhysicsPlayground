@@ -206,6 +206,8 @@ final class GravityLabModelTests: XCTestCase {
         model.timeScale = 100
         model.gMultiplier = 3
         model.trailLength = .long
+        model.showFieldParticles = true
+        model.showSpacetimeGrid = true
         model.step(dt: 1)
 
         model.reset()
@@ -215,5 +217,7 @@ final class GravityLabModelTests: XCTestCase {
         XCTAssertEqual(model.gMultiplier, 1)
         XCTAssertEqual(model.trailLength, .medium)
         XCTAssertEqual(model.simulatedDays, 0)
+        XCTAssertFalse(model.showFieldParticles)
+        XCTAssertFalse(model.showSpacetimeGrid)
     }
 }

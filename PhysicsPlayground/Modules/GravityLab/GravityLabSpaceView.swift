@@ -36,8 +36,11 @@ struct GravityLabSpaceView: View {
             configureRouter(renderer: renderer)
             renderer.subscriptions = router.subscriptions(for: content)
             renderer.subscriptions.append(
-                content.subscribe(to: SceneEvents.Update.self) { event in
+                content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.step(dt: event.deltaTime)
+                    // Ticked here (not in the render loop) so the field
+                    // keeps flowing even while the simulation is paused.
+                    renderer?.tickFieldParticles(dt: event.deltaTime, model: model)
                 }
             )
 

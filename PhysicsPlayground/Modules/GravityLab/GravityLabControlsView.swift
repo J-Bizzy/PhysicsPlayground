@@ -137,6 +137,22 @@ struct GravityLabControlsView: View {
                 Toggle("Velocity vector (blue)", isOn: $model.showVelocityVector)
                 Toggle("Acceleration vector (orange)", isOn: $model.showAccelerationVector)
                 Toggle("Force vector (red)", isOn: $model.showForceVector)
+
+                Toggle("Gravity field particles", isOn: $model.showFieldParticles)
+                    .accessibilityHint("Faint particles drifting along the field — they crowd together where gravity is stronger")
+                if model.showFieldParticles {
+                    Text("Each particle drifts along the true local field, Σ GM/r² — the crowding near masses isn't drawn, it emerges.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Toggle("Spacetime grid (conceptual)", isOn: $model.showSpacetimeGrid)
+                    .accessibilityHint("The rubber-sheet picture: masses dent a grid beneath the system")
+                if model.showSpacetimeGrid {
+                    Text("The classic rubber-sheet picture — an analogy, not the simulation. Well depths are compressed (∝ m¼) so planets dent the sheet visibly beside the Sun.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
             .font(DesignTokens.TypeScale.control)
 

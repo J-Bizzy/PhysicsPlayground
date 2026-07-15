@@ -55,6 +55,19 @@ final class GravityLabRenderer {
     private let predictionEntity = ModelEntity()
     private let predictionMaterial: UnlitMaterial
     private let flashEntity: ModelEntity
+    private var platform: ModelEntity!
+
+    // Field particles (display-space positions, relative to systemRoot).
+    private static let particleBudget = 450
+    private static let particleLife = 7.0
+    private let particlePool: EntityPool<Void>
+    private var particlePositions: [SIMD3<Float>] = []
+    private var particleAges: [Double] = []
+    private var particlesVisible = false
+
+    // Spacetime grid.
+    private static let floorHeight: Float = -0.42
+    private let gridEntity = ModelEntity()
 
     private struct Arrow {
         let container: Entity
@@ -75,14 +88,31 @@ final class GravityLabRenderer {
         root.addChild(systemRoot)
 
         // The floating platform under the system — a quiet glass disc.
+        // Hidden while the spacetime grid takes over as the floor.
         var platformMaterial = UnlitMaterial(color: .black)
         platformMaterial.blending = .transparent(opacity: 0.35)
-        let platform = ModelEntity(
+        platform = ModelEntity(
             mesh: .generateCylinder(height: 0.006, radius: 0.55),
             materials: [platformMaterial]
         )
-        platform.position = [0, -0.42, 0]
+        platform.position = [0, Self.floorHeight, 0]
         systemRoot.addChild(platform)
+
+        // The spacetime grid (rubber-sheet picture), rebuilt as bodies move.
+        systemRoot.addChild(gridEntity)
+
+        // Field particles: a fixed pool of faint dots that drift along the
+        // local gravitational field. Density near masses emerges from the
+        // flow itself — strong fields pull the streamlines together.
+        var particleMaterial = UnlitMaterial(color: .white)
+        particleMaterial.blending = .transparent(opacity: 0.32)
+        let particleMesh = MeshResource.generateSphere(radius: 0.0028)
+        particlePool = EntityPool(budget: Self.particleBudget) { container in
+            container.addChild(ModelEntity(mesh: particleMesh, materials: [particleMaterial]))
+        }
+        particlePositions = (0..<Self.particleBudget).map { _ in Self.randomParticleHome() }
+        particleAges = (0..<Self.particleBudget).map { _ in Double.random(in: 0..<Self.particleLife) }
+        systemRoot.addChild(particlePool.root)
 
         // Bodies.
         let bodyMesh = MeshResource.generateSphere(radius: Self.baseBodyRadius)
@@ -269,6 +299,135 @@ final class GravityLabRenderer {
         syncVectors(model)
         syncMergeFlash(model)
         syncLagrangeMarkers(model)
+        syncSpacetimeGrid(model)
+    }
+
+    // MARK: Field particles (ticked every frame by the space view, so the
+    // flow keeps moving even while the simulation itself is paused)
+
+    func tickFieldParticles(dt: Double, model: GravityLabModel) {
+        guard model.showFieldParticles else {
+            if particlesVisible {
+                particlePool.hideAll()
+                particlesVisible = false
+            }
+            return
+        }
+        particlesVisible = true
+
+        let bodies = model.bodies
+        guard !bodies.isEmpty else { return }
+        let G = model.effectiveG
+        let toSim = model.displayToSim
+        // Field strength at the scene's natural distance from the primary —
+        // the yardstick that maps acceleration to a visible drift speed.
+        let primaryMass = model.primaryBody?.body.mass ?? 1
+        let referenceAcceleration = G * primaryMass
+            / (model.characteristicLength * model.characteristicLength)
+
+        for index in 0..<Self.particleBudget {
+            var position = particlePositions[index]
+            particleAges[index] += dt
+
+            // True local field: a = Σ G·m·r̂/r², same math the planets feel.
+            let simPoint = SIMD3<Double>(position) * toSim
+            var acceleration = SIMD3<Double>.zero
+            var nearBody = false
+            for orbiting in bodies {
+                let offset = orbiting.body.position - simPoint
+                let distanceSquared = simd_length_squared(offset)
+                acceleration += (G * orbiting.body.mass
+                    / (distanceSquared * distanceSquared.squareRoot())) * offset
+                let displayDistance = distanceSquared.squareRoot() / toSim
+                if displayDistance < orbiting.displayRadius * 1.7 { nearBody = true }
+            }
+            let magnitude = simd_length(acceleration)
+
+            if magnitude > 0 {
+                // Drift along the field; speed grows sub-linearly with
+                // strength so the far field still visibly creeps.
+                let speed = 0.05 + 0.22 * min(1, pow(magnitude / referenceAcceleration, 0.35))
+                position += SIMD3<Float>(acceleration / magnitude) * Float(speed * dt)
+            }
+
+            // Absorbed, expired, or wandered off: respawn somewhere fresh.
+            if nearBody || particleAges[index] > Self.particleLife
+                || simd_length(position) > 0.95 {
+                position = Self.randomParticleHome()
+                particleAges[index] = 0
+            }
+            particlePositions[index] = position
+
+            // Fade in at birth and out near death by scaling.
+            let age = particleAges[index]
+            let fade = max(0.02, min(age / 0.6, (Self.particleLife - age) / 0.8, 1))
+            let slot = particlePool.slots[index]
+            slot.entity.isEnabled = true
+            slot.entity.position = position
+            slot.entity.scale = SIMD3(repeating: Float(fade))
+        }
+    }
+
+    private static func randomParticleHome() -> SIMD3<Float> {
+        // A point in a spherical shell around the system, biased outward
+        // so particles enter from the quiet far field.
+        var direction = SIMD3<Float>(
+            Float.random(in: -1...1), Float.random(in: -1...1), Float.random(in: -1...1))
+        let length = simd_length(direction)
+        direction = length > 1e-5 ? direction / length : SIMD3(0, 1, 0)
+        return direction * Float.random(in: 0.35...0.9)
+    }
+
+    // MARK: Spacetime grid (the rubber-sheet picture — conceptual only)
+
+    private func syncSpacetimeGrid(_ model: GravityLabModel) {
+        let show = model.showSpacetimeGrid
+        platform.isEnabled = !show
+        gridEntity.isEnabled = show
+        // Rebuild at a third of the render rate; bodies barely move per frame.
+        guard show, frameCounter % 3 == 0 else { return }
+
+        // Well weight ∝ m^¼ — deliberately compressed so planets still dent
+        // the sheet visibly beside the Sun. Conceptual, and labeled so.
+        let maxMass = model.bodies.map(\.body.mass).max() ?? 1
+        let wells: [(center: SIMD2<Float>, weight: Float)] = model.bodies.map { orbiting in
+            let display = SIMD3<Float>(orbiting.body.position) * scale
+            return (SIMD2(display.x, display.z),
+                    Float(pow(orbiting.body.mass / maxMass, 0.25)))
+        }
+
+        func height(_ x: Float, _ z: Float) -> Float {
+            var dip: Float = 0
+            for well in wells {
+                let d = simd_length(SIMD2(x, z) - well.center)
+                dip += well.weight / (1 + (d * d) / (0.15 * 0.15))
+            }
+            return Self.floorHeight - min(dip * 0.14, 0.2)
+        }
+
+        let extent: Float = 0.85
+        let lineCount = 11
+        let samples = 25
+        var lines: [[SIMD3<Float>]] = []
+        lines.reserveCapacity(lineCount * 2)
+        for lineIndex in 0..<lineCount {
+            let offset = -extent + 2 * extent * Float(lineIndex) / Float(lineCount - 1)
+            var alongX: [SIMD3<Float>] = []
+            var alongZ: [SIMD3<Float>] = []
+            for sample in 0..<samples {
+                let t = -extent + 2 * extent * Float(sample) / Float(samples - 1)
+                alongX.append(SIMD3(t, height(t, offset), offset))
+                alongZ.append(SIMD3(offset, height(offset, t), t))
+            }
+            lines.append(alongX)
+            lines.append(alongZ)
+        }
+
+        if let mesh = TubeMesh.tube(lines: lines, radius: 0.0011, sides: 3) {
+            var material = UnlitMaterial(color: .white)
+            material.blending = .transparent(opacity: 0.3)
+            gridEntity.model = ModelComponent(mesh: mesh, materials: [material])
+        }
     }
 
     private func syncLagrangeMarkers(_ model: GravityLabModel) {
