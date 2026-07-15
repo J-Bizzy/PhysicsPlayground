@@ -185,6 +185,7 @@ final class HubScene {
         case "kinematics": buildProjectileVignette(in: vignette)
         case "gravitylab": buildOrbitVignette(in: vignette)
         case "waves": buildWavesVignette(in: vignette)
+        case "windtunnel": buildWindTunnelVignette(in: vignette)
         default:
             // A new module gets a simple accent sphere until it has art.
             vignette.addChild(ModelEntity(
@@ -243,6 +244,30 @@ final class HubScene {
             let dot = ModelEntity(mesh: dotMesh, materials: [dotMaterial])
             dot.position = [x, y - 0.01, 0]
             parent.addChild(dot)
+        }
+    }
+
+    /// A cylinder with streamlines parting around it.
+    private static func buildWindTunnelVignette(in parent: Entity) {
+        let cylinder = ModelEntity(
+            mesh: .generateCylinder(height: 0.05, radius: 0.016),
+            materials: [SimpleMaterial(color: DesignTokens.Palette.launcherUI,
+                                       roughness: 0.35, isMetallic: true)])
+        parent.addChild(cylinder)
+
+        var lineMaterial = UnlitMaterial(color: DesignTokens.Palette.streamlineUI)
+        lineMaterial.blending = .transparent(opacity: 0.7)
+        for offset: Float in [-0.034, -0.012, 0.012, 0.034] {
+            let line: [SIMD3<Float>] = (0...24).map { step in
+                let x = -0.055 + 0.11 * Float(step) / 24
+                // Bend away from the cylinder, strongest near x = 0.
+                let bulge = 0.014 * exp(-x * x / 0.0012) * (offset > 0 ? 1 : -1)
+                    / max(abs(offset) / 0.02, 1)
+                return SIMD3(x, 0, offset + bulge)
+            }
+            if let mesh = TubeMesh.tube(lines: [line], radius: 0.0013) {
+                parent.addChild(ModelEntity(mesh: mesh, materials: [lineMaterial]))
+            }
         }
     }
 

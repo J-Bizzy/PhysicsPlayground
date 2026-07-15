@@ -79,11 +79,15 @@ enum DesignTokens {
         static let waveSource = Color(uiColor: waveSourceUI)
         static let waveInverted = Color(uiColor: waveInvertedUI)
 
+        // Wind tunnel
+        static let streamlineUI: UIColor = .systemMint
+
         // Module accent colors, one per catalog entry.
         static let electromagnetismAccent = Color.yellow
         static let kinematicsAccent = Color.orange
         static let gravityAccent = Color.indigo
         static let wavesAccent = Color.cyan
+        static let windAccent = Color.mint
     }
 
     // MARK: Panel metrics

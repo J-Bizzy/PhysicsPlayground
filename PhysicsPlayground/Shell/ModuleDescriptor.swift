@@ -83,6 +83,7 @@ enum ModuleCatalog {
             KinematicsModule.descriptor(appModel: appModel),
             GravityLabModule.descriptor(appModel: appModel),
             WavesModule.descriptor(appModel: appModel),
+            WindTunnelModule.descriptor(appModel: appModel),
         ]
     }
 }

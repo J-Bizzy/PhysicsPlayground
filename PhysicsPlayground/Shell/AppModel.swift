@@ -66,4 +66,13 @@ final class AppModel {
         waves = model
         return model
     }
+
+    private var windTunnel: WindTunnelModel?
+
+    var windTunnelModel: WindTunnelModel {
+        if let windTunnel { return windTunnel }
+        let model = WindTunnelModel()
+        windTunnel = model
+        return model
+    }
 }
