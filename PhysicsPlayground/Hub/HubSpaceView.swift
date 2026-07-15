@@ -2,17 +2,19 @@
 //  HubSpaceView.swift
 //  Physics Playground — Hub
 //
-//  The spatial menu: the app title floats in front of the user, and each
-//  module is a glass bubble on an arc around them — a living miniature
-//  of the experience inside, its name floating beneath. Look at a bubble
-//  (the system hover effect lights it) and pinch to enter.
+//  The spatial menu: the app title floats ahead, and the exhibits —
+//  large, free-floating 3D miniatures of each experience, no enclosing
+//  shells — drift in a slow carousel around the user, names beneath
+//  them in their module accents. Look at one (the system hover effect
+//  lights it up) and pinch to enter.
 //
-//  Everything idles gently: bubbles bob out of phase and the vignettes
-//  slowly turn. The whole scene is a handful of entities — the per-frame
-//  work is a few transform writes.
+//  Everything idles: the carousel revolves about once every two
+//  minutes, exhibits bob out of phase and slowly turn. A handful of
+//  entities; per-frame work is a few transform writes.
 //
 //  Vignettes are keyed by module id with a generic fallback, so a new
-//  module gets a bubble for free and a bespoke miniature with one case.
+//  module joins the carousel for free and gets a bespoke miniature
+//  with one case.
 //
 
 import SwiftUI
@@ -37,7 +39,7 @@ struct HubSpaceView: View {
                 .targetedToAnyEntity()
                 .onEnded { value in
                     guard let id = scene.moduleID(for: value.entity) else { return }
-                    scene.pulseBubble(id: id)
+                    scene.pulseExhibit(id: id)
                     Task {
                         // Let the pulse land before the scene switches.
                         try? await Task.sleep(for: .milliseconds(160))
@@ -55,38 +57,33 @@ final class HubScene {
     let root = Entity()
     var subscription: EventSubscription?
 
-    private struct Bubble {
+    private struct Exhibit {
         let moduleID: String
-        let anchor: Entity      // bobbing position
-        let shell: ModelEntity  // tap target
+        let anchor: Entity      // carousel position (moved every frame)
+        let pulser: Entity      // scale pulse on selection
         let vignette: Entity    // slowly rotating miniature
+        let baseAngle: Float
     }
-    private var bubbles: [Bubble] = []
+    private var exhibits: [Exhibit] = []
     private var time = 0.0
 
-    // Pushed well past the default window position (~1.3 m) so the menu
-    // reads as a room-scale layer behind and around the window.
-    private static let bubbleRadius: Float = 0.15
-    private static let arcRadius: Float = 2.1
-    private static let bubbleHeight: Float = 1.5
+    private static let carouselRadius: Float = 2.0
+    private static let exhibitHeight: Float = 1.45
+    /// One full revolution ≈ every two minutes.
+    private static let carouselSpeed = 0.05
+    /// The miniatures, unbottled and enlarged.
+    private static let vignetteScale: Float = 2.1
 
     // MARK: Build
 
     func build(modules: [ModuleDescriptor]) {
         buildTitle()
-
-        // Bubbles flank the user, alternating right and left and leaving
-        // the center corridor (±20°) free for the title and the window.
+        let count = max(modules.count, 1)
         for (index, module) in modules.enumerated() {
-            let side: Float = index % 2 == 0 ? -1 : 1
-            let ring = Float(index / 2)
-            let angle = side * (24 + 28 * ring) * .pi / 180
-            let position = SIMD3<Float>(
-                Self.arcRadius * sin(angle),
-                Self.bubbleHeight,
-                -Self.arcRadius * cos(angle)
-            )
-            buildBubble(for: module, at: position)
+            // Half-slot offset so no exhibit starts dead center behind
+            // the title; the carousel brings each one around in turn.
+            let baseAngle = 2 * Float.pi * (Float(index) + 0.5) / Float(count)
+            buildExhibit(for: module, baseAngle: baseAngle)
         }
     }
 
@@ -124,42 +121,34 @@ final class HubScene {
         root.addChild(subtitle)
     }
 
-    private func buildBubble(for module: ModuleDescriptor, at position: SIMD3<Float>) {
+    private func buildExhibit(for module: ModuleDescriptor, baseAngle: Float) {
         let anchor = Entity()
-        anchor.position = position
-        root.addChild(anchor)
-
-        // The glass shell — also the gaze/pinch target.
-        var glass = PhysicallyBasedMaterial()
-        glass.baseColor = .init(tint: .white)
-        glass.roughness = 0.08
-        glass.metallic = 0.0
-        glass.blending = .transparent(opacity: .init(floatLiteral: 0.14))
-        let shell = ModelEntity(
-            mesh: .generateSphere(radius: Self.bubbleRadius),
-            materials: [glass]
-        )
-        shell.name = module.id
-        shell.components.set(InputTargetComponent())
-        shell.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: Self.bubbleRadius * 1.15)]))
-        shell.components.set(HoverEffectComponent())
+        anchor.name = module.id
+        // Invisible gaze/pinch target wrapping the whole miniature; the
+        // hover highlight lights the miniature itself — no shell.
+        anchor.components.set(InputTargetComponent())
+        anchor.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.24)]))
+        anchor.components.set(HoverEffectComponent())
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = LocalizedStringResource(
             stringLiteral: "Enter \(module.title). \(module.blurb)")
-        shell.components.set(accessibility)
-        anchor.addChild(shell)
+        anchor.components.set(accessibility)
+        root.addChild(anchor)
 
-        // The living miniature inside.
+        let pulser = Entity()
+        anchor.addChild(pulser)
+
+        // The living miniature — big enough to read from across the room.
         let vignette = Self.vignette(for: module)
-        anchor.addChild(vignette)
+        vignette.scale = SIMD3(repeating: Self.vignetteScale)
+        pulser.addChild(vignette)
 
         // The floating name beneath, always facing the user.
         let nameMesh = MeshResource.generateText(
             module.title,
-            extrusionDepth: 0.003,
-            font: .systemFont(ofSize: 0.034, weight: .semibold)
+            extrusionDepth: 0.004,
+            font: .systemFont(ofSize: 0.044, weight: .semibold)
         )
         let name = ModelEntity(
             mesh: nameMesh,
@@ -168,12 +157,14 @@ final class HubScene {
         let nameBounds = nameMesh.bounds
         name.position = [-(nameBounds.min.x + nameBounds.max.x) / 2, 0, 0]
         let namePivot = Entity()
-        namePivot.position = [0, -Self.bubbleRadius - 0.075, 0]
+        namePivot.position = [0, -0.28, 0]
         namePivot.components.set(BillboardComponent())
         namePivot.addChild(name)
-        anchor.addChild(namePivot)
+        pulser.addChild(namePivot)
 
-        bubbles.append(Bubble(moduleID: module.id, anchor: anchor, shell: shell, vignette: vignette))
+        exhibits.append(Exhibit(
+            moduleID: module.id, anchor: anchor, pulser: pulser,
+            vignette: vignette, baseAngle: baseAngle))
     }
 
     // MARK: Vignettes (miniatures of each experience)
@@ -327,24 +318,28 @@ final class HubScene {
 
     // MARK: Idle animation & interaction
 
-    /// Gentle out-of-phase bobbing; vignettes turn once per ~20 s.
+    /// The carousel: every exhibit circles the user slowly, bobbing out
+    /// of phase, its miniature turning.
     func animate(dt: Double) {
         time += dt
-        for (index, bubble) in bubbles.enumerated() {
-            let phase = time * 0.8 + Double(index) * 2.1
-            var position = bubble.anchor.position
-            position.y = Self.bubbleHeight + 0.012 * Float(sin(phase))
-            bubble.anchor.position = position
-            bubble.vignette.orientation = simd_quatf(
+        for (index, exhibit) in exhibits.enumerated() {
+            let angle = exhibit.baseAngle + Float(time * Self.carouselSpeed)
+            let bob = 0.014 * Float(sin(time * 0.8 + Double(index) * 2.1))
+            exhibit.anchor.position = SIMD3(
+                Self.carouselRadius * sin(angle),
+                Self.exhibitHeight + bob,
+                -Self.carouselRadius * cos(angle)
+            )
+            exhibit.vignette.orientation = simd_quatf(
                 angle: Float(time * 0.3 + Double(index)), axis: [0, 1, 0])
         }
     }
 
-    /// Maps a tapped entity (shell or any child) back to its module.
+    /// Maps a tapped entity (target or any child) back to its module.
     func moduleID(for entity: Entity) -> String? {
         var current: Entity? = entity
         while let candidate = current {
-            if bubbles.contains(where: { $0.moduleID == candidate.name }) {
+            if exhibits.contains(where: { $0.moduleID == candidate.name }) {
                 return candidate.name
             }
             current = candidate.parent
@@ -352,14 +347,13 @@ final class HubScene {
         return nil
     }
 
-    /// A quick swell as the chosen bubble accepts the pinch.
-    func pulseBubble(id: String) {
-        guard let bubble = bubbles.first(where: { $0.moduleID == id }) else { return }
-        SoundPalette.play(.pop, on: bubble.shell, volume: 0.7)
-        bubble.anchor.move(
-            to: Transform(scale: SIMD3(repeating: 1.14),
-                          translation: bubble.anchor.position),
-            relativeTo: root,
+    /// A quick swell as the chosen exhibit accepts the pinch.
+    func pulseExhibit(id: String) {
+        guard let exhibit = exhibits.first(where: { $0.moduleID == id }) else { return }
+        SoundPalette.play(.pop, on: exhibit.anchor, volume: 0.7)
+        exhibit.pulser.move(
+            to: Transform(scale: SIMD3(repeating: 1.15)),
+            relativeTo: exhibit.anchor,
             duration: 0.14,
             timingFunction: .easeOut
         )
