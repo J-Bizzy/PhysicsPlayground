@@ -57,4 +57,13 @@ final class AppModel {
         gravityLab = model
         return model
     }
+
+    private var waves: WavesModel?
+
+    var wavesModel: WavesModel {
+        if let waves { return waves }
+        let model = WavesModel()
+        waves = model
+        return model
+    }
 }

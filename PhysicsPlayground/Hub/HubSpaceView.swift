@@ -184,6 +184,7 @@ final class HubScene {
         case "electrostatics": buildFieldVignette(in: vignette)
         case "kinematics": buildProjectileVignette(in: vignette)
         case "gravitylab": buildOrbitVignette(in: vignette)
+        case "waves": buildWavesVignette(in: vignette)
         default:
             // A new module gets a simple accent sphere until it has art.
             vignette.addChild(ModelEntity(
@@ -242,6 +243,33 @@ final class HubScene {
             let dot = ModelEntity(mesh: dotMesh, materials: [dotMaterial])
             dot.position = [x, y - 0.01, 0]
             parent.addChild(dot)
+        }
+    }
+
+    /// Two source pucks with interleaving ripple rings.
+    private static func buildWavesVignette(in parent: Entity) {
+        var ringMaterial = UnlitMaterial(color: DesignTokens.Palette.waveSourceUI)
+        ringMaterial.blending = .transparent(opacity: 0.55)
+
+        for (center, radii): (SIMD3<Float>, [Float]) in [
+            (SIMD3(-0.035, -0.01, 0), [0.02, 0.038]),
+            (SIMD3(0.035, -0.01, 0), [0.02, 0.038]),
+        ] {
+            let puck = ModelEntity(
+                mesh: .generateCylinder(height: 0.008, radius: 0.011),
+                materials: [UnlitMaterial(color: DesignTokens.Palette.waveSourceUI)])
+            puck.position = center
+            parent.addChild(puck)
+
+            for radius in radii {
+                let circle: [SIMD3<Float>] = (0...28).map { step in
+                    let theta = 2 * Float.pi * Float(step) / 28
+                    return center + SIMD3(radius * cos(theta), 0, radius * sin(theta))
+                }
+                if let mesh = TubeMesh.tube(lines: [circle], radius: 0.0014) {
+                    parent.addChild(ModelEntity(mesh: mesh, materials: [ringMaterial]))
+                }
+            }
         }
     }
 
