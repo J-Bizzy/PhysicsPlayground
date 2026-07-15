@@ -2,11 +2,14 @@
 //  WindTunnelRenderer.swift
 //  Physics Playground — Wind Tunnel module
 //
-//  Renders the test section: a grabbable cylinder that visibly spins at
-//  its true rate (ω = Γ/2πa²), streamlines traced through the exact
-//  field with RenderKit's StreamlineTracer, a sheet of air particles
-//  advected at true speed, red stagnation dots, the Kutta–Joukowski
-//  lift arrow, and the pressure probe.
+//  Renders the test section as a fully volumetric block of moving air
+//  floating in the room — no table, no furniture. A tall grabbable
+//  cylinder visibly spins at its true rate (ω = Γ/2πa²); streamline
+//  sheets at three heights bend around it (the extruded-cylinder field
+//  is exact at every height); a 3D cloud of air particles rides the
+//  flow at true speed; red vertical STAGNATION LINES (that's what they
+//  are on a cylinder) slide with spin; the Kutta–Joukowski lift arrow
+//  floats above; the pressure probe roams freely in 3D.
 //
 //  Frame-rate contract: particles are pool + transform writes; the
 //  streamline tube rebuilds only when a flow input changes, at most
@@ -27,17 +30,20 @@ final class WindTunnelRenderer {
 
     static let cylinderName = "cylinder"
     static let probeName = "probe"
-    static let sectionCenter = SIMD3<Float>(0, 0.92, -1.1)
-    /// Height of the flow sheet above the section floor.
-    static let flowHeight: Float = 0.055
+    static let sectionCenter = SIMD3<Float>(0, 1.15, -1.1)
+    /// Half-height of the airflow volume (cylinder spans it fully).
+    static let halfHeight: Float = 0.3
 
     var isManipulatingCylinder = false
     var isManipulatingProbe = false
+    /// The probe floats freely; its height is visual (the extruded field
+    /// is identical at every height — that's the point).
+    var probeHeight: Float = 0.1
 
     /// Parent for the probe's floating readout attachment.
     let probeAnchor = Entity()
 
-    private static let particleBudget = 350
+    private static let particleBudget = 380
     private static let particleLife = 12.0
     private static let baseCylinderRadius: Float = 0.05
 
@@ -54,6 +60,7 @@ final class WindTunnelRenderer {
 
     private let particlePool: EntityPool<Void>
     private var particlePositions: [SIMD2<Double>] = []
+    private var particleHeights: [Float] = []
     private var particleAges: [Double] = []
     private var particlesVisible = false
 
@@ -75,39 +82,21 @@ final class WindTunnelRenderer {
         sectionRoot.position = Self.sectionCenter
         root.addChild(sectionRoot)
 
-        // Section floor and the two side rails (ends stay open — the
-        // flow enters on the left and leaves on the right).
-        let floor = ModelEntity(
-            mesh: .generateBox(size: [1.28, 0.012, 0.86], cornerRadius: 0.005),
-            materials: [SimpleMaterial(color: UIColor(white: 0.15, alpha: 1),
-                                       roughness: 0.85, isMetallic: false)]
-        )
-        floor.position = [0, -0.006, 0]
-        sectionRoot.addChild(floor)
-
-        let railMesh = MeshResource.generateBox(size: [1.28, 0.05, 0.025])
-        let railMaterial = SimpleMaterial(
-            color: UIColor(white: 0.24, alpha: 1), roughness: 0.7, isMetallic: false)
-        for sign: Float in [1, -1] {
-            let rail = ModelEntity(mesh: railMesh, materials: [railMaterial])
-            rail.position = [0, 0.025, sign * (Float(WindTunnelModel.halfWidth) + 0.0325)]
-            sectionRoot.addChild(rail)
-        }
-
-        // The cylinder — grabbable, and it visibly spins at its true rate.
+        // The cylinder — a tall column spanning the airflow volume,
+        // grabbable, visibly spinning at its true rate.
         cylinder = ModelEntity(
-            mesh: .generateCylinder(height: 0.14, radius: Self.baseCylinderRadius),
+            mesh: .generateCylinder(height: 2 * Self.halfHeight, radius: Self.baseCylinderRadius),
             materials: [SimpleMaterial(color: DesignTokens.Palette.launcherUI,
                                        roughness: 0.35, isMetallic: true)]
         )
         cylinder.name = Self.cylinderName
-        Grabbable.configure(cylinder, collisionRadius: 0.11)
+        Grabbable.configure(cylinder, collisionRadius: 0.16)
         var cylinderAccessibility = AccessibilityComponent()
         cylinderAccessibility.isAccessibilityElement = true
         cylinderAccessibility.label = "Cylinder. Drag it through the flow; the streamlines re-form instantly."
         cylinder.components.set(cylinderAccessibility)
         spinMarker = ModelEntity(
-            mesh: .generateBox(size: [0.012, 0.13, 0.006]),
+            mesh: .generateBox(size: [0.012, 2 * Self.halfHeight - 0.02, 0.006]),
             materials: [UnlitMaterial(color: UIColor(white: 0.05, alpha: 1))]
         )
         spinMarker.position = [Self.baseCylinderRadius - 0.004, 0, 0]
@@ -120,8 +109,10 @@ final class WindTunnelRenderer {
         streamlineMaterial = streamMaterial
         sectionRoot.addChild(streamlineEntity)
 
-        // Stagnation points: where the air comes to rest on the surface.
-        let stagnationMesh = MeshResource.generateSphere(radius: 0.007)
+        // Stagnation LINES: on a cylinder the air comes to rest along a
+        // whole vertical line, not a point — drawn as thin red columns.
+        let stagnationMesh = MeshResource.generateBox(
+            size: [0.006, 2 * Self.halfHeight, 0.006], cornerRadius: 0.003)
         let stagnationMaterial = UnlitMaterial(color: DesignTokens.Palette.forceVectorUI)
         for _ in 0..<2 {
             let marker = ModelEntity(mesh: stagnationMesh, materials: [stagnationMaterial])
@@ -157,7 +148,8 @@ final class WindTunnelRenderer {
         probeAnchor.components.set(BillboardComponent())
         sectionRoot.addChild(probeAnchor)
 
-        // Air particles: one sheet at cylinder mid-height.
+        // Air particles: a full 3D cloud (the extruded field is exact at
+        // every height, so every layer of air moves identically).
         var particleMaterial = UnlitMaterial(color: .white)
         particleMaterial.blending = .transparent(opacity: 0.4)
         let particleMesh = MeshResource.generateSphere(radius: 0.0026)
@@ -165,6 +157,9 @@ final class WindTunnelRenderer {
             container.addChild(ModelEntity(mesh: particleMesh, materials: [particleMaterial]))
         }
         particlePositions = (0..<Self.particleBudget).map { _ in Self.randomEntryPoint(anywhere: true) }
+        particleHeights = (0..<Self.particleBudget).map { _ in
+            Float.random(in: -Self.halfHeight...Self.halfHeight)
+        }
         particleAges = (0..<Self.particleBudget).map { _ in Double.random(in: 0..<Self.particleLife) }
         sectionRoot.addChild(particlePool.root)
     }
@@ -205,6 +200,7 @@ final class WindTunnelRenderer {
                 || insideCylinder
                 || particleAges[index] > Self.particleLife {
                 position = Self.randomEntryPoint(anywhere: false)
+                particleHeights[index] = Float.random(in: -Self.halfHeight...Self.halfHeight)
                 particleAges[index] = 0
             }
             particlePositions[index] = position
@@ -212,7 +208,7 @@ final class WindTunnelRenderer {
             let slot = particlePool.slots[index]
             slot.entity.isEnabled = true
             slot.entity.position = SIMD3(
-                Float(position.x), Self.flowHeight, Float(position.y))
+                Float(position.x), particleHeights[index], Float(position.y))
         }
     }
 
@@ -245,17 +241,17 @@ final class WindTunnelRenderer {
 
         if !isManipulatingCylinder {
             cylinder.position = SIMD3(
-                Float(model.cylinderCenter.x), 0.07, Float(model.cylinderCenter.y))
+                Float(model.cylinderCenter.x), 0, Float(model.cylinderCenter.y))
         }
         let radiusScale = Float(model.cylinderRadius) / Self.baseCylinderRadius
         cylinder.scale = SIMD3(radiusScale, 1, radiusScale)
 
         if !isManipulatingProbe {
             probe.position = SIMD3(
-                Float(model.probePosition.x), Self.flowHeight + 0.02, Float(model.probePosition.y))
+                Float(model.probePosition.x), probeHeight, Float(model.probePosition.y))
         }
         probeAnchor.position = SIMD3(
-            Float(model.probePosition.x), 0.22, Float(model.probePosition.y))
+            Float(model.probePosition.x), probeHeight + 0.09, Float(model.probePosition.y))
 
         syncStagnationAndLift(model)
         syncStreamlines(model)
@@ -269,7 +265,7 @@ final class WindTunnelRenderer {
                 continue
             }
             marker.isEnabled = true
-            marker.position = SIMD3(Float(points[index].x), 0.07, Float(points[index].y))
+            marker.position = SIMD3(Float(points[index].x), 0, Float(points[index].y))
         }
 
         let lift = model.liftPerSpan
@@ -279,7 +275,7 @@ final class WindTunnelRenderer {
         }
         liftArrow.isEnabled = true
         liftArrow.position = SIMD3(
-            Float(model.cylinderCenter.x), 0.19, Float(model.cylinderCenter.y))
+            Float(model.cylinderCenter.x), Self.halfHeight + 0.06, Float(model.cylinderCenter.y))
         // Lift acts along ±y in plane coordinates = ±z in the room.
         let direction = SIMD3<Float>(0, 0, lift > 0 ? 1 : -1)
         let length = Float(min(0.05 + 0.09 * log10(1 + abs(lift) / 0.1), 0.24))
@@ -316,25 +312,29 @@ final class WindTunnelRenderer {
         config.stopCenters = [SIMD3(flow.center.x, 0, flow.center.y)]
         config.stopRadius = flow.radius * 1.01
 
+        // Three sheets of streamlines: the extruded field is exact at
+        // every height, and the stack makes the flow read as a volume.
         var lines: [[SIMD3<Float>]] = []
-        let seedCount = 13
-        for index in 0..<seedCount {
-            let fraction = Double(index) / Double(seedCount - 1)
-            let y = -WindTunnelModel.halfWidth + 0.04
-                + fraction * 2 * (WindTunnelModel.halfWidth - 0.04)
-            let seed = SIMD3(-WindTunnelModel.halfLength + 0.02, 0, y)
-            let line = StreamlineTracer.streamline(
-                from: seed, sign: 1,
-                field: { point in
-                    let v = flow.velocity(at: SIMD2(point.x, point.z))
-                    return SIMD3(v.x, 0, v.y)
-                },
-                config: config
-            )
-            if line.count > 1 {
-                lines.append(line.map {
-                    SIMD3(Float($0.x), Self.flowHeight, Float($0.z))
-                })
+        let seedCount = 9
+        for sheetHeight: Float in [-0.22, 0, 0.22] {
+            for index in 0..<seedCount {
+                let fraction = Double(index) / Double(seedCount - 1)
+                let y = -WindTunnelModel.halfWidth + 0.05
+                    + fraction * 2 * (WindTunnelModel.halfWidth - 0.05)
+                let seed = SIMD3(-WindTunnelModel.halfLength + 0.02, 0, y)
+                let line = StreamlineTracer.streamline(
+                    from: seed, sign: 1,
+                    field: { point in
+                        let v = flow.velocity(at: SIMD2(point.x, point.z))
+                        return SIMD3(v.x, 0, v.y)
+                    },
+                    config: config
+                )
+                if line.count > 1 {
+                    lines.append(line.map {
+                        SIMD3(Float($0.x), sheetHeight, Float($0.z))
+                    })
+                }
             }
         }
 

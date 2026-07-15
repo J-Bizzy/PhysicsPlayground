@@ -2,10 +2,10 @@
 //  WavesSpaceView.swift
 //  Physics Playground — Waves module
 //
-//  The ripple tank immersive scene. Source pucks and the probe route
-//  through RenderKit's ManipulationRouter into pool-plane coordinates;
-//  the wave clock is SceneEvents.Update (scaled and pausable in the
-//  model). The probe's readout floats above it, billboarded.
+//  The 3D interference field immersive scene. Sources and the probe are
+//  free-floating grabbables routed through RenderKit's
+//  ManipulationRouter (positions are room coordinates, 1:1); the wave
+//  clock is SceneEvents.Update, scaled and pausable in the model.
 //
 
 import PhysicsCore
@@ -24,7 +24,7 @@ struct WavesSpaceView: View {
             content.add(renderer.root)
 
             if let quick = attachments.entity(for: "quick") {
-                quick.position = [-0.62, 1.12, -0.85]
+                quick.position = [-0.62, 1.05, -0.75]
                 quick.orientation = simd_quatf(angle: 0.35, axis: [0, 1, 0])
                 renderer.root.addChild(quick)
             }
@@ -65,28 +65,27 @@ struct WavesSpaceView: View {
             guard let renderer else { return }
             if name == WavesRenderer.probeName {
                 renderer.isManipulatingProbe = true
-                model.moveProbe(to: renderer.planePoint(fromWorld: position))
+                model.moveProbe(to: SIMD3<Double>(position))
             } else if let id = UUID(uuidString: name) {
                 renderer.manipulatingSourceID = id
                 model.select(id: id)
-                model.moveSource(id: id, to: renderer.planePoint(fromWorld: position))
+                model.moveSource(id: id, to: SIMD3<Double>(position))
             }
         }
-        router.onMove = { [weak renderer] name, position in
-            guard let renderer else { return }
+        router.onMove = { name, position in
             if name == WavesRenderer.probeName {
-                model.moveProbe(to: renderer.planePoint(fromWorld: position))
+                model.moveProbe(to: SIMD3<Double>(position))
             } else if let id = UUID(uuidString: name) {
-                model.moveSource(id: id, to: renderer.planePoint(fromWorld: position))
+                model.moveSource(id: id, to: SIMD3<Double>(position))
             }
         }
         router.onEnd = { [weak renderer] name, position in
             guard let renderer else { return }
             if name == WavesRenderer.probeName {
-                model.moveProbe(to: renderer.planePoint(fromWorld: position))
+                model.moveProbe(to: SIMD3<Double>(position))
                 renderer.isManipulatingProbe = false
             } else if let id = UUID(uuidString: name) {
-                model.moveSource(id: id, to: renderer.planePoint(fromWorld: position))
+                model.moveSource(id: id, to: SIMD3<Double>(position))
                 renderer.manipulatingSourceID = nil
             }
         }
@@ -110,9 +109,9 @@ struct WavesQuickPanel: View {
                 .buttonStyle(.bordered)
                 .accessibilityLabel(model.isPaused ? "Resume waves" : "Freeze waves")
 
-                Toggle("Fringe map", isOn: $model.showEnvelope)
+                Toggle("Silence surfaces", isOn: $model.showSilenceSurfaces)
                     .font(DesignTokens.TypeScale.label)
-                    .accessibilityHint("Shows the standing amplitude pattern instead of the moving waves")
+                    .accessibilityHint("The 3D sheets where the waves cancel to nothing")
             }
 
             VStack(alignment: .leading, spacing: 6) {

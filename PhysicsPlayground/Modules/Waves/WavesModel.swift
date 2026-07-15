@@ -2,16 +2,18 @@
 //  WavesModel.swift
 //  Physics Playground — Waves module
 //
-//  App state for the ripple tank: a 1.2 m pool at table height whose
-//  surface is the live superposition of up to four circular wave
-//  sources. Sources and the probe live in pool-plane coordinates
-//  (meters, origin at the pool center) — 1:1 with the room, no scaling.
+//  App state for the 3D interference field: up to four wave sources
+//  float anywhere in a ~1.1 m cube in front of the user (immersive-space
+//  coordinates, 1:1 with the room), radiating spherical waves that
+//  superpose everywhere in the volume — a sound field slowed down until
+//  its crests are walkable.
 //
-//  All sources share one frequency (a common driver, like a real ripple
-//  tank); each has its own amplitude and a phase-invert switch — the
-//  noise-cancellation control. The probe reports the true local
-//  amplitude and, with exactly two sources, the path-difference math
-//  the whole fringe pattern is organized around.
+//  All sources share one frequency; each has its own amplitude and a
+//  phase-invert switch — the noise-cancellation control. The probe
+//  reports the true local amplitude and, with exactly two sources, the
+//  path-difference math the whole pattern is organized around. The
+//  silence surfaces (3D nodal sheets) are extracted by the renderer
+//  from the steady-state envelope.
 //
 
 import Foundation
@@ -22,10 +24,15 @@ import simd
 @MainActor
 @Observable
 final class WavesModel {
-    // MARK: Pool geometry & budgets
+    // MARK: Region (immersive-space coordinates) & budgets
 
-    /// Half-width of the square pool, m.
-    nonisolated static let poolHalfExtent = 0.6
+    /// Center of the field region: chest height, a meter ahead.
+    nonisolated static let regionCenter = SIMD3<Double>(0, 1.3, -1.1)
+    /// Half-extent of the cube sources and probe live in.
+    nonisolated static let regionHalfExtent = 0.55
+    /// Nothing sinks below this height (no sources in the floor).
+    nonisolated static let regionFloor = 0.25
+
     nonisolated static let sourceBudget = 4
 
     nonisolated static let frequencyRange = 0.5...3.0     // Hz
@@ -54,8 +61,8 @@ final class WavesModel {
     var waveSpeed = 0.5
     var wavelength: Double { WaveField.wavelength(frequency: frequency, speed: waveSpeed) }
 
-    /// Render the standing fringe pattern instead of the moving waves.
-    var showEnvelope = false
+    /// Show the 3D sheets where the field cancels to silence.
+    var showSilenceSurfaces = true
 
     // MARK: Time
 
@@ -74,8 +81,10 @@ final class WavesModel {
         guard sources.count < Self.sourceBudget else { return }
         // Walk spawn points around a ring so sources don't stack.
         let angle = Double(sources.count) * 2.4 + 0.7
-        let position = SIMD2(cos(angle) * 0.3, sin(angle) * 0.3)
-        let source = Source(id: UUID(), wave: WaveSource(position: clamp(position)))
+        let offset = SIMD3(cos(angle) * 0.3, sin(angle) * 0.15, sin(angle) * 0.2)
+        let source = Source(
+            id: UUID(),
+            wave: WaveSource(position: clamp(Self.regionCenter + offset)))
         sources.append(source)
         selectedID = source.id
     }
@@ -91,14 +100,19 @@ final class WavesModel {
         selectedID = id
     }
 
-    func moveSource(id: UUID, to point: SIMD2<Double>) {
+    func moveSource(id: UUID, to point: SIMD3<Double>) {
         guard let index = sources.firstIndex(where: { $0.id == id }) else { return }
         sources[index].wave.position = clamp(point)
     }
 
-    private func clamp(_ point: SIMD2<Double>) -> SIMD2<Double> {
-        let limit = Self.poolHalfExtent - 0.05
-        return SIMD2(min(max(point.x, -limit), limit), min(max(point.y, -limit), limit))
+    private func clamp(_ point: SIMD3<Double>) -> SIMD3<Double> {
+        var clamped = simd_clamp(
+            point,
+            Self.regionCenter - SIMD3(repeating: Self.regionHalfExtent),
+            Self.regionCenter + SIMD3(repeating: Self.regionHalfExtent)
+        )
+        clamped.y = max(clamped.y, Self.regionFloor)
+        return clamped
     }
 
     var selectedAmplitude: Double {
@@ -119,26 +133,16 @@ final class WavesModel {
 
     var waveSources: [WaveSource] { sources.map(\.wave) }
 
-    // MARK: Surface sampling (used by the renderer per vertex)
-
-    func surfaceHeight(at point: SIMD2<Double>) -> Double {
-        showEnvelope
-            ? WaveField.steadyAmplitude(at: point, sources: waveSources,
-                                        frequency: frequency, speed: waveSpeed)
-            : WaveField.displacement(at: point, time: time, sources: waveSources,
-                                     frequency: frequency, speed: waveSpeed)
-    }
-
     // MARK: Probe
 
-    private(set) var probePosition = SIMD2<Double>(0, 0.35)
+    private(set) var probePosition = WavesModel.regionCenter + SIMD3(0, 0.25, 0.2)
 
-    func moveProbe(to point: SIMD2<Double>) {
+    func moveProbe(to point: SIMD3<Double>) {
         probePosition = clamp(point)
     }
 
     struct ProbeReadout: Equatable {
-        /// Peak oscillation amplitude here, m (true value, not exaggerated).
+        /// Peak oscillation amplitude here, m (true value).
         var amplitude: Double
         /// Only meaningful with exactly two sources.
         var pathDifference: Double?
@@ -166,7 +170,7 @@ final class WavesModel {
         )
     }
 
-    // MARK: Two-source fringe bookkeeping
+    // MARK: Two-source pattern bookkeeping
 
     /// Separation of the first two sources, if there are exactly two.
     var sourceSeparation: Double? {
@@ -174,16 +178,16 @@ final class WavesModel {
         return simd_distance(sources[0].wave.position, sources[1].wave.position)
     }
 
-    /// How many silent (nodal) lines cross the pool for the two-source
-    /// pattern. Same-phase pairs go quiet where Δr = (m+½)λ; an inverted
-    /// pair goes quiet where Δr = mλ — including the midline itself.
-    var silentLineCount: Int? {
+    /// How many silence surfaces (3D nodal sheets) thread between the two
+    /// sources. Same-phase pairs go quiet where Δr = (m+½)λ; an inverted
+    /// pair where Δr = mλ — including the midplane itself.
+    var silentSurfaceCount: Int? {
         guard sources.count == 2, let d = sourceSeparation else { return nil }
         let inverted = sources[0].wave.phaseInverted != sources[1].wave.phaseInverted
         let lambda = wavelength
         var count = 0
         if inverted {
-            count = 1  // the midline (Δr = 0)
+            count = 1  // the midplane (Δr = 0)
             var m = 1
             while Double(m) * lambda < d * (1 - 1e-9) {
                 count += 2
@@ -201,21 +205,20 @@ final class WavesModel {
 
     // MARK: Reset
 
-    /// Two in-phase sources a comfortable hand-width apart — the classic
-    /// double-source pattern, moving.
+    /// Two in-phase sources a comfortable arm-span apart, chest height.
     func reset() {
         sources = [
-            Source(id: UUID(), wave: WaveSource(position: SIMD2(-0.18, 0))),
-            Source(id: UUID(), wave: WaveSource(position: SIMD2(0.18, 0))),
+            Source(id: UUID(), wave: WaveSource(position: Self.regionCenter + SIMD3(-0.22, 0, 0))),
+            Source(id: UUID(), wave: WaveSource(position: Self.regionCenter + SIMD3(0.22, 0, 0))),
         ]
         selectedID = sources[1].id
         frequency = 1.5
         waveSpeed = 0.5
-        showEnvelope = false
+        showSilenceSurfaces = true
         isPaused = false
         timeScale = 1.0
         time = 0
-        probePosition = SIMD2(0, 0.35)
+        probePosition = Self.regionCenter + SIMD3(0, 0.25, 0.2)
     }
 
     init() {

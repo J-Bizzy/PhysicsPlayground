@@ -2,10 +2,10 @@
 //  WavesModelTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Tests for the ripple-tank app state: the opening scene, probe math on
-//  known geometry, the inversion flip, silent-line counting, source
-//  clamping, time control, and reset. Wave superposition itself is
-//  covered in PhysicsCore's WaveFieldTests.
+//  Tests for the 3D interference-field app state: the opening scene,
+//  probe math on known geometry, the inversion flip, silence-surface
+//  counting, region clamping, time control, and reset. Wave
+//  superposition itself is covered in PhysicsCore's WaveFieldTests.
 //
 
 import XCTest
@@ -21,27 +21,25 @@ final class WavesModelTests: XCTestCase {
         XCTAssertEqual(model.sources.count, 2)
         XCTAssertFalse(model.sources[0].wave.phaseInverted)
         XCTAssertFalse(model.sources[1].wave.phaseInverted)
-        XCTAssertEqual(try! XCTUnwrap(model.sourceSeparation), 0.36, accuracy: 1e-9)
+        XCTAssertEqual(try! XCTUnwrap(model.sourceSeparation), 0.44, accuracy: 1e-9)
         XCTAssertEqual(model.wavelength, 0.5 / 1.5, accuracy: 1e-12)
     }
 
-    /// The default probe sits on the midline: constructive, Δr = 0.
-    func testDefaultProbeReadsMidlineConstructive() {
+    /// The default probe sits on the midplane: constructive, Δr = 0, and
+    /// exactly twice a single source's contribution.
+    func testDefaultProbeReadsMidplaneConstructive() {
         let model = WavesModel()
         let readout = model.probeReadout
         XCTAssertEqual(readout.pathDifference ?? -1, 0, accuracy: 1e-9)
         XCTAssertEqual(readout.interference, .constructive)
-        // Amplitude on the midline = 2 × single-source contribution.
-        let r = simd_distance(model.probePosition, model.sources[0].wave.position)
         let single = WaveField.steadyAmplitude(
             at: model.probePosition, sources: [model.sources[0].wave],
             frequency: model.frequency, speed: model.waveSpeed)
-        _ = r
         XCTAssertEqual(readout.amplitude, 2 * single, accuracy: single * 1e-9)
     }
 
-    /// Inverting the selected source turns the midline silent.
-    func testInvertingSelectedSourceSilencesMidline() {
+    /// Inverting the selected source turns the midplane silent.
+    func testInvertingSelectedSourceSilencesMidplane() {
         let model = WavesModel()
         model.selectedInverted = true
         XCTAssertTrue(model.sources.contains { $0.wave.phaseInverted })
@@ -50,34 +48,39 @@ final class WavesModelTests: XCTestCase {
         XCTAssertEqual(readout.amplitude, 0, accuracy: 1e-12)
     }
 
-    /// Silent-line counts: λ = 0.2 m via f = 2.5 Hz, c = 0.5 m/s, d = 0.3 m.
-    /// In phase: only Δr = λ/2 = 0.1 fits (0.3 > 0.1, 0.3 ≯ 0.3) → 2 lines.
-    /// Inverted: midline + Δr = λ = 0.2 on both sides → 3 lines.
-    func testSilentLineCounting() {
+    /// Silence-surface counts: λ = 0.2 m via f = 2.5 Hz, c = 0.5 m/s,
+    /// d = 0.3 m. In phase: only Δr = λ/2 = 0.1 fits → 2 surfaces.
+    /// Inverted: midplane + Δr = λ = 0.2 on both sides → 3.
+    func testSilenceSurfaceCounting() {
         let model = WavesModel()
         model.frequency = 2.5
         model.waveSpeed = 0.5
-        model.moveSource(id: model.sources[0].id, to: SIMD2(-0.15, 0))
-        model.moveSource(id: model.sources[1].id, to: SIMD2(0.15, 0))
+        let center = WavesModel.regionCenter
+        model.moveSource(id: model.sources[0].id, to: center + SIMD3(-0.15, 0, 0))
+        model.moveSource(id: model.sources[1].id, to: center + SIMD3(0.15, 0, 0))
         XCTAssertEqual(model.wavelength, 0.2, accuracy: 1e-12)
 
-        XCTAssertEqual(model.silentLineCount, 2)
+        XCTAssertEqual(model.silentSurfaceCount, 2)
 
         model.select(id: model.sources[1].id)
         model.selectedInverted = true
-        XCTAssertEqual(model.silentLineCount, 3)
+        XCTAssertEqual(model.silentSurfaceCount, 3)
     }
 
-    func testSourcesClampToPool() {
+    /// Sources and the probe stay inside the region cube — and above the
+    /// floor margin.
+    func testSourcesClampToRegion() {
         let model = WavesModel()
-        model.moveSource(id: model.sources[0].id, to: SIMD2(5, -5))
+        model.moveSource(id: model.sources[0].id, to: SIMD3(5, -5, 5))
         let position = model.sources[0].wave.position
-        let limit = WavesModel.poolHalfExtent - 0.05
-        XCTAssertEqual(position.x, limit, accuracy: 1e-9)
-        XCTAssertEqual(position.y, -limit, accuracy: 1e-9)
+        let center = WavesModel.regionCenter
+        let half = WavesModel.regionHalfExtent
+        XCTAssertEqual(position.x, center.x + half, accuracy: 1e-9)
+        XCTAssertEqual(position.y, max(center.y - half, WavesModel.regionFloor), accuracy: 1e-9)
+        XCTAssertEqual(position.z, center.z + half, accuracy: 1e-9)
 
-        model.moveProbe(to: SIMD2(-9, 9))
-        XCTAssertEqual(model.probePosition.x, -limit, accuracy: 1e-9)
+        model.moveProbe(to: SIMD3(0, -9, 0))
+        XCTAssertGreaterThanOrEqual(model.probePosition.y, WavesModel.regionFloor - 1e-9)
     }
 
     func testTimeRespectsPauseAndScale() {
@@ -103,7 +106,7 @@ final class WavesModelTests: XCTestCase {
 
         // Path-difference readouts only exist for exactly two sources.
         XCTAssertNil(model.probeReadout.pathDifference)
-        XCTAssertNil(model.silentLineCount)
+        XCTAssertNil(model.silentSurfaceCount)
 
         while model.sources.count > 1 {
             model.removeSelectedSource()
@@ -117,7 +120,7 @@ final class WavesModelTests: XCTestCase {
         model.addSource()
         model.frequency = 2.8
         model.waveSpeed = 0.9
-        model.showEnvelope = true
+        model.showSilenceSurfaces = false
         model.isPaused = true
         model.timeScale = 0.2
         model.step(dt: 1)
@@ -127,7 +130,7 @@ final class WavesModelTests: XCTestCase {
         XCTAssertEqual(model.sources.count, 2)
         XCTAssertEqual(model.frequency, 1.5)
         XCTAssertEqual(model.waveSpeed, 0.5)
-        XCTAssertFalse(model.showEnvelope)
+        XCTAssertTrue(model.showSilenceSurfaces)
         XCTAssertFalse(model.isPaused)
         XCTAssertEqual(model.timeScale, 1.0)
         XCTAssertEqual(model.time, 0)

@@ -2,22 +2,23 @@
 //  WavesRenderer.swift
 //  Physics Playground — Waves module
 //
-//  Renders the ripple tank: a 64×64 deformable water surface, source
-//  pucks (teal in phase, orange inverted), and the probe. This is the
-//  module where "correct physics" and "90 fps" genuinely collide — a
-//  finely-meshed surface re-generated per frame would blow the budget —
-//  so the surface is a RealityKit LowLevelMesh: the vertex buffer is
-//  written in place every frame (positions + normals; ~4k vertices,
-//  ~16k sin() calls) and the GPU sees the same mesh object, no
-//  allocation and no MeshResource rebuild anywhere in the hot path.
+//  Renders the 3D interference field, fully volumetric — no furniture:
 //
-//  Surface heights are exaggerated ×6 for visibility (real ripples are
-//  millimeters); the legend and panels disclose it, and every number
-//  shown is the true value.
+//  · a 8×8×8 lattice of dots filling the region, each pulsing with the
+//    live field at its point (scale = |u|), tinted once per configuration
+//    by the standing envelope (bright where loud, dim where quiet);
+//  · the SILENCE SURFACES — 3D sheets where the envelope cancels —
+//    extracted by marching tetrahedra on the GeometryPipeline, exactly
+//    like the electromagnetism module's equipotential shells;
+//  · floating grabbable sources (teal in phase, orange inverted) and the
+//    probe with its billboarded readout.
+//
+//  Frame-rate contract: the per-frame path is 512 scale writes plus a
+//  few transforms; lattice tinting and isosurface extraction happen only
+//  when the configuration changes (the latter off the main thread).
 //
 
 import Foundation
-import Metal
 import PhysicsCore
 import RealityKit
 import RenderKit
@@ -30,9 +31,7 @@ final class WavesRenderer {
     var subscriptions: [EventSubscription] = []
 
     static let probeName = "probe"
-    static let poolCenter = SIMD3<Float>(0, 0.92, -1.1)
-    /// Ripples are millimeters tall; the surface shows them ×6.
-    static let verticalExaggeration: Float = 6
+    static let latticeSide = 8
 
     var manipulatingSourceID: UUID?
     var isManipulatingProbe = false
@@ -40,197 +39,189 @@ final class WavesRenderer {
     /// Parent for the probe's floating readout attachment.
     let probeAnchor = Entity()
 
-    private static let gridN = 64
-    private static let extent = Float(WavesModel.poolHalfExtent)
-
-    private let poolRoot = Entity()
-    private let surfaceEntity = ModelEntity()
-    private var surfaceMesh: LowLevelMesh?
-    private var heights: [Float]
+    private let latticePool: EntityPool<ModelEntity>
+    private var latticePoints: [SIMD3<Double>] = []
+    private var latticePalette: [UnlitMaterial] = []
+    private var latticeTintKeys: [Int]
 
     private let sourcePool: EntityPool<ModelEntity>
     private var sourceMaterialKeys: [String]
     private let probe: ModelEntity
 
+    private let silenceEntity = ModelEntity()
+    private let silenceMaterial: UnlitMaterial
+    private var silencePipeline: GeometryPipeline<SilenceJob, SilenceResult>?
+
     private let renderLoop = RenderLoop()
     private var model: WavesModel?
 
-    private struct SurfaceVertex {
-        var position: SIMD3<Float>
-        var normal: SIMD3<Float>
+    private struct FieldInputs: Equatable {
+        var sources: [WaveSource]
+        var frequency: Double
+        var speed: Double
+        var show: Bool
     }
+    private var lastFieldInputs: FieldInputs?
 
     init() {
-        heights = Array(repeating: 0, count: Self.gridN * Self.gridN)
-        sourceMaterialKeys = Array(repeating: "", count: WavesModel.sourceBudget)
-
-        poolRoot.position = Self.poolCenter
-        root.addChild(poolRoot)
-
-        // Pool frame: four quiet dark rails.
-        let railMaterial = SimpleMaterial(
-            color: UIColor(white: 0.16, alpha: 1), roughness: 0.7, isMetallic: false)
-        let railLong = MeshResource.generateBox(size: [2 * Self.extent + 0.06, 0.03, 0.03])
-        let railShort = MeshResource.generateBox(size: [0.03, 0.03, 2 * Self.extent + 0.06])
-        for (mesh, offset) in [
-            (railLong, SIMD3<Float>(0, 0, Self.extent + 0.015)),
-            (railLong, SIMD3<Float>(0, 0, -Self.extent - 0.015)),
-            (railShort, SIMD3<Float>(Self.extent + 0.015, 0, 0)),
-            (railShort, SIMD3<Float>(-Self.extent - 0.015, 0, 0)),
-        ] {
-            let rail = ModelEntity(mesh: mesh, materials: [railMaterial])
-            rail.position = offset
-            poolRoot.addChild(rail)
+        // The lattice: shared mesh, per-dot material from a brightness
+        // palette assigned when the configuration changes.
+        let dotMesh = MeshResource.generateSphere(radius: 0.011)
+        latticePalette = (0..<6).map { step in
+            let t = CGFloat(step) / 5
+            var material = UnlitMaterial(
+                color: UIColor(red: 0.2 + 0.35 * t, green: 0.55 + 0.35 * t, blue: 0.65 + 0.3 * t, alpha: 1))
+            material.blending = .transparent(opacity: .init(floatLiteral: Float(0.18 + 0.5 * t)))
+            return material
         }
+        let initialMaterial = latticePalette[2]
+        let side = Self.latticeSide
+        latticePool = EntityPool(budget: side * side * side) { container in
+            let dot = ModelEntity(mesh: dotMesh, materials: [initialMaterial])
+            container.addChild(dot)
+            return dot
+        }
+        latticeTintKeys = Array(repeating: -1, count: latticePool.budget)
 
-        // The deformable water surface.
-        var water = PhysicallyBasedMaterial()
-        water.baseColor = .init(tint: UIColor(red: 0.25, green: 0.55, blue: 0.75, alpha: 1))
-        water.roughness = 0.22
-        water.metallic = 0.0
-        water.blending = .transparent(opacity: .init(floatLiteral: 0.85))
-        surfaceEntity.model = ModelComponent(
-            mesh: .generateBox(size: [0.01, 0.01, 0.01]),  // replaced on build
-            materials: [water]
-        )
-        poolRoot.addChild(surfaceEntity)
+        let spacing = 2 * WavesModel.regionHalfExtent * 0.92 / Double(side - 1)
+        let origin = WavesModel.regionCenter
+            - SIMD3(repeating: WavesModel.regionHalfExtent * 0.92)
+        var points: [SIMD3<Double>] = []
+        for i in 0..<side {
+            for j in 0..<side {
+                for k in 0..<side {
+                    points.append(origin + spacing * SIMD3(Double(i), Double(j), Double(k)))
+                }
+            }
+        }
+        latticePoints = points
+        for (index, slot) in latticePool.slots.enumerated() {
+            slot.entity.position = SIMD3<Float>(latticePoints[index])
+            slot.entity.isEnabled = true
+        }
+        root.addChild(latticePool.root)
 
-        // Source pucks (grabbable).
-        let puckMesh = MeshResource.generateCylinder(height: 0.02, radius: 0.032)
+        // Silence surfaces.
+        var silence = UnlitMaterial(color: DesignTokens.Palette.forceVectorUI)
+        silence.blending = .transparent(opacity: 0.16)
+        silence.faceCulling = .none
+        silenceMaterial = silence
+        root.addChild(silenceEntity)
+
+        // Sources.
+        let sourceMesh = MeshResource.generateSphere(radius: 0.032)
         sourcePool = EntityPool(budget: WavesModel.sourceBudget) { container in
-            let puck = ModelEntity(
-                mesh: puckMesh,
+            let sphere = ModelEntity(
+                mesh: sourceMesh,
                 materials: [UnlitMaterial(color: DesignTokens.Palette.waveSourceUI)]
             )
-            Grabbable.configure(puck, collisionRadius: 0.06)
+            Grabbable.configure(sphere, collisionRadius: 0.06)
             var accessibility = AccessibilityComponent()
             accessibility.isAccessibilityElement = true
-            accessibility.label = "Wave source. Drag it across the pool."
-            puck.components.set(accessibility)
-            container.addChild(puck)
-            return puck
+            accessibility.label = "Wave source. Drag it anywhere in the field."
+            sphere.components.set(accessibility)
+            container.addChild(sphere)
+            return sphere
         }
-        poolRoot.addChild(sourcePool.root)
+        sourceMaterialKeys = Array(repeating: "", count: sourcePool.budget)
+        root.addChild(sourcePool.root)
 
         // Probe.
         probe = ModelEntity(
-            mesh: .generateSphere(radius: 0.014),
+            mesh: .generateSphere(radius: 0.016),
             materials: [UnlitMaterial(color: .white)]
         )
         probe.name = Self.probeName
-        Grabbable.configure(probe, collisionRadius: 0.045)
+        Grabbable.configure(probe, collisionRadius: 0.05)
         var probeAccessibility = AccessibilityComponent()
         probeAccessibility.isAccessibilityElement = true
-        probeAccessibility.label = "Probe. Park it anywhere to read the local wave amplitude."
+        probeAccessibility.label = "Probe. Park it anywhere to hear the field: amplitude and interference."
         probe.components.set(probeAccessibility)
-        poolRoot.addChild(probe)
+        root.addChild(probe)
 
         probeAnchor.components.set(BillboardComponent())
-        poolRoot.addChild(probeAnchor)
+        root.addChild(probeAnchor)
 
-        buildSurfaceMesh()
-    }
-
-    // MARK: LowLevelMesh surface
-
-    private func buildSurfaceMesh() {
-        let n = Self.gridN
-        let vertexCount = n * n
-        let indexCount = (n - 1) * (n - 1) * 6
-
-        var descriptor = LowLevelMesh.Descriptor()
-        descriptor.vertexCapacity = vertexCount
-        descriptor.indexCapacity = indexCount
-        descriptor.vertexAttributes = [
-            .init(semantic: .position, format: .float3, layoutIndex: 0, offset: 0),
-            .init(semantic: .normal, format: .float3, layoutIndex: 0,
-                  offset: MemoryLayout<SIMD3<Float>>.stride),
-        ]
-        descriptor.vertexLayouts = [
-            .init(bufferIndex: 0, bufferOffset: 0,
-                  bufferStride: MemoryLayout<SurfaceVertex>.stride),
-        ]
-
-        guard let mesh = try? LowLevelMesh(descriptor: descriptor) else { return }
-
-        mesh.withUnsafeMutableIndices { raw in
-            guard let indices = raw.baseAddress?.assumingMemoryBound(to: UInt32.self) else { return }
-            var cursor = 0
-            for row in 0..<(n - 1) {
-                for column in 0..<(n - 1) {
-                    let a = UInt32(row * n + column)
-                    let b = a + 1
-                    let c = a + UInt32(n)
-                    let d = c + 1
-                    indices[cursor] = a; indices[cursor + 1] = c; indices[cursor + 2] = b
-                    indices[cursor + 3] = b; indices[cursor + 4] = c; indices[cursor + 5] = d
-                    cursor += 6
-                }
-            }
-        }
-
-        let bounds = BoundingBox(
-            min: [-Self.extent, -0.12, -Self.extent],
-            max: [Self.extent, 0.12, Self.extent]
+        silencePipeline = GeometryPipeline(
+            compute: { Self.extractSilenceSurfaces($0) },
+            apply: { [weak self] in self?.applySilenceSurfaces($0) }
         )
-        mesh.parts.replaceAll([
-            LowLevelMesh.Part(
-                indexOffset: 0, indexCount: indexCount,
-                topology: .triangle, materialIndex: 0, bounds: bounds),
-        ])
-
-        guard let resource = try? MeshResource(from: mesh) else { return }
-        surfaceEntity.model?.mesh = resource
-        surfaceMesh = mesh
     }
 
-    private func updateSurface(_ model: WavesModel) {
-        guard let mesh = surfaceMesh else { return }
-        let n = Self.gridN
-        let spacing = 2 * Self.extent / Float(n - 1)
-        let sources = model.waveSources
-        let frequency = model.frequency
-        let speed = model.waveSpeed
-        let envelope = model.showEnvelope
-        let time = model.time
+    // MARK: Silence surface extraction (background, coalescing)
 
-        // Height pass (true physics, then exaggerated for display).
-        for row in 0..<n {
-            let z = Double(-Self.extent + Float(row) * spacing)
-            for column in 0..<n {
-                let x = Double(-Self.extent + Float(column) * spacing)
-                let point = SIMD2(x, z)
-                let height = envelope
-                    ? WaveField.steadyAmplitude(at: point, sources: sources,
-                                                frequency: frequency, speed: speed)
-                    : WaveField.displacement(at: point, time: time, sources: sources,
-                                             frequency: frequency, speed: speed)
-                heights[row * n + column] = Float(height) * Self.verticalExaggeration
-            }
+    private nonisolated struct SilenceJob: Sendable {
+        var sources: [WaveSource]
+        var frequency: Double
+        var speed: Double
+    }
+
+    private nonisolated struct SilenceResult: Sendable {
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+    }
+
+    private nonisolated static func extractSilenceSurfaces(_ job: SilenceJob) -> SilenceResult {
+        guard job.sources.count > 1 else { return SilenceResult() }
+        // Threshold: a small fraction of a typical mid-field arrival, so
+        // the surface hugs the true zero set without wrapping quiet
+        // far-field corners.
+        let meanAmplitude = job.sources.map(\.amplitude).reduce(0, +) / Double(job.sources.count)
+        let level = 0.12 * meanAmplitude * (WaveField.falloffRadius / 0.3)
+
+        func amplitude(_ p: SIMD3<Double>) -> Double {
+            WaveField.steadyAmplitude(at: p, sources: job.sources,
+                                      frequency: job.frequency, speed: job.speed)
         }
 
-        // Vertex pass: positions + central-difference normals.
-        mesh.withUnsafeMutableBytes(bufferIndex: 0) { raw in
-            guard let vertices = raw.baseAddress?.assumingMemoryBound(to: SurfaceVertex.self)
-            else { return }
-            for row in 0..<n {
-                for column in 0..<n {
-                    let index = row * n + column
-                    let left = heights[row * n + max(column - 1, 0)]
-                    let right = heights[row * n + min(column + 1, n - 1)]
-                    let near = heights[max(row - 1, 0) * n + column]
-                    let far = heights[min(row + 1, n - 1) * n + column]
-                    let normal = simd_normalize(SIMD3<Float>(
-                        (left - right) / (2 * spacing), 1, (near - far) / (2 * spacing)))
-                    vertices[index] = SurfaceVertex(
-                        position: SIMD3(
-                            -Self.extent + Float(column) * spacing,
-                            heights[index],
-                            -Self.extent + Float(row) * spacing),
-                        normal: normal
-                    )
-                }
-            }
+        let triangles = Isosurface.triangles(
+            level: level,
+            scalar: amplitude,
+            outwardDirection: { point in
+                // ∇A by central differences — "outward" is "away from silence".
+                let h = 0.012
+                return SIMD3(
+                    amplitude(point + SIMD3(h, 0, 0)) - amplitude(point - SIMD3(h, 0, 0)),
+                    amplitude(point + SIMD3(0, h, 0)) - amplitude(point - SIMD3(0, h, 0)),
+                    amplitude(point + SIMD3(0, 0, h)) - amplitude(point - SIMD3(0, 0, h))
+                )
+            },
+            center: WavesModel.regionCenter,
+            extents: SIMD3(repeating: 2 * WavesModel.regionHalfExtent),
+            resolution: 22
+        )
+
+        var result = SilenceResult()
+        result.positions.reserveCapacity(triangles.count)
+        for vertex in triangles {
+            result.positions.append(SIMD3<Float>(vertex))
+        }
+        // Flat normals per triangle (adequate for a translucent sheet).
+        var index = 0
+        while index + 2 < result.positions.count {
+            let a = result.positions[index]
+            let b = result.positions[index + 1]
+            let c = result.positions[index + 2]
+            var normal = simd_cross(b - a, c - a)
+            let length = simd_length(normal)
+            normal = length > 1e-9 ? normal / length : SIMD3(0, 1, 0)
+            result.normals.append(contentsOf: [normal, normal, normal])
+            index += 3
+        }
+        return result
+    }
+
+    private func applySilenceSurfaces(_ result: SilenceResult) {
+        guard !result.positions.isEmpty else {
+            silenceEntity.model = nil
+            return
+        }
+        var descriptor = MeshDescriptor(name: "silence")
+        descriptor.positions = MeshBuffer(result.positions)
+        descriptor.normals = MeshBuffer(result.normals)
+        descriptor.primitives = .triangles(Array(0..<UInt32(result.positions.count)))
+        if let mesh = try? MeshResource.generate(from: [descriptor]) {
+            silenceEntity.model = ModelComponent(mesh: mesh, materials: [silenceMaterial])
         }
     }
 
@@ -244,13 +235,18 @@ final class WavesRenderer {
         }
     }
 
-    /// World point → pool-plane coordinates (meters from pool center).
-    func planePoint(fromWorld world: SIMD3<Float>) -> SIMD2<Double> {
-        let local = world - Self.poolCenter
-        return SIMD2(Double(local.x), Double(local.z))
+    private func render(_ model: WavesModel) {
+        syncSources(model)
+        syncConfiguration(model)
+        pulseLattice(model)
+
+        if !isManipulatingProbe {
+            probe.position = SIMD3<Float>(model.probePosition)
+        }
+        probeAnchor.position = SIMD3<Float>(model.probePosition) + SIMD3(0, 0.09, 0)
     }
 
-    private func render(_ model: WavesModel) {
+    private func syncSources(_ model: WavesModel) {
         for (index, slot) in sourcePool.slots.enumerated() {
             guard index < model.sources.count else {
                 slot.entity.isEnabled = false
@@ -261,8 +257,6 @@ final class WavesRenderer {
             if slot.payload.name != source.id.uuidString {
                 slot.payload.name = source.id.uuidString
             }
-
-            // Color = phase; brightness = selection.
             let key = (source.wave.phaseInverted ? "inverted" : "inPhase")
                 + (source.id == model.selectedID ? "-selected" : "")
             if sourceMaterialKeys[index] != key {
@@ -276,27 +270,65 @@ final class WavesRenderer {
                 }
                 slot.payload.model?.materials = [material]
             }
-
             if source.id == manipulatingSourceID {
                 // Hand owns it.
             } else {
-                slot.entity.position = SIMD3(
-                    Float(source.wave.position.x), 0.014, Float(source.wave.position.y))
+                slot.entity.position = SIMD3<Float>(source.wave.position)
                 slot.payload.position = .zero
             }
         }
         for index in model.sources.count..<sourcePool.budget {
             sourcePool.slots[index].entity.isEnabled = false
         }
+    }
 
-        if !isManipulatingProbe {
-            probe.position = SIMD3(
-                Float(model.probePosition.x), 0.035, Float(model.probePosition.y))
+    /// When the configuration changes: retint the lattice by the standing
+    /// envelope and resubmit the silence-surface job.
+    private func syncConfiguration(_ model: WavesModel) {
+        let inputs = FieldInputs(
+            sources: model.waveSources, frequency: model.frequency,
+            speed: model.waveSpeed, show: model.showSilenceSurfaces
+        )
+        guard inputs != lastFieldInputs else { return }
+        lastFieldInputs = inputs
+
+        // Tint dots by how loud they'll ever get (the envelope).
+        let reference = inputs.sources.map(\.amplitude).reduce(0, +)
+            * WaveField.falloff(0.25)
+        for (index, slot) in latticePool.slots.enumerated() {
+            let envelope = WaveField.steadyAmplitude(
+                at: latticePoints[index], sources: inputs.sources,
+                frequency: inputs.frequency, speed: inputs.speed)
+            let tint = min(Int(envelope / max(reference, 1e-12) * 5), 5)
+            if latticeTintKeys[index] != tint {
+                latticeTintKeys[index] = tint
+                slot.payload.model?.materials = [latticePalette[tint]]
+            }
         }
-        probeAnchor.position = SIMD3(
-            Float(model.probePosition.x), 0.16, Float(model.probePosition.y))
 
-        // The hot path: rewrite the surface for the current time/state.
-        updateSurface(model)
+        if inputs.show {
+            silencePipeline?.submit(SilenceJob(
+                sources: inputs.sources, frequency: inputs.frequency, speed: inputs.speed))
+        } else {
+            silenceEntity.model = nil
+        }
+        silenceEntity.isEnabled = inputs.show
+    }
+
+    /// The per-frame heartbeat: every dot scales with the live |u(r, t)|.
+    private func pulseLattice(_ model: WavesModel) {
+        let sources = model.waveSources
+        let frequency = model.frequency
+        let speed = model.waveSpeed
+        let time = model.time
+        let reference = sources.map(\.amplitude).reduce(0, +) * WaveField.falloff(0.25)
+
+        for (index, slot) in latticePool.slots.enumerated() {
+            let u = WaveField.displacement(
+                at: latticePoints[index], time: time,
+                sources: sources, frequency: frequency, speed: speed)
+            let normalized = min(abs(u) / max(reference, 1e-12), 1.6)
+            slot.entity.scale = SIMD3(repeating: Float(0.25 + 0.75 * normalized))
+        }
     }
 }

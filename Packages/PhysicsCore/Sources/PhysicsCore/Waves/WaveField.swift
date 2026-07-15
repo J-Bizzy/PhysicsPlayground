@@ -2,37 +2,38 @@
 //  WaveField.swift
 //  PhysicsCore — Waves
 //
-//  Linear superposition of circular waves on a surface — the ripple
-//  tank. Each source contributes
+//  Linear superposition of spherical waves in 3D — a sound-like field.
+//  Each source contributes
 //
 //      u_i(p, t) = a_i · F(r_i) · sin(k·r_i − ωt + φ_i),   r_i = |p − p_i|
 //
-//  with k = 2πf/c and ω = 2πf shared by all sources (a common driver,
-//  like a real tank), and F(r) = 1/√(1 + r/r₀) the cylindrical-spreading
-//  falloff (surface wave energy spreads around a circle, so amplitude
-//  decays like 1/√r; r₀ keeps the source itself finite).
+//  with k = 2πf/c and ω = 2πf shared by all sources (a common driver),
+//  and F(r) = r₀/max(r, r₀) the spherical-spreading falloff — wave
+//  energy spreads over a sphere, so amplitude decays as 1/r (the real
+//  law for sound), clamped at r₀ so the source itself stays finite.
 //
-//  The steady-state amplitude envelope — the standing fringe pattern —
-//  is the phasor magnitude |Σ a·F·e^{i(k·r + φ)}|, which is what the
-//  "amplitude map" mode renders and what the unit tests pin: exactly 2A
-//  on the midline of two equal sources, exactly 0 where the path
-//  difference is λ/2 (and swapped when one source is phase-inverted —
-//  the noise-cancelling headphone trick).
+//  The steady-state amplitude envelope is the phasor magnitude
+//  |Σ a·F·e^{i(k·r + φ)}|. Its zero set — the SILENCE SURFACES, nodal
+//  hyperboloids in 3D — is what the module extracts as isosurfaces.
+//  The unit tests pin the textbook results: exactly 2A where equal
+//  waves arrive in phase, exactly 0 at λ/2 path difference, and the
+//  two swapped when one source is phase-inverted — the noise-cancelling
+//  headphone principle.
 //
 
 import Foundation
 import simd
 
 public struct WaveSource: Equatable, Sendable {
-    /// Position on the surface, m.
-    public var position: SIMD2<Double>
-    /// Peak displacement at the source, m.
+    /// Position in space, m.
+    public var position: SIMD3<Double>
+    /// Peak displacement at the falloff radius, m.
     public var amplitude: Double
     /// Phase-inverted sources start half a cycle late (φ = π) — the
     /// principle behind active noise cancellation.
     public var phaseInverted: Bool
 
-    public init(position: SIMD2<Double>, amplitude: Double = 0.008, phaseInverted: Bool = false) {
+    public init(position: SIMD3<Double>, amplitude: Double = 0.008, phaseInverted: Bool = false) {
         self.position = position
         self.amplitude = amplitude
         self.phaseInverted = phaseInverted
@@ -42,22 +43,23 @@ public struct WaveSource: Equatable, Sendable {
 }
 
 public enum WaveField {
-    /// Falloff reference radius (m): F(r) = 1/√(1 + r/r₀).
-    public static let falloffRadius = 0.08
+    /// Falloff reference radius (m): F(r) = r₀/max(r, r₀).
+    public static let falloffRadius = 0.1
 
     public static func wavelength(frequency: Double, speed: Double) -> Double {
         speed / frequency
     }
 
-    static func falloff(_ distance: Double) -> Double {
-        1 / (1 + distance / falloffRadius).squareRoot()
+    /// Spherical-spreading amplitude factor: F(r) = r₀/max(r, r₀).
+    public static func falloff(_ distance: Double) -> Double {
+        falloffRadius / max(distance, falloffRadius)
     }
 
     // MARK: Live displacement
 
-    /// Surface height at `point` and `time` — the animated ripple field.
+    /// Field value at `point` and `time` — the animated wave.
     public static func displacement(
-        at point: SIMD2<Double>,
+        at point: SIMD3<Double>,
         time: Double,
         sources: [WaveSource],
         frequency: Double,
@@ -73,12 +75,13 @@ public enum WaveField {
         return sum
     }
 
-    // MARK: Steady-state envelope (the fringe pattern)
+    // MARK: Steady-state envelope (the interference pattern)
 
     /// Peak oscillation amplitude at `point` — time-independent, computed
-    /// as the phasor magnitude of the summed sources.
+    /// as the phasor magnitude of the summed sources. Its near-zero set
+    /// is the silence surfaces.
     public static func steadyAmplitude(
-        at point: SIMD2<Double>,
+        at point: SIMD3<Double>,
         sources: [WaveSource],
         frequency: Double,
         speed: Double
@@ -104,16 +107,16 @@ public enum WaveField {
 
     /// |r₁ − r₂| — the quantity the whole pattern is organized around.
     public static func pathDifference(
-        at point: SIMD2<Double>, between a: WaveSource, and b: WaveSource
+        at point: SIMD3<Double>, between a: WaveSource, and b: WaveSource
     ) -> Double {
         abs(simd_distance(point, a.position) - simd_distance(point, b.position))
     }
 
     /// Classifies `point` by the two sources' *total* phase difference —
     /// path difference plus any source inversion — so an inverted pair's
-    /// midline correctly reads destructive.
+    /// midplane correctly reads destructive.
     public static func interference(
-        at point: SIMD2<Double>,
+        at point: SIMD3<Double>,
         between a: WaveSource, and b: WaveSource,
         frequency: Double, speed: Double,
         tolerance: Double = 0.12

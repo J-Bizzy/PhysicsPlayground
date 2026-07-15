@@ -60,6 +60,12 @@ struct WindTunnelSpaceView: View {
     }
 
     private func configureRouter(renderer: WindTunnelRenderer) {
+        func updateProbeHeight(_ renderer: WindTunnelRenderer, _ position: SIMD3<Float>) {
+            renderer.probeHeight = min(
+                max(position.y - WindTunnelRenderer.sectionCenter.y,
+                    -WindTunnelRenderer.halfHeight),
+                WindTunnelRenderer.halfHeight)
+        }
         router.onBegin = { [weak renderer] name, position in
             guard let renderer else { return }
             switch name {
@@ -68,6 +74,7 @@ struct WindTunnelSpaceView: View {
                 model.moveCylinder(to: renderer.planePoint(fromWorld: position))
             case WindTunnelRenderer.probeName:
                 renderer.isManipulatingProbe = true
+                updateProbeHeight(renderer, position)
                 model.moveProbe(to: renderer.planePoint(fromWorld: position))
             default: break
             }
@@ -78,6 +85,7 @@ struct WindTunnelSpaceView: View {
             case WindTunnelRenderer.cylinderName:
                 model.moveCylinder(to: renderer.planePoint(fromWorld: position))
             case WindTunnelRenderer.probeName:
+                updateProbeHeight(renderer, position)
                 model.moveProbe(to: renderer.planePoint(fromWorld: position))
             default: break
             }
@@ -89,6 +97,7 @@ struct WindTunnelSpaceView: View {
                 model.moveCylinder(to: renderer.planePoint(fromWorld: position))
                 renderer.isManipulatingCylinder = false
             case WindTunnelRenderer.probeName:
+                updateProbeHeight(renderer, position)
                 model.moveProbe(to: renderer.planePoint(fromWorld: position))
                 renderer.isManipulatingProbe = false
             default: break

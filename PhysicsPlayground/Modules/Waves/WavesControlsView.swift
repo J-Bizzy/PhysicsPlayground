@@ -73,9 +73,9 @@ struct WavesControlsView: View {
                         .accessibilityLabel("Wave speed")
                 }
 
-                Toggle("Fringe map (standing pattern)", isOn: $model.showEnvelope)
+                Toggle("Silence surfaces", isOn: $model.showSilenceSurfaces)
                     .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("Freezes the picture into ridges of loud and silent — the interference fringes")
+                    .accessibilityHint("Translucent 3D sheets where the waves cancel to nothing — walk around them")
 
                 HStack(spacing: DesignTokens.Panel.rowSpacing) {
                     Button {
@@ -129,8 +129,8 @@ struct WavesStatsView: View {
                     row("Separation d", String(format: "%.1f", separation * 100), "cm")
                     row("d / λ", String(format: "%.2f", separation / model.wavelength), "")
                 }
-                if let silent = model.silentLineCount {
-                    row("Silent lines", "\(silent)", "")
+                if let silent = model.silentSurfaceCount {
+                    row("Silence surfaces", "\(silent)", "")
                 }
                 row("Probe amplitude", String(format: "%.1f", readout.amplitude * 1000), "mm")
                 if let cycles = readout.pathDifferenceInWavelengths {
@@ -151,7 +151,7 @@ struct WavesStatsView: View {
                 .accessibilityElement(children: .combine)
             }
 
-            Text("Surface heights shown ×6 — every number here is the true value.")
+            Text("Dot size shows the live field; brightness shows how loud each spot ever gets. Every number here is the true value.")
                 .font(DesignTokens.TypeScale.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -163,9 +163,9 @@ struct WavesStatsView: View {
         case .constructive:
             "The probe sits where crests arrive together — amplitudes add."
         case .destructive:
-            "The probe sits on a silent line — crest meets trough and they cancel."
+            "The probe sits on a silence surface — crest meets trough and they cancel."
         case .intermediate:
-            "Partial overlap here — between a loud lane and a silent one."
+            "Partial overlap here — between a loud zone and a silent sheet."
         }
     }
 

@@ -16,10 +16,10 @@ enum WavesModule {
         ModuleDescriptor(
             id: id,
             title: "Wave Interference",
-            blurb: "A ripple tank at table height — drag wave sources around, flip one out of phase, and find the silent lines with your own hands.",
+            blurb: "A wave field filling the space around you — float sources anywhere, flip one out of phase, and walk through the surfaces of silence.",
             icon: "water.waves",
             accent: DesignTokens.Palette.wavesAccent,
-            firstRunHint: "Pinch a teal source and drag it across the pool — the pattern reorganizes live. Then flip 'Invert phase' and watch the loud midline go silent.",
+            firstRunHint: "Pinch a teal source and float it anywhere — the whole field reorganizes live. Flip 'Invert phase' and a silence sheet appears between the sources.",
             legend: legend,
             realWorld: WavesRealWorld.story,
             makeControls: {
@@ -43,19 +43,23 @@ enum WavesModule {
     private static let legend: [LegendItem] = [
         LegendItem(
             swatch: .fill(DesignTokens.Palette.waveSource),
-            text: "Wave source — grab and drag it; all sources share one frequency, like a real ripple tank"
+            text: "Wave source — float it anywhere; all sources share one frequency, and waves spread as real spheres (1/r)"
         ),
         LegendItem(
             swatch: .fill(DesignTokens.Palette.waveInverted),
             text: "Phase-inverted source (starts half a cycle late) — the active noise-cancelling trick"
         ),
         LegendItem(
-            swatch: .stroke(DesignTokens.Palette.predictedArc),
-            text: "Probe — park it anywhere for the local amplitude and path-difference math"
+            swatch: .translucent(DesignTokens.Palette.wavesAccent),
+            text: "Lattice dots — size pulses with the live field, brightness marks where it ever gets loud"
         ),
         LegendItem(
-            swatch: .symbol("water.waves", DesignTokens.Palette.wavesAccent),
-            text: "Surface heights are exaggerated ×6 for visibility; all panel numbers are true values"
+            swatch: .translucent(DesignTokens.Palette.forceVector),
+            text: "Silence surfaces — the 3D sheets where crest always meets trough; nothing oscillates there"
+        ),
+        LegendItem(
+            swatch: .stroke(DesignTokens.Palette.predictedArc),
+            text: "Probe — park it anywhere for the local amplitude and path-difference math"
         ),
     ]
 }
