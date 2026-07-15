@@ -355,6 +355,7 @@ final class HubScene {
     /// A quick swell as the chosen bubble accepts the pinch.
     func pulseBubble(id: String) {
         guard let bubble = bubbles.first(where: { $0.moduleID == id }) else { return }
+        SoundPalette.play(.pop, on: bubble.shell, volume: 0.7)
         bubble.anchor.move(
             to: Transform(scale: SIMD3(repeating: 1.14),
                           translation: bubble.anchor.position),

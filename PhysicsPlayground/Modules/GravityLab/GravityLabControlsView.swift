@@ -42,6 +42,19 @@ struct GravityLabControlsView: View {
                 .buttonStyle(.bordered)
                 .disabled(model.selectedBody == nil || model.selectedBody?.id == model.primaryBody?.id)
 
+                if model.mode == .solarSystem, model.hasSingleSun {
+                    Button {
+                        model.makeBinary()
+                    } label: {
+                        Label("Split into a binary star", systemImage: "circle.grid.2x1.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(DesignTokens.Palette.gravityAccent)
+                    .disabled(model.bodies.count >= GravityLabModel.bodyBudget)
+                    .accessibilityHint("Splits the Sun into two half-mass suns orbiting each other — total mass and momentum conserved, then the three-body chaos begins")
+                }
+
                 Text("\(model.bodies.count) of \(GravityLabModel.bodyBudget) bodies. Grab any of them — or the Sun.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
@@ -116,7 +129,7 @@ struct GravityLabControlsView: View {
             }
 
             PanelSection("Physics") {
-                if model.mode == .solarSystem {
+                if model.mode == .solarSystem, model.hasSingleSun {
                     labeledSlider(
                         "Sun mass", value: $model.sunMassMultiplier,
                         range: 0.1...5, format: "×%.1f"

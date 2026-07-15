@@ -154,6 +154,17 @@ final class GravityLabModel {
     private(set) var mergeNonce = 0
     private(set) var lastMergePosition = SIMD3<Double>.zero
 
+    // MARK: Sounds (data only; the renderer positions and plays them)
+
+    private(set) var soundEvent: SpatialSoundEvent?
+    private var soundCounter = 0
+
+    private func emitSound(_ kind: SoundPalette.Sound, at position: SIMD3<Double>, volume: Double) {
+        soundCounter += 1
+        soundEvent = SpatialSoundEvent(id: soundCounter, kind: kind,
+                                       position: position, volume: volume)
+    }
+
     // MARK: Hold / throw
 
     private var heldID: UUID?
@@ -248,6 +259,39 @@ final class GravityLabModel {
         self.selectedID = primaryBody?.id
     }
 
+    /// True while the scene has the single classic Sun (the sun-mass
+    /// slider and the binary button only make sense then).
+    var hasSingleSun: Bool {
+        bodies.contains { $0.body.name == "Sun" }
+    }
+
+    /// The showstopper: split the Sun into two half-mass suns waltzing
+    /// about their barycenter. Total mass and momentum are conserved
+    /// exactly, so distant planets barely notice — until they drift close
+    /// and the three-body dance begins.
+    func makeBinary() {
+        guard let index = bodies.firstIndex(where: { $0.body.name == "Sun" }),
+              bodies.count < Self.bodyBudget else { return }
+        let sun = bodies[index].body
+        let separation = 0.4 * CelestialBody.astronomicalUnit
+        let half = sun.mass / 2
+        // Mutual circular orbit: relative speed √(GM_total/d), split evenly.
+        let orbitSpeed = (effectiveG * sun.mass / separation).squareRoot() / 2
+
+        var sunA = CelestialBody(name: "Sun A", mass: half, radius: sun.radius)
+        sunA.position = sun.position + SIMD3(-separation / 2, 0, 0)
+        sunA.velocity = sun.velocity + SIMD3(0, 0, orbitSpeed)
+        var sunB = CelestialBody(name: "Sun B", mass: half, radius: sun.radius)
+        sunB.position = sun.position + SIMD3(separation / 2, 0, 0)
+        sunB.velocity = sun.velocity + SIMD3(0, 0, -orbitSpeed)
+
+        bodies[index] = OrbitingBody(id: UUID(), body: sunA, displayRadius: 0.055)
+        bodies.insert(OrbitingBody(id: UUID(), body: sunB, displayRadius: 0.055),
+                      at: index + 1)
+        selectedID = bodies[index].id
+        emitSound(.boom, at: sun.position, volume: 1)
+    }
+
     func select(id: UUID) {
         guard bodies.contains(where: { $0.id == id }) else { return }
         selectedID = id
@@ -297,6 +341,10 @@ final class GravityLabModel {
         bodies[index].body.velocity = currentHandVelocity(timestamp: timestamp)
         bodies[index].trail.removeAll()
         bodies[index].lastTrailPosition = nil
+        let speed = simd_length(bodies[index].body.velocity)
+        if speed > 1000 {
+            emitSound(.whoosh, at: bodies[index].body.position, volume: min(speed / 45_000, 1))
+        }
 
         // Lagrange mode: releasing near one of the five points matches the
         // body's velocity to the rotating frame ("station insertion"), so
@@ -468,6 +516,7 @@ final class GravityLabModel {
                     )
                     lastMergePosition = merged.position
                     mergeNonce += 1
+                    emitSound(.boom, at: merged.position, volume: 0.9)
                     let selectionWasInvolved = selectedID == a.id || selectedID == b.id
                     bodies.remove(at: other)
                     bodies[index] = survivor

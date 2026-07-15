@@ -199,6 +199,32 @@ final class GravityLabModelTests: XCTestCase {
         XCTAssertNil(model.capturedPointName)
     }
 
+    /// Splitting the Sun into a binary conserves total mass and momentum
+    /// exactly, and the pair genuinely orbits (bound, opposite velocities).
+    func testMakeBinaryConservesMassAndMomentum() {
+        let model = GravityLabModel()
+        let originalMass = model.primaryBody!.body.mass
+
+        model.makeBinary()
+
+        let suns = model.bodies.filter { $0.body.name.hasPrefix("Sun") }
+        XCTAssertEqual(suns.count, 2)
+        XCTAssertEqual(suns.map(\.body.mass).reduce(0, +), originalMass, accuracy: 1e15)
+        let momentum = suns.reduce(SIMD3<Double>.zero) { $0 + $1.body.mass * $1.body.velocity }
+        XCTAssertEqual(simd_length(momentum), 0, accuracy: originalMass * 1e-9,
+                       "the pair's total momentum matches the original resting Sun")
+        XCTAssertFalse(model.hasSingleSun)
+
+        // The pair is bound: mutual energy is negative.
+        let pairEnergy = NBody.totalEnergy(bodies: suns.map(\.body))
+        XCTAssertLessThan(pairEnergy, 0)
+
+        // And it can't be split twice.
+        let count = model.bodies.count
+        model.makeBinary()
+        XCTAssertEqual(model.bodies.count, count)
+    }
+
     func testResetRestoresOpeningScene() {
         let model = GravityLabModel()
         model.spawn(.mars)

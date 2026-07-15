@@ -52,6 +52,10 @@ final class GravityLabRenderer {
     private var trailMaterialKeys: [String]
 
     private let sunLight = Entity()
+    private var sunGlow: ModelEntity!
+    private let audioEmitter = Entity()
+    private var lastSoundID = 0
+    private var appliedTextureVersion = -1
     private let predictionEntity = ModelEntity()
     private let predictionMaterial: UnlitMaterial
     private let flashEntity: ModelEntity
@@ -133,13 +137,23 @@ final class GravityLabRenderer {
         bodyNames = Array(repeating: "", count: bodyPool.budget)
         systemRoot.addChild(bodyPool.root)
 
-        // The Sun's light: warm, following the heaviest body.
+        // The Sun's light: warm, following the heaviest body — plus a
+        // soft corona shell so it reads as incandescent, not painted.
         sunLight.components.set(PointLightComponent(
             color: UIColor(red: 1.0, green: 0.9, blue: 0.75, alpha: 1),
             intensity: 12_000,
             attenuationRadius: 5
         ))
         systemRoot.addChild(sunLight)
+
+        var glowMaterial = UnlitMaterial(color: UIColor(red: 1.0, green: 0.82, blue: 0.5, alpha: 1))
+        glowMaterial.blending = .transparent(opacity: 0.16)
+        sunGlow = ModelEntity(mesh: .generateSphere(radius: 0.105), materials: [glowMaterial])
+        systemRoot.addChild(sunGlow)
+
+        audioEmitter.components.set(SpatialAudioComponent())
+        systemRoot.addChild(audioEmitter)
+        CelestialTextures.warmUp()
 
         // Trails: one tube entity per body slot.
         trailPool = EntityPool(budget: GravityLabModel.bodyBudget) { _ in }
@@ -293,6 +307,20 @@ final class GravityLabRenderer {
     private func render(_ model: GravityLabModel) {
         frameCounter &+= 1
         scale = Float(model.simToDisplay)
+
+        // Fresh procedural textures arrived: reapply body materials.
+        if appliedTextureVersion != CelestialTextures.version {
+            appliedTextureVersion = CelestialTextures.version
+            bodyMaterialKeys = Array(repeating: "", count: bodyPool.budget)
+        }
+
+        // Spatial sounds requested by the model.
+        if let event = model.soundEvent, event.id != lastSoundID {
+            lastSoundID = event.id
+            audioEmitter.position = SIMD3<Float>(event.position) * scale
+            SoundPalette.play(event.kind, on: audioEmitter, volume: event.volume)
+        }
+
         syncBodies(model)
         syncTrails(model)
         syncPrediction(model)
@@ -306,6 +334,15 @@ final class GravityLabRenderer {
     // flow keeps moving even while the simulation itself is paused)
 
     func tickFieldParticles(dt: Double, model: GravityLabModel) {
+        // Every body turns slowly on its axis — pure presentation, but it
+        // makes the textures live.
+        for (index, slot) in bodyPool.slots.enumerated()
+        where index < model.bodies.count {
+            let rate: Float = model.bodies[index].body.name.hasPrefix("Sun") ? 0.06 : 0.22
+            slot.payload.orientation = simd_quatf(angle: rate * Float(dt), axis: [0, 1, 0])
+                * slot.payload.orientation
+        }
+
         guard model.showFieldParticles else {
             if particlesVisible {
                 particlePool.hideAll()
@@ -455,7 +492,7 @@ final class GravityLabRenderer {
             }
             if bodyMaterialKeys[index] != orbiting.body.name {
                 bodyMaterialKeys[index] = orbiting.body.name
-                slot.payload.model?.materials = [Self.material(for: orbiting.body.name)]
+                slot.payload.model?.materials = [material(for: orbiting.body.name)]
             }
             slot.entity.scale = SIMD3<Float>(
                 repeating: Float(orbiting.displayRadius) / Self.baseBodyRadius)
@@ -473,6 +510,12 @@ final class GravityLabRenderer {
 
         if let primary = model.primaryBody {
             sunLight.position = SIMD3<Float>(primary.body.position) * scale
+            let isSun = primary.body.name.hasPrefix("Sun")
+            sunGlow.isEnabled = isSun
+            if isSun {
+                sunGlow.position = sunLight.position
+                sunGlow.scale = SIMD3(repeating: Float(primary.displayRadius / 0.075))
+            }
         }
 
         // Data-panel anchor floats above the selected body.
@@ -485,10 +528,22 @@ final class GravityLabRenderer {
         }
     }
 
-    private static func material(for name: String) -> RealityKit.Material {
-        if name == "Sun" {
+    private func material(for name: String) -> RealityKit.Material {
+        let texture = CelestialTextures.texture(for: name)
+        if name.hasPrefix("Sun") {
             // Unlit = self-luminous against the room.
-            return UnlitMaterial(color: DesignTokens.Palette.celestialUI(name))
+            var material = UnlitMaterial(color: DesignTokens.Palette.celestialUI(name))
+            if let texture {
+                material.color = .init(tint: .white, texture: .init(texture))
+            }
+            return material
+        }
+        if let texture {
+            var material = PhysicallyBasedMaterial()
+            material.baseColor = .init(tint: .white, texture: .init(texture))
+            material.roughness = 0.7
+            material.metallic = 0.0
+            return material
         }
         return SimpleMaterial(
             color: DesignTokens.Palette.celestialUI(name), roughness: 0.55, isMetallic: false)

@@ -54,6 +54,9 @@ final class KinematicsRenderer {
 
     private let ballPool: EntityPool<ModelEntity>
     private var ballMaterialKeys: [String] = []
+    private var appliedTextureVersion = -1
+    private let audioEmitter = Entity()
+    private var lastSoundID = 0
     private let dotPool: EntityPool<Void>
     private let shadowPool: EntityPool<Void>
 
@@ -185,6 +188,10 @@ final class KinematicsRenderer {
             ringSlots.append(RingSlot(tube: slot.payload, scoreText: text))
         }
         root.addChild(ringPool.root)
+
+        audioEmitter.components.set(SpatialAudioComponent())
+        root.addChild(audioEmitter)
+        BallTextures.warmUp()
     }
 
     // MARK: Render loop
@@ -200,6 +207,19 @@ final class KinematicsRenderer {
     private func render(_ model: KinematicsModel) {
         // Reading the nonce arms re-rendering for the hoop flash fade.
         _ = model.ringFlashNonce
+
+        // Fresh procedural textures arrived: reapply ball materials.
+        if appliedTextureVersion != BallTextures.version {
+            appliedTextureVersion = BallTextures.version
+            ballMaterialKeys = Array(repeating: "", count: ballPool.budget)
+        }
+
+        // Spatial sounds requested by the model.
+        if let event = model.soundEvent, event.id != lastSoundID {
+            lastSoundID = event.id
+            audioEmitter.position = SIMD3<Float>(event.position)
+            SoundPalette.play(event.kind, on: audioEmitter, volume: event.volume)
+        }
 
         let aim = SIMD3<Float>(model.aimDirection)
         let launcher = SIMD3<Float>(model.launcherPosition)
@@ -261,6 +281,20 @@ final class KinematicsRenderer {
                 slot.entity.position = SIMD3<Float>(flight.state.position)
                 // Undo any offset the manipulation system left on the child.
                 slot.payload.position = .zero
+
+                // Cosmetic tumble in flight / roll on the ground: rotate
+                // about the horizontal axis perpendicular to the motion.
+                let velocity = flight.state.velocity
+                let speed = simd_length(velocity)
+                if (flight.status == .flying || flight.status == .rolling), speed > 0.05 {
+                    let axis: SIMD3<Double> = simd_normalize(SIMD3(velocity.z, 0, -velocity.x))
+                    let cappedSpeed: Double = min(speed, 8)
+                    let effectiveRadius: Double = max(Double(radius), 0.02)
+                    let angle: Double = cappedSpeed / effectiveRadius * (0.6 / 90.0)
+                    slot.payload.orientation =
+                        simd_quatf(angle: Float(angle), axis: SIMD3<Float>(axis))
+                        * slot.payload.orientation
+                }
             }
 
             // Shadow directly below, hidden once the ball rests on the floor.
@@ -295,10 +329,17 @@ final class KinematicsRenderer {
     private func applyBallMaterial(for projectile: Projectile, at index: Int, slot: EntityPool<ModelEntity>.Slot) {
         guard ballMaterialKeys[index] != projectile.name else { return }
         ballMaterialKeys[index] = projectile.name
-        slot.payload.model?.materials = [Self.ballMaterial(for: projectile)]
+        slot.payload.model?.materials = [ballMaterial(for: projectile)]
     }
 
-    private static func ballMaterial(for projectile: Projectile) -> SimpleMaterial {
+    private func ballMaterial(for projectile: Projectile) -> RealityKit.Material {
+        if let texture = BallTextures.texture(for: projectile.name) {
+            var material = PhysicallyBasedMaterial()
+            material.baseColor = .init(tint: .white, texture: .init(texture))
+            material.roughness = .init(floatLiteral: projectile.name == Projectile.cannonball.name ? 0.35 : 0.6)
+            material.metallic = .init(floatLiteral: projectile.name == Projectile.cannonball.name ? 0.7 : 0.0)
+            return material
+        }
         let color: UIColor = switch projectile.name {
         case Projectile.tableTennisBall.name: .white
         case Projectile.golfBall.name: UIColor(white: 0.92, alpha: 1)

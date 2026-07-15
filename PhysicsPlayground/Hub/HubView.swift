@@ -78,6 +78,7 @@ struct HubView: View {
             .padding(DesignTokens.Panel.outerPadding)
         }
         .task {
+            SoundPalette.warmUp()
             // The spatial menu is the hub — bring it up on arrival.
             if !appModel.isImmersiveSpaceOpen {
                 _ = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)

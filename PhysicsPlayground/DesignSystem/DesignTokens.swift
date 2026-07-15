@@ -59,9 +59,12 @@ enum DesignTokens {
         static let sunColor = Color(uiColor: celestialUI("Sun"))
 
         /// Celestial body colors, keyed by preset name (custom = teal).
+        /// "Sun", "Sun A", "Sun B" all read as suns.
         static func celestialUI(_ name: String) -> UIColor {
-            switch name {
-            case "Sun": UIColor(red: 1.0, green: 0.85, blue: 0.45, alpha: 1)
+            if name.hasPrefix("Sun") {
+                return UIColor(red: 1.0, green: 0.85, blue: 0.45, alpha: 1)
+            }
+            return switch name {
             case "Mercury": .systemGray
             case "Venus": UIColor(red: 0.85, green: 0.72, blue: 0.52, alpha: 1)
             case "Earth": .systemBlue

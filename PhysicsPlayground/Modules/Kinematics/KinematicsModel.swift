@@ -268,6 +268,7 @@ final class KinematicsModel {
         flight.maxHeight = muzzlePoint.y
         flight.launchPoint = muzzlePoint
         insertFlight(flight)
+        emitSound(.pop, at: muzzlePoint, volume: 0.8)
     }
 
     /// Spawns a fresh ball hovering by the panel, ready to grab and throw.
@@ -340,13 +341,18 @@ final class KinematicsModel {
         flights[index].maxHeight = flights[index].state.position.y
         flights[index].launchPoint = flights[index].state.position
         flights[index].wasThrown = true
+        emitSound(.whoosh, at: flights[index].state.position,
+                  volume: min(simd_length(velocity) / 8, 1))
     }
 
     // MARK: Hoops
 
     struct Ring: Identifiable, Equatable {
         let id: UUID
+        /// Where the user placed it (the orbit's center when hoops move).
+        var anchor: SIMD3<Double>
         var position: SIMD3<Double>
+        var phase: Double
         var score = 0
     }
 
@@ -354,12 +360,23 @@ final class KinematicsModel {
     /// Bumped shortly after a score so observers re-render the flash off.
     private(set) var ringFlashNonce = 0
 
+    /// Moving targets: hoops circle their anchors — the skill mode.
+    var hoopsOrbit = false
+    nonisolated static let hoopOrbitRadius = 0.25
+    nonisolated static let hoopOrbitSpeed = 0.55  // rad/s (simulated time)
+
     var totalScore: Int { rings.reduce(0) { $0 + $1.score } }
+
+    /// Consecutive scoring flights; a landed miss (with hoops up) resets it.
+    private(set) var streak = 0
+    private(set) var bestStreak = UserDefaults.standard.integer(forKey: "kinematics.bestStreak")
 
     func addRing() {
         guard rings.count < Self.ringBudget else { return }
-        let offset = SIMD3(Double(rings.count) * 0.55, Double(rings.count) * 0.15, 0)
-        rings.append(Ring(id: UUID(), position: Self.ringSpawnPoint + offset))
+        let anchor = Self.ringSpawnPoint
+            + SIMD3(Double(rings.count) * 0.55, Double(rings.count) * 0.15, 0)
+        rings.append(Ring(id: UUID(), anchor: anchor, position: anchor,
+                          phase: Double(rings.count) * 2.1))
     }
 
     func removeLastRing() {
@@ -371,7 +388,26 @@ final class KinematicsModel {
         guard let index = rings.firstIndex(where: { $0.id == id }) else { return }
         var clamped = point
         clamped.y = max(clamped.y, 0.3)
-        rings[index].position = clamped
+        rings[index].anchor = clamped
+        if !hoopsOrbit {
+            rings[index].position = clamped
+        }
+    }
+
+    /// Advances hoop motion (independent of whether anything is flying).
+    private func stepRings(dt: Double) {
+        for index in rings.indices {
+            if hoopsOrbit {
+                rings[index].phase += Self.hoopOrbitSpeed * dt
+                rings[index].position = rings[index].anchor + SIMD3(
+                    Self.hoopOrbitRadius * cos(rings[index].phase),
+                    0,
+                    Self.hoopOrbitRadius * sin(rings[index].phase)
+                )
+            } else if rings[index].position != rings[index].anchor {
+                rings[index].position = rings[index].anchor
+            }
+        }
     }
 
     /// Returns the hoops newly scored by this segment of flight.
@@ -393,6 +429,7 @@ final class KinematicsModel {
             if simd_length(planar) < Self.ringRadius - ballRadius * 0.5 {
                 rings[index].score += 1
                 newlyScored.insert(ring.id)
+                emitSound(.chime, at: ring.position, volume: 1)
                 let generation = ringFlashNonce
                 Task { [weak self] in
                     try? await Task.sleep(for: .milliseconds(450))
@@ -406,13 +443,25 @@ final class KinematicsModel {
 
     // MARK: Stepping
 
+    // MARK: Sounds (data only; the renderer positions and plays them)
+
+    private(set) var soundEvent: SpatialSoundEvent?
+    private var soundCounter = 0
+
+    private func emitSound(_ kind: SoundPalette.Sound, at position: SIMD3<Double>, volume: Double) {
+        soundCounter += 1
+        soundEvent = SpatialSoundEvent(id: soundCounter, kind: kind,
+                                       position: position, volume: volume)
+    }
+
     /// Advances every active flight by one rendered frame, in simulated
     /// time (dt × timeScale). Two RK4 substeps per frame; stalled frames
     /// are clamped so debugger pauses don't become physics leaps.
     func step(dt: Double) {
         guard !isPaused else { return }
-        guard flights.contains(where: { $0.status == .flying || $0.status == .rolling }) else { return }
         let frameDt = min(dt, 1.0 / 30.0) * timeScale
+        stepRings(dt: frameDt)
+        guard flights.contains(where: { $0.status == .flying || $0.status == .rolling }) else { return }
 
         for index in flights.indices {
             switch flights[index].status {
@@ -475,7 +524,22 @@ final class KinematicsModel {
                     flightTime: contactTime,
                     wasThrown: flight.wasThrown
                 )
+                // Streak bookkeeping: with hoops up, every flight either
+                // scored (streak grows) or missed (streak dies).
+                if !rings.isEmpty {
+                    if flight.scoredRings.isEmpty {
+                        streak = 0
+                    } else {
+                        streak += 1
+                        if streak > bestStreak {
+                            bestStreak = streak
+                            UserDefaults.standard.set(bestStreak, forKey: "kinematics.bestStreak")
+                        }
+                    }
+                }
             }
+            emitSound(.thud, at: contact,
+                      volume: min(abs(flight.state.velocity.y) / 6, 1))
 
             let reboundSpeed = -flight.state.velocity.y * flight.projectile.restitution
             if reboundSpeed > ProjectileMotion.restSpeed {
@@ -522,6 +586,8 @@ final class KinematicsModel {
     func reset() {
         clearFlights()
         rings.removeAll()
+        hoopsOrbit = false
+        streak = 0
         launcherPosition = Self.launcherHome
         launchSpeed = 6.0
         gravity = 9.81

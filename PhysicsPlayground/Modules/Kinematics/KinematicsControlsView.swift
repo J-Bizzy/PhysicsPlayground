@@ -172,9 +172,19 @@ struct KinematicsControlsView: View {
                     .accessibilityLabel("Remove last hoop")
                 }
                 if !model.rings.isEmpty {
-                    Text("Score: \(model.totalScore)")
-                        .font(DesignTokens.TypeScale.sectionHeader.monospacedDigit())
-                        .accessibilityLabel("Total score \(model.totalScore)")
+                    Toggle("Moving hoops", isOn: $model.hoopsOrbit)
+                        .font(DesignTokens.TypeScale.control)
+                        .accessibilityHint("Hoops circle their spots — the skill mode")
+
+                    HStack(spacing: 20) {
+                        Text("Score: \(model.totalScore)")
+                        Text("Streak: \(model.streak)")
+                        Text("Best: \(model.bestStreak)")
+                            .foregroundStyle(DesignTokens.Palette.kinematicsAccent)
+                    }
+                    .font(DesignTokens.TypeScale.sectionHeader.monospacedDigit())
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Score \(model.totalScore), streak \(model.streak), best streak \(model.bestStreak)")
                 }
             }
 

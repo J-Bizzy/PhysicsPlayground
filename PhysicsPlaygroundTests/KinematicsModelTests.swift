@@ -170,6 +170,68 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(model.flights.count, KinematicsModel.flightBudget)
     }
 
+    /// Moving hoops circle their anchors at the set radius, and snap back
+    /// when the mode turns off.
+    func testHoopsOrbitMovesRingsAroundAnchors() {
+        let model = KinematicsModel()
+        model.addRing()
+        let anchor = model.rings[0].anchor
+
+        model.hoopsOrbit = true
+        for _ in 0..<45 {
+            model.step(dt: 1.0 / 90.0)
+        }
+        let distance = simd_distance(model.rings[0].position, anchor)
+        XCTAssertEqual(distance, KinematicsModel.hoopOrbitRadius, accuracy: 1e-9,
+                       "an orbiting hoop stays exactly one orbit radius from its anchor")
+        XCTAssertEqual(model.rings[0].position.y, anchor.y, accuracy: 1e-9,
+                       "hoops orbit in a horizontal circle")
+
+        model.hoopsOrbit = false
+        model.step(dt: 1.0 / 90.0)
+        XCTAssertEqual(model.rings[0].position, anchor)
+    }
+
+    /// A scoring flight grows the streak (and best); a landed miss with
+    /// hoops up resets it.
+    func testStreakGrowsOnScoresAndDiesOnMisses() {
+        UserDefaults.standard.removeObject(forKey: "kinematics.bestStreak")
+        let model = KinematicsModel()
+        model.addRing()
+        let ringPosition = SIMD3<Double>(0.5, 1.0, -1.0)
+        model.moveRing(id: model.rings[0].id, to: ringPosition)
+
+        func fire(over target: SIMD3<Double>) {
+            model.clearFlights()
+            model.moveLauncher(to: target + SIMD3(0, 1.0, 0))
+            model.setAim(elevationDegrees: -85, azimuthDegrees: 0)
+            model.launchSpeed = 1
+            model.fire()
+            for _ in 0..<3000 where model.flights.first?.status == .flying {
+                model.step(dt: 1.0 / 90.0)
+            }
+        }
+
+        fire(over: ringPosition)                      // swish
+        XCTAssertEqual(model.streak, 1)
+        fire(over: ringPosition)                      // swish again
+        XCTAssertEqual(model.streak, 2)
+        XCTAssertEqual(model.bestStreak, 2)
+        fire(over: ringPosition + SIMD3(1, 0, 0))     // air ball
+        XCTAssertEqual(model.streak, 0, "a landed miss with hoops up kills the streak")
+        XCTAssertEqual(model.bestStreak, 2, "the best survives")
+    }
+
+    /// The model publishes spatial sound events for launches.
+    func testFirePublishesSoundEvent() {
+        let model = KinematicsModel()
+        XCTAssertNil(model.soundEvent)
+        model.fire()
+        let event = try! XCTUnwrap(model.soundEvent)
+        XCTAssertEqual(event.kind, .pop)
+        XCTAssertEqual(simd_distance(event.position, model.muzzlePoint), 0, accuracy: 1e-9)
+    }
+
     func testResetRestoresFreshlyEnteredState() {
         let model = KinematicsModel()
         model.launchSpeed = 3
