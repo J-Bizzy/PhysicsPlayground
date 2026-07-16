@@ -19,7 +19,7 @@ enum CircuitsModule {
             blurb: "Build real circuits in mid-air — batteries, bulbs, resistors, capacitors, switches — and watch the electrons actually flow.",
             icon: "powerplug.fill",
             accent: DesignTokens.Palette.circuitsAccent,
-            firstRunHint: "Pinch a part on the tray and a copy lifts off it — carry it anywhere. Wire parts by pinching one copper terminal, then another. The circuit stays live even while you carry things.",
+            firstRunHint: "Grab a part off the tray — a copy follows your hand; carry it anywhere. Connect parts by pinching one copper terminal, then another (grab Wire jumpers from the tray for longer runs). The circuit stays live even while you carry things.",
             legend: legend,
             realWorld: CircuitsRealWorld.story,
             isPaused: { appModel.circuitsModel.isPaused },

@@ -105,6 +105,37 @@ final class CircuitsModelTests: XCTestCase {
                        "moving a part must not interrupt the current")
     }
 
+    /// Wire jumpers are honest conductors: a battery–wire–bulb–wire loop
+    /// carries V / (R_bulb + r_internal + 2·R_conductor).
+    func testWireJumpersConductTheLoop() {
+        let model = CircuitsModel()
+        model.add(.battery)
+        model.add(.wire)
+        model.add(.bulb)
+        model.add(.wire)
+        let battery = model.components[0]
+        let wireA = model.components[1]
+        let bulb = model.components[2]
+        let wireB = model.components[3]
+
+        model.tapTerminal(.init(componentID: battery.id, end: 1))
+        model.tapTerminal(.init(componentID: wireA.id, end: 0))
+        model.tapTerminal(.init(componentID: wireA.id, end: 1))
+        model.tapTerminal(.init(componentID: bulb.id, end: 0))
+        model.tapTerminal(.init(componentID: bulb.id, end: 1))
+        model.tapTerminal(.init(componentID: wireB.id, end: 0))
+        model.tapTerminal(.init(componentID: wireB.id, end: 1))
+        model.tapTerminal(.init(componentID: battery.id, end: 0))
+        model.step(dt: 1.0 / 90.0)
+
+        let expected = 9.0 / (24 + CircuitsModel.batteryInternalResistance
+                              + 2 * CircuitSolver.switchResistance)
+        XCTAssertEqual(abs(model.readouts[bulb.id]?.amps ?? 0), expected,
+                       accuracy: expected * 1e-3)
+        // Essentially no voltage is lost across an ideal jumper.
+        XCTAssertLessThan(abs(model.readouts[wireA.id]?.volts ?? 1), 0.001)
+    }
+
     /// Tap–tap wiring: first tap arms, second connects, tapping the same
     /// terminal cancels, duplicates are refused.
     func testTapTapWiring() {

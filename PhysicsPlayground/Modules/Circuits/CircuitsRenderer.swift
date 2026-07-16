@@ -92,7 +92,18 @@ final class CircuitsRenderer {
         buildTray()
     }
 
-    // MARK: The parts tray (pinch a part to lift a copy off it)
+    // MARK: The parts tray (grab a part and a copy lifts off it)
+
+    /// Tray templates by entity name ("tray-<kind>"), for hiding while a
+    /// copy is being pulled off.
+    private var trayTemplates: [String: ModelEntity] = [:]
+    /// Live tray drags: template entity name → the spawned component
+    /// following the hand.
+    var trayDragIDs: [String: UUID] = [:]
+
+    func setTrayTemplateHidden(_ name: String, _ hidden: Bool) {
+        trayTemplates[name]?.components.set(OpacityComponent(opacity: hidden ? 0 : 1))
+    }
 
     private func buildTray() {
         let tray = Entity()
@@ -101,17 +112,19 @@ final class CircuitsRenderer {
         tray.position = [0, 1.02, -0.85]
         root.addChild(tray)
 
+        let kinds = CircuitsModel.ComponentKind.allCases
+        let slabWidth = Float(kinds.count - 1) * 0.15 + 0.18
+
         var glass = PhysicallyBasedMaterial()
         glass.baseColor = .init(tint: .white)
         glass.roughness = 0.15
         glass.blending = .transparent(opacity: .init(floatLiteral: 0.22))
         let slab = ModelEntity(
-            mesh: .generateBox(size: [0.78, 0.015, 0.24], cornerRadius: 0.008),
+            mesh: .generateBox(size: [slabWidth, 0.015, 0.24], cornerRadius: 0.008),
             materials: [glass]
         )
         tray.addChild(slab)
 
-        let kinds = CircuitsModel.ComponentKind.allCases
         for (index, kind) in kinds.enumerated() {
             let x = Float(index) * 0.15 - Float(kinds.count - 1) * 0.075
             let template = makeBody(for: CircuitsModel.Component(
@@ -119,15 +132,24 @@ final class CircuitsRenderer {
             template.scale = SIMD3(repeating: 0.8)
             template.position = [x, 0.05, -0.02]
             template.name = "tray-\(kind.rawValue)"
-            template.components.set(InputTargetComponent())
-            template.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.05)]))
-            template.components.set(HoverEffectComponent())
+            // A real manipulation target, like the parts themselves — the
+            // router spawns a copy on grab-begin and this template glides
+            // back to its slot on release (the default release behavior).
+            ManipulationComponent.configureEntity(
+                template,
+                collisionShapes: [.generateSphere(radius: 0.06)]
+            )
+            if var manipulation = template.components[ManipulationComponent.self] {
+                manipulation.dynamics.scalingBehavior = .none
+                template.components.set(manipulation)
+            }
             var accessibility = AccessibilityComponent()
             accessibility.isAccessibilityElement = true
             accessibility.label = LocalizedStringResource(
-                stringLiteral: "Pick up a \(kind.displayName) from the tray")
+                stringLiteral: "Grab a \(kind.displayName) from the tray")
             template.components.set(accessibility)
             tray.addChild(template)
+            trayTemplates[template.name] = template
 
             // A small flat label on the tray surface.
             let labelMesh = MeshResource.generateText(
@@ -260,10 +282,15 @@ final class CircuitsRenderer {
                 ? String(format: "%.1f mF", component.value * 1000)
                 : String(format: "%.0f µF", component.value * 1e6)
         case .switcher: component.isClosed ? "closed" : "open"
+        case .wire: ""  // nothing to say — it's a jumper
         }
     }
 
     private func setLabel(_ label: ModelEntity, text: String) {
+        guard !text.isEmpty else {
+            label.model = nil
+            return
+        }
         let mesh = MeshResource.generateText(
             text, extrusionDepth: 0.001,
             font: .systemFont(ofSize: 0.02, weight: .medium))
@@ -430,6 +457,18 @@ final class CircuitsRenderer {
                 mesh: .generateBox(size: [0.075, 0.016, 0.032], cornerRadius: 0.004),
                 materials: [SimpleMaterial(color: UIColor(white: 0.25, alpha: 1),
                                            roughness: 0.6, isMetallic: false)])
+        case .wire:
+            // A jumper: bare copper rod in an orange insulation sleeve.
+            let body = ModelEntity(
+                mesh: .generateCylinder(height: 0.12, radius: 0.005),
+                materials: [copperMaterial])
+            body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            let sleeve = ModelEntity(
+                mesh: .generateCylinder(height: 0.07, radius: 0.0095),
+                materials: [SimpleMaterial(color: UIColor(red: 0.9, green: 0.45, blue: 0.15, alpha: 1),
+                                           roughness: 0.7, isMetallic: false)])
+            body.addChild(sleeve)
+            return body
         }
     }
 

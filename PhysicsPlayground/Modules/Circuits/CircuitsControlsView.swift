@@ -100,6 +100,10 @@ struct CircuitsControlsView: View {
         case .switcher:
             Toggle("Closed", isOn: model.selectedIsClosed)
                 .font(DesignTokens.TypeScale.control)
+        case .wire:
+            Text("An ideal jumper — a milliohm end to end, nothing to tune. Pinch its terminals to splice it into the circuit.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
         }
 
         if let readout {

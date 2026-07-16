@@ -42,7 +42,7 @@ final class CircuitsModel {
     // MARK: Components
 
     enum ComponentKind: String, CaseIterable, Identifiable {
-        case battery, resistor, bulb, capacitor, switcher
+        case battery, resistor, bulb, capacitor, switcher, wire
 
         var id: String { rawValue }
 
@@ -53,6 +53,7 @@ final class CircuitsModel {
             case .bulb: "Bulb"
             case .capacitor: "Capacitor"
             case .switcher: "Switch"
+            case .wire: "Wire"
             }
         }
 
@@ -63,6 +64,7 @@ final class CircuitsModel {
             case .bulb: 24.0          // Ω
             case .capacitor: 2.2e-3   // F
             case .switcher: 0
+            case .wire: 0             // an ideal jumper — milliohms end to end
             }
         }
     }
@@ -142,9 +144,11 @@ final class CircuitsModel {
     // MARK: Editing
 
     /// Adds a part — at `point` when it comes off the tray, otherwise on
-    /// a spawn ring at the build center.
-    func add(_ kind: ComponentKind, at point: SIMD3<Double>? = nil) {
-        guard components.count < Self.componentBudget else { return }
+    /// a spawn ring at the build center. Returns the new part's id (nil
+    /// when the component budget is full).
+    @discardableResult
+    func add(_ kind: ComponentKind, at point: SIMD3<Double>? = nil) -> UUID? {
+        guard components.count < Self.componentBudget else { return nil }
         let angle = Double(components.count) * 2.4
         let fallback = Self.buildCenter
             + SIMD3(cos(angle) * 0.35, Double(components.count % 3) * 0.15 - 0.1, sin(angle) * 0.25)
@@ -154,6 +158,7 @@ final class CircuitsModel {
         components.append(component)
         selectedID = component.id
         emitSound(.pop, at: position, volume: 0.6)
+        return component.id
     }
 
     func removeSelected() {
@@ -314,6 +319,8 @@ final class CircuitsModel {
                            previousVoltage: component.capacitorVoltage)
             case .switcher:
                 component.isClosed ? .conductor : .open
+            case .wire:
+                .conductor
             }
             return CircuitElement(nodeA: a, nodeB: b, kind: kind)
         }

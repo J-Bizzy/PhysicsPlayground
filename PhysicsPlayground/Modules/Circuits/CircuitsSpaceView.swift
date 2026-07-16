@@ -74,14 +74,6 @@ struct CircuitsSpaceView: View {
         var current: Entity? = entity
         while let candidate = current {
             let name = candidate.name
-            if name.hasPrefix("tray-") {
-                if let kind = CircuitsModel.ComponentKind(rawValue: String(name.dropFirst(5))) {
-                    // The copy lifts off right where the hand pinched.
-                    let world = SIMD3<Double>(candidate.position(relativeTo: nil))
-                    model.add(kind, at: world + SIMD3(0, 0.16, 0))
-                }
-                return
-            }
             if name.hasPrefix("t0-") || name.hasPrefix("t1-") {
                 let end = name.hasPrefix("t0-") ? 0 : 1
                 if let id = UUID(uuidString: String(name.dropFirst(3))) {
@@ -101,19 +93,46 @@ struct CircuitsSpaceView: View {
         }
     }
 
+    /// Component bodies (named by UUID) are carried directly. Tray
+    /// templates (named "tray-<kind>") spawn a copy on grab-begin; the
+    /// copy follows the hand while the hidden template glides back to
+    /// its slot on release.
     private func configureRouter(renderer: CircuitsRenderer) {
         router.onBegin = { [weak renderer] name, position in
-            guard let renderer, let id = UUID(uuidString: name) else { return }
+            guard let renderer else { return }
+            if name.hasPrefix("tray-") {
+                guard let kind = CircuitsModel.ComponentKind(rawValue: String(name.dropFirst(5))),
+                      let id = model.add(kind, at: SIMD3<Double>(position))
+                else { return }
+                renderer.trayDragIDs[name] = id
+                renderer.setTrayTemplateHidden(name, true)
+                return
+            }
+            guard let id = UUID(uuidString: name) else { return }
             renderer.manipulatingComponentID = id
             model.select(id: id)
             model.move(id: id, to: SIMD3<Double>(position))
         }
-        router.onMove = { name, position in
+        router.onMove = { [weak renderer] name, position in
+            if name.hasPrefix("tray-") {
+                guard let id = renderer?.trayDragIDs[name] else { return }
+                model.move(id: id, to: SIMD3<Double>(position))
+                return
+            }
             guard let id = UUID(uuidString: name) else { return }
             model.move(id: id, to: SIMD3<Double>(position))
         }
         router.onEnd = { [weak renderer] name, position in
-            guard let renderer, let id = UUID(uuidString: name) else { return }
+            guard let renderer else { return }
+            if name.hasPrefix("tray-") {
+                if let id = renderer.trayDragIDs[name] {
+                    model.move(id: id, to: SIMD3<Double>(position))
+                    renderer.trayDragIDs[name] = nil
+                }
+                renderer.setTrayTemplateHidden(name, false)
+                return
+            }
+            guard let id = UUID(uuidString: name) else { return }
             model.move(id: id, to: SIMD3<Double>(position))
             renderer.manipulatingComponentID = nil
         }
