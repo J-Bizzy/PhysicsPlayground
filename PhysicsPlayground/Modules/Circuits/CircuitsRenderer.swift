@@ -1,0 +1,487 @@
+//
+//  CircuitsRenderer.swift
+//  Physics Playground — Circuits module
+//
+//  Renders the circuit lab: recognizable little components (a cylinder
+//  battery with a + cap, banded resistors wearing their real color
+//  code, glass bulbs that glow with their true power, electrolytic
+//  capacitors, flip switches), copper wires that follow their terminals
+//  as you carry components around the room, and — the show — electron
+//  dots drifting along every live wire, minus to plus.
+//
+//  Components and wires are created/destroyed on edit (rare); the
+//  per-frame path is transform writes: component roots, wire cylinders
+//  (position/orientation/stretch — no mesh regeneration), and pooled
+//  electron dots.
+//
+
+import Foundation
+import PhysicsCore
+import RealityKit
+import RenderKit
+import SwiftUI
+import simd
+
+@MainActor
+final class CircuitsRenderer {
+    let root = Entity()
+    var subscriptions: [EventSubscription] = []
+
+    var manipulatingComponentID: UUID?
+
+    /// Parent for the selected component's readout attachment.
+    let selectedAnchor = Entity()
+
+    private struct ComponentVisual {
+        let holder: Entity
+        let body: ModelEntity
+        var terminals: [ModelEntity]
+        let label: ModelEntity
+        let halo: ModelEntity
+        var glow: ModelEntity?
+        var filament: ModelEntity?
+        var lever: ModelEntity?
+        var labelText = ""
+        var glowBucket = -1
+        var resistorCodeKey = ""
+    }
+
+    private var visuals: [UUID: ComponentVisual] = [:]
+    private var wireEntities: [UUID: ModelEntity] = [:]
+    private var wirePhases: [UUID: Double] = [:]
+
+    private static let electronBudget = 200
+    private let electronPool: EntityPool<Void>
+    private var electronsVisible = false
+
+    private let audioEmitter = Entity()
+    private var lastSoundID = 0
+    private var appliedResistorTextureVersion = -1
+
+    private let copperMaterial = SimpleMaterial(
+        color: DesignTokens.Palette.copperUI, roughness: 0.35, isMetallic: true)
+    private var glowMaterials: [UnlitMaterial] = []
+
+    private let renderLoop = RenderLoop()
+    private var model: CircuitsModel?
+
+    init() {
+        // Bulb glow brightness buckets (materials made once).
+        glowMaterials = (0..<6).map { step in
+            var material = UnlitMaterial(
+                color: UIColor(red: 1.0, green: 0.85, blue: 0.4, alpha: 1))
+            material.blending = .transparent(
+                opacity: .init(floatLiteral: Float(step) / 5 * 0.55))
+            return material
+        }
+
+        var electronMaterial = UnlitMaterial(color: DesignTokens.Palette.electronUI)
+        electronMaterial.blending = .transparent(opacity: 0.9)
+        let electronMesh = MeshResource.generateSphere(radius: 0.0045)
+        electronPool = EntityPool(budget: Self.electronBudget) { container in
+            container.addChild(ModelEntity(mesh: electronMesh, materials: [electronMaterial]))
+        }
+        root.addChild(electronPool.root)
+
+        selectedAnchor.components.set(BillboardComponent())
+        root.addChild(selectedAnchor)
+
+        audioEmitter.components.set(SpatialAudioComponent())
+        root.addChild(audioEmitter)
+    }
+
+    // MARK: Render loop
+
+    func startObserving(_ model: CircuitsModel) {
+        self.model = model
+        renderLoop.start { [weak self, weak model] in
+            guard let self, let model else { return }
+            self.render(model)
+        }
+    }
+
+    private func render(_ model: CircuitsModel) {
+        if appliedResistorTextureVersion != CircuitTextures.version {
+            appliedResistorTextureVersion = CircuitTextures.version
+            for id in visuals.keys { visuals[id]?.resistorCodeKey = "" }
+        }
+        if let event = model.soundEvent, event.id != lastSoundID {
+            lastSoundID = event.id
+            audioEmitter.position = SIMD3<Float>(event.position)
+            SoundPalette.play(event.kind, on: audioEmitter, volume: event.volume)
+        }
+
+        syncComponents(model)
+        syncWires(model)
+        syncElectrons(model)
+
+        if let selected = model.selectedComponent {
+            selectedAnchor.isEnabled = true
+            selectedAnchor.position = SIMD3<Float>(selected.position) + SIMD3(0, 0.14, 0)
+        } else {
+            selectedAnchor.isEnabled = false
+        }
+    }
+
+    // MARK: Components
+
+    private func syncComponents(_ model: CircuitsModel) {
+        // Remove visuals whose components are gone.
+        let liveIDs = Set(model.components.map(\.id))
+        for id in visuals.keys where !liveIDs.contains(id) {
+            visuals[id]?.holder.removeFromParent()
+            visuals[id] = nil
+        }
+
+        for component in model.components {
+            var visual = visuals[component.id] ?? makeVisual(for: component)
+
+            if component.id != manipulatingComponentID {
+                visual.holder.position = SIMD3<Float>(component.position)
+                visual.body.position = .zero
+            }
+            visual.halo.isEnabled = component.id == model.selectedID
+
+            // Pending terminal glows larger.
+            for (end, terminal) in visual.terminals.enumerated() {
+                let isPending = model.pendingTerminal ==
+                    CircuitsModel.Terminal(componentID: component.id, end: end)
+                terminal.scale = SIMD3(repeating: isPending ? 1.7 : 1.0)
+            }
+
+            // Live label.
+            let text = labelText(for: component)
+            if visual.labelText != text {
+                visual.labelText = text
+                setLabel(visual.label, text: text)
+            }
+
+            switch component.kind {
+            case .bulb:
+                let watts = model.readouts[component.id]?.watts ?? 0
+                let bucket = min(Int((watts / 3.0) * 5), 5)
+                if visual.glowBucket != bucket {
+                    visual.glowBucket = bucket
+                    visual.glow?.model?.materials = [glowMaterials[max(bucket, 0)]]
+                    var filamentMaterial = UnlitMaterial(
+                        color: bucket > 0 ? UIColor(red: 1, green: 0.75, blue: 0.3, alpha: 1)
+                                          : UIColor(white: 0.35, alpha: 1))
+                    filamentMaterial.blending = .transparent(opacity: bucket > 0 ? 1.0 : 0.8)
+                    visual.filament?.model?.materials = [filamentMaterial]
+                }
+            case .switcher:
+                visual.lever?.orientation = simd_quatf(
+                    angle: component.isClosed ? 0 : 0.6, axis: [0, 0, 1])
+            case .resistor:
+                let key = resistorKey(component.value)
+                if visual.resistorCodeKey != key {
+                    if let texture = CircuitTextures.resistorTexture(ohms: component.value) {
+                        visual.resistorCodeKey = key
+                        var material = PhysicallyBasedMaterial()
+                        material.baseColor = .init(tint: .white, texture: .init(texture))
+                        material.roughness = 0.6
+                        visual.body.model?.materials = [material]
+                    }
+                }
+            default:
+                break
+            }
+            visuals[component.id] = visual
+        }
+    }
+
+    private func resistorKey(_ ohms: Double) -> String {
+        guard let code = CircuitSolver.colorBands(ohms: ohms) else { return "?" }
+        return "\(code.digit1)-\(code.digit2)-\(code.multiplier)"
+    }
+
+    private func labelText(for component: CircuitsModel.Component) -> String {
+        switch component.kind {
+        case .battery: String(format: "%.1f V", component.value)
+        case .resistor, .bulb:
+            component.value >= 1000
+                ? String(format: "%.1f kΩ", component.value / 1000)
+                : String(format: "%.0f Ω", component.value)
+        case .capacitor:
+            component.value >= 1e-3
+                ? String(format: "%.1f mF", component.value * 1000)
+                : String(format: "%.0f µF", component.value * 1e6)
+        case .switcher: component.isClosed ? "closed" : "open"
+        }
+    }
+
+    private func setLabel(_ label: ModelEntity, text: String) {
+        let mesh = MeshResource.generateText(
+            text, extrusionDepth: 0.001,
+            font: .systemFont(ofSize: 0.02, weight: .medium))
+        label.model = ModelComponent(
+            mesh: mesh,
+            materials: [UnlitMaterial(color: UIColor(white: 0.95, alpha: 0.9))])
+        let bounds = mesh.bounds
+        label.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
+    }
+
+    private func makeVisual(for component: CircuitsModel.Component) -> ComponentVisual {
+        let holder = Entity()
+        holder.position = SIMD3<Float>(component.position)
+        root.addChild(holder)
+
+        // The grabbable body, shaped per kind.
+        let body = makeBody(for: component)
+        body.name = component.id.uuidString
+        Grabbable.configure(body, collisionRadius: 0.075)
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = LocalizedStringResource(
+            stringLiteral: "\(component.kind.displayName). Drag to move; pinch its terminals to wire.")
+        body.components.set(accessibility)
+        holder.addChild(body)
+
+        // Terminals: copper spheres, tap targets for wiring.
+        var terminals: [ModelEntity] = []
+        let terminalMesh = MeshResource.generateSphere(radius: 0.013)
+        for end in 0...1 {
+            let terminal = ModelEntity(mesh: terminalMesh, materials: [copperMaterial])
+            terminal.name = "t\(end)-\(component.id.uuidString)"
+            terminal.position = SIMD3(
+                Float(end == 0 ? -CircuitsModel.terminalOffset : CircuitsModel.terminalOffset), 0, 0)
+            terminal.components.set(InputTargetComponent())
+            terminal.components.set(CollisionComponent(
+                shapes: [.generateSphere(radius: 0.028)]))
+            terminal.components.set(HoverEffectComponent())
+            var terminalAccessibility = AccessibilityComponent()
+            terminalAccessibility.isAccessibilityElement = true
+            terminalAccessibility.label = LocalizedStringResource(stringLiteral:
+                "\(component.kind.displayName) terminal. Pinch this then another terminal to wire them.")
+            terminal.components.set(terminalAccessibility)
+            holder.addChild(terminal)
+            terminals.append(terminal)
+
+            // A short lead from the body toward the terminal.
+            let lead = ModelEntity(
+                mesh: .generateCylinder(height: 0.045, radius: 0.0028),
+                materials: [copperMaterial])
+            lead.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            lead.position = SIMD3(Float(end == 0 ? -0.062 : 0.062), 0, 0)
+            holder.addChild(lead)
+        }
+
+        // Selection halo.
+        var haloMaterial = UnlitMaterial(color: .white)
+        haloMaterial.blending = .transparent(opacity: 0.18)
+        let halo = ModelEntity(
+            mesh: .generateSphere(radius: 0.085), materials: [haloMaterial])
+        halo.isEnabled = false
+        holder.addChild(halo)
+
+        // Value label beneath, billboarded.
+        let label = ModelEntity()
+        let labelPivot = Entity()
+        labelPivot.position = [0, -0.065, 0]
+        labelPivot.components.set(BillboardComponent())
+        labelPivot.addChild(label)
+        holder.addChild(labelPivot)
+
+        var visual = ComponentVisual(
+            holder: holder, body: body, terminals: terminals,
+            label: label, halo: halo)
+
+        // Kind-specific extras.
+        switch component.kind {
+        case .bulb:
+            let filament = ModelEntity(
+                mesh: .generateBox(size: [0.016, 0.004, 0.004]),
+                materials: [UnlitMaterial(color: UIColor(white: 0.35, alpha: 1))])
+            filament.position = [0, 0.012, 0]
+            body.addChild(filament)
+            visual.filament = filament
+
+            let glow = ModelEntity(
+                mesh: .generateSphere(radius: 0.055), materials: [glowMaterials[0]])
+            glow.position = [0, 0.012, 0]
+            holder.addChild(glow)
+            visual.glow = glow
+        case .switcher:
+            // The lever pivots at the left contact; the tap target is the
+            // pivot so the whole arm is pinchable.
+            let pivot = ModelEntity()
+            pivot.name = "k-\(component.id.uuidString)"
+            pivot.position = [-0.028, 0.008, 0]
+            pivot.components.set(InputTargetComponent())
+            pivot.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.045)]))
+            pivot.components.set(HoverEffectComponent())
+            var leverAccessibility = AccessibilityComponent()
+            leverAccessibility.isAccessibilityElement = true
+            leverAccessibility.label = "Switch lever. Pinch to open or close the circuit."
+            pivot.components.set(leverAccessibility)
+            let arm = ModelEntity(
+                mesh: .generateBox(size: [0.06, 0.008, 0.014], cornerRadius: 0.003),
+                materials: [SimpleMaterial(color: UIColor(white: 0.75, alpha: 1),
+                                           roughness: 0.3, isMetallic: true)])
+            arm.position = [0.028, 0.006, 0]
+            pivot.addChild(arm)
+            body.addChild(pivot)
+            visual.lever = pivot
+        default:
+            break
+        }
+
+        visuals[component.id] = visual
+        return visual
+    }
+
+    private func makeBody(for component: CircuitsModel.Component) -> ModelEntity {
+        switch component.kind {
+        case .battery:
+            let body = ModelEntity(
+                mesh: .generateCylinder(height: 0.11, radius: 0.022),
+                materials: [SimpleMaterial(color: UIColor(red: 0.35, green: 0.45, blue: 0.35, alpha: 1),
+                                           roughness: 0.3, isMetallic: true)])
+            body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            // The + cap on terminal 0's side (nodeA convention).
+            let cap = ModelEntity(
+                mesh: .generateCylinder(height: 0.008, radius: 0.009),
+                materials: [copperMaterial])
+            cap.position = [0, 0.059, 0]  // local +y = world −x after rotation
+            body.addChild(cap)
+            return body
+        case .resistor:
+            let body = ModelEntity(
+                mesh: .generateCylinder(height: 0.075, radius: 0.016),
+                materials: [SimpleMaterial(color: UIColor(red: 0.85, green: 0.72, blue: 0.55, alpha: 1),
+                                           roughness: 0.6, isMetallic: false)])
+            body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            return body
+        case .bulb:
+            var glass = PhysicallyBasedMaterial()
+            glass.baseColor = .init(tint: .white)
+            glass.roughness = 0.1
+            glass.blending = .transparent(opacity: .init(floatLiteral: 0.35))
+            let body = ModelEntity(
+                mesh: .generateSphere(radius: 0.034), materials: [glass])
+            body.position = [0, 0.012, 0]
+            return body
+        case .capacitor:
+            let body = ModelEntity(
+                mesh: .generateCylinder(height: 0.06, radius: 0.02),
+                materials: [SimpleMaterial(color: UIColor(red: 0.12, green: 0.2, blue: 0.45, alpha: 1),
+                                           roughness: 0.4, isMetallic: false)])
+            let stripe = ModelEntity(
+                mesh: .generateBox(size: [0.006, 0.06, 0.041]),
+                materials: [UnlitMaterial(color: UIColor(white: 0.9, alpha: 1))])
+            stripe.position = [0.017, 0, 0]  // the − stripe, terminal-1 side
+            body.addChild(stripe)
+            return body
+        case .switcher:
+            return ModelEntity(
+                mesh: .generateBox(size: [0.075, 0.016, 0.032], cornerRadius: 0.004),
+                materials: [SimpleMaterial(color: UIColor(white: 0.25, alpha: 1),
+                                           roughness: 0.6, isMetallic: false)])
+        }
+    }
+
+    // MARK: Wires
+
+    private func syncWires(_ model: CircuitsModel) {
+        let liveIDs = Set(model.wires.map(\.id))
+        for id in wireEntities.keys where !liveIDs.contains(id) {
+            wireEntities[id]?.removeFromParent()
+            wireEntities[id] = nil
+            wirePhases[id] = nil
+        }
+
+        for wire in model.wires {
+            let entity: ModelEntity
+            if let existing = wireEntities[wire.id] {
+                entity = existing
+            } else {
+                entity = ModelEntity(
+                    mesh: .generateCylinder(height: 1, radius: 0.004),
+                    materials: [copperMaterial])
+                entity.name = "w-\(wire.id.uuidString)"
+                entity.components.set(InputTargetComponent())
+                entity.components.set(CollisionComponent(
+                    shapes: [.generateCapsule(height: 1, radius: 0.016)]))
+                entity.components.set(HoverEffectComponent())
+                var accessibility = AccessibilityComponent()
+                accessibility.isAccessibilityElement = true
+                accessibility.label = "Wire. Pinch to remove it."
+                entity.components.set(accessibility)
+                root.addChild(entity)
+                wireEntities[wire.id] = entity
+                wirePhases[wire.id] = 0
+            }
+
+            guard let a = terminalWorld(wire.from, model),
+                  let b = terminalWorld(wire.to, model) else {
+                entity.isEnabled = false
+                continue
+            }
+            entity.isEnabled = true
+            let direction = b - a
+            let length = simd_length(direction)
+            guard length > 1e-4 else { entity.isEnabled = false; continue }
+            entity.position = (a + b) / 2
+            entity.orientation = VectorFieldArrows.rotationFromYAxis(to: direction / length)
+            entity.scale = SIMD3(1, length, 1)
+        }
+    }
+
+    private func terminalWorld(_ terminal: CircuitsModel.Terminal, _ model: CircuitsModel) -> SIMD3<Float>? {
+        // While a component is being carried, follow the live entity so
+        // wires stay attached to the hand-held part.
+        if terminal.componentID == manipulatingComponentID,
+           let visual = visuals[terminal.componentID] {
+            let offset = SIMD3<Float>(
+                Float(terminal.end == 0 ? -CircuitsModel.terminalOffset : CircuitsModel.terminalOffset), 0, 0)
+            return visual.body.position(relativeTo: root) + offset
+        }
+        guard let component = model.components.first(where: { $0.id == terminal.componentID })
+        else { return nil }
+        return SIMD3<Float>(component.terminalPosition(terminal.end))
+    }
+
+    // MARK: Electron flow (drift is − to +: opposite conventional current)
+
+    private func syncElectrons(_ model: CircuitsModel) {
+        guard model.showElectronFlow else {
+            if electronsVisible {
+                electronPool.hideAll()
+                electronsVisible = false
+            }
+            return
+        }
+        electronsVisible = true
+
+        var dotIndex = 0
+        for wire in model.wires {
+            guard let entity = wireEntities[wire.id], entity.isEnabled,
+                  let a = terminalWorld(wire.from, model),
+                  let b = terminalWorld(wire.to, model) else { continue }
+            let current = model.wireFlows[wire.id] ?? 0
+            guard abs(current) > 5e-4 else { continue }
+
+            let length = Double(simd_distance(a, b))
+            let dots = min(max(Int(length / 0.06), 2), 7)
+            // Electrons drift against conventional current.
+            let speed = min(0.03 + 0.5 * abs(current), 0.35) * (current > 0 ? -1 : 1)
+            if !model.isPaused {
+                wirePhases[wire.id] = ((wirePhases[wire.id] ?? 0)
+                    + speed / max(length, 0.05) / 90).truncatingRemainder(dividingBy: 1)
+            }
+            let phase = wirePhases[wire.id] ?? 0
+
+            for dot in 0..<dots where dotIndex < electronPool.budget {
+                var t = (phase + Double(dot) / Double(dots)).truncatingRemainder(dividingBy: 1)
+                if t < 0 { t += 1 }
+                let slot = electronPool.slots[dotIndex]
+                slot.entity.isEnabled = true
+                slot.entity.position = a + (b - a) * Float(t)
+                dotIndex += 1
+            }
+        }
+        for index in dotIndex..<electronPool.budget {
+            electronPool.slots[index].entity.isEnabled = false
+        }
+    }
+}

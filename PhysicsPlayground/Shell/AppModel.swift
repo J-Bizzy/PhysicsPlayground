@@ -75,4 +75,13 @@ final class AppModel {
         windTunnel = model
         return model
     }
+
+    private var circuits: CircuitsModel?
+
+    var circuitsModel: CircuitsModel {
+        if let circuits { return circuits }
+        let model = CircuitsModel()
+        circuits = model
+        return model
+    }
 }

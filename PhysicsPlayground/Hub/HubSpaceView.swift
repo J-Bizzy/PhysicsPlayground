@@ -141,6 +141,7 @@ final class HubScene {
         case "gravitylab": buildOrbitVignette(in: vignette)
         case "waves": buildWavesVignette(in: vignette)
         case "windtunnel": buildWindTunnelVignette(in: vignette)
+        case "circuits": buildCircuitsVignette(in: vignette)
         default:
             // A new module gets a simple accent sphere until it has art.
             vignette.addChild(ModelEntity(
@@ -199,6 +200,34 @@ final class HubScene {
             let dot = ModelEntity(mesh: dotMesh, materials: [dotMaterial])
             dot.position = [x, y - 0.01, 0]
             parent.addChild(dot)
+        }
+    }
+
+    /// A tiny lit loop: battery, wire, glowing bulb.
+    private static func buildCircuitsVignette(in parent: Entity) {
+        let battery = ModelEntity(
+            mesh: .generateCylinder(height: 0.036, radius: 0.009),
+            materials: [SimpleMaterial(color: UIColor(red: 0.35, green: 0.45, blue: 0.35, alpha: 1),
+                                       roughness: 0.3, isMetallic: true)])
+        battery.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+        battery.position = [-0.035, 0, 0]
+        parent.addChild(battery)
+
+        var glow = UnlitMaterial(color: UIColor(red: 1, green: 0.85, blue: 0.4, alpha: 1))
+        glow.blending = .transparent(opacity: 0.85)
+        let bulb = ModelEntity(mesh: .generateSphere(radius: 0.014), materials: [glow])
+        bulb.position = [0.035, 0, 0]
+        parent.addChild(bulb)
+
+        let wireMaterial = UnlitMaterial(color: DesignTokens.Palette.copperUI)
+        for flip: Float in [1, -1] {
+            let arc: [SIMD3<Float>] = (0...20).map { step in
+                let theta = Float(step) / 20 * .pi
+                return SIMD3(-0.035 * cos(theta), flip * 0.03 * sin(theta), 0)
+            }
+            if let mesh = TubeMesh.tube(lines: [arc], radius: 0.0018) {
+                parent.addChild(ModelEntity(mesh: mesh, materials: [wireMaterial]))
+            }
         }
     }
 

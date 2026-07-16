@@ -29,7 +29,7 @@ struct HubView: View {
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
 
-            Text("Five hands-on exhibits are floating around you.\nLook at one and pinch to step inside.")
+            Text("Hands-on physics exhibits are floating around you.\nLook at one and pinch to step inside.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

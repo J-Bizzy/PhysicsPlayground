@@ -1,0 +1,153 @@
+//
+//  CircuitSolverTests.swift
+//  PhysicsCoreTests
+//
+//  The solver is pinned to the results every EE course starts from:
+//  Ohm's law, series and parallel combination, the voltage divider,
+//  Kirchhoff's current law at a junction, energy conservation, switch
+//  behavior — and the RC charging curve, checked point-by-point
+//  against V(1 − e^(−t/RC)).
+//
+
+import XCTest
+@testable import PhysicsCore
+
+final class CircuitSolverTests: XCTestCase {
+
+    private let internalR = 0.05
+
+    private func battery(_ volts: Double, _ a: Int, _ b: Int) -> CircuitElement {
+        CircuitElement(nodeA: a, nodeB: b,
+                       kind: .battery(volts: volts, internalResistance: internalR))
+    }
+
+    private func resistor(_ ohms: Double, _ a: Int, _ b: Int) -> CircuitElement {
+        CircuitElement(nodeA: a, nodeB: b, kind: .resistor(ohms: ohms))
+    }
+
+    /// 9 V across 100 Ω: I = V/(R + r_int), exactly.
+    func testOhmsLaw() {
+        let elements = [battery(9, 1, 0), resistor(100, 1, 0)]
+        let solution = CircuitSolver.solve(elements: elements, nodeCount: 2)
+        let expected = 9.0 / (100 + internalR)
+        XCTAssertEqual(solution.currents[1], expected, accuracy: expected * 1e-6)
+        // The battery drives that same current out of its + terminal.
+        XCTAssertEqual(solution.currents[0], -expected, accuracy: expected * 1e-6)
+    }
+
+    /// Series resistors add; the divider splits voltage proportionally.
+    func testSeriesResistorsAndVoltageDivider() {
+        let elements = [battery(12, 1, 0), resistor(300, 1, 2), resistor(100, 2, 0)]
+        let solution = CircuitSolver.solve(elements: elements, nodeCount: 3)
+        let expected = 12.0 / (400 + internalR)
+        XCTAssertEqual(solution.currents[1], expected, accuracy: expected * 1e-6)
+        // Divider: the 100 Ω sees a quarter of the (loaded) source voltage.
+        XCTAssertEqual(solution.nodeVoltages[2], 12 * 100 / (400 + internalR),
+                       accuracy: 1e-6)
+    }
+
+    /// Parallel resistors combine as the product over the sum.
+    func testParallelResistors() {
+        let elements = [battery(6, 1, 0), resistor(100, 1, 0), resistor(300, 1, 0)]
+        let solution = CircuitSolver.solve(elements: elements, nodeCount: 2)
+        let parallel = 75.0  // 100·300/400
+        let total = 6.0 / (parallel + internalR)
+        let branchSum = solution.currents[1] + solution.currents[2]
+        XCTAssertEqual(branchSum, total, accuracy: total * 1e-6)
+        // And each branch by Ohm's law from the shared node voltage.
+        XCTAssertEqual(solution.currents[1],
+                       solution.nodeVoltages[1] / 100, accuracy: 1e-9)
+    }
+
+    /// Kirchhoff's current law: at every non-ground node, element
+    /// currents sum to zero.
+    func testKirchhoffCurrentLaw() {
+        let elements = [
+            battery(9, 1, 0), resistor(220, 1, 2),
+            resistor(470, 2, 0), resistor(330, 2, 0),
+        ]
+        let solution = CircuitSolver.solve(elements: elements, nodeCount: 3)
+        // Node 2: in from the 220 Ω, out through the 470 and 330. The
+        // tolerance is the solver's documented 1 nS stabilizing leak.
+        let net = solution.currents[1] - solution.currents[2] - solution.currents[3]
+        XCTAssertEqual(net, 0, accuracy: 1e-7)
+    }
+
+    /// Energy conservation: the battery's delivered power equals the sum
+    /// dissipated everywhere (its own internal resistance included).
+    func testPowerBalances() {
+        let elements = [battery(9, 1, 0), resistor(150, 1, 2), resistor(50, 2, 0)]
+        let solution = CircuitSolver.solve(elements: elements, nodeCount: 3)
+        let total = solution.powers.reduce(0, +)
+        // Off only by what the 1 nS stabilizing leak sips.
+        XCTAssertEqual(total, 0, accuracy: 1e-6,
+                       "power delivered must equal power dissipated")
+        XCTAssertLessThan(solution.powers[0], 0, "the battery is the source")
+    }
+
+    /// An open switch stops everything; a closed one conducts.
+    func testSwitchGatesTheCircuit() {
+        let open = [battery(9, 1, 0), CircuitElement(nodeA: 1, nodeB: 2, kind: .open),
+                    resistor(100, 2, 0)]
+        let openSolution = CircuitSolver.solve(elements: open, nodeCount: 3)
+        XCTAssertEqual(openSolution.currents[2], 0, accuracy: 1e-7)
+
+        let closed = [battery(9, 1, 0), CircuitElement(nodeA: 1, nodeB: 2, kind: .conductor),
+                      resistor(100, 2, 0)]
+        let closedSolution = CircuitSolver.solve(elements: closed, nodeCount: 3)
+        let expected = 9.0 / (100 + internalR + CircuitSolver.switchResistance)
+        XCTAssertEqual(closedSolution.currents[2], expected, accuracy: expected * 1e-4)
+    }
+
+    /// The flagship transient: an RC series circuit charged step by step
+    /// must trace V·(1 − e^(−t/RC)) — backward Euler with a fine step
+    /// stays within 1% through the whole curve.
+    func testRCChargingCurve() {
+        let volts = 9.0, ohms = 1000.0, farads = 1e-3
+        let tau = ohms * farads   // 1 s
+        let dt = tau / 2000
+        var capacitorVoltage = 0.0
+        var time = 0.0
+
+        while time < 3 * tau {
+            let elements = [
+                battery(volts, 1, 0),
+                resistor(ohms, 1, 2),
+                CircuitElement(nodeA: 2, nodeB: 0,
+                               kind: .capacitor(farads: farads,
+                                                previousVoltage: capacitorVoltage)),
+            ]
+            let solution = CircuitSolver.solve(elements: elements, nodeCount: 3, timeStep: dt)
+            capacitorVoltage = solution.voltages[2]
+            time += dt
+
+            let exact = volts * (1 - exp(-time / tau))
+            XCTAssertEqual(capacitorVoltage, exact, accuracy: max(volts * 0.01, 0.01),
+                           "RC curve diverged at t = \(time)")
+        }
+        // After 3τ the capacitor is ~95% charged.
+        XCTAssertEqual(capacitorVoltage, volts * (1 - exp(-3)), accuracy: 0.1)
+    }
+
+    /// Floating (unwired) elements don't break the solve, and carry no
+    /// current.
+    func testFloatingElementsAreQuiet() {
+        let elements = [battery(9, 1, 0), resistor(100, 1, 0), resistor(220, 2, 3)]
+        let solution = CircuitSolver.solve(elements: elements, nodeCount: 4)
+        XCTAssertEqual(solution.currents[2], 0, accuracy: 1e-9)
+        XCTAssertGreaterThan(solution.currents[1], 0.08)
+    }
+
+    /// The 4-band color code: 4.7 kΩ = yellow(4) violet(7) red(×100).
+    func testResistorColorCode() {
+        let bands = try! XCTUnwrap(CircuitSolver.colorBands(ohms: 4700))
+        XCTAssertEqual(bands.digit1, 4)
+        XCTAssertEqual(bands.digit2, 7)
+        XCTAssertEqual(bands.multiplier, 2)
+
+        let small = try! XCTUnwrap(CircuitSolver.colorBands(ohms: 56))
+        XCTAssertEqual(small.digit1, 5)
+        XCTAssertEqual(small.digit2, 6)
+        XCTAssertEqual(small.multiplier, 0)
+    }
+}

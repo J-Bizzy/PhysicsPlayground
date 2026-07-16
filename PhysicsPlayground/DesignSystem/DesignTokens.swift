@@ -85,12 +85,17 @@ enum DesignTokens {
         // Wind tunnel
         static let streamlineUI: UIColor = .systemMint
 
+        // Circuits
+        static let copperUI = UIColor(red: 0.75, green: 0.48, blue: 0.25, alpha: 1)
+        static let electronUI: UIColor = .systemCyan
+
         // Module accent colors, one per catalog entry.
         static let electromagnetismAccent = Color.yellow
         static let kinematicsAccent = Color.orange
         static let gravityAccent = Color.indigo
         static let wavesAccent = Color.cyan
         static let windAccent = Color.mint
+        static let circuitsAccent = Color.green
     }
 
     // MARK: Panel metrics
