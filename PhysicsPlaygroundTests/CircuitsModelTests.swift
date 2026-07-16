@@ -161,6 +161,30 @@ final class CircuitsModelTests: XCTestCase {
                        "resistance is proportional to length")
     }
 
+    /// Pulling an end grip goes through setWireLength: clamped to the
+    /// slider's range, and a no-op on anything that isn't a wire.
+    func testSetWireLengthClampsAndIgnoresNonWires() {
+        let model = CircuitsModel()
+        model.add(.wire)
+        model.add(.battery)
+        let wire = model.components[0]
+        let battery = model.components[1]
+
+        model.setWireLength(id: wire.id, length: 0.8)
+        XCTAssertEqual(model.components[0].value, 0.8, accuracy: 1e-12)
+
+        model.setWireLength(id: wire.id, length: 50)
+        XCTAssertEqual(model.components[0].value,
+                       CircuitsModel.wireLengthRange.upperBound, accuracy: 1e-12)
+        model.setWireLength(id: wire.id, length: -1)
+        XCTAssertEqual(model.components[0].value,
+                       CircuitsModel.wireLengthRange.lowerBound, accuracy: 1e-12)
+
+        model.setWireLength(id: battery.id, length: 1.0)
+        XCTAssertEqual(model.components[1].value, 9.0, accuracy: 1e-12,
+                       "a battery's voltage must not be mistaken for a length")
+    }
+
     /// Tap–tap wiring: first tap arms, second connects, tapping the same
     /// terminal cancels, duplicates are refused.
     func testTapTapWiring() {

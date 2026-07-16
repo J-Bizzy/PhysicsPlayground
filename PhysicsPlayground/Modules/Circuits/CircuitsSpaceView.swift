@@ -93,10 +93,27 @@ struct CircuitsSpaceView: View {
         }
     }
 
+    /// The end-grip being pulled, parsed from "s0-"/"s1-" entity names.
+    private func stretchTerminal(from name: String) -> CircuitsModel.Terminal? {
+        guard name.hasPrefix("s0-") || name.hasPrefix("s1-"),
+              let id = UUID(uuidString: String(name.dropFirst(3))) else { return nil }
+        return CircuitsModel.Terminal(componentID: id, end: name.hasPrefix("s0-") ? 0 : 1)
+    }
+
+    /// The wire length implied by a grip pulled to `position`: twice the
+    /// grip's reach from the wire's center, minus the grip's standoff.
+    private func pulledLength(componentID: UUID, gripAt position: SIMD3<Float>) -> Double? {
+        guard let component = model.components.first(where: { $0.id == componentID })
+        else { return nil }
+        let reach = simd_distance(SIMD3<Double>(position), component.position)
+        return 2 * (reach - Double(CircuitsRenderer.wireGripOffset))
+    }
+
     /// Component bodies (named by UUID) are carried directly. Tray
-    /// templates (named "tray-<kind>") spawn a copy on grab-begin; the
-    /// copy follows the hand while the hidden template glides back to
-    /// its slot on release.
+    /// templates ("tray-<kind>") spawn a copy on grab-begin; the copy
+    /// follows the hand while the hidden template glides back to its
+    /// slot on release. Wire end grips ("s0-"/"s1-") set the wire's
+    /// length live as they're pulled.
     private func configureRouter(renderer: CircuitsRenderer) {
         router.onBegin = { [weak renderer] name, position in
             guard let renderer else { return }
@@ -106,6 +123,11 @@ struct CircuitsSpaceView: View {
                 else { return }
                 renderer.trayDragIDs[name] = id
                 renderer.setTrayTemplateHidden(name, true)
+                return
+            }
+            if let grip = stretchTerminal(from: name) {
+                renderer.stretchingHandle = grip
+                model.select(id: grip.componentID)
                 return
             }
             guard let id = UUID(uuidString: name) else { return }
@@ -119,6 +141,12 @@ struct CircuitsSpaceView: View {
                 model.move(id: id, to: SIMD3<Double>(position))
                 return
             }
+            if let grip = stretchTerminal(from: name) {
+                if let length = pulledLength(componentID: grip.componentID, gripAt: position) {
+                    model.setWireLength(id: grip.componentID, length: length)
+                }
+                return
+            }
             guard let id = UUID(uuidString: name) else { return }
             model.move(id: id, to: SIMD3<Double>(position))
         }
@@ -130,6 +158,13 @@ struct CircuitsSpaceView: View {
                     renderer.trayDragIDs[name] = nil
                 }
                 renderer.setTrayTemplateHidden(name, false)
+                return
+            }
+            if let grip = stretchTerminal(from: name) {
+                if let length = pulledLength(componentID: grip.componentID, gripAt: position) {
+                    model.setWireLength(id: grip.componentID, length: length)
+                }
+                renderer.stretchingHandle = nil
                 return
             }
             guard let id = UUID(uuidString: name) else { return }
@@ -178,28 +213,41 @@ struct CircuitsQuickPanel: View {
     }
 }
 
-/// The live card floating above the selected component.
+/// The live card floating above the selected component — readings plus
+/// the in-space way to throw a part away.
 struct CircuitsSelectedReadout: View {
     @Environment(CircuitsModel.self) private var model
 
     var body: some View {
-        if let component = model.selectedComponent,
-           let readout = model.readouts[component.id] {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(component.kind.displayName)
-                    .font(DesignTokens.TypeScale.sectionHeader)
-                Text("\(abs(readout.volts), specifier: "%.2f") V   \(abs(readout.amps) * 1000, specifier: "%.1f") mA")
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                Text("\(abs(readout.watts), specifier: "%.2f") W")
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                if component.kind == .capacitor {
-                    Text("charged to \(component.capacitorVoltage, specifier: "%.2f") V")
-                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                        .foregroundStyle(DesignTokens.Palette.circuitsAccent)
+        if let component = model.selectedComponent {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(component.kind.displayName)
+                        .font(DesignTokens.TypeScale.sectionHeader)
+                    if let readout = model.readouts[component.id] {
+                        Text("\(abs(readout.volts), specifier: "%.2f") V   \(abs(readout.amps) * 1000, specifier: "%.1f") mA")
+                            .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                        Text("\(abs(readout.watts), specifier: "%.2f") W")
+                            .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    if component.kind == .capacitor {
+                        Text("charged to \(component.capacitorVoltage, specifier: "%.2f") V")
+                            .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                            .foregroundStyle(DesignTokens.Palette.circuitsAccent)
+                    }
                 }
+                .accessibilityElement(children: .combine)
+
+                Button(role: .destructive) {
+                    model.removeSelected()
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.mini)
+                .accessibilityLabel("Remove this \(component.kind.displayName), and any wires connected to it")
             }
-            .accessibilityElement(children: .combine)
         }
     }
 }

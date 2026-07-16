@@ -101,7 +101,7 @@ struct CircuitsControlsView: View {
             Toggle("Closed", isOn: model.selectedIsClosed)
                 .font(DesignTokens.TypeScale.control)
         case .wire:
-            valueSlider("Length", model: model, range: 0.1...2.0,
+            valueSlider("Length", model: model, range: CircuitsModel.wireLengthRange,
                         format: { $0 >= 0.995 ? String(format: "%.2f m", $0)
                                               : String(format: "%.0f cm", $0 * 100) })
             Text("Real 1 mm² copper: R = ρL/A, about 17 mΩ per meter — a longer wire really does drop more voltage.")

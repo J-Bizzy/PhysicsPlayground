@@ -41,6 +41,9 @@ final class CircuitsRenderer {
         var glow: ModelEntity?
         var filament: ModelEntity?
         var lever: ModelEntity?
+        /// Wires only: the orange end grips ("s0-"/"s1-") pulled to
+        /// change the length.
+        var stretchHandles: [ModelEntity] = []
         var labelText = ""
         var glowBucket = -1
         var resistorCodeKey = ""
@@ -52,6 +55,11 @@ final class CircuitsRenderer {
 
     /// The wire rod's generated mesh length; live length is a scale on top.
     private static let wireBaseLength: Float = 0.12
+    /// How far beyond the terminal a wire's end grip sits.
+    static let wireGripOffset: Float = 0.03
+    /// The wire end grip being pulled right now (system-dragged — don't
+    /// reposition it), if any.
+    var stretchingHandle: CircuitsModel.Terminal?
 
     private static let electronBudget = 200
     private let electronPool: EntityPool<Void>
@@ -144,6 +152,7 @@ final class CircuitsRenderer {
             )
             if var manipulation = template.components[ManipulationComponent.self] {
                 manipulation.dynamics.scalingBehavior = .none
+                manipulation.dynamics.inertia = .zero
                 template.components.set(manipulation)
             }
             var accessibility = AccessibilityComponent()
@@ -263,14 +272,23 @@ final class CircuitsRenderer {
                 }
             case .wire:
                 // The rod stretches along its axis to the wire's live
-                // length, and the terminals ride its ends.
+                // length; terminals and end grips ride its ends. A grip
+                // the hand is pulling is system-dragged — leave it be.
                 let stretch = Float(component.value) / Self.wireBaseLength
                 if abs(visual.body.scale.y - stretch) > 1e-4 {
                     visual.body.scale = [1, stretch, 1]
                 }
                 let half = Float(component.terminalHalfSpan)
-                visual.terminals[0].position.x = -half
-                visual.terminals[1].position.x = half
+                for end in 0...1 {
+                    let sign: Float = end == 0 ? -1 : 1
+                    visual.terminals[end].position = SIMD3(sign * half, 0, 0)
+                    let beingPulled = stretchingHandle ==
+                        CircuitsModel.Terminal(componentID: component.id, end: end)
+                    if !beingPulled, visual.stretchHandles.count == 2 {
+                        visual.stretchHandles[end].position =
+                            SIMD3(sign * (half + Self.wireGripOffset), 0, 0)
+                    }
+                }
             default:
                 break
             }
@@ -421,6 +439,36 @@ final class CircuitsRenderer {
             pivot.addChild(arm)
             body.addChild(pivot)
             visual.lever = pivot
+        case .wire:
+            // Orange end grips just past the terminals: pull one and the
+            // wire lengthens. Separate from the copper terminals so quick
+            // pinches there still arm tap-tap wiring.
+            let gripMaterial = SimpleMaterial(
+                color: UIColor(red: 0.9, green: 0.45, blue: 0.15, alpha: 1),
+                roughness: 0.5, isMetallic: false)
+            for end in 0...1 {
+                let grip = ModelEntity(
+                    mesh: .generateSphere(radius: 0.012), materials: [gripMaterial])
+                grip.name = "s\(end)-\(component.id.uuidString)"
+                let half = Float(component.terminalHalfSpan) + Self.wireGripOffset
+                grip.position = SIMD3(end == 0 ? -half : half, 0, 0)
+                ManipulationComponent.configureEntity(
+                    grip,
+                    collisionShapes: [.generateSphere(radius: 0.03)]
+                )
+                if var manipulation = grip.components[ManipulationComponent.self] {
+                    manipulation.releaseBehavior = .stay
+                    manipulation.dynamics.scalingBehavior = .none
+                    manipulation.dynamics.inertia = .zero
+                    grip.components.set(manipulation)
+                }
+                var gripAccessibility = AccessibilityComponent()
+                gripAccessibility.isAccessibilityElement = true
+                gripAccessibility.label = "Wire end grip. Pull to change the wire's length."
+                grip.components.set(gripAccessibility)
+                holder.addChild(grip)
+                visual.stretchHandles.append(grip)
+            }
         default:
             break
         }

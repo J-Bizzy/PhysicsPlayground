@@ -31,6 +31,10 @@ public enum Grabbable {
             // and don't let two-handed gestures resize physics objects.
             manipulation.releaseBehavior = .stay
             manipulation.dynamics.scalingBehavior = .none
+            // No springy settle on release: in every module the MODEL owns
+            // motion, so the system's inertia only fights it — parts should
+            // stop dead exactly where the hand leaves them.
+            manipulation.dynamics.inertia = .zero
             entity.components.set(manipulation)
         }
     }

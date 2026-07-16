@@ -74,6 +74,10 @@ final class CircuitsModel {
     /// (~17 mΩ per meter — negligible next to a bulb, but not zero).
     nonisolated static let wireOhmsPerMeter = 1.68e-8 / 1e-6
 
+    /// How long a wire is allowed to be, whether set by slider or by
+    /// pulling its end grips.
+    nonisolated static let wireLengthRange = 0.1...2.0
+
     nonisolated static func wireResistance(length: Double) -> Double {
         max(length, 0.01) * wireOhmsPerMeter
     }
@@ -189,6 +193,15 @@ final class CircuitsModel {
     func select(id: UUID) {
         guard components.contains(where: { $0.id == id }) else { return }
         selectedID = id
+    }
+
+    /// Live length while a wire's end grip is being pulled. Clamped to
+    /// the same range as the panel slider; ignores non-wires.
+    func setWireLength(id: UUID, length: Double) {
+        guard let index = components.firstIndex(where: { $0.id == id }),
+              components[index].kind == .wire else { return }
+        components[index].value = min(max(length, Self.wireLengthRange.lowerBound),
+                                      Self.wireLengthRange.upperBound)
     }
 
     func move(id: UUID, to point: SIMD3<Double>) {
