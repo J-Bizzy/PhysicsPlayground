@@ -88,6 +88,59 @@ final class CircuitsRenderer {
 
         audioEmitter.components.set(SpatialAudioComponent())
         root.addChild(audioEmitter)
+
+        buildTray()
+    }
+
+    // MARK: The parts tray (pinch a part to lift a copy off it)
+
+    private func buildTray() {
+        let tray = Entity()
+        // Coffee-table height just below the build volume, close enough
+        // to reach without leaning.
+        tray.position = [0, 1.02, -0.85]
+        root.addChild(tray)
+
+        var glass = PhysicallyBasedMaterial()
+        glass.baseColor = .init(tint: .white)
+        glass.roughness = 0.15
+        glass.blending = .transparent(opacity: .init(floatLiteral: 0.22))
+        let slab = ModelEntity(
+            mesh: .generateBox(size: [0.78, 0.015, 0.24], cornerRadius: 0.008),
+            materials: [glass]
+        )
+        tray.addChild(slab)
+
+        let kinds = CircuitsModel.ComponentKind.allCases
+        for (index, kind) in kinds.enumerated() {
+            let x = Float(index) * 0.15 - Float(kinds.count - 1) * 0.075
+            let template = makeBody(for: CircuitsModel.Component(
+                id: UUID(), kind: kind, position: .zero, value: kind.defaultValue))
+            template.scale = SIMD3(repeating: 0.8)
+            template.position = [x, 0.05, -0.02]
+            template.name = "tray-\(kind.rawValue)"
+            template.components.set(InputTargetComponent())
+            template.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.05)]))
+            template.components.set(HoverEffectComponent())
+            var accessibility = AccessibilityComponent()
+            accessibility.isAccessibilityElement = true
+            accessibility.label = LocalizedStringResource(
+                stringLiteral: "Pick up a \(kind.displayName) from the tray")
+            template.components.set(accessibility)
+            tray.addChild(template)
+
+            // A small flat label on the tray surface.
+            let labelMesh = MeshResource.generateText(
+                kind.displayName, extrusionDepth: 0.0005,
+                font: .systemFont(ofSize: 0.014, weight: .medium))
+            let label = ModelEntity(
+                mesh: labelMesh,
+                materials: [UnlitMaterial(color: UIColor(white: 0.95, alpha: 0.85))])
+            let bounds = labelMesh.bounds
+            label.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
+            label.position = [x - (bounds.min.x + bounds.max.x) / 2, 0.009, 0.1]
+            tray.addChild(label)
+        }
     }
 
     // MARK: Render loop

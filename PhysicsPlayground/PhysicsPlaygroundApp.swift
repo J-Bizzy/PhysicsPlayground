@@ -20,6 +20,10 @@ struct PhysicsPlaygroundApp: App {
             MainWindowView()
                 .environment(appModel)
         }
+        // Plain style: no glass slab behind the hub title — the nameplate
+        // floats bare in the room. Module controls restore their own glass
+        // (MainWindowView adds it back for that branch).
+        .windowStyle(.plain)
         .windowResizability(.contentMinSize)
         .defaultSize(width: 520, height: 340)
 

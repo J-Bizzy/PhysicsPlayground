@@ -2,11 +2,11 @@
 //  HubSpaceView.swift
 //  Physics Playground — Hub
 //
-//  The spatial menu: the app title floats ahead, and the exhibits —
-//  large, free-floating 3D miniatures of each experience, no enclosing
-//  shells — hold a still ring all the way around the user, names
-//  beneath them in their module accents. Look at one (the system hover
-//  effect lights it up) and pinch to enter.
+//  The spatial menu: a clock face of exhibits. The large, shell-free
+//  3D miniatures form a vertical ring facing the user, encircling the
+//  title window at its center — one glance takes in every exhibit,
+//  names beneath each in their module accents. Look at one (the system
+//  hover effect lights it up) and pinch to enter.
 //
 //  The only motion is idle life: exhibits bob out of phase and their
 //  miniatures slowly turn. A handful of entities; per-frame work is a
@@ -59,35 +59,42 @@ final class HubScene {
 
     private struct Exhibit {
         let moduleID: String
-        let anchor: Entity      // carousel position (moved every frame)
+        let anchor: Entity      // ring position (bobbed every frame)
         let pulser: Entity      // scale pulse on selection
         let vignette: Entity    // slowly rotating miniature
-        let baseAngle: Float
+        let basePosition: SIMD3<Float>
     }
     private var exhibits: [Exhibit] = []
     private var time = 0.0
 
-    private static let ringRadius: Float = 2.0
-    private static let exhibitHeight: Float = 1.45
+    /// The ring encircles the title window: a vertical circle in the
+    /// frontal plane, a step beyond the window's depth.
+    private static let ringCenter = SIMD3<Float>(0, 1.6, -2.2)
+    private static let ringRadius: Float = 0.95
     /// The miniatures, unbottled and enlarged.
-    private static let vignetteScale: Float = 2.1
+    private static let vignetteScale: Float = 2.6
 
     // MARK: Build
 
     func build(modules: [ModuleDescriptor]) {
-        // The window carries the app title; out here it's exhibits only.
+        // The window carries the app title; the exhibits ring it like a
+        // clock face, starting at twelve and going clockwise.
         let count = max(modules.count, 1)
         for (index, module) in modules.enumerated() {
-            // Half-slot offset keeps the corridor ahead of the user clear
-            // for the title window.
-            let baseAngle = 2 * Float.pi * (Float(index) + 0.5) / Float(count)
-            buildExhibit(for: module, baseAngle: baseAngle)
+            let angle = Float.pi / 2 - 2 * .pi * Float(index) / Float(count)
+            let basePosition = Self.ringCenter + SIMD3(
+                Self.ringRadius * cos(angle),
+                Self.ringRadius * sin(angle),
+                0
+            )
+            buildExhibit(for: module, at: basePosition)
         }
     }
 
-    private func buildExhibit(for module: ModuleDescriptor, baseAngle: Float) {
+    private func buildExhibit(for module: ModuleDescriptor, at basePosition: SIMD3<Float>) {
         let anchor = Entity()
         anchor.name = module.id
+        anchor.position = basePosition
         // Invisible gaze/pinch target wrapping the whole miniature; the
         // hover highlight lights the miniature itself — no shell.
         anchor.components.set(InputTargetComponent())
@@ -128,7 +135,7 @@ final class HubScene {
 
         exhibits.append(Exhibit(
             moduleID: module.id, anchor: anchor, pulser: pulser,
-            vignette: vignette, baseAngle: baseAngle))
+            vignette: vignette, basePosition: basePosition))
     }
 
     // MARK: Vignettes (miniatures of each experience)
@@ -311,17 +318,13 @@ final class HubScene {
 
     // MARK: Idle animation & interaction
 
-    /// The exhibits hold their places on a ring all around the user —
-    /// only the gentle bob and each miniature's slow turn keep them alive.
+    /// The exhibits hold their places on the ring — only the gentle bob
+    /// and each miniature's slow turn keep them alive.
     func animate(dt: Double) {
         time += dt
         for (index, exhibit) in exhibits.enumerated() {
-            let bob = 0.014 * Float(sin(time * 0.8 + Double(index) * 2.1))
-            exhibit.anchor.position = SIMD3(
-                Self.ringRadius * sin(exhibit.baseAngle),
-                Self.exhibitHeight + bob,
-                -Self.ringRadius * cos(exhibit.baseAngle)
-            )
+            let bob = 0.012 * Float(sin(time * 0.8 + Double(index) * 2.1))
+            exhibit.anchor.position = exhibit.basePosition + SIMD3(0, bob, 0)
             exhibit.vignette.orientation = simd_quatf(
                 angle: Float(time * 0.3 + Double(index)), axis: [0, 1, 0])
         }

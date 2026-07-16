@@ -2,11 +2,11 @@
 //  HubView.swift
 //  Physics Playground — Hub
 //
-//  The window IS the app title at the hub: one clean nameplate the
-//  user can move, resize, and close (the window bar's controls are the
-//  app's exit). The exhibits themselves float in the ring around the
-//  user (HubSpaceView) and are VoiceOver elements in-space, so
-//  selection stays accessible.
+//  The window IS the app title at the hub: bare floating type (the
+//  window style is .plain, so there is no glass slab), movable and
+//  closable from the window bar beneath it. The exhibits form a ring
+//  around this title (HubSpaceView) and are VoiceOver elements
+//  in-space, so selection stays accessible.
 //
 
 import SwiftUI
@@ -21,17 +21,18 @@ struct HubView: View {
 
             Image(systemName: "atom")
                 .font(.system(size: 40))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.75))
                 .accessibilityHidden(true)
 
             Text("Physics Playground")
                 .font(.system(size: 46, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
 
-            Text("Hands-on physics exhibits are floating around you.\nLook at one and pinch to step inside.")
+            Text("The exhibits circle this title.\nLook at one and pinch to step inside.")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center)
 
             if !appModel.isImmersiveSpaceOpen {
@@ -53,6 +54,8 @@ struct HubView: View {
         }
         .padding(DesignTokens.Panel.outerPadding)
         .frame(minWidth: 440, maxWidth: .infinity, minHeight: 280, maxHeight: .infinity)
+        // Bare type over passthrough needs its own separation from the room.
+        .shadow(color: .black.opacity(0.45), radius: 8, y: 2)
         .task {
             SoundPalette.warmUp()
             // The spatial ring is the menu — bring it up on arrival.

@@ -74,6 +74,14 @@ struct CircuitsSpaceView: View {
         var current: Entity? = entity
         while let candidate = current {
             let name = candidate.name
+            if name.hasPrefix("tray-") {
+                if let kind = CircuitsModel.ComponentKind(rawValue: String(name.dropFirst(5))) {
+                    // The copy lifts off right where the hand pinched.
+                    let world = SIMD3<Double>(candidate.position(relativeTo: nil))
+                    model.add(kind, at: world + SIMD3(0, 0.16, 0))
+                }
+                return
+            }
             if name.hasPrefix("t0-") || name.hasPrefix("t1-") {
                 let end = name.hasPrefix("t0-") ? 0 : 1
                 if let id = UUID(uuidString: String(name.dropFirst(3))) {

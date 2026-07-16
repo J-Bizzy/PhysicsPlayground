@@ -2,11 +2,11 @@
 //  CircuitsModelTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Tests for the circuit-lab app state: the opening loop lights its
-//  bulb with the exact Ohm's-law current, the switch gates it, tap-tap
-//  wiring behaves, capacitors charge through time, and edits stay
-//  consistent. Solver math itself is covered in PhysicsCore's
-//  CircuitSolverTests.
+//  Tests for the circuit-lab app state: the bench opens empty (parts
+//  come off the tray), a hand-built battery–switch–bulb loop carries
+//  the exact Ohm's-law current, the switch gates it, tap-tap wiring
+//  behaves, capacitors charge through time, and edits stay consistent.
+//  Solver math itself is covered in PhysicsCore's CircuitSolverTests.
 //
 
 import XCTest
@@ -17,14 +17,57 @@ import simd
 @MainActor
 final class CircuitsModelTests: XCTestCase {
 
-    /// The opening battery–switch–bulb loop carries exactly
-    /// V / (R_bulb + r_internal + R_switch).
-    func testOpeningLoopLightsTheBulb() {
+    /// Builds the classic loop the way a user would: three parts off the
+    /// tray, three tap-tap wires — battery → switch → bulb → battery.
+    private func buildLoop(on model: CircuitsModel)
+    -> (battery: CircuitsModel.Component, toggle: CircuitsModel.Component, bulb: CircuitsModel.Component) {
+        model.add(.battery)
+        model.add(.switcher)
+        model.add(.bulb)
+        let battery = model.components[0]
+        let toggle = model.components[1]
+        let bulb = model.components[2]
+
+        model.tapTerminal(.init(componentID: battery.id, end: 1))
+        model.tapTerminal(.init(componentID: toggle.id, end: 0))
+        model.tapTerminal(.init(componentID: toggle.id, end: 1))
+        model.tapTerminal(.init(componentID: bulb.id, end: 0))
+        model.tapTerminal(.init(componentID: bulb.id, end: 1))
+        model.tapTerminal(.init(componentID: battery.id, end: 0))
+
+        model.step(dt: 1.0 / 90.0)
+        return (battery, toggle, bulb)
+    }
+
+    /// The lab opens with nothing on the bench — parts come off the tray.
+    func testOpensEmpty() {
         let model = CircuitsModel()
-        XCTAssertEqual(model.components.count, 3)
+        XCTAssertTrue(model.components.isEmpty)
+        XCTAssertTrue(model.wires.isEmpty)
+        XCTAssertEqual(model.totalSourcePower, 0)
+        XCTAssertNil(model.pendingTerminal)
+    }
+
+    /// A tray pickup drops the copy at the pinch point (clamped to the
+    /// build sphere), not at some fixed spawn slot.
+    func testAddAtPointSpawnsThere() {
+        let model = CircuitsModel()
+        let point = CircuitsModel.buildCenter + SIMD3(0.4, 0.2, -0.3)
+        model.add(.resistor, at: point)
+        XCTAssertEqual(model.components.count, 1)
+        XCTAssertEqual(simd_distance(model.components[0].position, point), 0,
+                       accuracy: 1e-12)
+        XCTAssertEqual(model.selectedID, model.components[0].id,
+                       "a fresh pickup is the selection")
+    }
+
+    /// The hand-built battery–switch–bulb loop carries exactly
+    /// V / (R_bulb + r_internal + R_switch).
+    func testBuiltLoopLightsTheBulb() {
+        let model = CircuitsModel()
+        let (_, _, bulb) = buildLoop(on: model)
         XCTAssertEqual(model.wires.count, 3)
 
-        let bulb = model.components.first { $0.kind == .bulb }!
         let readout = try! XCTUnwrap(model.readouts[bulb.id])
         let expected = 9.0 / (24 + CircuitsModel.batteryInternalResistance
                               + CircuitSolver.switchResistance)
@@ -37,48 +80,64 @@ final class CircuitsModelTests: XCTestCase {
     /// Pinching the switch open stops everything.
     func testOpeningTheSwitchKillsTheCurrent() {
         let model = CircuitsModel()
-        let toggle = model.components.first { $0.kind == .switcher }!
+        let (_, toggle, bulb) = buildLoop(on: model)
         model.toggleSwitch(id: toggle.id)
         model.step(dt: 1.0 / 90.0)
 
-        let bulb = model.components.first { $0.kind == .bulb }!
         XCTAssertEqual(abs(model.readouts[bulb.id]?.amps ?? 1), 0, accuracy: 1e-6)
         XCTAssertEqual(model.totalSourcePower, 0, accuracy: 1e-6)
+    }
+
+    /// The solver keeps running while a component is being carried — the
+    /// circuit never freezes mid-move.
+    func testCarryingAComponentKeepsTheCircuitLive() {
+        let model = CircuitsModel()
+        let (_, _, bulb) = buildLoop(on: model)
+
+        // Drag the bulb across the room mid-simulation.
+        model.move(id: bulb.id, to: CircuitsModel.buildCenter + SIMD3(0.8, 0.4, 0.2))
+        model.step(dt: 1.0 / 90.0)
+
+        let expected = 9.0 / (24 + CircuitsModel.batteryInternalResistance
+                              + CircuitSolver.switchResistance)
+        XCTAssertEqual(abs(model.readouts[bulb.id]?.amps ?? 0), expected,
+                       accuracy: expected * 1e-3,
+                       "moving a part must not interrupt the current")
     }
 
     /// Tap–tap wiring: first tap arms, second connects, tapping the same
     /// terminal cancels, duplicates are refused.
     func testTapTapWiring() {
         let model = CircuitsModel()
+        model.add(.battery)
         model.add(.resistor)
-        let resistor = model.components.last!
-        let battery = model.components.first { $0.kind == .battery }!
+        let battery = model.components[0]
+        let resistor = model.components[1]
         let a = CircuitsModel.Terminal(componentID: resistor.id, end: 0)
         let b = CircuitsModel.Terminal(componentID: battery.id, end: 0)
-        let wiresBefore = model.wires.count
 
         model.tapTerminal(a)
         XCTAssertEqual(model.pendingTerminal, a)
         model.tapTerminal(b)
         XCTAssertNil(model.pendingTerminal)
-        XCTAssertEqual(model.wires.count, wiresBefore + 1)
+        XCTAssertEqual(model.wires.count, 1)
 
         // Duplicate refused (in either direction).
         model.tapTerminal(b)
         model.tapTerminal(a)
-        XCTAssertEqual(model.wires.count, wiresBefore + 1)
+        XCTAssertEqual(model.wires.count, 1)
 
         // Same-terminal tap cancels.
         model.tapTerminal(a)
         model.tapTerminal(a)
         XCTAssertNil(model.pendingTerminal)
-        XCTAssertEqual(model.wires.count, wiresBefore + 1)
+        XCTAssertEqual(model.wires.count, 1)
     }
 
     /// Removing a component takes its wires with it.
     func testRemovingComponentRemovesItsWires() {
         let model = CircuitsModel()
-        let bulb = model.components.first { $0.kind == .bulb }!
+        let (_, _, bulb) = buildLoop(on: model)
         model.select(id: bulb.id)
         model.removeSelected()
         XCTAssertEqual(model.components.count, 2)
@@ -93,14 +152,15 @@ final class CircuitsModelTests: XCTestCase {
     /// voltage through time — and pause freezes it mid-charge.
     func testCapacitorChargesAndPauseFreezesIt() {
         let model = CircuitsModel()
-        model.add(.capacitor)
-        let capacitor = model.components.last!
-        let battery = model.components.first { $0.kind == .battery }!
-
-        // Wire it straight across the battery (through a fresh resistor
-        // for a visible time constant).
+        model.add(.battery)
         model.add(.resistor)
-        let resistor = model.components.last!
+        model.add(.capacitor)
+        let battery = model.components[0]
+        let resistor = model.components[1]
+        let capacitor = model.components[2]
+
+        // Battery → resistor → capacitor → battery, for a visible
+        // time constant.
         model.tapTerminal(.init(componentID: battery.id, end: 0))
         model.tapTerminal(.init(componentID: resistor.id, end: 0))
         model.tapTerminal(.init(componentID: resistor.id, end: 1))
@@ -137,21 +197,30 @@ final class CircuitsModelTests: XCTestCase {
             simd_distance(position, CircuitsModel.buildCenter),
             CircuitsModel.buildRadius + 1e-9)
         XCTAssertGreaterThanOrEqual(position.y, CircuitsModel.floorMargin - 1e-9)
+
+        // Off-sphere tray drops clamp too.
+        model.reset()
+        model.add(.bulb, at: CircuitsModel.buildCenter + SIMD3(100, 0, 0))
+        XCTAssertLessThanOrEqual(
+            simd_distance(model.components[0].position, CircuitsModel.buildCenter),
+            CircuitsModel.buildRadius + 1e-9)
     }
 
-    func testResetRestoresTheLitLoop() {
+    /// Reset clears the bench back to the empty opening state.
+    func testResetClearsTheBench() {
         let model = CircuitsModel()
+        _ = buildLoop(on: model)
         model.add(.capacitor)
         model.showElectronFlow = false
         model.isPaused = true
 
         model.reset()
 
-        XCTAssertEqual(model.components.count, 3)
-        XCTAssertEqual(model.wires.count, 3)
+        XCTAssertTrue(model.components.isEmpty)
+        XCTAssertTrue(model.wires.isEmpty)
         XCTAssertTrue(model.showElectronFlow)
         XCTAssertFalse(model.isPaused)
         XCTAssertNil(model.pendingTerminal)
-        XCTAssertGreaterThan(model.totalSourcePower, 3, "the loop starts lit")
+        XCTAssertEqual(model.totalSourcePower, 0)
     }
 }

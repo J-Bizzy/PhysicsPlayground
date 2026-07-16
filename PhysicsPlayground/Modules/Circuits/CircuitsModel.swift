@@ -141,11 +141,14 @@ final class CircuitsModel {
 
     // MARK: Editing
 
-    func add(_ kind: ComponentKind) {
+    /// Adds a part — at `point` when it comes off the tray, otherwise on
+    /// a spawn ring at the build center.
+    func add(_ kind: ComponentKind, at point: SIMD3<Double>? = nil) {
         guard components.count < Self.componentBudget else { return }
         let angle = Double(components.count) * 2.4
-        let position = clamp(Self.buildCenter
-            + SIMD3(cos(angle) * 0.35, Double(components.count % 3) * 0.15 - 0.1, sin(angle) * 0.25))
+        let fallback = Self.buildCenter
+            + SIMD3(cos(angle) * 0.35, Double(components.count % 3) * 0.15 - 0.1, sin(angle) * 0.25)
+        let position = clamp(point ?? fallback)
         let component = Component(id: UUID(), kind: kind, position: position,
                                   value: kind.defaultValue)
         components.append(component)
@@ -354,36 +357,18 @@ final class CircuitsModel {
 
     // MARK: Reset
 
-    /// The opening scene: a lit loop — battery, switch, bulb — begging
-    /// to be tapped open.
+    /// The opening scene: an empty bench and a stocked tray — the build
+    /// is entirely the user's.
     func reset() {
         components = []
         wires = []
+        selectedID = nil
         pendingTerminal = nil
         showElectronFlow = true
         isPaused = false
         readouts = [:]
         wireFlows = [:]
         totalSourcePower = 0
-
-        let battery = Component(id: UUID(), kind: .battery,
-                                position: Self.buildCenter + SIMD3(-0.4, -0.1, 0), value: 9)
-        let bulb = Component(id: UUID(), kind: .bulb,
-                             position: Self.buildCenter + SIMD3(0.4, -0.1, 0), value: 24)
-        let toggle = Component(id: UUID(), kind: .switcher,
-                               position: Self.buildCenter + SIMD3(0, 0.25, 0), value: 0)
-        components = [battery, bulb, toggle]
-        selectedID = bulb.id
-
-        func terminal(_ component: Component, _ end: Int) -> Terminal {
-            Terminal(componentID: component.id, end: end)
-        }
-        wires = [
-            Wire(id: UUID(), from: terminal(battery, 0), to: terminal(toggle, 0)),
-            Wire(id: UUID(), from: terminal(toggle, 1), to: terminal(bulb, 0)),
-            Wire(id: UUID(), from: terminal(bulb, 1), to: terminal(battery, 1)),
-        ]
-        step(dt: 1.0 / 90.0)
     }
 
     init() {

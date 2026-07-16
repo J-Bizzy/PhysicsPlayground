@@ -28,6 +28,17 @@ final class AppModel {
         return ModuleCatalog.all(appModel: self).first { $0.id == activeModuleID }
     }
 
+    init() {
+        // Debug hook: `simctl launch <udid> <bundle> -openModule circuits`
+        // jumps straight into a module, since the simulator can't be
+        // gaze-pinched from the command line.
+        #if DEBUG
+        if let id = UserDefaults.standard.string(forKey: "openModule") {
+            activeModuleID = id
+        }
+        #endif
+    }
+
     // MARK: Per-module models — created on first entry, retained so a
     // module's state survives leaving and re-entering it.
 
