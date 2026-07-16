@@ -21,7 +21,7 @@ final class WavesModelTests: XCTestCase {
         XCTAssertEqual(model.sources.count, 2)
         XCTAssertFalse(model.sources[0].wave.phaseInverted)
         XCTAssertFalse(model.sources[1].wave.phaseInverted)
-        XCTAssertEqual(try! XCTUnwrap(model.sourceSeparation), 0.44, accuracy: 1e-9)
+        XCTAssertEqual(try! XCTUnwrap(model.sourceSeparation), 0.8, accuracy: 1e-9)
         XCTAssertEqual(model.wavelength, 0.5 / 1.5, accuracy: 1e-12)
     }
 

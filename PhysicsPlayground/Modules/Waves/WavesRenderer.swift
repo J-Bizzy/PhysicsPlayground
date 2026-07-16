@@ -31,7 +31,7 @@ final class WavesRenderer {
     var subscriptions: [EventSubscription] = []
 
     static let probeName = "probe"
-    static let latticeSide = 8
+    static let latticeSide = 9
 
     var manipulatingSourceID: UUID?
     var isManipulatingProbe = false
@@ -188,7 +188,7 @@ final class WavesRenderer {
             },
             center: WavesModel.regionCenter,
             extents: SIMD3(repeating: 2 * WavesModel.regionHalfExtent),
-            resolution: 22
+            resolution: 26
         )
 
         var result = SilenceResult()

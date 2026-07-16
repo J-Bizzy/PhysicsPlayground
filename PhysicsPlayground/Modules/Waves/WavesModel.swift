@@ -26,10 +26,11 @@ import simd
 final class WavesModel {
     // MARK: Region (immersive-space coordinates) & budgets
 
-    /// Center of the field region: chest height, a meter ahead.
-    nonisolated static let regionCenter = SIMD3<Double>(0, 1.3, -1.1)
+    /// Center of the field region: head height, just ahead — the cube
+    /// reaches past the user, so the interference field surrounds them.
+    nonisolated static let regionCenter = SIMD3<Double>(0, 1.4, -0.6)
     /// Half-extent of the cube sources and probe live in.
-    nonisolated static let regionHalfExtent = 0.55
+    nonisolated static let regionHalfExtent = 1.2
     /// Nothing sinks below this height (no sources in the floor).
     nonisolated static let regionFloor = 0.25
 
@@ -81,7 +82,7 @@ final class WavesModel {
         guard sources.count < Self.sourceBudget else { return }
         // Walk spawn points around a ring so sources don't stack.
         let angle = Double(sources.count) * 2.4 + 0.7
-        let offset = SIMD3(cos(angle) * 0.3, sin(angle) * 0.15, sin(angle) * 0.2)
+        let offset = SIMD3(cos(angle) * 0.6, sin(angle) * 0.3, sin(angle) * 0.45)
         let source = Source(
             id: UUID(),
             wave: WaveSource(position: clamp(Self.regionCenter + offset)))
@@ -135,7 +136,7 @@ final class WavesModel {
 
     // MARK: Probe
 
-    private(set) var probePosition = WavesModel.regionCenter + SIMD3(0, 0.25, 0.2)
+    private(set) var probePosition = WavesModel.regionCenter + SIMD3(0, 0.3, 0.4)
 
     func moveProbe(to point: SIMD3<Double>) {
         probePosition = clamp(point)
@@ -208,8 +209,8 @@ final class WavesModel {
     /// Two in-phase sources a comfortable arm-span apart, chest height.
     func reset() {
         sources = [
-            Source(id: UUID(), wave: WaveSource(position: Self.regionCenter + SIMD3(-0.22, 0, 0))),
-            Source(id: UUID(), wave: WaveSource(position: Self.regionCenter + SIMD3(0.22, 0, 0))),
+            Source(id: UUID(), wave: WaveSource(position: Self.regionCenter + SIMD3(-0.4, 0, 0))),
+            Source(id: UUID(), wave: WaveSource(position: Self.regionCenter + SIMD3(0.4, 0, 0))),
         ]
         selectedID = sources[1].id
         frequency = 1.5
@@ -218,7 +219,7 @@ final class WavesModel {
         isPaused = false
         timeScale = 1.0
         time = 0
-        probePosition = Self.regionCenter + SIMD3(0, 0.25, 0.2)
+        probePosition = Self.regionCenter + SIMD3(0, 0.3, 0.4)
     }
 
     init() {

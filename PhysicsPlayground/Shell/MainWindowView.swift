@@ -21,8 +21,11 @@ struct MainWindowView: View {
             if let module = appModel.activeModule {
                 ModuleHostView(module: module)
                     .id(module.id)
+                    .frame(width: 560, height: 780)
             } else {
+                // A small splash, not a gray slab: the spatial ring is the menu.
                 HubView()
+                    .frame(width: 400, height: 360)
             }
         }
     }

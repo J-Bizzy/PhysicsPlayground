@@ -24,9 +24,10 @@ import simd
 final class WindTunnelModel {
     // MARK: Test section geometry & ranges
 
-    /// Half-extent downstream (x) and across (y), m.
-    nonisolated static let halfLength = 0.6
-    nonisolated static let halfWidth = 0.4
+    /// Half-extent downstream (x) and across (y), m — a two-meter test
+    /// section you walk alongside.
+    nonisolated static let halfLength = 1.0
+    nonisolated static let halfWidth = 0.6
 
     nonisolated static let windSpeedRange = 0.2...2.0     // m/s
     nonisolated static let radiusRange = 0.03...0.12      // m
@@ -39,7 +40,7 @@ final class WindTunnelModel {
     var cylinderRadius = 0.06 {
         didSet { cylinderCenter = clampCylinder(cylinderCenter) }
     }
-    private(set) var cylinderCenter = SIMD2<Double>(-0.12, 0)
+    private(set) var cylinderCenter = SIMD2<Double>(-0.3, 0)
     /// Γ, counterclockwise-positive seen from above.
     var circulation = 0.0
 
@@ -74,7 +75,7 @@ final class WindTunnelModel {
         )
     }
 
-    private(set) var probePosition = SIMD2<Double>(0.25, 0.15)
+    private(set) var probePosition = SIMD2<Double>(0.45, 0.25)
 
     func moveProbe(to point: SIMD2<Double>) {
         let clamped = SIMD2(
@@ -135,13 +136,13 @@ final class WindTunnelModel {
     func reset() {
         windSpeed = 1.0
         cylinderRadius = 0.06
-        cylinderCenter = SIMD2(-0.12, 0)
+        cylinderCenter = SIMD2(-0.3, 0)
         circulation = 0.0
         showStreamlines = true
         showParticles = true
         isPaused = false
         timeScale = 1.0
-        probePosition = SIMD2(0.25, 0.15)
+        probePosition = SIMD2(0.45, 0.25)
     }
 
     init() {

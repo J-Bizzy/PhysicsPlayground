@@ -96,7 +96,7 @@ final class GravityLabRenderer {
         var platformMaterial = UnlitMaterial(color: .black)
         platformMaterial.blending = .transparent(opacity: 0.35)
         platform = ModelEntity(
-            mesh: .generateCylinder(height: 0.006, radius: 0.55),
+            mesh: .generateCylinder(height: 0.006, radius: 0.9),
             materials: [platformMaterial]
         )
         platform.position = [0, Self.floorHeight, 0]
@@ -389,7 +389,7 @@ final class GravityLabRenderer {
 
             // Absorbed, expired, or wandered off: respawn somewhere fresh.
             if nearBody || particleAges[index] > Self.particleLife
-                || simd_length(position) > 0.95 {
+                || simd_length(position) > 1.6 {
                 position = Self.randomParticleHome()
                 particleAges[index] = 0
             }
@@ -412,7 +412,7 @@ final class GravityLabRenderer {
             Float.random(in: -1...1), Float.random(in: -1...1), Float.random(in: -1...1))
         let length = simd_length(direction)
         direction = length > 1e-5 ? direction / length : SIMD3(0, 1, 0)
-        return direction * Float.random(in: 0.35...0.9)
+        return direction * Float.random(in: 0.45...1.5)
     }
 
     // MARK: Spacetime grid (the rubber-sheet picture — conceptual only)
@@ -437,12 +437,12 @@ final class GravityLabRenderer {
             var dip: Float = 0
             for well in wells {
                 let d = simd_length(SIMD2(x, z) - well.center)
-                dip += well.weight / (1 + (d * d) / (0.15 * 0.15))
+                dip += well.weight / (1 + (d * d) / (0.22 * 0.22))
             }
             return Self.floorHeight - min(dip * 0.14, 0.2)
         }
 
-        let extent: Float = 0.85
+        let extent: Float = 1.4
         let lineCount = 11
         let samples = 25
         var lines: [[SIMD3<Float>]] = []

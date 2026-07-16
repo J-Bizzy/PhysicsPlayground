@@ -40,12 +40,14 @@ final class GravityLabModel {
 
     // MARK: Scale mappings (the only two numbers between sim and room)
 
-    /// Room meters per astronomical unit (solar system mode).
-    nonisolated static let metersPerAU = 0.35
+    /// Room meters per astronomical unit (solar system mode): Jupiter's
+    /// orbit is a 2.6 m ring — the planets genuinely circle the room.
+    nonisolated static let metersPerAU = 0.5
     /// Real Earth–Moon separation, m.
     nonisolated static let earthMoonSeparation = 3.844e8
-    /// Room meters for the Earth–Moon separation (Lagrange mode).
-    nonisolated static let metersPerEarthMoon = 0.5
+    /// Room meters for the Earth–Moon separation (Lagrange mode) — the
+    /// five points spread across most of the room.
+    nonisolated static let metersPerEarthMoon = 0.8
     /// Simulated days per real second at 1× speed.
     nonisolated static let daysPerSecond = 3.0
     /// Sim m/s per display m/s when throwing, per mode: tuned so a relaxed

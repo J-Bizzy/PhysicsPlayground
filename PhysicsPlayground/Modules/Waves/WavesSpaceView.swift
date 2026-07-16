@@ -24,7 +24,7 @@ struct WavesSpaceView: View {
             content.add(renderer.root)
 
             if let quick = attachments.entity(for: "quick") {
-                quick.position = [-0.62, 1.05, -0.75]
+                quick.position = [-1.5, 1.1, -0.6]
                 quick.orientation = simd_quatf(angle: 0.35, axis: [0, 1, 0])
                 renderer.root.addChild(quick)
             }

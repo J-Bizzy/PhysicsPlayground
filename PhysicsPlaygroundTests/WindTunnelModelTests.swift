@@ -112,7 +112,7 @@ final class WindTunnelModelTests: XCTestCase {
 
         XCTAssertEqual(model.windSpeed, 1.0)
         XCTAssertEqual(model.cylinderRadius, 0.06)
-        XCTAssertEqual(model.cylinderCenter, SIMD2(-0.12, 0))
+        XCTAssertEqual(model.cylinderCenter, SIMD2(-0.3, 0))
         XCTAssertEqual(model.circulation, 0)
         XCTAssertTrue(model.showStreamlines)
         XCTAssertTrue(model.showParticles)

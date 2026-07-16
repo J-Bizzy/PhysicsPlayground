@@ -23,12 +23,14 @@ final class FieldModel {
     // launched the space, +Y is up, -Z is straight ahead.
 
     /// Where the field visualization lives when there are no charges, and
-    /// where the first charge spawns: chest height, a meter in front.
-    nonisolated static let regionCenter = SIMD3<Double>(0, 1.3, -1.0)
-    nonisolated static let regionExtent = 0.9
+    /// where the first charge spawns: chest height, just ahead. The
+    /// region follows the charges, so dragging them apart spreads the
+    /// field across the whole room.
+    nonisolated static let regionCenter = SIMD3<Double>(0, 1.35, -0.9)
+    nonisolated static let regionExtent = 1.3
     nonisolated static let pointsPerAxis = 7
     /// Margin added around the charges' bounding box.
-    nonisolated static let regionMargin = 0.35
+    nonisolated static let regionMargin = 0.45
     /// Sample points never go below this height (no arrows in the floor).
     nonisolated static let regionFloor = 0.05
 

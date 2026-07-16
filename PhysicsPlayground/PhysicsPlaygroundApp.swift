@@ -20,7 +20,8 @@ struct PhysicsPlaygroundApp: App {
             MainWindowView()
                 .environment(appModel)
         }
-        .defaultSize(width: 520, height: 700)
+        .windowResizability(.contentSize)
+        .defaultSize(width: 400, height: 360)
 
         ImmersiveSpace(id: PlaygroundSpaceView.spaceID) {
             PlaygroundSpaceView()

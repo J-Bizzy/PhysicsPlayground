@@ -4,13 +4,13 @@
 //
 //  The spatial menu: the app title floats ahead, and the exhibits —
 //  large, free-floating 3D miniatures of each experience, no enclosing
-//  shells — drift in a slow carousel around the user, names beneath
-//  them in their module accents. Look at one (the system hover effect
-//  lights it up) and pinch to enter.
+//  shells — hold a still ring all the way around the user, names
+//  beneath them in their module accents. Look at one (the system hover
+//  effect lights it up) and pinch to enter.
 //
-//  Everything idles: the carousel revolves about once every two
-//  minutes, exhibits bob out of phase and slowly turn. A handful of
-//  entities; per-frame work is a few transform writes.
+//  The only motion is idle life: exhibits bob out of phase and their
+//  miniatures slowly turn. A handful of entities; per-frame work is a
+//  few transform writes.
 //
 //  Vignettes are keyed by module id with a generic fallback, so a new
 //  module joins the carousel for free and gets a bespoke miniature
@@ -67,10 +67,8 @@ final class HubScene {
     private var exhibits: [Exhibit] = []
     private var time = 0.0
 
-    private static let carouselRadius: Float = 2.0
+    private static let ringRadius: Float = 2.0
     private static let exhibitHeight: Float = 1.45
-    /// One full revolution ≈ every two minutes.
-    private static let carouselSpeed = 0.05
     /// The miniatures, unbottled and enlarged.
     private static let vignetteScale: Float = 2.1
 
@@ -318,17 +316,16 @@ final class HubScene {
 
     // MARK: Idle animation & interaction
 
-    /// The carousel: every exhibit circles the user slowly, bobbing out
-    /// of phase, its miniature turning.
+    /// The exhibits hold their places on a ring all around the user —
+    /// only the gentle bob and each miniature's slow turn keep them alive.
     func animate(dt: Double) {
         time += dt
         for (index, exhibit) in exhibits.enumerated() {
-            let angle = exhibit.baseAngle + Float(time * Self.carouselSpeed)
             let bob = 0.014 * Float(sin(time * 0.8 + Double(index) * 2.1))
             exhibit.anchor.position = SIMD3(
-                Self.carouselRadius * sin(angle),
+                Self.ringRadius * sin(exhibit.baseAngle),
                 Self.exhibitHeight + bob,
-                -Self.carouselRadius * cos(angle)
+                -Self.ringRadius * cos(exhibit.baseAngle)
             )
             exhibit.vignette.orientation = simd_quatf(
                 angle: Float(time * 0.3 + Double(index)), axis: [0, 1, 0])

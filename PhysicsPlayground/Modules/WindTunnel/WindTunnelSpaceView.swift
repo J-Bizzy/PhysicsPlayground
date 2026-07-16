@@ -23,7 +23,7 @@ struct WindTunnelSpaceView: View {
             content.add(renderer.root)
 
             if let quick = attachments.entity(for: "quick") {
-                quick.position = [-0.62, 1.14, -0.82]
+                quick.position = [-1.45, 1.25, -0.9]
                 quick.orientation = simd_quatf(angle: 0.35, axis: [0, 1, 0])
                 renderer.root.addChild(quick)
             }

@@ -30,9 +30,9 @@ final class WindTunnelRenderer {
 
     static let cylinderName = "cylinder"
     static let probeName = "probe"
-    static let sectionCenter = SIMD3<Float>(0, 1.15, -1.1)
+    static let sectionCenter = SIMD3<Float>(0, 1.3, -1.2)
     /// Half-height of the airflow volume (cylinder spans it fully).
-    static let halfHeight: Float = 0.3
+    static let halfHeight: Float = 0.45
 
     var isManipulatingCylinder = false
     var isManipulatingProbe = false
@@ -43,7 +43,7 @@ final class WindTunnelRenderer {
     /// Parent for the probe's floating readout attachment.
     let probeAnchor = Entity()
 
-    private static let particleBudget = 380
+    private static let particleBudget = 440
     private static let particleLife = 12.0
     private static let baseCylinderRadius: Float = 0.05
 
@@ -306,9 +306,9 @@ final class WindTunnelRenderer {
         let flow = model.flow
         var config = StreamlineTracer.Config()
         config.stepSize = 0.01
-        config.maxSteps = 220
+        config.maxSteps = 300
         config.boundsCenter = .zero
-        config.boundsRadius = 0.85
+        config.boundsRadius = 1.5
         config.stopCenters = [SIMD3(flow.center.x, 0, flow.center.y)]
         config.stopRadius = flow.radius * 1.01
 
@@ -316,7 +316,7 @@ final class WindTunnelRenderer {
         // every height, and the stack makes the flow read as a volume.
         var lines: [[SIMD3<Float>]] = []
         let seedCount = 9
-        for sheetHeight: Float in [-0.22, 0, 0.22] {
+        for sheetHeight: Float in [-0.32, 0, 0.32] {
             for index in 0..<seedCount {
                 let fraction = Double(index) / Double(seedCount - 1)
                 let y = -WindTunnelModel.halfWidth + 0.05
