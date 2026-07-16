@@ -201,6 +201,15 @@ struct CircuitsQuickPanel: View {
                 .font(DesignTokens.TypeScale.label)
                 .accessibilityHint("Cyan dots drifting minus to plus along every live wire")
 
+            Button {
+                model.clearBench()
+            } label: {
+                Label("Clear bench", systemImage: "eraser")
+            }
+            .buttonStyle(.bordered)
+            .disabled(model.components.isEmpty)
+            .accessibilityHint("Removes every part and wire; Reset brings the starter loop back")
+
             if model.hasOverloadedBattery {
                 Label("Short circuit! The battery's own internal resistance is all that's limiting the current — put a bulb or resistor in the loop.",
                       systemImage: "exclamationmark.triangle.fill")

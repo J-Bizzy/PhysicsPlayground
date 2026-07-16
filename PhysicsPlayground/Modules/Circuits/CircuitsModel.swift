@@ -437,18 +437,55 @@ final class CircuitsModel {
 
     // MARK: Reset
 
-    /// The opening scene: an empty bench and a stocked tray — the build
-    /// is entirely the user's.
-    func reset() {
+    /// Empties the bench completely — the blank-slate path behind the
+    /// quick panel's Clear bench button.
+    func clearBench() {
         components = []
         wires = []
         selectedID = nil
         pendingTerminal = nil
-        showElectronFlow = true
-        isPaused = false
         readouts = [:]
         wireFlows = [:]
         totalSourcePower = 0
+    }
+
+    /// The opening scene: a battery–switch–bulb loop already flowing, so
+    /// the room shows live current the moment the lab appears — flip the
+    /// switch, pull it apart, or Clear bench and build from nothing.
+    func reset() {
+        clearBench()
+        showElectronFlow = true
+        isPaused = false
+        seedStarterLoop()
+    }
+
+    private func seedStarterLoop() {
+        let battery = Component(
+            id: UUID(), kind: .battery,
+            position: SIMD3(-0.28, 1.12, -0.9),
+            value: ComponentKind.battery.defaultValue)
+        let switcher = Component(
+            id: UUID(), kind: .switcher,
+            position: SIMD3(0.28, 1.12, -0.9),
+            value: ComponentKind.switcher.defaultValue)
+        let bulb = Component(
+            id: UUID(), kind: .bulb,
+            position: SIMD3(0, 1.5, -0.9),
+            value: ComponentKind.bulb.defaultValue)
+        components = [battery, switcher, bulb]
+        wires = [
+            Wire(id: UUID(),
+                 from: Terminal(componentID: battery.id, end: 1),
+                 to: Terminal(componentID: switcher.id, end: 0)),
+            Wire(id: UUID(),
+                 from: Terminal(componentID: switcher.id, end: 1),
+                 to: Terminal(componentID: bulb.id, end: 0)),
+            Wire(id: UUID(),
+                 from: Terminal(componentID: bulb.id, end: 1),
+                 to: Terminal(componentID: battery.id, end: 0)),
+        ]
+        // Solve once immediately so the bulb opens lit, not one frame dark.
+        step(dt: 1.0 / 90.0)
     }
 
     init() {
