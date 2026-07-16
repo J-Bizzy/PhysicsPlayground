@@ -22,6 +22,8 @@ enum KinematicsModule {
             firstRunHint: "Grab any ball and throw it — physics takes over the instant you let go. For precise launches, drag the launcher anywhere and pinch its orange bead to aim.",
             legend: legend,
             realWorld: KinematicsRealWorld.story,
+            isPaused: { appModel.kinematicsModel.isPaused },
+            togglePause: { appModel.kinematicsModel.isPaused.toggle() },
             makeControls: {
                 AnyView(
                     KinematicsControlsView()

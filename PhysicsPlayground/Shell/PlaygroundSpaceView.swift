@@ -19,8 +19,13 @@ struct PlaygroundSpaceView: View {
     var body: some View {
         Group {
             if let module = appModel.activeModule {
-                module.makeScene()
-                    .id(module.id)
+                ZStack {
+                    module.makeScene()
+                        .id(module.id)
+                    // The shared orb controls (pause / back) every module gets.
+                    ModuleOrbControlsView(module: module)
+                        .id("orbs-\(module.id)")
+                }
             } else {
                 HubSpaceView()
                     .id("hub")

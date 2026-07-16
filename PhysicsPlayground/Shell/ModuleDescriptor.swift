@@ -36,6 +36,9 @@ struct ModuleDescriptor: Identifiable {
     let legend: [LegendItem]
     /// The first-class "where this shows up in the real world" content.
     let realWorld: RealWorldStory
+    /// Freeze-everything state, driving the shared in-space pause orb.
+    let isPaused: () -> Bool
+    let togglePause: () -> Void
     let makeControls: () -> AnyView
     let makeScene: () -> AnyView
     /// Returns the module's model to its freshly-entered state.

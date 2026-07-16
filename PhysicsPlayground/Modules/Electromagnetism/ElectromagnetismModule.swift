@@ -25,6 +25,8 @@ enum ElectromagnetismModule {
             firstRunHint: "Look at a charge and pinch to grab it, then drag it anywhere — the field follows. The charge with the white halo is the one the sliders edit.",
             legend: legend,
             realWorld: ElectromagnetismRealWorld.story,
+            isPaused: { appModel.electromagnetismModel.isPaused },
+            togglePause: { appModel.electromagnetismModel.isPaused.toggle() },
             makeControls: {
                 AnyView(
                     ElectrostaticsControlsView()

@@ -334,6 +334,9 @@ final class GravityLabRenderer {
     // flow keeps moving even while the simulation itself is paused)
 
     func tickFieldParticles(dt: Double, model: GravityLabModel) {
+        // Pause freezes EVERYTHING in time — spins and field flow included.
+        guard !model.isPaused else { return }
+
         // Every body turns slowly on its axis — pure presentation, but it
         // makes the textures live.
         for (index, slot) in bodyPool.slots.enumerated()

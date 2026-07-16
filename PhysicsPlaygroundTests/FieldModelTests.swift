@@ -227,6 +227,23 @@ final class FieldModelTests: XCTestCase {
                        "a positive probe falling into a negative charge must be captured")
     }
 
+    /// The shared pause orb freezes the probe mid-flight.
+    func testPauseFreezesProbe() {
+        let model = FieldModel()
+        model.dropProbe()
+        model.isPaused = true
+        let frozen = try! XCTUnwrap(model.probe)
+        for _ in 0..<30 {
+            model.stepProbe(dt: 1.0 / 90.0)
+        }
+        XCTAssertEqual(model.probe, frozen, "a paused probe must not move")
+        XCTAssertEqual(model.probeStatus, .running, "pause is not capture — resuming continues the flight")
+
+        model.isPaused = false
+        model.stepProbe(dt: 1.0 / 90.0)
+        XCTAssertNotEqual(model.probe, frozen, "resuming picks the flight back up")
+    }
+
     // MARK: Reset (the shell's Reset button calls this via the descriptor)
 
     func testResetRestoresFreshlyEnteredState() {

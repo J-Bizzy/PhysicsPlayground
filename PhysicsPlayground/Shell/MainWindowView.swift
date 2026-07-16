@@ -21,11 +21,12 @@ struct MainWindowView: View {
             if let module = appModel.activeModule {
                 ModuleHostView(module: module)
                     .id(module.id)
-                    .frame(width: 560, height: 780)
+                    .frame(minWidth: 540, maxWidth: .infinity,
+                           minHeight: 620, maxHeight: .infinity)
             } else {
-                // A small splash, not a gray slab: the spatial ring is the menu.
+                // The nameplate: the window is the title, movable,
+                // resizable, and closable from its own bar.
                 HubView()
-                    .frame(width: 400, height: 360)
             }
         }
     }

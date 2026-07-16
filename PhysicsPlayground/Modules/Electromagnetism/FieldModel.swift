@@ -77,6 +77,9 @@ final class FieldModel {
     var showLines = true
     var showEquipotentials = true
 
+    /// Freezes the probe's flight (the module's only time evolution).
+    var isPaused = false
+
     /// Counts placements so each new charge lands at a different spot.
     private var placementIndex = 1
 
@@ -98,6 +101,7 @@ final class FieldModel {
         showArrows = true
         showLines = true
         showEquipotentials = true
+        isPaused = false
         placementIndex = 1
     }
 
@@ -231,7 +235,7 @@ final class FieldModel {
     /// Advances the simulation by one frame. Substepped velocity Verlet, so
     /// accuracy doesn't ride on the display frame rate.
     func stepProbe(dt: Double) {
-        guard probeStatus == .running, var state = probe, !charges.isEmpty else { return }
+        guard !isPaused, probeStatus == .running, var state = probe, !charges.isEmpty else { return }
 
         // A stalled frame (app paused, debugger…) must not become one giant
         // physics leap.

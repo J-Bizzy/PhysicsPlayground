@@ -75,48 +75,14 @@ final class HubScene {
     // MARK: Build
 
     func build(modules: [ModuleDescriptor]) {
-        buildTitle()
+        // The window carries the app title; out here it's exhibits only.
         let count = max(modules.count, 1)
         for (index, module) in modules.enumerated() {
-            // Half-slot offset so no exhibit starts dead center behind
-            // the title; the carousel brings each one around in turn.
+            // Half-slot offset keeps the corridor ahead of the user clear
+            // for the title window.
             let baseAngle = 2 * Float.pi * (Float(index) + 0.5) / Float(count)
             buildExhibit(for: module, baseAngle: baseAngle)
         }
-    }
-
-    private func buildTitle() {
-        let titleMesh = MeshResource.generateText(
-            "Physics Playground",
-            extrusionDepth: 0.016,
-            font: .systemFont(ofSize: 0.13, weight: .bold)
-        )
-        // Metallic text picks up the room's light and shimmers as you move.
-        var titleMaterial = PhysicallyBasedMaterial()
-        titleMaterial.baseColor = .init(tint: .white)
-        titleMaterial.metallic = 0.65
-        titleMaterial.roughness = 0.32
-        let title = ModelEntity(mesh: titleMesh, materials: [titleMaterial])
-        let titleBounds = titleMesh.bounds
-        title.position = [
-            -(titleBounds.min.x + titleBounds.max.x) / 2, 2.06, -2.35,
-        ]
-        root.addChild(title)
-
-        let subtitleMesh = MeshResource.generateText(
-            "Look at an exhibit and pinch to step inside",
-            extrusionDepth: 0.002,
-            font: .systemFont(ofSize: 0.03, weight: .regular)
-        )
-        let subtitle = ModelEntity(
-            mesh: subtitleMesh,
-            materials: [UnlitMaterial(color: UIColor(white: 0.85, alpha: 0.8))]
-        )
-        let subtitleBounds = subtitleMesh.bounds
-        subtitle.position = [
-            -(subtitleBounds.min.x + subtitleBounds.max.x) / 2, 1.98, -2.35,
-        ]
-        root.addChild(subtitle)
     }
 
     private func buildExhibit(for module: ModuleDescriptor, baseAngle: Float) {

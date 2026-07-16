@@ -22,6 +22,8 @@ enum WindTunnelModule {
             firstRunHint: "Pinch the cylinder and drag it through the flow — the streamlines re-form instantly. Then add spin and watch the red lift arrow appear.",
             legend: legend,
             realWorld: WindTunnelRealWorld.story,
+            isPaused: { appModel.windTunnelModel.isPaused },
+            togglePause: { appModel.windTunnelModel.isPaused.toggle() },
             makeControls: {
                 AnyView(
                     WindTunnelControlsView()
