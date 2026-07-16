@@ -105,8 +105,8 @@ final class CircuitsModelTests: XCTestCase {
                        "moving a part must not interrupt the current")
     }
 
-    /// Wire jumpers are honest conductors: a battery–wire–bulb–wire loop
-    /// carries V / (R_bulb + r_internal + 2·R_conductor).
+    /// Wire jumpers are honest copper: a battery–wire–bulb–wire loop
+    /// carries V / (R_bulb + r_internal + 2·R_wire) with R = ρL/A.
     func testWireJumpersConductTheLoop() {
         let model = CircuitsModel()
         model.add(.battery)
@@ -128,12 +128,37 @@ final class CircuitsModelTests: XCTestCase {
         model.tapTerminal(.init(componentID: battery.id, end: 0))
         model.step(dt: 1.0 / 90.0)
 
+        let wireOhms = CircuitsModel.wireResistance(
+            length: CircuitsModel.ComponentKind.wire.defaultValue)
         let expected = 9.0 / (24 + CircuitsModel.batteryInternalResistance
-                              + 2 * CircuitSolver.switchResistance)
+                              + 2 * wireOhms)
         XCTAssertEqual(abs(model.readouts[bulb.id]?.amps ?? 0), expected,
                        accuracy: expected * 1e-3)
-        // Essentially no voltage is lost across an ideal jumper.
-        XCTAssertLessThan(abs(model.readouts[wireA.id]?.volts ?? 1), 0.001)
+        // The jumper drops exactly I·R — a millivolt or so, not zero.
+        XCTAssertEqual(abs(model.readouts[wireA.id]?.volts ?? 0),
+                       expected * wireOhms,
+                       accuracy: expected * wireOhms * 0.01)
+    }
+
+    /// A wire's length is adjustable: its terminals spread to span it
+    /// and its resistance grows with it (R = ρL/A).
+    func testWireLengthMovesTerminalsAndScalesResistance() {
+        let model = CircuitsModel()
+        model.add(.wire)
+        let short = model.components[0]
+        XCTAssertEqual(short.terminalPosition(1).x - short.terminalPosition(0).x,
+                       short.value, accuracy: 1e-12,
+                       "terminals span exactly the wire's length")
+
+        model.select(id: short.id)
+        model.selectedValue = 2.0
+        let long = model.components[0]
+        XCTAssertEqual(long.terminalPosition(1).x - long.terminalPosition(0).x,
+                       2.0, accuracy: 1e-12)
+        XCTAssertEqual(CircuitsModel.wireResistance(length: 2.0),
+                       8 * CircuitsModel.wireResistance(length: 0.25),
+                       accuracy: 1e-12,
+                       "resistance is proportional to length")
     }
 
     /// Tap–tap wiring: first tap arms, second connects, tapping the same

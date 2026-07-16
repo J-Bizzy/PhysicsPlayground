@@ -50,6 +50,9 @@ final class CircuitsRenderer {
     private var wireEntities: [UUID: ModelEntity] = [:]
     private var wirePhases: [UUID: Double] = [:]
 
+    /// The wire rod's generated mesh length; live length is a scale on top.
+    private static let wireBaseLength: Float = 0.12
+
     private static let electronBudget = 200
     private let electronPool: EntityPool<Void>
     private var electronsVisible = false
@@ -258,6 +261,16 @@ final class CircuitsRenderer {
                         visual.body.model?.materials = [material]
                     }
                 }
+            case .wire:
+                // The rod stretches along its axis to the wire's live
+                // length, and the terminals ride its ends.
+                let stretch = Float(component.value) / Self.wireBaseLength
+                if abs(visual.body.scale.y - stretch) > 1e-4 {
+                    visual.body.scale = [1, stretch, 1]
+                }
+                let half = Float(component.terminalHalfSpan)
+                visual.terminals[0].position.x = -half
+                visual.terminals[1].position.x = half
             default:
                 break
             }
@@ -282,7 +295,10 @@ final class CircuitsRenderer {
                 ? String(format: "%.1f mF", component.value * 1000)
                 : String(format: "%.0f µF", component.value * 1e6)
         case .switcher: component.isClosed ? "closed" : "open"
-        case .wire: ""  // nothing to say — it's a jumper
+        case .wire:
+            component.value >= 0.995
+                ? String(format: "%.2f m", component.value)
+                : String(format: "%.0f cm", component.value * 100)
         }
     }
 
@@ -324,7 +340,7 @@ final class CircuitsRenderer {
             let terminal = ModelEntity(mesh: terminalMesh, materials: [copperMaterial])
             terminal.name = "t\(end)-\(component.id.uuidString)"
             terminal.position = SIMD3(
-                Float(end == 0 ? -CircuitsModel.terminalOffset : CircuitsModel.terminalOffset), 0, 0)
+                Float(end == 0 ? -component.terminalHalfSpan : component.terminalHalfSpan), 0, 0)
             terminal.components.set(InputTargetComponent())
             terminal.components.set(CollisionComponent(
                 shapes: [.generateSphere(radius: 0.028)]))
@@ -337,13 +353,16 @@ final class CircuitsRenderer {
             holder.addChild(terminal)
             terminals.append(terminal)
 
-            // A short lead from the body toward the terminal.
-            let lead = ModelEntity(
-                mesh: .generateCylinder(height: 0.045, radius: 0.0028),
-                materials: [copperMaterial])
-            lead.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-            lead.position = SIMD3(Float(end == 0 ? -0.062 : 0.062), 0, 0)
-            holder.addChild(lead)
+            // A short lead from the body toward the terminal — except on
+            // wires, whose rod already spans terminal to terminal.
+            if component.kind != .wire {
+                let lead = ModelEntity(
+                    mesh: .generateCylinder(height: 0.045, radius: 0.0028),
+                    materials: [copperMaterial])
+                lead.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+                lead.position = SIMD3(Float(end == 0 ? -0.062 : 0.062), 0, 0)
+                holder.addChild(lead)
+            }
         }
 
         // Selection halo.
@@ -459,8 +478,10 @@ final class CircuitsRenderer {
                                            roughness: 0.6, isMetallic: false)])
         case .wire:
             // A jumper: bare copper rod in an orange insulation sleeve.
+            // Generated at the base length; updateVisuals stretches the
+            // rod along its axis to the component's live length.
             let body = ModelEntity(
-                mesh: .generateCylinder(height: 0.12, radius: 0.005),
+                mesh: .generateCylinder(height: Self.wireBaseLength, radius: 0.005),
                 materials: [copperMaterial])
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             let sleeve = ModelEntity(
@@ -520,16 +541,16 @@ final class CircuitsRenderer {
     }
 
     private func terminalWorld(_ terminal: CircuitsModel.Terminal, _ model: CircuitsModel) -> SIMD3<Float>? {
+        guard let component = model.components.first(where: { $0.id == terminal.componentID })
+        else { return nil }
         // While a component is being carried, follow the live entity so
         // wires stay attached to the hand-held part.
         if terminal.componentID == manipulatingComponentID,
            let visual = visuals[terminal.componentID] {
-            let offset = SIMD3<Float>(
-                Float(terminal.end == 0 ? -CircuitsModel.terminalOffset : CircuitsModel.terminalOffset), 0, 0)
+            let half = Float(component.terminalHalfSpan)
+            let offset = SIMD3<Float>(terminal.end == 0 ? -half : half, 0, 0)
             return visual.body.position(relativeTo: root) + offset
         }
-        guard let component = model.components.first(where: { $0.id == terminal.componentID })
-        else { return nil }
         return SIMD3<Float>(component.terminalPosition(terminal.end))
     }
 

@@ -101,7 +101,10 @@ struct CircuitsControlsView: View {
             Toggle("Closed", isOn: model.selectedIsClosed)
                 .font(DesignTokens.TypeScale.control)
         case .wire:
-            Text("An ideal jumper — a milliohm end to end, nothing to tune. Pinch its terminals to splice it into the circuit.")
+            valueSlider("Length", model: model, range: 0.1...2.0,
+                        format: { $0 >= 0.995 ? String(format: "%.2f m", $0)
+                                              : String(format: "%.0f cm", $0 * 100) })
+            Text("Real 1 mm² copper: R = ρL/A, about 17 mΩ per meter — a longer wire really does drop more voltage.")
                 .font(DesignTokens.TypeScale.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -113,6 +116,12 @@ struct CircuitsControlsView: View {
                 row("Power", String(format: "%.2f", abs(readout.watts)), "W")
                 if component.kind == .capacitor {
                     row("Charged to", String(format: "%.2f", component.capacitorVoltage), "V")
+                }
+                if component.kind == .wire {
+                    row("Resistance",
+                        String(format: "%.1f",
+                               CircuitsModel.wireResistance(length: component.value) * 1000),
+                        "mΩ")
                 }
             }
         }

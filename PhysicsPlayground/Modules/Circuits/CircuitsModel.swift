@@ -64,9 +64,18 @@ final class CircuitsModel {
             case .bulb: 24.0          // Ω
             case .capacitor: 2.2e-3   // F
             case .switcher: 0
-            case .wire: 0             // an ideal jumper — milliohms end to end
+            case .wire: 0.25          // m — a wire's value is its length
             }
         }
+    }
+
+    /// Real 1 mm² copper: R = ρL/A with ρ = 1.68×10⁻⁸ Ω·m, so a wire's
+    /// resistance honestly grows with the length the user gives it
+    /// (~17 mΩ per meter — negligible next to a bulb, but not zero).
+    nonisolated static let wireOhmsPerMeter = 1.68e-8 / 1e-6
+
+    nonisolated static func wireResistance(length: Double) -> Double {
+        max(length, 0.01) * wireOhmsPerMeter
     }
 
     struct Terminal: Equatable, Hashable {
@@ -78,16 +87,22 @@ final class CircuitsModel {
         let id: UUID
         let kind: ComponentKind
         var position: SIMD3<Double>
-        /// Volts, ohms, or farads depending on kind.
+        /// Volts, ohms, farads — or meters of length for a wire.
         var value: Double
         /// Switches only.
         var isClosed = true
         /// Capacitors only: the integrated state.
         var capacitorVoltage = 0.0
 
+        /// Half the distance between the two terminals — a wire spans
+        /// its own adjustable length; every other part has the
+        /// standard-size body.
+        var terminalHalfSpan: Double {
+            kind == .wire ? value / 2 : CircuitsModel.terminalOffset
+        }
+
         func terminalPosition(_ end: Int) -> SIMD3<Double> {
-            position + SIMD3(end == 0 ? -CircuitsModel.terminalOffset
-                                      : CircuitsModel.terminalOffset, 0, 0)
+            position + SIMD3(end == 0 ? -terminalHalfSpan : terminalHalfSpan, 0, 0)
         }
     }
 
@@ -320,7 +335,7 @@ final class CircuitsModel {
             case .switcher:
                 component.isClosed ? .conductor : .open
             case .wire:
-                .conductor
+                .resistor(ohms: Self.wireResistance(length: component.value))
             }
             return CircuitElement(nodeA: a, nodeB: b, kind: kind)
         }
