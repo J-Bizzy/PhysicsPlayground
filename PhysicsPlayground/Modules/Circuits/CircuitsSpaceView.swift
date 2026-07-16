@@ -166,6 +166,10 @@ struct CircuitsSpaceView: View {
             }
             guard let id = UUID(uuidString: name) else { return }
             model.move(id: id, to: SIMD3<Double>(position))
+            // Keep whatever twist the hand gave the part.
+            if let axis = renderer.liveAxis(of: id) {
+                model.setAxis(id: id, axis: axis)
+            }
             renderer.manipulatingComponentID = nil
         }
     }
@@ -196,6 +200,13 @@ struct CircuitsQuickPanel: View {
             Toggle("Electron flow", isOn: $model.showElectronFlow)
                 .font(DesignTokens.TypeScale.label)
                 .accessibilityHint("Cyan dots drifting minus to plus along every live wire")
+
+            if model.hasOverloadedBattery {
+                Label("Short circuit! The battery's own internal resistance is all that's limiting the current — put a bulb or resistor in the loop.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.red)
+            }
 
             if model.pendingTerminal != nil {
                 Text("Terminal armed — pinch another terminal to wire them (or the same one to cancel).")
@@ -232,6 +243,12 @@ struct CircuitsSelectedReadout: View {
                         Text("charged to \(component.capacitorVoltage, specifier: "%.2f") V")
                             .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                             .foregroundStyle(DesignTokens.Palette.circuitsAccent)
+                    }
+                    if component.kind == .battery,
+                       abs(model.readouts[component.id]?.amps ?? 0) > CircuitsModel.overloadAmps {
+                        Label("short circuit", systemImage: "exclamationmark.triangle.fill")
+                            .font(DesignTokens.TypeScale.footnote)
+                            .foregroundStyle(.red)
                     }
                 }
                 .accessibilityElement(children: .combine)

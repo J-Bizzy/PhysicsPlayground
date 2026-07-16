@@ -210,6 +210,29 @@ final class CircuitsModel {
                                       Self.wireLengthRange.upperBound)
     }
 
+    /// Adopt the aim a carry left the part with (the hand can twist a
+    /// held part). Ignores degenerate axes; normalizes the rest.
+    func setAxis(id: UUID, axis: SIMD3<Double>) {
+        guard let index = components.firstIndex(where: { $0.id == id }) else { return }
+        let length = simd_length(axis)
+        guard length > 1e-6 else { return }
+        components[index].axis = axis / length
+    }
+
+    /// True while any battery is pushing more current than a healthy
+    /// circuit would draw — i.e. the load is (nearly) a dead short and
+    /// the battery's internal resistance is doing all the limiting.
+    var hasOverloadedBattery: Bool {
+        components.contains { component in
+            component.kind == .battery
+                && abs(readouts[component.id]?.amps ?? 0) > Self.overloadAmps
+        }
+    }
+
+    /// A bulb draws ~0.4 A; a dead short through a 9 V battery draws
+    /// ~150 A. Anything past this is a wiring mistake, not a load.
+    nonisolated static let overloadAmps = 2.0
+
     /// Swing a part by one of its end grips: the opposite end stays
     /// pinned at `pivot`, the grabbed end chases the hand, and the part
     /// re-aims along the line between them. Wires also take their new

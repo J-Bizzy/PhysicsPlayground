@@ -21,7 +21,7 @@ import simd
 public enum Grabbable {
     /// Makes an entity grabbable with gaze+pinch or direct touch. The
     /// collision shape is bigger than the visible mesh so it's easy to grab.
-    public static func configure(_ entity: ModelEntity, collisionRadius: Float) {
+    public static func configure(_ entity: Entity, collisionRadius: Float) {
         ManipulationComponent.configureEntity(
             entity,
             collisionShapes: [.generateSphere(radius: collisionRadius)]

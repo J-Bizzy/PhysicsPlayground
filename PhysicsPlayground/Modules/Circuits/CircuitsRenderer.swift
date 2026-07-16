@@ -62,6 +62,13 @@ final class CircuitsRenderer {
     /// the fixed pivot the part swings around.
     var swingPivot: SIMD3<Double>?
 
+    /// The part's aim as the hand actually left it — the system may have
+    /// twisted the holder during a carry, and the model adopts that.
+    func liveAxis(of id: UUID) -> SIMD3<Double>? {
+        guard let visual = visuals[id] else { return nil }
+        return SIMD3<Double>(visual.holder.orientation.act([1, 0, 0]))
+    }
+
     private static let electronBudget = 200
     private let electronPool: EntityPool<Void>
     private var electronsVisible = false
@@ -219,19 +226,22 @@ final class CircuitsRenderer {
         for id in visuals.keys where !liveIDs.contains(id) {
             visuals[id]?.holder.removeFromParent()
             visuals[id] = nil
+            wirePhases[id] = nil  // a removed jumper's electron phase
         }
 
         for component in model.components {
             var visual = visuals[component.id] ?? makeVisual(for: component)
 
+            // While the hand carries the holder the system owns its
+            // transform — including any twist, which the model adopts
+            // on release.
             if component.id != manipulatingComponentID {
                 visual.holder.position = SIMD3<Float>(component.position)
-                visual.body.position = .zero
+                // Aim the whole part along its model axis (terminals,
+                // grips, leads, and body all ride the holder).
+                visual.holder.orientation = simd_quatf(
+                    from: [1, 0, 0], to: simd_normalize(SIMD3<Float>(component.axis)))
             }
-            // Aim the whole part along its model axis (terminals, grips,
-            // leads, and body all ride the holder).
-            visual.holder.orientation = simd_quatf(
-                from: [1, 0, 0], to: simd_normalize(SIMD3<Float>(component.axis)))
             visual.halo.isEnabled = component.id == model.selectedID
 
             // Terminals and end grips ride the ends of the (possibly
@@ -341,19 +351,22 @@ final class CircuitsRenderer {
     }
 
     private func makeVisual(for component: CircuitsModel.Component) -> ComponentVisual {
+        // The HOLDER is the manipulation target, so a carried part brings
+        // its terminals, grips, label, and halo along — and wires stay
+        // pinned to real terminal entities the whole way.
         let holder = Entity()
+        holder.name = component.id.uuidString
         holder.position = SIMD3<Float>(component.position)
-        root.addChild(holder)
-
-        // The grabbable body, shaped per kind.
-        let body = makeBody(for: component)
-        body.name = component.id.uuidString
-        Grabbable.configure(body, collisionRadius: 0.075)
+        Grabbable.configure(holder, collisionRadius: 0.075)
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = LocalizedStringResource(
             stringLiteral: "\(component.kind.displayName). Drag to move; pinch its terminals to wire.")
-        body.components.set(accessibility)
+        holder.components.set(accessibility)
+        root.addChild(holder)
+
+        // The visible body, shaped per kind.
+        let body = makeBody(for: component)
         holder.addChild(body)
 
         // Terminals: copper spheres, tap targets for wiring.
@@ -609,14 +622,12 @@ final class CircuitsRenderer {
     private func terminalWorld(_ terminal: CircuitsModel.Terminal, _ model: CircuitsModel) -> SIMD3<Float>? {
         guard let component = model.components.first(where: { $0.id == terminal.componentID })
         else { return nil }
-        // While a component is being carried, follow the live entity so
-        // wires stay attached to the hand-held part.
+        // While a component is being carried, follow its actual terminal
+        // entity — it rides the hand-held holder, twist and all.
         if terminal.componentID == manipulatingComponentID,
-           let visual = visuals[terminal.componentID] {
-            let half = terminal.end == 0 ? -component.terminalHalfSpan
-                                         : component.terminalHalfSpan
-            return visual.body.position(relativeTo: root)
-                + SIMD3<Float>(component.axis * half)
+           let visual = visuals[terminal.componentID],
+           visual.terminals.count == 2 {
+            return visual.terminals[terminal.end].position(relativeTo: root)
         }
         return SIMD3<Float>(component.terminalPosition(terminal.end))
     }
@@ -638,30 +649,51 @@ final class CircuitsRenderer {
             guard let entity = wireEntities[wire.id], entity.isEnabled,
                   let a = terminalWorld(wire.from, model),
                   let b = terminalWorld(wire.to, model) else { continue }
-            let current = model.wireFlows[wire.id] ?? 0
-            guard abs(current) > 5e-4 else { continue }
-
-            let length = Double(simd_distance(a, b))
-            let dots = min(max(Int(length / 0.06), 2), 7)
-            // Electrons drift against conventional current.
-            let speed = min(0.03 + 0.5 * abs(current), 0.35) * (current > 0 ? -1 : 1)
-            if !model.isPaused {
-                wirePhases[wire.id] = ((wirePhases[wire.id] ?? 0)
-                    + speed / max(length, 0.05) / 90).truncatingRemainder(dividingBy: 1)
-            }
-            let phase = wirePhases[wire.id] ?? 0
-
-            for dot in 0..<dots where dotIndex < electronPool.budget {
-                var t = (phase + Double(dot) / Double(dots)).truncatingRemainder(dividingBy: 1)
-                if t < 0 { t += 1 }
-                let slot = electronPool.slots[dotIndex]
-                slot.entity.isEnabled = true
-                slot.entity.position = a + (b - a) * Float(t)
-                dotIndex += 1
-            }
+            driftDots(key: wire.id, from: a, to: b,
+                      current: model.wireFlows[wire.id] ?? 0,
+                      model: model, dotIndex: &dotIndex)
+        }
+        // Wire jumper components conduct too — the same drift runs along
+        // their rods (keyed by component id; ids never collide with wires).
+        for component in model.components where component.kind == .wire {
+            guard let a = terminalWorld(.init(componentID: component.id, end: 0), model),
+                  let b = terminalWorld(.init(componentID: component.id, end: 1), model)
+            else { continue }
+            driftDots(key: component.id, from: a, to: b,
+                      current: model.readouts[component.id]?.amps ?? 0,
+                      model: model, dotIndex: &dotIndex)
         }
         for index in dotIndex..<electronPool.budget {
             electronPool.slots[index].entity.isEnabled = false
+        }
+    }
+
+    /// Lays a run of drifting electron dots between two points, advancing
+    /// their shared phase by the current's drift speed (− to +, opposite
+    /// the conventional arrow).
+    private func driftDots(
+        key: UUID, from a: SIMD3<Float>, to b: SIMD3<Float>,
+        current: Double, model: CircuitsModel, dotIndex: inout Int
+    ) {
+        guard abs(current) > 5e-4 else { return }
+
+        let length = Double(simd_distance(a, b))
+        let dots = min(max(Int(length / 0.06), 2), 7)
+        // Electrons drift against conventional current.
+        let speed = min(0.03 + 0.5 * abs(current), 0.35) * (current > 0 ? -1 : 1)
+        if !model.isPaused {
+            wirePhases[key] = ((wirePhases[key] ?? 0)
+                + speed / max(length, 0.05) / 90).truncatingRemainder(dividingBy: 1)
+        }
+        let phase = wirePhases[key] ?? 0
+
+        for dot in 0..<dots where dotIndex < electronPool.budget {
+            var t = (phase + Double(dot) / Double(dots)).truncatingRemainder(dividingBy: 1)
+            if t < 0 { t += 1 }
+            let slot = electronPool.slots[dotIndex]
+            slot.entity.isEnabled = true
+            slot.entity.position = a + (b - a) * Float(t)
+            dotIndex += 1
         }
     }
 }

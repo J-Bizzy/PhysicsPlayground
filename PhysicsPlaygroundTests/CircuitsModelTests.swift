@@ -205,6 +205,44 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertEqual(simd_distance(pulled.axis, direction), 0, accuracy: 1e-12)
     }
 
+    /// A twist during a carry is adopted on release: setAxis normalizes,
+    /// and rejects a degenerate axis rather than corrupting the part.
+    func testSetAxisNormalizesAndRejectsDegenerate() {
+        let model = CircuitsModel()
+        model.add(.resistor)
+        let id = model.components[0].id
+
+        model.setAxis(id: id, axis: SIMD3(0, 3, 0))
+        XCTAssertEqual(simd_distance(model.components[0].axis, SIMD3(0, 1, 0)), 0,
+                       accuracy: 1e-12)
+
+        model.setAxis(id: id, axis: .zero)
+        XCTAssertEqual(simd_distance(model.components[0].axis, SIMD3(0, 1, 0)), 0,
+                       accuracy: 1e-12, "a zero axis must be ignored")
+    }
+
+    /// Shorting a battery through bare wire trips the overload flag; a
+    /// healthy bulb loop doesn't.
+    func testShortCircuitTripsTheOverloadWarning() {
+        let model = CircuitsModel()
+        model.add(.battery)
+        model.add(.wire)
+        let battery = model.components[0]
+        let wire = model.components[1]
+        model.tapTerminal(.init(componentID: battery.id, end: 1))
+        model.tapTerminal(.init(componentID: wire.id, end: 0))
+        model.tapTerminal(.init(componentID: wire.id, end: 1))
+        model.tapTerminal(.init(componentID: battery.id, end: 0))
+        model.step(dt: 1.0 / 90.0)
+        XCTAssertTrue(model.hasOverloadedBattery,
+                      "9 V through milliohms is a dead short (~150 A)")
+
+        model.reset()
+        _ = buildLoop(on: model)
+        XCTAssertFalse(model.hasOverloadedBattery,
+                       "a bulb loop draws well under an amp")
+    }
+
     /// Pulling an end grip goes through setWireLength: clamped to the
     /// slider's range, and a no-op on anything that isn't a wire.
     func testSetWireLengthClampsAndIgnoresNonWires() {
