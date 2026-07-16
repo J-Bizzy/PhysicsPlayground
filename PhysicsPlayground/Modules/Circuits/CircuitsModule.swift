@@ -19,7 +19,7 @@ enum CircuitsModule {
             blurb: "Build real circuits in mid-air — batteries, bulbs, resistors, capacitors, switches — and watch the electrons actually flow.",
             icon: "powerplug.fill",
             accent: DesignTokens.Palette.circuitsAccent,
-            firstRunHint: "Grab a part off the tray — a copy follows your hand; carry it anywhere. Connect parts by pinching one copper terminal, then another. Pull a wire's orange end grip to change its length, and use the trash button above a selected part to remove it.",
+            firstRunHint: "Grab a part off the tray and carry it by its white center knob. Pull an orange end grip to aim a part anywhere in space — its other end stays pinned, and wires stretch too. Wire parts by pinching one copper terminal, then another; the trash button above a selected part removes it.",
             legend: legend,
             realWorld: CircuitsRealWorld.story,
             isPaused: { appModel.circuitsModel.isPaused },

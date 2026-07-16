@@ -161,6 +161,50 @@ final class CircuitsModelTests: XCTestCase {
                        "resistance is proportional to length")
     }
 
+    /// Pulling an end grip swings the part around its opposite end: the
+    /// pivot end stays exactly where it was, the part re-aims toward the
+    /// hand, and the span is preserved for fixed-size parts.
+    func testDragEndPinsTheOppositeEnd() {
+        let model = CircuitsModel()
+        model.add(.battery)
+        let battery = model.components[0]
+        let pivot = battery.terminalPosition(0)
+
+        // Pull terminal 1's grip straight up from the pivot.
+        model.dragEnd(id: battery.id, grabbedEnd: 1,
+                      pivot: pivot, hand: pivot + SIMD3(0, 0.5, 0))
+
+        let turned = model.components[0]
+        XCTAssertEqual(simd_distance(turned.terminalPosition(0), pivot), 0,
+                       accuracy: 1e-12, "the opposite end must stay pinned")
+        XCTAssertEqual(simd_distance(turned.axis, SIMD3(0, 1, 0)), 0,
+                       accuracy: 1e-12, "the part now points straight up")
+        XCTAssertEqual(
+            simd_distance(turned.terminalPosition(0), turned.terminalPosition(1)),
+            2 * CircuitsModel.terminalOffset, accuracy: 1e-12,
+            "a battery's span must not stretch")
+    }
+
+    /// The same pull on a wire aims it AND takes its length from the
+    /// hand's reach (minus the grip's standoff past the terminal).
+    func testDragEndStretchesAndAimsAWire() {
+        let model = CircuitsModel()
+        model.add(.wire)
+        let wire = model.components[0]
+        let pivot = wire.terminalPosition(0)
+        let direction = simd_normalize(SIMD3(1.0, 1.0, 0))
+
+        model.dragEnd(id: wire.id, grabbedEnd: 1,
+                      pivot: pivot, hand: pivot + direction * 1.0)
+
+        let pulled = model.components[0]
+        XCTAssertEqual(pulled.value, 1.0 - CircuitsModel.endGripOffset,
+                       accuracy: 1e-12, "length = reach minus the grip standoff")
+        XCTAssertEqual(simd_distance(pulled.terminalPosition(0), pivot), 0,
+                       accuracy: 1e-12)
+        XCTAssertEqual(simd_distance(pulled.axis, direction), 0, accuracy: 1e-12)
+    }
+
     /// Pulling an end grip goes through setWireLength: clamped to the
     /// slider's range, and a no-op on anything that isn't a wire.
     func testSetWireLengthClampsAndIgnoresNonWires() {

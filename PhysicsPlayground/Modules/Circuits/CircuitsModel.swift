@@ -78,6 +78,9 @@ final class CircuitsModel {
     /// pulling its end grips.
     nonisolated static let wireLengthRange = 0.1...2.0
 
+    /// How far beyond a terminal its orange end grip sits.
+    nonisolated static let endGripOffset = 0.03
+
     nonisolated static func wireResistance(length: Double) -> Double {
         max(length, 0.01) * wireOhmsPerMeter
     }
@@ -93,6 +96,9 @@ final class CircuitsModel {
         var position: SIMD3<Double>
         /// Volts, ohms, farads — or meters of length for a wire.
         var value: Double
+        /// Unit direction from terminal 0 toward terminal 1. Parts are
+        /// aimed anywhere in space by pulling their end grips.
+        var axis = SIMD3<Double>(1, 0, 0)
         /// Switches only.
         var isClosed = true
         /// Capacitors only: the integrated state.
@@ -106,7 +112,7 @@ final class CircuitsModel {
         }
 
         func terminalPosition(_ end: Int) -> SIMD3<Double> {
-            position + SIMD3(end == 0 ? -terminalHalfSpan : terminalHalfSpan, 0, 0)
+            position + (end == 0 ? -terminalHalfSpan : terminalHalfSpan) * axis
         }
     }
 
@@ -202,6 +208,22 @@ final class CircuitsModel {
               components[index].kind == .wire else { return }
         components[index].value = min(max(length, Self.wireLengthRange.lowerBound),
                                       Self.wireLengthRange.upperBound)
+    }
+
+    /// Swing a part by one of its end grips: the opposite end stays
+    /// pinned at `pivot`, the grabbed end chases the hand, and the part
+    /// re-aims along the line between them. Wires also take their new
+    /// length from the hand's reach.
+    func dragEnd(id: UUID, grabbedEnd: Int, pivot: SIMD3<Double>, hand: SIMD3<Double>) {
+        guard let index = components.firstIndex(where: { $0.id == id }) else { return }
+        var direction = hand - pivot
+        let reach = simd_length(direction)
+        guard reach > 1e-4 else { return }
+        direction /= reach
+        setWireLength(id: id, length: reach - Self.endGripOffset)
+        let halfSpan = components[index].terminalHalfSpan
+        components[index].axis = grabbedEnd == 1 ? direction : -direction
+        components[index].position = clamp(pivot + direction * halfSpan)
     }
 
     func move(id: UUID, to point: SIMD3<Double>) {

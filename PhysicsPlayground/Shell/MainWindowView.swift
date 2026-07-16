@@ -26,6 +26,21 @@ struct MainWindowView: View {
                     let result = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
                     print("openModule debug hook: openImmersiveSpace -> \(result)")
                 }
+                // `-seedCircuits 1` drops a few parts (one wire aimed off-axis)
+                // so component visuals can be screenshot-checked from the CLI.
+                if UserDefaults.standard.bool(forKey: "seedCircuits") {
+                    let circuits = appModel.circuitsModel
+                    if circuits.components.isEmpty {
+                        circuits.add(.battery, at: SIMD3(-0.35, 1.3, -0.9))
+                        circuits.add(.bulb, at: SIMD3(0.35, 1.3, -0.9))
+                        circuits.add(.wire, at: SIMD3(0, 1.5, -0.9))
+                        if let wire = circuits.components.last {
+                            let pivot = wire.terminalPosition(0)
+                            circuits.dragEnd(id: wire.id, grabbedEnd: 1, pivot: pivot,
+                                             hand: pivot + SIMD3(0.35, 0.4, 0.05))
+                        }
+                    }
+                }
                 #endif
             }
     }

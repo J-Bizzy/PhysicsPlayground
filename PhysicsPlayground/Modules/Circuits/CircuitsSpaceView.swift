@@ -100,20 +100,12 @@ struct CircuitsSpaceView: View {
         return CircuitsModel.Terminal(componentID: id, end: name.hasPrefix("s0-") ? 0 : 1)
     }
 
-    /// The wire length implied by a grip pulled to `position`: twice the
-    /// grip's reach from the wire's center, minus the grip's standoff.
-    private func pulledLength(componentID: UUID, gripAt position: SIMD3<Float>) -> Double? {
-        guard let component = model.components.first(where: { $0.id == componentID })
-        else { return nil }
-        let reach = simd_distance(SIMD3<Double>(position), component.position)
-        return 2 * (reach - Double(CircuitsRenderer.wireGripOffset))
-    }
-
-    /// Component bodies (named by UUID) are carried directly. Tray
-    /// templates ("tray-<kind>") spawn a copy on grab-begin; the copy
-    /// follows the hand while the hidden template glides back to its
-    /// slot on release. Wire end grips ("s0-"/"s1-") set the wire's
-    /// length live as they're pulled.
+    /// Component bodies (named by UUID, marked by the white center knob)
+    /// are carried directly. Tray templates ("tray-<kind>") spawn a copy
+    /// on grab-begin; the copy follows the hand while the hidden template
+    /// glides back to its slot on release. End grips ("s0-"/"s1-") swing
+    /// the part around its opposite end — pinned where it was when the
+    /// pull began — and set a wire's length from the hand's reach.
     private func configureRouter(renderer: CircuitsRenderer) {
         router.onBegin = { [weak renderer] name, position in
             guard let renderer else { return }
@@ -127,6 +119,9 @@ struct CircuitsSpaceView: View {
             }
             if let grip = stretchTerminal(from: name) {
                 renderer.stretchingHandle = grip
+                renderer.swingPivot = model.components
+                    .first { $0.id == grip.componentID }?
+                    .terminalPosition(1 - grip.end)
                 model.select(id: grip.componentID)
                 return
             }
@@ -142,9 +137,9 @@ struct CircuitsSpaceView: View {
                 return
             }
             if let grip = stretchTerminal(from: name) {
-                if let length = pulledLength(componentID: grip.componentID, gripAt: position) {
-                    model.setWireLength(id: grip.componentID, length: length)
-                }
+                guard let pivot = renderer?.swingPivot else { return }
+                model.dragEnd(id: grip.componentID, grabbedEnd: grip.end,
+                              pivot: pivot, hand: SIMD3<Double>(position))
                 return
             }
             guard let id = UUID(uuidString: name) else { return }
@@ -161,10 +156,12 @@ struct CircuitsSpaceView: View {
                 return
             }
             if let grip = stretchTerminal(from: name) {
-                if let length = pulledLength(componentID: grip.componentID, gripAt: position) {
-                    model.setWireLength(id: grip.componentID, length: length)
+                if let pivot = renderer.swingPivot {
+                    model.dragEnd(id: grip.componentID, grabbedEnd: grip.end,
+                                  pivot: pivot, hand: SIMD3<Double>(position))
                 }
                 renderer.stretchingHandle = nil
+                renderer.swingPivot = nil
                 return
             }
             guard let id = UUID(uuidString: name) else { return }
