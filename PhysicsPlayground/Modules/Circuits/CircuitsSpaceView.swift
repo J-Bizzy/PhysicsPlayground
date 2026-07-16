@@ -37,12 +37,16 @@ struct CircuitsSpaceView: View {
             configureRouter(renderer: renderer)
             renderer.subscriptions = router.subscriptions(for: content)
             renderer.subscriptions.append(
-                content.subscribe(to: SceneEvents.Update.self) { event in
+                content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.step(dt: event.deltaTime)
+                    // Rendered here every frame (not via the observation
+                    // loop): a steady DC circuit mutates nothing that
+                    // observation reliably re-fires on, but its electrons
+                    // must keep drifting.
+                    renderer?.tick(dt: event.deltaTime, model: model)
                 }
             )
 
-            renderer.startObserving(model)
             self.renderer = renderer
         } attachments: {
             Attachment(id: "quick") {

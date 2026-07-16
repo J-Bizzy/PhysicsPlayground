@@ -81,8 +81,6 @@ final class CircuitsRenderer {
         color: DesignTokens.Palette.copperUI, roughness: 0.35, isMetallic: true)
     private var glowMaterials: [UnlitMaterial] = []
 
-    private let renderLoop = RenderLoop()
-    private var model: CircuitsModel?
 
     init() {
         // Bulb glow brightness buckets (materials made once).
@@ -185,17 +183,19 @@ final class CircuitsRenderer {
         }
     }
 
-    // MARK: Render loop
+    // MARK: Render clock
 
-    func startObserving(_ model: CircuitsModel) {
-        self.model = model
-        renderLoop.start { [weak self, weak model] in
-            guard let self, let model else { return }
-            self.render(model)
-        }
+    /// Per-frame entry, driven straight from SceneEvents.Update: advance
+    /// the electron drift by real elapsed time, then write every
+    /// transform. Direct ticking (the hub/Gravity-field pattern) rather
+    /// than the observation render loop — a steady DC circuit gave
+    /// withObservationTracking nothing it reliably re-fired on, which
+    /// froze the flow animation whenever nothing else was changing.
+    func tick(dt: Double, model: CircuitsModel) {
+        render(model, dt: dt)
     }
 
-    private func render(_ model: CircuitsModel) {
+    private func render(_ model: CircuitsModel, dt: Double) {
         if appliedResistorTextureVersion != CircuitTextures.version {
             appliedResistorTextureVersion = CircuitTextures.version
             for id in visuals.keys { visuals[id]?.resistorCodeKey = "" }
@@ -208,7 +208,7 @@ final class CircuitsRenderer {
 
         syncComponents(model)
         syncWires(model)
-        syncElectrons(model)
+        syncElectrons(model, dt: dt)
 
         if let selected = model.selectedComponent {
             selectedAnchor.isEnabled = true
@@ -634,7 +634,7 @@ final class CircuitsRenderer {
 
     // MARK: Electron flow (drift is − to +: opposite conventional current)
 
-    private func syncElectrons(_ model: CircuitsModel) {
+    private func syncElectrons(_ model: CircuitsModel, dt: Double) {
         guard model.showElectronFlow else {
             if electronsVisible {
                 electronPool.hideAll()
@@ -651,7 +651,7 @@ final class CircuitsRenderer {
                   let b = terminalWorld(wire.to, model) else { continue }
             driftDots(key: wire.id, from: a, to: b,
                       current: model.wireFlows[wire.id] ?? 0,
-                      model: model, dotIndex: &dotIndex)
+                      model: model, dt: dt, dotIndex: &dotIndex)
         }
         // Wire jumper components conduct too — the same drift runs along
         // their rods (keyed by component id; ids never collide with wires).
@@ -661,7 +661,7 @@ final class CircuitsRenderer {
             else { continue }
             driftDots(key: component.id, from: a, to: b,
                       current: model.readouts[component.id]?.amps ?? 0,
-                      model: model, dotIndex: &dotIndex)
+                      model: model, dt: dt, dotIndex: &dotIndex)
         }
         for index in dotIndex..<electronPool.budget {
             electronPool.slots[index].entity.isEnabled = false
@@ -670,10 +670,10 @@ final class CircuitsRenderer {
 
     /// Lays a run of drifting electron dots between two points, advancing
     /// their shared phase by the current's drift speed (− to +, opposite
-    /// the conventional arrow).
+    /// the conventional arrow) over the real elapsed time.
     private func driftDots(
         key: UUID, from a: SIMD3<Float>, to b: SIMD3<Float>,
-        current: Double, model: CircuitsModel, dotIndex: inout Int
+        current: Double, model: CircuitsModel, dt: Double, dotIndex: inout Int
     ) {
         guard abs(current) > 5e-4 else { return }
 
@@ -683,7 +683,7 @@ final class CircuitsRenderer {
         let speed = min(0.03 + 0.5 * abs(current), 0.35) * (current > 0 ? -1 : 1)
         if !model.isPaused {
             wirePhases[key] = ((wirePhases[key] ?? 0)
-                + speed / max(length, 0.05) / 90).truncatingRemainder(dividingBy: 1)
+                + speed / max(length, 0.05) * dt).truncatingRemainder(dividingBy: 1)
         }
         let phase = wirePhases[key] ?? 0
 
