@@ -70,7 +70,12 @@ final class SpringsModel {
 
     // MARK: Derived readouts (single mode)
 
-    var biasForce: Double { gravityOn ? -9.81 * mass : 0 }
+    /// Hanging: gravity is inherent (+mg, down-positive). Horizontal:
+    /// the gravity toggle tips it onto the rail.
+    var biasForce: Double {
+        if orientation == .vertical { return 9.81 * mass }
+        return gravityOn ? -9.81 * mass : 0
+    }
     var equilibriumOffset: Double { biasForce / stiffness }
 
     var period: Double { SpringOscillator.period(stiffness: stiffness, mass: mass) }
@@ -85,10 +90,48 @@ final class SpringsModel {
         state.energies(stiffness: stiffness, mass: mass)
     }
 
-    /// Block center in world space (single mode): the left support
-    /// anchors the spring; the block rides at rest length + x.
+    // MARK: Orientation
+
+    enum Orientation: String { case horizontal, vertical }
+    private(set) var orientation: Orientation = .horizontal
+
+    /// Unit vector along increasing displacement: +X on the rail, or
+    /// straight DOWN when the spring hangs (down-positive stretch).
+    var axisDirection: SIMD3<Double> {
+        orientation == .horizontal ? SIMD3(1, 0, 0) : SIMD3(0, -1, 0)
+    }
+
+    /// Where the spring's fixed end anchors: the left support, or the
+    /// overhead plate when hanging.
+    var anchorWorld: SIMD3<Double> {
+        orientation == .horizontal
+            ? Self.center + SIMD3(-Self.railHalfLength, 0, 0)
+            : Self.center + SIMD3(0, 0.55, 0)
+    }
+
+    /// The static hanging sag: mg/k below natural length.
+    var equilibriumSag: Double { 9.81 * mass / stiffness }
+
+    func setOrientation(_ newOrientation: Orientation) {
+        guard orientation != newOrientation else { return }
+        orientation = newOrientation
+        grabbedBlock = nil
+        if newOrientation == .vertical {
+            // Coupled mode is a horizontal exhibit; hang a single spring.
+            mode = .single
+            state = SpringOscillator(displacement: equilibriumSag + 0.1)
+            insightText = "Hanging the spring adds a constant mg pulling down — the block sags to a new equilibrium mg/k below the natural length, and the oscillation is IDENTICAL around that point: same period, same frequency. Gravity shifts the center, not the physics."
+        } else {
+            state = SpringOscillator(displacement: 0.12)
+            insightText = ""
+        }
+        clearHistory()
+    }
+
+    /// Block center in world space (single mode): anchored end plus
+    /// rest length plus displacement, along the current axis.
     var blockWorld: SIMD3<Double> {
-        Self.center + SIMD3(-Self.railHalfLength + restLength + state.displacement, 0, 0)
+        anchorWorld + axisDirection * (restLength + state.displacement)
     }
 
     func coupledBlockWorld(_ index: Int) -> SIMD3<Double> {
@@ -125,6 +168,7 @@ final class SpringsModel {
         guard mode != newMode else { return }
         mode = newMode
         grabbedBlock = nil
+        if newMode == .coupled { orientation = .horizontal }
         if newMode == .coupled {
             coupled = CoupledSprings(displacements: SIMD2(0.18, 0))
             insight(.coupled)
@@ -143,14 +187,16 @@ final class SpringsModel {
         grabbedBlock = block
     }
 
-    func moveGrabbed(toWorldX x: Double) {
+    func moveGrabbed(toWorld world: SIMD3<Double>) {
         guard let grabbedBlock else { return }
         switch mode {
         case .single:
-            let anchor = Self.center.x - Self.railHalfLength + restLength
-            let displacement = min(max(x - anchor, -maxExtension), maxExtension)
+            // Project the hand onto the motion axis.
+            let along = simd_dot(world - anchorWorld, axisDirection)
+            let displacement = min(max(along - restLength, -maxExtension), maxExtension)
             state = SpringOscillator(displacement: displacement, velocity: 0)
         case .coupled:
+            let x = world.x
             let rest = Self.center.x + Self.railHalfLength / 3 * (grabbedBlock == 0 ? -1 : 1)
             let displacement = min(max(x - rest, -maxExtension), maxExtension)
             if grabbedBlock == 0 {

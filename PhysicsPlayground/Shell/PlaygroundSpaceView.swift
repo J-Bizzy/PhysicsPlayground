@@ -9,6 +9,7 @@
 //  switch, while module *models* live on in AppModel.
 //
 
+import RealityKit
 import SwiftUI
 
 struct PlaygroundSpaceView: View {
@@ -25,6 +26,10 @@ struct PlaygroundSpaceView: View {
                     // The shared orb controls (pause / back) every module gets.
                     ModuleOrbControlsView(module: module)
                         .id("orbs-\(module.id)")
+                    // Quiet lab room tone under every module (not the hub);
+                    // no per-module id, so it runs seamlessly across switches.
+                    AmbientLabAudioView()
+                        .id("ambient")
                 }
             } else {
                 HubSpaceView()
@@ -33,5 +38,32 @@ struct PlaygroundSpaceView: View {
         }
         .onAppear { appModel.isImmersiveSpaceOpen = true }
         .onDisappear { appModel.isImmersiveSpaceOpen = false }
+    }
+}
+
+/// An invisible emitter looping the synthesized laboratory ambience.
+private struct AmbientLabAudioView: View {
+    @State private var controller: AudioPlaybackController?
+
+    var body: some View {
+        RealityView { content in
+            let emitter = Entity()
+            emitter.position = [0, 1.7, -1.0]
+            content.add(emitter)
+            Task { @MainActor in
+                // warmUp synthesizes off-launch; retry briefly until ready.
+                for _ in 0..<40 where controller == nil {
+                    if let started = SoundPalette.startAmbient(on: emitter) {
+                        controller = started
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
+            }
+        }
+        .onDisappear {
+            controller?.stop()
+            controller = nil
+        }
     }
 }

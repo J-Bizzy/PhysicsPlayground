@@ -19,7 +19,7 @@ struct SpringsSpaceView: View {
     @Environment(SpringsModel.self) private var model
     @State private var renderer: SpringsRenderer?
     @State private var router = ManipulationRouter()
-    @State private var handSamples: [(time: Double, x: Double)] = []
+    @State private var handSamples: [(time: Double, position: SIMD3<Double>)] = []
 
     var body: some View {
         RealityView { content, attachments in
@@ -71,22 +71,25 @@ struct SpringsSpaceView: View {
             guard let index = blockIndex(from: name) else { return }
             renderer?.grabbedBlock = index
             model.beginGrab(block: index)
-            handSamples = [(Date.timeIntervalSinceReferenceDate, Double(position.x))]
+            handSamples = [(Date.timeIntervalSinceReferenceDate, SIMD3<Double>(position))]
         }
         router.onMove = { name, position in
             guard blockIndex(from: name) != nil else { return }
-            model.moveGrabbed(toWorldX: Double(position.x))
+            model.moveGrabbed(toWorld: SIMD3<Double>(position))
             let now = Date.timeIntervalSinceReferenceDate
-            handSamples.append((now, Double(position.x)))
+            handSamples.append((now, SIMD3<Double>(position)))
             handSamples.removeAll { now - $0.time > 0.14 }
         }
         router.onEnd = { [weak renderer] name, position in
             guard blockIndex(from: name) != nil else { return }
-            model.moveGrabbed(toWorldX: Double(position.x))
+            let world = SIMD3<Double>(position)
+            model.moveGrabbed(toWorld: world)
+            // Release speed along the motion axis only.
             var velocity = 0.0
             let now = Date.timeIntervalSinceReferenceDate
             if let oldest = handSamples.first, now - oldest.time > 0.02 {
-                velocity = (Double(position.x) - oldest.x) / (now - oldest.time)
+                let handVelocity = (world - oldest.position) / (now - oldest.time)
+                velocity = simd_dot(handVelocity, model.axisDirection)
             }
             model.release(handVelocityX: velocity)
             renderer?.grabbedBlock = nil
@@ -114,6 +117,25 @@ struct SpringsQuickPanel: View {
                 Button("Coupled ×2") { model.setMode(.coupled) }
                     .buttonStyle(.bordered)
                     .tint(model.mode == .coupled ? .teal : nil)
+            }
+            .font(DesignTokens.TypeScale.footnote)
+
+            HStack(spacing: 8) {
+                Button {
+                    model.setOrientation(.horizontal)
+                } label: {
+                    Label("Rail", systemImage: "arrow.left.and.right")
+                }
+                .buttonStyle(.bordered)
+                .tint(model.orientation == .horizontal ? .teal : nil)
+                Button {
+                    model.setOrientation(.vertical)
+                } label: {
+                    Label("Hanging", systemImage: "arrow.down")
+                }
+                .buttonStyle(.bordered)
+                .tint(model.orientation == .vertical ? .teal : nil)
+                .disabled(model.mode == .coupled)
             }
             .font(DesignTokens.TypeScale.footnote)
 
@@ -156,8 +178,14 @@ struct SpringsQuickPanel: View {
                    SpringsModel.stiffnessRange, "%.0f N/m")
             slider("Mass", $model.mass, SpringsModel.massRange, "%.1f kg")
             slider("Damping", $model.damping, SpringsModel.dampingRange, "%.2f N·s/m")
-            Toggle("Gravity along the rail", isOn: $model.gravityOn)
-                .font(DesignTokens.TypeScale.footnote)
+            if model.orientation == .horizontal {
+                Toggle("Gravity along the rail", isOn: $model.gravityOn)
+                    .font(DesignTokens.TypeScale.footnote)
+            } else {
+                Text("Hanging: equilibrium sags mg/k = \(String(format: "%.1f", model.equilibriumSag * 100)) cm")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            }
 
             if !model.insightText.isEmpty {
                 Text(model.insightText)

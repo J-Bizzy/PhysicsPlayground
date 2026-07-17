@@ -140,8 +140,34 @@ final class HubScene {
 
     // MARK: Vignettes (miniatures of each experience)
 
+    /// Blender-authored exhibit models, scaled so each reads ~0.12 m
+    /// before the shared vignette scale. Reuses in-module assets where
+    /// one already stars in its module.
+    private static let vignetteAssets: [String: (asset: String, scale: Float)] = [
+        "electrostatics": ("HubDipole", 1.0),
+        "kinematics": ("LauncherBarrel", 0.4),
+        "gravitylab": ("HubOrbit", 1.0),
+        "waves": ("WaveSpeaker", 1.7),
+        "windtunnel": ("TunnelFan", 0.2),
+        "circuits": ("CircuitBulb", 1.3),
+        "pendulums": ("HubPendulum", 1.0),
+        "springs": ("HubSpring", 1.0),
+    ]
+
     private static func vignette(for module: ModuleDescriptor) -> Entity {
         let vignette = Entity()
+        // A detailed model when one exists; procedural sketches as the
+        // always-working fallback.
+        if let entry = vignetteAssets[module.id],
+           let loaded = try? Entity.load(named: entry.asset) {
+            loaded.scale = SIMD3(repeating: entry.scale)
+            // Center the launcher barrel (authored base-at-origin).
+            if entry.asset == "LauncherBarrel" {
+                loaded.position = [0, -0.06, 0]
+            }
+            vignette.addChild(loaded)
+            return vignette
+        }
         switch module.id {
         case "electrostatics": buildFieldVignette(in: vignette)
         case "kinematics": buildProjectileVignette(in: vignette)

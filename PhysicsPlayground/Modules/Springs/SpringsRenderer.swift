@@ -40,6 +40,7 @@ final class SpringsRenderer {
 
     private var blocks: [ModelEntity] = []
     private var springs: [ModelEntity] = []
+    private var supports: [ModelEntity] = []
     private let rail: ModelEntity
     private let velocityArrow = PendulumsRenderer.Arrow(
         color: UIColor(red: 0.25, green: 0.55, blue: 1, alpha: 1))
@@ -86,6 +87,7 @@ final class SpringsRenderer {
             let support = ModelEntity(mesh: supportMesh, materials: [aluminumMaterial])
             support.position = SIMD3<Float>(
                 SpringsModel.center + SIMD3(side * SpringsModel.railHalfLength, 0, 0))
+            supports.append(support)
             root.addChild(support)
         }
         rail = ModelEntity(
@@ -187,7 +189,9 @@ final class SpringsRenderer {
 
         let blockWorld = model.mode == .single
             ? model.blockWorld : model.coupledBlockWorld(0)
-        infoAnchor.position = SIMD3<Float>(blockWorld) + SIMD3(0, 0.14, 0)
+        let cardOffset: SIMD3<Float> = model.orientation == .vertical
+            ? [0.2, 0, 0] : [0, 0.14, 0]
+        infoAnchor.position = SIMD3<Float>(blockWorld) + cardOffset
     }
 
     /// Aim a helix spring between two world points.
@@ -208,6 +212,23 @@ final class SpringsRenderer {
         let leftAnchor = SpringsModel.center + SIMD3(-SpringsModel.railHalfLength, 0, 0)
         let rightAnchor = SpringsModel.center + SIMD3(SpringsModel.railHalfLength, 0, 0)
 
+        // Rig the supports and rail for the current orientation.
+        let vertical = model.orientation == .vertical
+        if vertical {
+            supports[0].position = SIMD3<Float>(model.anchorWorld + SIMD3(0, 0.02, 0))
+            supports[0].orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            supports[1].isEnabled = false
+            rail.orientation = .init(angle: 0, axis: [0, 1, 0])
+            rail.position = SIMD3<Float>(model.anchorWorld + SIMD3(0, -0.55, 0))
+        } else {
+            supports[0].position = SIMD3<Float>(
+                SpringsModel.center + SIMD3(-SpringsModel.railHalfLength, 0, 0))
+            supports[0].orientation = .init(angle: 0, axis: [0, 1, 0])
+            supports[1].isEnabled = true
+            rail.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            rail.position = SIMD3<Float>(SpringsModel.center)
+        }
+
         switch model.mode {
         case .single:
             blocks[1].isEnabled = false
@@ -221,8 +242,8 @@ final class SpringsRenderer {
                 blockWorld = model.blockWorld
                 blocks[0].position = SIMD3<Float>(blockWorld)
             }
-            layoutSpring(springs[0], from: leftAnchor,
-                         to: blockWorld - SIMD3(0.045, 0, 0))
+            layoutSpring(springs[0], from: model.anchorWorld,
+                         to: blockWorld - model.axisDirection * 0.045)
         case .coupled:
             for index in 0..<2 {
                 blocks[index].isEnabled = true
@@ -239,26 +260,29 @@ final class SpringsRenderer {
     }
 
     private func syncArrowsAndEnergy(_ model: SpringsModel) {
+        let vertical = model.orientation == .vertical
+        let perpendicular: SIMD3<Float> = vertical ? [0.09, 0, 0] : [0, 0.07, 0]
         let origin = SIMD3<Float>(model.mode == .single
                                   ? model.blockWorld : model.coupledBlockWorld(0))
-            + SIMD3(0, 0.07, 0)
+            + perpendicular
+        let axis = model.axisDirection
 
         let velocity = model.mode == .single
             ? model.state.velocity : model.coupled.velocities.x
         velocityArrow.holder.isEnabled = model.showVelocity
         if model.showVelocity {
             velocityArrow.update(origin: origin,
-                                 vector: SIMD3(velocity, 0, 0), reference: 0.4)
+                                 vector: axis * velocity, reference: 0.4)
         }
         accelerationArrow.holder.isEnabled = model.showAcceleration
         if model.showAcceleration {
-            accelerationArrow.update(origin: origin + SIMD3(0, 0.05, 0),
-                                     vector: SIMD3(model.acceleration, 0, 0), reference: 3)
+            accelerationArrow.update(origin: origin + perpendicular * 0.7,
+                                     vector: axis * model.acceleration, reference: 3)
         }
         forceArrow.holder.isEnabled = model.showForce
         if model.showForce {
-            forceArrow.update(origin: origin + SIMD3(0, 0.1, 0),
-                              vector: SIMD3(model.springForce, 0, 0), reference: 4)
+            forceArrow.update(origin: origin + perpendicular * 1.4,
+                              vector: axis * model.springForce, reference: 4)
         }
 
         guard model.showEnergyBars else {
@@ -294,13 +318,11 @@ final class SpringsRenderer {
         }
         // Turning points a release right now would reach.
         let amplitude = model.predictedAmplitude()
-        let anchorX = SpringsModel.center.x - SpringsModel.railHalfLength + model.restLength
+        let anchor = model.anchorWorld + model.axisDirection * model.restLength
         ghostA.isEnabled = true
         ghostB.isEnabled = true
-        ghostA.position = SIMD3<Float>(SIMD3(anchorX + amplitude,
-                                             SpringsModel.center.y, SpringsModel.center.z))
-        ghostB.position = SIMD3<Float>(SIMD3(anchorX - amplitude,
-                                             SpringsModel.center.y, SpringsModel.center.z))
+        ghostA.position = SIMD3<Float>(anchor + model.axisDirection * amplitude)
+        ghostB.position = SIMD3<Float>(anchor - model.axisDirection * amplitude)
     }
 
     private func syncGraph(_ model: SpringsModel) {

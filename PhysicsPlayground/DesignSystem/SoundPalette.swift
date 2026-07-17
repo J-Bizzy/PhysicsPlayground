@@ -50,7 +50,57 @@ enum SoundPalette {
                     resources[sound] = resource
                 }
             }
+            if let url = try? writeAmbientIfNeeded() {
+                ambientResource = try? await AudioFileResource(
+                    contentsOf: url,
+                    configuration: .init(shouldLoop: true))
+            }
         }
+    }
+
+    // MARK: Ambient laboratory room tone
+
+    private static var ambientResource: AudioFileResource?
+
+    /// Starts the looping lab ambience on `entity` (very quiet: a deep
+    /// air-handler rumble, a faint equipment hum, a whisper of hiss).
+    /// Returns nil until warmUp's synthesis has finished.
+    static func startAmbient(on entity: Entity, gainDecibels: Double = -22) -> AudioPlaybackController? {
+        guard let ambientResource else { return nil }
+        entity.components.set(SpatialAudioComponent(gain: Audio.Decibel(gainDecibels)))
+        return entity.playAudio(ambientResource)
+    }
+
+    private static func writeAmbientIfNeeded() throws -> URL {
+        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("PhysicsPlaygroundSounds", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("ambient-lab.wav")
+        if !FileManager.default.fileExists(atPath: url.path) {
+            try wavData(samples: synthesizeAmbient()).write(to: url)
+        }
+        return url
+    }
+
+    /// A 6-second seamless loop: brown-ish rumble + 100/200 Hz hum with
+    /// a slow breath + faint hiss, ends crossfaded so the seam vanishes.
+    private static func synthesizeAmbient() -> [Float] {
+        var lowPassed = 0.0
+        var samples = render(duration: 6.0) { t, _ in
+            let noise = Double.random(in: -1...1)
+            lowPassed += 0.02 * (noise - lowPassed)
+            let hum = 0.20 * sin(2 * .pi * 100 * t) + 0.08 * sin(2 * .pi * 200 * t)
+            let breath = 1 + 0.08 * sin(2 * .pi * t / 3)
+            let hiss = 0.05 * Double.random(in: -1...1)
+            return lowPassed * 2.4 * breath + hum + hiss
+        }
+        let fade = Int(0.5 * sampleRate)
+        for index in 0..<fade {
+            let mix = Float(index) / Float(fade)
+            let tail = samples[samples.count - fade + index]
+            samples[index] = tail * (1 - mix) + samples[index] * mix
+        }
+        return samples
     }
 
     /// Plays `sound` spatially from `entity` (which should already sit at
