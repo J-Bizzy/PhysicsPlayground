@@ -45,7 +45,6 @@ struct WindTunnelSpaceView: View {
                 }
             )
 
-            renderer.startObserving(model)
             self.renderer = renderer
         } attachments: {
             Attachment(id: "quick") {

@@ -76,7 +76,6 @@ final class SpringsModel {
         if orientation == .vertical { return 9.81 * mass }
         return gravityOn ? -9.81 * mass : 0
     }
-    var equilibriumOffset: Double { biasForce / stiffness }
 
     var period: Double { SpringOscillator.period(stiffness: stiffness, mass: mass) }
     var frequency: Double { 1 / period }

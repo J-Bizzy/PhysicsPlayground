@@ -50,6 +50,12 @@ public struct CelestialBody: Equatable, Sendable {
         name: "Mars", mass: 6.417e23, radius: 3.3895e6)
     public static let jupiter = CelestialBody(
         name: "Jupiter", mass: 1.898e27, radius: 6.9911e7)
+    public static let saturn = CelestialBody(
+        name: "Saturn", mass: 5.683e26, radius: 5.8232e7)
+    public static let uranus = CelestialBody(
+        name: "Uranus", mass: 8.681e25, radius: 2.5362e7)
+    public static let neptune = CelestialBody(
+        name: "Neptune", mass: 1.024e26, radius: 2.4622e7)
     /// Ceres, standing in for every asteroid.
     public static let asteroid = CelestialBody(
         name: "Asteroid", mass: 9.38e20, radius: 4.73e5)
@@ -62,6 +68,9 @@ public struct CelestialBody: Equatable, Sendable {
         case "Earth": 1.0
         case "Mars": 1.524
         case "Jupiter": 5.204
+        case "Saturn": 9.537
+        case "Uranus": 19.19
+        case "Neptune": 30.07
         case "Asteroid": 2.77
         default: nil
         }

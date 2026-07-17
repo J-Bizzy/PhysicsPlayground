@@ -218,60 +218,10 @@ final class GravityLabRenderer {
             systemRoot.addChild(marker)
         }
 
-        // No starfield sky: the lab lives in the user's real room via
-        // passthrough (Jackson: "get rid of the dark background"). The
-        // sky builder below is kept for a possible opt-in later.
     }
 
     private var lagrangeMarkers: [ModelEntity] = []
 
-    // MARK: Starfield
-
-    private func installSky() async {
-        guard let image = Self.starfieldImage(width: 1536, height: 768, starCount: 1200) else { return }
-        guard let texture = try? await TextureResource(
-            image: image, options: .init(semantic: .color)) else { return }
-        var material = UnlitMaterial()
-        material.color = .init(texture: .init(texture))
-        let sky = ModelEntity(mesh: .generateSphere(radius: 24), materials: [material])
-        // Negative scale turns the sphere inside out so we see its interior.
-        sky.scale = SIMD3(-1, 1, 1)
-        sky.position = [0, 1.4, 0]
-        root.addChild(sky)
-    }
-
-    /// A quiet star map: mostly faint points, a few bright ones, the
-    /// subtlest cool/warm tint variation. No nebulas, no noise — calm.
-    private static func starfieldImage(width: Int, height: Int, starCount: Int) -> CGImage? {
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let context = CGContext(
-            data: nil, width: width, height: height,
-            bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return nil }
-
-        context.setFillColor(CGColor(red: 0.01, green: 0.01, blue: 0.03, alpha: 1))
-        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-
-        var generator = SystemRandomNumberGenerator()
-        for _ in 0..<starCount {
-            let x = Double.random(in: 0..<Double(width), using: &generator)
-            let y = Double.random(in: 0..<Double(height), using: &generator)
-            // Brightness heavily skewed toward faint stars.
-            let magnitude = pow(Double.random(in: 0...1, using: &generator), 3)
-            let radius = 0.5 + magnitude * 1.6
-            let warm = Double.random(in: -0.06...0.06, using: &generator)
-            context.setFillColor(CGColor(
-                red: min(1, 0.75 + magnitude * 0.25 + warm),
-                green: 0.78 + magnitude * 0.22,
-                blue: min(1, 0.82 + magnitude * 0.18 - warm),
-                alpha: 0.35 + magnitude * 0.65
-            ))
-            context.fillEllipse(in: CGRect(
-                x: x - radius, y: y - radius, width: radius * 2, height: radius * 2))
-        }
-        return context.makeImage()
-    }
 
     private static func makeArrow(color: UIColor) -> Arrow {
         let material = UnlitMaterial(color: color)

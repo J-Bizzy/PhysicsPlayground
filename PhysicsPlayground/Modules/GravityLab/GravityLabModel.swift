@@ -179,7 +179,7 @@ final class GravityLabModel {
     // MARK: Spawning
 
     enum Preset: String, CaseIterable, Identifiable {
-        case mercury, venus, earth, mars, jupiter, moon, asteroid
+        case mercury, venus, earth, mars, jupiter, saturn, uranus, neptune, moon, asteroid
         var id: String { rawValue }
         var displayName: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
     }
@@ -210,6 +210,9 @@ final class GravityLabModel {
             case .earth: .earth
             case .mars: .mars
             case .jupiter: .jupiter
+            case .saturn: .saturn
+            case .uranus: .uranus
+            case .neptune: .neptune
             case .asteroid: .asteroid
             case .moon: .moon
             }
@@ -246,6 +249,8 @@ final class GravityLabModel {
         switch body.name {
         case "Sun": 0.075
         case "Jupiter": 0.042
+        case "Saturn": 0.036
+        case "Uranus", "Neptune": 0.024
         case "Earth", "Venus": 0.018
         case "Mars": 0.014
         case "Mercury": 0.011
@@ -609,9 +614,18 @@ final class GravityLabModel {
         customMassExponent = 24.0
         customSpeedFactor = 1.0
 
+        // The whole solar system, live from the start: every planet on
+        // its true circular orbit (real masses, real AU distances at
+        // 1 AU = 0.5 m — Neptune really is 15 m away; walk toward it).
         append(.sun, displayRadius: Self.displayRadius(for: .sun))
-        append(CelestialBody.earth.onCircularOrbit(
-            of: .sun, distance: CelestialBody.astronomicalUnit),
-            displayRadius: Self.displayRadius(for: .earth))
+        let planets: [CelestialBody] = [.mercury, .venus, .earth, .mars,
+                                        .jupiter, .saturn, .uranus, .neptune]
+        for planet in planets {
+            let distance = (CelestialBody.meanOrbitAU(of: planet.name) ?? 1)
+                * CelestialBody.astronomicalUnit
+            append(planet.onCircularOrbit(of: .sun, distance: distance),
+                   displayRadius: Self.displayRadius(for: planet))
+        }
+        selectedID = bodies.first(where: { $0.body.name == "Earth" })?.id
     }
 }

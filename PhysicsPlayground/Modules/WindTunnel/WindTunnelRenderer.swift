@@ -88,8 +88,6 @@ final class WindTunnelRenderer {
     /// The frontal radius the USDZ bodies were authored at.
     private static let authoredBodyRadius = 0.06
 
-    private let renderLoop = RenderLoop()
-    private var model: WindTunnelModel?
     private var frameCounter = 0
 
     private struct FlowInputs: Equatable {
@@ -301,15 +299,6 @@ final class WindTunnelRenderer {
         )
     }
 
-    // MARK: Render loop
-
-    func startObserving(_ model: WindTunnelModel) {
-        self.model = model
-        renderLoop.start { [weak self, weak model] in
-            guard let self, let model else { return }
-            self.render(model)
-        }
-    }
 
     /// World point → plane coordinates (meters from the section center).
     func planePoint(fromWorld world: SIMD3<Float>) -> SIMD2<Double> {

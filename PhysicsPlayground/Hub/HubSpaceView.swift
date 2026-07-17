@@ -140,31 +140,34 @@ final class HubScene {
 
     // MARK: Vignettes (miniatures of each experience)
 
-    /// Blender-authored exhibit models, scaled so each reads ~0.12 m
-    /// before the shared vignette scale. Reuses in-module assets where
-    /// one already stars in its module.
-    private static let vignetteAssets: [String: (asset: String, scale: Float)] = [
-        "electrostatics": ("HubDipole", 1.0),
-        "kinematics": ("LauncherBarrel", 0.4),
-        "gravitylab": ("HubOrbit", 1.0),
-        "waves": ("WaveSpeaker", 1.7),
-        "windtunnel": ("TunnelFan", 0.2),
-        "circuits": ("CircuitBulb", 1.3),
-        "pendulums": ("HubPendulum", 1.0),
-        "springs": ("HubSpring", 1.0),
+    /// Blender-authored exhibit models. Each is auto-normalized from its
+    /// real bounds — centered on its middle and sized to a shared
+    /// footprint — so every exhibit sits dead-center on its ring slot.
+    private static let vignetteAssets: [String: String] = [
+        "electrostatics": "HubDipole",
+        "kinematics": "LauncherBarrel",
+        "gravitylab": "HubOrbit",
+        "waves": "WaveSpeaker",
+        "windtunnel": "TunnelFan",
+        "circuits": "CircuitBulb",
+        "pendulums": "HubPendulum",
+        "springs": "HubSpring",
     ]
+    /// Apparent exhibit size before the shared vignette scale.
+    private static let vignetteTargetSize: Float = 0.13
 
     private static func vignette(for module: ModuleDescriptor) -> Entity {
         let vignette = Entity()
         // A detailed model when one exists; procedural sketches as the
         // always-working fallback.
-        if let entry = vignetteAssets[module.id],
-           let loaded = try? Entity.load(named: entry.asset) {
-            loaded.scale = SIMD3(repeating: entry.scale)
-            // Center the launcher barrel (authored base-at-origin).
-            if entry.asset == "LauncherBarrel" {
-                loaded.position = [0, -0.06, 0]
-            }
+        if let asset = vignetteAssets[module.id],
+           let loaded = try? Entity.load(named: asset) {
+            let bounds = loaded.visualBounds(relativeTo: nil)
+            let extents = bounds.extents
+            let largest = max(extents.x, max(extents.y, extents.z), 1e-4)
+            let scale = Self.vignetteTargetSize / largest
+            loaded.scale = SIMD3(repeating: scale)
+            loaded.position = -bounds.center * scale
             vignette.addChild(loaded)
             return vignette
         }

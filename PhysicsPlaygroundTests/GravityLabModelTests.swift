@@ -19,8 +19,14 @@ final class GravityLabModelTests: XCTestCase {
 
     func testOpeningSceneIsSunAndEarthOnRealOrbit() {
         let model = GravityLabModel()
-        XCTAssertEqual(model.bodies.count, 2)
+        // The whole solar system opens live: Sun + 8 planets.
+        XCTAssertEqual(model.bodies.count, 9)
         XCTAssertEqual(model.primaryBody?.body.name, "Sun")
+        for name in ["Mercury", "Venus", "Earth", "Mars",
+                     "Jupiter", "Saturn", "Uranus", "Neptune"] {
+            XCTAssertTrue(model.bodies.contains { $0.body.name == name },
+                          "\(name) missing from the opening system")
+        }
 
         let earth = model.bodies.first { $0.body.name == "Earth" }!
         let readout = try! XCTUnwrap(model.readout(for: earth))
@@ -71,7 +77,6 @@ final class GravityLabModelTests: XCTestCase {
     /// combined mass, momentum conserved.
     func testOverlappingBodiesMergeConservingMomentum() {
         let model = GravityLabModel()
-        model.spawn(.venus)
         let venus = model.bodies.first { $0.body.name == "Venus" }!
         let earth = model.bodies.first { $0.body.name == "Earth" }!
         let expectedMass = venus.body.mass + earth.body.mass
@@ -84,8 +89,10 @@ final class GravityLabModelTests: XCTestCase {
         model.release(id: earth.id, timestamp: 80.1)
         model.step(dt: 1.0 / 90.0)
 
-        XCTAssertEqual(model.bodies.count, 2, "Sun + merged body")
-        let merged = model.bodies.first { $0.body.name != "Sun" }!
+        XCTAssertEqual(model.bodies.count, 8, "nine bodies minus one merger")
+        let merged = try! XCTUnwrap(model.bodies.first {
+            abs($0.body.mass - expectedMass) < expectedMass * 1e-6
+        }, "one body carries the combined Venus+Earth mass")
         XCTAssertEqual(merged.body.mass, expectedMass, accuracy: expectedMass * 1e-9)
         XCTAssertEqual(merged.body.mass * merged.body.velocity.z,
                        expectedMomentum.z,
@@ -191,7 +198,7 @@ final class GravityLabModelTests: XCTestCase {
         model.exitLagrangeMode()
 
         XCTAssertEqual(model.mode, .solarSystem)
-        XCTAssertEqual(model.bodies.count, 2)
+        XCTAssertEqual(model.bodies.count, 9)
         XCTAssertEqual(model.primaryBody?.body.name, "Sun")
         XCTAssertEqual(model.displayToSim,
                        CelestialBody.astronomicalUnit / GravityLabModel.metersPerAU,
@@ -238,7 +245,7 @@ final class GravityLabModelTests: XCTestCase {
 
         model.reset()
 
-        XCTAssertEqual(model.bodies.count, 2)
+        XCTAssertEqual(model.bodies.count, 9)
         XCTAssertEqual(model.timeScale, 1)
         XCTAssertEqual(model.gMultiplier, 1)
         XCTAssertEqual(model.trailLength, .medium)

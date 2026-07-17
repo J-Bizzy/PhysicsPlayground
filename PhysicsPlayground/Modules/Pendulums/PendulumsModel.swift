@@ -82,14 +82,12 @@ final class PendulumsModel {
 
     /// The contextual one-liner shown after a parameter change.
     private(set) var insightText = ""
-    private var insightID = 0
 
     enum InsightTopic {
         case length, mass, gravity, damping
     }
 
     private func insight(_ topic: InsightTopic) {
-        insightID += 1
         switch topic {
         case .length:
             insightText = "Longer cable, longer period: T = 2π√(L/g) — the restoring pull acts over a bigger arc, so each swing takes longer. Mass doesn't appear at all."
@@ -121,7 +119,7 @@ final class PendulumsModel {
             id: UUID(), length: length, mass: mass, damping: 0.02,
             bobRadius: 0.035, cableThickness: 0.002,
             state: SphericalPendulum(length: length, angle: angle),
-            beamOffset: nextBeamOffset())
+            beamOffset: 0)
         pendulums.append(pendulum)
         selectedID = pendulum.id
         relayoutBeam()
@@ -145,11 +143,8 @@ final class PendulumsModel {
         }
         selectedID = pendulums.first?.id
         relayoutBeam()
-        insightID += 1
         insightText = "Five lengths, 4% apart: they leave together, drift out of step, then re-align — the beat period is set by the difference of their frequencies."
     }
-
-    private func nextBeamOffset() -> Double { 0 }
 
     /// Spread pivots evenly along the beam.
     private func relayoutBeam() {
