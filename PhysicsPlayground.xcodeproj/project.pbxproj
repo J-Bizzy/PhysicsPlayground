@@ -249,9 +249,9 @@
 				DEVELOPMENT_TEAM = TL459W44PC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "The Wind Tunnel bends its airflow around your hands and arms.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "The Wind Tunnel bends its airflow around real objects in your room.";
-				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -280,9 +280,9 @@
 				DEVELOPMENT_TEAM = TL459W44PC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "The Wind Tunnel bends its airflow around your hands and arms.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "The Wind Tunnel bends its airflow around real objects in your room.";
-				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

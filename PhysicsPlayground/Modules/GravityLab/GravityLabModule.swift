@@ -20,7 +20,7 @@ enum GravityLabModule {
             blurb: "A real solar system in your room — grab planets, throw them into new orbits, and watch Newton's laws answer instantly.",
             icon: "sun.max.fill",
             accent: DesignTokens.Palette.gravityAccent,
-            immersionStyle: .progressive,
+            immersionStyle: .mixed,
             firstRunHint: "Pinch Earth and drag — the white line shows the orbit you're about to create. Release gently for an ellipse, throw hard to escape the Sun. Turn the crown to dim your room into deep space.",
             legend: legend,
             realWorld: GravityLabRealWorld.story,

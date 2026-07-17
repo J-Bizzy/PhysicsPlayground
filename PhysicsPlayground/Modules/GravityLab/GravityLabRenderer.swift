@@ -218,12 +218,9 @@ final class GravityLabRenderer {
             systemRoot.addChild(marker)
         }
 
-        // The starfield sky: an inward-facing sphere with a procedurally
-        // generated star texture. Visible through the progressive
-        // immersion portal; harmless if the user stays mostly in the room.
-        Task { [weak self] in
-            await self?.installSky()
-        }
+        // No starfield sky: the lab lives in the user's real room via
+        // passthrough (Jackson: "get rid of the dark background"). The
+        // sky builder below is kept for a possible opt-in later.
     }
 
     private var lagrangeMarkers: [ModelEntity] = []

@@ -50,8 +50,20 @@ final class WindTunnelRenderer {
     private let sectionRoot = Entity()
     private let cylinder: ModelEntity
     private let spinMarker: ModelEntity
-    private let streamlineEntity = ModelEntity()
-    private let streamlineMaterial: UnlitMaterial
+    /// One tube entity per speed color — CFD-plot style: red where the
+    /// air stagnates against the body, cyan where it whips around it.
+    private var streamlineBuckets: [ModelEntity] = []
+    private static let streamlineColors: [UIColor] = [
+        UIColor(red: 0.90, green: 0.12, blue: 0.10, alpha: 1),  // stagnant
+        UIColor(red: 0.95, green: 0.55, blue: 0.10, alpha: 1),
+        UIColor(red: 0.95, green: 0.85, blue: 0.20, alpha: 1),
+        UIColor(red: 0.30, green: 0.80, blue: 0.30, alpha: 1),  // free stream
+        UIColor(red: 0.20, green: 0.85, blue: 0.90, alpha: 1),  // accelerated
+    ]
+    /// The industrial fan the wind pours out of — free-floating, its
+    /// blades spun by the wind slider.
+    private var fanEntity: Entity?
+    private var fanBlades: Entity?
     private var stagnationMarkers: [ModelEntity] = []
     private let liftArrowShaft: ModelEntity
     private let liftArrowHead: ModelEntity
@@ -86,6 +98,7 @@ final class WindTunnelRenderer {
         var radius: Double
         var circulation: Double
         var show: Bool
+        var body: DragBody
     }
     private var lastFlowInputs: FlowInputs?
     private var streamlinesDirty = true
@@ -115,11 +128,28 @@ final class WindTunnelRenderer {
         cylinder.addChild(spinMarker)
         sectionRoot.addChild(cylinder)
 
-        // Streamlines.
-        var streamMaterial = UnlitMaterial(color: DesignTokens.Palette.streamlineUI)
-        streamMaterial.blending = .transparent(opacity: 0.6)
-        streamlineMaterial = streamMaterial
-        sectionRoot.addChild(streamlineEntity)
+        // Streamlines: five color buckets, slow→red through fast→cyan.
+        for color in Self.streamlineColors {
+            let entity = ModelEntity()
+            streamlineBuckets.append(entity)
+            sectionRoot.addChild(entity)
+            _ = color  // materials applied at mesh build
+        }
+
+        // The fan at the tunnel mouth: grab it and park it anywhere;
+        // its blades spin with the wind.
+        if let fan = try? Entity.load(named: "TunnelFan") {
+            fan.name = "fan"
+            fan.position = SIMD3(-Float(WindTunnelModel.halfLength) - 0.18, 0, 0)
+            Grabbable.configure(fan, collisionRadius: 0.34)
+            var fanAccessibility = AccessibilityComponent()
+            fanAccessibility.isAccessibilityElement = true
+            fanAccessibility.label = "Wind fan. Its blades spin with the wind speed; carry it anywhere."
+            fan.components.set(fanAccessibility)
+            sectionRoot.addChild(fan)
+            fanEntity = fan
+            fanBlades = fan.findEntity(named: "FanBlades")
+        }
 
         // Stagnation LINES: on a cylinder the air comes to rest along a
         // whole vertical line, not a point — drawn as thin red columns.
@@ -191,8 +221,20 @@ final class WindTunnelRenderer {
     // MARK: Per-frame tick (particles + true-rate spin animation)
 
     func tick(dt: Double, model: WindTunnelModel) {
+        // Rendered here every frame (the observation loop can starve on
+        // an idle scene — the circuits lesson) so streamline rebuilds
+        // and slider edits always land.
+        render(model)
+
         guard !model.isPaused else { return }
         let scaledDt = dt * model.timeScale
+
+        // The fan spins with the wind it's making.
+        if let fanBlades {
+            fanBlades.orientation = simd_quatf(
+                angle: Float(model.windSpeed * 7 * scaledDt), axis: [1, 0, 0])
+                * fanBlades.orientation
+        }
 
         // The cylinder turns at the spin rate its circulation implies.
         let omega = model.circulation
@@ -211,7 +253,7 @@ final class WindTunnelRenderer {
         }
         particlesVisible = true
 
-        let flow = model.flow
+        let flow = model.visualFlow
         let obstacles = model.obstacles
         let sectionCenter = SIMD3<Double>(Self.sectionCenter)
         for index in 0..<Self.particleBudget {
@@ -371,11 +413,23 @@ final class WindTunnelRenderer {
         liftArrowHead.position = [0, length + 0.015, 0]
     }
 
+    /// Local speed ratio → color bucket: red at stagnation, green in the
+    /// free stream, cyan where the body squeezes the air faster.
+    private static func speedBucket(_ ratio: Double) -> Int {
+        switch ratio {
+        case ..<0.40: 0
+        case ..<0.72: 1
+        case ..<0.95: 2
+        case ..<1.08: 3
+        default: 4
+        }
+    }
+
     private func syncStreamlines(_ model: WindTunnelModel) {
         let inputs = FlowInputs(
             speed: model.windSpeed, center: model.cylinderCenter,
             radius: model.cylinderRadius, circulation: model.circulation,
-            show: model.showStreamlines && model.testBody == .cylinder
+            show: model.showStreamlines, body: model.testBody
         )
         if inputs != lastFlowInputs {
             lastFlowInputs = inputs
@@ -384,12 +438,12 @@ final class WindTunnelRenderer {
         guard streamlinesDirty, frameCounter % 3 == 0 else { return }
         streamlinesDirty = false
 
-        guard model.showStreamlines, model.testBody == .cylinder else {
-            streamlineEntity.model = nil
+        guard model.showStreamlines else {
+            for bucket in streamlineBuckets { bucket.model = nil }
             return
         }
 
-        let flow = model.flow
+        let flow = model.visualFlow
         var config = StreamlineTracer.Config()
         config.stepSize = 0.01
         config.maxSteps = 300
@@ -398,9 +452,11 @@ final class WindTunnelRenderer {
         config.stopCenters = [SIMD3(flow.center.x, 0, flow.center.y)]
         config.stopRadius = flow.radius * 1.01
 
-        // Three sheets of streamlines: the extruded field is exact at
-        // every height, and the stack makes the flow read as a volume.
-        var lines: [[SIMD3<Float>]] = []
+        // Three sheets of streamlines, each polyline split into runs by
+        // local speed so the tube warps AND recolors around the body —
+        // blunter bodies carry a bigger effective radius, so their red
+        // stagnant zone grows with their drag.
+        var bucketLines: [[[SIMD3<Float>]]] = Array(repeating: [], count: Self.streamlineColors.count)
         let seedCount = 9
         for sheetHeight: Float in [-0.32, 0, 0.32] {
             for index in 0..<seedCount {
@@ -416,18 +472,37 @@ final class WindTunnelRenderer {
                     },
                     config: config
                 )
-                if line.count > 1 {
-                    lines.append(line.map {
-                        SIMD3(Float($0.x), sheetHeight, Float($0.z))
-                    })
+                guard line.count > 1 else { continue }
+
+                var run: [SIMD3<Float>] = []
+                var runBucket = -1
+                for point in line {
+                    let ratio = flow.speed(at: SIMD2(point.x, point.z))
+                        / max(model.windSpeed, 1e-9)
+                    let bucket = Self.speedBucket(ratio)
+                    let p3 = SIMD3(Float(point.x), sheetHeight, Float(point.z))
+                    if runBucket == -1 { runBucket = bucket }
+                    if bucket == runBucket {
+                        run.append(p3)
+                    } else {
+                        run.append(p3)
+                        if run.count > 1 { bucketLines[runBucket].append(run) }
+                        run = [p3]
+                        runBucket = bucket
+                    }
                 }
+                if run.count > 1 { bucketLines[runBucket].append(run) }
             }
         }
 
-        if let mesh = TubeMesh.tube(lines: lines, radius: 0.0013, sides: 3) {
-            streamlineEntity.model = ModelComponent(mesh: mesh, materials: [streamlineMaterial])
-        } else {
-            streamlineEntity.model = nil
+        for (index, entity) in streamlineBuckets.enumerated() {
+            if let mesh = TubeMesh.tube(lines: bucketLines[index], radius: 0.0016, sides: 3) {
+                var material = UnlitMaterial(color: Self.streamlineColors[index])
+                material.blending = .transparent(opacity: 0.8)
+                entity.model = ModelComponent(mesh: mesh, materials: [material])
+            } else {
+                entity.model = nil
+            }
         }
     }
 }

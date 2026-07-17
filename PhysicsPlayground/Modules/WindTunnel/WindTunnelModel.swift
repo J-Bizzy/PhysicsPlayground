@@ -77,6 +77,27 @@ final class WindTunnelModel {
     /// above are the real measured physics.
     var obstacles = ObstacleField()
 
+    /// 0 (teardrop) … 1 (flat disc): how bluntly the body meets the wind.
+    var bluntness: Double {
+        min(testBody.dragCoefficient / DragBody.flatDisc.dragCoefficient, 1)
+    }
+
+    /// The deflection field the streamlines and particles ride. For the
+    /// cylinder it IS the exact solution; for the drag bodies it's the
+    /// same ideal deflection with an effective radius scaled by
+    /// bluntness — a streamlined body parts the air gently (small
+    /// stagnant zone), a blunt one shoulders it aside (big red zone).
+    /// Visualization-grade for non-cylinders, disclosed in the legend.
+    var visualFlow: CylinderFlow {
+        if testBody == .cylinder { return flow }
+        return CylinderFlow(
+            freeStreamSpeed: windSpeed,
+            center: cylinderCenter,
+            radius: cylinderRadius * (0.4 + 0.6 * bluntness),
+            circulation: 0
+        )
+    }
+
     /// The exact analytic flow for the current state.
     var flow: CylinderFlow {
         CylinderFlow(
