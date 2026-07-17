@@ -154,6 +154,7 @@ struct CircuitsSpaceView: View {
             if name.hasPrefix("tray-") {
                 if let id = renderer.trayDragIDs[name] {
                     model.move(id: id, to: SIMD3<Double>(position))
+                    model.autoConnect(id: id)
                     renderer.trayDragIDs[name] = nil
                 }
                 renderer.setTrayTemplateHidden(name, false)
@@ -170,10 +171,12 @@ struct CircuitsSpaceView: View {
             }
             guard let id = UUID(uuidString: name) else { return }
             model.move(id: id, to: SIMD3<Double>(position))
-            // Keep whatever twist the hand gave the part.
+            // Keep whatever twist the hand gave the part, then let any
+            // nearly-touching terminals connect themselves.
             if let axis = renderer.liveAxis(of: id) {
                 model.setAxis(id: id, axis: axis)
             }
+            model.autoConnect(id: id)
             renderer.manipulatingComponentID = nil
         }
     }

@@ -92,11 +92,16 @@ final class CircuitsRenderer {
             return material
         }
 
-        var electronMaterial = UnlitMaterial(color: DesignTokens.Palette.electronUI)
-        electronMaterial.blending = .transparent(opacity: 0.9)
-        let electronMesh = MeshResource.generateSphere(radius: 0.0045)
+        // Electrons you can't miss: a white-hot core inside a cyan glow.
+        let coreMaterial = UnlitMaterial(color: UIColor(red: 0.8, green: 1.0, blue: 1.0, alpha: 1))
+        var haloMaterial = UnlitMaterial(color: DesignTokens.Palette.electronUI)
+        haloMaterial.blending = .transparent(opacity: 0.35)
+        let coreMesh = MeshResource.generateSphere(radius: 0.006)
+        let haloMesh = MeshResource.generateSphere(radius: 0.013)
         electronPool = EntityPool(budget: Self.electronBudget) { container in
-            container.addChild(ModelEntity(mesh: electronMesh, materials: [electronMaterial]))
+            let core = ModelEntity(mesh: coreMesh, materials: [coreMaterial])
+            core.addChild(ModelEntity(mesh: haloMesh, materials: [haloMaterial]))
+            container.addChild(core)
         }
         root.addChild(electronPool.root)
 
@@ -379,7 +384,7 @@ final class CircuitsRenderer {
                 Float(end == 0 ? -component.terminalHalfSpan : component.terminalHalfSpan), 0, 0)
             terminal.components.set(InputTargetComponent())
             terminal.components.set(CollisionComponent(
-                shapes: [.generateSphere(radius: 0.028)]))
+                shapes: [.generateSphere(radius: 0.042)]))
             terminal.components.set(HoverEffectComponent())
             var terminalAccessibility = AccessibilityComponent()
             terminalAccessibility.isAccessibilityElement = true
@@ -703,7 +708,7 @@ final class CircuitsRenderer {
         guard abs(current) > 5e-4 else { return }
 
         let length = Double(simd_distance(a, b))
-        let dots = min(max(Int(length / 0.06), 2), 7)
+        let dots = min(max(Int(length / 0.045), 2), 9)
         // Electrons drift against conventional current.
         let speed = min(0.03 + 0.5 * abs(current), 0.35) * (current > 0 ? -1 : 1)
         if !model.isPaused {

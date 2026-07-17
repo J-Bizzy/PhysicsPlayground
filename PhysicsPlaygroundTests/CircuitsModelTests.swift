@@ -423,4 +423,29 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertNil(model.pendingTerminal)
         XCTAssertGreaterThan(model.totalSourcePower, 3, "the loop comes back lit")
     }
+
+    /// Releasing a part with a terminal near another part's terminal
+    /// wires them automatically; distant terminals stay loose.
+    func testAutoConnectSnapsNearbyTerminals() {
+        let model = CircuitsModel()
+        model.clearBench()
+        model.add(.battery, at: CircuitsModel.buildCenter)
+        let battery = model.components[0]
+        // Drop a bulb so its terminal 0 lands 3 cm from battery terminal 1.
+        let near = battery.terminalPosition(1)
+            + SIMD3(0.03 + battery.terminalHalfSpan, 0, 0)
+        model.add(.bulb, at: near)
+        let bulb = model.components[1]
+
+        model.autoConnect(id: bulb.id)
+        XCTAssertEqual(model.wires.count, 1, "the close pair self-connects")
+        XCTAssertFalse(model.wires.contains {
+            $0.from.end == 1 && $0.to.end == 1
+        }, "only the near terminals joined")
+
+        // A part released far away connects nothing.
+        model.add(.resistor, at: CircuitsModel.buildCenter + SIMD3(0, 0.8, 0))
+        model.autoConnect(id: model.components[2].id)
+        XCTAssertEqual(model.wires.count, 1)
+    }
 }

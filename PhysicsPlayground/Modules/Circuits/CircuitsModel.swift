@@ -81,6 +81,9 @@ final class CircuitsModel {
     /// How far beyond a terminal its orange end grip sits.
     nonisolated static let endGripOffset = 0.03
 
+    /// Terminals this close when a part is released connect themselves.
+    nonisolated static let snapDistance = 0.08
+
     nonisolated static func wireResistance(length: Double) -> Double {
         max(length, 0.01) * wireOhmsPerMeter
     }
@@ -208,6 +211,40 @@ final class CircuitsModel {
               components[index].kind == .wire else { return }
         components[index].value = min(max(length, Self.wireLengthRange.lowerBound),
                                       Self.wireLengthRange.upperBound)
+    }
+
+    /// Magnetic connections: when a part is released, any of its
+    /// terminals sitting within snapDistance of another part's free-ish
+    /// terminal wires itself up — bring parts together and they connect.
+    func autoConnect(id: UUID) {
+        guard let component = components.first(where: { $0.id == id }) else { return }
+        var connected = false
+        for end in 0...1 {
+            let mine = Terminal(componentID: id, end: end)
+            let minePosition = component.terminalPosition(end)
+            var best: (terminal: Terminal, distance: Double)?
+            for other in components where other.id != id {
+                for otherEnd in 0...1 {
+                    let theirs = Terminal(componentID: other.id, end: otherEnd)
+                    let distance = simd_distance(minePosition, other.terminalPosition(otherEnd))
+                    guard distance < Self.snapDistance else { continue }
+                    let already = wires.contains {
+                        ($0.from == mine && $0.to == theirs) || ($0.from == theirs && $0.to == mine)
+                    }
+                    guard !already else { continue }
+                    if best == nil || distance < best!.distance {
+                        best = (theirs, distance)
+                    }
+                }
+            }
+            if let best {
+                wires.append(Wire(id: UUID(), from: mine, to: best.terminal))
+                connected = true
+            }
+        }
+        if connected {
+            emitSound(.chime, at: component.position, volume: 0.5)
+        }
     }
 
     /// Adopt the aim a carry left the part with (the hand can twist a
@@ -460,14 +497,18 @@ final class CircuitsModel {
     }
 
     private func seedStarterLoop() {
+        // A clean rectangle: battery along the bottom, bulb along the
+        // top, the switch standing upright on the right edge, and the
+        // bulb→battery wire closing the left edge dead vertical.
         let battery = Component(
             id: UUID(), kind: .battery,
-            position: SIMD3(-0.28, 1.12, -0.9),
+            position: SIMD3(0, 1.12, -0.9),
             value: ComponentKind.battery.defaultValue)
         let switcher = Component(
             id: UUID(), kind: .switcher,
-            position: SIMD3(0.28, 1.12, -0.9),
-            value: ComponentKind.switcher.defaultValue)
+            position: SIMD3(0.30, 1.31, -0.9),
+            value: ComponentKind.switcher.defaultValue,
+            axis: SIMD3(0, 1, 0))
         let bulb = Component(
             id: UUID(), kind: .bulb,
             position: SIMD3(0, 1.5, -0.9),
@@ -479,9 +520,9 @@ final class CircuitsModel {
                  to: Terminal(componentID: switcher.id, end: 0)),
             Wire(id: UUID(),
                  from: Terminal(componentID: switcher.id, end: 1),
-                 to: Terminal(componentID: bulb.id, end: 0)),
+                 to: Terminal(componentID: bulb.id, end: 1)),
             Wire(id: UUID(),
-                 from: Terminal(componentID: bulb.id, end: 1),
+                 from: Terminal(componentID: bulb.id, end: 0),
                  to: Terminal(componentID: battery.id, end: 0)),
         ]
         // Solve once immediately so the bulb opens lit, not one frame dark.
