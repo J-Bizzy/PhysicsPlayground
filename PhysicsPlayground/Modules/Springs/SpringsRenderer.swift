@@ -235,24 +235,20 @@ final class SpringsRenderer {
             springs[1].isEnabled = false
             springs[2].isEnabled = false
             blocks[0].isEnabled = true
-            let blockWorld: SIMD3<Double>
-            if model.grabbedBlock == 0 {
-                blockWorld = SIMD3<Double>(blocks[0].position(relativeTo: nil))
-            } else {
-                blockWorld = model.blockWorld
-                blocks[0].position = SIMD3<Float>(blockWorld)
-            }
+            // The block never leaves its rail: even while grabbed, the
+            // visual rides the axis-projected model position (the hand
+            // only supplies the displacement through the router).
+            let blockWorld = model.blockWorld
+            blocks[0].position = SIMD3<Float>(blockWorld)
             layoutSpring(springs[0], from: model.anchorWorld,
                          to: blockWorld - model.axisDirection * 0.045)
         case .coupled:
             for index in 0..<2 {
                 blocks[index].isEnabled = true
-                if model.grabbedBlock != index {
-                    blocks[index].position = SIMD3<Float>(model.coupledBlockWorld(index))
-                }
+                blocks[index].position = SIMD3<Float>(model.coupledBlockWorld(index))
             }
-            let b0 = SIMD3<Double>(blocks[0].position(relativeTo: nil))
-            let b1 = SIMD3<Double>(blocks[1].position(relativeTo: nil))
+            let b0 = model.coupledBlockWorld(0)
+            let b1 = model.coupledBlockWorld(1)
             layoutSpring(springs[0], from: leftAnchor, to: b0 - SIMD3(0.045, 0, 0))
             layoutSpring(springs[1], from: b0 + SIMD3(0.045, 0, 0), to: b1 - SIMD3(0.045, 0, 0))
             layoutSpring(springs[2], from: b1 + SIMD3(0.045, 0, 0), to: rightAnchor)

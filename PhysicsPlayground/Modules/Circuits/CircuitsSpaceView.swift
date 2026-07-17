@@ -177,7 +177,16 @@ struct CircuitsSpaceView: View {
                 model.setAxis(id: id, axis: axis)
             }
             model.autoConnect(id: id)
-            renderer.manipulatingComponentID = nil
+            // Don't reclaim the holder immediately: the manipulation
+            // system settles the entity for a beat after release, and
+            // writing transforms under it makes the part shudder. Hand
+            // it back once the settle is over (positions already agree).
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(450))
+                if renderer.manipulatingComponentID == id {
+                    renderer.manipulatingComponentID = nil
+                }
+            }
         }
     }
 }
@@ -192,30 +201,34 @@ struct CircuitsQuickPanel: View {
     var body: some View {
         @Bindable var model = model
 
-        VStack(alignment: .leading, spacing: 14) {
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(CircuitsModel.ComponentKind.allCases) { kind in
-                    Button(kind.displayName) {
-                        model.add(kind)
+        VStack(alignment: .leading, spacing: 10) {
+            QuickSection("Parts", expanded: true) {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(CircuitsModel.ComponentKind.allCases) { kind in
+                        Button(kind.displayName) {
+                            model.add(kind)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(model.components.count >= CircuitsModel.componentBudget)
+                        .accessibilityLabel("Add a \(kind.displayName)")
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(model.components.count >= CircuitsModel.componentBudget)
-                    .accessibilityLabel("Add a \(kind.displayName)")
                 }
             }
 
-            Toggle("Electron flow", isOn: $model.showElectronFlow)
-                .font(DesignTokens.TypeScale.label)
-                .accessibilityHint("Cyan dots drifting minus to plus along every live wire")
+            QuickSection("Options") {
+                Toggle("Electron flow", isOn: $model.showElectronFlow)
+                    .font(DesignTokens.TypeScale.label)
+                    .accessibilityHint("Cyan dots drifting minus to plus along every live wire")
 
-            Button {
-                model.clearBench()
-            } label: {
-                Label("Clear bench", systemImage: "eraser")
+                Button {
+                    model.clearBench()
+                } label: {
+                    Label("Clear bench", systemImage: "eraser")
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.components.isEmpty)
+                .accessibilityHint("Removes every part and wire; Reset brings the starter loop back")
             }
-            .buttonStyle(.bordered)
-            .disabled(model.components.isEmpty)
-            .accessibilityHint("Removes every part and wire; Reset brings the starter loop back")
 
             if model.hasOverloadedBattery {
                 Label("Short circuit! The battery's own internal resistance is all that's limiting the current — put a bulb or resistor in the loop.",

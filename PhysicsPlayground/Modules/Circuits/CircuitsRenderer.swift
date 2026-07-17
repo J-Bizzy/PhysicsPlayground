@@ -242,10 +242,15 @@ final class CircuitsRenderer {
             // on release.
             if component.id != manipulatingComponentID {
                 visual.holder.position = SIMD3<Float>(component.position)
-                // Aim the whole part along its model axis (terminals,
-                // grips, leads, and body all ride the holder).
-                visual.holder.orientation = simd_quatf(
-                    from: [1, 0, 0], to: simd_normalize(SIMD3<Float>(component.axis)))
+                // Aim the whole part along its model axis — but only when
+                // the axis actually moved. The hand's roll is legitimate
+                // orientation; snapping it away on release reads as a
+                // shake.
+                let target = simd_normalize(SIMD3<Float>(component.axis))
+                let current = visual.holder.orientation.act([1, 0, 0])
+                if simd_dot(current, target) < 0.99995 {
+                    visual.holder.orientation = simd_quatf(from: [1, 0, 0], to: target)
+                }
             }
             visual.halo.isEnabled = component.id == model.selectedID
 

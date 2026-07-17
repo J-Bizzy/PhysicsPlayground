@@ -119,68 +119,76 @@ struct PendulumsQuickPanel: View {
     var body: some View {
         @Bindable var model = model
 
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Button {
-                    model.addPendulum()
-                } label: {
-                    Label("Add pendulum", systemImage: "plus")
-                        .font(DesignTokens.TypeScale.footnote)
-                }
-                .buttonStyle(.bordered)
-                .disabled(model.pendulums.count >= PendulumsModel.pendulumBudget)
-
-                Button {
-                    model.loadResonancePreset()
-                } label: {
-                    Label("Resonance ×5", systemImage: "waveform.path")
-                        .font(DesignTokens.TypeScale.footnote)
-                }
-                .buttonStyle(.bordered)
-            }
-
-            HStack(spacing: 5) {
-                Button {
-                    model.isPaused.toggle()
-                } label: {
-                    Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
-                }
-                .buttonStyle(.bordered)
-                .accessibilityLabel(model.isPaused ? "Resume" : "Pause")
-
-                ForEach(timeScales, id: \.1) { label, scale in
-                    Button(label) {
-                        model.timeScale = scale
-                        model.isPaused = false
+        VStack(alignment: .leading, spacing: 10) {
+            QuickSection("Bench", expanded: true) {
+                HStack(spacing: 8) {
+                    Button {
+                        model.addPendulum()
+                    } label: {
+                        Label("Add", systemImage: "plus")
+                            .font(DesignTokens.TypeScale.footnote)
                     }
                     .buttonStyle(.bordered)
-                    .tint(model.timeScale == scale && !model.isPaused ? .indigo : nil)
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                    .disabled(model.pendulums.count >= PendulumsModel.pendulumBudget)
+
+                    Button {
+                        model.loadResonancePreset()
+                    } label: {
+                        Label("Resonance ×5", systemImage: "waveform.path")
+                            .font(DesignTokens.TypeScale.footnote)
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
 
-            Picker("Trail", selection: $model.trailMode) {
-                Text("No trail").tag(PendulumsModel.TrailMode.off)
-                Text("Short").tag(PendulumsModel.TrailMode.short)
-                Text("Long").tag(PendulumsModel.TrailMode.long)
-                Text("∞").tag(PendulumsModel.TrailMode.infinite)
-            }
-            .pickerStyle(.segmented)
+            QuickSection("Time") {
+                HStack(spacing: 5) {
+                    Button {
+                        model.isPaused.toggle()
+                    } label: {
+                        Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel(model.isPaused ? "Resume" : "Pause")
 
-            HStack(spacing: 10) {
-                Toggle("v", isOn: $model.showVelocity)
-                Toggle("a", isOn: $model.showAcceleration)
-                Toggle("F", isOn: $model.showForces)
-                Toggle("E", isOn: $model.showEnergyBars)
+                    ForEach(timeScales, id: \.1) { label, scale in
+                        Button(label) {
+                            model.timeScale = scale
+                            model.isPaused = false
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(model.timeScale == scale && !model.isPaused ? .indigo : nil)
+                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                    }
+                }
             }
-            .toggleStyle(.button)
-            .font(DesignTokens.TypeScale.footnote)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Gravity: \(model.gravity, specifier: "%.2f") m/s²")
-                    .font(DesignTokens.TypeScale.label.monospacedDigit())
-                Slider(value: $model.gravity, in: PendulumsModel.gravityRange)
-                    .accessibilityLabel("Gravity")
+            QuickSection("Trail & overlays") {
+                Picker("Trail", selection: $model.trailMode) {
+                    Text("Off").tag(PendulumsModel.TrailMode.off)
+                    Text("Short").tag(PendulumsModel.TrailMode.short)
+                    Text("Long").tag(PendulumsModel.TrailMode.long)
+                    Text("∞").tag(PendulumsModel.TrailMode.infinite)
+                }
+                .pickerStyle(.segmented)
+
+                HStack(spacing: 10) {
+                    Toggle("v", isOn: $model.showVelocity)
+                    Toggle("a", isOn: $model.showAcceleration)
+                    Toggle("F", isOn: $model.showForces)
+                    Toggle("E", isOn: $model.showEnergyBars)
+                }
+                .toggleStyle(.button)
+                .font(DesignTokens.TypeScale.footnote)
+            }
+
+            QuickSection("Gravity") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("g = \(model.gravity, specifier: "%.2f") m/s²")
+                        .font(DesignTokens.TypeScale.label.monospacedDigit())
+                    Slider(value: $model.gravity, in: PendulumsModel.gravityRange)
+                        .accessibilityLabel("Gravity")
+                }
             }
 
             if !model.insightText.isEmpty {
@@ -192,6 +200,7 @@ struct PendulumsQuickPanel: View {
         }
     }
 }
+
 
 /// The card floating above the selected bob: the numbers behind the swing.
 struct PendulumInfoCard: View {

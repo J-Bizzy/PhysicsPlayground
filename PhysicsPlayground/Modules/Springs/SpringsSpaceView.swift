@@ -109,82 +109,88 @@ struct SpringsQuickPanel: View {
     var body: some View {
         @Bindable var model = model
 
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Button("Single spring") { model.setMode(.single) }
-                    .buttonStyle(.bordered)
-                    .tint(model.mode == .single ? .teal : nil)
-                Button("Coupled ×2") { model.setMode(.coupled) }
-                    .buttonStyle(.bordered)
-                    .tint(model.mode == .coupled ? .teal : nil)
-            }
-            .font(DesignTokens.TypeScale.footnote)
-
-            HStack(spacing: 8) {
-                Button {
-                    model.setOrientation(.horizontal)
-                } label: {
-                    Label("Rail", systemImage: "arrow.left.and.right")
+        VStack(alignment: .leading, spacing: 10) {
+            QuickSection("Apparatus", expanded: true) {
+                HStack(spacing: 8) {
+                    Button("Single") { model.setMode(.single) }
+                        .buttonStyle(.bordered)
+                        .tint(model.mode == .single ? .teal : nil)
+                    Button("Coupled ×2") { model.setMode(.coupled) }
+                        .buttonStyle(.bordered)
+                        .tint(model.mode == .coupled ? .teal : nil)
                 }
-                .buttonStyle(.bordered)
-                .tint(model.orientation == .horizontal ? .teal : nil)
-                Button {
-                    model.setOrientation(.vertical)
-                } label: {
-                    Label("Hanging", systemImage: "arrow.down")
-                }
-                .buttonStyle(.bordered)
-                .tint(model.orientation == .vertical ? .teal : nil)
-                .disabled(model.mode == .coupled)
-            }
-            .font(DesignTokens.TypeScale.footnote)
-
-            HStack(spacing: 5) {
-                Button {
-                    model.isPaused.toggle()
-                } label: {
-                    Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
-                }
-                .buttonStyle(.bordered)
-                ForEach(timeScales, id: \.1) { label, scale in
-                    Button(label) {
-                        model.timeScale = scale
-                        model.isPaused = false
+                .font(DesignTokens.TypeScale.footnote)
+                HStack(spacing: 8) {
+                    Button {
+                        model.setOrientation(.horizontal)
+                    } label: {
+                        Label("Rail", systemImage: "arrow.left.and.right")
                     }
                     .buttonStyle(.bordered)
-                    .tint(model.timeScale == scale && !model.isPaused ? .teal : nil)
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                    .tint(model.orientation == .horizontal ? .teal : nil)
+                    Button {
+                        model.setOrientation(.vertical)
+                    } label: {
+                        Label("Hanging", systemImage: "arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(model.orientation == .vertical ? .teal : nil)
+                    .disabled(model.mode == .coupled)
+                }
+                .font(DesignTokens.TypeScale.footnote)
+            }
+
+            QuickSection("Time") {
+                HStack(spacing: 5) {
+                    Button {
+                        model.isPaused.toggle()
+                    } label: {
+                        Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    ForEach(timeScales, id: \.1) { label, scale in
+                        Button(label) {
+                            model.timeScale = scale
+                            model.isPaused = false
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(model.timeScale == scale && !model.isPaused ? .teal : nil)
+                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                    }
                 }
             }
 
-            Picker("Graph", selection: $model.graphMode) {
-                Text("x·t").tag(SpringsModel.GraphMode.position)
-                Text("v·t").tag(SpringsModel.GraphMode.velocity)
-                Text("a·t").tag(SpringsModel.GraphMode.acceleration)
-                Text("E·t").tag(SpringsModel.GraphMode.energy)
+            QuickSection("Graph & overlays") {
+                Picker("Graph", selection: $model.graphMode) {
+                    Text("x·t").tag(SpringsModel.GraphMode.position)
+                    Text("v·t").tag(SpringsModel.GraphMode.velocity)
+                    Text("a·t").tag(SpringsModel.GraphMode.acceleration)
+                    Text("E·t").tag(SpringsModel.GraphMode.energy)
+                }
+                .pickerStyle(.segmented)
+                HStack(spacing: 10) {
+                    Toggle("v", isOn: $model.showVelocity)
+                    Toggle("a", isOn: $model.showAcceleration)
+                    Toggle("F", isOn: $model.showForce)
+                    Toggle("E", isOn: $model.showEnergyBars)
+                }
+                .toggleStyle(.button)
+                .font(DesignTokens.TypeScale.footnote)
             }
-            .pickerStyle(.segmented)
 
-            HStack(spacing: 10) {
-                Toggle("v", isOn: $model.showVelocity)
-                Toggle("a", isOn: $model.showAcceleration)
-                Toggle("F", isOn: $model.showForce)
-                Toggle("E", isOn: $model.showEnergyBars)
-            }
-            .toggleStyle(.button)
-            .font(DesignTokens.TypeScale.footnote)
-
-            slider("Stiffness k", $model.stiffness,
-                   SpringsModel.stiffnessRange, "%.0f N/m")
-            slider("Mass", $model.mass, SpringsModel.massRange, "%.1f kg")
-            slider("Damping", $model.damping, SpringsModel.dampingRange, "%.2f N·s/m")
-            if model.orientation == .horizontal {
-                Toggle("Gravity along the rail", isOn: $model.gravityOn)
-                    .font(DesignTokens.TypeScale.footnote)
-            } else {
-                Text("Hanging: equilibrium sags mg/k = \(String(format: "%.1f", model.equilibriumSag * 100)) cm")
-                    .font(DesignTokens.TypeScale.footnote)
-                    .foregroundStyle(.secondary)
+            QuickSection("Parameters") {
+                slider("Stiffness k", $model.stiffness,
+                       SpringsModel.stiffnessRange, "%.0f N/m")
+                slider("Mass", $model.mass, SpringsModel.massRange, "%.1f kg")
+                slider("Damping", $model.damping, SpringsModel.dampingRange, "%.2f N·s/m")
+                if model.orientation == .horizontal {
+                    Toggle("Gravity along the rail", isOn: $model.gravityOn)
+                        .font(DesignTokens.TypeScale.footnote)
+                } else {
+                    Text("Hanging: equilibrium sags mg/k = \(String(format: "%.1f", model.equilibriumSag * 100)) cm")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if !model.insightText.isEmpty {
