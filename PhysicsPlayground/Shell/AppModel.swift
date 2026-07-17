@@ -95,4 +95,13 @@ final class AppModel {
         circuits = model
         return model
     }
+
+    private var pendulums: PendulumsModel?
+
+    var pendulumsModel: PendulumsModel {
+        if let pendulums { return pendulums }
+        let model = PendulumsModel()
+        pendulums = model
+        return model
+    }
 }
