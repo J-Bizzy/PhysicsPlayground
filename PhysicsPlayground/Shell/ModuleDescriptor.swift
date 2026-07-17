@@ -89,6 +89,7 @@ enum ModuleCatalog {
             WindTunnelModule.descriptor(appModel: appModel),
             CircuitsModule.descriptor(appModel: appModel),
             PendulumsModule.descriptor(appModel: appModel),
+            SpringsModule.descriptor(appModel: appModel),
         ]
     }
 }

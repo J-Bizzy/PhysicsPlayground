@@ -104,4 +104,13 @@ final class AppModel {
         pendulums = model
         return model
     }
+
+    private var springs: SpringsModel?
+
+    var springsModel: SpringsModel {
+        if let springs { return springs }
+        let model = SpringsModel()
+        springs = model
+        return model
+    }
 }

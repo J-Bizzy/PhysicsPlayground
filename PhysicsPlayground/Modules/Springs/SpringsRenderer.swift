@@ -1,0 +1,339 @@
+//
+//  SpringsRenderer.swift
+//  Physics Playground — Springs module
+//
+//  Renders the spring lab: aluminum supports, a coiled helix spring
+//  whose coils spread and bunch with the true extension, a polished
+//  block riding a rail, force/velocity/acceleration arrows, energy
+//  bars, ghost turning-points while held, and a floating scrolling
+//  graph of the motion the user can walk around.
+//
+//  The helix is one TubeMesh built once and scaled along its axis —
+//  exactly how a real spring's coils redistribute, at zero per-frame
+//  mesh cost. Ticked per frame from SceneEvents.Update.
+//
+
+import Foundation
+import PhysicsCore
+import RealityKit
+import RenderKit
+import SwiftUI
+import simd
+
+@MainActor
+final class SpringsRenderer {
+    let root = Entity()
+    var subscriptions: [EventSubscription] = []
+
+    /// Block index a hand is holding (system-dragged entity).
+    var grabbedBlock: Int?
+
+    let infoAnchor = Entity()
+
+    private let steelMaterial = SimpleMaterial(
+        color: UIColor(white: 0.85, alpha: 1), roughness: 0.15, isMetallic: true)
+    private let aluminumMaterial = SimpleMaterial(
+        color: UIColor(white: 0.7, alpha: 1), roughness: 0.35, isMetallic: true)
+    private let springMaterial = SimpleMaterial(
+        color: UIColor(red: 0.75, green: 0.76, blue: 0.8, alpha: 1),
+        roughness: 0.25, isMetallic: true)
+
+    private var blocks: [ModelEntity] = []
+    private var springs: [ModelEntity] = []
+    private let rail: ModelEntity
+    private let velocityArrow = PendulumsRenderer.Arrow(
+        color: UIColor(red: 0.25, green: 0.55, blue: 1, alpha: 1))
+    private let accelerationArrow = PendulumsRenderer.Arrow(
+        color: UIColor(red: 1, green: 0.55, blue: 0.1, alpha: 1))
+    private let forceArrow = PendulumsRenderer.Arrow(
+        color: UIColor(red: 0.2, green: 0.8, blue: 0.35, alpha: 1))
+
+    // Energy bars: KE blue, PE green, total white.
+    private let kineticBar: ModelEntity
+    private let potentialBar: ModelEntity
+    private let totalBar: ModelEntity
+    private let energyRoot = Entity()
+    private static let barFullHeight: Float = 0.4
+
+    // Ghost turning points while held.
+    private let ghostA: ModelEntity
+    private let ghostB: ModelEntity
+
+    // Scrolling graph: pooled dots + glowing marker.
+    private let graphRoot = Entity()
+    private let graphPool: EntityPool<Void>
+    private let graphMarker: ModelEntity
+    private static let graphWidth: Float = 0.7
+    private static let graphHeight: Float = 0.34
+
+    private static func helixMesh() -> MeshResource? {
+        // 9 coils, unit length along Y.
+        let coils = 9.0
+        let radius: Float = 0.032
+        let points = (0...260).map { step -> SIMD3<Float> in
+            let t = Float(step) / 260
+            let phi = Float(2 * .pi * coils) * t
+            return SIMD3(radius * cos(phi), t, radius * sin(phi))
+        }
+        return TubeMesh.tube(lines: [points], radius: 0.0045, sides: 6)
+    }
+
+    init() {
+        // Supports and rail.
+        let supportMesh = MeshResource.generateBox(
+            size: [0.05, 0.34, 0.1], cornerRadius: 0.01)
+        for side: Double in [-1, 1] {
+            let support = ModelEntity(mesh: supportMesh, materials: [aluminumMaterial])
+            support.position = SIMD3<Float>(
+                SpringsModel.center + SIMD3(side * SpringsModel.railHalfLength, 0, 0))
+            root.addChild(support)
+        }
+        rail = ModelEntity(
+            mesh: .generateCylinder(height: Float(2 * SpringsModel.railHalfLength), radius: 0.005),
+            materials: [aluminumMaterial])
+        rail.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+        rail.position = SIMD3<Float>(SpringsModel.center)
+        root.addChild(rail)
+
+        // Blocks (up to 2) and springs (up to 3), enabled per mode.
+        let blockMesh = MeshResource.generateBox(size: [0.09, 0.08, 0.08], cornerRadius: 0.012)
+        for index in 0..<2 {
+            let block = ModelEntity(mesh: blockMesh, materials: [steelMaterial])
+            block.name = "s-block-\(index)"
+            Grabbable.configure(block, collisionRadius: 0.1)
+            var accessibility = AccessibilityComponent()
+            accessibility.isAccessibilityElement = true
+            accessibility.label = "Spring block. Pull it along the rail and let go."
+            block.components.set(accessibility)
+            blocks.append(block)
+            root.addChild(block)
+        }
+        let helix = Self.helixMesh()
+        for _ in 0..<3 {
+            let spring = ModelEntity()
+            if let helix {
+                spring.model = ModelComponent(mesh: helix, materials: [springMaterial])
+            }
+            springs.append(spring)
+            root.addChild(spring)
+        }
+
+        root.addChild(velocityArrow.holder)
+        root.addChild(accelerationArrow.holder)
+        root.addChild(forceArrow.holder)
+
+        var kineticMaterial = UnlitMaterial(color: UIColor(red: 0.25, green: 0.5, blue: 1, alpha: 1))
+        kineticMaterial.blending = .transparent(opacity: 0.85)
+        var potentialMaterial = UnlitMaterial(color: UIColor(red: 0.2, green: 0.8, blue: 0.35, alpha: 1))
+        potentialMaterial.blending = .transparent(opacity: 0.85)
+        var totalMaterial = UnlitMaterial(color: UIColor(white: 0.9, alpha: 1))
+        totalMaterial.blending = .transparent(opacity: 0.4)
+        let barMesh = MeshResource.generateBox(size: [0.045, 1, 0.045], cornerRadius: 0.008)
+        kineticBar = ModelEntity(mesh: barMesh, materials: [kineticMaterial])
+        potentialBar = ModelEntity(mesh: barMesh, materials: [potentialMaterial])
+        totalBar = ModelEntity(mesh: barMesh, materials: [totalMaterial])
+        energyRoot.position = SIMD3<Float>(SpringsModel.center) + SIMD3(-1.0, 0.05, 0)
+        kineticBar.position = [0, 0, 0]
+        potentialBar.position = [0.08, 0, 0]
+        totalBar.position = [0.16, 0, 0]
+        energyRoot.addChild(kineticBar)
+        energyRoot.addChild(potentialBar)
+        energyRoot.addChild(totalBar)
+        root.addChild(energyRoot)
+
+        var ghostMaterial = SimpleMaterial(
+            color: UIColor(white: 0.9, alpha: 0.25), roughness: 0.3, isMetallic: false)
+        ghostMaterial.triangleFillMode = .fill
+        ghostA = ModelEntity(mesh: blockMesh, materials: [ghostMaterial])
+        ghostB = ModelEntity(mesh: blockMesh, materials: [ghostMaterial])
+        ghostA.isEnabled = false
+        ghostB.isEnabled = false
+        root.addChild(ghostA)
+        root.addChild(ghostB)
+
+        // Graph frame and dots.
+        graphRoot.position = SIMD3<Float>(SpringsModel.center) + SIMD3(1.05, 0.35, 0)
+        var axisMaterial = UnlitMaterial(color: UIColor(white: 0.8, alpha: 1))
+        axisMaterial.blending = .transparent(opacity: 0.5)
+        let axis = ModelEntity(
+            mesh: .generateBox(size: [Self.graphWidth + 0.04, 0.003, 0.003]),
+            materials: [axisMaterial])
+        graphRoot.addChild(axis)
+        let dotMesh = MeshResource.generateSphere(radius: 0.0035)
+        var dotMaterial = UnlitMaterial(color: UIColor(red: 0.4, green: 0.85, blue: 1, alpha: 1))
+        dotMaterial.blending = .transparent(opacity: 0.9)
+        graphPool = EntityPool(budget: SpringsModel.historyCapacity) { container in
+            container.addChild(ModelEntity(mesh: dotMesh, materials: [dotMaterial]))
+        }
+        graphRoot.addChild(graphPool.root)
+        graphMarker = ModelEntity(
+            mesh: .generateSphere(radius: 0.009),
+            materials: [UnlitMaterial(color: UIColor(red: 0.7, green: 0.95, blue: 1, alpha: 1))])
+        graphRoot.addChild(graphMarker)
+        root.addChild(graphRoot)
+
+        infoAnchor.components.set(BillboardComponent())
+        root.addChild(infoAnchor)
+    }
+
+    // MARK: Per-frame tick
+
+    func tick(dt: Double, model: SpringsModel) {
+        model.step(dt: dt)
+        syncApparatus(model)
+        syncArrowsAndEnergy(model)
+        syncGhost(model)
+        syncGraph(model)
+
+        let blockWorld = model.mode == .single
+            ? model.blockWorld : model.coupledBlockWorld(0)
+        infoAnchor.position = SIMD3<Float>(blockWorld) + SIMD3(0, 0.14, 0)
+    }
+
+    /// Aim a helix spring between two world points.
+    private func layoutSpring(_ spring: ModelEntity, from a: SIMD3<Double>, to b: SIMD3<Double>) {
+        let span = SIMD3<Float>(b - a)
+        let length = simd_length(span)
+        guard length > 1e-4 else {
+            spring.isEnabled = false
+            return
+        }
+        spring.isEnabled = true
+        spring.position = SIMD3<Float>(a)
+        spring.orientation = VectorFieldArrows.rotationFromYAxis(to: span / length)
+        spring.scale = SIMD3(1, length, 1)
+    }
+
+    private func syncApparatus(_ model: SpringsModel) {
+        let leftAnchor = SpringsModel.center + SIMD3(-SpringsModel.railHalfLength, 0, 0)
+        let rightAnchor = SpringsModel.center + SIMD3(SpringsModel.railHalfLength, 0, 0)
+
+        switch model.mode {
+        case .single:
+            blocks[1].isEnabled = false
+            springs[1].isEnabled = false
+            springs[2].isEnabled = false
+            blocks[0].isEnabled = true
+            let blockWorld: SIMD3<Double>
+            if model.grabbedBlock == 0 {
+                blockWorld = SIMD3<Double>(blocks[0].position(relativeTo: nil))
+            } else {
+                blockWorld = model.blockWorld
+                blocks[0].position = SIMD3<Float>(blockWorld)
+            }
+            layoutSpring(springs[0], from: leftAnchor,
+                         to: blockWorld - SIMD3(0.045, 0, 0))
+        case .coupled:
+            for index in 0..<2 {
+                blocks[index].isEnabled = true
+                if model.grabbedBlock != index {
+                    blocks[index].position = SIMD3<Float>(model.coupledBlockWorld(index))
+                }
+            }
+            let b0 = SIMD3<Double>(blocks[0].position(relativeTo: nil))
+            let b1 = SIMD3<Double>(blocks[1].position(relativeTo: nil))
+            layoutSpring(springs[0], from: leftAnchor, to: b0 - SIMD3(0.045, 0, 0))
+            layoutSpring(springs[1], from: b0 + SIMD3(0.045, 0, 0), to: b1 - SIMD3(0.045, 0, 0))
+            layoutSpring(springs[2], from: b1 + SIMD3(0.045, 0, 0), to: rightAnchor)
+        }
+    }
+
+    private func syncArrowsAndEnergy(_ model: SpringsModel) {
+        let origin = SIMD3<Float>(model.mode == .single
+                                  ? model.blockWorld : model.coupledBlockWorld(0))
+            + SIMD3(0, 0.07, 0)
+
+        let velocity = model.mode == .single
+            ? model.state.velocity : model.coupled.velocities.x
+        velocityArrow.holder.isEnabled = model.showVelocity
+        if model.showVelocity {
+            velocityArrow.update(origin: origin,
+                                 vector: SIMD3(velocity, 0, 0), reference: 0.4)
+        }
+        accelerationArrow.holder.isEnabled = model.showAcceleration
+        if model.showAcceleration {
+            accelerationArrow.update(origin: origin + SIMD3(0, 0.05, 0),
+                                     vector: SIMD3(model.acceleration, 0, 0), reference: 3)
+        }
+        forceArrow.holder.isEnabled = model.showForce
+        if model.showForce {
+            forceArrow.update(origin: origin + SIMD3(0, 0.1, 0),
+                              vector: SIMD3(model.springForce, 0, 0), reference: 4)
+        }
+
+        guard model.showEnergyBars else {
+            energyRoot.isEnabled = false
+            return
+        }
+        energyRoot.isEnabled = true
+        let energies = model.mode == .single
+            ? model.energies()
+            : {
+                let pair = model.coupled.massEnergies(
+                    stiffness: model.stiffness, coupling: model.coupling,
+                    masses: SIMD2(model.mass, model.mass))
+                return (kinetic: pair.x, potential: pair.y)
+            }()
+        let total = max(energies.kinetic + energies.potential, 1e-6)
+        let reference = max(total, 0.05)
+        func size(_ bar: ModelEntity, _ energy: Double, offset: Float) {
+            let height = max(Float(energy / reference) * Self.barFullHeight, 0.004)
+            bar.scale = [1, height, 1]
+            bar.position = [offset, height / 2, 0]
+        }
+        size(kineticBar, energies.kinetic, offset: 0)
+        size(potentialBar, energies.potential, offset: 0.08)
+        size(totalBar, total, offset: 0.16)
+    }
+
+    private func syncGhost(_ model: SpringsModel) {
+        guard model.showGhost, model.grabbedBlock == 0, model.mode == .single else {
+            ghostA.isEnabled = false
+            ghostB.isEnabled = false
+            return
+        }
+        // Turning points a release right now would reach.
+        let amplitude = model.predictedAmplitude()
+        let anchorX = SpringsModel.center.x - SpringsModel.railHalfLength + model.restLength
+        ghostA.isEnabled = true
+        ghostB.isEnabled = true
+        ghostA.position = SIMD3<Float>(SIMD3(anchorX + amplitude,
+                                             SpringsModel.center.y, SpringsModel.center.z))
+        ghostB.position = SIMD3<Float>(SIMD3(anchorX - amplitude,
+                                             SpringsModel.center.y, SpringsModel.center.z))
+    }
+
+    private func syncGraph(_ model: SpringsModel) {
+        let history = model.history
+        let count = history.count
+        // Fixed, readable scales per mode.
+        let scale: Double
+        switch model.graphMode {
+        case .position: scale = 0.36
+        case .velocity: scale = 1.6
+        case .acceleration: scale = 16
+        case .energy: scale = max(history.max() ?? 1, 0.01) * 1.2
+        }
+        for (index, slot) in graphPool.slots.enumerated() {
+            guard index < count else {
+                slot.entity.isEnabled = false
+                continue
+            }
+            slot.entity.isEnabled = true
+            let fraction = Float(index) / Float(SpringsModel.historyCapacity - 1)
+            let value = history[index]
+            let y = Float(min(max(value / scale, -1), 1)) * Self.graphHeight / 2
+            slot.entity.position = SIMD3(
+                -Self.graphWidth / 2 + fraction * Self.graphWidth, y, 0)
+        }
+        if count > 0 {
+            graphMarker.isEnabled = true
+            let fraction = Float(count - 1) / Float(SpringsModel.historyCapacity - 1)
+            let y = Float(min(max(history[count - 1] / scale, -1), 1)) * Self.graphHeight / 2
+            graphMarker.position = SIMD3(
+                -Self.graphWidth / 2 + fraction * Self.graphWidth, y, 0)
+        } else {
+            graphMarker.isEnabled = false
+        }
+    }
+}
