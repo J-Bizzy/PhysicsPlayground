@@ -108,13 +108,19 @@ final class WavesRenderer {
         silenceMaterial = silence
         root.addChild(silenceEntity)
 
-        // Sources.
-        let sourceMesh = MeshResource.generateSphere(radius: 0.032)
+        // Sources: a Blender-authored speaker puck inside a phase-tinted
+        // translucent shell (the shell's color is the in-phase/inverted
+        // indicator; the speaker is the body).
+        let speakerPrototype = try? Entity.load(named: "WaveSpeaker")
+        let sourceMesh = MeshResource.generateSphere(radius: 0.04)
         sourcePool = EntityPool(budget: WavesModel.sourceBudget) { container in
             let sphere = ModelEntity(
                 mesh: sourceMesh,
                 materials: [UnlitMaterial(color: DesignTokens.Palette.waveSourceUI)]
             )
+            if let speakerPrototype {
+                sphere.addChild(speakerPrototype.clone(recursive: true))
+            }
             Grabbable.configure(sphere, collisionRadius: 0.06)
             var accessibility = AccessibilityComponent()
             accessibility.isAccessibilityElement = true
@@ -265,9 +271,10 @@ final class WavesRenderer {
                     ? DesignTokens.Palette.waveInvertedUI
                     : DesignTokens.Palette.waveSourceUI
                 var material = UnlitMaterial(color: base)
-                if source.id != model.selectedID {
-                    material.blending = .transparent(opacity: 0.75)
-                }
+                // Translucent either way so the speaker model reads
+                // through its phase-tinted shell.
+                material.blending = .transparent(
+                    opacity: source.id == model.selectedID ? 0.45 : 0.25)
                 slot.payload.model?.materials = [material]
             }
             if source.id == manipulatingSourceID {

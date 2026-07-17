@@ -119,4 +119,26 @@ final class WindTunnelModelTests: XCTestCase {
         XCTAssertFalse(model.isPaused)
         XCTAssertEqual(model.timeScale, 1.0)
     }
+
+    /// The drag lab: F = ½ρv²CdA from the current body, size, and wind —
+    /// and reset() puts the exact-flow cylinder back in the section.
+    @MainActor
+    func testDragForceMatchesTheDragEquation() {
+        let model = WindTunnelModel()
+        model.testBody = .sphere
+        model.windSpeed = 2.0
+        model.cylinderRadius = 0.06
+
+        let expected = 0.5 * WindTunnelModel.airDensity * 4.0
+            * DragBody.sphere.dragCoefficient * Double.pi * 0.0036
+        XCTAssertEqual(model.dragForce, expected, accuracy: 1e-12)
+
+        // Streamlining at the same size and wind: >10× less drag.
+        model.testBody = .teardrop
+        XCTAssertLessThan(model.dragForce, expected / 10)
+
+        model.reset()
+        XCTAssertEqual(model.testBody, .cylinder)
+        XCTAssertTrue(model.obstacles.spheres.isEmpty)
+    }
 }

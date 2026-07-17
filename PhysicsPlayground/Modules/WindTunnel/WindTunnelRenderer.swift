@@ -64,6 +64,18 @@ final class WindTunnelRenderer {
     private var particleAges: [Double] = []
     private var particlesVisible = false
 
+    /// Holder for the non-cylinder drag bodies; the current USDZ clone
+    /// is its only child.
+    private let dragBodyHolder = Entity()
+    private var shownDragBody: DragBody?
+    private static var dragBodyPrototypes: [DragBody: Entity] = [:]
+    private static let dragBodyAssets: [DragBody: String] = [
+        .sphere: "DragSphere", .teardrop: "DragTeardrop", .cube: "DragCube",
+        .flatDisc: "DragDisc", .cone: "DragCone",
+    ]
+    /// The frontal radius the USDZ bodies were authored at.
+    private static let authoredBodyRadius = 0.06
+
     private let renderLoop = RenderLoop()
     private var model: WindTunnelModel?
     private var frameCounter = 0
@@ -148,6 +160,18 @@ final class WindTunnelRenderer {
         probeAnchor.components.set(BillboardComponent())
         sectionRoot.addChild(probeAnchor)
 
+        // The interchangeable drag bodies (Blender-authored USDZ, frontal
+        // radius 0.06 as authored) share the cylinder's name so the same
+        // grab gesture carries whichever body is in the section.
+        dragBodyHolder.name = Self.cylinderName
+        Grabbable.configure(dragBodyHolder, collisionRadius: 0.16)
+        var dragAccessibility = AccessibilityComponent()
+        dragAccessibility.isAccessibilityElement = true
+        dragAccessibility.label = "Drag test body. Carry it through the flow."
+        dragBodyHolder.components.set(dragAccessibility)
+        dragBodyHolder.isEnabled = false
+        sectionRoot.addChild(dragBodyHolder)
+
         // Air particles: a full 3D cloud (the extruded field is exact at
         // every height, so every layer of air moves identically).
         var particleMaterial = UnlitMaterial(color: .white)
@@ -188,11 +212,25 @@ final class WindTunnelRenderer {
         particlesVisible = true
 
         let flow = model.flow
+        let obstacles = model.obstacles
+        let sectionCenter = SIMD3<Double>(Self.sectionCenter)
         for index in 0..<Self.particleBudget {
             var position = particlePositions[index]
+            var height = Double(particleHeights[index])
             particleAges[index] += dt
-            let velocity = flow.velocity(at: position)
-            position += velocity * scaledDt
+
+            // The plane field (exact for the cylinder; the same ideal
+            // deflection visualizes the other bodies), then any real-room
+            // obstacles bend the full 3D velocity in world space.
+            let planar = flow.velocity(at: position)
+            var velocity3 = SIMD3(planar.x, 0, planar.y)
+            if !obstacles.spheres.isEmpty {
+                let world = sectionCenter + SIMD3(position.x, height, position.y)
+                velocity3 = obstacles.deflected(velocity3, at: world)
+            }
+            position += SIMD2(velocity3.x, velocity3.z) * scaledDt
+            height = min(max(height + velocity3.y * scaledDt,
+                             -Double(Self.halfHeight)), Double(Self.halfHeight))
 
             let insideCylinder = simd_distance(position, flow.center) < flow.radius * 1.02
             if position.x > WindTunnelModel.halfLength
@@ -200,10 +238,11 @@ final class WindTunnelRenderer {
                 || insideCylinder
                 || particleAges[index] > Self.particleLife {
                 position = Self.randomEntryPoint(anywhere: false)
-                particleHeights[index] = Float.random(in: -Self.halfHeight...Self.halfHeight)
+                height = Double(Float.random(in: -Self.halfHeight...Self.halfHeight))
                 particleAges[index] = 0
             }
             particlePositions[index] = position
+            particleHeights[index] = Float(height)
 
             let slot = particlePool.slots[index]
             slot.entity.isEnabled = true
@@ -239,13 +278,25 @@ final class WindTunnelRenderer {
     private func render(_ model: WindTunnelModel) {
         frameCounter &+= 1
 
+        syncTestBody(model)
+
+        let bodyEntity = model.testBody == .cylinder ? cylinder : dragBodyHolder
         if !isManipulatingCylinder {
-            cylinder.position = SIMD3(
+            bodyEntity.position = SIMD3(
                 Float(model.cylinderCenter.x), 0, Float(model.cylinderCenter.y))
         }
-        let radiusScale = Float(model.cylinderRadius) / Self.baseCylinderRadius
-        cylinder.scale = SIMD3(radiusScale, 1, radiusScale)
+        if model.testBody == .cylinder {
+            let radiusScale = Float(model.cylinderRadius) / Self.baseCylinderRadius
+            cylinder.scale = SIMD3(radiusScale, 1, radiusScale)
+        } else {
+            let scale = Float(model.cylinderRadius / Self.authoredBodyRadius)
+            dragBodyHolder.scale = SIMD3(repeating: scale)
+        }
 
+        // The probe reads the cylinder's exact field — for the empirical
+        // drag bodies it would be fiction, so it rests.
+        probe.isEnabled = model.testBody == .cylinder
+        probeAnchor.isEnabled = model.testBody == .cylinder
         if !isManipulatingProbe {
             probe.position = SIMD3(
                 Float(model.probePosition.x), probeHeight, Float(model.probePosition.y))
@@ -257,8 +308,36 @@ final class WindTunnelRenderer {
         syncStreamlines(model)
     }
 
+    /// Shows the selected test body: the spinning cylinder, or a clone
+    /// of the matching Blender-authored USDZ.
+    private func syncTestBody(_ model: WindTunnelModel) {
+        cylinder.isEnabled = model.testBody == .cylinder
+        dragBodyHolder.isEnabled = model.testBody != .cylinder
+        guard model.testBody != .cylinder, shownDragBody != model.testBody else { return }
+        shownDragBody = model.testBody
+
+        for child in Array(dragBodyHolder.children) {
+            child.removeFromParent()
+        }
+        guard let asset = Self.dragBodyAssets[model.testBody] else { return }
+        if Self.dragBodyPrototypes[model.testBody] == nil,
+           let loaded = try? Entity.load(named: asset) {
+            Self.dragBodyPrototypes[model.testBody] = loaded
+        }
+        if let prototype = Self.dragBodyPrototypes[model.testBody] {
+            dragBodyHolder.addChild(prototype.clone(recursive: true))
+        } else {
+            // Fallback: a simple sphere so the section is never empty.
+            dragBodyHolder.addChild(ModelEntity(
+                mesh: .generateSphere(radius: Float(Self.authoredBodyRadius)),
+                materials: [SimpleMaterial(color: DesignTokens.Palette.launcherUI,
+                                           roughness: 0.4, isMetallic: true)]))
+        }
+    }
+
     private func syncStagnationAndLift(_ model: WindTunnelModel) {
-        let points = model.stagnationPoints
+        // Stagnation lines belong to the cylinder's exact solution.
+        let points = model.testBody == .cylinder ? model.stagnationPoints : []
         for (index, marker) in stagnationMarkers.enumerated() {
             guard index < points.count else {
                 marker.isEnabled = false
@@ -268,17 +347,24 @@ final class WindTunnelRenderer {
             marker.position = SIMD3(Float(points[index].x), 0, Float(points[index].y))
         }
 
-        let lift = model.liftPerSpan
-        guard abs(lift) > 0.02 else {
+        // Cylinder mode: the KJ lift arrow (across the flow). Drag-lab
+        // mode: the same arrow becomes the DRAG arrow, pointing
+        // downstream with F = ½ρv²CdA setting its length.
+        let isCylinder = model.testBody == .cylinder
+        let magnitude = isCylinder ? abs(model.liftPerSpan) : model.dragForce
+        let threshold = isCylinder ? 0.02 : 0.001
+        guard magnitude > threshold else {
             liftArrow.isEnabled = false
             return
         }
         liftArrow.isEnabled = true
         liftArrow.position = SIMD3(
             Float(model.cylinderCenter.x), Self.halfHeight + 0.06, Float(model.cylinderCenter.y))
-        // Lift acts along ±y in plane coordinates = ±z in the room.
-        let direction = SIMD3<Float>(0, 0, lift > 0 ? 1 : -1)
-        let length = Float(min(0.05 + 0.09 * log10(1 + abs(lift) / 0.1), 0.24))
+        let direction: SIMD3<Float> = isCylinder
+            ? SIMD3(0, 0, model.liftPerSpan > 0 ? 1 : -1)   // across the flow
+            : SIMD3(1, 0, 0)                                 // downstream
+        let reference = isCylinder ? 0.1 : 0.02
+        let length = Float(min(0.05 + 0.09 * log10(1 + magnitude / reference), 0.24))
         liftArrow.orientation = VectorFieldArrows.rotationFromYAxis(to: direction)
         liftArrowShaft.scale = [1, length / 0.1, 1]
         liftArrowShaft.position = [0, length / 2, 0]
@@ -289,7 +375,7 @@ final class WindTunnelRenderer {
         let inputs = FlowInputs(
             speed: model.windSpeed, center: model.cylinderCenter,
             radius: model.cylinderRadius, circulation: model.circulation,
-            show: model.showStreamlines
+            show: model.showStreamlines && model.testBody == .cylinder
         )
         if inputs != lastFlowInputs {
             lastFlowInputs = inputs
@@ -298,7 +384,7 @@ final class WindTunnelRenderer {
         guard streamlinesDirty, frameCounter % 3 == 0 else { return }
         streamlinesDirty = false
 
-        guard model.showStreamlines else {
+        guard model.showStreamlines, model.testBody == .cylinder else {
             streamlineEntity.model = nil
             return
         }

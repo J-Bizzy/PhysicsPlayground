@@ -104,6 +104,15 @@ final class KinematicsRenderer {
             mesh: .generateCylinder(height: Self.barrelLength, radius: 0.02),
             materials: [launcherMaterial]
         )
+        if let loaded = try? Entity.load(named: "LauncherBarrel") {
+            // Blender-authored barrel: 0.30 m base-to-muzzle along +Y.
+            // Centered and scaled onto the aiming entity; the procedural
+            // cylinder bows out.
+            barrel.model = nil
+            loaded.scale = SIMD3(repeating: Self.barrelLength / 0.30)
+            loaded.position = [0, -Self.barrelLength / 2, 0]
+            barrel.addChild(loaded)
+        }
         root.addChild(barrel)
 
         bead = ModelEntity(

@@ -16,6 +16,7 @@ struct WindTunnelSpaceView: View {
     @Environment(WindTunnelModel.self) private var model
     @State private var renderer: WindTunnelRenderer?
     @State private var router = ManipulationRouter()
+    @State private var sensing = WindTunnelSensing()
 
     var body: some View {
         RealityView { content, attachments in
@@ -36,6 +37,10 @@ struct WindTunnelSpaceView: View {
             renderer.subscriptions = router.subscriptions(for: content)
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
+                    // On device, the room and hands flow into the field.
+                    if sensing.isRunning {
+                        model.obstacles = sensing.field
+                    }
                     renderer?.tick(dt: event.deltaTime, model: model)
                 }
             )
@@ -56,6 +61,11 @@ struct WindTunnelSpaceView: View {
                     .padding(12)
                     .glassBackgroundEffect()
             }
+        }
+        .task {
+            // Hand tracking + scene reconstruction: device-only, quietly
+            // absent in the simulator.
+            await sensing.start()
         }
     }
 
@@ -114,17 +124,43 @@ struct WindTunnelQuickPanel: View {
         @Bindable var model = model
 
         VStack(alignment: .leading, spacing: 14) {
+            // The shape zoo: same frontal size, wildly different drag.
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Test body")
+                    .font(DesignTokens.TypeScale.label)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 6)], spacing: 6) {
+                    ForEach(DragBody.allCases) { body in
+                        Button {
+                            model.testBody = body
+                        } label: {
+                            Text(bodyName(body))
+                                .font(DesignTokens.TypeScale.footnote)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(model.testBody == body ? DesignTokens.Palette.windAccent : nil)
+                        .accessibilityLabel("Put the \(bodyName(body)) in the wind")
+                    }
+                }
+            }
+
+            Text("Cd \(model.testBody.dragCoefficient, specifier: "%.2f")   drag \(model.dragForce, specifier: "%.3f") N")
+                .font(DesignTokens.TypeScale.label.monospacedDigit())
+                .foregroundStyle(DesignTokens.Palette.forceVector)
+                .accessibilityLabel("Drag coefficient \(model.testBody.dragCoefficient), drag force \(model.dragForce) newtons")
+
             VStack(alignment: .leading, spacing: 6) {
                 Text("Wind: \(model.windSpeed, specifier: "%.2f") m/s")
                     .font(DesignTokens.TypeScale.label.monospacedDigit())
                 Slider(value: $model.windSpeed, in: WindTunnelModel.windSpeedRange)
                     .accessibilityLabel("Wind speed")
             }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Spin: \(model.spinRPM, specifier: "%.0f") rpm")
-                    .font(DesignTokens.TypeScale.label.monospacedDigit())
-                Slider(value: $model.circulation, in: WindTunnelModel.circulationRange)
-                    .accessibilityLabel("Spin (circulation)")
+            if model.testBody == .cylinder {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Spin: \(model.spinRPM, specifier: "%.0f") rpm")
+                        .font(DesignTokens.TypeScale.label.monospacedDigit())
+                    Slider(value: $model.circulation, in: WindTunnelModel.circulationRange)
+                        .accessibilityLabel("Spin (circulation)")
+                }
             }
 
             HStack(spacing: DesignTokens.Panel.rowSpacing) {
@@ -144,11 +180,22 @@ struct WindTunnelQuickPanel: View {
                 }
             }
 
-            if abs(model.liftPerSpan) > 0.02 {
+            if model.testBody == .cylinder, abs(model.liftPerSpan) > 0.02 {
                 Text("Lift: \(abs(model.liftPerSpan), specifier: "%.2f") N/m")
                     .font(DesignTokens.TypeScale.label.monospacedDigit())
                     .foregroundStyle(DesignTokens.Palette.forceVector)
             }
+        }
+    }
+
+    private func bodyName(_ body: DragBody) -> String {
+        switch body {
+        case .cylinder: "Cylinder"
+        case .sphere: "Sphere"
+        case .teardrop: "Teardrop"
+        case .cube: "Cube"
+        case .flatDisc: "Flat disc"
+        case .cone: "Cone"
         }
     }
 }

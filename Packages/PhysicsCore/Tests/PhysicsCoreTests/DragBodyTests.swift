@@ -1,0 +1,76 @@
+//
+//  DragBodyTests.swift
+//  PhysicsCoreTests
+//
+//  The drag equation gives exact textbook numbers, the coefficient
+//  table orders shapes the way wind tunnels do, and the obstacle field
+//  respects the slip condition at surfaces while leaving distant flow
+//  untouched.
+//
+
+import XCTest
+import simd
+@testable import PhysicsCore
+
+final class DragBodyTests: XCTestCase {
+
+    /// Textbook check: a 0.06 m-radius sphere at 10 m/s in sea-level
+    /// air drags F = ½·1.225·100·0.47·π·0.0036 ≈ 0.3256 N.
+    func testDragEquationExactValue() {
+        let force = DragBody.dragForce(
+            airDensity: 1.225, speed: 10,
+            dragCoefficient: DragBody.sphere.dragCoefficient,
+            frontalArea: DragBody.sphere.frontalArea(radius: 0.06))
+        XCTAssertEqual(force, 0.5 * 1.225 * 100 * 0.47 * .pi * 0.0036, accuracy: 1e-12)
+        XCTAssertEqual(force, 0.32564, accuracy: 5e-4)
+    }
+
+    /// The whole point of the exhibit: streamlining beats bluffness by
+    /// an order of magnitude at equal frontal size.
+    func testCoefficientOrdering() {
+        XCTAssertLessThan(DragBody.teardrop.dragCoefficient,
+                          DragBody.cone.dragCoefficient)
+        XCTAssertLessThan(DragBody.cone.dragCoefficient,
+                          DragBody.cube.dragCoefficient)
+        XCTAssertLessThan(DragBody.sphere.dragCoefficient,
+                          DragBody.cube.dragCoefficient)
+        XCTAssertGreaterThan(DragBody.flatDisc.dragCoefficient / DragBody.teardrop.dragCoefficient,
+                             25, "the disc drags >25× the teardrop")
+    }
+
+    /// Drag grows with the square of speed — doubling wind quadruples force.
+    func testQuadraticSpeedScaling() {
+        func f(_ v: Double) -> Double {
+            DragBody.dragForce(airDensity: 1.225, speed: v,
+                               dragCoefficient: 1.0, frontalArea: 0.01)
+        }
+        XCTAssertEqual(f(8) / f(4), 4, accuracy: 1e-12)
+    }
+
+    /// Far from every obstacle the field is untouched; at a surface the
+    /// into-surface component is gone (slip); inside, flow points out.
+    func testObstacleFieldSlipCondition() {
+        let field = ObstacleField(spheres: [
+            .init(center: SIMD3(0, 0, 0), radius: 0.1),
+        ])
+        let wind = SIMD3(1.0, 0, 0)
+
+        // Far away: unchanged.
+        let far = field.deflected(wind, at: SIMD3(0, 0, 5))
+        XCTAssertEqual(simd_distance(far, wind), 0, accuracy: 1e-12)
+
+        // Head-on at the upstream surface: the into-surface (x)
+        // component is fully removed.
+        let atSurface = field.deflected(wind, at: SIMD3(-0.1, 0, 0))
+        XCTAssertEqual(atSurface.x, 0, accuracy: 1e-9)
+
+        // Inside: pushed outward, never inward.
+        let inside = field.deflected(wind, at: SIMD3(-0.05, 0, 0))
+        XCTAssertLessThan(inside.x, 0, "flow inside the sphere points back out")
+
+        // Grazing flow (tangential) at the side is preserved.
+        let grazing = field.deflected(wind, at: SIMD3(0, 0.1, 0))
+        XCTAssertEqual(simd_distance(grazing, wind), 0, accuracy: 1e-9,
+                       "tangential flow feels no obstacle")
+    }
+}

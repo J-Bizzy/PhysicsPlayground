@@ -249,6 +249,8 @@
 				DEVELOPMENT_TEAM = TL459W44PC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "The Wind Tunnel bends its airflow around your hands and arms.";
+				INFOPLIST_KEY_NSWorldSensingUsageDescription = "The Wind Tunnel bends its airflow around real objects in your room.";
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -278,6 +280,8 @@
 				DEVELOPMENT_TEAM = TL459W44PC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "The Wind Tunnel bends its airflow around your hands and arms.";
+				INFOPLIST_KEY_NSWorldSensingUsageDescription = "The Wind Tunnel bends its airflow around real objects in your room.";
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -426,6 +430,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TL459W44PC;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "The Wind Tunnel bends its airflow around your hands and arms.";
+				INFOPLIST_KEY_NSWorldSensingUsageDescription = "The Wind Tunnel bends its airflow around real objects in your room.";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "j-bizzell.PhysicsPlaygroundTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -449,6 +455,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TL459W44PC;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "The Wind Tunnel bends its airflow around your hands and arms.";
+				INFOPLIST_KEY_NSWorldSensingUsageDescription = "The Wind Tunnel bends its airflow around real objects in your room.";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "j-bizzell.PhysicsPlaygroundTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";

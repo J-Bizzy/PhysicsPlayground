@@ -16,10 +16,10 @@ enum WindTunnelModule {
         ModuleDescriptor(
             id: id,
             title: "Wind Tunnel",
-            blurb: "Drag a cylinder through an exact airflow, spin it, and watch lift appear — the Magnus effect, with the math on display.",
+            blurb: "An air-resistance lab: race a teardrop against a flat disc, spin the exact-flow cylinder for lift — and on device the wind bends around your own hands.",
             icon: "wind",
             accent: DesignTokens.Palette.windAccent,
-            firstRunHint: "Pinch the cylinder and drag it through the flow — the streamlines re-form instantly. Then add spin and watch the red lift arrow appear.",
+            firstRunHint: "Pick a test body — the teardrop slips through the wind while the flat disc fights it 30 times harder at the same size. The cylinder keeps the exact ideal-flow exhibit: drag it, spin it, watch the lift arrow. On device, the air also bends around your hands and real objects in the room.",
             legend: legend,
             realWorld: WindTunnelRealWorld.story,
             isPaused: { appModel.windTunnelModel.isPaused },

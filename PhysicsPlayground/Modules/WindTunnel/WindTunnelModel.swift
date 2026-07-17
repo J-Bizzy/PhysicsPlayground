@@ -49,6 +49,34 @@ final class WindTunnelModel {
     var isPaused = false
     var timeScale = 1.0
 
+    // MARK: Drag lab
+
+    /// The body in the test section. The cylinder keeps the exact
+    /// ideal-flow exhibit (streamlines, Cp probe, KJ lift, spin); the
+    /// other shapes tell the empirical drag story — same frontal size,
+    /// wildly different measured drag coefficients.
+    var testBody: DragBody = .cylinder
+
+    nonisolated static let airDensity = 1.225   // kg/m³, sea level 15 °C
+    /// The visual cylinder's span (its reference area is 2r × span).
+    nonisolated static let cylinderSpan = 0.9
+
+    /// F = ½ρv²·Cd·A for the current body, size, and wind (newtons).
+    var dragForce: Double {
+        DragBody.dragForce(
+            airDensity: Self.airDensity, speed: windSpeed,
+            dragCoefficient: testBody.dragCoefficient,
+            frontalArea: testBody.frontalArea(
+                radius: cylinderRadius, cylinderSpan: Self.cylinderSpan))
+    }
+
+    /// Live obstacles from ARKit on device — tracked hands/forearms and
+    /// coarse room-mesh voxels — that the air visibly bends around.
+    /// Always empty in the simulator. The deflection is
+    /// visualization-grade (disclosed in the legend), the drag numbers
+    /// above are the real measured physics.
+    var obstacles = ObstacleField()
+
     /// The exact analytic flow for the current state.
     var flow: CylinderFlow {
         CylinderFlow(
@@ -143,6 +171,8 @@ final class WindTunnelModel {
         isPaused = false
         timeScale = 1.0
         probePosition = SIMD2(0.45, 0.25)
+        testBody = .cylinder
+        obstacles = ObstacleField()
     }
 
     init() {
