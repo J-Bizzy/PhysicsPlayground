@@ -17,17 +17,17 @@ struct GravityLabSpaceView: View {
     @Environment(GravityLabModel.self) private var model
     @State private var renderer: GravityLabRenderer?
     @State private var router = ManipulationRouter()
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         RealityView { content, attachments in
             let renderer = GravityLabRenderer()
             content.add(renderer.root)
 
-            if let time = attachments.entity(for: "time") {
-                time.position = [0, 0.78, -0.95]
-                time.orientation = simd_quatf(angle: -0.25, axis: [1, 0, 0])
-                renderer.root.addChild(time)
-            }
+            let podsRoot = Entity()
+            renderer.root.addChild(podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-time"), name: "Time",
+                           at: [0, 1.14, -1.05], in: podsRoot)
             if let data = attachments.entity(for: "data") {
                 data.position = [0, 0.05, 0]
                 renderer.selectedAnchor.addChild(data)
@@ -41,17 +41,19 @@ struct GravityLabSpaceView: View {
                     // Ticked here (not in the render loop) so the field
                     // keeps flowing even while the simulation is paused.
                     renderer?.tickFieldParticles(dt: event.deltaTime, model: model)
+                    podsRoot.isEnabled = appModel.controlPodsVisible
                 }
             )
 
             renderer.startObserving(model)
             self.renderer = renderer
         } attachments: {
-            Attachment(id: "time") {
-                GravityLabTimePanel()
-                    .environment(model)
-                    .padding(16)
-                    .glassBackgroundEffect()
+            Attachment(id: "pod-time") {
+                ControlPod(title: "Time", icon: "clock",
+                           tint: .orange, width: 460) {
+                    GravityLabTimePanel()
+                        .environment(model)
+                }
             }
             Attachment(id: "data") {
                 GravityLabDataPanel(compact: true)

@@ -16,22 +16,21 @@ struct KinematicsSpaceView: View {
     @Environment(KinematicsModel.self) private var model
     @State private var renderer: KinematicsRenderer?
     @State private var router = ManipulationRouter()
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         RealityView { content, attachments in
             let renderer = KinematicsRenderer()
             content.add(renderer.root)
 
-            if let panel = attachments.entity(for: "quick") {
-                panel.position = [-0.45, 1.0, -0.8]
-                panel.orientation = simd_quatf(angle: -0.2, axis: [1, 0, 0])
-                renderer.root.addChild(panel)
-            }
-            if let stats = attachments.entity(for: "stats") {
-                stats.position = [0.5, 1.0, -0.8]
-                stats.orientation = simd_quatf(angle: -0.2, axis: [1, 0, 0])
-                renderer.root.addChild(stats)
-            }
+            let podsRoot = Entity()
+            renderer.root.addChild(podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-launcher"), name: "Launcher",
+                           at: [-0.9, 1.6, -0.95], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-time"), name: "Time",
+                           at: [-0.7, 0.95, -0.75], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-stats"), name: "Numbers",
+                           at: [0.9, 1.5, -0.95], in: podsRoot)
 
             configureRouter(renderer: renderer)
             renderer.subscriptions = router.subscriptions(for: content)
@@ -41,25 +40,27 @@ struct KinematicsSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { event in
                     model.step(dt: event.deltaTime)
+                    podsRoot.isEnabled = appModel.controlPodsVisible
                 }
             )
 
             renderer.startObserving(model)
             self.renderer = renderer
         } attachments: {
-            Attachment(id: "quick") {
-                KinematicsQuickPanel()
+            Attachment(id: "pod-launcher") {
+                LauncherPod()
                     .environment(model)
-                    .padding(20)
-                    .frame(width: 360)
-                    .glassBackgroundEffect()
             }
-            Attachment(id: "stats") {
-                KinematicsStatsView()
+            Attachment(id: "pod-time") {
+                KinematicsTimePod()
                     .environment(model)
-                    .padding(20)
-                    .frame(width: 360)
-                    .glassBackgroundEffect()
+            }
+            Attachment(id: "pod-stats") {
+                ControlPod(title: "Numbers", icon: "number",
+                           tint: .secondary, width: 340) {
+                    KinematicsStatsView()
+                        .environment(model)
+                }
             }
         }
     }
@@ -125,15 +126,15 @@ struct KinematicsSpaceView: View {
     }
 }
 
-/// The floating in-space panel: everything you need mid-play without
-/// looking away — fire, spawn a throwable ball, slow time.
-struct KinematicsQuickPanel: View {
+/// The launcher's pod: fire, spawn a throwable ball, set the speed.
+struct LauncherPod: View {
     @Environment(KinematicsModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
 
-        VStack(alignment: .leading, spacing: 14) {
+        ControlPod(title: "Launcher", icon: "paperplane.fill",
+                   tint: DesignTokens.Palette.kinematicsAccent) {
             HStack(spacing: DesignTokens.Panel.rowSpacing) {
                 Button {
                     model.fire()
@@ -164,7 +165,19 @@ struct KinematicsQuickPanel: View {
                 Slider(value: $model.launchSpeed, in: KinematicsModel.speedRange)
                     .accessibilityLabel("Launch speed")
             }
+        }
+    }
+}
 
+/// Time and air: the flight's environment.
+struct KinematicsTimePod: View {
+    @Environment(KinematicsModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+
+        ControlPod(title: "Time", icon: "clock",
+                   tint: DesignTokens.Palette.kinematicsAccent) {
             HStack(spacing: DesignTokens.Panel.rowSpacing) {
                 Button {
                     model.isPaused.toggle()

@@ -17,17 +17,19 @@ struct WavesSpaceView: View {
     @Environment(WavesModel.self) private var model
     @State private var renderer: WavesRenderer?
     @State private var router = ManipulationRouter()
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         RealityView { content, attachments in
             let renderer = WavesRenderer()
             content.add(renderer.root)
 
-            if let quick = attachments.entity(for: "quick") {
-                quick.position = [-1.5, 1.1, -0.6]
-                quick.orientation = simd_quatf(angle: 0.35, axis: [0, 1, 0])
-                renderer.root.addChild(quick)
-            }
+            let podsRoot = Entity()
+            renderer.root.addChild(podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-waves"), name: "Waves",
+                           at: [-1.15, 1.6, -0.85], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-time"), name: "Time",
+                           at: [-1.2, 1.0, -0.8], in: podsRoot)
             if let readout = attachments.entity(for: "probe") {
                 readout.position = [0, 0.02, 0]
                 renderer.probeAnchor.addChild(readout)
@@ -38,18 +40,20 @@ struct WavesSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { event in
                     model.step(dt: event.deltaTime)
+                    podsRoot.isEnabled = appModel.controlPodsVisible
                 }
             )
 
             renderer.startObserving(model)
             self.renderer = renderer
         } attachments: {
-            Attachment(id: "quick") {
-                WavesQuickPanel()
+            Attachment(id: "pod-waves") {
+                WavesPod()
                     .environment(model)
-                    .padding(18)
-                    .frame(width: 320)
-                    .glassBackgroundEffect()
+            }
+            Attachment(id: "pod-time") {
+                WavesTimePod()
+                    .environment(model)
             }
             Attachment(id: "probe") {
                 WavesProbeReadout()
@@ -92,14 +96,35 @@ struct WavesSpaceView: View {
     }
 }
 
-/// The floating in-space panel: the controls you want mid-experiment.
-struct WavesQuickPanel: View {
+/// The wave sources' pod: frequency, wavelength, and the cancel sheets.
+struct WavesPod: View {
     @Environment(WavesModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
 
-        VStack(alignment: .leading, spacing: 14) {
+        ControlPod(title: "Waves", icon: "waveform", tint: .cyan) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Frequency: \(model.frequency, specifier: "%.2f") Hz   λ = \(model.wavelength * 100, specifier: "%.1f") cm")
+                    .font(DesignTokens.TypeScale.control.monospacedDigit())
+                Slider(value: $model.frequency, in: WavesModel.frequencyRange)
+                    .accessibilityLabel("Frequency")
+            }
+            Toggle("Silence surfaces", isOn: $model.showSilenceSurfaces)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("The 3D sheets where the waves cancel to nothing")
+        }
+    }
+}
+
+/// Freeze or slow the wave clock.
+struct WavesTimePod: View {
+    @Environment(WavesModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+
+        ControlPod(title: "Time", icon: "clock", tint: .cyan) {
             HStack(spacing: DesignTokens.Panel.rowSpacing) {
                 Button {
                     model.isPaused.toggle()
@@ -108,28 +133,13 @@ struct WavesQuickPanel: View {
                 }
                 .buttonStyle(.bordered)
                 .accessibilityLabel(model.isPaused ? "Resume waves" : "Freeze waves")
-
-                Toggle("Silence surfaces", isOn: $model.showSilenceSurfaces)
-                    .font(DesignTokens.TypeScale.label)
-                    .accessibilityHint("The 3D sheets where the waves cancel to nothing")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Slow motion ×\(model.timeScale, specifier: "%.1f")")
+                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                    Slider(value: $model.timeScale, in: WavesModel.timeScaleRange)
+                        .accessibilityLabel("Time scale")
+                }
             }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Frequency: \(model.frequency, specifier: "%.2f") Hz")
-                    .font(DesignTokens.TypeScale.label.monospacedDigit())
-                Slider(value: $model.frequency, in: WavesModel.frequencyRange)
-                    .accessibilityLabel("Frequency")
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Slow motion: ×\(model.timeScale, specifier: "%.1f")")
-                    .font(DesignTokens.TypeScale.label.monospacedDigit())
-                Slider(value: $model.timeScale, in: WavesModel.timeScaleRange)
-                    .accessibilityLabel("Time scale")
-            }
-
-            Text("λ = \(model.wavelength * 100, specifier: "%.1f") cm")
-                .font(DesignTokens.TypeScale.label.monospacedDigit())
-                .foregroundStyle(.secondary)
         }
     }
 }

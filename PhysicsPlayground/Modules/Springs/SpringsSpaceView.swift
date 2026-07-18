@@ -20,17 +20,23 @@ struct SpringsSpaceView: View {
     @State private var renderer: SpringsRenderer?
     @State private var router = ManipulationRouter()
     @State private var handSamples: [(time: Double, position: SIMD3<Double>)] = []
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         RealityView { content, attachments in
             let renderer = SpringsRenderer()
             content.add(renderer.root)
 
-            if let quick = attachments.entity(for: "quick") {
-                quick.position = [-1.35, 1.35, -0.75]
-                quick.orientation = simd_quatf(angle: 0.3, axis: [0, 1, 0])
-                renderer.root.addChild(quick)
-            }
+            let podsRoot = Entity()
+            renderer.root.addChild(podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-apparatus"), name: "Apparatus",
+                           at: [-1.1, 1.75, -0.8], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-time"), name: "Time",
+                           at: [-1.2, 1.15, -0.8], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-graph"), name: "Graph",
+                           at: [1.1, 1.72, -0.8], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-parameters"), name: "Parameters",
+                           at: [1.2, 1.05, -0.8], in: podsRoot)
             if let info = attachments.entity(for: "info") {
                 info.position = [0, 0.02, 0]
                 renderer.infoAnchor.addChild(info)
@@ -41,16 +47,26 @@ struct SpringsSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     renderer?.tick(dt: event.deltaTime, model: model)
+                    podsRoot.isEnabled = appModel.controlPodsVisible
                 }
             )
             self.renderer = renderer
         } attachments: {
-            Attachment(id: "quick") {
-                SpringsQuickPanel()
+            Attachment(id: "pod-apparatus") {
+                SpringsApparatusPod()
                     .environment(model)
-                    .padding(18)
-                    .frame(width: 340)
-                    .glassBackgroundEffect()
+            }
+            Attachment(id: "pod-time") {
+                SpringsTimePod()
+                    .environment(model)
+            }
+            Attachment(id: "pod-graph") {
+                SpringsGraphPod()
+                    .environment(model)
+            }
+            Attachment(id: "pod-parameters") {
+                SpringsParametersPod()
+                    .environment(model)
             }
             Attachment(id: "info") {
                 SpringInfoCard()
@@ -99,8 +115,45 @@ struct SpringsSpaceView: View {
     }
 }
 
-/// Floating panel: mode, graph channel, time, parameters.
-struct SpringsQuickPanel: View {
+/// Single or coupled, on the rail or hanging.
+struct SpringsApparatusPod: View {
+    @Environment(SpringsModel.self) private var model
+
+    var body: some View {
+        ControlPod(title: "Apparatus", icon: "wrench.and.screwdriver", tint: .teal) {
+            HStack(spacing: 8) {
+                Button("Single") { model.setMode(.single) }
+                    .buttonStyle(.bordered)
+                    .tint(model.mode == .single ? .teal : nil)
+                Button("Coupled ×2") { model.setMode(.coupled) }
+                    .buttonStyle(.bordered)
+                    .tint(model.mode == .coupled ? .teal : nil)
+            }
+            .font(DesignTokens.TypeScale.footnote)
+            HStack(spacing: 8) {
+                Button {
+                    model.setOrientation(.horizontal)
+                } label: {
+                    Label("Rail", systemImage: "arrow.left.and.right")
+                }
+                .buttonStyle(.bordered)
+                .tint(model.orientation == .horizontal ? .teal : nil)
+                Button {
+                    model.setOrientation(.vertical)
+                } label: {
+                    Label("Hanging", systemImage: "arrow.down")
+                }
+                .buttonStyle(.bordered)
+                .tint(model.orientation == .vertical ? .teal : nil)
+                .disabled(model.mode == .coupled)
+            }
+            .font(DesignTokens.TypeScale.footnote)
+        }
+    }
+}
+
+/// Pause and slow motion for the oscillation clock.
+struct SpringsTimePod: View {
     @Environment(SpringsModel.self) private var model
 
     private let timeScales: [(String, Double)] = [
@@ -110,90 +163,75 @@ struct SpringsQuickPanel: View {
     var body: some View {
         @Bindable var model = model
 
-        VStack(alignment: .leading, spacing: 10) {
-            QuickSection("Apparatus", expanded: true) {
-                HStack(spacing: 8) {
-                    Button("Single") { model.setMode(.single) }
-                        .buttonStyle(.bordered)
-                        .tint(model.mode == .single ? .teal : nil)
-                    Button("Coupled ×2") { model.setMode(.coupled) }
-                        .buttonStyle(.bordered)
-                        .tint(model.mode == .coupled ? .teal : nil)
+        ControlPod(title: "Time", icon: "clock", tint: .teal, width: 300) {
+            HStack(spacing: 5) {
+                Button {
+                    model.isPaused.toggle()
+                } label: {
+                    Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
                 }
-                .font(DesignTokens.TypeScale.footnote)
-                HStack(spacing: 8) {
-                    Button {
-                        model.setOrientation(.horizontal)
-                    } label: {
-                        Label("Rail", systemImage: "arrow.left.and.right")
+                .buttonStyle(.bordered)
+                ForEach(timeScales, id: \.1) { label, scale in
+                    Button(label) {
+                        model.timeScale = scale
+                        model.isPaused = false
                     }
                     .buttonStyle(.bordered)
-                    .tint(model.orientation == .horizontal ? .teal : nil)
-                    Button {
-                        model.setOrientation(.vertical)
-                    } label: {
-                        Label("Hanging", systemImage: "arrow.down")
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(model.orientation == .vertical ? .teal : nil)
-                    .disabled(model.mode == .coupled)
-                }
-                .font(DesignTokens.TypeScale.footnote)
-            }
-
-            QuickSection("Time") {
-                HStack(spacing: 5) {
-                    Button {
-                        model.isPaused.toggle()
-                    } label: {
-                        Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
-                    }
-                    .buttonStyle(.bordered)
-                    ForEach(timeScales, id: \.1) { label, scale in
-                        Button(label) {
-                            model.timeScale = scale
-                            model.isPaused = false
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(model.timeScale == scale && !model.isPaused ? .teal : nil)
-                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                    }
+                    .tint(model.timeScale == scale && !model.isPaused ? .teal : nil)
+                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                 }
             }
+        }
+    }
+}
 
-            QuickSection("Graph & overlays") {
-                Picker("Graph", selection: $model.graphMode) {
-                    Text("x·t").tag(SpringsModel.GraphMode.position)
-                    Text("v·t").tag(SpringsModel.GraphMode.velocity)
-                    Text("a·t").tag(SpringsModel.GraphMode.acceleration)
-                    Text("E·t").tag(SpringsModel.GraphMode.energy)
-                }
-                .pickerStyle(.segmented)
-                HStack(spacing: 10) {
-                    Toggle("v", isOn: $model.showVelocity)
-                    Toggle("a", isOn: $model.showAcceleration)
-                    Toggle("F", isOn: $model.showForce)
-                    Toggle("E", isOn: $model.showEnergyBars)
-                }
-                .toggleStyle(.button)
-                .font(DesignTokens.TypeScale.footnote)
+/// The scrolling graph's channel, plus overlay vectors.
+struct SpringsGraphPod: View {
+    @Environment(SpringsModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+
+        ControlPod(title: "Graph", icon: "chart.xyaxis.line", tint: .teal) {
+            Picker("Graph", selection: $model.graphMode) {
+                Text("x·t").tag(SpringsModel.GraphMode.position)
+                Text("v·t").tag(SpringsModel.GraphMode.velocity)
+                Text("a·t").tag(SpringsModel.GraphMode.acceleration)
+                Text("E·t").tag(SpringsModel.GraphMode.energy)
             }
-
-            QuickSection("Parameters") {
-                slider("Stiffness k", $model.stiffness,
-                       SpringsModel.stiffnessRange, "%.0f N/m")
-                slider("Mass", $model.mass, SpringsModel.massRange, "%.1f kg")
-                slider("Damping", $model.damping, SpringsModel.dampingRange, "%.2f N·s/m")
-                if model.orientation == .horizontal {
-                    Toggle("Gravity along the rail", isOn: $model.gravityOn)
-                        .font(DesignTokens.TypeScale.footnote)
-                } else {
-                    Text("Hanging: equilibrium sags mg/k = \(String(format: "%.1f", model.equilibriumSag * 100)) cm")
-                        .font(DesignTokens.TypeScale.footnote)
-                        .foregroundStyle(.secondary)
-                }
+            .pickerStyle(.segmented)
+            HStack(spacing: 10) {
+                Toggle("v", isOn: $model.showVelocity)
+                Toggle("a", isOn: $model.showAcceleration)
+                Toggle("F", isOn: $model.showForce)
+                Toggle("E", isOn: $model.showEnergyBars)
             }
+            .toggleStyle(.button)
+            .font(DesignTokens.TypeScale.footnote)
+        }
+    }
+}
 
+/// k, m, damping — the oscillator's DNA — plus the insight line.
+struct SpringsParametersPod: View {
+    @Environment(SpringsModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+
+        ControlPod(title: "Parameters", icon: "slider.horizontal.3", tint: .teal) {
+            slider("Stiffness k", $model.stiffness,
+                   SpringsModel.stiffnessRange, "%.0f N/m")
+            slider("Mass", $model.mass, SpringsModel.massRange, "%.1f kg")
+            slider("Damping", $model.damping, SpringsModel.dampingRange, "%.2f N·s/m")
+            if model.orientation == .horizontal {
+                Toggle("Gravity along the rail", isOn: $model.gravityOn)
+                    .font(DesignTokens.TypeScale.footnote)
+            } else {
+                Text("Hanging: equilibrium sags mg/k = \(String(format: "%.1f", model.equilibriumSag * 100)) cm")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            }
             if !model.insightText.isEmpty {
                 Text(model.insightText)
                     .font(DesignTokens.TypeScale.footnote)

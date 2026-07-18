@@ -21,17 +21,23 @@ struct PendulumsSpaceView: View {
     @State private var renderer: PendulumsRenderer?
     @State private var router = ManipulationRouter()
     @State private var handSamples: [(time: Double, position: SIMD3<Double>)] = []
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         RealityView { content, attachments in
             let renderer = PendulumsRenderer()
             content.add(renderer.root)
 
-            if let quick = attachments.entity(for: "quick") {
-                quick.position = [-1.35, 1.35, -0.85]
-                quick.orientation = simd_quatf(angle: 0.3, axis: [0, 1, 0])
-                renderer.root.addChild(quick)
-            }
+            let podsRoot = Entity()
+            renderer.root.addChild(podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-bench"), name: "Bench",
+                           at: [-1.1, 1.75, -0.9], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-time"), name: "Time",
+                           at: [-1.2, 1.15, -0.85], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-view"), name: "View",
+                           at: [1.1, 1.7, -0.9], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-gravity"), name: "Gravity",
+                           at: [1.2, 1.1, -0.85], in: podsRoot)
             if let info = attachments.entity(for: "info") {
                 info.position = [0, 0.02, 0]
                 renderer.infoAnchor.addChild(info)
@@ -42,16 +48,26 @@ struct PendulumsSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     renderer?.tick(dt: event.deltaTime, model: model)
+                    podsRoot.isEnabled = appModel.controlPodsVisible
                 }
             )
             self.renderer = renderer
         } attachments: {
-            Attachment(id: "quick") {
-                PendulumsQuickPanel()
+            Attachment(id: "pod-bench") {
+                PendulumsBenchPod()
                     .environment(model)
-                    .padding(18)
-                    .frame(width: 340)
-                    .glassBackgroundEffect()
+            }
+            Attachment(id: "pod-time") {
+                PendulumsTimePod()
+                    .environment(model)
+            }
+            Attachment(id: "pod-view") {
+                PendulumsViewPod()
+                    .environment(model)
+            }
+            Attachment(id: "pod-gravity") {
+                PendulumsGravityPod()
+                    .environment(model)
             }
             Attachment(id: "info") {
                 PendulumInfoCard()
@@ -108,8 +124,36 @@ struct PendulumsSpaceView: View {
     }
 }
 
-/// The floating panel: time, trails, vectors, and the pendulum bench.
-struct PendulumsQuickPanel: View {
+/// The bench: add pendulums, load the resonance demo.
+struct PendulumsBenchPod: View {
+    @Environment(PendulumsModel.self) private var model
+
+    var body: some View {
+        ControlPod(title: "Bench", icon: "metronome", tint: .indigo) {
+            HStack(spacing: 8) {
+                Button {
+                    model.addPendulum()
+                } label: {
+                    Label("Add", systemImage: "plus")
+                        .font(DesignTokens.TypeScale.footnote)
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.pendulums.count >= PendulumsModel.pendulumBudget)
+
+                Button {
+                    model.loadResonancePreset()
+                } label: {
+                    Label("Resonance ×5", systemImage: "waveform.path")
+                        .font(DesignTokens.TypeScale.footnote)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+}
+
+/// Pause and the swing clock's gears.
+struct PendulumsTimePod: View {
     @Environment(PendulumsModel.self) private var model
 
     private let timeScales: [(String, Double)] = [
@@ -119,78 +163,72 @@ struct PendulumsQuickPanel: View {
     var body: some View {
         @Bindable var model = model
 
-        VStack(alignment: .leading, spacing: 10) {
-            QuickSection("Bench", expanded: true) {
-                HStack(spacing: 8) {
-                    Button {
-                        model.addPendulum()
-                    } label: {
-                        Label("Add", systemImage: "plus")
-                            .font(DesignTokens.TypeScale.footnote)
+        ControlPod(title: "Time", icon: "clock", tint: .indigo, width: 330) {
+            HStack(spacing: 5) {
+                Button {
+                    model.isPaused.toggle()
+                } label: {
+                    Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(model.isPaused ? "Resume" : "Pause")
+
+                ForEach(timeScales, id: \.1) { label, scale in
+                    Button(label) {
+                        model.timeScale = scale
+                        model.isPaused = false
                     }
                     .buttonStyle(.bordered)
-                    .disabled(model.pendulums.count >= PendulumsModel.pendulumBudget)
-
-                    Button {
-                        model.loadResonancePreset()
-                    } label: {
-                        Label("Resonance ×5", systemImage: "waveform.path")
-                            .font(DesignTokens.TypeScale.footnote)
-                    }
-                    .buttonStyle(.bordered)
+                    .tint(model.timeScale == scale && !model.isPaused ? .indigo : nil)
+                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                 }
             }
+        }
+    }
+}
 
-            QuickSection("Time") {
-                HStack(spacing: 5) {
-                    Button {
-                        model.isPaused.toggle()
-                    } label: {
-                        Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
-                    }
-                    .buttonStyle(.bordered)
-                    .accessibilityLabel(model.isPaused ? "Resume" : "Pause")
+/// Trails and overlay vectors.
+struct PendulumsViewPod: View {
+    @Environment(PendulumsModel.self) private var model
 
-                    ForEach(timeScales, id: \.1) { label, scale in
-                        Button(label) {
-                            model.timeScale = scale
-                            model.isPaused = false
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(model.timeScale == scale && !model.isPaused ? .indigo : nil)
-                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                    }
-                }
+    var body: some View {
+        @Bindable var model = model
+
+        ControlPod(title: "View", icon: "eye", tint: .indigo, width: 310) {
+            Picker("Trail", selection: $model.trailMode) {
+                Text("Off").tag(PendulumsModel.TrailMode.off)
+                Text("Short").tag(PendulumsModel.TrailMode.short)
+                Text("Long").tag(PendulumsModel.TrailMode.long)
+                Text("∞").tag(PendulumsModel.TrailMode.infinite)
             }
+            .pickerStyle(.segmented)
 
-            QuickSection("Trail & overlays") {
-                Picker("Trail", selection: $model.trailMode) {
-                    Text("Off").tag(PendulumsModel.TrailMode.off)
-                    Text("Short").tag(PendulumsModel.TrailMode.short)
-                    Text("Long").tag(PendulumsModel.TrailMode.long)
-                    Text("∞").tag(PendulumsModel.TrailMode.infinite)
-                }
-                .pickerStyle(.segmented)
-
-                HStack(spacing: 10) {
-                    Toggle("v", isOn: $model.showVelocity)
-                    Toggle("a", isOn: $model.showAcceleration)
-                    Toggle("F", isOn: $model.showForces)
-                    Toggle("E", isOn: $model.showEnergyBars)
-                }
-                .toggleStyle(.button)
-                .font(DesignTokens.TypeScale.footnote)
+            HStack(spacing: 10) {
+                Toggle("v", isOn: $model.showVelocity)
+                Toggle("a", isOn: $model.showAcceleration)
+                Toggle("F", isOn: $model.showForces)
+                Toggle("E", isOn: $model.showEnergyBars)
             }
+            .toggleStyle(.button)
+            .font(DesignTokens.TypeScale.footnote)
+        }
+    }
+}
 
-            QuickSection("Gravity") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("g = \(model.gravity, specifier: "%.2f") m/s²")
-                        .font(DesignTokens.TypeScale.label.monospacedDigit())
-                    Slider(value: $model.gravity, in: PendulumsModel.gravityRange)
-                        .accessibilityLabel("Gravity")
-                }
+/// The planet knob, plus the live insight line.
+struct PendulumsGravityPod: View {
+    @Environment(PendulumsModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+
+        ControlPod(title: "Gravity", icon: "arrow.down.circle", tint: .indigo) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("g = \(model.gravity, specifier: "%.2f") m/s²")
+                    .font(DesignTokens.TypeScale.control.monospacedDigit())
+                Slider(value: $model.gravity, in: PendulumsModel.gravityRange)
+                    .accessibilityLabel("Gravity")
             }
-
             if !model.insightText.isEmpty {
                 Text(model.insightText)
                     .font(DesignTokens.TypeScale.footnote)
