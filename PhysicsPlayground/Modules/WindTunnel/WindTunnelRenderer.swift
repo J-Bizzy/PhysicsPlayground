@@ -441,47 +441,50 @@ final class WindTunnelRenderer {
         config.stopCenters = [SIMD3(flow.center.x, 0, flow.center.y)]
         config.stopRadius = flow.radius * 1.01
 
-        // Three sheets of streamlines, each polyline split into runs by
-        // local speed so the tube warps AND recolors around the body —
-        // blunter bodies carry a bigger effective radius, so their red
-        // stagnant zone grows with their drag.
+        // A condensed cylindrical bundle matching the fan's outlet: a
+        // center ray plus concentric rings of seeds inside the duct
+        // radius, so the beam visibly pours out of the fan. Each
+        // polyline splits into runs by local speed — the tube warps AND
+        // recolors around the body, and blunter bodies (bigger
+        // effective radius) grow a bigger red stagnant zone.
         var bucketLines: [[[SIMD3<Float>]]] = Array(repeating: [], count: Self.streamlineColors.count)
-        let seedCount = 9
-        for sheetHeight: Float in [-0.32, 0, 0.32] {
-            for index in 0..<seedCount {
-                let fraction = Double(index) / Double(seedCount - 1)
-                let y = -WindTunnelModel.halfWidth + 0.05
-                    + fraction * 2 * (WindTunnelModel.halfWidth - 0.05)
-                let seed = SIMD3(-WindTunnelModel.halfLength + 0.02, 0, y)
-                let line = StreamlineTracer.streamline(
-                    from: seed, sign: 1,
-                    field: { point in
-                        let v = flow.velocity(at: SIMD2(point.x, point.z))
-                        return SIMD3(v.x, 0, v.y)
-                    },
-                    config: config
-                )
-                guard line.count > 1 else { continue }
-
-                var run: [SIMD3<Float>] = []
-                var runBucket = -1
-                for point in line {
-                    let ratio = flow.speed(at: SIMD2(point.x, point.z))
-                        / max(model.windSpeed, 1e-9)
-                    let bucket = Self.speedBucket(ratio)
-                    let p3 = SIMD3(Float(point.x), sheetHeight, Float(point.z))
-                    if runBucket == -1 { runBucket = bucket }
-                    if bucket == runBucket {
-                        run.append(p3)
-                    } else {
-                        run.append(p3)
-                        if run.count > 1 { bucketLines[runBucket].append(run) }
-                        run = [p3]
-                        runBucket = bucket
-                    }
-                }
-                if run.count > 1 { bucketLines[runBucket].append(run) }
+        var seeds: [(height: Float, lateral: Double)] = [(0, 0)]
+        for (radius, count) in [(0.08, 6), (0.15, 10), (0.22, 14)] {
+            for index in 0..<count {
+                let phi = 2 * Double.pi * Double(index) / Double(count)
+                seeds.append((Float(radius * sin(phi)), radius * cos(phi)))
             }
+        }
+        for seedSpec in seeds {
+            let seed = SIMD3(-WindTunnelModel.halfLength + 0.02, 0, seedSpec.lateral)
+            let line = StreamlineTracer.streamline(
+                from: seed, sign: 1,
+                field: { point in
+                    let v = flow.velocity(at: SIMD2(point.x, point.z))
+                    return SIMD3(v.x, 0, v.y)
+                },
+                config: config
+            )
+            guard line.count > 1 else { continue }
+
+            var run: [SIMD3<Float>] = []
+            var runBucket = -1
+            for point in line {
+                let ratio = flow.speed(at: SIMD2(point.x, point.z))
+                    / max(model.windSpeed, 1e-9)
+                let bucket = Self.speedBucket(ratio)
+                let p3 = SIMD3(Float(point.x), seedSpec.height, Float(point.z))
+                if runBucket == -1 { runBucket = bucket }
+                if bucket == runBucket {
+                    run.append(p3)
+                } else {
+                    run.append(p3)
+                    if run.count > 1 { bucketLines[runBucket].append(run) }
+                    run = [p3]
+                    runBucket = bucket
+                }
+            }
+            if run.count > 1 { bucketLines[runBucket].append(run) }
         }
 
         for (index, entity) in streamlineBuckets.enumerated() {
