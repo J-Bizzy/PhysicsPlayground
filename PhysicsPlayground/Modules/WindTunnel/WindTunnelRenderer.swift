@@ -208,10 +208,9 @@ final class WindTunnelRenderer {
         particlePool = EntityPool(budget: Self.particleBudget) { container in
             container.addChild(ModelEntity(mesh: particleMesh, materials: [particleMaterial]))
         }
-        particlePositions = (0..<Self.particleBudget).map { _ in Self.randomEntryPoint(anywhere: true) }
-        particleHeights = (0..<Self.particleBudget).map { _ in
-            Float.random(in: -Self.halfHeight...Self.halfHeight)
-        }
+        let spawns = (0..<Self.particleBudget).map { _ in Self.randomBeamPoint(anywhere: true) }
+        particlePositions = spawns.map(\.position)
+        particleHeights = spawns.map(\.height)
         particleAges = (0..<Self.particleBudget).map { _ in Double.random(in: 0..<Self.particleLife) }
         sectionRoot.addChild(particlePool.root)
     }
@@ -277,8 +276,9 @@ final class WindTunnelRenderer {
                 || abs(position.y) > WindTunnelModel.halfWidth
                 || insideCylinder
                 || particleAges[index] > Self.particleLife {
-                position = Self.randomEntryPoint(anywhere: false)
-                height = Double(Float.random(in: -Self.halfHeight...Self.halfHeight))
+                let spawn = Self.randomBeamPoint(anywhere: false)
+                position = spawn.position
+                height = Double(spawn.height)
                 particleAges[index] = 0
             }
             particlePositions[index] = position
@@ -291,12 +291,17 @@ final class WindTunnelRenderer {
         }
     }
 
-    private static func randomEntryPoint(anywhere: Bool) -> SIMD2<Double> {
-        SIMD2(
-            anywhere ? .random(in: -WindTunnelModel.halfLength...WindTunnelModel.halfLength)
-                     : -WindTunnelModel.halfLength,
-            .random(in: -WindTunnelModel.halfWidth...WindTunnelModel.halfWidth)
-        )
+    /// A random point inside the fan's beam: uniform over the duct
+    /// disc (lateral, height), at the fan mouth or anywhere along it.
+    private static let beamRadius = 0.24
+
+    private static func randomBeamPoint(anywhere: Bool) -> (position: SIMD2<Double>, height: Float) {
+        let radius = beamRadius * Double.random(in: 0...1).squareRoot()
+        let phi = Double.random(in: 0..<(2 * .pi))
+        let x = anywhere
+            ? Double.random(in: -WindTunnelModel.halfLength...WindTunnelModel.halfLength)
+            : -WindTunnelModel.halfLength
+        return (SIMD2(x, radius * cos(phi)), Float(radius * sin(phi)))
     }
 
 
