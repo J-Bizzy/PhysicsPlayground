@@ -19,6 +19,8 @@ final class AppModel {
         }
     }
     var isImmersiveSpaceOpen = false
+    /// Cross-module challenge progress (persisted).
+    let challenges = ChallengeProgress()
     /// Driven by the active module's descriptor; bound to the shared
     /// immersive space's style selection.
     var immersionStyle: ImmersionStyle = .mixed
