@@ -99,6 +99,29 @@ final class FieldModel {
     nonisolated static let plateVoltageRange = 2_000.0...40_000.0
     nonisolated static let plateSeparationRange = 0.15...1.0
 
+    // MARK: Magnetic field
+
+    /// A uniform B pointing straight UP fills the region; the probe
+    /// then feels the full Lorentz force F = q(E + v×B) and curves.
+    /// The tesla numbers are colossal because the probe is a 0.5 g,
+    /// 10 nC ball — an electron (q/m ~10¹¹ larger) curves this hard in
+    /// microtesla. The geometry is exact either way: r = mv/qB.
+    var magneticFieldOn = false
+    var magneticFieldTesla = 5e4
+    nonisolated static let magneticFieldRange = 1e4...2e5
+    /// The push dropProbe gives when B is on, so there's a v to curve.
+    nonisolated static let magneticLaunchSpeed = 0.35
+
+    var magneticField: SIMD3<Double> {
+        magneticFieldOn ? SIMD3(0, magneticFieldTesla, 0) : .zero
+    }
+
+    /// Cyclotron radius at the launch speed, m.
+    var cyclotronRadius: Double {
+        Self.probeMass * Self.magneticLaunchSpeed
+            / (probeChargeMagnitude * magneticFieldTesla)
+    }
+
     /// A plate's world x (0 = the + plate on the −x side).
     func plateX(_ index: Int) -> Double {
         capacitorCenter.x + (index == 0 ? -plateSeparation : plateSeparation) / 2
@@ -163,6 +186,8 @@ final class FieldModel {
         capacitorCenter = samplingRegion.center
         plateSeparation = 0.44
         probeChargeMagnitude = Self.defaultProbeCharge
+        magneticFieldOn = false
+        magneticFieldTesla = 5e4
         isPaused = false
         placementIndex = 1
     }
@@ -270,7 +295,12 @@ final class FieldModel {
     /// region center, at rest, and starts the simulation.
     func dropProbe() {
         let center = samplingRegion.center
-        probe = TestChargeDynamics.ProbeState(position: center + SIMD3(0.12, 0.24, 0))
+        var state = TestChargeDynamics.ProbeState(position: center + SIMD3(0.12, 0.24, 0))
+        if magneticFieldOn {
+            // A sideways push so there's a velocity for B to bend.
+            state.velocity = SIMD3(Self.magneticLaunchSpeed, 0, 0)
+        }
+        probe = state
         probeStatus = .running
     }
 
@@ -298,19 +328,19 @@ final class FieldModel {
     /// accuracy doesn't ride on the display frame rate.
     func stepProbe(dt: Double) {
         guard !isPaused, probeStatus == .running, var state = probe,
-              !charges.isEmpty || capacitorOn else { return }
+              !charges.isEmpty || capacitorOn || magneticFieldOn else { return }
 
         // A stalled frame (app paused, debugger…) must not become one giant
         // physics leap.
         let frameDt = min(dt, 1.0 / 30.0)
-        state = TestChargeDynamics.step(
+        state = TestChargeDynamics.stepLorentz(
             state,
             chargeToMassRatio: probeCharge / Self.probeMass,
             dt: frameDt,
-            substeps: 4
-        ) { point in
-            self.fieldVector(at: point)
-        }
+            substeps: 4,
+            electricField: { point in self.fieldVector(at: point) },
+            magneticField: magneticField
+        )
 
         // Landed on a source charge or a capacitor plate: ride over.
         let plateOffset = state.position - capacitorCenter

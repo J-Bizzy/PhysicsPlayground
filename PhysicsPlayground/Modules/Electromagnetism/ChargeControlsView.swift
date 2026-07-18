@@ -92,7 +92,7 @@ struct ChargeControlsView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .tint(model.probeIsPositive ? DesignTokens.Palette.probePositive : DesignTokens.Palette.probeNegative)
-                .disabled(model.charges.isEmpty && !model.capacitorOn)
+                .disabled(model.charges.isEmpty && !model.capacitorOn && !model.magneticFieldOn)
                 .accessibilityHint("A small charge that accelerates along the field")
 
                 Picker("Test charge polarity", selection: $model.probeIsPositive) {
@@ -147,6 +147,22 @@ struct ChargeControlsView: View {
                                 .accessibilityLabel("Plate voltage")
                         }
                         Text("Uniform field between the plates: red is +, blue is −. Drop the probe in the gap — a + probe drifts toward the blue plate with a = qE/m, and doubling ΔV doubles the push.")
+                            .font(DesignTokens.TypeScale.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                PanelSection("Magnetic field") {
+                    Toggle("Uniform B (pointing up)", isOn: $model.magneticFieldOn)
+                        .font(DesignTokens.TypeScale.control)
+                    if model.magneticFieldOn {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("B: \(model.magneticFieldTesla / 1000, specifier: "%.0f") kT   r = mv/qB = \(model.cyclotronRadius * 100, specifier: "%.0f") cm")
+                                .font(DesignTokens.TypeScale.control.monospacedDigit())
+                            Slider(value: $model.magneticFieldTesla, in: FieldModel.magneticFieldRange)
+                                .accessibilityLabel("Magnetic field strength")
+                        }
+                        Text("Drop the probe and it launches sideways, then curves on an exact cyclotron circle — F = qv×B, computed with the Boris integrator so the speed never drifts. The kilotesla numbers are what a 0.5 g ball needs; an electron curves this hard in microtesla. Turn the plates on too for cycloids.")
                             .font(DesignTokens.TypeScale.footnote)
                             .foregroundStyle(.secondary)
                     }

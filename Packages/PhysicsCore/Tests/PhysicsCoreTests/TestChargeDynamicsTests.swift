@@ -120,4 +120,38 @@ final class TestChargeDynamicsTests: XCTestCase {
         XCTAssertEqual(single.position.y, substepped.position.y, accuracy: 1e-12)
         XCTAssertEqual(single.velocity.y, substepped.velocity.y, accuracy: 1e-12)
     }
+
+    /// Pure B: the probe rides an exact cyclotron circle of radius
+    /// r = v/((q/m)·B) at constant speed.
+    func testBorisCyclotronCircle() {
+        let ratio = 2.0, b = 3.0, speed = 0.5
+        var state = TestChargeDynamics.ProbeState(
+            position: .zero, velocity: SIMD3(speed, 0, 0))
+        let omega = ratio * b
+        let period = 2 * Double.pi / omega
+        let dt = period / 4000
+        for _ in 0..<4000 {
+            state = TestChargeDynamics.stepLorentz(
+                state, chargeToMassRatio: ratio, dt: dt, substeps: 1,
+                electricField: { _ in .zero },
+                magneticField: SIMD3(0, b, 0))
+            XCTAssertEqual(simd_length(state.velocity), speed, accuracy: 1e-12,
+                           "magnetic force never changes speed")
+        }
+        // One full period returns home.
+        XCTAssertEqual(simd_length(state.position), 0, accuracy: speed * period * 1e-4)
+        // Radius check via the farthest excursion ≈ diameter.
+        var probe = TestChargeDynamics.ProbeState(
+            position: .zero, velocity: SIMD3(speed, 0, 0))
+        var maxR = 0.0
+        for _ in 0..<2000 {
+            probe = TestChargeDynamics.stepLorentz(
+                probe, chargeToMassRatio: ratio, dt: dt, substeps: 1,
+                electricField: { _ in .zero },
+                magneticField: SIMD3(0, b, 0))
+            maxR = max(maxR, simd_length(probe.position))
+        }
+        XCTAssertEqual(maxR, 2 * speed / omega, accuracy: 2 * speed / omega * 1e-3,
+                       "diameter = 2mv/qB")
+    }
 }

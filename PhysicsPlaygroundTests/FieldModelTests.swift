@@ -320,4 +320,27 @@ final class FieldModelTests: XCTestCase {
                        accuracy: readoutBefore.forceMagnitude * 1e-9,
                        "F = qE scales linearly with q")
     }
+
+    /// With B on and nothing else, the probe launches sideways and
+    /// curves at constant speed — v rotates into z while |v| holds.
+    func testMagneticFieldCurvesTheProbe() {
+        let model = FieldModel()
+        model.removeAllCharges()
+        model.magneticFieldOn = true
+        model.magneticFieldTesla = 5e4
+        model.dropProbe()
+        let launch = FieldModel.magneticLaunchSpeed
+
+        for _ in 0..<90 {
+            model.stepProbe(dt: 1.0 / 90.0)
+        }
+        let probe = try! XCTUnwrap(model.probe)
+        XCTAssertGreaterThan(abs(probe.velocity.z), launch * 0.2,
+                             "the velocity has visibly rotated")
+        XCTAssertEqual(simd_length(probe.velocity), launch,
+                       accuracy: launch * 1e-9,
+                       "a magnetic force never changes the speed")
+        XCTAssertEqual(probe.velocity.y, 0, accuracy: 1e-12,
+                       "B along y leaves vy alone")
+    }
 }
