@@ -528,4 +528,40 @@ final class CircuitsModelTests: XCTestCase {
 
         UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey)
     }
+
+    /// Named slots: save a build, wreck the bench, load it back exactly;
+    /// deletion removes it; a fresh model sees the same slot list.
+    func testNamedSaveSlotsRoundTrip() {
+        UserDefaults.standard.removeObject(forKey: CircuitsModel.slotsKey)
+        UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey)
+
+        let model = CircuitsModel()
+        model.clearBench()
+        model.add(.battery)
+        model.add(.bulb)
+        let battery = model.components[0]
+        let bulb = model.components[1]
+        model.tapTerminal(.init(componentID: battery.id, end: 1))
+        model.tapTerminal(.init(componentID: bulb.id, end: 0))
+        XCTAssertTrue(model.saveSlot(named: "  My loop  "),
+                      "names are trimmed and accepted")
+        XCTAssertEqual(model.slotNames, ["My loop"])
+
+        model.clearBench()
+        XCTAssertTrue(model.components.isEmpty)
+        XCTAssertTrue(model.loadSlot(named: "My loop"))
+        XCTAssertEqual(model.components.count, 2)
+        XCTAssertEqual(model.wires.count, 1)
+
+        // A fresh model sees the saved slot too.
+        let fresh = CircuitsModel()
+        XCTAssertEqual(fresh.slotNames, ["My loop"])
+
+        model.deleteSlot(named: "My loop")
+        XCTAssertTrue(model.slotNames.isEmpty)
+        XCTAssertFalse(model.loadSlot(named: "My loop"))
+
+        UserDefaults.standard.removeObject(forKey: CircuitsModel.slotsKey)
+        UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey)
+    }
 }

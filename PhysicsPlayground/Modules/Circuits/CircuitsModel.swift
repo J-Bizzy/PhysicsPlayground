@@ -509,22 +509,82 @@ final class CircuitsModel {
         }
     }
 
-    /// Restores a saved bench if one exists and passes sanity checks.
-    private func restoreSavedBench() -> Bool {
-        guard let data = UserDefaults.standard.data(forKey: Self.saveKey),
-              let bench = try? JSONDecoder().decode(SavedBench.self, from: data),
-              !bench.components.isEmpty,
-              bench.components.count <= Self.componentBudget
-        else { return false }
+    /// Installs a decoded bench after sanity checks: budget respected,
+    /// orphaned wires dropped.
+    @discardableResult
+    private func apply(_ bench: SavedBench) -> Bool {
+        guard !bench.components.isEmpty,
+              bench.components.count <= Self.componentBudget else { return false }
         components = bench.components
-        // Drop any wire whose ends no longer exist (defensive).
         wires = bench.wires.filter { wire in
             bench.components.contains { $0.id == wire.from.componentID }
                 && bench.components.contains { $0.id == wire.to.componentID }
         }
         selectedID = nil
+        pendingTerminal = nil
         step(dt: 1.0 / 90.0)
         return true
+    }
+
+    /// Restores the auto-saved bench if one exists.
+    private func restoreSavedBench() -> Bool {
+        guard let data = UserDefaults.standard.data(forKey: Self.saveKey),
+              let bench = try? JSONDecoder().decode(SavedBench.self, from: data)
+        else { return false }
+        return apply(bench)
+    }
+
+    // MARK: Named save slots
+
+    nonisolated static let slotsKey = "circuits.saveSlots.v1"
+    nonisolated static let slotBudget = 8
+
+    /// The saved circuit names, sorted — observable for the panel list.
+    private(set) var slotNames: [String] = []
+
+    private func readSlots() -> [String: Data] {
+        UserDefaults.standard.dictionary(forKey: Self.slotsKey) as? [String: Data] ?? [:]
+    }
+
+    private func writeSlots(_ slots: [String: Data]) {
+        UserDefaults.standard.set(slots, forKey: Self.slotsKey)
+        slotNames = slots.keys.sorted()
+    }
+
+    func refreshSlotNames() {
+        slotNames = readSlots().keys.sorted()
+    }
+
+    /// Saves the current bench under `name` (overwrites an existing
+    /// slot; new slots respect the budget). Returns success.
+    @discardableResult
+    func saveSlot(named rawName: String) -> Bool {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, !components.isEmpty else { return false }
+        var slots = readSlots()
+        guard slots[name] != nil || slots.count < Self.slotBudget else { return false }
+        guard let data = try? JSONEncoder().encode(
+            SavedBench(components: components, wires: wires)) else { return false }
+        slots[name] = data
+        writeSlots(slots)
+        insightText = "Saved as “\(name)” — load it any time from the Saved circuits list."
+        return true
+    }
+
+    @discardableResult
+    func loadSlot(named name: String) -> Bool {
+        guard let data = readSlots()[name],
+              let bench = try? JSONDecoder().decode(SavedBench.self, from: data),
+              apply(bench) else { return false }
+        insightText = "Loaded “\(name)” — it's live, and it's yours to rewire."
+        persistSoon()
+        return true
+    }
+
+    func deleteSlot(named name: String) {
+        var slots = readSlots()
+        slots.removeValue(forKey: name)
+        writeSlots(slots)
     }
 
     // MARK: Premade circuits
@@ -682,6 +742,7 @@ final class CircuitsModel {
     /// true); tests use the default and always get the starter loop.
     init(restoreSaved: Bool = false) {
         reset()
+        refreshSlotNames()
         if restoreSaved, restoreSavedBench() {
             insightText = ""
         }

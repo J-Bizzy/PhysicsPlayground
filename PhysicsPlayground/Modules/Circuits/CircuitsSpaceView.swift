@@ -195,6 +195,7 @@ struct CircuitsSpaceView: View {
 /// away from the build.
 struct CircuitsQuickPanel: View {
     @Environment(CircuitsModel.self) private var model
+    @State private var slotName = ""
 
     private let columns = [GridItem(.adaptive(minimum: 92), spacing: 8)]
 
@@ -228,6 +229,50 @@ struct CircuitsQuickPanel: View {
                 Text("Each preset is built from ordinary parts — rewire, re-value, and pull them apart.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
+            }
+
+            QuickSection("Saved circuits") {
+                HStack(spacing: 6) {
+                    TextField("Name this build", text: $slotName)
+                        .textFieldStyle(.roundedBorder)
+                        .font(DesignTokens.TypeScale.footnote)
+                    Button {
+                        if model.saveSlot(named: slotName) {
+                            slotName = ""
+                        }
+                    } label: {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(slotName.trimmingCharacters(in: .whitespaces).isEmpty
+                              || model.components.isEmpty)
+                    .accessibilityLabel("Save the current circuit")
+                }
+                if model.slotNames.isEmpty {
+                    Text("Nothing saved yet — name the bench and tap save.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(model.slotNames, id: \.self) { name in
+                        HStack(spacing: 6) {
+                            Button(name) {
+                                model.loadSlot(named: name)
+                            }
+                            .buttonStyle(.bordered)
+                            .font(DesignTokens.TypeScale.footnote)
+                            .accessibilityLabel("Load \(name)")
+                            Spacer(minLength: 0)
+                            Button(role: .destructive) {
+                                model.deleteSlot(named: name)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .controlSize(.mini)
+                            .accessibilityLabel("Delete \(name)")
+                        }
+                    }
+                }
             }
 
             QuickSection("Options") {
