@@ -92,7 +92,7 @@ struct ChargeControlsView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .tint(model.probeIsPositive ? DesignTokens.Palette.probePositive : DesignTokens.Palette.probeNegative)
-                .disabled(model.charges.isEmpty)
+                .disabled(model.charges.isEmpty && !model.capacitorOn)
                 .accessibilityHint("A small charge that accelerates along the field")
 
                 Picker("Test charge polarity", selection: $model.probeIsPositive) {
@@ -100,6 +100,12 @@ struct ChargeControlsView: View {
                     Text("−").tag(false)
                 }
                 .pickerStyle(.segmented)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Charge: \(model.probeIsPositive ? "+" : "−")\(model.probeChargeMagnitude * 1e9, specifier: "%.0f") nC — F = qE scales with it")
+                        .font(DesignTokens.TypeScale.control.monospacedDigit())
+                    Slider(value: $model.probeChargeMagnitude, in: FieldModel.probeChargeRange)
+                        .accessibilityLabel("Test charge magnitude")
+                }
                 .frame(width: 110)
                 .accessibilityLabel("Test charge polarity")
 

@@ -206,9 +206,9 @@ final class FieldModelTests: XCTestCase {
 
     func testProbePolarityFlipsSignedCharge() {
         let model = FieldModel()
-        XCTAssertEqual(model.probeCharge, FieldModel.probeChargeMagnitude)
+        XCTAssertEqual(model.probeCharge, model.probeChargeMagnitude)
         model.probeIsPositive = false
-        XCTAssertEqual(model.probeCharge, -FieldModel.probeChargeMagnitude)
+        XCTAssertEqual(model.probeCharge, -model.probeChargeMagnitude)
     }
 
     func testProbeIsCapturedByNegativeCharge() {
@@ -288,7 +288,7 @@ final class FieldModelTests: XCTestCase {
         model.holdProbe(at: model.samplingRegion.center)
         model.releaseProbe()
 
-        let expectedAcceleration = FieldModel.probeChargeMagnitude
+        let expectedAcceleration = model.probeChargeMagnitude
             * model.plateVoltage / model.plateSeparation / FieldModel.probeMass
         for _ in 0..<27 {  // 0.3 s
             model.stepProbe(dt: 1.0 / 90.0)
@@ -310,5 +310,14 @@ final class FieldModelTests: XCTestCase {
         XCTAssertGreaterThan(model.plateSeparation, 0.5)
         let fieldAfter = simd_length(model.capacitorField(at: model.capacitorCenter))
         XCTAssertLessThan(fieldAfter, fieldBefore, "wider gap, weaker field")
+
+        // Double the probe's charge: the same field pushes twice as hard.
+        let readoutBefore = try! XCTUnwrap(model.probeReadout)
+        model.probeChargeMagnitude *= 2
+        let readoutAfter = try! XCTUnwrap(model.probeReadout)
+        XCTAssertEqual(readoutAfter.forceMagnitude,
+                       2 * readoutBefore.forceMagnitude,
+                       accuracy: readoutBefore.forceMagnitude * 1e-9,
+                       "F = qE scales linearly with q")
     }
 }

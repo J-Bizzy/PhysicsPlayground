@@ -39,7 +39,8 @@ final class FieldModel {
 
     // MARK: Probe (test charge) constants — real SI values, sized so the
     // acceleration is a visible ~0.1–2 m/s² at tabletop distances.
-    nonisolated static let probeChargeMagnitude = 1e-8              // 10 nC
+    nonisolated static let defaultProbeCharge = 1e-8                // 10 nC
+    nonisolated static let probeChargeRange = 1e-9...5e-8           // 1…50 nC
     nonisolated static let probeMass = 5e-4                         // 0.5 g
     /// Probe freezes when it gets this close to a source charge ("captured").
     nonisolated static let probeCaptureRadius = 0.045
@@ -68,8 +69,11 @@ final class FieldModel {
     var probeIsPositive = true
 
     /// Signed probe charge in Coulombs.
+    /// The test charge's magnitude, C — bigger charge, bigger F = qE.
+    var probeChargeMagnitude = FieldModel.defaultProbeCharge
+
     var probeCharge: Double {
-        (probeIsPositive ? 1 : -1) * Self.probeChargeMagnitude
+        (probeIsPositive ? 1 : -1) * probeChargeMagnitude
     }
 
     // MARK: Display options
@@ -158,6 +162,7 @@ final class FieldModel {
         plateVoltage = 20_000
         capacitorCenter = samplingRegion.center
         plateSeparation = 0.44
+        probeChargeMagnitude = Self.defaultProbeCharge
         isPaused = false
         placementIndex = 1
     }
@@ -339,7 +344,7 @@ final class FieldModel {
     var probeReadout: ProbeReadout? {
         guard let probe else { return nil }
         let fieldMagnitude = simd_length(fieldVector(at: probe.position))
-        let force = Self.probeChargeMagnitude * fieldMagnitude
+        let force = probeChargeMagnitude * fieldMagnitude
         return ProbeReadout(
             fieldMagnitude: fieldMagnitude,
             potential: ElectricField.potential(at: probe.position, dueTo: charges),

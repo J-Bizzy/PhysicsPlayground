@@ -30,7 +30,7 @@ struct PhysicsStatsView: View {
                     statRow("Speed", PhysicsFormat.fixed(readout.speed), "m/s")
                 }
 
-                Text("Test charge: q = \(model.probeIsPositive ? "+" : "−")10 nC, m = 0.5 g.  F = qE, a = F/m.")
+                Text("Test charge: q = \(model.probeIsPositive ? "+" : "−")\(model.probeChargeMagnitude * 1e9, specifier: "%.0f") nC, m = 0.5 g.  F = qE, a = F/m.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
