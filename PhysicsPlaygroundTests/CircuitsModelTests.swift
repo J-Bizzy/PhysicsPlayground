@@ -448,4 +448,49 @@ final class CircuitsModelTests: XCTestCase {
         model.autoConnect(id: model.components[2].id)
         XCTAssertEqual(model.wires.count, 1)
     }
+
+    /// The preset library carries exact textbook numbers: series bulbs
+    /// share current, parallel bulbs each draw full current, the
+    /// divider splits 9 V by resistance, and the short trips the
+    /// warning.
+    func testPresetCircuitsCarryTextbookValues() {
+        let model = CircuitsModel()
+
+        model.loadPreset(.series)
+        let seriesBulbs = model.components.filter { $0.kind == .bulb }
+        let seriesExpected = 9.0 / (48 + CircuitsModel.batteryInternalResistance
+                                    + CircuitSolver.switchResistance)
+        for bulb in seriesBulbs {
+            XCTAssertEqual(abs(model.readouts[bulb.id]?.amps ?? 0), seriesExpected,
+                           accuracy: seriesExpected * 1e-3,
+                           "series bulbs thread the same current")
+        }
+
+        model.loadPreset(.parallel)
+        let battery = model.components.first { $0.kind == .battery }!
+        let parallelBulb = model.components.first { $0.kind == .bulb }!
+        let batteryAmps = abs(model.readouts[battery.id]?.amps ?? 0)
+        let bulbAmps = abs(model.readouts[parallelBulb.id]?.amps ?? 0)
+        XCTAssertEqual(batteryAmps, 2 * bulbAmps, accuracy: batteryAmps * 0.01,
+                       "the battery feeds both branches")
+
+        model.loadPreset(.divider)
+        let resistors = model.components.filter { $0.kind == .resistor }
+        let v470 = abs(model.readouts[resistors.first { $0.value == 470 }!.id]?.volts ?? 0)
+        let v1000 = abs(model.readouts[resistors.first { $0.value == 1000 }!.id]?.volts ?? 0)
+        XCTAssertEqual(v1000 / v470, 1000.0 / 470.0, accuracy: 0.02,
+                       "voltage splits in proportion to resistance")
+        XCTAssertEqual(v470 + v1000, 9.0, accuracy: 0.05,
+                       "the shares add back to the source (minus internal drop)")
+
+        model.loadPreset(.shortCircuit)
+        XCTAssertTrue(model.hasOverloadedBattery, "the short trips the warning")
+
+        model.loadPreset(.rcCharger)
+        let capacitor = model.components.first { $0.kind == .capacitor }!
+        for _ in 0..<180 { model.step(dt: 1.0 / 90.0) }  // 2 s ~ 0.9 tau
+        let charged = model.components.first { $0.id == capacitor.id }!.capacitorVoltage
+        XCTAssertGreaterThan(abs(charged), 3, "well into the charge curve after 2 s")
+        XCTAssertLessThan(abs(charged), 8, "but nowhere near full yet")
+    }
 }

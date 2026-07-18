@@ -215,6 +215,21 @@ struct CircuitsQuickPanel: View {
                 }
             }
 
+            QuickSection("Premade circuits") {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(CircuitsModel.Preset.allCases) { preset in
+                        Button(preset.displayName) {
+                            model.loadPreset(preset)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityLabel("Build the \(preset.displayName) circuit")
+                    }
+                }
+                Text("Each preset is built from ordinary parts — rewire, re-value, and pull them apart.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             QuickSection("Options") {
                 Toggle("Electron flow", isOn: $model.showElectronFlow)
                     .font(DesignTokens.TypeScale.label)
@@ -235,6 +250,13 @@ struct CircuitsQuickPanel: View {
                       systemImage: "exclamationmark.triangle.fill")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.red)
+            }
+
+            if !model.insightText.isEmpty {
+                Text(model.insightText)
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if model.pendingTerminal != nil {

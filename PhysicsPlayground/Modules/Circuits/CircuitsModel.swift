@@ -140,6 +140,8 @@ final class CircuitsModel {
 
     var showElectronFlow = true
     var isPaused = false
+    /// The contextual one-liner shown after loading a premade circuit.
+    private(set) var insightText = ""
 
     // MARK: Live electrical state (rebuilt every step)
 
@@ -472,6 +474,99 @@ final class CircuitsModel {
         wireFlows = flows
     }
 
+    // MARK: Premade circuits
+
+    /// The classic teaching circuits, laid out ready-made — and built
+    /// from ordinary parts, so every one can be rewired, re-valued,
+    /// aimed, and torn apart afterward.
+    enum Preset: String, CaseIterable, Identifiable {
+        case series, parallel, divider, rcCharger, shortCircuit
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .series: "Series bulbs"
+            case .parallel: "Parallel bulbs"
+            case .divider: "Voltage divider"
+            case .rcCharger: "RC charger"
+            case .shortCircuit: "Short circuit"
+            }
+        }
+    }
+
+    /// Places a part directly (no spawn sound), returning its id.
+    @discardableResult
+    private func place(_ kind: ComponentKind, at position: SIMD3<Double>,
+                       axis: SIMD3<Double> = SIMD3(1, 0, 0),
+                       value: Double? = nil) -> UUID {
+        var component = Component(id: UUID(), kind: kind, position: position,
+                                  value: value ?? kind.defaultValue)
+        component.axis = axis
+        components.append(component)
+        return component.id
+    }
+
+    private func connect(_ a: (UUID, Int), _ b: (UUID, Int)) {
+        wires.append(Wire(id: UUID(),
+                          from: Terminal(componentID: a.0, end: a.1),
+                          to: Terminal(componentID: b.0, end: b.1)))
+    }
+
+    func loadPreset(_ preset: Preset) {
+        clearBench()
+        showElectronFlow = true
+        isPaused = false
+        let up = SIMD3<Double>(0, 1, 0)
+
+        switch preset {
+        case .series:
+            let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
+            let bulb1 = place(.bulb, at: SIMD3(-0.22, 1.5, -0.9))
+            let bulb2 = place(.bulb, at: SIMD3(0.22, 1.5, -0.9))
+            let toggle = place(.switcher, at: SIMD3(0.34, 1.31, -0.9), axis: up)
+            connect((battery, 1), (toggle, 0))
+            connect((toggle, 1), (bulb2, 1))
+            connect((bulb2, 0), (bulb1, 1))
+            connect((bulb1, 0), (battery, 0))
+            insightText = "Series: ONE path, so the same current threads both bulbs — each gets half the voltage and glows dimmer than it would alone. Unscrew either and the whole loop dies."
+        case .parallel:
+            let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
+            let bulb1 = place(.bulb, at: SIMD3(-0.18, 1.45, -0.9))
+            let bulb2 = place(.bulb, at: SIMD3(0.18, 1.58, -0.9))
+            connect((battery, 1), (bulb1, 1))
+            connect((battery, 1), (bulb2, 1))
+            connect((bulb1, 0), (battery, 0))
+            connect((bulb2, 0), (battery, 0))
+            insightText = "Parallel: each bulb gets the FULL 9 V, so both burn at full brightness — and the battery pays for it, pushing double the current. Select the battery and compare its mA to one bulb's."
+        case .divider:
+            let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
+            let r1 = place(.resistor, at: SIMD3(-0.2, 1.5, -0.9), value: 470)
+            let r2 = place(.resistor, at: SIMD3(0.2, 1.5, -0.9), value: 1000)
+            connect((battery, 1), (r2, 1))
+            connect((r2, 0), (r1, 1))
+            connect((r1, 0), (battery, 0))
+            insightText = "A voltage divider: the 9 V splits in proportion to resistance — select each resistor and read ~2.9 V across 470 Ω and ~6.1 V across 1 kΩ. Slide either value and watch the split follow."
+        case .rcCharger:
+            let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
+            let resistor = place(.resistor, at: SIMD3(-0.3, 1.31, -0.9), axis: up, value: 1000)
+            let capacitor = place(.capacitor, at: SIMD3(0, 1.5, -0.9))
+            let toggle = place(.switcher, at: SIMD3(0.3, 1.31, -0.9), axis: up)
+            connect((battery, 1), (toggle, 0))
+            connect((toggle, 1), (capacitor, 1))
+            connect((capacitor, 0), (resistor, 1))
+            connect((resistor, 0), (battery, 0))
+            insightText = "RC charging: the capacitor fills toward 9 V with time constant τ = RC ≈ 2.2 s — select it and watch the charge curve slow as it approaches full. Flip the switch to pause the flow mid-charge."
+        case .shortCircuit:
+            let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
+            let jumper = place(.wire, at: SIMD3(0, 1.45, -0.9), value: 0.4)
+            connect((battery, 1), (jumper, 1))
+            connect((jumper, 0), (battery, 0))
+            insightText = "A dead short: nothing limits the current but the battery's own 50 mΩ — about 150 A, the red warning, and in real life a very hot battery. Add a bulb into the loop to tame it."
+        }
+        selectedID = components.first?.id
+        step(dt: 1.0 / 90.0)
+    }
+
     // MARK: Reset
 
     /// Empties the bench completely — the blank-slate path behind the
@@ -481,6 +576,7 @@ final class CircuitsModel {
         wires = []
         selectedID = nil
         pendingTerminal = nil
+        insightText = ""
         readouts = [:]
         wireFlows = [:]
         totalSourcePower = 0
