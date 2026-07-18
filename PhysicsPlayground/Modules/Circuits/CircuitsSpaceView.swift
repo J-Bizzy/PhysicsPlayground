@@ -18,17 +18,24 @@ struct CircuitsSpaceView: View {
     @Environment(CircuitsModel.self) private var model
     @State private var renderer: CircuitsRenderer?
     @State private var router = ManipulationRouter()
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         RealityView { content, attachments in
             let renderer = CircuitsRenderer()
             content.add(renderer.root)
 
-            if let quick = attachments.entity(for: "quick") {
-                quick.position = [-1.35, 1.2, -0.7]
-                quick.orientation = simd_quatf(angle: 0.35, axis: [0, 1, 0])
-                renderer.root.addChild(quick)
-            }
+            // Control pods: build helpers on the left near the tray,
+            // bench status on the right — the tray itself is the
+            // spatial way to add parts.
+            let podsRoot = Entity()
+            renderer.root.addChild(podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-presets"), name: "Premade circuits",
+                           at: [-1.1, 1.7, -0.9], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-saved"), name: "Saved circuits",
+                           at: [-1.25, 1.12, -0.72], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-bench"), name: "Bench",
+                           at: [1.12, 1.5, -0.85], in: podsRoot)
             if let readout = attachments.entity(for: "info") {
                 readout.position = [0, 0.02, 0]
                 renderer.selectedAnchor.addChild(readout)
@@ -38,6 +45,7 @@ struct CircuitsSpaceView: View {
             renderer.subscriptions = router.subscriptions(for: content)
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
+                    podsRoot.isEnabled = appModel.controlPodsVisible
                     model.step(dt: event.deltaTime)
                     // Rendered here every frame (not via the observation
                     // loop): a steady DC circuit mutates nothing that
@@ -49,12 +57,17 @@ struct CircuitsSpaceView: View {
 
             self.renderer = renderer
         } attachments: {
-            Attachment(id: "quick") {
-                CircuitsQuickPanel()
+            Attachment(id: "pod-presets") {
+                CircuitPresetsPod()
                     .environment(model)
-                    .padding(18)
-                    .frame(width: 340)
-                    .glassBackgroundEffect()
+            }
+            Attachment(id: "pod-saved") {
+                CircuitSavedPod()
+                    .environment(model)
+            }
+            Attachment(id: "pod-bench") {
+                CircuitBenchPod()
+                    .environment(model)
             }
             Attachment(id: "info") {
                 CircuitsSelectedReadout()
@@ -191,119 +204,119 @@ struct CircuitsSpaceView: View {
     }
 }
 
-/// The floating palette: spawn parts and steer the lab without looking
-/// away from the build.
-struct CircuitsQuickPanel: View {
+/// Premade circuits, floating by the parts tray: series, parallel,
+/// divider, RC — each built from ordinary parts, ready to rewire.
+struct CircuitPresetsPod: View {
+    @Environment(CircuitsModel.self) private var model
+
+    var body: some View {
+        ControlPod(title: "Premade circuits", icon: "square.grid.2x2",
+                   tint: DesignTokens.Palette.circuitsAccent) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
+                ForEach(CircuitsModel.Preset.allCases) { preset in
+                    Button(preset.displayName) {
+                        model.loadPreset(preset)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Build the \(preset.displayName) circuit")
+                }
+            }
+            Text("Each one is ordinary parts — rewire, re-value, pull apart.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// The save slots, on their own card below the presets.
+struct CircuitSavedPod: View {
     @Environment(CircuitsModel.self) private var model
     @State private var slotName = ""
-
-    private let columns = [GridItem(.adaptive(minimum: 92), spacing: 8)]
 
     var body: some View {
         @Bindable var model = model
 
-        VStack(alignment: .leading, spacing: 10) {
-            QuickSection("Parts", expanded: true) {
-                LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(CircuitsModel.ComponentKind.allCases) { kind in
-                        Button(kind.displayName) {
-                            model.add(kind)
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(model.components.count >= CircuitsModel.componentBudget)
-                        .accessibilityLabel("Add a \(kind.displayName)")
-                    }
-                }
-            }
-
-            QuickSection("Premade circuits") {
-                LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(CircuitsModel.Preset.allCases) { preset in
-                        Button(preset.displayName) {
-                            model.loadPreset(preset)
-                        }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel("Build the \(preset.displayName) circuit")
-                    }
-                }
-                Text("Each preset is built from ordinary parts — rewire, re-value, and pull them apart.")
+        ControlPod(title: "Saved circuits", icon: "tray.full",
+                   tint: DesignTokens.Palette.circuitsAccent) {
+            HStack(spacing: 6) {
+                TextField("Name this build", text: $slotName)
+                    .textFieldStyle(.roundedBorder)
                     .font(DesignTokens.TypeScale.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            QuickSection("Saved circuits") {
-                HStack(spacing: 6) {
-                    TextField("Name this build", text: $slotName)
-                        .textFieldStyle(.roundedBorder)
-                        .font(DesignTokens.TypeScale.footnote)
-                    Button {
-                        if model.saveSlot(named: slotName) {
-                            slotName = ""
-                        }
-                    } label: {
-                        Image(systemName: "square.and.arrow.down")
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(slotName.trimmingCharacters(in: .whitespaces).isEmpty
-                              || model.components.isEmpty)
-                    .accessibilityLabel("Save the current circuit")
-                }
-                if model.slotNames.isEmpty {
-                    Text("Nothing saved yet — name the bench and tap save.")
-                        .font(DesignTokens.TypeScale.footnote)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(model.slotNames, id: \.self) { name in
-                        HStack(spacing: 6) {
-                            Button(name) {
-                                model.loadSlot(named: name)
-                            }
-                            .buttonStyle(.bordered)
-                            .font(DesignTokens.TypeScale.footnote)
-                            .accessibilityLabel("Load \(name)")
-                            Spacer(minLength: 0)
-                            Button(role: .destructive) {
-                                model.deleteSlot(named: name)
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                            .buttonStyle(.borderless)
-                            .controlSize(.mini)
-                            .accessibilityLabel("Delete \(name)")
-                        }
-                    }
-                }
-            }
-
-            QuickSection("Options") {
-                Toggle("Electron flow", isOn: $model.showElectronFlow)
-                    .font(DesignTokens.TypeScale.label)
-                    .accessibilityHint("Cyan dots drifting minus to plus along every live wire")
-
                 Button {
-                    model.clearBench()
+                    if model.saveSlot(named: slotName) {
+                        slotName = ""
+                    }
                 } label: {
-                    Label("Clear bench", systemImage: "eraser")
+                    Image(systemName: "square.and.arrow.down")
                 }
                 .buttonStyle(.bordered)
-                .disabled(model.components.isEmpty)
-                .accessibilityHint("Removes every part and wire; Reset brings the starter loop back")
+                .disabled(slotName.trimmingCharacters(in: .whitespaces).isEmpty
+                          || model.components.isEmpty)
+                .accessibilityLabel("Save the current circuit")
             }
+            if model.slotNames.isEmpty {
+                Text("Nothing saved yet — name the bench and tap save.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(model.slotNames, id: \.self) { name in
+                    HStack(spacing: 6) {
+                        Button(name) {
+                            model.loadSlot(named: name)
+                        }
+                        .buttonStyle(.bordered)
+                        .font(DesignTokens.TypeScale.footnote)
+                        .accessibilityLabel("Load \(name)")
+                        Spacer(minLength: 0)
+                        Button(role: .destructive) {
+                            model.deleteSlot(named: name)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                        .controlSize(.mini)
+                        .accessibilityLabel("Delete \(name)")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Bench status and housekeeping: electron flow, clear, the live
+/// insight line, and the wiring hint — the read side of the lab.
+struct CircuitBenchPod: View {
+    @Environment(CircuitsModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+
+        ControlPod(title: "Bench", icon: "list.clipboard",
+                   tint: DesignTokens.Palette.circuitsAccent) {
+            Toggle("Electron flow", isOn: $model.showElectronFlow)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("Cyan dots drifting minus to plus along every live wire")
+            Button {
+                model.clearBench()
+            } label: {
+                Label("Clear bench", systemImage: "eraser")
+            }
+            .buttonStyle(.bordered)
+            .disabled(model.components.isEmpty)
+            .accessibilityHint("Removes every part and wire; Reset brings the starter loop back")
 
             if model.hasOverloadedBattery {
-                Label("Short circuit! The battery's own internal resistance is all that's limiting the current — put a bulb or resistor in the loop.",
+                Label("Short circuit! Only the battery's internal resistance limits the current — put a bulb or resistor in the loop.",
                       systemImage: "exclamationmark.triangle.fill")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.red)
             }
-
             if !model.insightText.isEmpty {
                 Text(model.insightText)
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
             if model.pendingTerminal != nil {
                 Text("Terminal armed — pinch another terminal to wire them (or the same one to cancel).")
                     .font(DesignTokens.TypeScale.footnote)

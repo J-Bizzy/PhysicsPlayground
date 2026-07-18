@@ -18,6 +18,7 @@ import RenderKit
 
 struct FieldSpaceView: View {
     @Environment(FieldModel.self) private var model
+    @Environment(AppModel.self) private var appModel
     @State private var renderer: FieldRenderer?
     @State private var router = ManipulationRouter()
 
@@ -26,17 +27,23 @@ struct FieldSpaceView: View {
             let renderer = FieldRenderer()
             content.add(renderer.root)
 
-            if let panel = attachments.entity(for: "controls") {
-                // Below the field region, tilted up toward the user's face.
-                panel.position = [-0.25, 0.72, -0.75]
-                panel.orientation = simd_quatf(angle: -0.35, axis: [1, 0, 0])
-                renderer.root.addChild(panel)
-            }
-            if let stats = attachments.entity(for: "stats") {
-                stats.position = [0.42, 0.72, -0.75]
-                stats.orientation = simd_quatf(angle: -0.35, axis: [1, 0, 0])
-                renderer.root.addChild(stats)
-            }
+            // The control constellation: five single-purpose pods in an
+            // arc around the field region, plus the numbers card. Each
+            // hangs from a grabbable bar; the pods orb clears them all.
+            let podsRoot = Entity()
+            renderer.root.addChild(podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-charges"), name: "Charges",
+                           at: [-1.05, 1.72, -0.85], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-probe"), name: "Test charge",
+                           at: [-1.2, 1.12, -0.65], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-capacitor"), name: "Capacitor",
+                           at: [1.05, 1.72, -0.85], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-magnetic"), name: "Magnetic field",
+                           at: [1.2, 1.12, -0.65], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-view"), name: "View",
+                           at: [-0.62, 0.78, -0.75], drop: 0.13, in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-stats"), name: "Numbers",
+                           at: [0.62, 0.78, -0.75], in: podsRoot)
 
             configureRouter(renderer: renderer)
             renderer.subscriptions = router.subscriptions(for: content)
@@ -48,23 +55,23 @@ struct FieldSpaceView: View {
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.stepProbe(dt: event.deltaTime)
                     renderer?.syncProbeNow(model.probe, isPositive: model.probeIsPositive)
+                    podsRoot.isEnabled = appModel.controlPodsVisible
                 }
             )
 
             renderer.startObserving(model)
             self.renderer = renderer
         } attachments: {
-            Attachment(id: "controls") {
-                ChargeControlsView(compact: true)
-                    .padding(20)
-                    .frame(width: 360)
-                    .glassBackgroundEffect()
-            }
-            Attachment(id: "stats") {
-                PhysicsStatsView()
-                    .padding(20)
-                    .frame(width: 340)
-                    .glassBackgroundEffect()
+            Attachment(id: "pod-charges") { ChargesPod() }
+            Attachment(id: "pod-probe") { TestChargePod() }
+            Attachment(id: "pod-capacitor") { CapacitorPod() }
+            Attachment(id: "pod-magnetic") { MagneticPod() }
+            Attachment(id: "pod-view") { FieldViewPod() }
+            Attachment(id: "pod-stats") {
+                ControlPod(title: "Numbers", icon: "number",
+                           tint: .secondary, width: 300) {
+                    PhysicsStatsView()
+                }
             }
         }
     }

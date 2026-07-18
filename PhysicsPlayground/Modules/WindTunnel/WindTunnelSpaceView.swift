@@ -14,6 +14,7 @@ import RenderKit
 
 struct WindTunnelSpaceView: View {
     @Environment(WindTunnelModel.self) private var model
+    @Environment(AppModel.self) private var appModel
     @State private var renderer: WindTunnelRenderer?
     @State private var router = ManipulationRouter()
     @State private var sensing = WindTunnelSensing()
@@ -23,11 +24,14 @@ struct WindTunnelSpaceView: View {
             let renderer = WindTunnelRenderer()
             content.add(renderer.root)
 
-            if let quick = attachments.entity(for: "quick") {
-                quick.position = [-1.45, 1.25, -0.9]
-                quick.orientation = simd_quatf(angle: 0.35, axis: [0, 1, 0])
-                renderer.root.addChild(quick)
-            }
+            // Control pods: the wind card floats beside the fan, the
+            // test-body card hangs low under the section.
+            let podsRoot = Entity()
+            renderer.root.addChild(podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-wind"), name: "Wind",
+                           at: [-1.35, 1.95, -1.15], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-body"), name: "Test body",
+                           at: [0.7, 0.95, -0.95], in: podsRoot)
             if let readout = attachments.entity(for: "probe") {
                 readout.position = [0, 0.02, 0]
                 renderer.probeAnchor.addChild(readout)
@@ -42,17 +46,19 @@ struct WindTunnelSpaceView: View {
                         model.obstacles = sensing.field
                     }
                     renderer?.tick(dt: event.deltaTime, model: model)
+                    podsRoot.isEnabled = appModel.controlPodsVisible
                 }
             )
 
             self.renderer = renderer
         } attachments: {
-            Attachment(id: "quick") {
-                WindTunnelQuickPanel()
+            Attachment(id: "pod-wind") {
+                WindPod()
                     .environment(model)
-                    .padding(18)
-                    .frame(width: 320)
-                    .glassBackgroundEffect()
+            }
+            Attachment(id: "pod-body") {
+                TestBodyPod()
+                    .environment(model)
             }
             Attachment(id: "probe") {
                 WindTunnelProbeReadout()
@@ -115,53 +121,35 @@ struct WindTunnelSpaceView: View {
     }
 }
 
-/// The floating in-space panel: wind, spin, time.
-struct WindTunnelQuickPanel: View {
+/// The wind's own pod, floating beside the fan it controls: speed,
+/// time, and — for the cylinder — spin and its Kutta–Joukowski lift.
+struct WindPod: View {
     @Environment(WindTunnelModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
 
-        VStack(alignment: .leading, spacing: 14) {
-            // The shape zoo: same frontal size, wildly different drag.
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Test body")
-                    .font(DesignTokens.TypeScale.label)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 6)], spacing: 6) {
-                    ForEach(DragBody.allCases) { body in
-                        Button {
-                            model.testBody = body
-                        } label: {
-                            Text(bodyName(body))
-                                .font(DesignTokens.TypeScale.footnote)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(model.testBody == body ? DesignTokens.Palette.windAccent : nil)
-                        .accessibilityLabel("Put the \(bodyName(body)) in the wind")
-                    }
-                }
-            }
-
-            Text("Cd \(model.testBody.dragCoefficient, specifier: "%.2f")   drag \(model.dragForce, specifier: "%.3f") N")
-                .font(DesignTokens.TypeScale.label.monospacedDigit())
-                .foregroundStyle(DesignTokens.Palette.forceVector)
-                .accessibilityLabel("Drag coefficient \(model.testBody.dragCoefficient), drag force \(model.dragForce) newtons")
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Wind: \(model.windSpeed, specifier: "%.2f") m/s")
-                    .font(DesignTokens.TypeScale.label.monospacedDigit())
+        ControlPod(title: "Wind", icon: "wind",
+                   tint: DesignTokens.Palette.windAccent) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(model.windSpeed, specifier: "%.2f") m/s")
+                    .font(DesignTokens.TypeScale.control.monospacedDigit())
                 Slider(value: $model.windSpeed, in: WindTunnelModel.windSpeedRange)
                     .accessibilityLabel("Wind speed")
             }
             if model.testBody == .cylinder {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Spin: \(model.spinRPM, specifier: "%.0f") rpm")
-                        .font(DesignTokens.TypeScale.label.monospacedDigit())
+                        .font(DesignTokens.TypeScale.control.monospacedDigit())
                     Slider(value: $model.circulation, in: WindTunnelModel.circulationRange)
                         .accessibilityLabel("Spin (circulation)")
                 }
+                if abs(model.liftPerSpan) > 0.02 {
+                    Text("Lift: \(abs(model.liftPerSpan), specifier: "%.2f") N/m")
+                        .font(DesignTokens.TypeScale.control.monospacedDigit())
+                        .foregroundStyle(DesignTokens.Palette.forceVector)
+                }
             }
-
             HStack(spacing: DesignTokens.Panel.rowSpacing) {
                 Button {
                     model.isPaused.toggle()
@@ -170,7 +158,6 @@ struct WindTunnelQuickPanel: View {
                 }
                 .buttonStyle(.bordered)
                 .accessibilityLabel(model.isPaused ? "Resume air" : "Freeze air")
-
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Slow motion ×\(model.timeScale, specifier: "%.1f")")
                         .font(DesignTokens.TypeScale.footnote.monospacedDigit())
@@ -178,12 +165,35 @@ struct WindTunnelQuickPanel: View {
                         .accessibilityLabel("Time scale")
                 }
             }
+        }
+    }
+}
 
-            if model.testBody == .cylinder, abs(model.liftPerSpan) > 0.02 {
-                Text("Lift: \(abs(model.liftPerSpan), specifier: "%.2f") N/m")
-                    .font(DesignTokens.TypeScale.label.monospacedDigit())
-                    .foregroundStyle(DesignTokens.Palette.forceVector)
+/// The shape zoo under the test section: same frontal size, wildly
+/// different measured drag.
+struct TestBodyPod: View {
+    @Environment(WindTunnelModel.self) private var model
+
+    var body: some View {
+        ControlPod(title: "Test body", icon: "cube",
+                   tint: DesignTokens.Palette.windAccent, width: 290) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 6)], spacing: 6) {
+                ForEach(DragBody.allCases) { body in
+                    Button {
+                        model.testBody = body
+                    } label: {
+                        Text(bodyName(body))
+                            .font(DesignTokens.TypeScale.footnote)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(model.testBody == body ? DesignTokens.Palette.windAccent : nil)
+                    .accessibilityLabel("Put the \(bodyName(body)) in the wind")
+                }
             }
+            Text("Cd \(model.testBody.dragCoefficient, specifier: "%.2f")   drag \(model.dragForce, specifier: "%.3f") N")
+                .font(DesignTokens.TypeScale.control.monospacedDigit())
+                .foregroundStyle(DesignTokens.Palette.forceVector)
+                .accessibilityLabel("Drag coefficient \(model.testBody.dragCoefficient), drag force \(model.dragForce) newtons")
         }
     }
 

@@ -2,10 +2,11 @@
 //  ModuleOrbControls.swift
 //  Physics Playground — Shell
 //
-//  The two floating orb controls every module inherits, hovering low
-//  in front of the user: a BACK orb (left, chevron) that returns to
-//  the exhibit ring, and a PAUSE orb (right, bars/triangle) that
-//  freezes the module's physics in time. Glass spheres with 3D icons
+//  The three floating orb controls every module inherits, hovering
+//  low in front of the user: a BACK orb (chevron) that returns to
+//  the exhibit ring, a PAUSE orb (bars/triangle) that freezes the
+//  module's physics in time, and a PODS orb (tiles) that clears the
+//  floating control pods away. Glass spheres with 3D icons
 //  billboarded toward the user; the system hover effect lights them
 //  on gaze, pinch activates.
 //
@@ -28,6 +29,7 @@ struct ModuleOrbControlsView: View {
             content.add(scene.root)
             scene.subscription = content.subscribe(to: SceneEvents.Update.self) { _ in
                 scene.showPausedState(module.isPaused())
+                scene.showPodsState(appModel.controlPodsVisible)
             }
         }
         .gesture(
@@ -39,6 +41,10 @@ struct ModuleOrbControlsView: View {
                         module.togglePause()
                         SoundPalette.play(.pop, on: scene.pauseOrb, volume: 0.5)
                         scene.pulse(scene.pauseOrb)
+                    case .pods:
+                        appModel.controlPodsVisible.toggle()
+                        SoundPalette.play(.pop, on: scene.podsOrb, volume: 0.5)
+                        scene.pulse(scene.podsOrb)
                     case .back:
                         SoundPalette.play(.pop, on: scene.backOrb, volume: 0.5)
                         scene.pulse(scene.backOrb)
@@ -58,16 +64,20 @@ struct ModuleOrbControlsView: View {
 @MainActor
 @Observable
 final class OrbScene {
-    enum Action { case pause, back }
+    enum Action { case pause, back, pods }
 
     let root = Entity()
     var subscription: EventSubscription?
 
     private(set) var pauseOrb = ModelEntity()
     private(set) var backOrb = ModelEntity()
+    private(set) var podsOrb = ModelEntity()
     private var pauseBars = Entity()
     private var playTriangle = Entity()
+    private var podTiles = Entity()
+    private var podTileSolo = Entity()
     private var showingPaused = false
+    private var showingPods = true
 
     private static let orbRadius: Float = 0.05
     private static let iconColor = UIColor(white: 0.95, alpha: 1)
@@ -75,13 +85,18 @@ final class OrbScene {
     func build() {
         backOrb = makeOrb(
             name: "orb-back",
-            at: SIMD3(-0.11, 0.85, -0.72),
+            at: SIMD3(-0.22, 0.85, -0.72),
             accessibilityLabel: "Back to the exhibit menu"
         )
         pauseOrb = makeOrb(
             name: "orb-pause",
-            at: SIMD3(0.11, 0.85, -0.72),
+            at: SIMD3(0, 0.85, -0.72),
             accessibilityLabel: "Pause or resume the physics"
+        )
+        podsOrb = makeOrb(
+            name: "orb-pods",
+            at: SIMD3(0.22, 0.85, -0.72),
+            accessibilityLabel: "Show or hide the floating control pods"
         )
 
         // Back: a chevron pointing left.
@@ -121,6 +136,26 @@ final class OrbScene {
         pauseIcon.addChild(pauseBars)
         pauseIcon.addChild(playTriangle)
         attachIcon(pauseIcon, to: pauseOrb)
+
+        // Pods: three little cards fanned out; a lone dim card while
+        // the pods are hidden.
+        let tileMesh = MeshResource.generateBox(
+            size: [0.016, 0.0115, 0.004], cornerRadius: 0.002)
+        for offset in [SIMD3<Float>(-0.011, 0.010, 0), SIMD3(0.011, 0.004, 0),
+                       SIMD3(0, -0.009, 0)] {
+            let tile = ModelEntity(mesh: tileMesh, materials: [iconMaterial])
+            tile.position = offset
+            podTiles.addChild(tile)
+        }
+        let soloTile = ModelEntity(
+            mesh: tileMesh,
+            materials: [UnlitMaterial(color: UIColor(white: 0.55, alpha: 1))])
+        podTileSolo.addChild(soloTile)
+        podTileSolo.isEnabled = false
+        let podsIcon = Entity()
+        podsIcon.addChild(podTiles)
+        podsIcon.addChild(podTileSolo)
+        attachIcon(podsIcon, to: podsOrb)
     }
 
     private func makeOrb(name: String, at position: SIMD3<Float>,
@@ -154,6 +189,14 @@ final class OrbScene {
         orb.addChild(pivot)
     }
 
+    /// Fanned tiles while pods are out, one dim tile while hidden.
+    func showPodsState(_ visible: Bool) {
+        guard visible != showingPods else { return }
+        showingPods = visible
+        podTiles.isEnabled = visible
+        podTileSolo.isEnabled = !visible
+    }
+
     /// Bars while running (pinch to pause), triangle while frozen.
     func showPausedState(_ paused: Bool) {
         guard paused != showingPaused else { return }
@@ -167,6 +210,7 @@ final class OrbScene {
         while let candidate = current {
             if candidate.name == "orb-pause" { return .pause }
             if candidate.name == "orb-back" { return .back }
+            if candidate.name == "orb-pods" { return .pods }
             current = candidate.parent
         }
         return nil
