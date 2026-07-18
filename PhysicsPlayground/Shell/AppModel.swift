@@ -105,6 +105,15 @@ final class AppModel {
         return model
     }
 
+    private var optics: OpticsModel?
+
+    var opticsModel: OpticsModel {
+        if let optics { return optics }
+        let model = OpticsModel()
+        optics = model
+        return model
+    }
+
     private var springs: SpringsModel?
 
     var springsModel: SpringsModel {
