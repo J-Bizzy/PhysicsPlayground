@@ -16,8 +16,43 @@ import Foundation
 import RealityKit
 import simd
 
+/// The CPU side of a tube mesh — buildable on any thread, uploaded on
+/// the main actor. Lets GeometryPipeline workers do the vertex math.
+public struct TubeBuffers: Sendable {
+    public var positions: [SIMD3<Float>] = []
+    public var normals: [SIMD3<Float>] = []
+    public var indices: [UInt32] = []
+    public var isEmpty: Bool { indices.isEmpty }
+
+    public init(positions: [SIMD3<Float>] = [], normals: [SIMD3<Float>] = [],
+                indices: [UInt32] = []) {
+        self.positions = positions
+        self.normals = normals
+        self.indices = indices
+    }
+}
+
 @MainActor public enum TubeMesh {
+    /// Convenience for callers already on the main actor.
     public static func tube(lines: [[SIMD3<Float>]], radius: Float = 0.0016, sides: Int = 5) -> MeshResource? {
+        mesh(from: buffers(lines: lines, radius: radius, sides: sides))
+    }
+
+    /// Uploads prebuilt buffers as a MeshResource (main actor: resource
+    /// creation touches RealityKit).
+    public static func mesh(from buffers: TubeBuffers) -> MeshResource? {
+        guard !buffers.isEmpty else { return nil }
+        var descriptor = MeshDescriptor(name: "tubes")
+        descriptor.positions = MeshBuffer(buffers.positions)
+        descriptor.normals = MeshBuffer(buffers.normals)
+        descriptor.primitives = .triangles(buffers.indices)
+        return try? MeshResource.generate(from: [descriptor])
+    }
+
+    /// Pure vertex math — safe on any thread.
+    public nonisolated static func buffers(
+        lines: [[SIMD3<Float>]], radius: Float = 0.0016, sides: Int = 5
+    ) -> TubeBuffers {
         var positions: [SIMD3<Float>] = []
         var normals: [SIMD3<Float>] = []
         var indices: [UInt32] = []
@@ -61,12 +96,6 @@ import simd
             }
         }
 
-        guard !indices.isEmpty else { return nil }
-
-        var descriptor = MeshDescriptor(name: "tubes")
-        descriptor.positions = MeshBuffer(positions)
-        descriptor.normals = MeshBuffer(normals)
-        descriptor.primitives = .triangles(indices)
-        return try? MeshResource.generate(from: [descriptor])
+        return TubeBuffers(positions: positions, normals: normals, indices: indices)
     }
 }

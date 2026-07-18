@@ -76,16 +76,24 @@ final class FieldRenderer {
     private var lastShowShells: Bool?
 
     private var geometryPipeline: GeometryPipeline<GeometryJob, GeometryResult>?
+    private let fieldFlowRoot = Entity()
+    /// The charge layout the currently-applied geometry was traced from.
+    private var appliedCharges: [PointCharge] = []
 
     init() {
         arrows = VectorFieldArrows(
             count: FieldModel.pointsPerAxis * FieldModel.pointsPerAxis * FieldModel.pointsPerAxis
         )
-        root.addChild(arrows.root)
 
+        // Everything derived from the traced field lives under one root:
+        // while a single charge is dragged, the whole pattern translates
+        // rigidly with it (exact for one charge — the field just moves),
+        // so the lines stick to the hand while the re-trace catches up.
+        root.addChild(fieldFlowRoot)
+        fieldFlowRoot.addChild(arrows.root)
         for entity in [linesEntity, positiveShellsEntity, negativeShellsEntity] {
             entity.isEnabled = false
-            root.addChild(entity)
+            fieldFlowRoot.addChild(entity)
         }
 
         geometryPipeline = GeometryPipeline(
@@ -146,6 +154,7 @@ final class FieldRenderer {
         syncProbeEntity(probe, isPositive: probeIsPositive)
         syncPlates(on: capacitorOn, center: capacitorCenter, separation: plateSeparation)
         syncBField(on: magneticFieldOn)
+        syncFieldFlowWarp(charges)
 
         let chargesChanged = charges != lastCharges || region != lastRegion
 
@@ -187,6 +196,19 @@ final class FieldRenderer {
     }
 
     private var lastShells = 3
+
+    /// While a lone charge moves, translate the whole traced pattern with
+    /// it — exact physics (one charge's field is the same everywhere, just
+    /// centered on the charge), and it makes the lines stick to the hand
+    /// instead of trailing the background re-trace.
+    private func syncFieldFlowWarp(_ charges: [PointCharge]) {
+        if charges.count == 1, appliedCharges.count == 1,
+           charges[0].id == appliedCharges[0].id {
+            fieldFlowRoot.position = SIMD3<Float>(charges[0].position - appliedCharges[0].position)
+        } else {
+            fieldFlowRoot.position = .zero
+        }
+    }
 
     // MARK: Uniform B field — the same visual language as the E lines:
     // continuous vertical lines with arrowheads riding them, pointing the
@@ -279,7 +301,8 @@ final class FieldRenderer {
     }
 
     private nonisolated struct GeometryResult: Sendable {
-        var lines: [[SIMD3<Float>]] = []
+        var sourceCharges: [PointCharge] = []
+        var tube = TubeBuffers()
         /// Sample points along the lines where arrowheads ride, with the
         /// true field vector there (direction AND strength for the pool's
         /// log-brightness ramp).
@@ -291,17 +314,23 @@ final class FieldRenderer {
 
     private nonisolated static func computeGeometry(_ job: GeometryJob) -> GeometryResult {
         var result = GeometryResult()
+        result.sourceCharges = job.charges
 
         if job.wantLines {
             var config = FieldLineTracer.Config()
             config.boundsCenter = job.region.center
             config.boundsRadius = max(simd_reduce_max(job.region.extents), FieldModel.regionExtent) * 0.95
-            result.lines = FieldLineTracer.trace(charges: job.charges, config: config)
+            // 1.2 cm steps: invisible on a 1.6 mm tube, ~40% cheaper than
+            // the tracer's default, so drags re-trace at a higher rate.
+            config.stepSize = 0.012
+            config.maxSteps = 220
+            let lines = FieldLineTracer.trace(charges: job.charges, config: config)
                 .map { $0.map(SIMD3<Float>.init) }
+            result.tube = TubeMesh.buffers(lines: lines)
 
             // Arrowheads at regular arc length along every line — the line
             // carries the path, the arrows carry the direction.
-            for line in result.lines {
+            for line in lines {
                 var nextAt = FieldRenderer.arrowSpacing * 0.6
                 var walked: Float = 0
                 for (a, b) in zip(line, line.dropFirst()) {
@@ -349,13 +378,17 @@ final class FieldRenderer {
     }
 
     private func applyGeometry(_ result: GeometryResult) {
-        if let mesh = TubeMesh.tube(lines: result.lines) {
+        if let mesh = TubeMesh.mesh(from: result.tube) {
             linesEntity.model = ModelComponent(mesh: mesh, materials: [lineMaterial])
         } else {
             linesEntity.model = nil
         }
         arrows.update(points: result.arrowPoints, vectors: result.arrowVectors,
                       hidden: [])
+        // Fresh geometry is anchored to its own charge layout; re-derive
+        // the warp so there's no pop when it lands mid-drag.
+        appliedCharges = result.sourceCharges
+        if let model { syncFieldFlowWarp(model.charges) }
         applyShellMesh(result.positiveShells, to: positiveShellsEntity, material: positiveShellMaterial)
         applyShellMesh(result.negativeShells, to: negativeShellsEntity, material: negativeShellMaterial)
     }
