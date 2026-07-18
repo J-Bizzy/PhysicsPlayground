@@ -63,9 +63,14 @@ public enum EquipotentialSurface {
     /// A pleasant default set of levels for a scene: shells at three
     /// reference radii from the strongest charge, positive and/or negative
     /// depending on which polarities are present.
-    public static func defaultLevels(for charges: [PointCharge]) -> [Double] {
-        guard let maxQ = charges.map({ abs($0.charge) }).max(), maxQ > 0 else { return [] }
-        let radii = [0.13, 0.21, 0.33]
+    public static func defaultLevels(for charges: [PointCharge], shells: Int = 3) -> [Double] {
+        guard let maxQ = charges.map({ abs($0.charge) }).max(), maxQ > 0,
+              shells > 0 else { return [] }
+        // `shells` casings per polarity, spread between tight and wide.
+        let radii = (0..<shells).map { index in
+            shells == 1 ? 0.2
+                : 0.11 + (0.40 - 0.11) * Double(index) / Double(shells - 1)
+        }
         var levels: [Double] = []
         if charges.contains(where: { $0.isPositive }) {
             levels += radii.map { ElectricField.k * maxQ / $0 }

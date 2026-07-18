@@ -123,6 +123,28 @@ struct ChargeControlsView: View {
                     Toggle("Shells", isOn: $model.showEquipotentials)
                         .accessibilityLabel("Show equipotential shells")
                 }
+
+                if model.showEquipotentials {
+                    Stepper("Casings per polarity: \(model.equipotentialShells)",
+                            value: $model.equipotentialShells, in: 1...6)
+                        .font(DesignTokens.TypeScale.control)
+                }
+
+                PanelSection("Parallel plates") {
+                    Toggle("Capacitor field", isOn: $model.capacitorOn)
+                        .font(DesignTokens.TypeScale.control)
+                    if model.capacitorOn {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("ΔV: \(model.plateVoltage / 1000, specifier: "%.0f") kV   E = V/d = \(model.plateVoltage / FieldModel.plateSeparation / 1000, specifier: "%.1f") kV/m")
+                                .font(DesignTokens.TypeScale.control.monospacedDigit())
+                            Slider(value: $model.plateVoltage, in: FieldModel.plateVoltageRange)
+                                .accessibilityLabel("Plate voltage")
+                        }
+                        Text("Uniform field between the plates: red is +, blue is −. Drop the probe in the gap — a + probe drifts toward the blue plate with a = qE/m, and doubling ΔV doubles the push.")
+                            .font(DesignTokens.TypeScale.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 .font(.callout)
             }
 

@@ -268,4 +268,35 @@ final class FieldModelTests: XCTestCase {
         XCTAssertTrue(model.showLines)
         XCTAssertTrue(model.showEquipotentials)
     }
+
+    /// The casing count is honored per polarity, and the capacitor
+    /// accelerates the probe at exactly a = qV/(d·m).
+    func testShellCountAndCapacitorDrift() {
+        // Shell levels: 5 casings around a positive-only system.
+        let charge = PointCharge(id: UUID(), position: SIMD3(0, 1.3, -1.0),
+                                 charge: 1e-6)
+        XCTAssertEqual(EquipotentialSurface.defaultLevels(for: [charge], shells: 5).count, 5)
+        XCTAssertEqual(EquipotentialSurface.defaultLevels(for: [charge], shells: 1).count, 1)
+
+        // Capacitor: no point charges, plates on, probe at the center.
+        let model = FieldModel()
+        model.removeAllCharges()
+        XCTAssertTrue(model.charges.isEmpty)
+        model.capacitorOn = true
+        model.plateVoltage = 20_000
+        model.dropProbe()
+        model.holdProbe(at: model.samplingRegion.center)
+        model.releaseProbe()
+
+        let expectedAcceleration = FieldModel.probeChargeMagnitude
+            * model.plateVoltage / FieldModel.plateSeparation / FieldModel.probeMass
+        for _ in 0..<27 {  // 0.3 s
+            model.stepProbe(dt: 1.0 / 90.0)
+        }
+        let probe = try! XCTUnwrap(model.probe)
+        XCTAssertEqual(probe.velocity.x, expectedAcceleration * 0.3,
+                       accuracy: expectedAcceleration * 0.3 * 0.02,
+                       "a + probe drifts toward the negative plate at qE/m")
+        XCTAssertEqual(probe.velocity.y, 0, accuracy: 1e-9)
+    }
 }

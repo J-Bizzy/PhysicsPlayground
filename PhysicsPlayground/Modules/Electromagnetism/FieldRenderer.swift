@@ -117,7 +117,9 @@ final class FieldRenderer {
                 probeIsPositive: model.probeIsPositive,
                 showArrows: model.showArrows,
                 showLines: model.showLines,
-                showShells: model.showEquipotentials
+                showShells: model.showEquipotentials,
+                shells: model.equipotentialShells,
+                capacitorOn: model.capacitorOn
             )
         }
     }
@@ -132,11 +134,14 @@ final class FieldRenderer {
         probeIsPositive: Bool,
         showArrows: Bool,
         showLines: Bool,
-        showShells: Bool
+        showShells: Bool,
+        shells: Int = 3,
+        capacitorOn: Bool = false
     ) {
         // Cheap path — runs every render.
         syncChargeEntities(charges, selectedID: selectedID)
         syncProbeEntity(probe, isPositive: probeIsPositive)
+        syncPlates(on: capacitorOn, region: region)
 
         let chargesChanged = charges != lastCharges || region != lastRegion
 
@@ -151,14 +156,18 @@ final class FieldRenderer {
         positiveShellsEntity.isEnabled = showShells && !charges.isEmpty
         negativeShellsEntity.isEnabled = showShells && !charges.isEmpty
         let visibilityChanged = showLines != lastShowLines || showShells != lastShowShells
-        if (showLines || showShells) && (chargesChanged || visibilityChanged) && !charges.isEmpty {
+        let shellsChanged = shells != lastShells
+        if (showLines || showShells) && (chargesChanged || visibilityChanged || shellsChanged)
+            && !charges.isEmpty {
             geometryPipeline?.submit(GeometryJob(
                 charges: charges,
                 region: region,
                 wantLines: showLines,
-                wantShells: showShells
+                wantShells: showShells,
+                shells: shells
             ))
         }
+        lastShells = shells
         lastShowLines = showLines
         lastShowShells = showShells
         lastCharges = charges
@@ -172,6 +181,37 @@ final class FieldRenderer {
         var region: FieldModel.SamplingRegion
         var wantLines: Bool
         var wantShells: Bool
+        var shells: Int
+    }
+
+    private var lastShells = 3
+
+    // MARK: Capacitor plates
+
+    private var plateEntities: [ModelEntity] = []
+
+    private func syncPlates(on: Bool, region: FieldModel.SamplingRegion) {
+        if plateEntities.isEmpty {
+            let mesh = MeshResource.generateBox(
+                size: [0.012, Float(FieldModel.plateSize), Float(FieldModel.plateSize)],
+                cornerRadius: 0.004)
+            for isPositive in [true, false] {
+                var material = PhysicallyBasedMaterial()
+                material.baseColor = .init(tint: isPositive
+                    ? DesignTokens.Palette.positiveUI : DesignTokens.Palette.negativeUI)
+                material.roughness = 0.4
+                material.blending = .transparent(opacity: .init(floatLiteral: 0.35))
+                let plate = ModelEntity(mesh: mesh, materials: [material])
+                plate.isEnabled = false
+                plateEntities.append(plate)
+                root.addChild(plate)
+            }
+        }
+        let center = SIMD3<Float>(region.center)
+        let half = Float(FieldModel.plateSeparation / 2)
+        plateEntities[0].position = center + SIMD3(-half, 0, 0)  // + plate
+        plateEntities[1].position = center + SIMD3(half, 0, 0)   // − plate
+        for plate in plateEntities { plate.isEnabled = on }
     }
 
     private nonisolated struct ShellMeshData: Sendable {
@@ -197,7 +237,7 @@ final class FieldRenderer {
         }
 
         if job.wantShells {
-            for level in EquipotentialSurface.defaultLevels(for: job.charges) {
+            for level in EquipotentialSurface.defaultLevels(for: job.charges, shells: job.shells) {
                 let triangles = EquipotentialSurface.triangles(
                     level: level,
                     charges: job.charges,

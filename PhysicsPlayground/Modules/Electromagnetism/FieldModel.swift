@@ -76,6 +76,36 @@ final class FieldModel {
     var showArrows = true
     var showLines = true
     var showEquipotentials = true
+    /// How many equipotential casings wrap each polarity (1…6).
+    var equipotentialShells = 3
+
+    // MARK: Parallel-plate capacitor
+
+    /// Two square plates bracketing the region: left (−x) positive,
+    /// right (+x) negative, uniform E = V/d between them (fringing
+    /// ignored, as every textbook does).
+    var capacitorOn = false
+    /// Plate voltage difference, V. kV-scale, like a real demo bench.
+    var plateVoltage = 20_000.0
+    nonisolated static let plateSeparation = 0.44
+    nonisolated static let plateSize = 0.5
+    nonisolated static let plateVoltageRange = 2_000.0...40_000.0
+
+    /// The uniform field between the plates (zero outside them).
+    func capacitorField(at point: SIMD3<Double>) -> SIMD3<Double> {
+        guard capacitorOn else { return .zero }
+        let offset = point - samplingRegion.center
+        guard abs(offset.x) < Self.plateSeparation / 2,
+              abs(offset.y) < Self.plateSize / 2,
+              abs(offset.z) < Self.plateSize / 2 else { return .zero }
+        // + plate on the −x side: E points +x, from + toward −.
+        return SIMD3(plateVoltage / Self.plateSeparation, 0, 0)
+    }
+
+    /// The full field the probe feels: point charges + plates.
+    func fieldVector(at point: SIMD3<Double>) -> SIMD3<Double> {
+        ElectricField.vector(at: point, dueTo: charges) + capacitorField(at: point)
+    }
 
     /// Freezes the probe's flight (the module's only time evolution).
     var isPaused = false
@@ -101,6 +131,9 @@ final class FieldModel {
         showArrows = true
         showLines = true
         showEquipotentials = true
+        equipotentialShells = 3
+        capacitorOn = false
+        plateVoltage = 20_000
         isPaused = false
         placementIndex = 1
     }
@@ -235,7 +268,8 @@ final class FieldModel {
     /// Advances the simulation by one frame. Substepped velocity Verlet, so
     /// accuracy doesn't ride on the display frame rate.
     func stepProbe(dt: Double) {
-        guard !isPaused, probeStatus == .running, var state = probe, !charges.isEmpty else { return }
+        guard !isPaused, probeStatus == .running, var state = probe,
+              !charges.isEmpty || capacitorOn else { return }
 
         // A stalled frame (app paused, debugger…) must not become one giant
         // physics leap.
@@ -245,12 +279,19 @@ final class FieldModel {
             chargeToMassRatio: probeCharge / Self.probeMass,
             dt: frameDt,
             substeps: 4
-        ) { [charges] point in
-            ElectricField.vector(at: point, dueTo: charges)
+        ) { point in
+            self.fieldVector(at: point)
         }
 
-        // Landed on a source charge: field lines end here, and so does the ride.
-        if charges.contains(where: { simd_distance($0.position, state.position) < Self.probeCaptureRadius }) {
+        // Landed on a source charge or a capacitor plate: ride over.
+        let plateOffset = state.position - samplingRegion.center
+        let hitPlate = capacitorOn
+            && abs(plateOffset.x) >= Self.plateSeparation / 2 - 0.01
+            && abs(plateOffset.x) < Self.plateSeparation / 2 + 0.06
+            && abs(plateOffset.y) < Self.plateSize / 2
+            && abs(plateOffset.z) < Self.plateSize / 2
+        if hitPlate
+            || charges.contains(where: { simd_distance($0.position, state.position) < Self.probeCaptureRadius }) {
             probeStatus = .captured
         } else if simd_distance(state.position, samplingRegion.center) > Self.probeEscapeDistance {
             // Off to infinity, as a real unbound charge would be.
@@ -273,7 +314,7 @@ final class FieldModel {
 
     var probeReadout: ProbeReadout? {
         guard let probe else { return nil }
-        let fieldMagnitude = ElectricField.magnitude(at: probe.position, dueTo: charges)
+        let fieldMagnitude = simd_length(fieldVector(at: probe.position))
         let force = Self.probeChargeMagnitude * fieldMagnitude
         return ProbeReadout(
             fieldMagnitude: fieldMagnitude,
