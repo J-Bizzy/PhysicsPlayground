@@ -493,4 +493,39 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertGreaterThan(abs(charged), 3, "well into the charge curve after 2 s")
         XCTAssertLessThan(abs(charged), 8, "but nowhere near full yet")
     }
+
+    /// The bench survives relaunch: an edited build saves, a fresh
+    /// restoring model reopens it exactly, and non-restoring models
+    /// (like every other test here) always get the starter loop.
+    func testBenchPersistsAcrossRelaunch() {
+        UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey)
+
+        let model = CircuitsModel()
+        model.clearBench()
+        model.add(.battery)
+        model.add(.resistor)
+        let battery = model.components[0]
+        let resistor = model.components[1]
+        model.select(id: resistor.id)
+        model.selectedValue = 2200
+        model.tapTerminal(.init(componentID: battery.id, end: 1))
+        model.tapTerminal(.init(componentID: resistor.id, end: 0))
+        model.setAxis(id: resistor.id, axis: SIMD3(0, 1, 0))
+        model.persistNow()
+
+        // "Relaunch": a restoring model reopens the build.
+        let restored = CircuitsModel(restoreSaved: true)
+        XCTAssertEqual(restored.components.count, 2)
+        XCTAssertEqual(restored.wires.count, 1)
+        let restoredResistor = restored.components.first { $0.kind == .resistor }!
+        XCTAssertEqual(restoredResistor.value, 2200, accuracy: 1e-12)
+        XCTAssertEqual(simd_distance(restoredResistor.axis, SIMD3(0, 1, 0)), 0,
+                       accuracy: 1e-12, "orientation survives too")
+
+        // Non-restoring init ignores the save (starter loop as always).
+        let fresh = CircuitsModel()
+        XCTAssertEqual(fresh.components.count, 3)
+
+        UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey)
+    }
 }

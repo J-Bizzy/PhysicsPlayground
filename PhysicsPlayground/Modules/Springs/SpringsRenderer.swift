@@ -176,6 +176,18 @@ final class SpringsRenderer {
 
         infoAnchor.components.set(BillboardComponent())
         root.addChild(infoAnchor)
+
+        audioEmitter.components.set(SpatialAudioComponent())
+        root.addChild(audioEmitter)
+    }
+
+    private let audioEmitter = Entity()
+
+    /// A soft whoosh on release, louder for faster pulls.
+    func playRelease(speed: Double, at position: SIMD3<Double>) {
+        audioEmitter.position = SIMD3<Float>(position)
+        SoundPalette.play(.whoosh, on: audioEmitter,
+                          volume: min(0.25 + speed * 0.25, 0.85))
     }
 
     // MARK: Per-frame tick

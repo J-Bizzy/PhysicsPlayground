@@ -92,6 +92,7 @@ struct SpringsSpaceView: View {
                 velocity = simd_dot(handVelocity, model.axisDirection)
             }
             model.release(handVelocityX: velocity)
+            renderer?.playRelease(speed: abs(velocity), at: world)
             renderer?.grabbedBlock = nil
             handSamples = []
         }

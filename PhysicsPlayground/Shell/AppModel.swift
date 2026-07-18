@@ -91,7 +91,7 @@ final class AppModel {
 
     var circuitsModel: CircuitsModel {
         if let circuits { return circuits }
-        let model = CircuitsModel()
+        let model = CircuitsModel(restoreSaved: true)
         circuits = model
         return model
     }

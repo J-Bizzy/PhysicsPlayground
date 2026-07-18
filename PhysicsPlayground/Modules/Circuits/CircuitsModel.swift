@@ -41,7 +41,7 @@ final class CircuitsModel {
 
     // MARK: Components
 
-    enum ComponentKind: String, CaseIterable, Identifiable {
+    enum ComponentKind: String, CaseIterable, Identifiable, Codable {
         case battery, resistor, bulb, capacitor, switcher, wire
 
         var id: String { rawValue }
@@ -88,12 +88,12 @@ final class CircuitsModel {
         max(length, 0.01) * wireOhmsPerMeter
     }
 
-    struct Terminal: Equatable, Hashable {
+    struct Terminal: Equatable, Hashable, Codable {
         var componentID: UUID
         var end: Int  // 0 = left (battery +), 1 = right
     }
 
-    struct Component: Identifiable, Equatable {
+    struct Component: Identifiable, Equatable, Codable {
         let id: UUID
         let kind: ComponentKind
         var position: SIMD3<Double>
@@ -119,7 +119,7 @@ final class CircuitsModel {
         }
     }
 
-    struct Wire: Identifiable, Equatable {
+    struct Wire: Identifiable, Equatable, Codable {
         let id: UUID
         let from: Terminal
         let to: Terminal
@@ -188,6 +188,7 @@ final class CircuitsModel {
         components.append(component)
         selectedID = component.id
         emitSound(.pop, at: position, volume: 0.6)
+        persistSoon()
         return component.id
     }
 
@@ -199,6 +200,7 @@ final class CircuitsModel {
         if pendingTerminal?.componentID == selectedID { pendingTerminal = nil }
         self.selectedID = components.last?.id
         emitSound(.thud, at: component.position, volume: 0.4)
+        persistSoon()
     }
 
     func select(id: UUID) {
@@ -246,6 +248,7 @@ final class CircuitsModel {
         }
         if connected {
             emitSound(.chime, at: component.position, volume: 0.5)
+            persistSoon()
         }
     }
 
@@ -323,6 +326,7 @@ final class CircuitsModel {
         if let component = components.first(where: { $0.id == terminal.componentID }) {
             emitSound(.pop, at: component.terminalPosition(terminal.end), volume: 0.8)
         }
+        persistSoon()
     }
 
     func deleteWire(id: UUID) {
@@ -331,6 +335,7 @@ final class CircuitsModel {
         if let component = components.first(where: { $0.id == wire.from.componentID }) {
             emitSound(.thud, at: component.terminalPosition(wire.from.end), volume: 0.3)
         }
+        persistSoon()
     }
 
     func toggleSwitch(id: UUID) {
@@ -339,6 +344,7 @@ final class CircuitsModel {
         components[index].isClosed.toggle()
         selectedID = id
         emitSound(.thud, at: components[index].position, volume: 0.5)
+        persistSoon()
     }
 
     // MARK: Selected-component value editing
@@ -348,6 +354,7 @@ final class CircuitsModel {
         set {
             guard let index = components.firstIndex(where: { $0.id == selectedID }) else { return }
             components[index].value = newValue
+            persistSoon()
         }
     }
 
@@ -472,6 +479,52 @@ final class CircuitsModel {
             flows[wire.id] = (outflow(wire.from) - outflow(wire.to)) / 2
         }
         wireFlows = flows
+    }
+
+    // MARK: Persistence (the bench survives relaunch)
+
+    private struct SavedBench: Codable {
+        var components: [Component]
+        var wires: [Wire]
+    }
+
+    nonisolated static let saveKey = "circuits.savedBench.v1"
+    private var persistTask: Task<Void, Never>?
+
+    /// Debounced save: edits within a second collapse into one write.
+    private func persistSoon() {
+        persistTask?.cancel()
+        persistTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            self?.persistNow()
+        }
+    }
+
+    /// Immediate save (internal so tests can force it).
+    func persistNow() {
+        let bench = SavedBench(components: components, wires: wires)
+        if let data = try? JSONEncoder().encode(bench) {
+            UserDefaults.standard.set(data, forKey: Self.saveKey)
+        }
+    }
+
+    /// Restores a saved bench if one exists and passes sanity checks.
+    private func restoreSavedBench() -> Bool {
+        guard let data = UserDefaults.standard.data(forKey: Self.saveKey),
+              let bench = try? JSONDecoder().decode(SavedBench.self, from: data),
+              !bench.components.isEmpty,
+              bench.components.count <= Self.componentBudget
+        else { return false }
+        components = bench.components
+        // Drop any wire whose ends no longer exist (defensive).
+        wires = bench.wires.filter { wire in
+            bench.components.contains { $0.id == wire.from.componentID }
+                && bench.components.contains { $0.id == wire.to.componentID }
+        }
+        selectedID = nil
+        step(dt: 1.0 / 90.0)
+        return true
     }
 
     // MARK: Premade circuits
@@ -625,7 +678,12 @@ final class CircuitsModel {
         step(dt: 1.0 / 90.0)
     }
 
-    init() {
+    /// `restoreSaved` re-opens the user's last bench (AppModel passes
+    /// true); tests use the default and always get the starter loop.
+    init(restoreSaved: Bool = false) {
         reset()
+        if restoreSaved, restoreSavedBench() {
+            insightText = ""
+        }
     }
 }
