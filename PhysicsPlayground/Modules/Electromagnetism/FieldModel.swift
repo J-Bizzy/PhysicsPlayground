@@ -87,19 +87,41 @@ final class FieldModel {
     var capacitorOn = false
     /// Plate voltage difference, V. kV-scale, like a real demo bench.
     var plateVoltage = 20_000.0
-    nonisolated static let plateSeparation = 0.44
+    /// Where the gap's midpoint sits — grab a plate to carry it.
+    var capacitorCenter = SIMD3<Double>(0, 1.3, -1.0)
+    /// Gap width, m — grab a plate and pull: E = V/d follows live.
+    var plateSeparation = 0.44
     nonisolated static let plateSize = 0.5
     nonisolated static let plateVoltageRange = 2_000.0...40_000.0
+    nonisolated static let plateSeparationRange = 0.15...1.0
+
+    /// A plate's world x (0 = the + plate on the −x side).
+    func plateX(_ index: Int) -> Double {
+        capacitorCenter.x + (index == 0 ? -plateSeparation : plateSeparation) / 2
+    }
+
+    /// Grabbing a plate: its own x changes the GAP (the other plate
+    /// stays put), while its y/z carry the whole assembly.
+    func movePlate(_ index: Int, toWorld world: SIMD3<Double>) {
+        let fixedX = plateX(index == 0 ? 1 : 0)
+        let pulled = index == 0 ? fixedX - world.x : world.x - fixedX
+        let separation = min(max(pulled, Self.plateSeparationRange.lowerBound),
+                             Self.plateSeparationRange.upperBound)
+        plateSeparation = separation
+        capacitorCenter.x = index == 0 ? fixedX - separation / 2 : fixedX + separation / 2
+        capacitorCenter.y = max(world.y, Self.plateSize / 2 + 0.15)
+        capacitorCenter.z = world.z
+    }
 
     /// The uniform field between the plates (zero outside them).
     func capacitorField(at point: SIMD3<Double>) -> SIMD3<Double> {
         guard capacitorOn else { return .zero }
-        let offset = point - samplingRegion.center
-        guard abs(offset.x) < Self.plateSeparation / 2,
+        let offset = point - capacitorCenter
+        guard abs(offset.x) < plateSeparation / 2,
               abs(offset.y) < Self.plateSize / 2,
               abs(offset.z) < Self.plateSize / 2 else { return .zero }
         // + plate on the −x side: E points +x, from + toward −.
-        return SIMD3(plateVoltage / Self.plateSeparation, 0, 0)
+        return SIMD3(plateVoltage / plateSeparation, 0, 0)
     }
 
     /// The full field the probe feels: point charges + plates.
@@ -134,6 +156,8 @@ final class FieldModel {
         equipotentialShells = 3
         capacitorOn = false
         plateVoltage = 20_000
+        capacitorCenter = samplingRegion.center
+        plateSeparation = 0.44
         isPaused = false
         placementIndex = 1
     }
@@ -284,10 +308,10 @@ final class FieldModel {
         }
 
         // Landed on a source charge or a capacitor plate: ride over.
-        let plateOffset = state.position - samplingRegion.center
+        let plateOffset = state.position - capacitorCenter
         let hitPlate = capacitorOn
-            && abs(plateOffset.x) >= Self.plateSeparation / 2 - 0.01
-            && abs(plateOffset.x) < Self.plateSeparation / 2 + 0.06
+            && abs(plateOffset.x) >= plateSeparation / 2 - 0.01
+            && abs(plateOffset.x) < plateSeparation / 2 + 0.06
             && abs(plateOffset.y) < Self.plateSize / 2
             && abs(plateOffset.z) < Self.plateSize / 2
         if hitPlate

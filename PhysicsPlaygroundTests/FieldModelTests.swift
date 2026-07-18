@@ -289,7 +289,7 @@ final class FieldModelTests: XCTestCase {
         model.releaseProbe()
 
         let expectedAcceleration = FieldModel.probeChargeMagnitude
-            * model.plateVoltage / FieldModel.plateSeparation / FieldModel.probeMass
+            * model.plateVoltage / model.plateSeparation / FieldModel.probeMass
         for _ in 0..<27 {  // 0.3 s
             model.stepProbe(dt: 1.0 / 90.0)
         }
@@ -298,5 +298,17 @@ final class FieldModelTests: XCTestCase {
                        accuracy: expectedAcceleration * 0.3 * 0.02,
                        "a + probe drifts toward the negative plate at qE/m")
         XCTAssertEqual(probe.velocity.y, 0, accuracy: 1e-9)
+
+        // Grab the negative plate and pull it outward: the gap grows,
+        // the other plate stays put, and E = V/d falls.
+        let fieldBefore = simd_length(model.capacitorField(at: model.capacitorCenter))
+        let leftPlateX = model.plateX(0)
+        model.movePlate(1, toWorld: model.capacitorCenter
+                        + SIMD3(0.45, 0, 0))
+        XCTAssertEqual(model.plateX(0), leftPlateX, accuracy: 1e-9,
+                       "the un-grabbed plate stays put")
+        XCTAssertGreaterThan(model.plateSeparation, 0.5)
+        let fieldAfter = simd_length(model.capacitorField(at: model.capacitorCenter))
+        XCTAssertLessThan(fieldAfter, fieldBefore, "wider gap, weaker field")
     }
 }

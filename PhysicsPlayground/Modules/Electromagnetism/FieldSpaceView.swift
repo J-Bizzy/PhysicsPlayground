@@ -70,8 +70,14 @@ struct FieldSpaceView: View {
     }
 
     private func configureRouter(renderer: FieldRenderer) {
+        func plateIndex(_ name: String) -> Int? {
+            name == "plate-0" ? 0 : name == "plate-1" ? 1 : nil
+        }
         router.onBegin = { [weak renderer] name, position in
-            if name == FieldRenderer.probeEntityName {
+            if let index = plateIndex(name) {
+                renderer?.manipulatingPlateIndex = index
+                model.movePlate(index, toWorld: SIMD3<Double>(position))
+            } else if name == FieldRenderer.probeEntityName {
                 renderer?.isManipulatingProbe = true
                 model.holdProbe(at: SIMD3<Double>(position))
             } else if let id = UUID(uuidString: name) {
@@ -80,14 +86,19 @@ struct FieldSpaceView: View {
             }
         }
         router.onMove = { name, position in
-            if name == FieldRenderer.probeEntityName {
+            if let index = plateIndex(name) {
+                model.movePlate(index, toWorld: SIMD3<Double>(position))
+            } else if name == FieldRenderer.probeEntityName {
                 model.holdProbe(at: SIMD3<Double>(position))
             } else if let id = UUID(uuidString: name) {
                 model.moveCharge(id: id, to: SIMD3<Double>(position))
             }
         }
         router.onEnd = { [weak renderer] name, position in
-            if name == FieldRenderer.probeEntityName {
+            if let index = plateIndex(name) {
+                model.movePlate(index, toWorld: SIMD3<Double>(position))
+                renderer?.manipulatingPlateIndex = nil
+            } else if name == FieldRenderer.probeEntityName {
                 renderer?.isManipulatingProbe = false
                 model.holdProbe(at: SIMD3<Double>(position))
                 model.releaseProbe()

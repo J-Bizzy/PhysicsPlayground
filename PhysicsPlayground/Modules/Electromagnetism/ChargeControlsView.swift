@@ -135,7 +135,7 @@ struct ChargeControlsView: View {
                         .font(DesignTokens.TypeScale.control)
                     if model.capacitorOn {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("ΔV: \(model.plateVoltage / 1000, specifier: "%.0f") kV   E = V/d = \(model.plateVoltage / FieldModel.plateSeparation / 1000, specifier: "%.1f") kV/m")
+                            Text("ΔV: \(model.plateVoltage / 1000, specifier: "%.0f") kV   E = V/d = \(model.plateVoltage / model.plateSeparation / 1000, specifier: "%.1f") kV/m   d = \(model.plateSeparation * 100, specifier: "%.0f") cm")
                                 .font(DesignTokens.TypeScale.control.monospacedDigit())
                             Slider(value: $model.plateVoltage, in: FieldModel.plateVoltageRange)
                                 .accessibilityLabel("Plate voltage")

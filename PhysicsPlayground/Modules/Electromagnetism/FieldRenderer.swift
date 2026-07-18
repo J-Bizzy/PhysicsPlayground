@@ -119,7 +119,9 @@ final class FieldRenderer {
                 showLines: model.showLines,
                 showShells: model.showEquipotentials,
                 shells: model.equipotentialShells,
-                capacitorOn: model.capacitorOn
+                capacitorOn: model.capacitorOn,
+                capacitorCenter: model.capacitorCenter,
+                plateSeparation: model.plateSeparation
             )
         }
     }
@@ -136,12 +138,14 @@ final class FieldRenderer {
         showLines: Bool,
         showShells: Bool,
         shells: Int = 3,
-        capacitorOn: Bool = false
+        capacitorOn: Bool = false,
+        capacitorCenter: SIMD3<Double> = .zero,
+        plateSeparation: Double = 0.44
     ) {
         // Cheap path — runs every render.
         syncChargeEntities(charges, selectedID: selectedID)
         syncProbeEntity(probe, isPositive: probeIsPositive)
-        syncPlates(on: capacitorOn, region: region)
+        syncPlates(on: capacitorOn, center: capacitorCenter, separation: plateSeparation)
 
         let chargesChanged = charges != lastCharges || region != lastRegion
 
@@ -189,8 +193,10 @@ final class FieldRenderer {
     // MARK: Capacitor plates
 
     private var plateEntities: [ModelEntity] = []
+    /// The plate a hand is dragging (system-owned; don't reposition it).
+    var manipulatingPlateIndex: Int?
 
-    private func syncPlates(on: Bool, region: FieldModel.SamplingRegion) {
+    private func syncPlates(on: Bool, center: SIMD3<Double>, separation: Double) {
         if plateEntities.isEmpty {
             let mesh = MeshResource.generateBox(
                 size: [0.012, Float(FieldModel.plateSize), Float(FieldModel.plateSize)],
@@ -202,15 +208,25 @@ final class FieldRenderer {
                 material.roughness = 0.4
                 material.blending = .transparent(opacity: .init(floatLiteral: 0.35))
                 let plate = ModelEntity(mesh: mesh, materials: [material])
+                plate.name = isPositive ? "plate-0" : "plate-1"
+                Grabbable.configure(plate, collisionRadius: 0.26)
+                var accessibility = AccessibilityComponent()
+                accessibility.isAccessibilityElement = true
+                accessibility.label = "Capacitor plate. Drag along the field axis to change the gap; carry it to move the capacitor."
+                plate.components.set(accessibility)
                 plate.isEnabled = false
                 plateEntities.append(plate)
                 root.addChild(plate)
             }
         }
-        let center = SIMD3<Float>(region.center)
-        let half = Float(FieldModel.plateSeparation / 2)
-        plateEntities[0].position = center + SIMD3(-half, 0, 0)  // + plate
-        plateEntities[1].position = center + SIMD3(half, 0, 0)   // − plate
+        let mid = SIMD3<Float>(center)
+        let half = Float(separation / 2)
+        if manipulatingPlateIndex != 0 {
+            plateEntities[0].position = mid + SIMD3(-half, 0, 0)  // + plate
+        }
+        if manipulatingPlateIndex != 1 {
+            plateEntities[1].position = mid + SIMD3(half, 0, 0)   // − plate
+        }
         for plate in plateEntities { plate.isEnabled = on }
     }
 
@@ -400,7 +416,7 @@ final class FieldRenderer {
             materials: [SimpleMaterial(color: Self.probePositiveColor, roughness: 0.3, isMetallic: false)]
         )
         sphere.name = Self.probeEntityName
-        Grabbable.configure(sphere, collisionRadius: Self.probeRadius * 2.4)
+        Grabbable.configure(sphere, collisionRadius: max(Self.probeRadius * 2.4, 0.06))
         root.addChild(sphere)
         probeEntity = sphere
         return sphere
