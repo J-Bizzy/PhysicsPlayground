@@ -196,6 +196,15 @@ final class FieldModel {
     init() {
         charges = []
         reset()
+        // Debug hook: `simctl launch … -emMagnetic 1` opens with the
+        // uniform B field (and electron mode) already on — the toggles
+        // can't be pinched from the command line.
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "emMagnetic") {
+            magneticFieldOn = true
+            electronMode = true
+        }
+        #endif
     }
 
     /// Returns the module to its freshly-entered state: one positive charge

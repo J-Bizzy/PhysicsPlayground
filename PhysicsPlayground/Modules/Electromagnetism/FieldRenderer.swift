@@ -120,7 +120,8 @@ final class FieldRenderer {
                 shells: model.equipotentialShells,
                 capacitorOn: model.capacitorOn,
                 capacitorCenter: model.capacitorCenter,
-                plateSeparation: model.plateSeparation
+                plateSeparation: model.plateSeparation,
+                magneticFieldOn: model.magneticFieldOn
             )
         }
     }
@@ -137,12 +138,14 @@ final class FieldRenderer {
         shells: Int = 3,
         capacitorOn: Bool = false,
         capacitorCenter: SIMD3<Double> = .zero,
-        plateSeparation: Double = 0.44
+        plateSeparation: Double = 0.44,
+        magneticFieldOn: Bool = false
     ) {
         // Cheap path — runs every render.
         syncChargeEntities(charges, selectedID: selectedID)
         syncProbeEntity(probe, isPositive: probeIsPositive)
         syncPlates(on: capacitorOn, center: capacitorCenter, separation: plateSeparation)
+        syncBField(on: magneticFieldOn)
 
         let chargesChanged = charges != lastCharges || region != lastRegion
 
@@ -184,6 +187,51 @@ final class FieldRenderer {
     }
 
     private var lastShells = 3
+
+    // MARK: Uniform B field — the same visual language as the E lines:
+    // continuous vertical lines with arrowheads riding them, pointing the
+    // way B points (up). Violet, like the magnet pod. The field is
+    // uniform, so the geometry is static — built once, then toggled.
+
+    private let bFieldRoot = Entity()
+    private var bFieldBuilt = false
+
+    private func syncBField(on: Bool) {
+        if on && !bFieldBuilt {
+            bFieldBuilt = true
+            let material = UnlitMaterial(color: DesignTokens.Palette.probeNegativeUI)
+            let center = SIMD3<Float>(FieldModel.regionCenter)
+            let lattice: [Float] = [-0.54, -0.18, 0.18, 0.54]
+            let yBottom = center.y - 0.6
+            let yTop = center.y + 0.6
+
+            var lines: [[SIMD3<Float>]] = []
+            for x in lattice {
+                for z in lattice {
+                    lines.append([SIMD3(center.x + x, yBottom, center.z + z),
+                                  SIMD3(center.x + x, yTop, center.z + z)])
+                }
+            }
+            if let mesh = TubeMesh.tube(lines: lines) {
+                bFieldRoot.addChild(ModelEntity(mesh: mesh, materials: [material]))
+            }
+            // Arrowheads chained up each line (cones point +y already).
+            let coneMesh = MeshResource.generateCone(height: 0.02, radius: 0.008)
+            for x in lattice {
+                for z in lattice {
+                    var y = yBottom + 0.12
+                    while y < yTop - 0.06 {
+                        let head = ModelEntity(mesh: coneMesh, materials: [material])
+                        head.position = [center.x + x, y, center.z + z]
+                        bFieldRoot.addChild(head)
+                        y += FieldRenderer.arrowSpacing
+                    }
+                }
+            }
+            root.addChild(bFieldRoot)
+        }
+        bFieldRoot.isEnabled = on
+    }
 
     // MARK: Capacitor plates
 
