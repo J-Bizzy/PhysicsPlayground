@@ -36,6 +36,20 @@ public enum DragBody: String, CaseIterable, Sendable, Identifiable {
 
     public var id: String { rawValue }
 
+    /// The three real-world vehicles (vs. the canonical lab shapes).
+    public var isVehicle: Bool {
+        switch self {
+        case .car, .truck, .plane: true
+        default: false
+        }
+    }
+
+    /// Vehicles present 2.2× larger than the lab shapes at the same
+    /// size setting, so the flow visibly works around them. This is the
+    /// single knob the renderer scale, the frontal area, and the
+    /// streamline deflection radius all share — size and physics agree.
+    public var sizeMultiplier: Double { isVehicle ? 2.2 : 1 }
+
     /// Measured drag coefficient at high (subcritical) Reynolds number.
     public var dragCoefficient: Double {
         switch self {
@@ -67,14 +81,16 @@ public enum DragBody: String, CaseIterable, Sendable, Identifiable {
         case .sphere, .teardrop, .flatDisc, .cone:
             .pi * radius * radius
         case .car:
-            // Sedan silhouette: ~2r wide × 1.4r tall.
-            (2 * radius) * (1.4 * radius)
+            // Sedan silhouette (1.85 m wide × 1.45 m tall): 2r × 1.57r.
+            (2 * radius) * (1.57 * radius)
         case .truck:
-            // Box truck: ~2r wide × 2r tall.
-            (2 * radius) * (2 * radius)
+            // Semi tractor-trailer (2.55 m wide × 3.95 m tall): 2r × 3.1r.
+            (2 * radius) * (3.1 * radius)
         case .plane:
-            // Fuselage circle; the wings meet the flow edge-on.
-            .pi * radius * radius
+            // Slender airliner: the fuselage radius is 0.4 of the
+            // half-width scale (A320 class: 1.98 m radius, 35.8 m span);
+            // the wings meet the flow edge-on.
+            .pi * (0.4 * radius) * (0.4 * radius)
         }
     }
 

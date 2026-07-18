@@ -67,7 +67,8 @@ final class WindTunnelModel {
             airDensity: Self.airDensity, speed: windSpeed,
             dragCoefficient: testBody.dragCoefficient,
             frontalArea: testBody.frontalArea(
-                radius: cylinderRadius, cylinderSpan: Self.cylinderSpan))
+                radius: cylinderRadius * testBody.sizeMultiplier,
+                cylinderSpan: Self.cylinderSpan))
     }
 
     /// Live obstacles from ARKit on device — tracked hands/forearms and
@@ -93,7 +94,7 @@ final class WindTunnelModel {
         return CylinderFlow(
             freeStreamSpeed: windSpeed,
             center: cylinderCenter,
-            radius: cylinderRadius * (0.4 + 0.6 * bluntness),
+            radius: cylinderRadius * testBody.sizeMultiplier * (0.4 + 0.6 * bluntness),
             circulation: 0
         )
     }

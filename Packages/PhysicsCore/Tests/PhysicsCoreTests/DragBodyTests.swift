@@ -43,6 +43,17 @@ final class DragBodyTests: XCTestCase {
                           "even a box truck beats a flat plate")
     }
 
+    /// Vehicle geometry: frontal areas follow the real silhouettes, and
+    /// the shared size multiplier keeps display and physics in step.
+    func testVehicleGeometry() {
+        XCTAssertEqual(DragBody.car.frontalArea(radius: 0.1), 2 * 0.1 * 1.57 * 0.1, accuracy: 1e-12)
+        XCTAssertEqual(DragBody.truck.frontalArea(radius: 0.1), 2 * 0.1 * 3.1 * 0.1, accuracy: 1e-12)
+        XCTAssertEqual(DragBody.plane.frontalArea(radius: 0.1), .pi * 0.04 * 0.04, accuracy: 1e-12)
+        for body in DragBody.allCases {
+            XCTAssertEqual(body.sizeMultiplier, body.isVehicle ? 2.2 : 1)
+        }
+    }
+
     /// Drag grows with the square of speed — doubling wind quadruples force.
     func testQuadraticSpeedScaling() {
         func f(_ v: Double) -> Double {
