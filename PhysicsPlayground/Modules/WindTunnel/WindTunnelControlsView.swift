@@ -23,7 +23,8 @@ struct WindTunnelControlsView: View {
                     range: WindTunnelModel.windSpeedRange, format: "%.2f m/s"
                 )
                 labeledSlider(
-                    "Cylinder radius", value: $model.cylinderRadius,
+                    model.testBody == .cylinder ? "Cylinder radius" : "Body size",
+                    value: $model.cylinderRadius,
                     range: WindTunnelModel.radiusRange, format: "%.0f cm",
                     scale: 100
                 )

@@ -36,6 +36,11 @@ final class DragBodyTests: XCTestCase {
                           DragBody.cube.dragCoefficient)
         XCTAssertGreaterThan(DragBody.flatDisc.dragCoefficient / DragBody.teardrop.dragCoefficient,
                              25, "the disc drags >25× the teardrop")
+        // The vehicles rank as every highway proves daily.
+        XCTAssertLessThan(DragBody.plane.dragCoefficient, DragBody.car.dragCoefficient)
+        XCTAssertLessThan(DragBody.car.dragCoefficient, DragBody.truck.dragCoefficient)
+        XCTAssertLessThan(DragBody.truck.dragCoefficient, DragBody.flatDisc.dragCoefficient,
+                          "even a box truck beats a flat plate")
     }
 
     /// Drag grows with the square of speed — doubling wind quadruples force.

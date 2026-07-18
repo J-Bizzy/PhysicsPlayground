@@ -27,6 +27,12 @@ public enum DragBody: String, CaseIterable, Sendable, Identifiable {
     case flatDisc
     /// Cone, apex into the flow (~30° half-angle class).
     case cone
+    /// Modern sedan (automotive Cd, referenced to frontal area).
+    case car
+    /// Box truck — the bluff body every highway knows.
+    case truck
+    /// Light aircraft: streamlined fuselage, wings edge-on.
+    case plane
 
     public var id: String { rawValue }
 
@@ -39,6 +45,9 @@ public enum DragBody: String, CaseIterable, Sendable, Identifiable {
         case .cube: 1.05
         case .flatDisc: 1.17
         case .cone: 0.50
+        case .car: 0.30
+        case .truck: 0.80
+        case .plane: 0.09
         }
     }
 
@@ -56,6 +65,15 @@ public enum DragBody: String, CaseIterable, Sendable, Identifiable {
             // the reference is simply edge²; use the inscribed edge.
             (2 * radius * 0.883) * (2 * radius * 0.883)
         case .sphere, .teardrop, .flatDisc, .cone:
+            .pi * radius * radius
+        case .car:
+            // Sedan silhouette: ~2r wide × 1.4r tall.
+            (2 * radius) * (1.4 * radius)
+        case .truck:
+            // Box truck: ~2r wide × 2r tall.
+            (2 * radius) * (2 * radius)
+        case .plane:
+            // Fuselage circle; the wings meet the flow edge-on.
             .pi * radius * radius
         }
     }

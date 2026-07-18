@@ -84,6 +84,7 @@ final class WindTunnelRenderer {
     private static let dragBodyAssets: [DragBody: String] = [
         .sphere: "DragSphere", .teardrop: "DragTeardrop", .cube: "DragCube",
         .flatDisc: "DragDisc", .cone: "DragCone",
+        .car: "DragCar", .truck: "DragTruck", .plane: "DragPlane",
     ]
     /// The frontal radius the USDZ bodies were authored at.
     private static let authoredBodyRadius = 0.06

@@ -195,6 +195,9 @@ struct WindTunnelQuickPanel: View {
         case .cube: "Cube"
         case .flatDisc: "Flat disc"
         case .cone: "Cone"
+        case .car: "Car"
+        case .truck: "Truck"
+        case .plane: "Plane"
         }
     }
 }

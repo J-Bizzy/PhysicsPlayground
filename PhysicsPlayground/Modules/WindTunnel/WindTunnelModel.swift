@@ -198,5 +198,13 @@ final class WindTunnelModel {
 
     init() {
         reset()
+        // Debug hook: `simctl launch … -windBody car` starts with that
+        // body in the section (the picker can't be pinched from the CLI).
+        #if DEBUG
+        if let raw = UserDefaults.standard.string(forKey: "windBody"),
+           let body = DragBody(rawValue: raw) {
+            testBody = body
+        }
+        #endif
     }
 }
