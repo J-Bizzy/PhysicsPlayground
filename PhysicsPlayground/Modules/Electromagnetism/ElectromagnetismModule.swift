@@ -76,7 +76,7 @@ enum ElectromagnetismModule {
         ),
         LegendItem(
             swatch: .symbol("arrow.up.right", DesignTokens.Palette.arrowStrong),
-            text: "Arrows show field direction; longer and brighter means stronger"
+            text: "Arrowheads ride the field lines; brighter means stronger"
         ),
     ]
 }

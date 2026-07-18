@@ -251,8 +251,8 @@ final class FieldModelTests: XCTestCase {
         model.addCharge(positive: false)
         model.addCharge(positive: true)
         model.dropProbe()
-        model.showArrows = false
         model.showLines = false
+        model.showEquipotentials = true
         model.probeIsPositive = false
 
         model.reset()
@@ -264,9 +264,9 @@ final class FieldModelTests: XCTestCase {
         XCTAssertNil(model.probe)
         XCTAssertEqual(model.probeStatus, .none)
         XCTAssertTrue(model.probeIsPositive)
-        XCTAssertTrue(model.showArrows)
         XCTAssertTrue(model.showLines)
-        XCTAssertTrue(model.showEquipotentials)
+        XCTAssertFalse(model.showEquipotentials,
+                       "shells start hidden — they're an opt-in layer")
     }
 
     /// The casing count is honored per polarity, and the capacitor

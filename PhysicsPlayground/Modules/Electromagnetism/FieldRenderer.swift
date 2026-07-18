@@ -48,9 +48,11 @@ final class FieldRenderer {
     static let negativeShellColor = DesignTokens.Palette.negativeShellUI
     static let chargeRadius: Float = 0.03
     static let probeRadius: Float = 0.018
-    /// Arrows are hidden inside this distance of a charge, where the 1/r²
-    /// field diverges and a finite arrow is meaningless.
+    /// Arrowheads are hidden inside this distance of a charge, where the
+    /// 1/r² field diverges and a finite arrow is meaningless.
     static let arrowExclusionRadius = 0.09
+    /// Arc-length spacing of the arrowheads riding each field line.
+    static let arrowSpacing: Float = 0.17
 
     private var model: FieldModel?
     private let renderLoop = RenderLoop()
@@ -70,7 +72,6 @@ final class FieldRenderer {
     // Change detection: the expensive paths only run when these differ.
     private var lastCharges: [PointCharge]?
     private var lastRegion: FieldModel.SamplingRegion?
-    private var lastShowArrows: Bool?
     private var lastShowLines: Bool?
     private var lastShowShells: Bool?
 
@@ -111,11 +112,9 @@ final class FieldRenderer {
             self.render(
                 charges: model.charges,
                 region: model.samplingRegion,
-                samplePoints: model.samplePoints,
                 selectedID: model.selectedChargeID,
                 probe: model.probe,
                 probeIsPositive: model.probeIsPositive,
-                showArrows: model.showArrows,
                 showLines: model.showLines,
                 showShells: model.showEquipotentials,
                 shells: model.equipotentialShells,
@@ -130,11 +129,9 @@ final class FieldRenderer {
     func render(
         charges: [PointCharge],
         region: FieldModel.SamplingRegion,
-        samplePoints: [SIMD3<Double>],
         selectedID: UUID?,
         probe: TestChargeDynamics.ProbeState?,
         probeIsPositive: Bool,
-        showArrows: Bool,
         showLines: Bool,
         showShells: Bool,
         shells: Int = 3,
@@ -149,14 +146,12 @@ final class FieldRenderer {
 
         let chargesChanged = charges != lastCharges || region != lastRegion
 
-        // Medium path — the arrow grid, only when the field actually moved.
-        if chargesChanged || showArrows != lastShowArrows {
-            updateArrows(charges: charges, points: samplePoints, visible: showArrows)
-            lastShowArrows = showArrows
-        }
-
-        // Expensive path — lines and shells rebuild on the geometry pipeline.
+        // Expensive path — lines (with their riding arrowheads) and shells
+        // rebuild on the geometry pipeline.
         linesEntity.isEnabled = showLines && !charges.isEmpty
+        if !showLines || charges.isEmpty {
+            arrows.hideAll()
+        }
         positiveShellsEntity.isEnabled = showShells && !charges.isEmpty
         negativeShellsEntity.isEnabled = showShells && !charges.isEmpty
         let visibilityChanged = showLines != lastShowLines || showShells != lastShowShells
@@ -237,6 +232,11 @@ final class FieldRenderer {
 
     private nonisolated struct GeometryResult: Sendable {
         var lines: [[SIMD3<Float>]] = []
+        /// Sample points along the lines where arrowheads ride, with the
+        /// true field vector there (direction AND strength for the pool's
+        /// log-brightness ramp).
+        var arrowPoints: [SIMD3<Double>] = []
+        var arrowVectors: [SIMD3<Double>] = []
         var positiveShells = ShellMeshData()
         var negativeShells = ShellMeshData()
     }
@@ -250,6 +250,30 @@ final class FieldRenderer {
             config.boundsRadius = max(simd_reduce_max(job.region.extents), FieldModel.regionExtent) * 0.95
             result.lines = FieldLineTracer.trace(charges: job.charges, config: config)
                 .map { $0.map(SIMD3<Float>.init) }
+
+            // Arrowheads at regular arc length along every line — the line
+            // carries the path, the arrows carry the direction.
+            for line in result.lines {
+                var nextAt = FieldRenderer.arrowSpacing * 0.6
+                var walked: Float = 0
+                for (a, b) in zip(line, line.dropFirst()) {
+                    let step = simd_distance(a, b)
+                    while walked + step >= nextAt {
+                        let t = (nextAt - walked) / max(step, 1e-6)
+                        let point = SIMD3<Double>(a + (b - a) * t)
+                        let nearCharge = job.charges.contains {
+                            simd_distance($0.position, point) < FieldRenderer.arrowExclusionRadius
+                        }
+                        if !nearCharge {
+                            result.arrowPoints.append(point)
+                            result.arrowVectors.append(
+                                ElectricField.vector(at: point, dueTo: job.charges))
+                        }
+                        nextAt += FieldRenderer.arrowSpacing
+                    }
+                    walked += step
+                }
+            }
         }
 
         if job.wantShells {
@@ -282,6 +306,8 @@ final class FieldRenderer {
         } else {
             linesEntity.model = nil
         }
+        arrows.update(points: result.arrowPoints, vectors: result.arrowVectors,
+                      hidden: [])
         applyShellMesh(result.positiveShells, to: positiveShellsEntity, material: positiveShellMaterial)
         applyShellMesh(result.negativeShells, to: negativeShellsEntity, material: negativeShellMaterial)
     }
@@ -422,17 +448,4 @@ final class FieldRenderer {
         return sphere
     }
 
-    // MARK: Arrows
-
-    private func updateArrows(charges: [PointCharge], points: [SIMD3<Double>], visible: Bool) {
-        guard visible, !charges.isEmpty else {
-            arrows.hideAll()
-            return
-        }
-        let vectors = points.map { ElectricField.vector(at: $0, dueTo: charges) }
-        let hidden = points.map { point in
-            charges.contains { simd_distance($0.position, point) < Self.arrowExclusionRadius }
-        }
-        arrows.update(points: points, vectors: vectors, hidden: hidden)
-    }
 }

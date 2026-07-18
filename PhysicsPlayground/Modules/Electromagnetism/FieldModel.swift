@@ -82,9 +82,8 @@ final class FieldModel {
     }
 
     // MARK: Display options
-    var showArrows = true
     var showLines = true
-    var showEquipotentials = true
+    var showEquipotentials = false
     /// How many equipotential casings wrap each polarity (1…6).
     var equipotentialShells = 3
 
@@ -209,9 +208,8 @@ final class FieldModel {
         probe = nil
         probeStatus = .none
         probeIsPositive = true
-        showArrows = true
         showLines = true
-        showEquipotentials = true
+        showEquipotentials = false
         equipotentialShells = 3
         capacitorOn = false
         plateVoltage = 20_000

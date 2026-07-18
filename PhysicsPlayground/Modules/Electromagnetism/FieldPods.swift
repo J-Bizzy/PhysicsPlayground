@@ -207,9 +207,7 @@ struct FieldViewPod: View {
         ControlPod(title: "View", icon: "eye",
                    tint: .secondary) {
             Toggle("Field lines", isOn: $model.showLines)
-                .accessibilityLabel("Show field lines")
-            Toggle("Arrow grid", isOn: $model.showArrows)
-                .accessibilityLabel("Show arrow grid")
+                .accessibilityLabel("Show field lines with direction arrows")
             Toggle("Equipotential shells", isOn: $model.showEquipotentials)
                 .accessibilityLabel("Show equipotential shells")
             if model.showEquipotentials {

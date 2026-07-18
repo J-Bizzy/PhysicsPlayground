@@ -34,9 +34,8 @@ struct ElectrostaticsControlsView: View {
     private func displayToggles(model: Bindable<FieldModel>) -> some View {
         VStack(spacing: 8) {
             Toggle("Field lines", isOn: model.showLines)
+                .accessibilityHint("Continuous lines with arrowheads riding them, showing the field's direction")
                 .accessibilityHint("Curves that follow the field from positive to negative charges")
-            Toggle("Arrow grid", isOn: model.showArrows)
-                .accessibilityHint("Arrows showing field direction and strength at fixed points")
             Toggle("Equipotential shells", isOn: model.showEquipotentials)
                 .accessibilityHint("Translucent surfaces of constant potential, always perpendicular to the field lines")
         }
