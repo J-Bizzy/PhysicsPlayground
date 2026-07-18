@@ -343,4 +343,33 @@ final class FieldModelTests: XCTestCase {
         XCTAssertEqual(probe.velocity.y, 0, accuracy: 1e-12,
                        "B along y leaves vy alone")
     }
+
+    /// Electron mode: a realistic 0.1 mT bends a real electron into an
+    /// ~11 cm circle at constant speed, under display time compression.
+    func testElectronModeCurvesAtRealisticField() {
+        let model = FieldModel()
+        model.removeAllCharges()
+        model.magneticFieldOn = true
+        model.electronMode = true
+        model.electronFieldTesla = 1e-4
+        model.dropProbe()
+
+        // r = v/((q/m)B) ≈ 0.1137 m.
+        let ratio = FieldModel.electronCharge / FieldModel.electronMass
+        XCTAssertEqual(model.cyclotronRadius,
+                       FieldModel.electronLaunchSpeed / (ratio * 1e-4),
+                       accuracy: 1e-6)
+        XCTAssertEqual(model.cyclotronRadius, 0.1137, accuracy: 0.001)
+
+        for _ in 0..<90 {  // one wall-second ≈ 0.28 orbits
+            model.stepProbe(dt: 1.0 / 90.0)
+        }
+        let probe = try! XCTUnwrap(model.probe)
+        XCTAssertGreaterThan(abs(probe.velocity.z),
+                             FieldModel.electronLaunchSpeed * 0.2,
+                             "the electron's velocity has visibly rotated")
+        XCTAssertEqual(simd_length(probe.velocity), FieldModel.electronLaunchSpeed,
+                       accuracy: FieldModel.electronLaunchSpeed * 1e-9,
+                       "B does no work on the electron either")
+    }
 }

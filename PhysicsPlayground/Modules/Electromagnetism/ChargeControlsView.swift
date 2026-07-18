@@ -155,16 +155,31 @@ struct ChargeControlsView: View {
                 PanelSection("Magnetic field") {
                     Toggle("Uniform B (pointing up)", isOn: $model.magneticFieldOn)
                         .font(DesignTokens.TypeScale.control)
+                    Toggle("Electron mode", isOn: $model.electronMode)
+                        .font(DesignTokens.TypeScale.control)
+                        .accessibilityHint("The probe becomes a real electron; realistic fields curve it")
                     if model.magneticFieldOn {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("B: \(model.magneticFieldTesla / 1000, specifier: "%.0f") kT   r = mv/qB = \(model.cyclotronRadius * 100, specifier: "%.0f") cm")
-                                .font(DesignTokens.TypeScale.control.monospacedDigit())
-                            Slider(value: $model.magneticFieldTesla, in: FieldModel.magneticFieldRange)
-                                .accessibilityLabel("Magnetic field strength")
+                        if model.electronMode {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("B: \(model.electronFieldTesla * 1000, specifier: "%.2f") mT   r = mv/qB = \(model.cyclotronRadius * 100, specifier: "%.0f") cm")
+                                    .font(DesignTokens.TypeScale.control.monospacedDigit())
+                                Slider(value: $model.electronFieldTesla, in: FieldModel.electronFieldRange)
+                                    .accessibilityLabel("Magnetic field strength")
+                            }
+                            Text("A real electron (q = e, m = mₑ) at 2×10⁶ m/s: a TENTH of a millitesla bends it into an 11 cm circle — the classic Helmholtz-coil e/m lab. Time runs 10⁷× slower on display (1 s shows 0.1 µs); the physics is SI-exact. Flip polarity for a positron.")
+                                .font(DesignTokens.TypeScale.footnote)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("B: \(model.magneticFieldTesla / 1000, specifier: "%.0f") kT   r = mv/qB = \(model.cyclotronRadius * 100, specifier: "%.0f") cm")
+                                    .font(DesignTokens.TypeScale.control.monospacedDigit())
+                                Slider(value: $model.magneticFieldTesla, in: FieldModel.magneticFieldRange)
+                                    .accessibilityLabel("Magnetic field strength")
+                            }
+                            Text("Drop the probe and it launches sideways, then curves on an exact cyclotron circle — F = qv×B, computed with the Boris integrator so the speed never drifts. The kilotesla numbers are what a 0.5 g ball needs — or flip on Electron mode for realistic fields. Turn the plates on too for cycloids.")
+                                .font(DesignTokens.TypeScale.footnote)
+                                .foregroundStyle(.secondary)
                         }
-                        Text("Drop the probe and it launches sideways, then curves on an exact cyclotron circle — F = qv×B, computed with the Boris integrator so the speed never drifts. The kilotesla numbers are what a 0.5 g ball needs; an electron curves this hard in microtesla. Turn the plates on too for cycloids.")
-                            .font(DesignTokens.TypeScale.footnote)
-                            .foregroundStyle(.secondary)
                     }
                 }
                 .font(.callout)

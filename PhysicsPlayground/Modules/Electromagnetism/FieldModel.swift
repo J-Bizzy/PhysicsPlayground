@@ -15,6 +15,11 @@ import Observation
 import PhysicsCore
 import simd
 
+private extension Double {
+    /// Guards divide-by-zero in display-only ratios.
+    var replacingZero: Double { abs(self) < 1e-30 ? 1e-30 : self }
+}
+
 @MainActor
 @Observable
 final class FieldModel {
@@ -112,14 +117,41 @@ final class FieldModel {
     /// The push dropProbe gives when B is on, so there's a v to curve.
     nonisolated static let magneticLaunchSpeed = 0.35
 
-    var magneticField: SIMD3<Double> {
-        magneticFieldOn ? SIMD3(0, magneticFieldTesla, 0) : .zero
+    // MARK: Electron mode
+
+    /// The probe becomes a genuine electron (or positron, via the
+    /// polarity picker): q = e, m = mₑ, launched at a cathode-ray
+    /// 2×10⁶ m/s. Now REALISTIC fields curve it — a tenth of a
+    /// millitesla bends it into an 11 cm circle, exactly the classic
+    /// Helmholtz-coil e/m experiment. Time is compressed for display
+    /// (1 s shows 0.1 µs, disclosed): the physics stays SI-exact.
+    var electronMode = false
+    nonisolated static let electronCharge = 1.602176634e-19
+    nonisolated static let electronMass = 9.1093837015e-31
+    nonisolated static let electronLaunchSpeed = 2e6
+    nonisolated static let electronTimeScale = 1e-7
+    nonisolated static let electronFieldRange = 2e-5...5e-4
+    /// Electron-mode B remembered separately from ball-mode B.
+    var electronFieldTesla = 1e-4
+
+    /// Mode-aware signed charge and mass.
+    var probeQ: Double {
+        let magnitude = electronMode ? Self.electronCharge : probeChargeMagnitude
+        return (probeIsPositive ? 1 : -1) * magnitude
+    }
+    var probeM: Double { electronMode ? Self.electronMass : Self.probeMass }
+    var launchSpeed: Double {
+        electronMode ? Self.electronLaunchSpeed : Self.magneticLaunchSpeed
     }
 
-    /// Cyclotron radius at the launch speed, m.
+    var magneticField: SIMD3<Double> {
+        guard magneticFieldOn else { return .zero }
+        return SIMD3(0, electronMode ? electronFieldTesla : magneticFieldTesla, 0)
+    }
+
+    /// Cyclotron radius at the launch speed, m (mode-aware).
     var cyclotronRadius: Double {
-        Self.probeMass * Self.magneticLaunchSpeed
-            / (probeChargeMagnitude * magneticFieldTesla)
+        probeM * launchSpeed / (abs(probeQ) * simd_length(magneticField).replacingZero)
     }
 
     /// A plate's world x (0 = the + plate on the −x side).
@@ -188,6 +220,8 @@ final class FieldModel {
         probeChargeMagnitude = Self.defaultProbeCharge
         magneticFieldOn = false
         magneticFieldTesla = 5e4
+        electronMode = false
+        electronFieldTesla = 1e-4
         isPaused = false
         placementIndex = 1
     }
@@ -296,9 +330,9 @@ final class FieldModel {
     func dropProbe() {
         let center = samplingRegion.center
         var state = TestChargeDynamics.ProbeState(position: center + SIMD3(0.12, 0.24, 0))
-        if magneticFieldOn {
+        if magneticFieldOn || electronMode {
             // A sideways push so there's a velocity for B to bend.
-            state.velocity = SIMD3(Self.magneticLaunchSpeed, 0, 0)
+            state.velocity = SIMD3(launchSpeed, 0, 0)
         }
         probe = state
         probeStatus = .running
@@ -333,10 +367,11 @@ final class FieldModel {
         // A stalled frame (app paused, debugger…) must not become one giant
         // physics leap.
         let frameDt = min(dt, 1.0 / 30.0)
+        let simDt = frameDt * (electronMode ? Self.electronTimeScale : 1)
         state = TestChargeDynamics.stepLorentz(
             state,
-            chargeToMassRatio: probeCharge / Self.probeMass,
-            dt: frameDt,
+            chargeToMassRatio: probeQ / probeM,
+            dt: simDt,
             substeps: 4,
             electricField: { point in self.fieldVector(at: point) },
             magneticField: magneticField
@@ -374,12 +409,12 @@ final class FieldModel {
     var probeReadout: ProbeReadout? {
         guard let probe else { return nil }
         let fieldMagnitude = simd_length(fieldVector(at: probe.position))
-        let force = probeChargeMagnitude * fieldMagnitude
+        let force = abs(probeQ) * fieldMagnitude
         return ProbeReadout(
             fieldMagnitude: fieldMagnitude,
             potential: ElectricField.potential(at: probe.position, dueTo: charges),
             forceMagnitude: force,
-            acceleration: force / Self.probeMass,
+            acceleration: force / probeM,
             speed: simd_length(probe.velocity)
         )
     }
