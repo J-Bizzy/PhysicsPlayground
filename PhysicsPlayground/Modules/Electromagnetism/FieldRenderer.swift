@@ -62,6 +62,9 @@ final class FieldRenderer {
     private let arrowHeads: EntityPool<ModelEntity>
     private var chargeEntities: [UUID: ModelEntity] = [:]
     private var chargeHalos: [UUID: ModelEntity] = [:]
+    /// The vertical stroke of each charge's sign glyph — hidden on a
+    /// negative charge, turning the + into a −.
+    private var chargeSignVerticals: [UUID: ModelEntity] = [:]
     private var appliedPolarity: [UUID: Bool] = [:]
     private var probeEntity: ModelEntity?
     private var appliedProbePolarity: Bool?
@@ -448,6 +451,7 @@ final class FieldRenderer {
             if appliedPolarity[charge.id] != charge.isPositive {
                 entity.model?.materials = [Self.chargeMaterial(isPositive: charge.isPositive)]
                 appliedPolarity[charge.id] = charge.isPositive
+                chargeSignVerticals[charge.id]?.isEnabled = charge.isPositive
                 setAccessibilityLabel(on: entity, for: charge)
             }
             chargeHalos[charge.id]?.isEnabled = (charge.id == selectedID)
@@ -456,6 +460,7 @@ final class FieldRenderer {
             entity.removeFromParent()
             chargeEntities.removeValue(forKey: id)
             chargeHalos.removeValue(forKey: id)
+            chargeSignVerticals.removeValue(forKey: id)
             appliedPolarity.removeValue(forKey: id)
         }
     }
@@ -481,9 +486,28 @@ final class FieldRenderer {
         halo.isEnabled = false
         sphere.addChild(halo)
 
+        // The sign glyph: a billboarded + (or −, with the vertical stroke
+        // hidden) floating just proud of the sphere, always facing the user.
+        let signPivot = Entity()
+        signPivot.components.set(BillboardComponent())
+        let strokeMaterial = UnlitMaterial(color: UIColor(white: 1.0, alpha: 1))
+        let horizontal = ModelEntity(
+            mesh: .generateBox(size: [0.024, 0.006, 0.003], cornerRadius: 0.0015),
+            materials: [strokeMaterial])
+        horizontal.position = [0, 0, Self.chargeRadius * 1.15]
+        let vertical = ModelEntity(
+            mesh: .generateBox(size: [0.006, 0.024, 0.003], cornerRadius: 0.0015),
+            materials: [strokeMaterial])
+        vertical.position = [0, 0, Self.chargeRadius * 1.15]
+        vertical.isEnabled = charge.isPositive
+        signPivot.addChild(horizontal)
+        signPivot.addChild(vertical)
+        sphere.addChild(signPivot)
+
         root.addChild(sphere)
         chargeEntities[charge.id] = sphere
         chargeHalos[charge.id] = halo
+        chargeSignVerticals[charge.id] = vertical
         appliedPolarity[charge.id] = charge.isPositive
         return sphere
     }
