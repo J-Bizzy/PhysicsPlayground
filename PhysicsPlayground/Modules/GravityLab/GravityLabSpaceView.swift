@@ -28,6 +28,10 @@ struct GravityLabSpaceView: View {
             renderer.root.addChild(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-time"), name: "Time",
                            at: [0, 1.14, -1.05], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-bodies"), name: "Bodies",
+                           at: [-1.1, 1.62, -0.9], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-view"), name: "View",
+                           at: [1.1, 1.6, -0.9], in: podsRoot)
             if let data = attachments.entity(for: "data") {
                 data.position = [0, 0.05, 0]
                 renderer.selectedAnchor.addChild(data)
@@ -55,6 +59,14 @@ struct GravityLabSpaceView: View {
                     GravityLabTimePanel()
                         .environment(model)
                 }
+            }
+            Attachment(id: "pod-bodies") {
+                GravityBodiesPod()
+                    .environment(model)
+            }
+            Attachment(id: "pod-view") {
+                GravityViewPod()
+                    .environment(model)
             }
             Attachment(id: "data") {
                 GravityLabDataPanel(compact: true)
@@ -123,5 +135,92 @@ struct GravityLabTimePanel: View {
         return days < 400
             ? String(format: "%.0f days", days)
             : String(format: "%.2f years", days / 365.25)
+    }
+}
+
+/// Spawn planets onto their real orbits without leaving the system.
+struct GravityBodiesPod: View {
+    @Environment(GravityLabModel.self) private var model
+
+    var body: some View {
+        ControlPod(title: "Bodies", icon: "plus.circle",
+                   tint: DesignTokens.Palette.gravityAccent, width: 316) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 6)], spacing: 6) {
+                ForEach(GravityLabModel.Preset.allCases) { preset in
+                    Button(preset.displayName) {
+                        model.spawn(preset)
+                    }
+                    .buttonStyle(.bordered)
+                    .font(DesignTokens.TypeScale.footnote)
+                    .disabled(model.bodies.count >= GravityLabModel.bodyBudget
+                              || model.mode == .lagrange)
+                    .accessibilityLabel("Spawn \(preset.displayName) on its real orbit")
+                }
+            }
+            HStack(spacing: 8) {
+                Button(role: .destructive) {
+                    model.removeSelected()
+                } label: {
+                    Image(systemName: "trash")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.selectedBody == nil
+                          || model.selectedBody?.id == model.primaryBody?.id)
+                .accessibilityLabel("Remove selected body")
+
+                if model.mode == .solarSystem, model.hasSingleSun {
+                    Button {
+                        model.makeBinary()
+                    } label: {
+                        Label("Twin suns", systemImage: "circle.grid.2x1.fill")
+                            .font(DesignTokens.TypeScale.footnote)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(DesignTokens.Palette.gravityAccent)
+                    .disabled(model.bodies.count >= GravityLabModel.bodyBudget)
+                    .accessibilityHint("Splits the Sun into a binary pair — mass and momentum conserved")
+                }
+            }
+            Text("\(model.bodies.count) of \(GravityLabModel.bodyBudget) bodies — grab any of them.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Trails, vectors, and the two field pictures.
+struct GravityViewPod: View {
+    @Environment(GravityLabModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+
+        ControlPod(title: "View", icon: "eye",
+                   tint: DesignTokens.Palette.gravityAccent, width: 280) {
+            Picker("Trails", selection: $model.trailLength) {
+                ForEach(GravityLabModel.TrailLength.allCases) { length in
+                    Text(length.rawValue.capitalized).tag(length)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("Trail length")
+
+            HStack(spacing: 10) {
+                Toggle("v", isOn: $model.showVelocityVector)
+                Toggle("a", isOn: $model.showAccelerationVector)
+                Toggle("F", isOn: $model.showForceVector)
+            }
+            .toggleStyle(.button)
+            .font(DesignTokens.TypeScale.footnote)
+
+            Toggle("Field particles", isOn: $model.showFieldParticles)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("Particles drifting along the true local field")
+            Toggle("Spacetime grid", isOn: $model.showSpacetimeGrid)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("The rubber-sheet picture — an analogy, not the simulation")
+        }
     }
 }
