@@ -26,11 +26,19 @@ final class OpticsRenderer {
 
     private struct ElementVisual {
         let holder: ModelEntity
-        /// Two dots at ±f on the axis — the focal points, marked where
-        /// the thin-lens story actually happens. Lenses only.
+        /// Four labeled markers at ±f and ±2f on the axis — the bench
+        /// notation the thin-lens story is told in (object at 2F images
+        /// at 2F, inside F goes virtual). Lenses only.
         var focalMarkers: [ModelEntity] = []
     }
     private var visuals: [UUID: ElementVisual] = [:]
+    /// Multipliers for the marker slots, matching focalMarkers order.
+    private static let focalMultipliers: [Double] = [-1, 1, -2, 2]
+
+    private lazy var fLabelMesh = MeshResource.generateText(
+        "F", extrusionDepth: 0.002, font: .systemFont(ofSize: 0.02, weight: .semibold))
+    private lazy var twoFLabelMesh = MeshResource.generateText(
+        "2F", extrusionDepth: 0.002, font: .systemFont(ofSize: 0.02, weight: .semibold))
 
     private let rayEntity = ModelEntity()
     private let rayMaterial: UnlitMaterial = {
@@ -105,11 +113,24 @@ final class OpticsRenderer {
         let scale = Float(spot.radius / 0.01)
         screenSpotEntity.scale = SIMD3(scale, 1, scale)
         let focusGlow = max(0.25, min(0.95, 0.95 - spot.radius * 5))
-        var material = UnlitMaterial(color: UIColor(
-            red: 1.0, green: 0.55, blue: 0.4, alpha: 1))
-        material.blending = .transparent(opacity: .init(floatLiteral: Float(focusGlow)))
-        screenSpotEntity.model?.materials = [material]
+        // Bucketed materials: the glow sweeps continuously while a lens
+        // is dragged, but eight steps read identically.
+        let bucket = Int(focusGlow * 8)
+        if bucket != appliedSpotBucket {
+            appliedSpotBucket = bucket
+            if screenSpotMaterials[bucket] == nil {
+                var material = UnlitMaterial(color: UIColor(
+                    red: 1.0, green: 0.55, blue: 0.4, alpha: 1))
+                material.blending = .transparent(
+                    opacity: .init(floatLiteral: Float(bucket) / 8))
+                screenSpotMaterials[bucket] = material
+            }
+            screenSpotEntity.model?.materials = [screenSpotMaterials[bucket]!]
+        }
     }
+
+    private var screenSpotMaterials: [Int: UnlitMaterial] = [:]
+    private var appliedSpotBucket = -1
 
     func tick(model: OpticsModel) {
         syncElements(model)
@@ -137,9 +158,12 @@ final class OpticsRenderer {
                 visual.holder.position = SIMD3<Float>(OpticsModel.center)
                     + SIMD3(Float(element.x), 0, 0)
             }
-            for (side, marker) in zip([-1.0, 1.0], visual.focalMarkers) {
+            for (multiplier, marker) in zip(Self.focalMultipliers, visual.focalMarkers) {
+                let x = element.x + multiplier * element.focal
+                // Markers past the bench ends would float in space.
+                marker.isEnabled = abs(x) < OpticsModel.railHalf + 0.05
                 marker.position = SIMD3<Float>(OpticsModel.center)
-                    + SIMD3(Float(element.x + side * element.focal), 0, 0)
+                    + SIMD3(Float(x), 0, 0)
             }
             visuals[element.id] = visual
         }
@@ -185,10 +209,23 @@ final class OpticsRenderer {
             let markerColor: UIColor = element.kind == .convergingLens
                 ? UIColor(red: 0.3, green: 0.75, blue: 1, alpha: 1)
                 : UIColor(red: 1, green: 0.6, blue: 0.3, alpha: 1)
-            for _ in 0..<2 {
+            var labelMaterial = UnlitMaterial(color: markerColor)
+            labelMaterial.blending = .transparent(opacity: 0.85)
+            for slot in 0..<Self.focalMultipliers.count {
+                let isTwoF = slot >= 2
                 let marker = ModelEntity(
-                    mesh: .generateSphere(radius: 0.0075),
+                    mesh: .generateSphere(radius: isTwoF ? 0.0058 : 0.0075),
                     materials: [UnlitMaterial(color: markerColor)])
+                // The bench letter riding just above each dot.
+                let pivot = Entity()
+                pivot.components.set(BillboardComponent())
+                pivot.position = [0, 0.02, 0]
+                let labelMesh = isTwoF ? twoFLabelMesh : fLabelMesh
+                let label = ModelEntity(mesh: labelMesh, materials: [labelMaterial])
+                let bounds = labelMesh.bounds
+                label.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
+                pivot.addChild(label)
+                marker.addChild(pivot)
                 root.addChild(marker)
                 focalMarkers.append(marker)
             }

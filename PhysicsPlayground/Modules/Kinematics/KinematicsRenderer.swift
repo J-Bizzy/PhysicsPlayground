@@ -80,6 +80,24 @@ final class KinematicsRenderer {
 
     private var arcPipeline: GeometryPipeline<[SIMD3<Float>], TubeBuffers>?
 
+    // Spatial flight numbers: the pod's headline stats living IN the
+    // room — peak height floats at the arc's apex (with a drop line
+    // showing what the number measures), range + flight time sit on the
+    // predicted landing ring, and a protractor at the launcher shows
+    // the elevation where the aiming happens. All change-gated with the
+    // arc; text meshes cached per rendered string.
+    private let apexMarker = Entity()
+    private var apexText: ModelEntity!
+    private var apexDropLine: ModelEntity!
+    private let landingMarker = Entity()
+    private var landingText: ModelEntity!
+    private let protractorRoot = Entity()
+    private var protractorNeedleHolder: Entity!
+    private var protractorTextPivot: Entity!
+    private var protractorText: ModelEntity!
+    private var annotationMeshCache: [String: MeshResource] = [:]
+    private let annotationMaterial = UnlitMaterial(color: UIColor(white: 1, alpha: 0.92))
+
     // Change detection: the arc tube only rebuilds when these differ.
     private struct ArcInputs: Equatable {
         var aim: SIMD3<Double>
@@ -211,6 +229,140 @@ final class KinematicsRenderer {
             compute: { points in TubeMesh.buffers(lines: [points], radius: 0.004) },
             apply: { [weak self] in self?.applyArc($0) }
         )
+
+        buildFlightAnnotations()
+    }
+
+    // MARK: Spatial flight numbers
+
+    private func buildFlightAnnotations() {
+        // Apex: a dot on the arc's crest, the height beside it, and a
+        // faint plumb line to the floor — the number drawn as geometry.
+        let apexDot = ModelEntity(
+            mesh: .generateSphere(radius: 0.009),
+            materials: [UnlitMaterial(color: DesignTokens.Palette.predictedArcUI)])
+        apexMarker.addChild(apexDot)
+        let apexPivot = Entity()
+        apexPivot.components.set(BillboardComponent())
+        apexPivot.position = [0, 0.055, 0]
+        apexText = ModelEntity()
+        apexPivot.addChild(apexText)
+        apexMarker.addChild(apexPivot)
+        apexMarker.isEnabled = false
+        root.addChild(apexMarker)
+
+        var plumbMaterial = UnlitMaterial(color: .white)
+        plumbMaterial.blending = .transparent(opacity: 0.16)
+        apexDropLine = ModelEntity(
+            mesh: .generateCylinder(height: 1, radius: 0.0012),
+            materials: [plumbMaterial])
+        apexDropLine.isEnabled = false
+        root.addChild(apexDropLine)
+
+        // Landing: a floor ring where the flight will end, wearing the
+        // range and flight time.
+        let circle: [SIMD3<Float>] = (0...28).map { index in
+            let angle = 2 * Float.pi * Float(index) / 28
+            return SIMD3(cos(angle), 0, sin(angle)) * 0.07
+        }
+        var ringMaterial = UnlitMaterial(color: DesignTokens.Palette.predictedArcUI)
+        ringMaterial.blending = .transparent(opacity: 0.55)
+        if let ringMesh = TubeMesh.tube(lines: [circle], radius: 0.0035, sides: 4) {
+            landingMarker.addChild(ModelEntity(mesh: ringMesh, materials: [ringMaterial]))
+        }
+        let landingPivot = Entity()
+        landingPivot.components.set(BillboardComponent())
+        landingPivot.position = [0, 0.075, 0]
+        landingText = ModelEntity()
+        landingPivot.addChild(landingText)
+        landingMarker.addChild(landingPivot)
+        landingMarker.isEnabled = false
+        root.addChild(landingMarker)
+
+        // Protractor: ticks every 15 degrees in the aim's vertical
+        // plane, an orange needle at the live elevation, the degree
+        // count at its tip. Reads like a real instrument at the muzzle.
+        var tickMaterial = UnlitMaterial(color: .white)
+        tickMaterial.blending = .transparent(opacity: 0.38)
+        let tickMesh = MeshResource.generateBox(size: [0.016, 0.003, 0.003], cornerRadius: 0.001)
+        for degrees in stride(from: -75, through: 75, by: 15) {
+            let holder = Entity()
+            holder.orientation = simd_quatf(
+                angle: Float(degrees) * .pi / 180, axis: [0, 0, 1])
+            let tick = ModelEntity(mesh: tickMesh, materials: [tickMaterial])
+            tick.position = [0.165, 0, 0]
+            holder.addChild(tick)
+            protractorRoot.addChild(holder)
+        }
+        protractorNeedleHolder = Entity()
+        let needle = ModelEntity(
+            mesh: .generateBox(size: [0.055, 0.0045, 0.0045], cornerRadius: 0.002),
+            materials: [UnlitMaterial(color: DesignTokens.Palette.projectileUI)])
+        needle.position = [0.155, 0, 0]
+        protractorNeedleHolder.addChild(needle)
+        protractorRoot.addChild(protractorNeedleHolder)
+        protractorTextPivot = Entity()
+        protractorTextPivot.components.set(BillboardComponent())
+        protractorText = ModelEntity()
+        protractorTextPivot.addChild(protractorText)
+        protractorRoot.addChild(protractorTextPivot)
+        root.addChild(protractorRoot)
+    }
+
+    private func annotationMesh(_ string: String) -> MeshResource {
+        if let cached = annotationMeshCache[string] { return cached }
+        if annotationMeshCache.count > 300 { annotationMeshCache.removeAll() }
+        let mesh = MeshResource.generateText(
+            string, extrusionDepth: 0.002,
+            font: .systemFont(ofSize: 0.042, weight: .semibold))
+        annotationMeshCache[string] = mesh
+        return mesh
+    }
+
+    private func setAnnotation(_ entity: ModelEntity, to string: String) {
+        let mesh = annotationMesh(string)
+        entity.model = ModelComponent(mesh: mesh, materials: [annotationMaterial])
+        let bounds = mesh.bounds
+        entity.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
+    }
+
+    private func updateFlightAnnotations(
+        _ model: KinematicsModel, trajectory: ProjectileMotion.Trajectory
+    ) {
+        // Peak height, where the peak actually is.
+        if let apex = trajectory.points.max(by: { $0.y < $1.y }), apex.y > 0.3 {
+            apexMarker.isEnabled = true
+            apexMarker.position = SIMD3<Float>(apex)
+            setAnnotation(apexText, to: String(format: "%.1f m", trajectory.apexHeight))
+            apexDropLine.isEnabled = true
+            apexDropLine.position = SIMD3(Float(apex.x), Float(apex.y) / 2, Float(apex.z))
+            apexDropLine.scale = SIMD3(1, Float(apex.y), 1)
+        } else {
+            apexMarker.isEnabled = false
+            apexDropLine.isEnabled = false
+        }
+
+        // Range and flight time, at the landing spot.
+        if trajectory.landed, let landing = trajectory.landingPoint {
+            landingMarker.isEnabled = true
+            landingMarker.position = SIMD3(Float(landing.x), 0.004, Float(landing.z))
+            setAnnotation(landingText, to: String(
+                format: "%.1f m · %.1f s", trajectory.range, trajectory.flightTime))
+        } else {
+            landingMarker.isEnabled = false
+        }
+
+        // The protractor rides the launcher, yawed into the aim plane.
+        let aim = model.aimDirection
+        protractorRoot.position = SIMD3<Float>(model.launcherPosition)
+        let azimuth = atan2(aim.z, aim.x)
+        protractorRoot.orientation = simd_quatf(angle: -Float(azimuth), axis: [0, 1, 0])
+        let elevation = asin(max(-1, min(1, aim.y)))
+        protractorNeedleHolder.orientation = simd_quatf(
+            angle: Float(elevation), axis: [0, 0, 1])
+        protractorTextPivot.position = [
+            Float(cos(elevation)) * 0.235, Float(sin(elevation)) * 0.235, 0]
+        setAnnotation(protractorText, to: "\(Int((elevation * 180 / .pi).rounded()))°")
     }
 
     private func applyArc(_ buffers: TubeBuffers) {
@@ -260,7 +412,9 @@ final class KinematicsRenderer {
             lastArcInputs = arcInputs
             // The RK4 trace is microseconds (see the model); the tube's
             // vertex math is what moves to the worker.
-            arcPipeline?.submit(model.prediction.points.map { SIMD3<Float>($0) })
+            let trajectory = model.prediction
+            arcPipeline?.submit(trajectory.points.map { SIMD3<Float>($0) })
+            updateFlightAnnotations(model, trajectory: trajectory)
         }
 
         syncFlights(model.flights)

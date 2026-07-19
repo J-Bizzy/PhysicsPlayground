@@ -64,6 +64,17 @@ final class WavesRenderer {
     private let silenceMaterial: UnlitMaterial
     private var silencePipeline: GeometryPipeline<SilenceJob, SilenceResult>?
 
+    // The wavelength ruler: a physical lambda between the first two
+    // sources — alternating half-wave segments (the spatial period,
+    // drawn AS geometry) with the value floating at the midpoint.
+    private static let rulerBudget = 48
+    private let rulerRoot = Entity()
+    private var rulerSegments: [ModelEntity] = []
+    private var rulerLabelPivot: Entity!
+    private var rulerLabel: ModelEntity!
+    private var rulerMeshCache: [Int: MeshResource] = [:]
+    private let rulerLabelMaterial = UnlitMaterial(color: UIColor(white: 1, alpha: 0.9))
+
     private struct FieldInputs: Equatable {
         var sources: [WaveSource]
         var frequency: Double
@@ -107,6 +118,28 @@ final class WavesRenderer {
         silence.faceCulling = .none
         silenceMaterial = silence
         root.addChild(silenceEntity)
+
+        // Wavelength ruler segments: alternation is by index, so each
+        // segment's material is assigned exactly once, here.
+        var crest = UnlitMaterial(color: DesignTokens.Palette.waveSourceUI)
+        crest.blending = .transparent(opacity: 0.72)
+        var trough = UnlitMaterial(color: .white)
+        trough.blending = .transparent(opacity: 0.2)
+        let segmentMesh = MeshResource.generateCylinder(height: 1, radius: 0.0024)
+        for index in 0..<Self.rulerBudget {
+            let segment = ModelEntity(
+                mesh: segmentMesh,
+                materials: [index % 2 == 0 ? crest : trough])
+            segment.isEnabled = false
+            rulerRoot.addChild(segment)
+            rulerSegments.append(segment)
+        }
+        rulerLabelPivot = Entity()
+        rulerLabelPivot.components.set(BillboardComponent())
+        rulerLabel = ModelEntity()
+        rulerLabelPivot.addChild(rulerLabel)
+        rulerRoot.addChild(rulerLabelPivot)
+        root.addChild(rulerRoot)
 
         // Sources: a Blender-authored speaker puck inside a phase-tinted
         // translucent shell (the shell's color is the in-phase/inverted
@@ -400,6 +433,56 @@ final class WavesRenderer {
             silenceEntity.model = nil
         }
         silenceEntity.isEnabled = inputs.show
+
+        syncWavelengthRuler(model)
+    }
+
+    /// Lays the ruler along the line between the first two sources:
+    /// each segment spans exactly lambda/2, so interference geometry
+    /// (path differences in half-waves) can be READ off the room.
+    private func syncWavelengthRuler(_ model: WavesModel) {
+        guard model.sources.count >= 2 else {
+            rulerRoot.isEnabled = false
+            return
+        }
+        let a = model.sources[0].wave.position
+        let b = model.sources[1].wave.position
+        let distance = simd_distance(a, b)
+        guard distance > 0.08 else {
+            rulerRoot.isEnabled = false
+            return
+        }
+        rulerRoot.isEnabled = true
+        let direction = (b - a) / distance
+        let half = model.wavelength / 2
+        let orientation = VectorFieldArrows.rotationFromYAxis(to: SIMD3<Float>(direction))
+        for (index, segment) in rulerSegments.enumerated() {
+            let start = Double(index) * half
+            guard start < distance else {
+                segment.isEnabled = false
+                continue
+            }
+            let end = min(start + half, distance)
+            segment.isEnabled = true
+            segment.position = SIMD3<Float>(a + direction * (start + end) / 2)
+            segment.scale = SIMD3(1, Float(end - start), 1)
+            segment.orientation = orientation
+        }
+
+        rulerLabelPivot.position = SIMD3<Float>((a + b) / 2) + SIMD3(0, 0.05, 0)
+        let centimeters = Int((model.wavelength * 100).rounded())
+        let mesh: MeshResource
+        if let cached = rulerMeshCache[centimeters] {
+            mesh = cached
+        } else {
+            mesh = MeshResource.generateText(
+                "λ = \(centimeters) cm", extrusionDepth: 0.002,
+                font: .systemFont(ofSize: 0.032, weight: .semibold))
+            rulerMeshCache[centimeters] = mesh
+        }
+        rulerLabel.model = ModelComponent(mesh: mesh, materials: [rulerLabelMaterial])
+        let bounds = mesh.bounds
+        rulerLabel.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
     }
 
     /// The per-frame heartbeat: every dot scales with the live |u(r, t)|,
