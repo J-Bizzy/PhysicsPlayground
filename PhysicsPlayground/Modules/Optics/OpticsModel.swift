@@ -146,6 +146,57 @@ final class OpticsModel {
         }
     }
 
+    /// The full 3D light bundle: a circular beam or a cone of rays,
+    /// traced through ideal elements in world coordinates. This is the
+    /// rendered light — the 2D tracedRays stays as the exactly-tested
+    /// paraxial reference.
+    var tracedRays3D: [[SIMD3<Double>]] {
+        let elements3D = elements.map { element -> RayOptics3D.Element in
+            let kind: RayOptics3D.Element.Kind
+            switch element.kind {
+            case .convergingLens: kind = .lens(focalLength: element.focal)
+            case .divergingLens: kind = .lens(focalLength: -element.focal)
+            case .mirror: kind = .mirror
+            case .screen: kind = .screen
+            }
+            return RayOptics3D.Element(
+                x: Self.center.x + element.x, kind: kind, apertureRadius: 0.17)
+        }
+        let bounds = (Self.center.x + Self.sourceX)...(Self.center.x + Self.railHalf)
+        let rays: [RayOptics3D.Ray]
+        switch sourceMode {
+        case .parallel:
+            rays = RayOptics3D.parallelBeam(
+                fromX: Self.center.x + Self.sourceX, center: Self.center,
+                radius: 0.13, rings: 3, spokes: 8)
+        case .point:
+            rays = RayOptics3D.pointCone(
+                from: SIMD3(Self.center.x + Self.sourceX, Self.center.y, Self.center.z),
+                halfAngle: 0.26, rings: 3, spokes: 8)
+        }
+        return RayOptics3D.trace(
+            rays: rays, elements: elements3D, axisCenter: Self.center, bounds: bounds)
+    }
+
+    /// The light landing on the nearest screen: its centroid and blur
+    /// radius. Slide the screen through focus and this disc collapses
+    /// to a point, then blooms again — depth of focus made touchable.
+    var screenSpot: (center: SIMD3<Double>, radius: Double)? {
+        let screens = elements.filter { $0.kind == .screen }
+        guard !screens.isEmpty else { return nil }
+        let screenXs = Set(screens.map { Self.center.x + $0.x })
+        var hits: [SIMD3<Double>] = []
+        for line in tracedRays3D {
+            guard let end = line.last,
+                  screenXs.contains(where: { abs($0 - end.x) < 1e-6 }) else { continue }
+            hits.append(end)
+        }
+        guard hits.count >= 2 else { return nil }
+        let centroid = hits.reduce(SIMD3<Double>.zero, +) / Double(hits.count)
+        let radius = hits.map { simd_distance($0, centroid) }.max() ?? 0
+        return (centroid, max(radius, 0.004))
+    }
+
     /// Thin-lens prediction for the FIRST lens: (image x, di, dₒ, m) —
     /// nil when there's no lens or the image is at infinity.
     var imagePrediction: (x: Double, imageDistance: Double, objectDistance: Double, magnification: Double)? {

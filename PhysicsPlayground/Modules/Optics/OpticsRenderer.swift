@@ -77,6 +77,35 @@ final class OpticsRenderer {
         root.addChild(infoAnchor)
     }
 
+    /// The pool for the screen's blur disc: bright and tiny in focus,
+    /// broad and dim out of it.
+    private lazy var screenSpotEntity: ModelEntity = {
+        let disc = ModelEntity(
+            mesh: .generateCylinder(height: 0.004, radius: 0.01),
+            materials: [UnlitMaterial(color: .white)])
+        disc.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+        disc.isEnabled = false
+        root.addChild(disc)
+        return disc
+    }()
+
+    private func syncScreenSpot(_ model: OpticsModel) {
+        guard let spot = model.screenSpot else {
+            screenSpotEntity.isEnabled = false
+            return
+        }
+        screenSpotEntity.isEnabled = true
+        // Nudge off the screen face so the disc never z-fights it.
+        screenSpotEntity.position = SIMD3<Float>(spot.center) - SIMD3(0.006, 0, 0)
+        let scale = Float(spot.radius / 0.01)
+        screenSpotEntity.scale = SIMD3(scale, 1, scale)
+        let focusGlow = max(0.25, min(0.95, 0.95 - spot.radius * 5))
+        var material = UnlitMaterial(color: UIColor(
+            red: 1.0, green: 0.55, blue: 0.4, alpha: 1))
+        material.blending = .transparent(opacity: .init(floatLiteral: Float(focusGlow)))
+        screenSpotEntity.model?.materials = [material]
+    }
+
     func tick(model: OpticsModel) {
         syncElements(model)
         syncRays(model)
@@ -179,12 +208,11 @@ final class OpticsRenderer {
         lastSnapshot = snapshot
 
         var lines: [[SIMD3<Float>]] = []
-        for ray in model.tracedRays where ray.count > 1 {
-            lines.append(ray.map {
-                SIMD3<Float>(OpticsModel.center + SIMD3($0.x, $0.y, 0))
-            })
+        for ray in model.tracedRays3D where ray.count > 1 {
+            lines.append(ray.map { SIMD3<Float>($0) })
         }
-        if let mesh = TubeMesh.tube(lines: lines, radius: 0.0022, sides: 3) {
+        syncScreenSpot(model)
+        if let mesh = TubeMesh.tube(lines: lines, radius: 0.0018, sides: 3) {
             var material = UnlitMaterial(color: UIColor(red: 1, green: 0.32, blue: 0.26, alpha: 1))
             material.blending = .transparent(opacity: 0.85)
             rayEntity.model = ModelComponent(mesh: mesh, materials: [material])
