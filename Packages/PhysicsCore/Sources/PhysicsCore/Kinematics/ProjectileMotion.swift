@@ -141,6 +141,7 @@ public enum ProjectileMotion {
         drag: Drag? = nil,
         restitution: Double = 0,
         maxBounces: Int = 0,
+        walls: [RoomWalls.Wall] = [],
         timeStep: Double = 1.0 / 240.0,
         maxDuration: Double = 30,
         pointStride: Int = 4
@@ -161,6 +162,19 @@ public enum ProjectileMotion {
             time += timeStep
             step += 1
             apex = max(apex, state.position.y)
+
+            // Struck a wall: reflect, and cut a crisp corner into the
+            // polyline. Wall hits share the bounce budget so a ricochet
+            // between close walls can't run forever.
+            if !walls.isEmpty, bounces < maxBounces,
+               let hit = RoomWalls.strike(
+                   previous: previous.position, current: state.position,
+                   velocity: state.velocity, radius: 0,
+                   restitution: restitution, walls: walls) {
+                bounces += 1
+                points.append(hit.position)
+                state = ParticleDynamics.State(position: hit.position, velocity: hit.velocity)
+            }
 
             // Crossed the ground going down.
             if state.position.y < 0, state.velocity.y < 0 {

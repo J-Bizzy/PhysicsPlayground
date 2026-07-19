@@ -65,6 +65,26 @@ final class RoomWallsTests: XCTestCase {
         XCTAssertNil(hit)
     }
 
+    /// The trajectory simulation reflects off walls with the same law
+    /// as live flights: elastic wall at x = 2, horizontal launch — the
+    /// path never passes the wall and comes back at full speed.
+    func testSimulatedTrajectoryBouncesOffWalls() {
+        let trajectory = ProjectileMotion.simulate(
+            from: SIMD3(0, 1.5, 0),
+            launchVelocity: SIMD3(5, 0, 0),
+            gravity: 9.81,
+            restitution: 1.0,
+            maxBounces: 4,
+            walls: [wall],
+            maxDuration: 2
+        )
+        let maxX = trajectory.points.map(\.x).max()!
+        XCTAssertLessThanOrEqual(maxX, 2.0 + 1e-9, "never passes the wall plane")
+        XCTAssertGreaterThan(maxX, 1.99, "actually reaches the wall")
+        XCTAssertLessThan(trajectory.points.last!.x, 1.0,
+                          "came back off the wall")
+    }
+
     /// Two walls in the path: the strike reports the FIRST one hit.
     func testEarliestWallWins() {
         let near = RoomWalls.Wall(

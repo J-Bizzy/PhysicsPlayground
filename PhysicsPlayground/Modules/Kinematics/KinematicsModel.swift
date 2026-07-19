@@ -205,6 +205,7 @@ final class KinematicsModel {
             drag: drag(for: projectile),
             restitution: projectile.restitution,
             maxBounces: 4,
+            walls: respectRoomWalls ? roomWalls : [],
             maxDuration: 12
         )
     }

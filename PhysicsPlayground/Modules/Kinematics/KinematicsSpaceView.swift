@@ -212,7 +212,7 @@ struct KinematicsTimePod: View {
                 .font(DesignTokens.TypeScale.label)
                 .accessibilityHint("Your real walls, detected on device — off, balls sail straight through")
             Text(model.respectRoomWalls
-                 ? "Walls come from your room, on device. The dotted prediction shows the wall-free path."
+                 ? "Walls come from your room, on device — the prediction bounces too."
                  : "Balls phase through walls to hold their trajectory.")
                 .font(DesignTokens.TypeScale.footnote)
                 .foregroundStyle(.secondary)
