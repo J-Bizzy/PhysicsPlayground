@@ -26,6 +26,9 @@ final class OpticsRenderer {
 
     private struct ElementVisual {
         let holder: ModelEntity
+        /// Two dots at ±f on the axis — the focal points, marked where
+        /// the thin-lens story actually happens. Lenses only.
+        var focalMarkers: [ModelEntity] = []
     }
     private var visuals: [UUID: ElementVisual] = [:]
 
@@ -91,6 +94,7 @@ final class OpticsRenderer {
         let liveIDs = Set(model.elements.map(\.id))
         for id in visuals.keys where !liveIDs.contains(id) {
             visuals[id]?.holder.removeFromParent()
+            visuals[id]?.focalMarkers.forEach { $0.removeFromParent() }
             visuals[id] = nil
         }
         for element in model.elements {
@@ -98,6 +102,10 @@ final class OpticsRenderer {
             if element.id != manipulatingID {
                 visual.holder.position = SIMD3<Float>(OpticsModel.center)
                     + SIMD3(Float(element.x), 0, 0)
+            }
+            for (side, marker) in zip([-1.0, 1.0], visual.focalMarkers) {
+                marker.position = SIMD3<Float>(OpticsModel.center)
+                    + SIMD3(Float(element.x + side * element.focal), 0, 0)
             }
             visuals[element.id] = visual
         }
@@ -138,6 +146,19 @@ final class OpticsRenderer {
                 mesh: .generateBox(size: [0.008, 0.36, 0.26], cornerRadius: 0.004),
                 materials: [screen])
         }
+        var focalMarkers: [ModelEntity] = []
+        if element.kind == .convergingLens || element.kind == .divergingLens {
+            let markerColor: UIColor = element.kind == .convergingLens
+                ? UIColor(red: 0.3, green: 0.75, blue: 1, alpha: 1)
+                : UIColor(red: 1, green: 0.6, blue: 0.3, alpha: 1)
+            for _ in 0..<2 {
+                let marker = ModelEntity(
+                    mesh: .generateSphere(radius: 0.0075),
+                    materials: [UnlitMaterial(color: markerColor)])
+                root.addChild(marker)
+                focalMarkers.append(marker)
+            }
+        }
         holder.name = element.id.uuidString
         Grabbable.configure(holder, collisionRadius: 0.2)
         var accessibility = AccessibilityComponent()
@@ -146,7 +167,7 @@ final class OpticsRenderer {
             stringLiteral: "\(element.kind.displayName). Slide it along the bench.")
         holder.components.set(accessibility)
         root.addChild(holder)
-        return ElementVisual(holder: holder)
+        return ElementVisual(holder: holder, focalMarkers: focalMarkers)
     }
 
     private func syncRays(_ model: OpticsModel) {

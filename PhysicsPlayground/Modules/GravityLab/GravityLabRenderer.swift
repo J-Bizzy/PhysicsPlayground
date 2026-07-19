@@ -429,6 +429,39 @@ final class GravityLabRenderer {
         }
     }
 
+    /// Billboarded name tags riding above the bodies — you should never
+    /// have to guess which dot is Mars.
+    private var bodyLabels: [Entity] = []
+    private var bodyLabelTexts: [ModelEntity] = []
+    private var labelMeshCache: [String: MeshResource] = [:]
+
+    private func labelMesh(for name: String) -> MeshResource {
+        if let cached = labelMeshCache[name] { return cached }
+        let mesh = MeshResource.generateText(
+            name, extrusionDepth: 0.001,
+            font: .systemFont(ofSize: 0.022, weight: .semibold))
+        labelMeshCache[name] = mesh
+        return mesh
+    }
+
+    private func ensureLabel(_ index: Int) {
+        while bodyLabels.count <= index {
+            let holder = Entity()
+            let pivot = Entity()
+            pivot.components.set(BillboardComponent())
+            holder.addChild(pivot)
+            let text = ModelEntity()
+            var material = UnlitMaterial(color: UIColor(white: 1, alpha: 0.75))
+            material.blending = .transparent(opacity: 0.75)
+            text.model = ModelComponent(mesh: labelMesh(for: " "), materials: [material])
+            pivot.addChild(text)
+            holder.isEnabled = false
+            systemRoot.addChild(holder)
+            bodyLabels.append(holder)
+            bodyLabelTexts.append(text)
+        }
+    }
+
     private func syncBodies(_ model: GravityLabModel) {
         for (index, slot) in bodyPool.slots.enumerated() {
             guard index < model.bodies.count else {
@@ -440,10 +473,19 @@ final class GravityLabRenderer {
             if slot.payload.name != orbiting.id.uuidString {
                 slot.payload.name = orbiting.id.uuidString
             }
+            ensureLabel(index)
             if bodyMaterialKeys[index] != orbiting.body.name {
                 bodyMaterialKeys[index] = orbiting.body.name
                 slot.payload.model?.materials = [material(for: orbiting.body.name)]
+                let mesh = labelMesh(for: orbiting.body.name)
+                bodyLabelTexts[index].model?.mesh = mesh
+                let bounds = mesh.bounds
+                bodyLabelTexts[index].position = [
+                    -(bounds.min.x + bounds.max.x) / 2, 0, 0]
             }
+            bodyLabels[index].isEnabled = true
+            bodyLabels[index].position = SIMD3<Float>(orbiting.body.position) * scale
+                + SIMD3(0, Float(orbiting.displayRadius) + 0.028, 0)
             slot.entity.scale = SIMD3<Float>(
                 repeating: Float(orbiting.displayRadius) / Self.baseBodyRadius)
 
@@ -456,6 +498,7 @@ final class GravityLabRenderer {
         }
         for index in model.bodies.count..<bodyPool.budget {
             bodyPool.slots[index].entity.isEnabled = false
+            if index < bodyLabels.count { bodyLabels[index].isEnabled = false }
         }
 
         if let primary = model.primaryBody {

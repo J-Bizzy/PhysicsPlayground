@@ -182,8 +182,13 @@ struct TestBodyPod: View {
                     Button {
                         model.testBody = body
                     } label: {
-                        Text(bodyName(body))
-                            .font(DesignTokens.TypeScale.footnote)
+                        VStack(spacing: 1) {
+                            Text(bodyName(body))
+                                .font(DesignTokens.TypeScale.footnote)
+                            Text("Cd \(body.dragCoefficient, specifier: "%.2f")")
+                                .font(.system(size: 10).monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .buttonStyle(.bordered)
                     .tint(model.testBody == body ? DesignTokens.Palette.windAccent : nil)

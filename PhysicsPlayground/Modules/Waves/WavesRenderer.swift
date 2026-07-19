@@ -252,6 +252,29 @@ final class WavesRenderer {
         probeAnchor.position = SIMD3<Float>(model.probePosition) + SIMD3(0, 0.09, 0)
     }
 
+    /// The +/− sign language from the EM module: a billboarded glyph
+    /// above each source — + in phase, − inverted (the vertical stroke
+    /// hides). Color already says it; now it reads outright.
+    private var sourceSignVerticals: [Int: ModelEntity] = [:]
+
+    private func ensureSourceSign(_ index: Int, on container: Entity) {
+        guard sourceSignVerticals[index] == nil else { return }
+        let pivot = Entity()
+        pivot.components.set(BillboardComponent())
+        pivot.position = [0, 0.085, 0]
+        let strokeMaterial = UnlitMaterial(color: UIColor(white: 1, alpha: 0.9))
+        let horizontal = ModelEntity(
+            mesh: .generateBox(size: [0.018, 0.0045, 0.0025], cornerRadius: 0.001),
+            materials: [strokeMaterial])
+        let vertical = ModelEntity(
+            mesh: .generateBox(size: [0.0045, 0.018, 0.0025], cornerRadius: 0.001),
+            materials: [strokeMaterial])
+        pivot.addChild(horizontal)
+        pivot.addChild(vertical)
+        container.addChild(pivot)
+        sourceSignVerticals[index] = vertical
+    }
+
     private func syncSources(_ model: WavesModel) {
         for (index, slot) in sourcePool.slots.enumerated() {
             guard index < model.sources.count else {
@@ -263,6 +286,8 @@ final class WavesRenderer {
             if slot.payload.name != source.id.uuidString {
                 slot.payload.name = source.id.uuidString
             }
+            ensureSourceSign(index, on: slot.entity)
+            sourceSignVerticals[index]?.isEnabled = !source.wave.phaseInverted
             let key = (source.wave.phaseInverted ? "inverted" : "inPhase")
                 + (source.id == model.selectedID ? "-selected" : "")
             if sourceMaterialKeys[index] != key {
