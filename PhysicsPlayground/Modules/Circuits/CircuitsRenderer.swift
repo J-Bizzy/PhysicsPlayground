@@ -199,6 +199,82 @@ final class CircuitsRenderer {
     /// Drives the armed-terminal pulse.
     private var pendingPulsePhase = 0.0
 
+    // MARK: Connection previews & drag-to-wire
+
+    /// While this part is carried (or its end pulled), ghost wires show
+    /// exactly what a release would connect.
+    var previewComponentID: UUID?
+    /// Terminals currently highlighted as connection targets.
+    private(set) var previewTargets: Set<CircuitsModel.Terminal> = []
+    /// The terminal the drag-to-wire rubber band is hovering.
+    var rubberTargetTerminal: CircuitsModel.Terminal?
+
+    private var previewWireEntities: [ModelEntity] = []
+    private lazy var rubberBand: ModelEntity = {
+        let band = ModelEntity(
+            mesh: .generateCylinder(height: 1, radius: 0.0045),
+            materials: [Self.previewMaterial])
+        band.isEnabled = false
+        root.addChild(band)
+        return band
+    }()
+    private static let previewMaterial: UnlitMaterial = {
+        var material = UnlitMaterial(color: UIColor(
+            red: 0.35, green: 1.0, blue: 0.55, alpha: 1))
+        material.blending = .transparent(opacity: 0.65)
+        return material
+    }()
+
+    private func stretch(_ entity: ModelEntity, from a: SIMD3<Float>, to b: SIMD3<Float>) {
+        let direction = b - a
+        let length = simd_length(direction)
+        guard length > 1e-4 else { entity.isEnabled = false; return }
+        entity.isEnabled = true
+        entity.position = (a + b) / 2
+        entity.orientation = VectorFieldArrows.rotationFromYAxis(to: direction / length)
+        entity.scale = SIMD3(1, length, 1)
+    }
+
+    /// The live rubber band from a terminal to the hand (or its target).
+    func showRubberBand(from a: SIMD3<Float>, to b: SIMD3<Float>) {
+        stretch(rubberBand, from: a, to: b)
+    }
+
+    func hideRubberBand() {
+        rubberBand.isEnabled = false
+        rubberTargetTerminal = nil
+    }
+
+    private func syncConnectionPreviews(_ model: CircuitsModel) {
+        var pairs: [(SIMD3<Float>, SIMD3<Float>, CircuitsModel.Terminal)] = []
+        if let id = previewComponentID {
+            for pair in model.autoConnectCandidates(id: id) {
+                if let a = terminalWorld(pair.from, model),
+                   let b = terminalWorld(pair.to, model) {
+                    pairs.append((a, b, pair.to))
+                }
+            }
+        }
+        previewTargets = Set(pairs.map(\.2))
+        if let rubber = rubberTargetTerminal { previewTargets.insert(rubber) }
+
+        while previewWireEntities.count < pairs.count {
+            let ghost = ModelEntity(
+                mesh: .generateCylinder(height: 1, radius: 0.0045),
+                materials: [Self.previewMaterial])
+            ghost.isEnabled = false
+            root.addChild(ghost)
+            previewWireEntities.append(ghost)
+        }
+        for (index, ghost) in previewWireEntities.enumerated() {
+            if index < pairs.count {
+                stretch(ghost, from: pairs[index].0, to: pairs[index].1)
+            } else {
+                ghost.isEnabled = false
+            }
+        }
+    }
+
     func tick(dt: Double, model: CircuitsModel) {
         pendingPulsePhase += dt * 6
         render(model, dt: dt)
@@ -209,6 +285,7 @@ final class CircuitsRenderer {
             appliedResistorTextureVersion = CircuitTextures.version
             for id in visuals.keys { visuals[id]?.resistorCodeKey = "" }
         }
+        syncConnectionPreviews(model)
         if let event = model.soundEvent, event.id != lastSoundID {
             lastSoundID = event.id
             audioEmitter.position = SIMD3<Float>(event.position)
@@ -265,12 +342,13 @@ final class CircuitsRenderer {
             for (end, terminal) in visual.terminals.enumerated() {
                 let sign: Float = end == 0 ? -1 : 1
                 terminal.position = SIMD3(sign * half, 0, 0)
-                let isPending = model.pendingTerminal ==
-                    CircuitsModel.Terminal(componentID: component.id, end: end)
-                // The armed terminal breathes so there's never any doubt
-                // which end the next pinch will wire from.
+                let key = CircuitsModel.Terminal(componentID: component.id, end: end)
+                let isPending = model.pendingTerminal == key
+                // The armed terminal breathes, and preview targets swell,
+                // so there's never doubt what the next action will wire.
                 terminal.scale = SIMD3(repeating: isPending
-                    ? Float(1.6 + 0.35 * sin(pendingPulsePhase)) : 1.0)
+                    ? Float(1.6 + 0.35 * sin(pendingPulsePhase))
+                    : (previewTargets.contains(key) ? 1.5 : 1.0))
 
                 let beingPulled = stretchingHandle ==
                     CircuitsModel.Terminal(componentID: component.id, end: end)

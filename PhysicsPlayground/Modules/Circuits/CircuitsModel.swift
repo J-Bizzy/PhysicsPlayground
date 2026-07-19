@@ -217,12 +217,12 @@ final class CircuitsModel {
                                       Self.wireLengthRange.upperBound)
     }
 
-    /// Magnetic connections: when a part is released, any of its
-    /// terminals sitting within snapDistance of another part's free-ish
-    /// terminal wires itself up — bring parts together and they connect.
-    func autoConnect(id: UUID) {
-        guard let component = components.first(where: { $0.id == id }) else { return }
-        var connected = false
+    /// The pairs a release right now would wire up — the renderer draws
+    /// these as ghost wires while a part is carried, so the release
+    /// never surprises: what you preview is what you get.
+    func autoConnectCandidates(id: UUID) -> [(from: Terminal, to: Terminal)] {
+        guard let component = components.first(where: { $0.id == id }) else { return [] }
+        var pairs: [(from: Terminal, to: Terminal)] = []
         for end in 0...1 {
             let mine = Terminal(componentID: id, end: end)
             let minePosition = component.terminalPosition(end)
@@ -242,14 +242,41 @@ final class CircuitsModel {
                 }
             }
             if let best {
-                wires.append(Wire(id: UUID(), from: mine, to: best.terminal))
-                connected = true
+                pairs.append((mine, best.terminal))
             }
         }
-        if connected {
-            emitSound(.chime, at: component.position, volume: 0.5)
-            persistSoon()
+        return pairs
+    }
+
+    /// Magnetic connections: when a part is released, any of its
+    /// terminals sitting within snapDistance of another part's free-ish
+    /// terminal wires itself up — bring parts together and they connect.
+    func autoConnect(id: UUID) {
+        let pairs = autoConnectCandidates(id: id)
+        guard !pairs.isEmpty,
+              let component = components.first(where: { $0.id == id }) else { return }
+        for pair in pairs {
+            wires.append(Wire(id: UUID(), from: pair.from, to: pair.to))
         }
+        emitSound(.chime, at: component.position, volume: 0.5)
+        persistSoon()
+    }
+
+    /// Direct terminal-to-terminal wiring — the drag-to-wire gesture's
+    /// landing. Same rules as tap-tap: no self-wires, no duplicates.
+    func connectTerminals(_ a: Terminal, _ b: Terminal) {
+        guard a != b,
+              components.contains(where: { $0.id == a.componentID }),
+              let target = components.first(where: { $0.id == b.componentID })
+        else { return }
+        let exists = wires.contains {
+            ($0.from == a && $0.to == b) || ($0.from == b && $0.to == a)
+        }
+        guard !exists, wires.count < Self.wireBudget else { return }
+        wires.append(Wire(id: UUID(), from: a, to: b))
+        pendingTerminal = nil
+        emitSound(.pop, at: target.terminalPosition(b.end), volume: 0.8)
+        persistSoon()
     }
 
     /// Adopt the aim a carry left the part with (the hand can twist a

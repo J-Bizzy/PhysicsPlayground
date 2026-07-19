@@ -18,6 +18,46 @@ import simd
 @MainActor
 final class CircuitsModelTests: XCTestCase {
 
+    /// The carry preview and the release do the same thing: what the
+    /// ghost wires promise is exactly what autoConnect creates.
+    func testAutoConnectPreviewMatchesRelease() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let battery = model.add(.battery, at: SIMD3(0, 1.2, -0.9)),
+              let bulb = model.add(.bulb, at: SIMD3(0.2, 1.2, -0.9)) else {
+            return XCTFail("bench refused parts")
+        }
+        // battery t1 at x = 0.085; bulb t0 at 0.115 — a 3 cm gap, inside snap.
+        let pairs = model.autoConnectCandidates(id: bulb)
+        XCTAssertEqual(pairs.count, 1)
+        XCTAssertEqual(pairs[0].from, CircuitsModel.Terminal(componentID: bulb, end: 0))
+        XCTAssertEqual(pairs[0].to, CircuitsModel.Terminal(componentID: battery, end: 1))
+
+        model.autoConnect(id: bulb)
+        XCTAssertEqual(model.wires.count, 1)
+        XCTAssertTrue(model.autoConnectCandidates(id: bulb).isEmpty,
+                      "once wired, the preview clears")
+    }
+
+    /// Drag-to-wire lands anywhere: distance-free, duplicate-proof.
+    func testConnectTerminalsDirectly() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let battery = model.add(.battery, at: SIMD3(-0.4, 1.2, -0.9)),
+              let bulb = model.add(.bulb, at: SIMD3(0.5, 1.4, -0.9)) else {
+            return XCTFail("bench refused parts")
+        }
+        let a = CircuitsModel.Terminal(componentID: battery, end: 1)
+        let b = CircuitsModel.Terminal(componentID: bulb, end: 0)
+        model.connectTerminals(a, b)
+        XCTAssertEqual(model.wires.count, 1)
+        model.connectTerminals(b, a)
+        XCTAssertEqual(model.wires.count, 1, "duplicates rejected either way round")
+        model.connectTerminals(a, a)
+        XCTAssertEqual(model.wires.count, 1, "no self-wires")
+    }
+
+
     /// The exact current of a 9 V battery–switch–bulb loop.
     private var starterLoopAmps: Double {
         9.0 / (24 + CircuitsModel.batteryInternalResistance

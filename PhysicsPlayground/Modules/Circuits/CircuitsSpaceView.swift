@@ -18,6 +18,7 @@ struct CircuitsSpaceView: View {
     @Environment(CircuitsModel.self) private var model
     @State private var renderer: CircuitsRenderer?
     @State private var router = ManipulationRouter()
+    @State private var wireDragFrom: CircuitsModel.Terminal?
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -84,6 +85,79 @@ struct CircuitsSpaceView: View {
                     handleTap(on: value.entity)
                 }
         )
+        // Drag-to-wire: pinch a copper terminal and PULL — a live wire
+        // follows the hand; let go on another terminal to connect it
+        // (anywhere else cancels). Tap-tap wiring still works too.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0.01)
+                .targetedToAnyEntity()
+                .onChanged { value in
+                    guard let renderer else { return }
+                    if wireDragFrom == nil {
+                        guard let terminal = terminal(on: value.entity) else { return }
+                        wireDragFrom = terminal
+                    }
+                    guard let source = wireDragFrom,
+                          let sourceComponent = model.components.first(
+                            where: { $0.id == source.componentID }) else { return }
+                    let hand = SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene))
+                    let target = nearestTerminal(to: hand, excluding: source)
+                    renderer.rubberTargetTerminal = target?.terminal
+                    let sourcePosition = SIMD3<Float>(
+                        sourceComponent.terminalPosition(source.end))
+                    renderer.showRubberBand(
+                        from: sourcePosition,
+                        to: target.map { SIMD3<Float>($0.position) } ?? hand)
+                }
+                .onEnded { value in
+                    defer {
+                        renderer?.hideRubberBand()
+                        wireDragFrom = nil
+                    }
+                    guard let source = wireDragFrom else { return }
+                    let hand = SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene))
+                    if let target = nearestTerminal(to: hand, excluding: source) {
+                        model.connectTerminals(source, target.terminal)
+                    }
+                }
+        )
+    }
+
+    /// The terminal an entity (or any ancestor) represents, if any.
+    private func terminal(on entity: Entity) -> CircuitsModel.Terminal? {
+        var current: Entity? = entity
+        while let candidate = current {
+            let name = candidate.name
+            if name.hasPrefix("t0-") || name.hasPrefix("t1-"),
+               let id = UUID(uuidString: String(name.dropFirst(3))) {
+                return CircuitsModel.Terminal(
+                    componentID: id, end: name.hasPrefix("t0-") ? 0 : 1)
+            }
+            current = candidate.parent
+        }
+        return nil
+    }
+
+    /// The closest connectable terminal within reach of the hand.
+    private func nearestTerminal(
+        to hand: SIMD3<Float>, excluding source: CircuitsModel.Terminal
+    ) -> (terminal: CircuitsModel.Terminal, position: SIMD3<Double>)? {
+        var best: (CircuitsModel.Terminal, SIMD3<Double>, Float)?
+        for component in model.components {
+            for end in 0...1 {
+                let terminal = CircuitsModel.Terminal(componentID: component.id, end: end)
+                guard terminal != source else { continue }
+                let position = component.terminalPosition(end)
+                let distance = simd_distance(SIMD3<Float>(position), hand)
+                guard distance < 0.09 else { continue }
+                if best == nil || distance < best!.2 {
+                    best = (terminal, position, distance)
+                }
+            }
+        }
+        return best.map { ($0.0, $0.1) }
     }
 
     /// Terminals ("t0-"/"t1-"), wires ("w-"), and levers ("k-") are tap
@@ -132,11 +206,13 @@ struct CircuitsSpaceView: View {
                       let id = model.add(kind, at: SIMD3<Double>(position))
                 else { return }
                 renderer.trayDragIDs[name] = id
+                renderer.previewComponentID = id
                 renderer.setTrayTemplateHidden(name, true)
                 return
             }
             if let grip = stretchTerminal(from: name) {
                 renderer.stretchingHandle = grip
+                renderer.previewComponentID = grip.componentID
                 renderer.swingPivot = model.components
                     .first { $0.id == grip.componentID }?
                     .terminalPosition(1 - grip.end)
@@ -145,6 +221,7 @@ struct CircuitsSpaceView: View {
             }
             guard let id = UUID(uuidString: name) else { return }
             renderer.manipulatingComponentID = id
+            renderer.previewComponentID = id
             model.select(id: id)
             model.move(id: id, to: SIMD3<Double>(position))
         }
@@ -171,6 +248,7 @@ struct CircuitsSpaceView: View {
                     model.autoConnect(id: id)
                     renderer.trayDragIDs[name] = nil
                 }
+                renderer.previewComponentID = nil
                 renderer.setTrayTemplateHidden(name, false)
                 return
             }
@@ -179,7 +257,11 @@ struct CircuitsSpaceView: View {
                     model.dragEnd(id: grip.componentID, grabbedEnd: grip.end,
                                   pivot: pivot, hand: SIMD3<Double>(position))
                 }
+                // A pulled end parked beside a terminal connects, just
+                // like a released part — the preview already promised it.
+                model.autoConnect(id: grip.componentID)
                 renderer.stretchingHandle = nil
+                renderer.previewComponentID = nil
                 renderer.swingPivot = nil
                 return
             }
@@ -191,6 +273,7 @@ struct CircuitsSpaceView: View {
                 model.setAxis(id: id, axis: axis)
             }
             model.autoConnect(id: id)
+            renderer.previewComponentID = nil
             // Don't reclaim the holder immediately: the manipulation
             // system settles the entity for a beat after release, and
             // writing transforms under it makes the part shudder. Hand
@@ -323,7 +406,7 @@ struct CircuitBenchPod: View {
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(DesignTokens.Palette.circuitsAccent)
             } else {
-                Text("Pinch a copper terminal, then another, to run a wire.")
+                Text("Drag from a copper terminal to pull a wire — let go on another to connect. Carried parts show green ghost wires where they'll snap.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
             }
