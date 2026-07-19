@@ -31,7 +31,7 @@ struct WindTunnelSpaceView: View {
             PodMount.mount(attachments.entity(for: "pod-wind"), name: "Wind",
                            at: [-1.35, 1.95, -1.15], in: podsRoot)
             PodMount.mount(attachments.entity(for: "pod-body"), name: "Test body",
-                           at: [0.7, 0.95, -0.95], in: podsRoot)
+                           at: [0.72, 1.05, -1.0], in: podsRoot)
             if let readout = attachments.entity(for: "probe") {
                 readout.position = [0, 0.02, 0]
                 renderer.probeAnchor.addChild(readout)

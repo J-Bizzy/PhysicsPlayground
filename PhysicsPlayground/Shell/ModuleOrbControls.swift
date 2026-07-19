@@ -22,15 +22,42 @@ struct ModuleOrbControlsView: View {
 
     @Environment(AppModel.self) private var appModel
     @State private var scene = OrbScene()
+    @State private var showPodTip = !UserDefaults.standard.bool(forKey: "hint.pods.dismissed")
 
     var body: some View {
-        RealityView { content in
+        RealityView { content, attachments in
             scene.build()
             content.add(scene.root)
+            if let tip = attachments.entity(for: "pod-tip") {
+                tip.position = [0, 1.02, -0.72]
+                tip.components.set(BillboardComponent())
+                scene.root.addChild(tip)
+            }
             scene.subscription = content.subscribe(to: SceneEvents.Update.self) { _ in
                 scene.showPausedState(module.isPaused())
                 scene.showPodsState(appModel.controlPodsVisible)
             }
+        } attachments: {
+            Attachment(id: "pod-tip") {
+                if showPodTip {
+                    Text("Pinch a glass bar to carry a pod anywhere — the tiles orb clears them all")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .frame(maxWidth: 300)
+                        .multilineTextAlignment(.center)
+                        .glassBackgroundEffect()
+                        .transition(.opacity)
+                }
+            }
+        }
+        .task {
+            // The tip shows once per install, then bows out.
+            guard showPodTip else { return }
+            try? await Task.sleep(for: .seconds(14))
+            withAnimation(.easeOut(duration: 1)) { showPodTip = false }
+            UserDefaults.standard.set(true, forKey: "hint.pods.dismissed")
         }
         .gesture(
             TapGesture()

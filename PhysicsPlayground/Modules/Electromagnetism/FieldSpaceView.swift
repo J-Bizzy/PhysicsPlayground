@@ -69,7 +69,7 @@ struct FieldSpaceView: View {
             Attachment(id: "pod-view") { FieldViewPod() }
             Attachment(id: "pod-stats") {
                 ControlPod(title: "Numbers", icon: "number",
-                           tint: .secondary, width: 300) {
+                           tint: .secondary, width: 330) {
                     PhysicsStatsView()
                 }
             }
