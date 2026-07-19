@@ -75,8 +75,8 @@ enum ElectromagnetismModule {
             text: "Halo marks the selected charge"
         ),
         LegendItem(
-            swatch: .symbol("arrow.up.right", DesignTokens.Palette.arrowStrong),
-            text: "Arrowheads ride the field lines; brighter means stronger"
+            swatch: .symbol("arrow.up.right", DesignTokens.Palette.fieldLine),
+            text: "Arrowheads ride the field lines, pointing along E"
         ),
     ]
 }

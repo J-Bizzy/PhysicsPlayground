@@ -56,7 +56,10 @@ final class FieldRenderer {
 
     private var model: FieldModel?
     private let renderLoop = RenderLoop()
-    private let arrows: VectorFieldArrows
+    /// Bare arrowhead cones riding the field lines. The line itself is
+    /// the shaft — consecutive heads follow the curve, so the arrows bend
+    /// with the line instead of laying straight chords over it.
+    private let arrowHeads: EntityPool<ModelEntity>
     private var chargeEntities: [UUID: ModelEntity] = [:]
     private var chargeHalos: [UUID: ModelEntity] = [:]
     private var appliedPolarity: [UUID: Bool] = [:]
@@ -81,16 +84,20 @@ final class FieldRenderer {
     private var appliedCharges: [PointCharge] = []
 
     init() {
-        arrows = VectorFieldArrows(
-            count: FieldModel.pointsPerAxis * FieldModel.pointsPerAxis * FieldModel.pointsPerAxis
-        )
+        let headMesh = MeshResource.generateCone(height: 0.022, radius: 0.0085)
+        let headMaterial = UnlitMaterial(color: FieldRenderer.lineColor)
+        arrowHeads = EntityPool(budget: 400) { container in
+            let head = ModelEntity(mesh: headMesh, materials: [headMaterial])
+            container.addChild(head)
+            return head
+        }
 
         // Everything derived from the traced field lives under one root:
         // while a single charge is dragged, the whole pattern translates
         // rigidly with it (exact for one charge — the field just moves),
         // so the lines stick to the hand while the re-trace catches up.
         root.addChild(fieldFlowRoot)
-        fieldFlowRoot.addChild(arrows.root)
+        fieldFlowRoot.addChild(arrowHeads.root)
         for entity in [linesEntity, positiveShellsEntity, negativeShellsEntity] {
             entity.isEnabled = false
             fieldFlowRoot.addChild(entity)
@@ -162,7 +169,7 @@ final class FieldRenderer {
         // rebuild on the geometry pipeline.
         linesEntity.isEnabled = showLines && !charges.isEmpty
         if !showLines || charges.isEmpty {
-            arrows.hideAll()
+            arrowHeads.hideAll()
         }
         positiveShellsEntity.isEnabled = showShells && !charges.isEmpty
         negativeShellsEntity.isEnabled = showShells && !charges.isEmpty
@@ -196,6 +203,27 @@ final class FieldRenderer {
     }
 
     private var lastShells = 3
+
+    /// Re-aims the arrowhead pool at the given points, each cone rotated
+    /// from its rest +y onto the line's local direction there.
+    private func syncArrowHeads(points: [SIMD3<Double>], directions: [SIMD3<Double>]) {
+        for (index, slot) in arrowHeads.slots.enumerated() {
+            guard index < points.count, index < directions.count else {
+                slot.entity.isEnabled = false
+                continue
+            }
+            let direction = directions[index]
+            let length = simd_length(direction)
+            guard length > 1e-12 else {
+                slot.entity.isEnabled = false
+                continue
+            }
+            slot.entity.isEnabled = true
+            slot.entity.position = SIMD3<Float>(points[index])
+            slot.entity.orientation = simd_quatf(
+                from: [0, 1, 0], to: SIMD3<Float>(direction / length))
+        }
+    }
 
     /// While a lone charge moves, translate the whole traced pattern with
     /// it — exact physics (one charge's field is the same everywhere, just
@@ -383,8 +411,7 @@ final class FieldRenderer {
         } else {
             linesEntity.model = nil
         }
-        arrows.update(points: result.arrowPoints, vectors: result.arrowVectors,
-                      hidden: [])
+        syncArrowHeads(points: result.arrowPoints, directions: result.arrowVectors)
         // Fresh geometry is anchored to its own charge layout; re-derive
         // the warp so there's no pop when it lands mid-drag.
         appliedCharges = result.sourceCharges
