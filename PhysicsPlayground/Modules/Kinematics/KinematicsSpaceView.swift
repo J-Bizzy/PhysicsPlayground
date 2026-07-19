@@ -16,6 +16,7 @@ struct KinematicsSpaceView: View {
     @Environment(KinematicsModel.self) private var model
     @State private var renderer: KinematicsRenderer?
     @State private var router = ManipulationRouter()
+    @State private var sensing = KinematicsSensing()
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -39,6 +40,10 @@ struct KinematicsSpaceView: View {
             // the model applies the slow-motion scale and pause).
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { event in
+                    // On device, detected walls flow into the physics.
+                    if sensing.isRunning {
+                        model.roomWalls = sensing.walls
+                    }
                     model.step(dt: event.deltaTime)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                 }
@@ -62,6 +67,10 @@ struct KinematicsSpaceView: View {
                         .environment(model)
                 }
             }
+        }
+        .task {
+            // Plane detection: device-only, quietly absent in the sim.
+            await sensing.start()
         }
     }
 
@@ -198,6 +207,14 @@ struct KinematicsTimePod: View {
 
             Toggle("Air resistance", isOn: $model.airResistance)
                 .font(DesignTokens.TypeScale.label)
+            Toggle("Bounce off room walls", isOn: $model.respectRoomWalls)
+                .font(DesignTokens.TypeScale.label)
+                .accessibilityHint("Your real walls, detected on device — off, balls sail straight through")
+            Text(model.respectRoomWalls
+                 ? "Walls come from your room, on device. The dotted prediction shows the wall-free path."
+                 : "Balls phase through walls to hold their trajectory.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 }

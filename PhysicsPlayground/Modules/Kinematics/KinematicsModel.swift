@@ -100,6 +100,28 @@ final class KinematicsModel {
 
     var gravity = 9.81
     var airResistance = false
+
+    /// Whether flights bounce off the room's real walls (from ARKit
+    /// plane detection on device) or sail straight through them.
+    var respectRoomWalls = true
+    /// The current wall rectangles, fed by KinematicsSensing — always
+    /// empty in the simulator unless the debug room is seeded.
+    var roomWalls: [RoomWalls.Wall] = []
+
+    init() {
+        // Debug hook: `simctl launch … -kinWalls 1` seeds a synthetic
+        // wall across the room and fires a ball at it, so the bounce is
+        // verifiable in the simulator (real walls are device-only).
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "kinWalls") {
+            roomWalls = [RoomWalls.Wall(
+                center: SIMD3(2.0, 1.5, -0.9), normal: SIMD3(1, 0, 0),
+                uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0),
+                halfU: 2.5, halfV: 1.5)]
+            fire()
+        }
+        #endif
+    }
     var windSpeed = 0.0
     /// Wind heading in degrees; 0 blows toward +x, 90 toward +z.
     var windDirectionDegrees = 0.0
@@ -505,6 +527,20 @@ final class KinematicsModel {
                 previous.position + fraction * (flight.state.position - previous.position)
             )
             flight.nextDotTime += Self.dotInterval
+        }
+
+        // Wall contact: the real room pushes back (when enabled).
+        if respectRoomWalls, !roomWalls.isEmpty,
+           let hit = RoomWalls.strike(
+               previous: previous.position, current: flight.state.position,
+               velocity: flight.state.velocity,
+               radius: flight.projectile.diameter / 2,
+               restitution: flight.projectile.restitution,
+               walls: roomWalls) {
+            flight.bounces += 1
+            emitSound(.thud, at: hit.position, volume: min(hit.impactSpeed / 6, 1))
+            flight.state = ParticleDynamics.State(
+                position: hit.position, velocity: hit.velocity)
         }
 
         // Floor contact (ball center at its radius above y = 0).
