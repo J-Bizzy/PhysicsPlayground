@@ -42,7 +42,7 @@ final class KinematicsRenderer {
     var manipulatingRingID: UUID?
 
     private static let barrelLength = Float(KinematicsModel.barrelLength)
-    private static let beadDistance: Float = 0.42
+    static let beadDistance: Float = 0.42
     private static let baseBallRadius: Float = 0.05
     private static let baseShadowRadius: Float = 0.05
 
@@ -96,7 +96,7 @@ final class KinematicsRenderer {
         launcherBase = ModelEntity(
             mesh: .generateSphere(radius: 0.05), materials: [launcherMaterial])
         launcherBase.name = Self.launcherName
-        Grabbable.configure(launcherBase, collisionRadius: 0.09)
+        Grabbable.configureTouchTarget(launcherBase, collisionRadius: 0.09)
         Self.setAccessibility(on: launcherBase, label: "Launcher. Drag to move it anywhere in the room.")
         root.addChild(launcherBase)
 
@@ -120,7 +120,7 @@ final class KinematicsRenderer {
             materials: [UnlitMaterial(color: DesignTokens.Palette.projectileUI)]
         )
         bead.name = Self.aimBeadName
-        Grabbable.configure(bead, collisionRadius: 0.06)
+        Grabbable.configureTouchTarget(bead, collisionRadius: 0.06)
         Self.setAccessibility(on: bead, label: "Aim bead. Drag to point the launcher.")
         root.addChild(bead)
 
@@ -138,7 +138,7 @@ final class KinematicsRenderer {
                 materials: [SimpleMaterial(color: DesignTokens.Palette.projectileUI,
                                            roughness: 0.5, isMetallic: false)]
             )
-            Grabbable.configure(sphere, collisionRadius: Self.baseBallRadius * 1.6)
+            Grabbable.configureTouchTarget(sphere, collisionRadius: Self.baseBallRadius * 1.6)
             Self.setAccessibility(on: sphere, label: "Ball. Grab and throw it.")
             container.addChild(sphere)
             return sphere
@@ -184,7 +184,7 @@ final class KinematicsRenderer {
                 mesh: ringMesh ?? MeshResource.generateSphere(radius: 0.05),
                 materials: [capturedRingMaterial]
             )
-            Grabbable.configure(tube, collisionRadius: 0.2)
+            Grabbable.configureTouchTarget(tube, collisionRadius: 0.2)
             Self.setAccessibility(on: tube, label: "Hoop. Drag to place it; balls passing down through it score.")
             container.addChild(tube)
             return tube

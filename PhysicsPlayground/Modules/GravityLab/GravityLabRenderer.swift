@@ -125,7 +125,7 @@ final class GravityLabRenderer {
                 mesh: bodyMesh,
                 materials: [SimpleMaterial(color: .white, roughness: 0.6, isMetallic: false)]
             )
-            Grabbable.configure(sphere, collisionRadius: Self.baseBodyRadius * 1.5)
+            Grabbable.configureTouchTarget(sphere, collisionRadius: Self.baseBodyRadius * 1.5)
             var accessibility = AccessibilityComponent()
             accessibility.isAccessibilityElement = true
             accessibility.label = "Celestial body. Grab to move it; throw it to set a new orbit."

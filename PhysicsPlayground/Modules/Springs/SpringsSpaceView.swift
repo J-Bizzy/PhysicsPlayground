@@ -18,7 +18,7 @@ import simd
 struct SpringsSpaceView: View {
     @Environment(SpringsModel.self) private var model
     @State private var renderer: SpringsRenderer?
-    @State private var router = ManipulationRouter()
+    @State private var drag: RelativeDrag?
     @State private var handSamples: [(time: Double, position: SIMD3<Double>)] = []
     @Environment(AppModel.self) private var appModel
 
@@ -42,8 +42,6 @@ struct SpringsSpaceView: View {
                 renderer.infoAnchor.addChild(info)
             }
 
-            configureRouter(renderer: renderer)
-            renderer.subscriptions = router.subscriptions(for: content)
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     renderer?.tick(dt: event.deltaTime, model: model)
@@ -76,6 +74,56 @@ struct SpringsSpaceView: View {
                     .glassBackgroundEffect()
             }
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .targetedToAnyEntity()
+                .onChanged { value in
+                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    if drag == nil {
+                        var current: Entity? = value.entity
+                        while let candidate = current {
+                            if let index = blockIndex(from: candidate.name) {
+                                let target = model.mode == .single
+                                    ? model.blockWorld : model.coupledBlockWorld(index)
+                                renderer?.grabbedBlock = index
+                                model.beginGrab(block: index)
+                                drag = RelativeDrag(name: candidate.name,
+                                                    target: target, hand: hand)
+                                handSamples = [(Date.timeIntervalSinceReferenceDate, target)]
+                                break
+                            }
+                            current = candidate.parent
+                        }
+                    }
+                    guard let drag else { return }
+                    let world = drag.position(forHand: hand)
+                    model.moveGrabbed(toWorld: world)
+                    let now = Date.timeIntervalSinceReferenceDate
+                    handSamples.append((now, world))
+                    handSamples.removeAll { now - $0.time > 0.14 }
+                }
+                .onEnded { value in
+                    defer {
+                        renderer?.grabbedBlock = nil
+                        drag = nil
+                        handSamples = []
+                    }
+                    guard let drag else { return }
+                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    let world = drag.position(forHand: hand)
+                    model.moveGrabbed(toWorld: world)
+                    var velocity = 0.0
+                    let now = Date.timeIntervalSinceReferenceDate
+                    if let oldest = handSamples.first, now - oldest.time > 0.02 {
+                        let handVelocity = (world - oldest.position) / (now - oldest.time)
+                        velocity = simd_dot(handVelocity, model.axisDirection)
+                    }
+                    model.release(handVelocityX: velocity)
+                    renderer?.playRelease(speed: abs(velocity), at: world)
+                }
+        )
     }
 
     private func blockIndex(from name: String) -> Int? {
@@ -83,37 +131,6 @@ struct SpringsSpaceView: View {
         return Int(name.dropFirst(8))
     }
 
-    private func configureRouter(renderer: SpringsRenderer) {
-        router.onBegin = { [weak renderer] name, position in
-            guard let index = blockIndex(from: name) else { return }
-            renderer?.grabbedBlock = index
-            model.beginGrab(block: index)
-            handSamples = [(Date.timeIntervalSinceReferenceDate, SIMD3<Double>(position))]
-        }
-        router.onMove = { name, position in
-            guard blockIndex(from: name) != nil else { return }
-            model.moveGrabbed(toWorld: SIMD3<Double>(position))
-            let now = Date.timeIntervalSinceReferenceDate
-            handSamples.append((now, SIMD3<Double>(position)))
-            handSamples.removeAll { now - $0.time > 0.14 }
-        }
-        router.onEnd = { [weak renderer] name, position in
-            guard blockIndex(from: name) != nil else { return }
-            let world = SIMD3<Double>(position)
-            model.moveGrabbed(toWorld: world)
-            // Release speed along the motion axis only.
-            var velocity = 0.0
-            let now = Date.timeIntervalSinceReferenceDate
-            if let oldest = handSamples.first, now - oldest.time > 0.02 {
-                let handVelocity = (world - oldest.position) / (now - oldest.time)
-                velocity = simd_dot(handVelocity, model.axisDirection)
-            }
-            model.release(handVelocityX: velocity)
-            renderer?.playRelease(speed: abs(velocity), at: world)
-            renderer?.grabbedBlock = nil
-            handSamples = []
-        }
-    }
 }
 
 /// Single or coupled, on the rail or hanging.

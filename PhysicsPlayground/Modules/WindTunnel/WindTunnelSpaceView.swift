@@ -16,7 +16,6 @@ struct WindTunnelSpaceView: View {
     @Environment(WindTunnelModel.self) private var model
     @Environment(AppModel.self) private var appModel
     @State private var renderer: WindTunnelRenderer?
-    @State private var router = ManipulationRouter()
     @State private var fanDrag: RelativeDrag?
     @State private var sensing = WindTunnelSensing()
 
@@ -38,8 +37,6 @@ struct WindTunnelSpaceView: View {
                 renderer.probeAnchor.addChild(readout)
             }
 
-            configureRouter(renderer: renderer)
-            renderer.subscriptions = router.subscriptions(for: content)
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // On device, the room and hands flow into the field.
@@ -80,24 +77,16 @@ struct WindTunnelSpaceView: View {
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
                     if fanDrag == nil {
-                        var current: Entity? = value.entity
-                        while let candidate = current {
-                            if candidate.name == "fan" {
-                                guard let target = renderer.fanWorldPosition() else { return }
-                                fanDrag = RelativeDrag(name: "fan", target: target, hand: hand)
-                                break
-                            }
-                            current = candidate.parent
-                        }
+                        fanDrag = beginDrag(entity: value.entity, hand: hand, renderer: renderer)
                     }
                     guard let fanDrag else { return }
-                    renderer.moveFan(toWorld: fanDrag.position(forHand: hand))
+                    apply(drag: fanDrag, hand: hand, renderer: renderer)
                 }
                 .onEnded { value in
                     if let fanDrag, let renderer {
                         let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                             value.location3D, from: .local, to: .scene)))
-                        renderer.moveFan(toWorld: fanDrag.position(forHand: hand))
+                        apply(drag: fanDrag, hand: hand, renderer: renderer)
                     }
                     fanDrag = nil
                 }
@@ -109,49 +98,49 @@ struct WindTunnelSpaceView: View {
         }
     }
 
-    private func configureRouter(renderer: WindTunnelRenderer) {
-        func updateProbeHeight(_ renderer: WindTunnelRenderer, _ position: SIMD3<Float>) {
+    /// Resolves a pinch to a relative-drag session (fan, cylinder,
+    /// test body, or probe).
+    private func beginDrag(
+        entity: Entity, hand: SIMD3<Double>, renderer: WindTunnelRenderer
+    ) -> RelativeDrag? {
+        let section = SIMD3<Double>(WindTunnelRenderer.sectionCenter)
+        var current: Entity? = entity
+        while let candidate = current {
+            switch candidate.name {
+            case "fan":
+                guard let target = renderer.fanWorldPosition() else { return nil }
+                return RelativeDrag(name: "fan", target: target, hand: hand)
+            case WindTunnelRenderer.cylinderName:
+                let target = section
+                    + SIMD3(model.cylinderCenter.x, 0, model.cylinderCenter.y)
+                return RelativeDrag(name: candidate.name, target: target, hand: hand)
+            case WindTunnelRenderer.probeName:
+                let target = section + SIMD3(model.probePosition.x,
+                                             Double(renderer.probeHeight),
+                                             model.probePosition.y)
+                return RelativeDrag(name: candidate.name, target: target, hand: hand)
+            default:
+                current = candidate.parent
+            }
+        }
+        return nil
+    }
+
+    private func apply(drag: RelativeDrag, hand: SIMD3<Double>, renderer: WindTunnelRenderer) {
+        let position = SIMD3<Float>(drag.position(forHand: hand))
+        switch drag.name {
+        case "fan":
+            renderer.moveFan(toWorld: SIMD3<Double>(position))
+        case WindTunnelRenderer.cylinderName:
+            model.moveCylinder(to: renderer.planePoint(fromWorld: position))
+        case WindTunnelRenderer.probeName:
             renderer.probeHeight = min(
                 max(position.y - WindTunnelRenderer.sectionCenter.y,
                     -WindTunnelRenderer.halfHeight),
                 WindTunnelRenderer.halfHeight)
-        }
-        router.onBegin = { [weak renderer] name, position in
-            guard let renderer else { return }
-            switch name {
-            case WindTunnelRenderer.cylinderName:
-                renderer.isManipulatingCylinder = true
-                model.moveCylinder(to: renderer.planePoint(fromWorld: position))
-            case WindTunnelRenderer.probeName:
-                renderer.isManipulatingProbe = true
-                updateProbeHeight(renderer, position)
-                model.moveProbe(to: renderer.planePoint(fromWorld: position))
-            default: break
-            }
-        }
-        router.onMove = { [weak renderer] name, position in
-            guard let renderer else { return }
-            switch name {
-            case WindTunnelRenderer.cylinderName:
-                model.moveCylinder(to: renderer.planePoint(fromWorld: position))
-            case WindTunnelRenderer.probeName:
-                updateProbeHeight(renderer, position)
-                model.moveProbe(to: renderer.planePoint(fromWorld: position))
-            default: break
-            }
-        }
-        router.onEnd = { [weak renderer] name, position in
-            guard let renderer else { return }
-            switch name {
-            case WindTunnelRenderer.cylinderName:
-                model.moveCylinder(to: renderer.planePoint(fromWorld: position))
-                renderer.isManipulatingCylinder = false
-            case WindTunnelRenderer.probeName:
-                updateProbeHeight(renderer, position)
-                model.moveProbe(to: renderer.planePoint(fromWorld: position))
-                renderer.isManipulatingProbe = false
-            default: break
-            }
+            model.moveProbe(to: renderer.planePoint(fromWorld: position))
+        default:
+            break
         }
     }
 }

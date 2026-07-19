@@ -16,7 +16,7 @@ import RenderKit
 struct WavesSpaceView: View {
     @Environment(WavesModel.self) private var model
     @State private var renderer: WavesRenderer?
-    @State private var router = ManipulationRouter()
+    @State private var drag: RelativeDrag?
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -35,8 +35,6 @@ struct WavesSpaceView: View {
                 renderer.probeAnchor.addChild(readout)
             }
 
-            configureRouter(renderer: renderer)
-            renderer.subscriptions = router.subscriptions(for: content)
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { event in
                     model.step(dt: event.deltaTime)
@@ -63,38 +61,42 @@ struct WavesSpaceView: View {
                     .glassBackgroundEffect()
             }
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .targetedToAnyEntity()
+                .onChanged { value in
+                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    if drag == nil {
+                        var current: Entity? = value.entity
+                        while let candidate = current {
+                            if candidate.name == WavesRenderer.probeName {
+                                drag = RelativeDrag(name: candidate.name,
+                                                    target: model.probePosition, hand: hand)
+                                break
+                            }
+                            if let id = UUID(uuidString: candidate.name),
+                               let source = model.sources.first(where: { $0.id == id }) {
+                                model.select(id: id)
+                                drag = RelativeDrag(name: candidate.name,
+                                                    target: source.wave.position, hand: hand)
+                                break
+                            }
+                            current = candidate.parent
+                        }
+                    }
+                    guard let drag else { return }
+                    let position = drag.position(forHand: hand)
+                    if drag.name == WavesRenderer.probeName {
+                        model.moveProbe(to: position)
+                    } else if let id = UUID(uuidString: drag.name) {
+                        model.moveSource(id: id, to: position)
+                    }
+                }
+                .onEnded { _ in drag = nil }
+        )
     }
 
-    private func configureRouter(renderer: WavesRenderer) {
-        router.onBegin = { [weak renderer] name, position in
-            guard let renderer else { return }
-            if name == WavesRenderer.probeName {
-                renderer.isManipulatingProbe = true
-                model.moveProbe(to: SIMD3<Double>(position))
-            } else if let id = UUID(uuidString: name) {
-                renderer.manipulatingSourceID = id
-                model.select(id: id)
-                model.moveSource(id: id, to: SIMD3<Double>(position))
-            }
-        }
-        router.onMove = { name, position in
-            if name == WavesRenderer.probeName {
-                model.moveProbe(to: SIMD3<Double>(position))
-            } else if let id = UUID(uuidString: name) {
-                model.moveSource(id: id, to: SIMD3<Double>(position))
-            }
-        }
-        router.onEnd = { [weak renderer] name, position in
-            guard let renderer else { return }
-            if name == WavesRenderer.probeName {
-                model.moveProbe(to: SIMD3<Double>(position))
-                renderer.isManipulatingProbe = false
-            } else if let id = UUID(uuidString: name) {
-                model.moveSource(id: id, to: SIMD3<Double>(position))
-                renderer.manipulatingSourceID = nil
-            }
-        }
-    }
 }
 
 /// The wave sources' pod: frequency, wavelength, and the cancel sheets.

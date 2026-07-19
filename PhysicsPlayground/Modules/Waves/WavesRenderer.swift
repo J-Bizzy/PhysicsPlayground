@@ -121,7 +121,7 @@ final class WavesRenderer {
             if let speakerPrototype {
                 sphere.addChild(speakerPrototype.clone(recursive: true))
             }
-            Grabbable.configure(sphere, collisionRadius: 0.06)
+            Grabbable.configureTouchTarget(sphere, collisionRadius: 0.06)
             var accessibility = AccessibilityComponent()
             accessibility.isAccessibilityElement = true
             accessibility.label = "Wave source. Drag it anywhere in the field."
@@ -138,7 +138,7 @@ final class WavesRenderer {
             materials: [UnlitMaterial(color: .white)]
         )
         probe.name = Self.probeName
-        Grabbable.configure(probe, collisionRadius: 0.05)
+        Grabbable.configureTouchTarget(probe, collisionRadius: 0.05)
         var probeAccessibility = AccessibilityComponent()
         probeAccessibility.isAccessibilityElement = true
         probeAccessibility.label = "Probe. Park it anywhere to hear the field: amplitude and interference."

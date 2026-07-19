@@ -9,6 +9,7 @@
 //  body; the time panel floats by the platform.
 //
 
+import PhysicsCore
 import SwiftUI
 import RealityKit
 import RenderKit
@@ -16,7 +17,7 @@ import RenderKit
 struct GravityLabSpaceView: View {
     @Environment(GravityLabModel.self) private var model
     @State private var renderer: GravityLabRenderer?
-    @State private var router = ManipulationRouter()
+    @State private var drag: RelativeDrag?
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -37,8 +38,6 @@ struct GravityLabSpaceView: View {
                 renderer.selectedAnchor.addChild(data)
             }
 
-            configureRouter(renderer: renderer)
-            renderer.subscriptions = router.subscriptions(for: content)
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.step(dt: event.deltaTime)
@@ -76,25 +75,42 @@ struct GravityLabSpaceView: View {
                     .glassBackgroundEffect()
             }
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .targetedToAnyEntity()
+                .onChanged { value in
+                    guard let renderer else { return }
+                    let hand = renderer.displayPoint(fromWorld: SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    if drag == nil {
+                        var current: Entity? = value.entity
+                        while let candidate = current {
+                            if let id = UUID(uuidString: candidate.name),
+                               let body = model.bodies.first(where: { $0.id == id }) {
+                                let target = body.body.position * model.simToDisplay
+                                drag = RelativeDrag(
+                                    name: candidate.name, target: target, hand: hand)
+                                model.grab(id: id, at: target)
+                                break
+                            }
+                            current = candidate.parent
+                        }
+                    }
+                    guard let drag, let id = UUID(uuidString: drag.name) else { return }
+                    model.hold(id: id, at: drag.position(forHand: hand))
+                }
+                .onEnded { value in
+                    defer { drag = nil }
+                    guard let renderer, let drag,
+                          let id = UUID(uuidString: drag.name) else { return }
+                    let hand = renderer.displayPoint(fromWorld: SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    model.hold(id: id, at: drag.position(forHand: hand))
+                    model.release(id: id)
+                }
+        )
     }
 
-    private func configureRouter(renderer: GravityLabRenderer) {
-        router.onBegin = { [weak renderer] name, position in
-            guard let renderer, let id = UUID(uuidString: name) else { return }
-            renderer.manipulatingBodyID = id
-            model.grab(id: id, at: renderer.displayPoint(fromWorld: position))
-        }
-        router.onMove = { [weak renderer] name, position in
-            guard let renderer, let id = UUID(uuidString: name) else { return }
-            model.hold(id: id, at: renderer.displayPoint(fromWorld: position))
-        }
-        router.onEnd = { [weak renderer] name, position in
-            guard let renderer, let id = UUID(uuidString: name) else { return }
-            model.hold(id: id, at: renderer.displayPoint(fromWorld: position))
-            model.release(id: id)
-            renderer.manipulatingBodyID = nil
-        }
-    }
 }
 
 /// Pause / play and the 1–100× time scale, plus the simulation clock.

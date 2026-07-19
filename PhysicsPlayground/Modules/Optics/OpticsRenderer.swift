@@ -189,7 +189,7 @@ final class OpticsRenderer {
             }
         }
         holder.name = element.id.uuidString
-        Grabbable.configure(holder, collisionRadius: 0.2)
+        Grabbable.configureTouchTarget(holder, collisionRadius: 0.2)
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = LocalizedStringResource(

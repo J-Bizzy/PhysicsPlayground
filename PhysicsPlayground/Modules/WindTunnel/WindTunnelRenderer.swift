@@ -123,7 +123,7 @@ final class WindTunnelRenderer {
                                        roughness: 0.35, isMetallic: true)]
         )
         cylinder.name = Self.cylinderName
-        Grabbable.configure(cylinder, collisionRadius: 0.16)
+        Grabbable.configureTouchTarget(cylinder, collisionRadius: 0.16)
         var cylinderAccessibility = AccessibilityComponent()
         cylinderAccessibility.isAccessibilityElement = true
         cylinderAccessibility.label = "Cylinder. Drag it through the flow; the streamlines re-form instantly."
@@ -192,7 +192,7 @@ final class WindTunnelRenderer {
             materials: [UnlitMaterial(color: .white)]
         )
         probe.name = Self.probeName
-        Grabbable.configure(probe, collisionRadius: 0.045)
+        Grabbable.configureTouchTarget(probe, collisionRadius: 0.045)
         var probeAccessibility = AccessibilityComponent()
         probeAccessibility.isAccessibilityElement = true
         probeAccessibility.label = "Pressure probe. Park it anywhere to read the local air speed and pressure."
@@ -206,7 +206,7 @@ final class WindTunnelRenderer {
         // radius 0.06 as authored) share the cylinder's name so the same
         // grab gesture carries whichever body is in the section.
         dragBodyHolder.name = Self.cylinderName
-        Grabbable.configure(dragBodyHolder, collisionRadius: 0.16)
+        Grabbable.configureTouchTarget(dragBodyHolder, collisionRadius: 0.16)
         var dragAccessibility = AccessibilityComponent()
         dragAccessibility.isAccessibilityElement = true
         dragAccessibility.label = "Drag test body. Carry it through the flow."

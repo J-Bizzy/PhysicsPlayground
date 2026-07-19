@@ -102,7 +102,7 @@ final class SpringsRenderer {
         for index in 0..<2 {
             let block = ModelEntity(mesh: blockMesh, materials: [steelMaterial])
             block.name = "s-block-\(index)"
-            Grabbable.configure(block, collisionRadius: 0.1)
+            Grabbable.configureTouchTarget(block, collisionRadius: 0.1)
             var accessibility = AccessibilityComponent()
             accessibility.isAccessibilityElement = true
             accessibility.label = "Spring block. Pull it along the rail and let go."

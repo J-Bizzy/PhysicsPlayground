@@ -8,6 +8,7 @@
 //  any hoop (place it). The flight clock is SceneEvents.Update.
 //
 
+import PhysicsCore
 import SwiftUI
 import RealityKit
 import RenderKit
@@ -15,7 +16,7 @@ import RenderKit
 struct KinematicsSpaceView: View {
     @Environment(KinematicsModel.self) private var model
     @State private var renderer: KinematicsRenderer?
-    @State private var router = ManipulationRouter()
+    @State private var drag: RelativeDrag?
     @State private var sensing = KinematicsSensing()
     @Environment(AppModel.self) private var appModel
 
@@ -33,8 +34,7 @@ struct KinematicsSpaceView: View {
             PodMount.mount(attachments.entity(for: "pod-stats"), name: "Numbers",
                            at: [0.9, 1.5, -0.95], in: podsRoot)
 
-            configureRouter(renderer: renderer)
-            renderer.subscriptions = router.subscriptions(for: content)
+            renderer.subscriptions = []
 
             // Flight clock: step every rendered frame (simulated time —
             // the model applies the slow-motion scale and pause).
@@ -73,64 +73,76 @@ struct KinematicsSpaceView: View {
             // Plane detection: device-only, quietly absent in the sim.
             await sensing.start()
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .targetedToAnyEntity()
+                .onChanged { value in
+                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    if drag == nil {
+                        drag = beginDrag(entity: value.entity, hand: hand)
+                    }
+                    guard let drag else { return }
+                    apply(drag: drag, hand: hand)
+                }
+                .onEnded { value in
+                    defer { drag = nil }
+                    guard let drag else { return }
+                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    apply(drag: drag, hand: hand)
+                    if let id = UUID(uuidString: drag.name),
+                       model.flights.contains(where: { $0.id == id }) {
+                        model.releaseBall(id: id)
+                    }
+                }
+        )
     }
 
-    private func configureRouter(renderer: KinematicsRenderer) {
-        router.onBegin = { [weak renderer] name, position in
-            guard let renderer else { return }
-            switch name {
+    /// Resolves a pinch: launcher body, aim bead, a flying/resting
+    /// ball, or a hoop.
+    private func beginDrag(entity: Entity, hand: SIMD3<Double>) -> RelativeDrag? {
+        var current: Entity? = entity
+        while let candidate = current {
+            switch candidate.name {
             case KinematicsRenderer.launcherName:
-                renderer.isManipulatingLauncher = true
-                model.moveLauncher(to: SIMD3<Double>(position))
+                return RelativeDrag(name: candidate.name,
+                                    target: model.launcherPosition, hand: hand)
             case KinematicsRenderer.aimBeadName:
-                renderer.isManipulatingBead = true
-                model.aim(toward: SIMD3<Double>(position))
+                let target = model.launcherPosition
+                    + Double(KinematicsRenderer.beadDistance) * model.aimDirection
+                return RelativeDrag(name: candidate.name, target: target, hand: hand)
             default:
-                guard let id = UUID(uuidString: name) else { return }
-                if model.rings.contains(where: { $0.id == id }) {
-                    renderer.manipulatingRingID = id
-                    model.moveRing(id: id, to: SIMD3<Double>(position))
-                } else {
-                    renderer.manipulatingBallID = id
-                    model.grabBall(id: id)
-                    model.holdBall(id: id, at: SIMD3<Double>(position))
+                if let id = UUID(uuidString: candidate.name) {
+                    if let ring = model.rings.first(where: { $0.id == id }) {
+                        return RelativeDrag(name: candidate.name,
+                                            target: ring.position, hand: hand)
+                    }
+                    if let flight = model.flights.first(where: { $0.id == id }) {
+                        model.grabBall(id: id)
+                        return RelativeDrag(name: candidate.name,
+                                            target: flight.state.position, hand: hand)
+                    }
                 }
+                current = candidate.parent
             }
         }
-        router.onMove = { name, position in
-            switch name {
-            case KinematicsRenderer.launcherName:
-                model.moveLauncher(to: SIMD3<Double>(position))
-            case KinematicsRenderer.aimBeadName:
-                model.aim(toward: SIMD3<Double>(position))
-            default:
-                guard let id = UUID(uuidString: name) else { return }
-                if model.rings.contains(where: { $0.id == id }) {
-                    model.moveRing(id: id, to: SIMD3<Double>(position))
-                } else {
-                    model.holdBall(id: id, at: SIMD3<Double>(position))
-                }
-            }
-        }
-        router.onEnd = { [weak renderer] name, position in
-            guard let renderer else { return }
-            switch name {
-            case KinematicsRenderer.launcherName:
-                model.moveLauncher(to: SIMD3<Double>(position))
-                renderer.isManipulatingLauncher = false
-            case KinematicsRenderer.aimBeadName:
-                // The render loop snaps the bead back onto the aim line.
-                renderer.isManipulatingBead = false
-            default:
-                guard let id = UUID(uuidString: name) else { return }
-                if model.rings.contains(where: { $0.id == id }) {
-                    model.moveRing(id: id, to: SIMD3<Double>(position))
-                    renderer.manipulatingRingID = nil
-                } else {
-                    model.holdBall(id: id, at: SIMD3<Double>(position))
-                    model.releaseBall(id: id)
-                    renderer.manipulatingBallID = nil
-                }
+        return nil
+    }
+
+    private func apply(drag: RelativeDrag, hand: SIMD3<Double>) {
+        let position = drag.position(forHand: hand)
+        switch drag.name {
+        case KinematicsRenderer.launcherName:
+            model.moveLauncher(to: position)
+        case KinematicsRenderer.aimBeadName:
+            model.aim(toward: position)
+        default:
+            guard let id = UUID(uuidString: drag.name) else { return }
+            if model.rings.contains(where: { $0.id == id }) {
+                model.moveRing(id: id, to: position)
+            } else {
+                model.holdBall(id: id, at: position)
             }
         }
     }

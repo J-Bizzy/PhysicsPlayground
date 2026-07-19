@@ -16,7 +16,7 @@ import simd
 struct OpticsSpaceView: View {
     @Environment(OpticsModel.self) private var model
     @State private var renderer: OpticsRenderer?
-    @State private var router = ManipulationRouter()
+    @State private var drag: RelativeDrag?
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -35,8 +35,6 @@ struct OpticsSpaceView: View {
                 renderer.infoAnchor.addChild(info)
             }
 
-            configureRouter(renderer: renderer)
-            renderer.subscriptions = router.subscriptions(for: content)
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] _ in
                     renderer?.tick(model: model)
@@ -61,6 +59,33 @@ struct OpticsSpaceView: View {
                     .glassBackgroundEffect()
             }
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .targetedToAnyEntity()
+                .onChanged { value in
+                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    if drag == nil {
+                        var current: Entity? = value.entity
+                        while let candidate = current {
+                            if let id = UUID(uuidString: candidate.name),
+                               let element = model.elements.first(where: { $0.id == id }) {
+                                model.select(id: id)
+                                drag = RelativeDrag(
+                                    name: candidate.name,
+                                    target: OpticsModel.center + SIMD3(element.x, 0, 0),
+                                    hand: hand)
+                                break
+                            }
+                            current = candidate.parent
+                        }
+                    }
+                    guard let drag, let id = UUID(uuidString: drag.name) else { return }
+                    let position = drag.position(forHand: hand)
+                    model.moveElement(id: id, toX: position.x - OpticsModel.center.x)
+                }
+                .onEnded { _ in drag = nil }
+        )
         .gesture(
             TapGesture()
                 .targetedToAnyEntity()
@@ -77,23 +102,6 @@ struct OpticsSpaceView: View {
         )
     }
 
-    private func configureRouter(renderer: OpticsRenderer) {
-        router.onBegin = { [weak renderer] name, position in
-            guard let id = UUID(uuidString: name) else { return }
-            renderer?.manipulatingID = id
-            model.select(id: id)
-            model.moveElement(id: id, toX: Double(position.x) - OpticsModel.center.x)
-        }
-        router.onMove = { name, position in
-            guard let id = UUID(uuidString: name) else { return }
-            model.moveElement(id: id, toX: Double(position.x) - OpticsModel.center.x)
-        }
-        router.onEnd = { [weak renderer] name, position in
-            guard let id = UUID(uuidString: name) else { return }
-            model.moveElement(id: id, toX: Double(position.x) - OpticsModel.center.x)
-            renderer?.manipulatingID = nil
-        }
-    }
 }
 
 /// The optical bench: add elements, choose the source, read insight.

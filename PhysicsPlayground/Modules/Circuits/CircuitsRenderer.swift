@@ -154,18 +154,9 @@ final class CircuitsRenderer {
             template.scale = SIMD3(repeating: 0.8)
             template.position = [x, 0.05, -0.02]
             template.name = "tray-\(kind.rawValue)"
-            // A real manipulation target, like the parts themselves — the
-            // router spawns a copy on grab-begin and this template glides
-            // back to its slot on release (the default release behavior).
-            ManipulationComponent.configureEntity(
-                template,
-                collisionShapes: [.generateSphere(radius: 0.06)]
-            )
-            if var manipulation = template.components[ManipulationComponent.self] {
-                manipulation.dynamics.scalingBehavior = .none
-                manipulation.dynamics.inertia = .zero
-                template.components.set(manipulation)
-            }
+            // A drag target: pulling it spawns a copy that follows the
+            // hand's displacement; the template itself never moves.
+            Grabbable.configureTouchTarget(template, collisionRadius: 0.06)
             var accessibility = AccessibilityComponent()
             accessibility.isAccessibilityElement = true
             accessibility.label = LocalizedStringResource(
@@ -452,7 +443,7 @@ final class CircuitsRenderer {
         let holder = Entity()
         holder.name = component.id.uuidString
         holder.position = SIMD3<Float>(component.position)
-        Grabbable.configure(holder, collisionRadius: 0.075)
+        Grabbable.configureTouchTarget(holder, collisionRadius: 0.075)
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = LocalizedStringResource(
@@ -510,16 +501,7 @@ final class CircuitsRenderer {
             grip.name = "s\(end)-\(component.id.uuidString)"
             let half = Float(component.terminalHalfSpan + CircuitsModel.endGripOffset)
             grip.position = SIMD3(end == 0 ? -half : half, 0, 0)
-            ManipulationComponent.configureEntity(
-                grip,
-                collisionShapes: [.generateSphere(radius: 0.03)]
-            )
-            if var manipulation = grip.components[ManipulationComponent.self] {
-                manipulation.releaseBehavior = .stay
-                manipulation.dynamics.scalingBehavior = .none
-                manipulation.dynamics.inertia = .zero
-                grip.components.set(manipulation)
-            }
+            Grabbable.configureTouchTarget(grip, collisionRadius: 0.03)
             var gripAccessibility = AccessibilityComponent()
             gripAccessibility.isAccessibilityElement = true
             gripAccessibility.label = LocalizedStringResource(stringLiteral:

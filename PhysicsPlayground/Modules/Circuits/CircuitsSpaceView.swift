@@ -17,8 +17,10 @@ import RenderKit
 struct CircuitsSpaceView: View {
     @Environment(CircuitsModel.self) private var model
     @State private var renderer: CircuitsRenderer?
-    @State private var router = ManipulationRouter()
     @State private var wireDragFrom: CircuitsModel.Terminal?
+    @State private var partDrag: RelativeDrag?
+    @State private var trayDragID: UUID?
+    @State private var gripDrag: (grip: CircuitsModel.Terminal, pivot: SIMD3<Double>)?
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -42,8 +44,6 @@ struct CircuitsSpaceView: View {
                 renderer.selectedAnchor.addChild(readout)
             }
 
-            configureRouter(renderer: renderer)
-            renderer.subscriptions = router.subscriptions(for: content)
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     podsRoot.isEnabled = appModel.controlPodsVisible
@@ -85,44 +85,123 @@ struct CircuitsSpaceView: View {
                     handleTap(on: value.entity)
                 }
         )
-        // Drag-to-wire: pinch a copper terminal and PULL — a live wire
-        // follows the hand; let go on another terminal to connect it
-        // (anywhere else cancels). Tap-tap wiring still works too.
+        // One drag gesture, four grabs — all relative, nothing lurches
+        // toward the hand: a terminal pulls a live wire; an end grip
+        // aims/stretches its part; a tray template spawns a copy that
+        // follows the hand's displacement; a part body carries the
+        // part. Tap-tap wiring still works too.
         .simultaneousGesture(
-            DragGesture(minimumDistance: 0.01)
+            DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
                 .onChanged { value in
                     guard let renderer else { return }
-                    if wireDragFrom == nil {
-                        guard let terminal = terminal(on: value.entity) else { return }
-                        wireDragFrom = terminal
-                    }
-                    guard let source = wireDragFrom,
-                          let sourceComponent = model.components.first(
-                            where: { $0.id == source.componentID }) else { return }
-                    let hand = SIMD3<Float>(value.convert(
+                    let handF = SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene))
-                    let target = nearestTerminal(to: hand, excluding: source)
-                    renderer.rubberTargetTerminal = target?.terminal
-                    let sourcePosition = SIMD3<Float>(
-                        sourceComponent.terminalPosition(source.end))
-                    renderer.showRubberBand(
-                        from: sourcePosition,
-                        to: target.map { SIMD3<Float>($0.position) } ?? hand)
+                    let hand = SIMD3<Double>(handF)
+                    if wireDragFrom == nil, partDrag == nil {
+                        beginCircuitDrag(entity: value.entity, hand: hand, renderer: renderer)
+                    }
+                    if let source = wireDragFrom,
+                       let sourceComponent = model.components.first(
+                         where: { $0.id == source.componentID }) {
+                        let target = nearestTerminal(to: handF, excluding: source)
+                        renderer.rubberTargetTerminal = target?.terminal
+                        renderer.showRubberBand(
+                            from: SIMD3<Float>(sourceComponent.terminalPosition(source.end)),
+                            to: target.map { SIMD3<Float>($0.position) } ?? handF)
+                    } else if let partDrag {
+                        applyCircuitDrag(partDrag, hand: hand)
+                    }
                 }
                 .onEnded { value in
                     defer {
                         renderer?.hideRubberBand()
+                        renderer?.previewComponentID = nil
                         wireDragFrom = nil
+                        partDrag = nil
+                        trayDragID = nil
+                        gripDrag = nil
                     }
-                    guard let source = wireDragFrom else { return }
-                    let hand = SIMD3<Float>(value.convert(
+                    guard let renderer else { return }
+                    let handF = SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene))
-                    if let target = nearestTerminal(to: hand, excluding: source) {
-                        model.connectTerminals(source, target.terminal)
+                    let hand = SIMD3<Double>(handF)
+                    if let source = wireDragFrom {
+                        if let target = nearestTerminal(to: handF, excluding: source) {
+                            model.connectTerminals(source, target.terminal)
+                        }
+                        return
+                    }
+                    guard let partDrag else { return }
+                    applyCircuitDrag(partDrag, hand: hand)
+                    if let gripDrag {
+                        model.autoConnect(id: gripDrag.grip.componentID)
+                    } else if let id = trayDragID ?? UUID(uuidString: partDrag.name) {
+                        model.autoConnect(id: id)
+                    }
+                    if trayDragID != nil {
+                        renderer.setTrayTemplateHidden(partDrag.name, false)
                     }
                 }
         )
+    }
+
+    /// Resolves what the pinch landed on and opens the right session:
+    /// wire (terminal), aim/stretch (grip), spawn (tray), carry (body).
+    private func beginCircuitDrag(
+        entity: Entity, hand: SIMD3<Double>, renderer: CircuitsRenderer
+    ) {
+        var current: Entity? = entity
+        while let candidate = current {
+            let name = candidate.name
+            if name.hasPrefix("t0-") || name.hasPrefix("t1-") {
+                wireDragFrom = terminal(on: candidate)
+                return
+            }
+            if let grip = stretchTerminal(from: name),
+               let component = model.components.first(
+                where: { $0.id == grip.componentID }) {
+                let sign = grip.end == 0 ? -1.0 : 1.0
+                let gripWorld = component.position + sign
+                    * (component.terminalHalfSpan + CircuitsModel.endGripOffset)
+                    * component.axis
+                gripDrag = (grip, component.terminalPosition(1 - grip.end))
+                partDrag = RelativeDrag(name: name, target: gripWorld, hand: hand)
+                renderer.previewComponentID = grip.componentID
+                model.select(id: grip.componentID)
+                return
+            }
+            if name.hasPrefix("tray-") {
+                guard let kind = CircuitsModel.ComponentKind(
+                        rawValue: String(name.dropFirst(5))) else { return }
+                let templateWorld = SIMD3<Double>(candidate.position(relativeTo: nil))
+                guard let id = model.add(kind, at: templateWorld) else { return }
+                trayDragID = id
+                partDrag = RelativeDrag(name: name, target: templateWorld, hand: hand)
+                renderer.previewComponentID = id
+                renderer.setTrayTemplateHidden(name, true)
+                return
+            }
+            if let id = UUID(uuidString: name),
+               let component = model.components.first(where: { $0.id == id }) {
+                partDrag = RelativeDrag(name: name, target: component.position, hand: hand)
+                renderer.previewComponentID = id
+                model.select(id: id)
+                return
+            }
+            current = candidate.parent
+        }
+    }
+
+    private func applyCircuitDrag(_ drag: RelativeDrag, hand: SIMD3<Double>) {
+        let position = drag.position(forHand: hand)
+        if let gripDrag {
+            model.dragEnd(id: gripDrag.grip.componentID,
+                          grabbedEnd: gripDrag.grip.end,
+                          pivot: gripDrag.pivot, hand: position)
+        } else if let id = trayDragID ?? UUID(uuidString: drag.name) {
+            model.move(id: id, to: position)
+        }
     }
 
     /// The terminal an entity (or any ancestor) represents, if any.
@@ -198,94 +277,6 @@ struct CircuitsSpaceView: View {
     /// glides back to its slot on release. End grips ("s0-"/"s1-") swing
     /// the part around its opposite end — pinned where it was when the
     /// pull began — and set a wire's length from the hand's reach.
-    private func configureRouter(renderer: CircuitsRenderer) {
-        router.onBegin = { [weak renderer] name, position in
-            guard let renderer else { return }
-            if name.hasPrefix("tray-") {
-                guard let kind = CircuitsModel.ComponentKind(rawValue: String(name.dropFirst(5))),
-                      let id = model.add(kind, at: SIMD3<Double>(position))
-                else { return }
-                renderer.trayDragIDs[name] = id
-                renderer.previewComponentID = id
-                renderer.setTrayTemplateHidden(name, true)
-                return
-            }
-            if let grip = stretchTerminal(from: name) {
-                renderer.stretchingHandle = grip
-                renderer.previewComponentID = grip.componentID
-                renderer.swingPivot = model.components
-                    .first { $0.id == grip.componentID }?
-                    .terminalPosition(1 - grip.end)
-                model.select(id: grip.componentID)
-                return
-            }
-            guard let id = UUID(uuidString: name) else { return }
-            renderer.manipulatingComponentID = id
-            renderer.previewComponentID = id
-            model.select(id: id)
-            model.move(id: id, to: SIMD3<Double>(position))
-        }
-        router.onMove = { [weak renderer] name, position in
-            if name.hasPrefix("tray-") {
-                guard let id = renderer?.trayDragIDs[name] else { return }
-                model.move(id: id, to: SIMD3<Double>(position))
-                return
-            }
-            if let grip = stretchTerminal(from: name) {
-                guard let pivot = renderer?.swingPivot else { return }
-                model.dragEnd(id: grip.componentID, grabbedEnd: grip.end,
-                              pivot: pivot, hand: SIMD3<Double>(position))
-                return
-            }
-            guard let id = UUID(uuidString: name) else { return }
-            model.move(id: id, to: SIMD3<Double>(position))
-        }
-        router.onEnd = { [weak renderer] name, position in
-            guard let renderer else { return }
-            if name.hasPrefix("tray-") {
-                if let id = renderer.trayDragIDs[name] {
-                    model.move(id: id, to: SIMD3<Double>(position))
-                    model.autoConnect(id: id)
-                    renderer.trayDragIDs[name] = nil
-                }
-                renderer.previewComponentID = nil
-                renderer.setTrayTemplateHidden(name, false)
-                return
-            }
-            if let grip = stretchTerminal(from: name) {
-                if let pivot = renderer.swingPivot {
-                    model.dragEnd(id: grip.componentID, grabbedEnd: grip.end,
-                                  pivot: pivot, hand: SIMD3<Double>(position))
-                }
-                // A pulled end parked beside a terminal connects, just
-                // like a released part — the preview already promised it.
-                model.autoConnect(id: grip.componentID)
-                renderer.stretchingHandle = nil
-                renderer.previewComponentID = nil
-                renderer.swingPivot = nil
-                return
-            }
-            guard let id = UUID(uuidString: name) else { return }
-            model.move(id: id, to: SIMD3<Double>(position))
-            // Keep whatever twist the hand gave the part, then let any
-            // nearly-touching terminals connect themselves.
-            if let axis = renderer.liveAxis(of: id) {
-                model.setAxis(id: id, axis: axis)
-            }
-            model.autoConnect(id: id)
-            renderer.previewComponentID = nil
-            // Don't reclaim the holder immediately: the manipulation
-            // system settles the entity for a beat after release, and
-            // writing transforms under it makes the part shudder. Hand
-            // it back once the settle is over (positions already agree).
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(450))
-                if renderer.manipulatingComponentID == id {
-                    renderer.manipulatingComponentID = nil
-                }
-            }
-        }
-    }
 }
 
 /// Premade circuits, floating by the parts tray: series, parallel,
