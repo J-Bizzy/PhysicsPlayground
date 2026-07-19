@@ -204,6 +204,9 @@ final class FieldModel {
             magneticFieldOn = true
             electronMode = true
         }
+        if UserDefaults.standard.bool(forKey: "emProbe") {
+            dropProbe()
+        }
         #endif
     }
 

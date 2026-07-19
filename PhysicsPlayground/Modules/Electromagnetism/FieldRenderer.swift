@@ -67,6 +67,8 @@ final class FieldRenderer {
     private var chargeSignVerticals: [UUID: ModelEntity] = [:]
     private var appliedPolarity: [UUID: Bool] = [:]
     private var probeEntity: ModelEntity?
+    /// Vertical stroke of the probe's sign glyph (hidden makes it a −).
+    private var probeSignVertical: ModelEntity?
     private var appliedProbePolarity: Bool?
     private let linesEntity = ModelEntity()
     private let positiveShellsEntity = ModelEntity()
@@ -543,6 +545,7 @@ final class FieldRenderer {
         guard let probe else {
             probeEntity?.removeFromParent()
             probeEntity = nil
+            probeSignVertical = nil
             appliedProbePolarity = nil
             return
         }
@@ -554,6 +557,7 @@ final class FieldRenderer {
                 isMetallic: false
             )]
             appliedProbePolarity = isPositive
+            probeSignVertical?.isEnabled = isPositive
 
             var accessibility = AccessibilityComponent()
             accessibility.isAccessibilityElement = true
@@ -575,6 +579,24 @@ final class FieldRenderer {
         )
         sphere.name = Self.probeEntityName
         Grabbable.configure(sphere, collisionRadius: max(Self.probeRadius * 2.4, 0.06))
+
+        // Same sign glyph the source charges wear, scaled to probe size.
+        let signPivot = Entity()
+        signPivot.components.set(BillboardComponent())
+        let strokeMaterial = UnlitMaterial(color: UIColor(white: 1.0, alpha: 1))
+        let horizontal = ModelEntity(
+            mesh: .generateBox(size: [0.015, 0.004, 0.002], cornerRadius: 0.001),
+            materials: [strokeMaterial])
+        horizontal.position = [0, 0, Self.probeRadius * 1.2]
+        let vertical = ModelEntity(
+            mesh: .generateBox(size: [0.004, 0.015, 0.002], cornerRadius: 0.001),
+            materials: [strokeMaterial])
+        vertical.position = [0, 0, Self.probeRadius * 1.2]
+        signPivot.addChild(horizontal)
+        signPivot.addChild(vertical)
+        sphere.addChild(signPivot)
+        probeSignVertical = vertical
+
         root.addChild(sphere)
         probeEntity = sphere
         return sphere
