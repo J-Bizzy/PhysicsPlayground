@@ -94,6 +94,49 @@ public enum DragBody: String, CaseIterable, Sendable, Identifiable {
         }
     }
 
+    /// A visualization-grade sphere silhouette of the body for flow
+    /// deflection: streamlines and particles slip around these spheres
+    /// (ObstacleField), so the flow wraps the actual shape — tight over
+    /// a sedan's cabin, wide around a box truck, barely rippled by a
+    /// slender fuselage. Local coords: x downstream, y up, z lateral;
+    /// offsets and radii scale with the frontal half-width, matching
+    /// each body's authored proportions. The cylinder returns none —
+    /// it keeps its exact analytic solution.
+    public func obstacleSpheres(center: SIMD3<Double>, halfWidth: Double) -> [ObstacleField.Sphere] {
+        let layout: [(x: Double, y: Double, r: Double)]
+        switch self {
+        case .cylinder:
+            return []
+        case .sphere:
+            layout = [(0, 0, 1.0)]
+        case .teardrop:
+            layout = [(-0.5, 0, 0.95), (0.5, 0, 0.6), (1.3, 0, 0.32)]
+        case .cube:
+            layout = [(0, 0, 1.25)]
+        case .flatDisc:
+            layout = [(0, 0, 1.35)]
+        case .cone:
+            layout = [(-0.8, 0, 0.45), (0.15, 0, 1.0)]
+        case .car:
+            // Sedan silhouette: low nose, high cabin, tapering tail.
+            layout = [(-2.0, -0.25, 0.62), (-1.0, -0.15, 0.78), (0.1, 0.1, 0.95),
+                      (1.2, -0.05, 0.75), (2.05, -0.2, 0.55)]
+        case .truck:
+            // Long tall box: near-constant girth nose to tail.
+            layout = [(-3.9, 0, 1.45), (-2.0, 0, 1.53), (0, 0, 1.53),
+                      (2.0, 0, 1.53), (3.9, 0, 1.45)]
+        case .plane:
+            // Slender fuselage: the wind barely notices.
+            layout = [(-3.4, 0, 0.35), (-1.7, 0, 0.45), (0, 0, 0.45),
+                      (1.7, 0, 0.42), (3.2, 0, 0.3)]
+        }
+        return layout.map {
+            ObstacleField.Sphere(
+                center: center + SIMD3($0.x * halfWidth, $0.y * halfWidth, 0),
+                radius: $0.r * halfWidth)
+        }
+    }
+
     /// The drag equation: F = ½ · ρ · v² · Cd · A  (newtons).
     public static func dragForce(
         airDensity: Double, speed: Double, dragCoefficient: Double, frontalArea: Double

@@ -91,12 +91,25 @@ final class WindTunnelModel {
     /// Visualization-grade for non-cylinders, disclosed in the legend.
     var visualFlow: CylinderFlow {
         if testBody == .cylinder { return flow }
+        // Non-cylinder bodies deflect the flow through their sphere
+        // silhouettes (bodyObstacles) instead of a stand-in cylinder,
+        // so the base flow here is effectively uniform.
         return CylinderFlow(
             freeStreamSpeed: windSpeed,
             center: cylinderCenter,
-            radius: cylinderRadius * testBody.sizeMultiplier * (0.4 + 0.6 * bluntness),
+            radius: 0.001,
             circulation: 0
         )
+    }
+
+    /// The current body's sphere silhouette in section coordinates
+    /// (origin on the beam axis) — what streamlines and particles
+    /// actually wrap around. Empty for the cylinder (exact solution).
+    var bodyObstacles: ObstacleField {
+        guard testBody != .cylinder else { return ObstacleField() }
+        return ObstacleField(spheres: testBody.obstacleSpheres(
+            center: SIMD3(cylinderCenter.x, 0, cylinderCenter.y),
+            halfWidth: cylinderRadius * testBody.sizeMultiplier))
     }
 
     /// The exact analytic flow for the current state.

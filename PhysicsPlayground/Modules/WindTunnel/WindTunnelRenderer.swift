@@ -252,8 +252,12 @@ final class WindTunnelRenderer {
         particlesVisible = true
 
         let flow = model.visualFlow
-        let obstacles = model.obstacles
         let sectionCenter = SIMD3<Double>(Self.sectionCenter)
+        // Body silhouette (section coords → world) + real-room obstacles.
+        let bodySpheres = model.bodyObstacles.spheres.map {
+            ObstacleField.Sphere(center: sectionCenter + $0.center, radius: $0.radius)
+        }
+        let obstacles = ObstacleField(spheres: bodySpheres + model.obstacles.spheres)
         for index in 0..<Self.particleBudget {
             var position = particlePositions[index]
             var height = Double(particleHeights[index])
@@ -439,47 +443,77 @@ final class WindTunnelRenderer {
         }
 
         let flow = model.visualFlow
-        var config = StreamlineTracer.Config()
-        config.stepSize = 0.01
-        config.maxSteps = 300
-        config.boundsCenter = .zero
-        config.boundsRadius = 1.5
-        config.stopCenters = [SIMD3(flow.center.x, 0, flow.center.y)]
-        config.stopRadius = flow.radius * 1.01
+        let bodyField = model.bodyObstacles
+        let isCylinder = model.testBody == .cylinder
+        let uniformWind = SIMD3(model.windSpeed, 0, 0)
 
-        // A condensed cylindrical bundle matching the fan's outlet: a
-        // center ray plus concentric rings of seeds inside the duct
-        // radius, so the beam visibly pours out of the fan. Each
-        // polyline splits into runs by local speed — the tube warps AND
-        // recolors around the body, and blunter bodies (bigger
-        // effective radius) grow a bigger red stagnant zone.
+        var config = StreamlineTracer.Config()
+        config.boundsCenter = .zero
+        config.boundsRadius = 2.2
+        if isCylinder {
+            config.stepSize = 0.01
+            config.maxSteps = 300
+            config.stopCenters = [SIMD3(flow.center.x, 0, flow.center.y)]
+            config.stopRadius = flow.radius * 1.01
+        } else {
+            // 3D wrap around the body silhouette: coarser steps keep the
+            // doubled bundle affordable.
+            config.stepSize = 0.02
+            config.maxSteps = 140
+        }
+
+        // A dense cylindrical bundle matching the fan's outlet: a center
+        // ray plus concentric rings of seeds across the duct. For the
+        // cylinder the lines ride the exact 2D solution; for every other
+        // body they integrate in full 3D through the body's sphere
+        // silhouette — wrapping tight over the shape and tapering back
+        // behind it, with color following the true local speed (red
+        // where the air stalls against the nose).
         var bucketLines: [[[SIMD3<Float>]]] = Array(repeating: [], count: Self.streamlineColors.count)
         var seeds: [(height: Float, lateral: Double)] = [(0, 0)]
-        for (radius, count) in [(0.09, 8), (0.17, 12), (0.26, 16), (0.34, 20)] {
+        for (radius, count) in [(0.045, 6), (0.09, 9), (0.135, 12), (0.18, 15),
+                                (0.225, 17), (0.27, 19), (0.315, 21), (0.355, 23)] {
             for index in 0..<count {
                 let phi = 2 * Double.pi * Double(index) / Double(count)
                 seeds.append((Float(radius * sin(phi)), radius * cos(phi)))
             }
         }
         for seedSpec in seeds {
-            let seed = SIMD3(-WindTunnelModel.halfLength + 0.02, 0, seedSpec.lateral)
-            let line = StreamlineTracer.streamline(
-                from: seed, sign: 1,
-                field: { point in
-                    let v = flow.velocity(at: SIMD2(point.x, point.z))
-                    return SIMD3(v.x, 0, v.y)
-                },
-                config: config
-            )
+            let line: [SIMD3<Double>]
+            let localRatio: (SIMD3<Double>) -> Double
+            if isCylinder {
+                let seed = SIMD3(-WindTunnelModel.halfLength + 0.02, 0, seedSpec.lateral)
+                line = StreamlineTracer.streamline(
+                    from: seed, sign: 1,
+                    field: { point in
+                        let v = flow.velocity(at: SIMD2(point.x, point.z))
+                        return SIMD3(v.x, 0, v.y)
+                    },
+                    config: config
+                ).map { SIMD3($0.x, Double(seedSpec.height), $0.z) }
+                localRatio = { point in
+                    flow.speed(at: SIMD2(point.x, point.z)) / max(model.windSpeed, 1e-9)
+                }
+            } else {
+                let seed = SIMD3(-WindTunnelModel.halfLength + 0.02,
+                                 Double(seedSpec.height), seedSpec.lateral)
+                line = StreamlineTracer.streamline(
+                    from: seed, sign: 1,
+                    field: { bodyField.deflected(uniformWind, at: $0) },
+                    config: config
+                )
+                localRatio = { point in
+                    simd_length(bodyField.deflected(uniformWind, at: point))
+                        / max(model.windSpeed, 1e-9)
+                }
+            }
             guard line.count > 1 else { continue }
 
             var run: [SIMD3<Float>] = []
             var runBucket = -1
             for point in line {
-                let ratio = flow.speed(at: SIMD2(point.x, point.z))
-                    / max(model.windSpeed, 1e-9)
-                let bucket = Self.speedBucket(ratio)
-                let p3 = SIMD3(Float(point.x), seedSpec.height, Float(point.z))
+                let bucket = Self.speedBucket(localRatio(point))
+                let p3 = SIMD3<Float>(point)
                 if runBucket == -1 { runBucket = bucket }
                 if bucket == runBucket {
                     run.append(p3)

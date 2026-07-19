@@ -54,6 +54,33 @@ final class DragBodyTests: XCTestCase {
         }
     }
 
+    /// The sphere silhouettes match each body's story: none for the
+    /// cylinder (exact solution), one exact sphere for the sphere, a
+    /// cabin-high taper for the car, near-constant girth for the truck,
+    /// and a slender fuselage for the plane — all scaling with size.
+    func testObstacleSilhouettes() {
+        XCTAssertTrue(DragBody.cylinder.obstacleSpheres(center: .zero, halfWidth: 0.1).isEmpty)
+
+        let ball = DragBody.sphere.obstacleSpheres(center: SIMD3(1, 2, 3), halfWidth: 0.1)
+        XCTAssertEqual(ball.count, 1)
+        XCTAssertEqual(ball[0].radius, 0.1, accuracy: 1e-12)
+        XCTAssertEqual(ball[0].center, SIMD3(1, 2, 3))
+
+        let car = DragBody.car.obstacleSpheres(center: .zero, halfWidth: 0.1)
+        let biggest = car.max(by: { $0.radius < $1.radius })!
+        XCTAssertGreaterThan(biggest.radius, car.first!.radius, "cabin above the nose")
+        XCTAssertGreaterThan(biggest.radius, car.last!.radius, "cabin above the tail")
+
+        let truck = DragBody.truck.obstacleSpheres(center: .zero, halfWidth: 0.1)
+        let plane = DragBody.plane.obstacleSpheres(center: .zero, halfWidth: 0.1)
+        XCTAssertGreaterThan(truck.map(\.radius).max()!, 3 * plane.map(\.radius).max()!,
+                             "the truck shoulders far more air than the fuselage")
+
+        // Radii scale linearly with the body's half-width.
+        let doubled = DragBody.car.obstacleSpheres(center: .zero, halfWidth: 0.2)
+        XCTAssertEqual(doubled[0].radius, 2 * car[0].radius, accuracy: 1e-12)
+    }
+
     /// Drag grows with the square of speed — doubling wind quadruples force.
     func testQuadraticSpeedScaling() {
         func f(_ v: Double) -> Double {
