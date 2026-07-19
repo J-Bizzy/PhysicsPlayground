@@ -17,6 +17,9 @@ struct MainWindowView: View {
     var body: some View {
         content
             .task {
+                // Synthesize the sound set no matter how the app was
+                // entered (the debug -openModule path skips the hub).
+                SoundPalette.warmUp()
                 #if DEBUG
                 // Companion to AppModel's `-openModule` debug hook: a module
                 // launched from the command line needs its space opened too

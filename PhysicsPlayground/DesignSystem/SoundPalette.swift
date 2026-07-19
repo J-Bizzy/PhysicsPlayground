@@ -55,6 +55,11 @@ enum SoundPalette {
                     contentsOf: url,
                     configuration: .init(shouldLoop: true))
             }
+            if let url = try? writeFanHumIfNeeded() {
+                fanHumResource = try? await AudioFileResource(
+                    contentsOf: url,
+                    configuration: .init(shouldLoop: true))
+            }
         }
     }
 
@@ -95,6 +100,52 @@ enum SoundPalette {
             return lowPassed * 2.4 * breath + hum + hiss
         }
         let fade = Int(0.5 * sampleRate)
+        for index in 0..<fade {
+            let mix = Float(index) / Float(fade)
+            let tail = samples[samples.count - fade + index]
+            samples[index] = tail * (1 - mix) + samples[index] * mix
+        }
+        return samples
+    }
+
+    // MARK: Fan hum (wind tunnel)
+
+    private static var fanHumResource: AudioFileResource?
+
+    /// Starts the looping fan hum on `entity`; the caller drives its
+    /// gain with the wind. Returns nil until synthesis has finished.
+    static func startFanHum(on entity: Entity, gainDecibels: Double = -30) -> AudioPlaybackController? {
+        guard let fanHumResource else { return nil }
+        entity.components.set(SpatialAudioComponent(gain: Audio.Decibel(gainDecibels)))
+        return entity.playAudio(fanHumResource)
+    }
+
+    private static func writeFanHumIfNeeded() throws -> URL {
+        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("PhysicsPlaygroundSounds", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("fan-hum.wav")
+        if !FileManager.default.fileExists(atPath: url.path) {
+            try wavData(samples: synthesizeFanHum()).write(to: url)
+        }
+        return url
+    }
+
+    /// A 3-second seamless loop of an axial fan: broadband air noise
+    /// pulsed at the blade-pass rate over a motor hum. Every periodic
+    /// component is an integer number of cycles in 3 s, and the noise
+    /// bed is crossfaded, so the seam vanishes.
+    private static func synthesizeFanHum() -> [Float] {
+        var lowPassed = 0.0
+        var samples = render(duration: 3.0) { t, _ in
+            let noise = Double.random(in: -1...1)
+            lowPassed += 0.09 * (noise - lowPassed)
+            // Six blades at ~240 rpm: 24 blade passes a second.
+            let bladePass = 1 + 0.35 * sin(2 * .pi * 24 * t)
+            let motor = 0.16 * sin(2 * .pi * 120 * t) + 0.05 * sin(2 * .pi * 240 * t)
+            return lowPassed * 2.1 * bladePass + motor
+        }
+        let fade = Int(0.4 * sampleRate)
         for index in 0..<fade {
             let mix = Float(index) / Float(fade)
             let tail = samples[samples.count - fade + index]

@@ -64,6 +64,8 @@ final class WindTunnelRenderer {
     /// blades spun by the wind slider.
     private var fanEntity: Entity?
     private var fanBlades: Entity?
+    private var fanHum: AudioPlaybackController?
+    private var fanHumGain = -100.0
     private var stagnationMarkers: [ModelEntity] = []
     private let liftArrowShaft: ModelEntity
     private let liftArrowHead: ModelEntity
@@ -234,11 +236,22 @@ final class WindTunnelRenderer {
         guard !model.isPaused else { return }
         let scaledDt = dt * model.timeScale
 
-        // The fan spins with the wind it's making.
+        // The fan spins with the wind it's making — and sounds like it:
+        // the hum's gain rides the wind slider, silent while paused.
         if let fanBlades {
             fanBlades.orientation = simd_quatf(
                 angle: Float(model.windSpeed * 7 * scaledDt), axis: [1, 0, 0])
                 * fanBlades.orientation
+        }
+        if let fanEntity {
+            if fanHum == nil {
+                fanHum = SoundPalette.startFanHum(on: fanEntity)
+            }
+            let target = model.isPaused ? -100.0 : (-40.0 + 13.0 * model.windSpeed)
+            if abs(target - fanHumGain) > 0.5 {
+                fanHumGain = target
+                fanEntity.components.set(SpatialAudioComponent(gain: Audio.Decibel(target)))
+            }
         }
 
         // The cylinder turns at the spin rate its circulation implies.
