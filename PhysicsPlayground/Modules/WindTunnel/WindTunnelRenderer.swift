@@ -103,7 +103,10 @@ final class WindTunnelRenderer {
     private var lastFlowInputs: FlowInputs?
     /// Background worker for the trace + tube-buffer build; the main
     /// thread only uploads finished meshes (the EM renderer's pattern).
-    private var streamPipeline: GeometryPipeline<StreamJob, [TubeBuffers]>?
+    private var streamPipeline: GeometryPipeline<StreamJob, StreamOutput>?
+    private let beamRoot = Entity()
+    /// The fan-mouth position the currently-applied trace was seeded at.
+    private var appliedMouth = SIMD3<Double>(-WindTunnelModel.halfLength - 0.10, 0, 0)
     /// Where the beam pours from: the fan's face, in section coords —
     /// carried with the fan wherever it's parked.
     private var fanMouth = SIMD3<Double>(-WindTunnelModel.halfLength - 0.10, 0, 0)
@@ -134,10 +137,14 @@ final class WindTunnelRenderer {
         sectionRoot.addChild(cylinder)
 
         // Streamlines: five color buckets, slow→red through fast→cyan.
+        // They hang under beamRoot, which translates rigidly with the
+        // carried fan so the beam sticks to the duct while the
+        // background re-trace catches up (the EM warp pattern).
+        sectionRoot.addChild(beamRoot)
         for color in Self.streamlineColors {
             let entity = ModelEntity()
             streamlineBuckets.append(entity)
-            sectionRoot.addChild(entity)
+            beamRoot.addChild(entity)
             _ = color  // materials applied at mesh build
         }
 
@@ -344,6 +351,8 @@ final class WindTunnelRenderer {
             let p = fanEntity.position
             fanMouth = SIMD3(Double(p.x) + 0.14, Double(p.y), Double(p.z))
         }
+        // The beam rides the fan between re-traces.
+        beamRoot.position = SIMD3<Float>(fanMouth - appliedMouth)
 
         syncTestBody(model)
 
@@ -487,11 +496,16 @@ final class WindTunnelRenderer {
         var mouth: SIMD3<Double>
     }
 
+    private nonisolated struct StreamOutput: Sendable {
+        var buffers: [TubeBuffers]
+        var mouth: SIMD3<Double>
+    }
+
     /// The full trace + tube-buffer build, off the main thread: a dense
     /// bundle seeded at the fan's face — the exact 2D solution for the
     /// cylinder, a 3D wrap through the body silhouette for everything
     /// else — split into speed-colored runs.
-    private nonisolated static func computeStreamlines(_ job: StreamJob) -> [TubeBuffers] {
+    private nonisolated static func computeStreamlines(_ job: StreamJob) -> StreamOutput {
         var config = StreamlineTracer.Config()
         config.boundsCenter = .zero
         config.boundsRadius = 2.4
@@ -566,12 +580,15 @@ final class WindTunnelRenderer {
             }
             if run.count > 1 { bucketLines[runBucket].append(run) }
         }
-        return bucketLines.map { TubeMesh.buffers(lines: $0, radius: 0.0016, sides: 3) }
+        return StreamOutput(
+            buffers: bucketLines.map { TubeMesh.buffers(lines: $0, radius: 0.0016, sides: 3) },
+            mouth: job.mouth)
     }
 
-    private func applyStreamlines(_ buffers: [TubeBuffers]) {
+    private func applyStreamlines(_ output: StreamOutput) {
         for (index, entity) in streamlineBuckets.enumerated() {
-            if index < buffers.count, let mesh = TubeMesh.mesh(from: buffers[index]) {
+            if index < output.buffers.count,
+               let mesh = TubeMesh.mesh(from: output.buffers[index]) {
                 var material = UnlitMaterial(color: Self.streamlineColors[index])
                 material.blending = .transparent(opacity: 0.8)
                 entity.model = ModelComponent(mesh: mesh, materials: [material])
@@ -579,5 +596,9 @@ final class WindTunnelRenderer {
                 entity.model = nil
             }
         }
+        // Fresh trace is anchored at its own mouth; re-derive the warp
+        // so there's no pop when it lands mid-carry.
+        appliedMouth = output.mouth
+        beamRoot.position = SIMD3<Float>(fanMouth - appliedMouth)
     }
 }

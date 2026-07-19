@@ -252,12 +252,16 @@ final class SpringsRenderer {
             // only supplies the displacement through the router).
             let blockWorld = model.blockWorld
             blocks[0].position = SIMD3<Float>(blockWorld)
+            // The block slides; it never spins. Lock the twist a hand
+            // gives it back to the rail's frame, every frame.
+            blocks[0].orientation = simd_quatf(angle: 0, axis: [0, 1, 0])
             layoutSpring(springs[0], from: model.anchorWorld,
                          to: blockWorld - model.axisDirection * 0.045)
         case .coupled:
             for index in 0..<2 {
                 blocks[index].isEnabled = true
                 blocks[index].position = SIMD3<Float>(model.coupledBlockWorld(index))
+                blocks[index].orientation = simd_quatf(angle: 0, axis: [0, 1, 0])
             }
             let b0 = model.coupledBlockWorld(0)
             let b1 = model.coupledBlockWorld(1)

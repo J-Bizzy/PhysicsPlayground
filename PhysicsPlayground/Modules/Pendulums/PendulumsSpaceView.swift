@@ -97,6 +97,7 @@ struct PendulumsSpaceView: View {
         router.onBegin = { [weak renderer] name, position in
             guard let id = UUID(uuidString: name) else { return }
             renderer?.grabbedID = id
+            renderer?.clearTrail()
             model.beginGrab(id: id)
             handSamples = [(Date.timeIntervalSinceReferenceDate, SIMD3<Double>(position))]
         }

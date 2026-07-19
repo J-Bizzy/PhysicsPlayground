@@ -123,13 +123,13 @@ final class FieldRenderer {
 
     // MARK: Render loop
 
-    /// Starts rendering: draw now, then redraw whenever any observed model
-    /// property changes.
-    func startObserving(_ model: FieldModel) {
+    /// Per-frame sync, called from SceneEvents.Update — the observation
+    /// loop starves during system manipulation, so EM ticks directly
+    /// like every continuously-animating module. All expensive paths
+    /// inside render() are change-gated, so the per-frame cost is tiny.
+    func tick(_ model: FieldModel) {
         self.model = model
-        renderLoop.start { [weak self, weak model] in
-            guard let self, let model else { return }
-            self.render(
+        render(
                 charges: model.charges,
                 region: model.samplingRegion,
                 selectedID: model.selectedChargeID,
@@ -142,8 +142,7 @@ final class FieldRenderer {
                 capacitorCenter: model.capacitorCenter,
                 plateSeparation: model.plateSeparation,
                 magneticFieldOn: model.magneticFieldOn
-            )
-        }
+        )
     }
 
     /// Re-syncs all visuals to the given state.

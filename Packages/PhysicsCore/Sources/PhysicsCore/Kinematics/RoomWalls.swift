@@ -62,19 +62,32 @@ public enum RoomWalls {
             let s1 = simd_dot(current - wall.center, wall.normal)
             // The face being approached: the side the ball starts on.
             let side: Double = s0 >= 0 ? 1 : -1
+            let face = side * wall.normal
+            let into = simd_dot(velocity, face)
+            guard into < 0 else { continue }  // moving away, not striking
+
             let p0 = s0 * side - radius
             let p1 = s1 * side - radius
-            guard p0 >= 0, p1 < 0 else { continue }  // didn't cross this step
 
-            let t = p0 / (p0 - p1)
-            let contact = previous + t * (current - previous)
+            let t: Double
+            let contact: SIMD3<Double>
+            if p0 >= -1e-9, p1 < 0 {
+                // Clean crossing within this step.
+                t = max(p0, 0) / max(p0 - p1, 1e-12)
+                contact = previous + t * (current - previous)
+            } else if p0 < 0, p0 > -radius, p1 < p0 {
+                // Started already inside the ball-radius shell (a spawn
+                // near the wall, or numeric residue from a prior bounce)
+                // and burrowing deeper: reflect immediately, pushed back
+                // to the surface — nothing may tunnel through quietly.
+                t = 0
+                contact = current + face * (radius - s1 * side)
+            } else {
+                continue
+            }
             guard abs(simd_dot(contact - wall.center, wall.uAxis)) <= wall.halfU + radius,
                   abs(simd_dot(contact - wall.center, wall.vAxis)) <= wall.halfV + radius
             else { continue }
-
-            let face = side * wall.normal
-            let into = simd_dot(velocity, face)
-            guard into < 0 else { continue }  // grazing away, not striking
 
             let bounced = velocity - (1 + restitution) * into * face
             let hit = Hit(position: contact, velocity: bounced, impactSpeed: -into)

@@ -85,6 +85,20 @@ final class RoomWallsTests: XCTestCase {
                           "came back off the wall")
     }
 
+    /// A ball already inside the wall's ball-radius shell and still
+    /// burrowing inward reflects immediately instead of tunneling.
+    func testStartingInsideTheShellStillBounces() {
+        let hit = RoomWalls.strike(
+            previous: SIMD3(1.97, 1.5, 0),   // 3 cm from the wall, shell is 5 cm
+            current: SIMD3(1.99, 1.5, 0),    // burrowing deeper
+            velocity: SIMD3(2, 0, 0), radius: 0.05, restitution: 0.5,
+            walls: [wall])
+        XCTAssertNotNil(hit)
+        XCTAssertEqual(hit!.velocity.x, -1.0, accuracy: 1e-12)
+        XCTAssertEqual(hit!.position.x, 1.95, accuracy: 1e-9,
+                       "pushed back to the shell surface")
+    }
+
     /// Two walls in the path: the strike reports the FIRST one hit.
     func testEarliestWallWins() {
         let near = RoomWalls.Wall(

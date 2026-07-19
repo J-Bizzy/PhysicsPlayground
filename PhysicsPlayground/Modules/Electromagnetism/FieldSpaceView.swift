@@ -54,13 +54,13 @@ struct FieldSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.stepProbe(dt: event.deltaTime)
-                    renderer?.syncProbeNow(model.probe, isPositive: model.probeIsPositive)
+                    renderer?.tick(model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                 }
             )
 
-            renderer.startObserving(model)
+            renderer.tick(model)
             self.renderer = renderer
         } attachments: {
             Attachment(id: "pod-charges") { ChargesPod() }

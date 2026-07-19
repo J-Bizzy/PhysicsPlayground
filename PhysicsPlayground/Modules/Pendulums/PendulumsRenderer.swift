@@ -27,6 +27,14 @@ final class PendulumsRenderer {
     /// The pendulum whose bob a hand is holding (system-dragged).
     var grabbedID: UUID?
 
+    /// Grabbing starts a new experiment: the old swing's trail would
+    /// hang in the air behind the hand, so it clears on grab.
+    func clearTrail() {
+        trailPool.hideAll()
+        trailIndex = 0
+        trailBirths = Array(repeating: -1e9, count: Self.trailBudget)
+    }
+
     /// Parent for the selected pendulum's info attachment.
     let infoAnchor = Entity()
 
