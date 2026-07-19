@@ -28,7 +28,7 @@ struct PendulumsSpaceView: View {
             let renderer = PendulumsRenderer()
             content.add(renderer.root)
 
-            let podsRoot = Entity()
+            let podsRoot = PodMount.makeRoot(module: "pendulums")
             renderer.root.addChild(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-bench"), name: "Bench",
                            at: [-1.1, 1.75, -0.9], in: podsRoot)
@@ -49,6 +49,7 @@ struct PendulumsSpaceView: View {
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     renderer?.tick(dt: event.deltaTime, model: model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
+                    PodMount.persistIfMoved(podsRoot)
                 }
             )
             self.renderer = renderer

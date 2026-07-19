@@ -24,7 +24,7 @@ struct KinematicsSpaceView: View {
             let renderer = KinematicsRenderer()
             content.add(renderer.root)
 
-            let podsRoot = Entity()
+            let podsRoot = PodMount.makeRoot(module: "kinematics")
             renderer.root.addChild(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-launcher"), name: "Launcher",
                            at: [-0.9, 1.6, -0.95], in: podsRoot)
@@ -46,6 +46,7 @@ struct KinematicsSpaceView: View {
                     }
                     model.step(dt: event.deltaTime)
                     podsRoot.isEnabled = appModel.controlPodsVisible
+                    PodMount.persistIfMoved(podsRoot)
                 }
             )
 

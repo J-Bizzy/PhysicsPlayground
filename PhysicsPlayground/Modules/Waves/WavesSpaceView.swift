@@ -24,7 +24,7 @@ struct WavesSpaceView: View {
             let renderer = WavesRenderer()
             content.add(renderer.root)
 
-            let podsRoot = Entity()
+            let podsRoot = PodMount.makeRoot(module: "waves")
             renderer.root.addChild(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-waves"), name: "Waves",
                            at: [-1.15, 1.6, -0.85], in: podsRoot)
@@ -41,6 +41,7 @@ struct WavesSpaceView: View {
                 content.subscribe(to: SceneEvents.Update.self) { event in
                     model.step(dt: event.deltaTime)
                     podsRoot.isEnabled = appModel.controlPodsVisible
+                    PodMount.persistIfMoved(podsRoot)
                 }
             )
 

@@ -46,6 +46,13 @@ final class ChallengeProgress {
 /// The goals per module, each with a live predicate against the models.
 @MainActor
 enum ChallengeCatalog {
+    /// Every challenge across every module (for the hub's tally).
+    static func total(appModel: AppModel) -> Int {
+        ModuleCatalog.all(appModel: appModel)
+            .map { challenges(for: $0.id, appModel: appModel).count }
+            .reduce(0, +)
+    }
+
     static func challenges(for moduleID: String, appModel: AppModel)
     -> [(challenge: Challenge, isMet: () -> Bool)] {
         switch moduleID {

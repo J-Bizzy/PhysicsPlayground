@@ -50,6 +50,36 @@ struct ControlPod<Content: View>: View {
 /// window, readable from anywhere.
 @MainActor
 enum PodMount {
+    /// The root every module hangs its pods from, named so parked
+    /// positions persist per module ("the user owns the layout" —
+    /// including across sessions).
+    static func makeRoot(module: String) -> Entity {
+        let root = Entity()
+        root.name = module
+        return root
+    }
+
+    private static func layoutKey(_ module: String, _ name: String) -> String {
+        "podLayout.\(module).\(name)"
+    }
+
+    /// Call once per frame with the module's pod root: any pod the
+    /// hand has parked somewhere new gets its position remembered.
+    private static var savedPositions: [String: SIMD3<Float>] = [:]
+    static func persistIfMoved(_ root: Entity) {
+        for holder in root.children {
+            let key = layoutKey(root.name, holder.name)
+            let position = holder.position
+            if let last = savedPositions[key], simd_distance(last, position) < 0.01 {
+                continue
+            }
+            savedPositions[key] = position
+            UserDefaults.standard.set(
+                [Double(position.x), Double(position.y), Double(position.z)],
+                forKey: key)
+        }
+    }
+
     @discardableResult
     static func mount(
         _ attachment: Entity?, name: String,
@@ -59,7 +89,14 @@ enum PodMount {
         guard let attachment else { return nil }
         let holder = Entity()
         holder.name = "pod-\(name)"
-        holder.position = position
+        // A previously parked spot wins over the default.
+        if let saved = UserDefaults.standard.array(forKey: layoutKey(parent.name, "pod-\(name)"))
+            as? [Double], saved.count == 3 {
+            holder.position = SIMD3(Float(saved[0]), Float(saved[1]), Float(saved[2]))
+        } else {
+            holder.position = position
+        }
+        savedPositions[layoutKey(parent.name, "pod-\(name)")] = holder.position
 
         let pivot = Entity()
         pivot.components.set(BillboardComponent())

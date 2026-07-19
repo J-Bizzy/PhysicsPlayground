@@ -27,7 +27,7 @@ struct SpringsSpaceView: View {
             let renderer = SpringsRenderer()
             content.add(renderer.root)
 
-            let podsRoot = Entity()
+            let podsRoot = PodMount.makeRoot(module: "springs")
             renderer.root.addChild(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-apparatus"), name: "Apparatus",
                            at: [-1.1, 1.75, -0.8], in: podsRoot)
@@ -48,6 +48,7 @@ struct SpringsSpaceView: View {
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     renderer?.tick(dt: event.deltaTime, model: model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
+                    PodMount.persistIfMoved(podsRoot)
                 }
             )
             self.renderer = renderer

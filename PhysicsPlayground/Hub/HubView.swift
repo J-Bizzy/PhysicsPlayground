@@ -35,6 +35,15 @@ struct HubView: View {
                 .foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center)
 
+            if !appModel.challenges.completed.isEmpty {
+                Label(
+                    "\(appModel.challenges.completed.count) of \(ChallengeCatalog.total(appModel: appModel)) challenges",
+                    systemImage: "checkmark.seal.fill"
+                )
+                .font(.footnote)
+                .foregroundStyle(Color(red: 1, green: 0.85, blue: 0.4))
+            }
+
             if !appModel.isImmersiveSpaceOpen {
                 Button {
                     Task {

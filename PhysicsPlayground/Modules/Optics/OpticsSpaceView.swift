@@ -24,7 +24,7 @@ struct OpticsSpaceView: View {
             let renderer = OpticsRenderer()
             content.add(renderer.root)
 
-            let podsRoot = Entity()
+            let podsRoot = PodMount.makeRoot(module: "optics")
             renderer.root.addChild(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-bench"), name: "Bench",
                            at: [-1.1, 1.65, -0.8], in: podsRoot)
@@ -41,6 +41,7 @@ struct OpticsSpaceView: View {
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] _ in
                     renderer?.tick(model: model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
+                    PodMount.persistIfMoved(podsRoot)
                 }
             )
             self.renderer = renderer

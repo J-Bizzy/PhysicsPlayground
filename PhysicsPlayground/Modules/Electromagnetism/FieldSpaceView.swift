@@ -30,7 +30,7 @@ struct FieldSpaceView: View {
             // The control constellation: five single-purpose pods in an
             // arc around the field region, plus the numbers card. Each
             // hangs from a grabbable bar; the pods orb clears them all.
-            let podsRoot = Entity()
+            let podsRoot = PodMount.makeRoot(module: "electrostatics")
             renderer.root.addChild(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-charges"), name: "Charges",
                            at: [-1.05, 1.72, -0.85], in: podsRoot)
@@ -56,6 +56,7 @@ struct FieldSpaceView: View {
                     model.stepProbe(dt: event.deltaTime)
                     renderer?.syncProbeNow(model.probe, isPositive: model.probeIsPositive)
                     podsRoot.isEnabled = appModel.controlPodsVisible
+                    PodMount.persistIfMoved(podsRoot)
                 }
             )
 

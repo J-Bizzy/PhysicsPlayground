@@ -24,7 +24,7 @@ struct GravityLabSpaceView: View {
             let renderer = GravityLabRenderer()
             content.add(renderer.root)
 
-            let podsRoot = Entity()
+            let podsRoot = PodMount.makeRoot(module: "gravitylab")
             renderer.root.addChild(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-time"), name: "Time",
                            at: [0, 1.14, -1.05], in: podsRoot)
@@ -42,6 +42,7 @@ struct GravityLabSpaceView: View {
                     // keeps flowing even while the simulation is paused.
                     renderer?.tickFieldParticles(dt: event.deltaTime, model: model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
+                    PodMount.persistIfMoved(podsRoot)
                 }
             )
 

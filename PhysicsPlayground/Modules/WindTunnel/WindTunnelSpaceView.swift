@@ -26,7 +26,7 @@ struct WindTunnelSpaceView: View {
 
             // Control pods: the wind card floats beside the fan, the
             // test-body card hangs low under the section.
-            let podsRoot = Entity()
+            let podsRoot = PodMount.makeRoot(module: "windtunnel")
             renderer.root.addChild(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-wind"), name: "Wind",
                            at: [-1.35, 1.95, -1.15], in: podsRoot)
@@ -47,6 +47,7 @@ struct WindTunnelSpaceView: View {
                     }
                     renderer?.tick(dt: event.deltaTime, model: model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
+                    PodMount.persistIfMoved(podsRoot)
                 }
             )
 

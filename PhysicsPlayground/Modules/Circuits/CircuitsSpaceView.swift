@@ -28,7 +28,7 @@ struct CircuitsSpaceView: View {
             // Control pods: build helpers on the left near the tray,
             // bench status on the right — the tray itself is the
             // spatial way to add parts.
-            let podsRoot = Entity()
+            let podsRoot = PodMount.makeRoot(module: "circuits")
             renderer.root.addChild(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-presets"), name: "Premade circuits",
                            at: [-1.1, 1.7, -0.9], in: podsRoot)
@@ -46,6 +46,7 @@ struct CircuitsSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     podsRoot.isEnabled = appModel.controlPodsVisible
+                    PodMount.persistIfMoved(podsRoot)
                     model.step(dt: event.deltaTime)
                     // Rendered here every frame (not via the observation
                     // loop): a steady DC circuit mutates nothing that
