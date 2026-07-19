@@ -40,6 +40,10 @@ struct CircuitsSpaceView: View {
                            at: [-1.25, 1.12, -0.72], in: podsRoot)
             PodMount.mount(attachments.entity(for: "pod-bench"), name: "Bench",
                            at: [1.12, 1.5, -0.85], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-scope"), name: "Oscilloscope",
+                           at: [1.18, 0.92, -0.8], in: podsRoot)
+            PodMount.mount(attachments.entity(for: "pod-meter"), name: "Multimeter",
+                           at: [0.55, 1.9, -1.1], in: podsRoot)
             if let readout = attachments.entity(for: "info") {
                 readout.position = [0, 0.02, 0]
                 renderer.selectedAnchor.addChild(readout)
@@ -70,6 +74,14 @@ struct CircuitsSpaceView: View {
             }
             Attachment(id: "pod-bench") {
                 CircuitBenchPod()
+                    .environment(model)
+            }
+            Attachment(id: "pod-scope") {
+                CircuitScopePod()
+                    .environment(model)
+            }
+            Attachment(id: "pod-meter") {
+                CircuitMultimeterPod()
                     .environment(model)
             }
             Attachment(id: "info") {
@@ -249,7 +261,12 @@ struct CircuitsSpaceView: View {
             if name.hasPrefix("t0-") || name.hasPrefix("t1-") {
                 let end = name.hasPrefix("t0-") ? 0 : 1
                 if let id = UUID(uuidString: String(name.dropFirst(3))) {
-                    model.tapTerminal(CircuitsModel.Terminal(componentID: id, end: end))
+                    let terminal = CircuitsModel.Terminal(componentID: id, end: end)
+                    if model.multimeterArmed {
+                        model.probeTap(terminal)
+                    } else {
+                        model.tapTerminal(terminal)
+                    }
                 }
                 return
             }
@@ -407,6 +424,125 @@ struct CircuitBenchPod: View {
                     .foregroundStyle(DesignTokens.Palette.circuitsAccent)
             } else {
                 Text("Drag from a copper terminal to pull a wire — let go on another to connect. Carried parts show green ghost wires where they'll snap.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// The oscilloscope: a scrolling five-second window of the selected
+/// part's voltage and current — watch an RC charge curve, an AC
+/// cycle, or an inductor's rise as it happens.
+struct CircuitScopePod: View {
+    @Environment(CircuitsModel.self) private var model
+
+    var body: some View {
+        ControlPod(title: "Oscilloscope", icon: "waveform.path.ecg",
+                   tint: DesignTokens.Palette.circuitsAccent, width: 300) {
+            if let selected = model.selectedComponent {
+                TimelineView(.animation) { _ in
+                    Canvas { context, size in
+                        let samples = model.scopeSamples
+                        guard samples.count > 2 else { return }
+                        // Grid.
+                        var grid = Path()
+                        for step in 1..<5 {
+                            let x = size.width * CGFloat(step) / 5
+                            grid.move(to: CGPoint(x: x, y: 0))
+                            grid.addLine(to: CGPoint(x: x, y: size.height))
+                        }
+                        grid.move(to: CGPoint(x: 0, y: size.height / 2))
+                        grid.addLine(to: CGPoint(x: size.width, y: size.height / 2))
+                        context.stroke(grid, with: .color(.white.opacity(0.12)), lineWidth: 1)
+
+                        let vMax = max(samples.map { abs($0.volts) }.max() ?? 0, 0.1)
+                        let iMax = max(samples.map { abs($0.amps) }.max() ?? 0, 1e-4)
+                        let t0 = samples.first!.time
+                        let span = max(samples.last!.time - t0, 0.5)
+                        func path(_ value: @escaping ((time: Double, volts: Double, amps: Double)) -> Double,
+                                  scale: Double) -> Path {
+                            var path = Path()
+                            for (index, sample) in samples.enumerated() {
+                                let x = size.width * CGFloat((sample.time - t0) / span)
+                                let y = size.height * CGFloat(0.5 - 0.42 * value(sample) / scale)
+                                if index == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                                else { path.addLine(to: CGPoint(x: x, y: y)) }
+                            }
+                            return path
+                        }
+                        context.stroke(path({ $0.volts }, scale: vMax),
+                                       with: .color(.orange), lineWidth: 2)
+                        context.stroke(path({ $0.amps }, scale: iMax),
+                                       with: .color(.cyan), lineWidth: 2)
+                    }
+                    .frame(height: 120)
+                }
+                let vMax = max(model.scopeSamples.map { abs($0.volts) }.max() ?? 0, 0.1)
+                let iMax = max(model.scopeSamples.map { abs($0.amps) }.max() ?? 0, 1e-4)
+                HStack(spacing: 12) {
+                    Label(String(format: "±%.1f V", vMax), systemImage: "circle.fill")
+                        .foregroundStyle(.orange)
+                    Label(String(format: "±%.0f mA", iMax * 1000), systemImage: "circle.fill")
+                        .foregroundStyle(.cyan)
+                    Spacer()
+                    Text(selected.kind.displayName)
+                        .foregroundStyle(.secondary)
+                }
+                .font(DesignTokens.TypeScale.footnote)
+                Text("Pause freezes the trace.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Select a part — its voltage (orange) and current (cyan) trace here, live.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// The multimeter: arm it, tap any two copper terminals, read the
+/// live voltage difference — continuity and inline current included,
+/// exactly like the real thing.
+struct CircuitMultimeterPod: View {
+    @Environment(CircuitsModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+
+        ControlPod(title: "Multimeter", icon: "gauge.with.needle",
+                   tint: DesignTokens.Palette.circuitsAccent, width: 270) {
+            Toggle("Probes armed", isOn: $model.multimeterArmed)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("While armed, tapping terminals lands the probes instead of wiring")
+            if model.multimeterArmed {
+                if let reading = model.multimeterReading {
+                    Text(String(format: "ΔV  %+.3f V", reading.deltaVolts))
+                        .font(DesignTokens.TypeScale.sectionHeader.monospacedDigit())
+                        .foregroundStyle(DesignTokens.Palette.circuitsAccent)
+                    if reading.continuity {
+                        Label("Continuity", systemImage: "dot.radiowaves.left.and.right")
+                            .font(DesignTokens.TypeScale.footnote)
+                            .foregroundStyle(.green)
+                    }
+                    if let amps = reading.inlineAmps {
+                        Text(String(format: "%.1f mA through this part", abs(amps) * 1000))
+                            .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("Tap another terminal to move the red probe.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(model.probeA == nil
+                         ? "Tap any copper terminal — that's the red probe."
+                         : "Now tap a second terminal for the black probe.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Arm the probes, then touch any two points in the circuit to read the voltage between them.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
             }

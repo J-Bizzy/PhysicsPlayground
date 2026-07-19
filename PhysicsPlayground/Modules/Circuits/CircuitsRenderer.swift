@@ -351,9 +351,10 @@ final class CircuitsRenderer {
                 let isPending = model.pendingTerminal == key
                 // The armed terminal breathes, and preview targets swell,
                 // so there's never doubt what the next action will wire.
+                let isProbed = model.probeA == key || model.probeB == key
                 terminal.scale = SIMD3(repeating: isPending
                     ? Float(1.6 + 0.35 * sin(pendingPulsePhase))
-                    : (previewTargets.contains(key) ? 1.5 : 1.0))
+                    : (previewTargets.contains(key) ? 1.5 : (isProbed ? 1.35 : 1.0)))
 
                 let beingPulled = stretchingHandle ==
                     CircuitsModel.Terminal(componentID: component.id, end: end)

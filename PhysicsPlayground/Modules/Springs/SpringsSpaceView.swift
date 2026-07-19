@@ -241,7 +241,12 @@ struct SpringsParametersPod: View {
             slider("Stiffness k", $model.stiffness,
                    SpringsModel.stiffnessRange, "%.0f N/m")
             slider("Mass", $model.mass, SpringsModel.massRange, "%.1f kg")
+            Toggle("Friction", isOn: $model.frictionOn)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("Off: an ideal oscillator that never dies down")
             slider("Damping", $model.damping, SpringsModel.dampingRange, "%.2f N·s/m")
+                .opacity(model.frictionOn ? 1 : 0.4)
+                .disabled(!model.frictionOn)
             if model.orientation == .horizontal {
                 Toggle("Gravity along the rail", isOn: $model.gravityOn)
                     .font(DesignTokens.TypeScale.footnote)

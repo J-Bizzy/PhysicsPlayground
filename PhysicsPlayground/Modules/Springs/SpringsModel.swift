@@ -37,6 +37,16 @@ final class SpringsModel {
     var stiffness = 40.0 { didSet { insight(.stiffness) } }
     var mass = 0.5 { didSet { insight(.mass) } }
     var damping = 0.1 { didSet { insight(.damping) } }
+    /// The friction kill-switch: off = ideal oscillator, forever.
+    var frictionOn = true {
+        didSet {
+            insightText = frictionOn
+                ? "Friction is back — watch the envelope decay exponentially again."
+                : "Frictionless: no damping, no losses — the energy just sloshes between kinetic and potential, forever."
+        }
+    }
+    /// What the integrator actually feels.
+    var effectiveDamping: Double { frictionOn ? damping : 0 }
     var restLength = 0.45
     var maxExtension = 0.3
     /// Gravity along the motion axis (as if the rail were tipped
@@ -82,7 +92,7 @@ final class SpringsModel {
 
     var springForce: Double { -stiffness * state.displacement }
     var acceleration: Double {
-        (springForce - damping * state.velocity + biasForce) / mass
+        (springForce - effectiveDamping * state.velocity + biasForce) / mass
     }
 
     func energies() -> (kinetic: Double, potential: Double) {
@@ -268,12 +278,12 @@ final class SpringsModel {
                 case .single:
                     state = SpringOscillator.step(
                         state, dt: Self.substep, stiffness: stiffness,
-                        mass: mass, damping: damping, biasForce: biasForce)
+                        mass: mass, damping: effectiveDamping, biasForce: biasForce)
                 case .coupled:
                     // While one block is held, pin it and let the other run.
                     var next = CoupledSprings.step(
                         coupled, dt: Self.substep, stiffness: stiffness,
-                        coupling: coupling, masses: SIMD2(mass, mass), damping: damping)
+                        coupling: coupling, masses: SIMD2(mass, mass), damping: effectiveDamping)
                     if grabbedBlock == 0 {
                         next.displacements.x = coupled.displacements.x
                         next.velocities.x = 0

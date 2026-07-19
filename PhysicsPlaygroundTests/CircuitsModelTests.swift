@@ -18,6 +18,62 @@ import simd
 @MainActor
 final class CircuitsModelTests: XCTestCase {
 
+    /// The multimeter reads the true potential difference across a
+    /// component, and continuity through a wire.
+    func testMultimeterReadsVoltageAndContinuity() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let battery = model.add(.battery, at: SIMD3(-0.3, 1.2, -0.9)),
+              let resistor = model.add(.resistor, at: SIMD3(0.3, 1.2, -0.9)) else {
+            return XCTFail("bench refused parts")
+        }
+        let bPlus = CircuitsModel.Terminal(componentID: battery, end: 0)
+        let bMinus = CircuitsModel.Terminal(componentID: battery, end: 1)
+        let rA = CircuitsModel.Terminal(componentID: resistor, end: 0)
+        let rB = CircuitsModel.Terminal(componentID: resistor, end: 1)
+        model.connectTerminals(bPlus, rA)
+        model.connectTerminals(bMinus, rB)
+        model.step(dt: 1.0 / 90.0)
+
+        model.multimeterArmed = true
+        model.probeTap(rA)
+        model.probeTap(rB)
+        let reading = model.multimeterReading
+        XCTAssertNotNil(reading)
+        let expected = model.readouts[resistor]!.volts
+        XCTAssertEqual(reading!.deltaVolts, expected, accuracy: 1e-9,
+                       "the meter reads the same drop the solver computes")
+        XCTAssertEqual(reading!.inlineAmps!, model.readouts[resistor]!.amps,
+                       accuracy: 1e-12, "probes across one part read its current")
+
+        // Probes on the two ends of one WIRE: continuity.
+        model.probeTap(bPlus)
+        model.probeTap(rA)
+        XCTAssertTrue(model.multimeterReading!.continuity,
+                      "wired-together terminals show continuity")
+    }
+
+    /// The scope buffers the selected part's live samples and clears
+    /// when the selection changes.
+    func testScopeBuffersSelectedComponent() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let battery = model.add(.battery, at: SIMD3(-0.3, 1.2, -0.9)),
+              let resistor = model.add(.resistor, at: SIMD3(0.3, 1.2, -0.9)) else {
+            return XCTFail("bench refused parts")
+        }
+        model.connectTerminals(.init(componentID: battery, end: 0), .init(componentID: resistor, end: 0))
+        model.connectTerminals(.init(componentID: battery, end: 1), .init(componentID: resistor, end: 1))
+        model.select(id: resistor)
+        for _ in 0..<90 { model.step(dt: 1.0 / 90.0) }
+        XCTAssertGreaterThan(model.scopeSamples.count, 30, "a second of samples")
+        XCTAssertEqual(model.scopeSamples.last!.volts,
+                       model.readouts[resistor]!.volts, accuracy: 1e-9)
+        model.select(id: battery)
+        XCTAssertTrue(model.scopeSamples.isEmpty, "new selection, fresh trace")
+    }
+
+
     /// A bare LED across a 9 V battery burns out in one live step; a
     /// Replace puts it back in service.
     func testLEDBurnsOutWithoutSeriesResistance() {

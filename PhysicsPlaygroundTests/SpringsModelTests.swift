@@ -15,6 +15,30 @@ import simd
 @MainActor
 final class SpringsModelTests: XCTestCase {
 
+    /// Friction off = ideal oscillator: the amplitude survives ten
+    /// seconds essentially untouched (RK4 at 90 Hz barely leaks).
+    func testFrictionToggleMakesTheOscillatorIdeal() {
+        let model = SpringsModel()
+        model.frictionOn = false
+        model.damping = 2.0   // would kill the motion fast if it applied
+        model.beginGrab(block: 0)
+        model.moveGrabbed(toWorld: SpringsModel.center + SIMD3(0.2, 0, 0))
+        model.release(handVelocityX: 0)
+        var earlyPeak = 0.0
+        var latePeak = 0.0
+        for step in 0..<900 {
+            model.step(dt: 1.0 / 90.0)
+            let x = abs(model.state.displacement)
+            if step < 180 { earlyPeak = max(earlyPeak, x) }
+            if step >= 720 { latePeak = max(latePeak, x) }
+        }
+        XCTAssertGreaterThan(latePeak, earlyPeak * 0.98,
+                             "no friction, no decay — the swing keeps its amplitude")
+        model.frictionOn = true
+        XCTAssertEqual(model.effectiveDamping, 2.0, "friction back on restores damping")
+    }
+
+
     /// Hanging: bias is +mg (down-positive), and with damping the block
     /// settles exactly mg/k below the natural length.
     func testVerticalModeSagsToMgOverK() {

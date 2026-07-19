@@ -232,6 +232,7 @@ final class CircuitsModel {
     }
 
     func select(id: UUID) {
+        if id != selectedID { scopeSamples = [] }
         guard components.contains(where: { $0.id == id }) else { return }
         selectedID = id
     }
@@ -561,6 +562,14 @@ final class CircuitsModel {
         }
         readouts = newReadouts
         totalSourcePower = sourcePower
+        if !isPaused, let selectedID, let readout = newReadouts[selectedID],
+           simTime - lastScopeSample >= 1.0 / 60.0 {
+            lastScopeSample = simTime
+            scopeSamples.append((simTime, readout.volts, readout.amps))
+            if scopeSamples.count > Self.scopeCapacity {
+                scopeSamples.removeFirst(scopeSamples.count - Self.scopeCapacity)
+            }
+        }
         updateLiveInsight()
 
         // 5. Wire currents for the electron flow: each terminal's element
@@ -579,6 +588,77 @@ final class CircuitsModel {
             flows[wire.id] = (outflow(wire.from) - outflow(wire.to)) / 2
         }
         wireFlows = flows
+    }
+
+    // MARK: Instruments
+
+    /// Oscilloscope: a scrolling window of the selected part's voltage
+    /// and current, sampled at 60 Hz of simulated time.
+    private(set) var scopeSamples: [(time: Double, volts: Double, amps: Double)] = []
+    private var lastScopeSample = -1.0
+    nonisolated static let scopeCapacity = 300   // 5 s at 60 Hz
+
+    /// Multimeter: arm it, then tap any two terminals. Red probe first.
+    var multimeterArmed = false {
+        didSet { if !multimeterArmed { probeA = nil; probeB = nil } }
+    }
+    private(set) var probeA: Terminal?
+    private(set) var probeB: Terminal?
+
+    /// A tap while the meter is armed lands a probe (A, then B, then
+    /// back to A — walk the probes around the circuit freely).
+    func probeTap(_ terminal: Terminal) {
+        if probeA == nil || probeB != nil {
+            probeA = terminal
+            probeB = nil
+        } else if terminal != probeA {
+            probeB = terminal
+        }
+        if let component = components.first(where: { $0.id == terminal.componentID }) {
+            emitSound(.pop, at: component.terminalPosition(terminal.end), volume: 0.5)
+        }
+    }
+
+    struct MultimeterReading {
+        var deltaVolts: Double
+        /// Probes on the same electrical node.
+        var continuity: Bool
+        /// When the probes bracket exactly one component, its current.
+        var inlineAmps: Double?
+    }
+
+    var multimeterReading: MultimeterReading? {
+        guard let probeA, let probeB,
+              let vA = terminalVoltages[probeA],
+              let vB = terminalVoltages[probeB] else { return nil }
+        var inline: Double?
+        if probeA.componentID == probeB.componentID, probeA.end != probeB.end {
+            inline = readouts[probeA.componentID]?.amps
+        }
+        return MultimeterReading(
+            deltaVolts: vA - vB,
+            continuity: abs(vA - vB) < 1e-3 && isProbePairConnected(probeA, probeB),
+            inlineAmps: inline)
+    }
+
+    /// True when the two probes share a node through wires alone.
+    private func isProbePairConnected(_ a: Terminal, _ b: Terminal) -> Bool {
+        var frontier = [a]
+        var seen: Set<Terminal> = [a]
+        while let current = frontier.popLast() {
+            if current == b { return true }
+            for wire in wires {
+                let next: Terminal?
+                if wire.from == current { next = wire.to }
+                else if wire.to == current { next = wire.from }
+                else { next = nil }
+                if let next, !seen.contains(next) {
+                    seen.insert(next)
+                    frontier.append(next)
+                }
+            }
+        }
+        return false
     }
 
     // MARK: Workshop state
