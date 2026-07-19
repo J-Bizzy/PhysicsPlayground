@@ -15,8 +15,8 @@ enum CircuitsModule {
     static func descriptor(appModel: AppModel) -> ModuleDescriptor {
         ModuleDescriptor(
             id: id,
-            title: "Circuit Lab",
-            blurb: "Build real circuits in mid-air — batteries, bulbs, resistors, capacitors, switches — and watch the electrons actually flow.",
+            title: "Circuit Workshop",
+            blurb: "A live electronics workbench: build anything from a flashlight to an RLC network, and watch voltage, current, and charge become visible.",
             icon: "powerplug.fill",
             accent: DesignTokens.Palette.circuitsAccent,
             firstRunHint: "The loop in front of you is live — pinch the switch lever to break it. Grab parts off the tray and drop them so copper ends nearly touch: they connect themselves. Pull an orange end grip to aim or stretch a part; pinch two copper terminals to wire across a distance; the trash button removes a selected part.",

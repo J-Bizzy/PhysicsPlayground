@@ -42,16 +42,23 @@ final class CircuitsModel {
     // MARK: Components
 
     enum ComponentKind: String, CaseIterable, Identifiable, Codable {
-        case battery, resistor, bulb, capacitor, switcher, wire
+        // Declaration order is drawer order: power, passives, outputs,
+        // control, wire.
+        case battery, acSource, resistor, capacitor, inductor
+        case bulb, led, fuse, switcher, wire
 
         var id: String { rawValue }
 
         var displayName: String {
             switch self {
             case .battery: "Battery"
+            case .acSource: "AC Source"
             case .resistor: "Resistor"
-            case .bulb: "Bulb"
             case .capacitor: "Capacitor"
+            case .inductor: "Inductor"
+            case .bulb: "Bulb"
+            case .led: "LED"
+            case .fuse: "Fuse"
             case .switcher: "Switch"
             case .wire: "Wire"
             }
@@ -60,14 +67,26 @@ final class CircuitsModel {
         var defaultValue: Double {
             switch self {
             case .battery: 9.0        // V
+            case .acSource: 6.0       // V amplitude (0.5 Hz)
             case .resistor: 470.0     // Ω
-            case .bulb: 24.0          // Ω
             case .capacitor: 2.2e-3   // F
+            case .inductor: 0.5       // H
+            case .bulb: 24.0          // Ω
+            case .led: 0              // fixed 2 V drop, 12 Ω on
+            case .fuse: 1.0           // A rating
             case .switcher: 0
             case .wire: 0.25          // m — a wire's value is its length
             }
         }
     }
+
+    // LED physics: a red LED's forward drop and on-resistance, and the
+    // current beyond which it burns out (real 5 mm LEDs die ~30 mA+).
+    nonisolated static let ledForwardDrop = 2.0
+    nonisolated static let ledOnResistance = 12.0
+    nonisolated static let ledMaxAmps = 0.03
+    /// The AC source's fixed frequency — slow enough to watch.
+    nonisolated static let acFrequency = 0.5
 
     /// Real 1 mm² copper: R = ρL/A with ρ = 1.68×10⁻⁸ Ω·m, so a wire's
     /// resistance honestly grows with the length the user gives it
@@ -106,6 +125,15 @@ final class CircuitsModel {
         var isClosed = true
         /// Capacitors only: the integrated state.
         var capacitorVoltage = 0.0
+        /// Failure simulation (burned LED, blown fuse) — transient,
+        /// never persisted; Replace on the readout clears it.
+        var failed = false
+        /// Inductors only: the integrated state — transient.
+        var inductorCurrent = 0.0
+
+        private enum CodingKeys: String, CodingKey {
+            case id, kind, position, value, axis, isClosed, capacitorVoltage
+        }
 
         /// Half the distance between the two terminals — a wire spans
         /// its own adjustable length; every other part has the
@@ -451,6 +479,7 @@ final class CircuitsModel {
         }
 
         // 3. Stamp one element per component and solve.
+        if !isPaused { simTime += timeStep }
         let elements = components.map { component -> CircuitElement in
             let a = node(Terminal(componentID: component.id, end: 0))
             let b = node(Terminal(componentID: component.id, end: 1))
@@ -458,11 +487,26 @@ final class CircuitsModel {
             case .battery:
                 .battery(volts: component.value,
                          internalResistance: Self.batteryInternalResistance)
+            case .acSource:
+                .battery(volts: component.value
+                            * sin(2 * .pi * Self.acFrequency * simTime),
+                         internalResistance: Self.batteryInternalResistance)
             case .resistor, .bulb:
                 .resistor(ohms: component.value)
             case .capacitor:
                 .capacitor(farads: component.value,
                            previousVoltage: component.capacitorVoltage)
+            case .inductor:
+                .inductor(henries: component.value,
+                          previousCurrent: component.inductorCurrent)
+            case .led:
+                component.failed
+                    ? .open
+                    : .diode(forwardDrop: Self.ledForwardDrop,
+                             onResistance: Self.ledOnResistance,
+                             isConducting: false)
+            case .fuse:
+                component.failed ? .open : .resistor(ohms: 0.001)
             case .switcher:
                 component.isClosed ? .conductor : .open
             case .wire:
@@ -470,8 +514,21 @@ final class CircuitsModel {
             }
             return CircuitElement(nodeA: a, nodeB: b, kind: kind)
         }
-        let solution = CircuitSolver.solve(
-            elements: elements, nodeCount: nodeCount, timeStep: timeStep)
+        let solution = CircuitSolver.solveWithDiodes(
+            elements: elements, nodeCount: nodeCount, timeStep: timeStep).solution
+
+        // Terminal voltages for the warm↔cool gradient the renderer
+        // paints across the bench.
+        var terminalVolts: [Terminal: Double] = [:]
+        for component in components {
+            for end in 0...1 {
+                let terminal = Terminal(componentID: component.id, end: end)
+                terminalVolts[terminal] = solution.nodeVoltages[node(terminal)]
+            }
+        }
+        terminalVoltages = terminalVolts
+        let span = solution.nodeVoltages.dropFirst()
+        voltageSpan = (min(span.min() ?? 0, 0), max(span.max() ?? 0, 0))
 
         // 4. Publish readouts; advance capacitor state (unless frozen).
         var newReadouts: [UUID: Readout] = [:]
@@ -486,9 +543,25 @@ final class CircuitsModel {
             if component.kind == .capacitor, !isPaused {
                 components[index].capacitorVoltage = solution.voltages[index]
             }
+            if component.kind == .inductor, !isPaused {
+                components[index].inductorCurrent = solution.currents[index]
+            }
+            if !isPaused, !component.failed {
+                let amps = abs(solution.currents[index])
+                if component.kind == .led, amps > Self.ledMaxAmps {
+                    components[index].failed = true
+                    emitSound(.boom, at: component.position, volume: 0.35)
+                    failureNote = "The LED burned out — it drew \(Int(amps * 1000)) mA, past its 30 mA limit. Add series resistance, then tap Replace on its card."
+                } else if component.kind == .fuse, amps > component.value {
+                    components[index].failed = true
+                    emitSound(.pop, at: component.position, volume: 0.8)
+                    failureNote = "The fuse blew at \(String(format: "%.1f", amps)) A — beyond its \(String(format: "%.1f", component.value)) A rating. It did its job; find the short, then Replace it."
+                }
+            }
         }
         readouts = newReadouts
         totalSourcePower = sourcePower
+        updateLiveInsight()
 
         // 5. Wire currents for the electron flow: each terminal's element
         // current fans out evenly over its wires (a visualization choice;
@@ -506,6 +579,59 @@ final class CircuitsModel {
             flows[wire.id] = (outflow(wire.from) - outflow(wire.to)) / 2
         }
         wireFlows = flows
+    }
+
+    // MARK: Workshop state
+
+    /// The AC sources' shared clock.
+    private(set) var simTime = 0.0
+    /// Live node voltages by terminal, for the voltage-gradient wires.
+    private(set) var terminalVoltages: [Terminal: Double] = [:]
+    private(set) var voltageSpan: (min: Double, max: Double) = (0, 0)
+    /// The Electron View toggle: the whole bench swells around the user.
+    var electronView = false
+    /// The latest failure explanation (shown until the part is replaced).
+    private(set) var failureNote = ""
+
+    /// Puts a burned/blown part back in service.
+    func replaceFailed(id: UUID) {
+        guard let index = components.firstIndex(where: { $0.id == id }) else { return }
+        components[index].failed = false
+        failureNote = ""
+        emitSound(.chime, at: components[index].position, volume: 0.5)
+    }
+
+    /// Live guided physics: one line about what the circuit is doing
+    /// RIGHT NOW, refreshed at most twice a second.
+    private var insightClock = 0.0
+    private func updateLiveInsight() {
+        guard simTime - insightClock > 0.5 else { return }
+        insightClock = simTime
+        if components.contains(where: { $0.failed }) {
+            insightText = failureNote
+            return
+        }
+        // The hardest-working dissipator.
+        var topID: UUID?
+        var topWatts = 0.05
+        for component in components
+        where component.kind != .battery && component.kind != .acSource {
+            let watts = abs(readouts[component.id]?.watts ?? 0)
+            if watts > topWatts {
+                topWatts = watts
+                topID = component.id
+            }
+        }
+        if let capacitor = components.first(where: { $0.kind == .capacitor }),
+           let amps = readouts[capacitor.id]?.amps, abs(amps) > 1e-4 {
+            let percent = Int(min(abs(capacitor.capacitorVoltage)
+                / max(abs(readouts[capacitor.id]?.volts ?? 1), 0.01), 1) * 100)
+            insightText = "The capacitor is charging exponentially — \(percent)% of the way to its final voltage, and the current shrinks as it fills."
+        } else if let topID, let top = components.first(where: { $0.id == topID }) {
+            insightText = "The \(top.kind.displayName.lowercased()) dissipates the most power right now — \(String(format: "%.2f", topWatts)) W as heat\(top.kind == .bulb ? " and light" : "")."
+        } else if electronView {
+            insightText = "Electron View: each electron only drifts millimeters per second — but the field pushes ALL of them at once, so the bulb lights instantly."
+        }
     }
 
     // MARK: Persistence (the bench survives relaunch)

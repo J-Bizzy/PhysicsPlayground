@@ -32,7 +32,8 @@ struct CircuitsSpaceView: View {
             // bench status on the right — the tray itself is the
             // spatial way to add parts.
             let podsRoot = PodMount.makeRoot(module: "circuits")
-            renderer.root.addChild(podsRoot)
+            content.add(podsRoot)   // outside renderer.root: pods must not
+                                    // scale with the Electron View bench
             PodMount.mount(attachments.entity(for: "pod-presets"), name: "Premade circuits",
                            at: [-1.1, 1.7, -0.9], in: podsRoot)
             PodMount.mount(attachments.entity(for: "pod-saved"), name: "Saved circuits",
@@ -371,6 +372,14 @@ struct CircuitBenchPod: View {
             Toggle("Electron flow", isOn: $model.showElectronFlow)
                 .font(DesignTokens.TypeScale.control)
                 .accessibilityHint("Cyan dots drifting minus to plus along every live wire")
+            Toggle("Electron View", isOn: $model.electronView)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("The bench swells around you until wires are tunnels — walk inside your circuit")
+            if model.electronView {
+                Text("Wires are tunnels now. Electrons drift slowly — millimeters per second — but the field pushes all of them at once, everywhere.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            }
             Button {
                 model.clearBench()
             } label: {
@@ -437,14 +446,27 @@ struct CircuitsSelectedReadout: View {
                 }
                 .accessibilityElement(children: .combine)
 
-                Button(role: .destructive) {
-                    model.removeSelected()
-                } label: {
-                    Image(systemName: "trash")
+                VStack(spacing: 6) {
+                    if component.failed {
+                        Button {
+                            model.replaceFailed(id: component.id)
+                        } label: {
+                            Label("Replace", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .tint(.orange)
+                        .accessibilityLabel("Replace the failed \(component.kind.displayName)")
+                    }
+                    Button(role: .destructive) {
+                        model.removeSelected()
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.mini)
+                    .accessibilityLabel("Remove this \(component.kind.displayName), and any wires connected to it")
                 }
-                .buttonStyle(.borderless)
-                .controlSize(.mini)
-                .accessibilityLabel("Remove this \(component.kind.displayName), and any wires connected to it")
             }
         }
     }

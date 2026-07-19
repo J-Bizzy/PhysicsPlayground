@@ -71,6 +71,12 @@ enum ChallengeCatalog {
                            detail: "Charge a capacitor past 8 V."),
                  { model.components.contains {
                      $0.kind == .capacitor && abs($0.capacitorVoltage) > 8 } }),
+                (Challenge(id: "circuits.firstLight", title: "First light",
+                           detail: "Light an LED in its safe range — series resistance is your friend."),
+                 { model.components.contains { component in
+                     component.kind == .led && !component.failed
+                         && abs(model.readouts[component.id]?.amps ?? 0) > 0.005
+                         && abs(model.readouts[component.id]?.amps ?? 0) < 0.03 } }),
             ]
         case "pendulums":
             let model = appModel.pendulumsModel

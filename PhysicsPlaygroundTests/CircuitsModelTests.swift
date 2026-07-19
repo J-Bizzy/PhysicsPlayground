@@ -18,6 +18,73 @@ import simd
 @MainActor
 final class CircuitsModelTests: XCTestCase {
 
+    /// A bare LED across a 9 V battery burns out in one live step; a
+    /// Replace puts it back in service.
+    func testLEDBurnsOutWithoutSeriesResistance() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let battery = model.add(.battery, at: SIMD3(-0.3, 1.2, -0.9)),
+              let led = model.add(.led, at: SIMD3(0.3, 1.2, -0.9)) else {
+            return XCTFail("bench refused parts")
+        }
+        let bPlus = CircuitsModel.Terminal(componentID: battery, end: 0)
+        let bMinus = CircuitsModel.Terminal(componentID: battery, end: 1)
+        let lA = CircuitsModel.Terminal(componentID: led, end: 0)
+        let lB = CircuitsModel.Terminal(componentID: led, end: 1)
+        model.connectTerminals(bPlus, lA)
+        model.connectTerminals(bMinus, lB)
+        model.step(dt: 1.0 / 90.0)
+        XCTAssertTrue(model.components.first { $0.id == led }!.failed,
+                      "9 V straight into a 2 V/12 Ω LED is far past 30 mA")
+        model.step(dt: 1.0 / 90.0)
+        XCTAssertEqual(abs(model.readouts[led]?.amps ?? 1), 0, accuracy: 1e-6,
+                       "a burned LED is an open circuit")
+        model.replaceFailed(id: led)
+        XCTAssertFalse(model.components.first { $0.id == led }!.failed)
+    }
+
+    /// A shorted battery through a 1 A fuse blows it — and the blown
+    /// fuse then protects the circuit as an open.
+    func testFuseBlowsAboveItsRating() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let battery = model.add(.battery, at: SIMD3(-0.3, 1.2, -0.9)),
+              let fuse = model.add(.fuse, at: SIMD3(0.3, 1.2, -0.9)) else {
+            return XCTFail("bench refused parts")
+        }
+        model.connectTerminals(.init(componentID: battery, end: 0), .init(componentID: fuse, end: 0))
+        model.connectTerminals(.init(componentID: battery, end: 1), .init(componentID: fuse, end: 1))
+        model.step(dt: 1.0 / 90.0)
+        XCTAssertTrue(model.components.first { $0.id == fuse }!.failed,
+                      "a dead short pushes far beyond the 1 A rating")
+        model.step(dt: 1.0 / 90.0)
+        XCTAssertEqual(abs(model.readouts[fuse]?.amps ?? 1), 0, accuracy: 1e-6)
+    }
+
+    /// The AC source really alternates: over one full period the
+    /// resistor's current flows both ways.
+    func testACSourceAlternates() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let source = model.add(.acSource, at: SIMD3(-0.3, 1.2, -0.9)),
+              let resistor = model.add(.resistor, at: SIMD3(0.3, 1.2, -0.9)) else {
+            return XCTFail("bench refused parts")
+        }
+        model.connectTerminals(.init(componentID: source, end: 0), .init(componentID: resistor, end: 0))
+        model.connectTerminals(.init(componentID: source, end: 1), .init(componentID: resistor, end: 1))
+        var sawPositive = false
+        var sawNegative = false
+        for _ in 0..<240 {   // ~2.7 s at 90 Hz: beyond one 2 s period
+            model.step(dt: 1.0 / 90.0)
+            let amps = model.readouts[resistor]?.amps ?? 0
+            if amps > 1e-4 { sawPositive = true }
+            if amps < -1e-4 { sawNegative = true }
+        }
+        XCTAssertTrue(sawPositive && sawNegative,
+                      "current must flow both directions over a full AC cycle")
+    }
+
+
     /// The carry preview and the release do the same thing: what the
     /// ghost wires promise is exactly what autoConnect creates.
     func testAutoConnectPreviewMatchesRelease() {

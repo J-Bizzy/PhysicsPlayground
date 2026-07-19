@@ -100,6 +100,28 @@ struct CircuitsControlsView: View {
         case .switcher:
             Toggle("Closed", isOn: model.selectedIsClosed)
                 .font(DesignTokens.TypeScale.control)
+        case .acSource:
+            valueSlider("Amplitude", model: model, range: 1...12,
+                        format: { String(format: "%.1f V at 0.5 Hz", $0) })
+            Text("The EMF swings sinusoidally — watch the electrons reverse twice a cycle.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
+        case .inductor:
+            logSlider("Inductance", model: model, range: 0.05...5,
+                      format: { String(format: "%.2f H", $0) })
+            Text("An inductor resists changes in current — switch the circuit and watch the current rise on the real 1 − e^(−tR/L) curve.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
+        case .led:
+            Text("A real red LED: 2 V forward drop, one-way. More than 30 mA burns it out — give it a series resistor.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
+        case .fuse:
+            valueSlider("Rating", model: model, range: 0.2...5,
+                        format: { String(format: "%.1f A", $0) })
+            Text("Nearly zero resistance — until too much current melts it open, on purpose.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
         case .wire:
             valueSlider("Length", model: model, range: CircuitsModel.wireLengthRange,
                         format: { $0 >= 0.995 ? String(format: "%.2f m", $0)

@@ -148,11 +148,14 @@ final class CircuitsRenderer {
         tray.addChild(slab)
 
         for (index, kind) in kinds.enumerated() {
-            let x = Float(index) * 0.15 - Float(kinds.count - 1) * 0.075
+            let column = index % 5
+            let row = index / 5
+            let x = Float(column) * 0.15 - 4 * 0.075
+            let z: Float = row == 0 ? -0.07 : 0.07
             let template = makeBody(for: CircuitsModel.Component(
                 id: UUID(), kind: kind, position: .zero, value: kind.defaultValue))
             template.scale = SIMD3(repeating: 0.8)
-            template.position = [x, 0.05, -0.02]
+            template.position = [x, 0.05, z]
             template.name = "tray-\(kind.rawValue)"
             // A drag target: pulling it spawns a copy that follows the
             // hand's displacement; the template itself never moves.
@@ -266,8 +269,19 @@ final class CircuitsRenderer {
         }
     }
 
+    /// Electron View: the whole bench scales up smoothly about its own
+    /// center until wires read as tunnels and electrons as characters.
+    private var benchScale: Float = 1
+    private static let benchPivot = SIMD3<Float>(0, 1.25, -0.85)
+
     func tick(dt: Double, model: CircuitsModel) {
         pendingPulsePhase += dt * 6
+        let targetScale: Float = model.electronView ? 4.0 : 1.0
+        if abs(benchScale - targetScale) > 1e-3 {
+            benchScale += (targetScale - benchScale) * Float(min(dt * 3, 1))
+            root.scale = SIMD3(repeating: benchScale)
+            root.position = Self.benchPivot * (1 - benchScale)
+        }
         render(model, dt: dt)
     }
 
@@ -369,6 +383,13 @@ final class CircuitsRenderer {
                     filamentMaterial.blending = .transparent(opacity: bucket > 0 ? 1.0 : 0.8)
                     visual.filament?.model?.materials = [filamentMaterial]
                 }
+            case .led:
+                let amps = abs(model.readouts[component.id]?.amps ?? 0)
+                let bucket = component.failed ? 0 : min(Int(amps / 0.005), 5)
+                if visual.glowBucket != bucket {
+                    visual.glowBucket = bucket
+                    visual.glow?.model?.materials = [glowMaterials[max(bucket, 0)]]
+                }
             case .switcher:
                 visual.lever?.orientation = simd_quatf(
                     angle: component.isClosed ? 0 : 0.6, axis: [0, 0, 1])
@@ -414,6 +435,12 @@ final class CircuitsRenderer {
                 ? String(format: "%.1f mF", component.value * 1000)
                 : String(format: "%.0f µF", component.value * 1e6)
         case .switcher: component.isClosed ? "closed" : "open"
+        case .acSource: String(format: "%.1f V~", component.value)
+        case .inductor: String(format: "%.2f H", component.value)
+        case .led: component.failed ? "burned out" : "LED"
+        case .fuse: component.failed
+            ? "blown"
+            : String(format: "%.1f A fuse", component.value)
         case .wire:
             component.value >= 0.995
                 ? String(format: "%.2f m", component.value)
@@ -556,6 +583,12 @@ final class CircuitsRenderer {
             glow.position = [0, 0.012, 0]
             holder.addChild(glow)
             visual.glow = glow
+        case .led:
+            let glow = ModelEntity(
+                mesh: .generateSphere(radius: 0.03), materials: [glowMaterials[0]])
+            glow.position = [0, 0.012, 0]
+            holder.addChild(glow)
+            visual.glow = glow
         case .switcher:
             // The lever pivots at the left contact; the tap target is the
             // pivot so the whole arm is pinchable.
@@ -657,6 +690,65 @@ final class CircuitsRenderer {
                 mesh: .generateBox(size: [0.075, 0.016, 0.032], cornerRadius: 0.004),
                 materials: [SimpleMaterial(color: UIColor(white: 0.25, alpha: 1),
                                            roughness: 0.6, isMetallic: false)])
+        case .acSource:
+            let body = ModelEntity(
+                mesh: .generateCylinder(height: 0.02, radius: 0.032),
+                materials: [SimpleMaterial(color: UIColor(red: 0.1, green: 0.5, blue: 0.6, alpha: 1),
+                                           roughness: 0.35, isMetallic: true)])
+            body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            let band = ModelEntity(
+                mesh: .generateCylinder(height: 0.021, radius: 0.012),
+                materials: [UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))])
+            body.addChild(band)
+            return body
+        case .inductor:
+            let body = ModelEntity(
+                mesh: .generateCylinder(height: 0.07, radius: 0.014),
+                materials: [SimpleMaterial(color: UIColor(white: 0.35, alpha: 1),
+                                           roughness: 0.6, isMetallic: false)])
+            body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            for offset in stride(from: -0.024, through: 0.024, by: 0.012) {
+                let coil = ModelEntity(
+                    mesh: .generateCylinder(height: 0.006, radius: 0.019),
+                    materials: [copperMaterial])
+                coil.position = [0, Float(offset), 0]
+                body.addChild(coil)
+            }
+            return body
+        case .led:
+            let base = ModelEntity(
+                mesh: .generateCylinder(height: 0.016, radius: 0.012),
+                materials: [SimpleMaterial(color: UIColor(white: 0.75, alpha: 1),
+                                           roughness: 0.3, isMetallic: true)])
+            var dome = PhysicallyBasedMaterial()
+            dome.baseColor = .init(tint: UIColor(red: 0.9, green: 0.2, blue: 0.15, alpha: 1))
+            dome.roughness = 0.15
+            dome.blending = .transparent(opacity: .init(floatLiteral: 0.75))
+            let cap = ModelEntity(mesh: .generateSphere(radius: 0.013), materials: [dome])
+            cap.position = [0, 0.012, 0]
+            base.addChild(cap)
+            return base
+        case .fuse:
+            var glass = PhysicallyBasedMaterial()
+            glass.baseColor = .init(tint: .white)
+            glass.roughness = 0.1
+            glass.blending = .transparent(opacity: .init(floatLiteral: 0.3))
+            let body = ModelEntity(
+                mesh: .generateCylinder(height: 0.06, radius: 0.012), materials: [glass])
+            body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            let filament = ModelEntity(
+                mesh: .generateCylinder(height: 0.055, radius: 0.0018),
+                materials: [copperMaterial])
+            body.addChild(filament)
+            for sign: Float in [-1, 1] {
+                let cap = ModelEntity(
+                    mesh: .generateCylinder(height: 0.01, radius: 0.0125),
+                    materials: [SimpleMaterial(color: UIColor(white: 0.8, alpha: 1),
+                                               roughness: 0.25, isMetallic: true)])
+                cap.position = [0, sign * 0.03, 0]
+                body.addChild(cap)
+            }
+            return body
         case .wire:
             // A jumper: bare copper rod in an orange insulation sleeve.
             // Generated at the base length; updateVisuals stretches the
@@ -675,6 +767,19 @@ final class CircuitsRenderer {
     }
 
     // MARK: Wires
+
+    /// Eight-step warm↔cool palette for the live voltage gradient.
+    private static let voltageMaterials: [UnlitMaterial] = (0..<8).map { step in
+        let t = Double(step) / 7
+        var material = UnlitMaterial(color: UIColor(
+            red: 0.35 + 0.62 * t,
+            green: 0.5 + 0.18 * sin(t * .pi),
+            blue: 0.95 - 0.65 * t,
+            alpha: 1))
+        material.blending = .transparent(opacity: 0.95)
+        return material
+    }
+    private var wireVoltBuckets: [UUID: Int] = [:]
 
     private func syncWires(_ model: CircuitsModel) {
         let liveIDs = Set(model.wires.map(\.id))
@@ -718,6 +823,19 @@ final class CircuitsRenderer {
             entity.position = (a + b) / 2
             entity.orientation = VectorFieldArrows.rotationFromYAxis(to: direction / length)
             entity.scale = SIMD3(1, length, 1)
+
+            // The wire wears its potential: warm = high, cool = low —
+            // voltage differences readable at a glance across the bench.
+            let span = model.voltageSpan
+            let width = max(span.max - span.min, 0.5)
+            let vA = model.terminalVoltages[wire.from] ?? 0
+            let vB = model.terminalVoltages[wire.to] ?? 0
+            let t = ((vA + vB) / 2 - span.min) / width
+            let bucket = min(max(Int(t * 7.999), 0), 7)
+            if wireVoltBuckets[wire.id] != bucket {
+                wireVoltBuckets[wire.id] = bucket
+                entity.model?.materials = [Self.voltageMaterials[bucket]]
+            }
         }
     }
 

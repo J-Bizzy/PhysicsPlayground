@@ -150,4 +150,53 @@ final class CircuitSolverTests: XCTestCase {
         XCTAssertEqual(small.digit2, 6)
         XCTAssertEqual(small.multiplier, 0)
     }
+
+    /// RL charging: stepping V–R–L follows i(t) = (V/R)(1 − e^(−tR/L))
+    /// to backward-Euler accuracy.
+    func testInductorRLChargingCurve() {
+        let volts = 6.0, r = 10.0, henries = 0.5
+        let dt = 1e-4
+        var iPrev = 0.0
+        var time = 0.0
+        for _ in 0..<2000 {
+            let elements = [
+                CircuitElement(nodeA: 1, nodeB: 0,
+                               kind: .battery(volts: volts, internalResistance: 1e-3)),
+                CircuitElement(nodeA: 1, nodeB: 2, kind: .resistor(ohms: r)),
+                CircuitElement(nodeA: 2, nodeB: 0,
+                               kind: .inductor(henries: henries, previousCurrent: iPrev)),
+            ]
+            let solution = CircuitSolver.solve(elements: elements, nodeCount: 3, timeStep: dt)
+            iPrev = solution.currents[2]
+            time += dt
+        }
+        let expected = volts / r * (1 - exp(-time * r / henries))
+        XCTAssertEqual(iPrev, expected, accuracy: expected * 0.01,
+                       "RL rise follows 1 − e^(−tR/L) within 1%")
+    }
+
+    /// Forward LED: I = (V − Vf)/R exactly; reversed: dark, no current.
+    func testDiodeConductsForwardBlocksReverse() {
+        let forward = [
+            CircuitElement(nodeA: 1, nodeB: 0,
+                           kind: .battery(volts: 5, internalResistance: 1e-3)),
+            CircuitElement(nodeA: 1, nodeB: 2, kind: .resistor(ohms: 220)),
+            CircuitElement(nodeA: 2, nodeB: 0,
+                           kind: .diode(forwardDrop: 2.0, onResistance: 1.0, isConducting: false)),
+        ]
+        let lit = CircuitSolver.solveWithDiodes(elements: forward, nodeCount: 3)
+        let expected = (5.0 - 2.0) / 221.0
+        XCTAssertEqual(lit.solution.currents[2], expected, accuracy: expected * 0.02)
+
+        let reversed = [
+            CircuitElement(nodeA: 1, nodeB: 0,
+                           kind: .battery(volts: 5, internalResistance: 1e-3)),
+            CircuitElement(nodeA: 1, nodeB: 2, kind: .resistor(ohms: 220)),
+            CircuitElement(nodeA: 0, nodeB: 2,
+                           kind: .diode(forwardDrop: 2.0, onResistance: 1.0, isConducting: true)),
+        ]
+        let dark = CircuitSolver.solveWithDiodes(elements: reversed, nodeCount: 3)
+        XCTAssertEqual(abs(dark.solution.currents[2]), 0, accuracy: 1e-6,
+                       "reverse-biased diode carries nothing")
+    }
 }

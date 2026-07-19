@@ -40,6 +40,13 @@ public struct CircuitElement: Sendable, Equatable {
         case conductor
         /// An open switch: no connection at all.
         case open
+        /// Backward-Euler inductor: i = i_prev + (dt/L)·v — RL rise
+        /// follows the real 1 − e^(−tR/L) curve.
+        case inductor(henries: Double, previousCurrent: Double)
+        /// An ideal-ish diode: forward drop + small on-resistance when
+        /// conducting (anode = nodeA), otherwise open. Conduction state
+        /// is found by solveWithDiodes' fixed-point iteration.
+        case diode(forwardDrop: Double, onResistance: Double, isConducting: Bool)
     }
 
     public var nodeA: Int
@@ -83,6 +90,15 @@ public enum CircuitSolver {
             return (1 / switchResistance, 0)
         case .open:
             return (0, 0)
+        case .inductor(let henries, let previousCurrent):
+            let g = timeStep / max(henries, 1e-9)
+            // i_AB = g·v_AB + i_prev  →  Norton injection −i_prev into A.
+            return (g, -previousCurrent)
+        case .diode(let forwardDrop, let onResistance, let isConducting):
+            guard isConducting else { return (0, 0) }
+            let r = max(onResistance, 1e-3)
+            // Same Thévenin→Norton shape as a battery opposing the flow.
+            return (1 / r, forwardDrop / r)
         }
     }
 
@@ -183,11 +199,59 @@ public enum CircuitSolver {
                 powers[index] = vAB * current
             case .open:
                 break
+            case .inductor(let henries, let previousCurrent):
+                let g = timeStep / max(henries, 1e-9)
+                let current = g * vAB + previousCurrent
+                currents[index] = current
+                powers[index] = vAB * current
+            case .diode(let forwardDrop, let onResistance, let isConducting):
+                guard isConducting else { break }
+                let r = max(onResistance, 1e-3)
+                let current = (vAB - forwardDrop) / r
+                currents[index] = current
+                powers[index] = vAB * current
             }
         }
 
         return Solution(nodeVoltages: voltages, currents: currents,
                         voltages: elementVoltages, powers: powers)
+    }
+
+    /// Solves a network containing diodes by fixed-point iteration on
+    /// their conduction states: assume, solve, check each diode against
+    /// its own solution (conducting must carry forward current; blocking
+    /// must see less than the forward drop), repeat until stable. Two
+    /// states per diode and monotone updates make this converge in a
+    /// few passes for the networks this app builds.
+    public static func solveWithDiodes(
+        elements: [CircuitElement],
+        nodeCount: Int,
+        timeStep: Double = 1.0 / 90.0,
+        maxIterations: Int = 8
+    ) -> (solution: Solution, elements: [CircuitElement]) {
+        var working = elements
+        var solution = solve(elements: working, nodeCount: nodeCount, timeStep: timeStep)
+        for _ in 0..<maxIterations {
+            var changed = false
+            for (index, element) in working.enumerated() {
+                guard case .diode(let drop, let r, let conducting) = element.kind else { continue }
+                let vAB = solution.voltages[index]
+                let shouldConduct: Bool
+                if conducting {
+                    shouldConduct = solution.currents[index] > -1e-9
+                } else {
+                    shouldConduct = vAB > drop
+                }
+                if shouldConduct != conducting {
+                    working[index].kind = .diode(
+                        forwardDrop: drop, onResistance: r, isConducting: shouldConduct)
+                    changed = true
+                }
+            }
+            guard changed else { break }
+            solution = solve(elements: working, nodeCount: nodeCount, timeStep: timeStep)
+        }
+        return (solution, working)
     }
 
     // MARK: Resistor color code (the EE garnish)
