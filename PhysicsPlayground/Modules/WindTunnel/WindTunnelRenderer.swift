@@ -139,8 +139,8 @@ final class WindTunnelRenderer {
         // its blades spin with the wind.
         if let fan = try? Entity.load(named: "TunnelFan") {
             fan.name = "fan"
-            fan.position = SIMD3(-Float(WindTunnelModel.halfLength) - 0.18, 0, 0)
-            Grabbable.configure(fan, collisionRadius: 0.34)
+            fan.position = SIMD3(-Float(WindTunnelModel.halfLength) - 0.24, 0, 0)
+            Grabbable.configure(fan, collisionRadius: 0.48)
             var fanAccessibility = AccessibilityComponent()
             fanAccessibility.isAccessibilityElement = true
             fanAccessibility.label = "Wind fan. Its blades spin with the wind speed; carry it anywhere."
@@ -294,7 +294,7 @@ final class WindTunnelRenderer {
 
     /// A random point inside the fan's beam: uniform over the duct
     /// disc (lateral, height), at the fan mouth or anywhere along it.
-    private static let beamRadius = 0.24
+    private static let beamRadius = 0.36
 
     private static func randomBeamPoint(anywhere: Bool) -> (position: SIMD2<Double>, height: Float) {
         let radius = beamRadius * Double.random(in: 0...1).squareRoot()
@@ -455,7 +455,7 @@ final class WindTunnelRenderer {
         // effective radius) grow a bigger red stagnant zone.
         var bucketLines: [[[SIMD3<Float>]]] = Array(repeating: [], count: Self.streamlineColors.count)
         var seeds: [(height: Float, lateral: Double)] = [(0, 0)]
-        for (radius, count) in [(0.08, 6), (0.15, 10), (0.22, 14)] {
+        for (radius, count) in [(0.09, 8), (0.17, 12), (0.26, 16), (0.34, 20)] {
             for index in 0..<count {
                 let phi = 2 * Double.pi * Double(index) / Double(count)
                 seeds.append((Float(radius * sin(phi)), radius * cos(phi)))
