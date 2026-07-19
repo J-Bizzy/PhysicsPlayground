@@ -60,8 +60,17 @@ public enum RoomWalls {
         for wall in walls {
             let s0 = simd_dot(previous - wall.center, wall.normal)
             let s1 = simd_dot(current - wall.center, wall.normal)
-            // The face being approached: the side the ball starts on.
-            let side: Double = s0 >= 0 ? 1 : -1
+            // The face being approached: the side the ball starts on. A
+            // ball sitting exactly ON the plane — where a zero-radius
+            // reflection leaves it — belongs to the side it is moving
+            // toward; classifying it by s0's sign alone would read the
+            // receding ball as striking the back face and undo the bounce.
+            let side: Double
+            if abs(s0) > 1e-12 {
+                side = s0 >= 0 ? 1 : -1
+            } else {
+                side = s1 >= 0 ? 1 : -1
+            }
             let face = side * wall.normal
             let into = simd_dot(velocity, face)
             guard into < 0 else { continue }  // moving away, not striking
@@ -71,8 +80,12 @@ public enum RoomWalls {
 
             let t: Double
             let contact: SIMD3<Double>
-            if p0 >= -1e-9, p1 < 0 {
-                // Clean crossing within this step.
+            if p0 >= -1e-9, p1 <= 1e-12 {
+                // Clean crossing within this step. Landing EXACTLY on
+                // the contact surface counts — an integration step can
+                // end right on the plane (e.g. 5 m/s at 1/240 s lands on
+                // x = 2 to the bit), and "reached" must mean "struck" or
+                // the next step walks through from the inside.
                 t = max(p0, 0) / max(p0 - p1, 1e-12)
                 contact = previous + t * (current - previous)
             } else if p0 < 0, p0 > -radius, p1 < p0 {

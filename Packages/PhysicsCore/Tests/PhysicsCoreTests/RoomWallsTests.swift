@@ -65,6 +65,17 @@ final class RoomWallsTests: XCTestCase {
         XCTAssertNil(hit)
     }
 
+    /// A zero-radius reflection leaves the ball exactly ON the plane;
+    /// the next step, receding, must NOT strike the back face and undo
+    /// the bounce (the trajectory-preview double-hit regression).
+    func testReflectedBallOnThePlaneIsNotStruckAgain() {
+        let hit = RoomWalls.strike(
+            previous: SIMD3(2.0, 1.5, 0), current: SIMD3(1.98, 1.5, 0),
+            velocity: SIMD3(-5, 0, 0), radius: 0, restitution: 1.0,
+            walls: [wall])
+        XCTAssertNil(hit)
+    }
+
     /// The trajectory simulation reflects off walls with the same law
     /// as live flights: elastic wall at x = 2, horizontal launch — the
     /// path never passes the wall and comes back at full speed.
