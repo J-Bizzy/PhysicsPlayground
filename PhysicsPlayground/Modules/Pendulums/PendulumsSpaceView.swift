@@ -248,6 +248,9 @@ struct PendulumsGravityPod: View {
                 Slider(value: $model.gravity, in: PendulumsModel.gravityRange)
                     .accessibilityLabel("Gravity")
             }
+            Toggle("Friction", isOn: $model.frictionOn)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("Off: ideal pendulums that swing forever")
             if !model.insightText.isEmpty {
                 Text(model.insightText)
                     .font(DesignTokens.TypeScale.footnote)

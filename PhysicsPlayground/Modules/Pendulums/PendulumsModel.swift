@@ -254,6 +254,16 @@ final class PendulumsModel {
     nonisolated static let substep = 1.0 / 720.0
     private var accumulator = 0.0
 
+    /// The friction kill-switch: off = an ideal pendulum that swings
+    /// forever (per-pendulum damping is bypassed, not forgotten).
+    var frictionOn = true {
+        didSet {
+            insightText = frictionOn
+                ? "Air resistance is back — each swing hands a little energy to the air, and the amplitude decays."
+                : "Frictionless: an ideal pendulum. The energy just trades between height and speed — it will swing forever."
+        }
+    }
+
     func step(dt: Double) {
         guard !isPaused, timeScale > 0 else { return }
         accumulator += min(dt, 0.1) * timeScale
@@ -266,7 +276,8 @@ final class PendulumsModel {
                 pendulums[index].state = SphericalPendulum.step(
                     pendulums[index].state, dt: substep,
                     length: pendulums[index].length, gravity: gravity,
-                    mass: pendulums[index].mass, damping: pendulums[index].damping)
+                    mass: pendulums[index].mass,
+                    damping: frictionOn ? pendulums[index].damping : 0)
             }
         }
     }
@@ -284,7 +295,8 @@ final class PendulumsModel {
             for _ in 0..<stepsPerPoint {
                 state = SphericalPendulum.step(
                     state, dt: Self.substep, length: pendulum.length,
-                    gravity: gravity, mass: pendulum.mass, damping: pendulum.damping)
+                    gravity: gravity, mass: pendulum.mass,
+                    damping: frictionOn ? pendulum.damping : 0)
             }
             path.append(pendulum.pivot + state.position)
         }
