@@ -144,14 +144,15 @@ final class HubScene {
     /// real bounds — centered on its middle and sized to a shared
     /// footprint — so every exhibit sits dead-center on its ring slot.
     private static let vignetteAssets: [String: String] = [
-        "electrostatics": "HubDipole",
-        "kinematics": "LauncherBarrel",
-        "gravitylab": "HubOrbit",
-        "waves": "WaveSpeaker",
-        "windtunnel": "TunnelFan",
-        "circuits": "CircuitBulb",
-        "pendulums": "HubPendulum",
-        "springs": "HubSpring",
+        "electrostatics": "HubElectric",
+        "kinematics": "HubProjectile",
+        "gravitylab": "HubGravity",
+        "waves": "HubWaves",
+        "windtunnel": "HubWind",
+        "circuits": "HubCircuit",
+        "pendulums": "HubPendulums",
+        "springs": "HubSprings",
+        "optics": "HubOptics",
     ]
     /// Apparent exhibit size before the shared vignette scale.
     private static let vignetteTargetSize: Float = 0.13
