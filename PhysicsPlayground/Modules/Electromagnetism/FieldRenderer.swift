@@ -307,6 +307,22 @@ final class FieldRenderer {
                 material.blending = .transparent(opacity: .init(floatLiteral: 0.35))
                 let plate = ModelEntity(mesh: mesh, materials: [material])
                 plate.name = isPositive ? "plate-0" : "plate-1"
+                // The plates wear the same sign glyphs as the charges.
+                let signPivot = Entity()
+                signPivot.components.set(BillboardComponent())
+                signPivot.position = [0, Float(FieldModel.plateSize) * 0.28, 0]
+                let strokeMaterial = UnlitMaterial(color: UIColor(white: 1, alpha: 0.9))
+                let horizontal = ModelEntity(
+                    mesh: .generateBox(size: [0.05, 0.011, 0.004], cornerRadius: 0.002),
+                    materials: [strokeMaterial])
+                signPivot.addChild(horizontal)
+                if isPositive {
+                    let vertical = ModelEntity(
+                        mesh: .generateBox(size: [0.011, 0.05, 0.004], cornerRadius: 0.002),
+                        materials: [strokeMaterial])
+                    signPivot.addChild(vertical)
+                }
+                plate.addChild(signPivot)
                 Grabbable.configure(plate, collisionRadius: 0.26)
                 var accessibility = AccessibilityComponent()
                 accessibility.isAccessibilityElement = true

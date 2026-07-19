@@ -2,11 +2,14 @@
 //  ModuleOrbControls.swift
 //  Physics Playground — Shell
 //
-//  The three floating orb controls every module inherits, hovering
+//  The four floating orb controls every module inherits, hovering
 //  low in front of the user: a BACK orb (chevron) that returns to
 //  the exhibit ring, a PAUSE orb (bars/triangle) that freezes the
-//  module's physics in time, and a PODS orb (tiles) that clears the
-//  floating control pods away. Glass spheres with 3D icons
+//  module's physics in time, a PODS orb (tiles) that clears the
+//  floating control pods away, and a RESET orb (ring-arrow) that
+//  needs two pinches — the first arms it red for three seconds, the
+//  second restores the module's opening scene, so a stray gaze-pinch
+//  can never wipe a build. Glass spheres with 3D icons
 //  billboarded toward the user; the system hover effect lights them
 //  on gaze, pinch activates.
 //
@@ -23,6 +26,7 @@ struct ModuleOrbControlsView: View {
     @Environment(AppModel.self) private var appModel
     @State private var scene = OrbScene()
     @State private var showPodTip = !UserDefaults.standard.bool(forKey: "hint.pods.dismissed")
+    @State private var resetArmedUntil = Date.distantPast
 
     var body: some View {
         RealityView { content, attachments in
@@ -36,6 +40,7 @@ struct ModuleOrbControlsView: View {
             scene.subscription = content.subscribe(to: SceneEvents.Update.self) { _ in
                 scene.showPausedState(module.isPaused())
                 scene.showPodsState(appModel.controlPodsVisible)
+                scene.showResetArmed(Date() < resetArmedUntil)
             }
         } attachments: {
             Attachment(id: "pod-tip") {
@@ -72,6 +77,16 @@ struct ModuleOrbControlsView: View {
                         appModel.controlPodsVisible.toggle()
                         SoundPalette.play(.pop, on: scene.podsOrb, volume: 0.5)
                         scene.pulse(scene.podsOrb)
+                    case .reset:
+                        if Date() < resetArmedUntil {
+                            resetArmedUntil = .distantPast
+                            module.reset()
+                            SoundPalette.play(.chime, on: scene.resetOrb, volume: 0.6)
+                        } else {
+                            resetArmedUntil = Date().addingTimeInterval(3)
+                            SoundPalette.play(.pop, on: scene.resetOrb, volume: 0.5)
+                        }
+                        scene.pulse(scene.resetOrb)
                     case .back:
                         SoundPalette.play(.pop, on: scene.backOrb, volume: 0.5)
                         scene.pulse(scene.backOrb)
@@ -91,7 +106,7 @@ struct ModuleOrbControlsView: View {
 @MainActor
 @Observable
 final class OrbScene {
-    enum Action { case pause, back, pods }
+    enum Action { case pause, back, pods, reset }
 
     let root = Entity()
     var subscription: EventSubscription?
@@ -99,12 +114,14 @@ final class OrbScene {
     private(set) var pauseOrb = ModelEntity()
     private(set) var backOrb = ModelEntity()
     private(set) var podsOrb = ModelEntity()
+    private(set) var resetOrb = ModelEntity()
     private var pauseBars = Entity()
     private var playTriangle = Entity()
     private var podTiles = Entity()
     private var podTileSolo = Entity()
     private var showingPaused = false
     private var showingPods = true
+    private var showingResetArmed = false
 
     private static let orbRadius: Float = 0.05
     private static let iconColor = UIColor(white: 0.95, alpha: 1)
@@ -124,6 +141,11 @@ final class OrbScene {
             name: "orb-pods",
             at: SIMD3(0.22, 0.85, -0.72),
             accessibilityLabel: "Show or hide the floating control pods"
+        )
+        resetOrb = makeOrb(
+            name: "orb-reset",
+            at: SIMD3(0.44, 0.85, -0.72),
+            accessibilityLabel: "Reset the module. Pinch once to arm, again to reset."
         )
 
         // Back: a chevron pointing left.
@@ -183,6 +205,39 @@ final class OrbScene {
         podsIcon.addChild(podTiles)
         podsIcon.addChild(podTileSolo)
         attachIcon(podsIcon, to: podsOrb)
+
+        // Reset: a ring with a little arrowhead — the universal ↺.
+        let resetIcon = Entity()
+        // Ring built from short segments (RealityKit has no torus).
+        let segmentMesh = MeshResource.generateBox(
+            size: [0.0105, 0.0055, 0.0055], cornerRadius: 0.0025)
+        for step in 0..<10 {
+            let angle = Float(step) / 10 * 2 * .pi
+            let segment = ModelEntity(mesh: segmentMesh, materials: [iconMaterial])
+            segment.position = [0.0155 * cos(angle), 0.0155 * sin(angle), 0]
+            segment.orientation = simd_quatf(angle: angle + .pi / 2, axis: [0, 0, 1])
+            resetIcon.addChild(segment)
+        }
+        let head = ModelEntity(
+            mesh: .generateCone(height: 0.012, radius: 0.0065),
+            materials: [iconMaterial])
+        head.position = [-0.004, 0.0155, 0]
+        head.orientation = simd_quatf(angle: -.pi / 2, axis: [0, 0, 1])
+        resetIcon.addChild(head)
+        attachIcon(resetIcon, to: resetOrb)
+    }
+
+    /// Armed: the orb warms to red until the confirming pinch (or the
+    /// three-second window closes).
+    func showResetArmed(_ armed: Bool) {
+        guard armed != showingResetArmed else { return }
+        showingResetArmed = armed
+        var glass = PhysicallyBasedMaterial()
+        glass.baseColor = .init(tint: armed
+            ? UIColor(red: 1, green: 0.32, blue: 0.28, alpha: 1) : .white)
+        glass.roughness = 0.12
+        glass.blending = .transparent(opacity: .init(floatLiteral: armed ? 0.5 : 0.22))
+        resetOrb.model?.materials = [glass]
     }
 
     private func makeOrb(name: String, at position: SIMD3<Float>,
@@ -238,6 +293,7 @@ final class OrbScene {
             if candidate.name == "orb-pause" { return .pause }
             if candidate.name == "orb-back" { return .back }
             if candidate.name == "orb-pods" { return .pods }
+            if candidate.name == "orb-reset" { return .reset }
             current = candidate.parent
         }
         return nil

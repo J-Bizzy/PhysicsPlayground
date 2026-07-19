@@ -196,7 +196,11 @@ final class CircuitsRenderer {
     /// than the observation render loop — a steady DC circuit gave
     /// withObservationTracking nothing it reliably re-fired on, which
     /// froze the flow animation whenever nothing else was changing.
+    /// Drives the armed-terminal pulse.
+    private var pendingPulsePhase = 0.0
+
     func tick(dt: Double, model: CircuitsModel) {
+        pendingPulsePhase += dt * 6
         render(model, dt: dt)
     }
 
@@ -263,7 +267,10 @@ final class CircuitsRenderer {
                 terminal.position = SIMD3(sign * half, 0, 0)
                 let isPending = model.pendingTerminal ==
                     CircuitsModel.Terminal(componentID: component.id, end: end)
-                terminal.scale = SIMD3(repeating: isPending ? 1.7 : 1.0)
+                // The armed terminal breathes so there's never any doubt
+                // which end the next pinch will wire from.
+                terminal.scale = SIMD3(repeating: isPending
+                    ? Float(1.6 + 0.35 * sin(pendingPulsePhase)) : 1.0)
 
                 let beingPulled = stretchingHandle ==
                     CircuitsModel.Terminal(componentID: component.id, end: end)
