@@ -130,7 +130,7 @@ struct PendulumsBenchPod: View {
     @Environment(PendulumsModel.self) private var model
 
     var body: some View {
-        ControlPod(title: "Bench", icon: "metronome", tint: .indigo) {
+        ControlPod(title: "Bench", icon: "metronome", tint: DesignTokens.Palette.pendulumsAccent) {
             HStack(spacing: 8) {
                 Button {
                     model.addPendulum()
@@ -164,7 +164,7 @@ struct PendulumsTimePod: View {
     var body: some View {
         @Bindable var model = model
 
-        ControlPod(title: "Time", icon: "clock", tint: .indigo, width: 330) {
+        ControlPod(title: "Time", icon: "clock", tint: DesignTokens.Palette.pendulumsAccent, width: 330) {
             HStack(spacing: 5) {
                 Button {
                     model.isPaused.toggle()
@@ -180,7 +180,7 @@ struct PendulumsTimePod: View {
                         model.isPaused = false
                     }
                     .buttonStyle(.bordered)
-                    .tint(model.timeScale == scale && !model.isPaused ? .indigo : nil)
+                    .tint(model.timeScale == scale && !model.isPaused ? DesignTokens.Palette.pendulumsAccent : nil)
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                 }
             }
@@ -195,7 +195,7 @@ struct PendulumsViewPod: View {
     var body: some View {
         @Bindable var model = model
 
-        ControlPod(title: "View", icon: "eye", tint: .indigo, width: 310) {
+        ControlPod(title: "View", icon: "eye", tint: DesignTokens.Palette.pendulumsAccent, width: 310) {
             Picker("Trail", selection: $model.trailMode) {
                 Text("Off").tag(PendulumsModel.TrailMode.off)
                 Text("Short").tag(PendulumsModel.TrailMode.short)
@@ -223,7 +223,7 @@ struct PendulumsGravityPod: View {
     var body: some View {
         @Bindable var model = model
 
-        ControlPod(title: "Gravity", icon: "arrow.down.circle", tint: .indigo) {
+        ControlPod(title: "Gravity", icon: "arrow.down.circle", tint: DesignTokens.Palette.pendulumsAccent) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("g = \(model.gravity, specifier: "%.2f") m/s²")
                     .font(DesignTokens.TypeScale.control.monospacedDigit())

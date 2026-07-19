@@ -19,7 +19,7 @@ enum PendulumsModule {
             title: "Pendulums",
             blurb: "Grab a steel bob off its beam and throw it — full nonlinear swings, energy trading between bars, and five-pendulum resonance.",
             icon: "metronome.fill",
-            accent: .indigo,
+            accent: DesignTokens.Palette.pendulumsAccent,
             firstRunHint: "The bob is already swinging — grab it and throw it sideways. While you hold it, the faint line shows the swing you're about to launch. Pinch a bob to select it and read its numbers.",
             legend: legend,
             realWorld: story,

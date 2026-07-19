@@ -18,7 +18,7 @@ enum OpticsModule {
             title: "Ray Optics",
             blurb: "A laser bench in mid-air: slide lenses and mirrors along the rail and watch the thin-lens equation draw itself in light.",
             icon: "rays",
-            accent: .orange,
+            accent: DesignTokens.Palette.opticsAccent,
             firstRunHint: "The beam is live — drag the lens along the rail and watch the focus chase it. Switch to a point source and the gold marker sits exactly where 1/f = 1/dₒ + 1/dᵢ predicts. Add mirrors and screens from the panel.",
             legend: legend,
             realWorld: story,

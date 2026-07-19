@@ -96,6 +96,9 @@ enum DesignTokens {
         static let wavesAccent = Color.cyan
         static let windAccent = Color.mint
         static let circuitsAccent = Color.green
+        static let pendulumsAccent = Color.purple
+        static let springsAccent = Color.teal
+        static let opticsAccent = Color(red: 1.0, green: 0.42, blue: 0.38)
     }
 
     // MARK: Panel metrics

@@ -51,7 +51,7 @@ struct GravityLabSpaceView: View {
         } attachments: {
             Attachment(id: "pod-time") {
                 ControlPod(title: "Time", icon: "clock",
-                           tint: .orange, width: 460) {
+                           tint: DesignTokens.Palette.gravityAccent, width: 460) {
                     GravityLabTimePanel()
                         .environment(model)
                 }

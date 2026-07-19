@@ -18,7 +18,7 @@ enum SpringsModule {
             title: "Springs",
             blurb: "Pull a block on a coiled spring — Hooke's law live, energy bars trading, a scrolling motion graph, and two coupled masses swapping energy.",
             icon: "alternatingcurrent",
-            accent: .teal,
+            accent: DesignTokens.Palette.springsAccent,
             firstRunHint: "Pull the block along its rail and let go — the coils spread with the true extension and the ghost blocks mark the turning points you'll reach. Try Coupled ×2 and pull one block: watch its energy drain into the other and slosh back.",
             legend: legend,
             realWorld: story,

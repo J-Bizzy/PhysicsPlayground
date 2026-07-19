@@ -103,7 +103,7 @@ struct OpticsBenchPod: View {
     var body: some View {
         @Bindable var model = model
 
-        ControlPod(title: "Bench", icon: "camera.aperture", tint: .green) {
+        ControlPod(title: "Bench", icon: "camera.aperture", tint: DesignTokens.Palette.opticsAccent) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 6)], spacing: 6) {
                 ForEach(OpticsModel.ElementKind.allCases, id: \.rawValue) { kind in
                     Button(kind.displayName) {
@@ -134,7 +134,7 @@ struct OpticsSelectedPod: View {
     @Environment(OpticsModel.self) private var model
 
     var body: some View {
-        ControlPod(title: "Selected", icon: "viewfinder", tint: .green) {
+        ControlPod(title: "Selected", icon: "viewfinder", tint: DesignTokens.Palette.opticsAccent) {
             if let selected = model.selected {
                 if selected.kind == .convergingLens || selected.kind == .divergingLens {
                     VStack(alignment: .leading, spacing: 4) {

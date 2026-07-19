@@ -121,14 +121,14 @@ struct SpringsApparatusPod: View {
     @Environment(SpringsModel.self) private var model
 
     var body: some View {
-        ControlPod(title: "Apparatus", icon: "wrench.and.screwdriver", tint: .teal) {
+        ControlPod(title: "Apparatus", icon: "wrench.and.screwdriver", tint: DesignTokens.Palette.springsAccent) {
             HStack(spacing: 8) {
                 Button("Single") { model.setMode(.single) }
                     .buttonStyle(.bordered)
-                    .tint(model.mode == .single ? .teal : nil)
+                    .tint(model.mode == .single ? DesignTokens.Palette.springsAccent : nil)
                 Button("Coupled ×2") { model.setMode(.coupled) }
                     .buttonStyle(.bordered)
-                    .tint(model.mode == .coupled ? .teal : nil)
+                    .tint(model.mode == .coupled ? DesignTokens.Palette.springsAccent : nil)
             }
             .font(DesignTokens.TypeScale.footnote)
             HStack(spacing: 8) {
@@ -138,14 +138,14 @@ struct SpringsApparatusPod: View {
                     Label("Rail", systemImage: "arrow.left.and.right")
                 }
                 .buttonStyle(.bordered)
-                .tint(model.orientation == .horizontal ? .teal : nil)
+                .tint(model.orientation == .horizontal ? DesignTokens.Palette.springsAccent : nil)
                 Button {
                     model.setOrientation(.vertical)
                 } label: {
                     Label("Hanging", systemImage: "arrow.down")
                 }
                 .buttonStyle(.bordered)
-                .tint(model.orientation == .vertical ? .teal : nil)
+                .tint(model.orientation == .vertical ? DesignTokens.Palette.springsAccent : nil)
                 .disabled(model.mode == .coupled)
             }
             .font(DesignTokens.TypeScale.footnote)
@@ -164,7 +164,7 @@ struct SpringsTimePod: View {
     var body: some View {
         @Bindable var model = model
 
-        ControlPod(title: "Time", icon: "clock", tint: .teal, width: 300) {
+        ControlPod(title: "Time", icon: "clock", tint: DesignTokens.Palette.springsAccent, width: 300) {
             HStack(spacing: 5) {
                 Button {
                     model.isPaused.toggle()
@@ -178,7 +178,7 @@ struct SpringsTimePod: View {
                         model.isPaused = false
                     }
                     .buttonStyle(.bordered)
-                    .tint(model.timeScale == scale && !model.isPaused ? .teal : nil)
+                    .tint(model.timeScale == scale && !model.isPaused ? DesignTokens.Palette.springsAccent : nil)
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                 }
             }
@@ -193,7 +193,7 @@ struct SpringsGraphPod: View {
     var body: some View {
         @Bindable var model = model
 
-        ControlPod(title: "Graph", icon: "chart.xyaxis.line", tint: .teal) {
+        ControlPod(title: "Graph", icon: "chart.xyaxis.line", tint: DesignTokens.Palette.springsAccent) {
             Picker("Graph", selection: $model.graphMode) {
                 Text("x·t").tag(SpringsModel.GraphMode.position)
                 Text("v·t").tag(SpringsModel.GraphMode.velocity)
@@ -220,7 +220,7 @@ struct SpringsParametersPod: View {
     var body: some View {
         @Bindable var model = model
 
-        ControlPod(title: "Parameters", icon: "slider.horizontal.3", tint: .teal) {
+        ControlPod(title: "Parameters", icon: "slider.horizontal.3", tint: DesignTokens.Palette.springsAccent) {
             slider("Stiffness k", $model.stiffness,
                    SpringsModel.stiffnessRange, "%.0f N/m")
             slider("Mass", $model.mass, SpringsModel.massRange, "%.1f kg")

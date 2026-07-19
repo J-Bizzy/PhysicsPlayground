@@ -104,7 +104,7 @@ struct WavesPod: View {
     var body: some View {
         @Bindable var model = model
 
-        ControlPod(title: "Waves", icon: "waveform", tint: .cyan) {
+        ControlPod(title: "Waves", icon: "waveform", tint: DesignTokens.Palette.wavesAccent) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Frequency: \(model.frequency, specifier: "%.2f") Hz   λ = \(model.wavelength * 100, specifier: "%.1f") cm")
                     .font(DesignTokens.TypeScale.control.monospacedDigit())
@@ -125,7 +125,7 @@ struct WavesTimePod: View {
     var body: some View {
         @Bindable var model = model
 
-        ControlPod(title: "Time", icon: "clock", tint: .cyan) {
+        ControlPod(title: "Time", icon: "clock", tint: DesignTokens.Palette.wavesAccent) {
             HStack(spacing: DesignTokens.Panel.rowSpacing) {
                 Button {
                     model.isPaused.toggle()
