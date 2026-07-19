@@ -89,8 +89,6 @@ final class WindTunnelRenderer {
     /// The frontal radius the USDZ bodies were authored at.
     private static let authoredBodyRadius = 0.06
 
-    private var frameCounter = 0
-
     private struct FlowInputs: Equatable {
         var speed: Double
         var center: SIMD2<Double>
@@ -98,9 +96,15 @@ final class WindTunnelRenderer {
         var circulation: Double
         var show: Bool
         var body: DragBody
+        var mouth: SIMD3<Float>
     }
     private var lastFlowInputs: FlowInputs?
-    private var streamlinesDirty = true
+    /// Background worker for the trace + tube-buffer build; the main
+    /// thread only uploads finished meshes (the EM renderer's pattern).
+    private var streamPipeline: GeometryPipeline<StreamJob, [TubeBuffers]>?
+    /// Where the beam pours from: the fan's face, in section coords —
+    /// carried with the fan wherever it's parked.
+    private var fanMouth = SIMD3<Double>(-WindTunnelModel.halfLength - 0.10, 0, 0)
 
     init() {
         sectionRoot.position = Self.sectionCenter
@@ -209,7 +213,10 @@ final class WindTunnelRenderer {
         particlePool = EntityPool(budget: Self.particleBudget) { container in
             container.addChild(ModelEntity(mesh: particleMesh, materials: [particleMaterial]))
         }
-        let spawns = (0..<Self.particleBudget).map { _ in Self.randomBeamPoint(anywhere: true) }
+        let spawns = (0..<Self.particleBudget).map { _ in
+            Self.randomBeamPoint(anywhere: true,
+                                 mouth: SIMD3(-WindTunnelModel.halfLength - 0.10, 0, 0))
+        }
         particlePositions = spawns.map(\.position)
         particleHeights = spawns.map(\.height)
         particleAges = (0..<Self.particleBudget).map { _ in Double.random(in: 0..<Self.particleLife) }
@@ -281,7 +288,7 @@ final class WindTunnelRenderer {
                 || abs(position.y) > WindTunnelModel.halfWidth
                 || insideCylinder
                 || particleAges[index] > Self.particleLife {
-                let spawn = Self.randomBeamPoint(anywhere: false)
+                let spawn = Self.randomBeamPoint(anywhere: false, mouth: fanMouth)
                 position = spawn.position
                 height = Double(spawn.height)
                 particleAges[index] = 0
@@ -300,13 +307,16 @@ final class WindTunnelRenderer {
     /// disc (lateral, height), at the fan mouth or anywhere along it.
     private static let beamRadius = 0.36
 
-    private static func randomBeamPoint(anywhere: Bool) -> (position: SIMD2<Double>, height: Float) {
+    private static func randomBeamPoint(
+        anywhere: Bool, mouth: SIMD3<Double>
+    ) -> (position: SIMD2<Double>, height: Float) {
         let radius = beamRadius * Double.random(in: 0...1).squareRoot()
         let phi = Double.random(in: 0..<(2 * .pi))
         let x = anywhere
-            ? Double.random(in: -WindTunnelModel.halfLength...WindTunnelModel.halfLength)
-            : -WindTunnelModel.halfLength
-        return (SIMD2(x, radius * cos(phi)), Float(radius * sin(phi)))
+            ? Double.random(in: mouth.x...WindTunnelModel.halfLength)
+            : mouth.x
+        return (SIMD2(x, mouth.z + radius * cos(phi)),
+                Float(mouth.y + radius * sin(phi)))
     }
 
 
@@ -317,7 +327,10 @@ final class WindTunnelRenderer {
     }
 
     private func render(_ model: WindTunnelModel) {
-        frameCounter &+= 1
+        if let fanEntity {
+            let p = fanEntity.position
+            fanMouth = SIMD3(Double(p.x) + 0.14, Double(p.y), Double(p.z))
+        }
 
         syncTestBody(model)
 
@@ -414,7 +427,7 @@ final class WindTunnelRenderer {
 
     /// Local speed ratio → color bucket: red at stagnation, green in the
     /// free stream, cyan where the body squeezes the air faster.
-    private static func speedBucket(_ ratio: Double) -> Int {
+    private nonisolated static func speedBucket(_ ratio: Double) -> Int {
         switch ratio {
         case ..<0.40: 0
         case ..<0.72: 1
@@ -428,48 +441,58 @@ final class WindTunnelRenderer {
         let inputs = FlowInputs(
             speed: model.windSpeed, center: model.cylinderCenter,
             radius: model.cylinderRadius, circulation: model.circulation,
-            show: model.showStreamlines, body: model.testBody
+            show: model.showStreamlines, body: model.testBody,
+            mouth: SIMD3<Float>(fanMouth)
         )
-        if inputs != lastFlowInputs {
-            lastFlowInputs = inputs
-            streamlinesDirty = true
-        }
-        guard streamlinesDirty, frameCounter % 3 == 0 else { return }
-        streamlinesDirty = false
+        guard inputs != lastFlowInputs else { return }
+        lastFlowInputs = inputs
 
         guard model.showStreamlines else {
             for bucket in streamlineBuckets { bucket.model = nil }
             return
         }
+        if streamPipeline == nil {
+            streamPipeline = GeometryPipeline(
+                compute: { Self.computeStreamlines($0) },
+                apply: { [weak self] in self?.applyStreamlines($0) }
+            )
+        }
+        streamPipeline?.submit(StreamJob(
+            flow: model.visualFlow,
+            bodyField: model.bodyObstacles,
+            isCylinder: model.testBody == .cylinder,
+            windSpeed: model.windSpeed,
+            mouth: fanMouth
+        ))
+    }
 
-        let flow = model.visualFlow
-        let bodyField = model.bodyObstacles
-        let isCylinder = model.testBody == .cylinder
-        let uniformWind = SIMD3(model.windSpeed, 0, 0)
+    private nonisolated struct StreamJob: Sendable {
+        var flow: CylinderFlow
+        var bodyField: ObstacleField
+        var isCylinder: Bool
+        var windSpeed: Double
+        var mouth: SIMD3<Double>
+    }
 
+    /// The full trace + tube-buffer build, off the main thread: a dense
+    /// bundle seeded at the fan's face — the exact 2D solution for the
+    /// cylinder, a 3D wrap through the body silhouette for everything
+    /// else — split into speed-colored runs.
+    private nonisolated static func computeStreamlines(_ job: StreamJob) -> [TubeBuffers] {
         var config = StreamlineTracer.Config()
         config.boundsCenter = .zero
-        config.boundsRadius = 2.2
-        if isCylinder {
+        config.boundsRadius = 2.4
+        if job.isCylinder {
             config.stepSize = 0.01
-            config.maxSteps = 300
-            config.stopCenters = [SIMD3(flow.center.x, 0, flow.center.y)]
-            config.stopRadius = flow.radius * 1.01
+            config.maxSteps = 340
+            config.stopCenters = [SIMD3(job.flow.center.x, 0, job.flow.center.y)]
+            config.stopRadius = job.flow.radius * 1.01
         } else {
-            // 3D wrap around the body silhouette: coarser steps keep the
-            // doubled bundle affordable.
-            config.stepSize = 0.02
-            config.maxSteps = 140
+            config.stepSize = 0.024
+            config.maxSteps = 130
         }
 
-        // A dense cylindrical bundle matching the fan's outlet: a center
-        // ray plus concentric rings of seeds across the duct. For the
-        // cylinder the lines ride the exact 2D solution; for every other
-        // body they integrate in full 3D through the body's sphere
-        // silhouette — wrapping tight over the shape and tapering back
-        // behind it, with color following the true local speed (red
-        // where the air stalls against the nose).
-        var bucketLines: [[[SIMD3<Float>]]] = Array(repeating: [], count: Self.streamlineColors.count)
+        var bucketLines: [[[SIMD3<Float>]]] = Array(repeating: [], count: 5)
         var seeds: [(height: Float, lateral: Double)] = [(0, 0)]
         for (radius, count) in [(0.045, 6), (0.09, 9), (0.135, 12), (0.18, 15),
                                 (0.225, 17), (0.27, 19), (0.315, 21), (0.355, 23)] {
@@ -478,11 +501,13 @@ final class WindTunnelRenderer {
                 seeds.append((Float(radius * sin(phi)), radius * cos(phi)))
             }
         }
+        let uniformWind = SIMD3(job.windSpeed, 0, 0)
         for seedSpec in seeds {
             let line: [SIMD3<Double>]
             let localRatio: (SIMD3<Double>) -> Double
-            if isCylinder {
-                let seed = SIMD3(-WindTunnelModel.halfLength + 0.02, 0, seedSpec.lateral)
+            if job.isCylinder {
+                let seed = SIMD3(job.mouth.x + 0.02, 0, job.mouth.z + seedSpec.lateral)
+                let flow = job.flow
                 line = StreamlineTracer.streamline(
                     from: seed, sign: 1,
                     field: { point in
@@ -490,13 +515,15 @@ final class WindTunnelRenderer {
                         return SIMD3(v.x, 0, v.y)
                     },
                     config: config
-                ).map { SIMD3($0.x, Double(seedSpec.height), $0.z) }
+                ).map { SIMD3($0.x, job.mouth.y + Double(seedSpec.height), $0.z) }
                 localRatio = { point in
-                    flow.speed(at: SIMD2(point.x, point.z)) / max(model.windSpeed, 1e-9)
+                    flow.speed(at: SIMD2(point.x, point.z)) / max(job.windSpeed, 1e-9)
                 }
             } else {
-                let seed = SIMD3(-WindTunnelModel.halfLength + 0.02,
-                                 Double(seedSpec.height), seedSpec.lateral)
+                let seed = SIMD3(job.mouth.x + 0.02,
+                                 job.mouth.y + Double(seedSpec.height),
+                                 job.mouth.z + seedSpec.lateral)
+                let bodyField = job.bodyField
                 line = StreamlineTracer.streamline(
                     from: seed, sign: 1,
                     field: { bodyField.deflected(uniformWind, at: $0) },
@@ -504,7 +531,7 @@ final class WindTunnelRenderer {
                 )
                 localRatio = { point in
                     simd_length(bodyField.deflected(uniformWind, at: point))
-                        / max(model.windSpeed, 1e-9)
+                        / max(job.windSpeed, 1e-9)
                 }
             }
             guard line.count > 1 else { continue }
@@ -526,9 +553,12 @@ final class WindTunnelRenderer {
             }
             if run.count > 1 { bucketLines[runBucket].append(run) }
         }
+        return bucketLines.map { TubeMesh.buffers(lines: $0, radius: 0.0016, sides: 3) }
+    }
 
+    private func applyStreamlines(_ buffers: [TubeBuffers]) {
         for (index, entity) in streamlineBuckets.enumerated() {
-            if let mesh = TubeMesh.tube(lines: bucketLines[index], radius: 0.0016, sides: 3) {
+            if index < buffers.count, let mesh = TubeMesh.mesh(from: buffers[index]) {
                 var material = UnlitMaterial(color: Self.streamlineColors[index])
                 material.blending = .transparent(opacity: 0.8)
                 entity.model = ModelComponent(mesh: mesh, materials: [material])
