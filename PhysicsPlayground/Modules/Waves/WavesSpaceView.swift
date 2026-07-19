@@ -36,14 +36,15 @@ struct WavesSpaceView: View {
             }
 
             renderer.subscriptions.append(
-                content.subscribe(to: SceneEvents.Update.self) { event in
+                content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.step(dt: event.deltaTime)
+                    renderer?.tick(model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                 }
             )
 
-            renderer.startObserving(model)
+            renderer.tick(model)
             self.renderer = renderer
         } attachments: {
             Attachment(id: "pod-waves") {

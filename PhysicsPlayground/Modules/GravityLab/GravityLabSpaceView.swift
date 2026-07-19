@@ -41,15 +41,16 @@ struct GravityLabSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.step(dt: event.deltaTime)
-                    // Ticked here (not in the render loop) so the field
-                    // keeps flowing even while the simulation is paused.
+                    renderer?.tick(model)
+                    // Separate from the tick so the field keeps flowing
+                    // even while the simulation is paused.
                     renderer?.tickFieldParticles(dt: event.deltaTime, model: model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                 }
             )
 
-            renderer.startObserving(model)
+            renderer.tick(model)
             self.renderer = renderer
         } attachments: {
             Attachment(id: "pod-time") {

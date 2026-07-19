@@ -33,6 +33,11 @@ final class OpticsRenderer {
     private var visuals: [UUID: ElementVisual] = [:]
 
     private let rayEntity = ModelEntity()
+    private let rayMaterial: UnlitMaterial = {
+        var material = UnlitMaterial(color: UIColor(red: 1, green: 0.32, blue: 0.26, alpha: 1))
+        material.blending = .transparent(opacity: 0.85)
+        return material
+    }()
     private let imageMarker: ModelEntity
     private var lastSnapshot: String?
 
@@ -213,9 +218,7 @@ final class OpticsRenderer {
         }
         syncScreenSpot(model)
         if let mesh = TubeMesh.tube(lines: lines, radius: 0.0018, sides: 3) {
-            var material = UnlitMaterial(color: UIColor(red: 1, green: 0.32, blue: 0.26, alpha: 1))
-            material.blending = .transparent(opacity: 0.85)
-            rayEntity.model = ModelComponent(mesh: mesh, materials: [material])
+            rayEntity.model = ModelComponent(mesh: mesh, materials: [rayMaterial])
         } else {
             rayEntity.model = nil
         }

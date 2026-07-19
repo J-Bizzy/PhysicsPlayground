@@ -122,6 +122,11 @@ final class PendulumsRenderer {
 
     // Ghost prediction while grabbed.
     private let ghostEntity = ModelEntity()
+    private let ghostMaterial: UnlitMaterial = {
+        var material = UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))
+        material.blending = .transparent(opacity: 0.28)
+        return material
+    }()
     private var ghostCounter = 0
 
     private let steelMaterial = SimpleMaterial(
@@ -408,9 +413,7 @@ final class PendulumsRenderer {
         }
         let line = path.map { SIMD3<Float>($0) }
         if let mesh = TubeMesh.tube(lines: [line], radius: 0.0035, sides: 3) {
-            var material = UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))
-            material.blending = .transparent(opacity: 0.28)
-            ghostEntity.model = ModelComponent(mesh: mesh, materials: [material])
+            ghostEntity.model = ModelComponent(mesh: mesh, materials: [ghostMaterial])
         }
     }
 }

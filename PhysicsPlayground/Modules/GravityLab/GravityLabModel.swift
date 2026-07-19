@@ -372,18 +372,41 @@ final class GravityLabModel {
 
     var heldBodyID: UUID? { heldID }
 
-    /// Predicted path (sim coordinates) of the held body if released with
-    /// the current hand velocity — the "orbit you're about to create".
-    /// Lookahead matches the scene: ~600 days solar, ~17 days Earth–Moon.
-    func heldPrediction(timestamp: Double = CACurrentMediaTime()) -> [SIMD3<Double>] {
-        guard let heldID, let index = bodies.firstIndex(where: { $0.id == heldID }) else { return [] }
+    /// Everything the held-body orbit prediction needs, packaged so the
+    /// 1200-step n-body integration can run OFF the main thread (the
+    /// renderer's pipeline calls NBody.predictedPath with these).
+    struct PredictionInputs: Sendable {
+        var bodies: [CelestialBody]
+        var index: Int
+        var dt: Double
+        var steps = 1200
+        var pointStride = 6
+        var gravitationalConstant: Double
+    }
+
+    /// Snapshot for the "orbit you're about to create" preview, with the
+    /// current hand velocity substituted on the held body. Lookahead
+    /// matches the scene: ~600 days solar, ~17 days Earth–Moon.
+    func heldPredictionInputs(timestamp: Double = CACurrentMediaTime()) -> PredictionInputs? {
+        guard let heldID, let index = bodies.firstIndex(where: { $0.id == heldID }) else { return nil }
         var snapshot = bodies.map(\.body)
         snapshot[index].velocity = currentHandVelocity(timestamp: timestamp)
-        return NBody.predictedPath(
-            bodies: snapshot, of: index,
+        return PredictionInputs(
+            bodies: snapshot, index: index,
             dt: mode == .solarSystem ? 12 * 3600 : 1200,
-            steps: 1200, pointStride: 6,
             gravitationalConstant: effectiveG
+        )
+    }
+
+    /// The predicted path itself (sim coordinates) — the synchronous
+    /// form the tests pin; the renderer computes the same thing from
+    /// `heldPredictionInputs` on its worker.
+    func heldPrediction(timestamp: Double = CACurrentMediaTime()) -> [SIMD3<Double>] {
+        guard let inputs = heldPredictionInputs(timestamp: timestamp) else { return [] }
+        return NBody.predictedPath(
+            bodies: inputs.bodies, of: inputs.index,
+            dt: inputs.dt, steps: inputs.steps, pointStride: inputs.pointStride,
+            gravitationalConstant: inputs.gravitationalConstant
         )
     }
 

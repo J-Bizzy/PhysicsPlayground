@@ -10,7 +10,12 @@
 //
 //  Frame-rate contract: pools are built once (EntityPool); per-frame work
 //  is transform writes only. The predicted-arc tube rebuilds only when an
-//  aim input actually changes; hoop score text only when a score lands.
+//  aim input actually changes — and its vertex math runs on a
+//  GeometryPipeline worker, so aiming never costs the main thread more
+//  than a mesh upload. Hoop score text rebuilds only when a score lands;
+//  hoop materials are written only when the flash state flips. Ticked
+//  per frame from SceneEvents.Update (observation loops starve during
+//  grabs — house rule since the EM module's device findings).
 //
 //  Grabbable entities are pooled, so each slot's NAME is reassigned to
 //  the flight/ring it currently shows — manipulation events map back to
@@ -66,14 +71,14 @@ final class KinematicsRenderer {
         var appliedID: UUID?
         var appliedScore = -1
         var flashUntil = 0.0
+        var appliedFlashing = false
     }
     private let ringPool: EntityPool<ModelEntity>
     private var ringSlots: [RingSlot] = []
     private let ringMaterial: UnlitMaterial
     private let ringFlashMaterial: UnlitMaterial
 
-    private let renderLoop = RenderLoop()
-    private var model: KinematicsModel?
+    private var arcPipeline: GeometryPipeline<[SIMD3<Float>], TubeBuffers>?
 
     // Change detection: the arc tube only rebuilds when these differ.
     private struct ArcInputs: Equatable {
@@ -201,22 +206,24 @@ final class KinematicsRenderer {
         audioEmitter.components.set(SpatialAudioComponent())
         root.addChild(audioEmitter)
         BallTextures.warmUp()
+
+        arcPipeline = GeometryPipeline(
+            compute: { points in TubeMesh.buffers(lines: [points], radius: 0.004) },
+            apply: { [weak self] in self?.applyArc($0) }
+        )
     }
 
-    // MARK: Render loop
-
-    func startObserving(_ model: KinematicsModel) {
-        self.model = model
-        renderLoop.start { [weak self, weak model] in
-            guard let self, let model else { return }
-            self.render(model)
+    private func applyArc(_ buffers: TubeBuffers) {
+        if let mesh = TubeMesh.mesh(from: buffers) {
+            arcEntity.model = ModelComponent(mesh: mesh, materials: [arcMaterial])
+        } else {
+            arcEntity.model = nil
         }
     }
 
-    private func render(_ model: KinematicsModel) {
-        // Reading the nonce arms re-rendering for the hoop flash fade.
-        _ = model.ringFlashNonce
+    // MARK: Per-frame tick (from SceneEvents.Update)
 
+    func tick(_ model: KinematicsModel) {
         // Fresh procedural textures arrived: reapply ball materials.
         if appliedTextureVersion != BallTextures.version {
             appliedTextureVersion = BallTextures.version
@@ -250,13 +257,10 @@ final class KinematicsRenderer {
             windDirection: model.windDirectionDegrees, projectile: model.projectile
         )
         if arcInputs != lastArcInputs {
-            let points = model.prediction.points.map { SIMD3<Float>($0) }
-            if let mesh = TubeMesh.tube(lines: [points], radius: 0.004) {
-                arcEntity.model = ModelComponent(mesh: mesh, materials: [arcMaterial])
-            } else {
-                arcEntity.model = nil
-            }
             lastArcInputs = arcInputs
+            // The RK4 trace is microseconds (see the model); the tube's
+            // vertex math is what moves to the worker.
+            arcPipeline?.submit(model.prediction.points.map { SIMD3<Float>($0) })
         }
 
         syncFlights(model.flights)
@@ -391,7 +395,11 @@ final class KinematicsRenderer {
                 setScoreText(ringSlots[index].scoreText, score: ring.score)
             }
             let flashing = now < ringSlots[index].flashUntil
-            ringSlots[index].tube.model?.materials = [flashing ? ringFlashMaterial : ringMaterial]
+            if ringSlots[index].appliedFlashing != flashing {
+                ringSlots[index].appliedFlashing = flashing
+                ringSlots[index].tube.model?.materials =
+                    [flashing ? ringFlashMaterial : ringMaterial]
+            }
         }
     }
 

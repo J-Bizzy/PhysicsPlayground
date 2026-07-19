@@ -3,9 +3,10 @@
 //  Physics Playground — Electromagnetism module
 //
 //  Translates electrostatics state into RealityKit entities, built on
-//  RenderKit: RenderLoop (observation-driven re-render), VectorFieldArrows
-//  (pooled arrow grid), GeometryPipeline (background line/shell rebuilds
-//  with coalescing), TubeMesh (field lines), Grabbable (manipulation).
+//  RenderKit: VectorFieldArrows (pooled arrow grid), GeometryPipeline
+//  (background line/shell rebuilds with coalescing), TubeMesh (field
+//  lines), Grabbable (manipulation). Ticked per frame from
+//  SceneEvents.Update.
 //
 //  Frame-rate contract (shared by all simulations): the per-frame path is
 //  tiny — entity transforms only. The arrow grid recomputes just when
@@ -55,7 +56,6 @@ final class FieldRenderer {
     static let arrowSpacing: Float = 0.17
 
     private var model: FieldModel?
-    private let renderLoop = RenderLoop()
     /// Bare arrowhead cones riding the field lines. The line itself is
     /// the shaft — consecutive heads follow the curve, so the arrows bend
     /// with the line instead of laying straight chords over it.

@@ -75,6 +75,35 @@ public enum WaveField {
         return sum
     }
 
+    /// The standing-wave decomposition of the field at one point:
+    ///
+    ///     u(p, t) = c·cos(ωt) − s·sin(ωt)
+    ///
+    /// with c = Σ a·F·sin(k·r + φ) and s = Σ a·F·cos(k·r + φ). All the
+    /// spatial work — distances, falloff, trig — folds into these two
+    /// numbers, so animating the field costs two multiplies per point
+    /// per frame instead of a trig call per source. The identity is
+    /// exact (sin(θ − ωt) expanded), and √(c² + s²) is the envelope —
+    /// both pinned by the unit tests.
+    public static func phasorCoefficients(
+        at point: SIMD3<Double>,
+        sources: [WaveSource],
+        frequency: Double,
+        speed: Double
+    ) -> (c: Double, s: Double) {
+        let k = 2 * .pi * frequency / speed
+        var c = 0.0
+        var s = 0.0
+        for source in sources {
+            let r = simd_distance(point, source.position)
+            let magnitude = source.amplitude * falloff(r)
+            let theta = k * r + source.phase
+            c += magnitude * sin(theta)
+            s += magnitude * cos(theta)
+        }
+        return (c, s)
+    }
+
     // MARK: Steady-state envelope (the interference pattern)
 
     /// Peak oscillation amplitude at `point` — time-independent, computed

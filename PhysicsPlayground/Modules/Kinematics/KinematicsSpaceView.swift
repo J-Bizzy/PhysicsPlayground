@@ -39,18 +39,19 @@ struct KinematicsSpaceView: View {
             // Flight clock: step every rendered frame (simulated time —
             // the model applies the slow-motion scale and pause).
             renderer.subscriptions.append(
-                content.subscribe(to: SceneEvents.Update.self) { event in
+                content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // On device, detected walls flow into the physics.
                     if sensing.isRunning {
                         model.roomWalls = sensing.walls
                     }
                     model.step(dt: event.deltaTime)
+                    renderer?.tick(model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                 }
             )
 
-            renderer.startObserving(model)
+            renderer.tick(model)
             self.renderer = renderer
         } attachments: {
             Attachment(id: "pod-launcher") {

@@ -9,9 +9,12 @@
 //  flash when bodies merge.
 //
 //  Frame-rate contract: pools built once; per-frame work is transform
-//  writes. Trail tubes rebuild staggered (each body at most every 8th
-//  render); the prediction tube rebuilds at most every 4th render while
-//  a body is held.
+//  writes. Every tube — orbit trails, the held-body prediction (a
+//  1200-step n-body integration), and the spacetime grid — is computed
+//  on a GeometryPipeline worker; the main thread only uploads finished
+//  buffers. Materials are created once and cached. Ticked per frame
+//  from SceneEvents.Update (observation loops starve during grabs —
+//  house rule since the EM module's device findings).
 //
 
 import Foundation
@@ -49,7 +52,13 @@ final class GravityLabRenderer {
     private let trailPool: EntityPool<Void>
     private var trailEntities: [ModelEntity] = []
     private var trailBuiltCounts: [Int]
-    private var trailMaterialKeys: [String]
+    private var trailMaterialCache: [String: UnlitMaterial] = [:]
+    private var activeTrailSlots = 0
+    private var trailPipeline: GeometryPipeline<TrailJob, TrailResult>?
+    private var predictionPipeline: GeometryPipeline<PredictionJob, TubeBuffers>?
+    private var predictionActive = false
+    private var gridPipeline: GeometryPipeline<GridJob, TubeBuffers>?
+    private let gridMaterial: UnlitMaterial
 
     private let sunLight = Entity()
     private var sunGlow: ModelEntity!
@@ -69,8 +78,14 @@ final class GravityLabRenderer {
     private var particleAges: [Double] = []
     private var particlesVisible = false
 
-    // Spacetime grid.
-    private static let floorHeight: Float = -0.42
+    // Spacetime grid. Constants live in a plain enum so the background
+    // grid computation can read them without actor hops.
+    private nonisolated enum GridSpec {
+        static let floorHeight: Float = -0.42
+        static let extent: Float = 1.4
+        static let lineCount = 11
+        static let samples = 25
+    }
     private let gridEntity = ModelEntity()
 
     private struct Arrow {
@@ -82,12 +97,14 @@ final class GravityLabRenderer {
     private var accelerationArrow: Arrow!
     private var forceArrow: Arrow!
 
-    private let renderLoop = RenderLoop()
-    private var model: GravityLabModel?
     private var frameCounter = 0
     private var lastMergeNonce = 0
 
     init() {
+        var grid = UnlitMaterial(color: .white)
+        grid.blending = .transparent(opacity: 0.3)
+        gridMaterial = grid
+
         systemRoot.position = Self.systemPosition
         root.addChild(systemRoot)
 
@@ -99,7 +116,7 @@ final class GravityLabRenderer {
             mesh: .generateCylinder(height: 0.006, radius: 0.9),
             materials: [platformMaterial]
         )
-        platform.position = [0, Self.floorHeight, 0]
+        platform.position = [0, GridSpec.floorHeight, 0]
         systemRoot.addChild(platform)
 
         // The spacetime grid (rubber-sheet picture), rebuilt as bodies move.
@@ -164,7 +181,6 @@ final class GravityLabRenderer {
             trailEntities.append(tube)
         }
         trailBuiltCounts = Array(repeating: -1, count: trailPool.budget)
-        trailMaterialKeys = Array(repeating: "", count: trailPool.budget)
         systemRoot.addChild(trailPool.root)
 
         // Held-body orbit prediction.
@@ -218,6 +234,18 @@ final class GravityLabRenderer {
             systemRoot.addChild(marker)
         }
 
+        trailPipeline = GeometryPipeline(
+            compute: { Self.computeTrails($0) },
+            apply: { [weak self] in self?.applyTrails($0) }
+        )
+        predictionPipeline = GeometryPipeline(
+            compute: { Self.computePrediction($0) },
+            apply: { [weak self] in self?.applyPrediction($0) }
+        )
+        gridPipeline = GeometryPipeline(
+            compute: { Self.computeGrid($0) },
+            apply: { [weak self] in self?.applyGrid($0) }
+        )
     }
 
     private var lagrangeMarkers: [ModelEntity] = []
@@ -236,22 +264,14 @@ final class GravityLabRenderer {
         return Arrow(container: container, shaft: shaft, head: head)
     }
 
-    // MARK: Render loop
-
-    func startObserving(_ model: GravityLabModel) {
-        self.model = model
-        renderLoop.start { [weak self, weak model] in
-            guard let self, let model else { return }
-            self.render(model)
-        }
-    }
+    // MARK: Per-frame tick (from SceneEvents.Update)
 
     /// Room coordinates → display coordinates relative to the system center.
     func displayPoint(fromWorld world: SIMD3<Float>) -> SIMD3<Double> {
         SIMD3<Double>(world - Self.systemPosition)
     }
 
-    private func render(_ model: GravityLabModel) {
+    func tick(_ model: GravityLabModel) {
         frameCounter &+= 1
         scale = Float(model.simToDisplay)
 
@@ -367,54 +387,65 @@ final class GravityLabRenderer {
 
     // MARK: Spacetime grid (the rubber-sheet picture — conceptual only)
 
-    private func syncSpacetimeGrid(_ model: GravityLabModel) {
-        let show = model.showSpacetimeGrid
-        platform.isEnabled = !show
-        gridEntity.isEnabled = show
-        // Rebuild at a third of the render rate; bodies barely move per frame.
-        guard show, frameCounter % 3 == 0 else { return }
+    private nonisolated struct GridWell: Sendable {
+        var center: SIMD2<Float>
+        var weight: Float
+    }
 
-        // Well weight ∝ m^¼ — deliberately compressed so planets still dent
-        // the sheet visibly beside the Sun. Conceptual, and labeled so.
-        let maxMass = model.bodies.map(\.body.mass).max() ?? 1
-        let wells: [(center: SIMD2<Float>, weight: Float)] = model.bodies.map { orbiting in
-            let display = SIMD3<Float>(orbiting.body.position) * scale
-            return (SIMD2(display.x, display.z),
-                    Float(pow(orbiting.body.mass / maxMass, 0.25)))
-        }
+    private nonisolated struct GridJob: Sendable {
+        var wells: [GridWell]
+    }
 
+    private nonisolated static func computeGrid(_ job: GridJob) -> TubeBuffers {
         func height(_ x: Float, _ z: Float) -> Float {
             var dip: Float = 0
-            for well in wells {
+            for well in job.wells {
                 let d = simd_length(SIMD2(x, z) - well.center)
                 dip += well.weight / (1 + (d * d) / (0.22 * 0.22))
             }
-            return Self.floorHeight - min(dip * 0.14, 0.2)
+            return GridSpec.floorHeight - min(dip * 0.14, 0.2)
         }
 
-        let extent: Float = 1.4
-        let lineCount = 11
-        let samples = 25
+        let extent = GridSpec.extent
         var lines: [[SIMD3<Float>]] = []
-        lines.reserveCapacity(lineCount * 2)
-        for lineIndex in 0..<lineCount {
-            let offset = -extent + 2 * extent * Float(lineIndex) / Float(lineCount - 1)
+        lines.reserveCapacity(GridSpec.lineCount * 2)
+        for lineIndex in 0..<GridSpec.lineCount {
+            let offset = -extent + 2 * extent * Float(lineIndex) / Float(GridSpec.lineCount - 1)
             var alongX: [SIMD3<Float>] = []
             var alongZ: [SIMD3<Float>] = []
-            for sample in 0..<samples {
-                let t = -extent + 2 * extent * Float(sample) / Float(samples - 1)
+            for sample in 0..<GridSpec.samples {
+                let t = -extent + 2 * extent * Float(sample) / Float(GridSpec.samples - 1)
                 alongX.append(SIMD3(t, height(t, offset), offset))
                 alongZ.append(SIMD3(offset, height(offset, t), t))
             }
             lines.append(alongX)
             lines.append(alongZ)
         }
+        return TubeMesh.buffers(lines: lines, radius: 0.0011, sides: 3)
+    }
 
-        if let mesh = TubeMesh.tube(lines: lines, radius: 0.0011, sides: 3) {
-            var material = UnlitMaterial(color: .white)
-            material.blending = .transparent(opacity: 0.3)
-            gridEntity.model = ModelComponent(mesh: mesh, materials: [material])
+    private func applyGrid(_ buffers: TubeBuffers) {
+        guard gridEntity.isEnabled, let mesh = TubeMesh.mesh(from: buffers) else { return }
+        gridEntity.model = ModelComponent(mesh: mesh, materials: [gridMaterial])
+    }
+
+    private func syncSpacetimeGrid(_ model: GravityLabModel) {
+        let show = model.showSpacetimeGrid
+        platform.isEnabled = !show
+        gridEntity.isEnabled = show
+        // Resubmit at a third of the render rate; bodies barely move per
+        // frame, and the sheet itself is sampled on the worker.
+        guard show, frameCounter % 3 == 0 else { return }
+
+        // Well weight ∝ m^¼ — deliberately compressed so planets still dent
+        // the sheet visibly beside the Sun. Conceptual, and labeled so.
+        let maxMass = model.bodies.map(\.body.mass).max() ?? 1
+        let wells = model.bodies.map { orbiting in
+            let display = SIMD3<Float>(orbiting.body.position) * scale
+            return GridWell(center: SIMD2(display.x, display.z),
+                            weight: Float(pow(orbiting.body.mass / maxMass, 0.25)))
         }
+        gridPipeline?.submit(GridJob(wells: wells))
     }
 
     private func syncLagrangeMarkers(_ model: GravityLabModel) {
@@ -542,50 +573,123 @@ final class GravityLabRenderer {
             color: DesignTokens.Palette.celestialUI(name), roughness: 0.55, isMetallic: false)
     }
 
-    // MARK: Trails
+    // MARK: Trails (vertex math on the pipeline worker)
 
-    private func syncTrails(_ model: GravityLabModel) {
-        for index in 0..<trailPool.budget {
-            guard index < model.bodies.count else {
-                trailEntities[index].model = nil
-                trailBuiltCounts[index] = -1
-                continue
+    private nonisolated struct TrailJob: Sendable {
+        var names: [String]
+        var lines: [[SIMD3<Float>]]
+    }
+
+    private nonisolated struct TrailResult: Sendable {
+        var names: [String]
+        var buffers: [TubeBuffers]
+    }
+
+    private nonisolated static func computeTrails(_ job: TrailJob) -> TrailResult {
+        TrailResult(
+            names: job.names,
+            buffers: job.lines.map { line in
+                line.count >= 2
+                    ? TubeMesh.buffers(lines: [line], radius: 0.0012)
+                    : TubeBuffers()
             }
-            let orbiting = model.bodies[index]
-            // Staggered rebuilds: each body's tube refreshes at most every
-            // 8th render, and only when its trail actually grew.
-            guard (frameCounter + index) % 8 == 0,
-                  orbiting.trail.count != trailBuiltCounts[index] else { continue }
-            trailBuiltCounts[index] = orbiting.trail.count
+        )
+    }
 
-            let points = orbiting.trail.map { SIMD3<Float>($0) * scale }
-            if points.count >= 2, let mesh = TubeMesh.tube(lines: [points], radius: 0.0012) {
-                if trailMaterialKeys[index] != orbiting.body.name {
-                    trailMaterialKeys[index] = orbiting.body.name
-                }
-                var material = UnlitMaterial(color: DesignTokens.Palette.celestialUI(orbiting.body.name))
-                material.blending = .transparent(opacity: 0.5)
-                trailEntities[index].model = ModelComponent(mesh: mesh, materials: [material])
+    private func applyTrails(_ result: TrailResult) {
+        for (index, buffers) in result.buffers.enumerated()
+        where index < trailEntities.count {
+            // A body removed after submission: don't repaint its slot.
+            guard index < activeTrailSlots else { continue }
+            if let mesh = TubeMesh.mesh(from: buffers) {
+                trailEntities[index].model = ModelComponent(
+                    mesh: mesh, materials: [trailMaterial(for: result.names[index])])
             } else {
                 trailEntities[index].model = nil
             }
         }
     }
 
-    // MARK: Held-body prediction
+    private func trailMaterial(for name: String) -> UnlitMaterial {
+        if let cached = trailMaterialCache[name] { return cached }
+        var material = UnlitMaterial(color: DesignTokens.Palette.celestialUI(name))
+        material.blending = .transparent(opacity: 0.5)
+        trailMaterialCache[name] = material
+        return material
+    }
 
-    private func syncPrediction(_ model: GravityLabModel) {
-        guard model.heldBodyID != nil else {
-            predictionEntity.model = nil
-            return
+    private func syncTrails(_ model: GravityLabModel) {
+        activeTrailSlots = min(model.bodies.count, trailPool.budget)
+        for index in activeTrailSlots..<trailPool.budget
+        where trailBuiltCounts[index] != -1 {
+            trailEntities[index].model = nil
+            trailBuiltCounts[index] = -1
         }
+
+        // One coalescing job covers every body; resubmitted at a quarter
+        // of the render rate when any trail actually grew.
         guard frameCounter % 4 == 0 else { return }
-        let points = model.heldPrediction().map { SIMD3<Float>($0) * scale }
-        if points.count >= 2, let mesh = TubeMesh.tube(lines: [points], radius: 0.002) {
+        var changed = false
+        for index in 0..<activeTrailSlots
+        where model.bodies[index].trail.count != trailBuiltCounts[index] {
+            changed = true
+            break
+        }
+        guard changed else { return }
+
+        let scale = self.scale
+        var names: [String] = []
+        var lines: [[SIMD3<Float>]] = []
+        for index in 0..<activeTrailSlots {
+            let orbiting = model.bodies[index]
+            names.append(orbiting.body.name)
+            lines.append(orbiting.trail.map { SIMD3<Float>($0) * scale })
+            trailBuiltCounts[index] = orbiting.trail.count
+        }
+        trailPipeline?.submit(TrailJob(names: names, lines: lines))
+    }
+
+    // MARK: Held-body prediction (n-body integration on the worker)
+
+    private nonisolated struct PredictionJob: Sendable {
+        var inputs: GravityLabModel.PredictionInputs
+        var scale: Float
+    }
+
+    private nonisolated static func computePrediction(_ job: PredictionJob) -> TubeBuffers {
+        let path = NBody.predictedPath(
+            bodies: job.inputs.bodies, of: job.inputs.index,
+            dt: job.inputs.dt, steps: job.inputs.steps,
+            pointStride: job.inputs.pointStride,
+            gravitationalConstant: job.inputs.gravitationalConstant
+        )
+        let points = path.map { SIMD3<Float>($0) * job.scale }
+        guard points.count >= 2 else { return TubeBuffers() }
+        return TubeMesh.buffers(lines: [points], radius: 0.002)
+    }
+
+    private func applyPrediction(_ buffers: TubeBuffers) {
+        guard predictionActive else { return }
+        if let mesh = TubeMesh.mesh(from: buffers) {
             predictionEntity.model = ModelComponent(mesh: mesh, materials: [predictionMaterial])
         } else {
             predictionEntity.model = nil
         }
+    }
+
+    private func syncPrediction(_ model: GravityLabModel) {
+        guard let inputs = model.heldPredictionInputs() else {
+            if predictionActive {
+                predictionActive = false
+                predictionEntity.model = nil
+            }
+            return
+        }
+        predictionActive = true
+        // Submit freely: the pipeline coalesces, so the preview refreshes
+        // at whatever rate the worker can integrate — never blocking a
+        // frame, always tracking the newest hand state.
+        predictionPipeline?.submit(PredictionJob(inputs: inputs, scale: scale))
     }
 
     // MARK: Vectors (lengths are log-scaled; the legend says so)

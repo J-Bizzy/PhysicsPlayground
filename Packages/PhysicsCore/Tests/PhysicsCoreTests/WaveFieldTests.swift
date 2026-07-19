@@ -18,6 +18,45 @@ final class WaveFieldTests: XCTestCase {
     private let speed = 0.5
     private var wavelength: Double { speed / frequency }
 
+    /// The phasor decomposition u = c·cos(ωt) − s·sin(ωt) reproduces the
+    /// live field EXACTLY at arbitrary points and times — the identity
+    /// the renderer leans on to animate without per-frame trig.
+    func testPhasorCoefficientsReproduceTheLiveField() {
+        let sources = [
+            WaveSource(position: SIMD3(-0.2, 0.05, -0.1), amplitude: 0.008),
+            WaveSource(position: SIMD3(0.25, -0.1, 0.15), amplitude: 0.005,
+                       phaseInverted: true),
+            WaveSource(position: SIMD3(0.0, 0.3, 0.05), amplitude: 0.011),
+        ]
+        let omega = 2 * Double.pi * frequency
+        for point in [SIMD3(0.1, 0.12, -0.07), SIMD3(-0.31, 0.02, 0.2),
+                      SIMD3(0.05, -0.18, 0.33)] {
+            let (c, s) = WaveField.phasorCoefficients(
+                at: point, sources: sources, frequency: frequency, speed: speed)
+            for time in [0.0, 0.137, 0.5, 1.234, 7.7] {
+                let direct = WaveField.displacement(
+                    at: point, time: time, sources: sources,
+                    frequency: frequency, speed: speed)
+                let folded = c * cos(omega * time) - s * sin(omega * time)
+                XCTAssertEqual(folded, direct, accuracy: 1e-15)
+            }
+        }
+    }
+
+    /// √(c² + s²) IS the steady-state envelope — same phasor, same math.
+    func testPhasorMagnitudeIsTheEnvelope() {
+        let sources = [
+            WaveSource(position: SIMD3(-0.15, 0, 0)),
+            WaveSource(position: SIMD3(0.15, 0.1, -0.2), amplitude: 0.004),
+        ]
+        let point = SIMD3(0.07, 0.21, 0.14)
+        let (c, s) = WaveField.phasorCoefficients(
+            at: point, sources: sources, frequency: frequency, speed: speed)
+        let envelope = WaveField.steadyAmplitude(
+            at: point, sources: sources, frequency: frequency, speed: speed)
+        XCTAssertEqual((c * c + s * s).squareRoot(), envelope, accuracy: 1e-15)
+    }
+
     /// Two equal sources, both distance R from a midplane point:
     /// constructive everywhere on the plane — amplitude exactly 2A·F(R).
     func testMidplaneDoublesForEqualSources() {

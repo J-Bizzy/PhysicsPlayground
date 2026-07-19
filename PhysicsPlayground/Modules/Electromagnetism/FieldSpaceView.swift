@@ -4,7 +4,7 @@
 //
 //  The electrostatics immersive scene, hosted by PlaygroundSpaceView.
 //  RealityView's make closure installs the entity tree; from then on
-//  FieldRenderer's RenderLoop re-renders on every model change.
+//  FieldRenderer is ticked every frame from SceneEvents.Update.
 //
 //  Manipulation events arrive through Core's ManipulationRouter: charges
 //  are keyed by UUID name, the probe by its fixed name. The probe

@@ -13,9 +13,14 @@
 //  · floating grabbable sources (teal in phase, orange inverted) and the
 //    probe with its billboarded readout.
 //
-//  Frame-rate contract: the per-frame path is 512 scale writes plus a
-//  few transforms; lattice tinting and isosurface extraction happen only
-//  when the configuration changes (the latter off the main thread).
+//  Frame-rate contract: all spatial field math (distances, falloff,
+//  trig) folds into two cached phasor coefficients per dot — computed
+//  off the main thread when the configuration changes — so the per-frame
+//  path is one fused multiply-add per dot (u = c·cosωt − s·sinωt, exact;
+//  see WaveFieldTests) plus scale writes gated on visible change.
+//  Isosurface extraction also runs off-main. Ticked per frame from
+//  SceneEvents.Update (observation loops starve during grabs — house
+//  rule since the EM module's device findings).
 //
 
 import Foundation
@@ -40,9 +45,16 @@ final class WavesRenderer {
     let probeAnchor = Entity()
 
     private let latticePool: EntityPool<ModelEntity>
-    private var latticePoints: [SIMD3<Double>] = []
     private var latticePalette: [UnlitMaterial] = []
     private var latticeTintKeys: [Int]
+
+    // The phasor cache: u(dot, t) = c·cos(ωt) − s·sin(ωt), refreshed off
+    // the main thread whenever the configuration changes.
+    private var latticeC: [Float]
+    private var latticeS: [Float]
+    private var latticeScaleKeys: [Float]
+    private var latticeReference: Float = 1
+    private var latticePipeline: GeometryPipeline<LatticeJob, LatticeResult>?
 
     private let sourcePool: EntityPool<ModelEntity>
     private var sourceMaterialKeys: [String]
@@ -51,9 +63,6 @@ final class WavesRenderer {
     private let silenceEntity = ModelEntity()
     private let silenceMaterial: UnlitMaterial
     private var silencePipeline: GeometryPipeline<SilenceJob, SilenceResult>?
-
-    private let renderLoop = RenderLoop()
-    private var model: WavesModel?
 
     private struct FieldInputs: Equatable {
         var sources: [WaveSource]
@@ -82,21 +91,12 @@ final class WavesRenderer {
             return dot
         }
         latticeTintKeys = Array(repeating: -1, count: latticePool.budget)
+        latticeC = Array(repeating: 0, count: latticePool.budget)
+        latticeS = Array(repeating: 0, count: latticePool.budget)
+        latticeScaleKeys = Array(repeating: 0, count: latticePool.budget)
 
-        let spacing = 2 * WavesModel.regionHalfExtent * 0.92 / Double(side - 1)
-        let origin = WavesModel.regionCenter
-            - SIMD3(repeating: WavesModel.regionHalfExtent * 0.92)
-        var points: [SIMD3<Double>] = []
-        for i in 0..<side {
-            for j in 0..<side {
-                for k in 0..<side {
-                    points.append(origin + spacing * SIMD3(Double(i), Double(j), Double(k)))
-                }
-            }
-        }
-        latticePoints = points
         for (index, slot) in latticePool.slots.enumerated() {
-            slot.entity.position = SIMD3<Float>(latticePoints[index])
+            slot.entity.position = SIMD3<Float>(Self.latticePoints[index])
             slot.entity.isEnabled = true
         }
         root.addChild(latticePool.root)
@@ -152,6 +152,79 @@ final class WavesRenderer {
             compute: { Self.extractSilenceSurfaces($0) },
             apply: { [weak self] in self?.applySilenceSurfaces($0) }
         )
+        latticePipeline = GeometryPipeline(
+            compute: { Self.computeLattice($0) },
+            apply: { [weak self] in self?.applyLattice($0) }
+        )
+    }
+
+    /// The dot positions — fixed for the module's lifetime, shared with
+    /// the background phasor computation.
+    private nonisolated static let latticePoints: [SIMD3<Double>] = {
+        let side = latticeSide
+        let spacing = 2 * WavesModel.regionHalfExtent * 0.92 / Double(side - 1)
+        let origin = WavesModel.regionCenter
+            - SIMD3(repeating: WavesModel.regionHalfExtent * 0.92)
+        var points: [SIMD3<Double>] = []
+        points.reserveCapacity(side * side * side)
+        for i in 0..<side {
+            for j in 0..<side {
+                for k in 0..<side {
+                    points.append(origin + spacing * SIMD3(Double(i), Double(j), Double(k)))
+                }
+            }
+        }
+        return points
+    }()
+
+    // MARK: Lattice phasor cache (background, coalescing)
+
+    private nonisolated struct LatticeJob: Sendable {
+        var sources: [WaveSource]
+        var frequency: Double
+        var speed: Double
+    }
+
+    private nonisolated struct LatticeResult: Sendable {
+        var c: [Float]
+        var s: [Float]
+        var tints: [Int]
+        var reference: Float
+    }
+
+    private nonisolated static func computeLattice(_ job: LatticeJob) -> LatticeResult {
+        let count = latticePoints.count
+        var c = [Float](repeating: 0, count: count)
+        var s = [Float](repeating: 0, count: count)
+        var tints = [Int](repeating: 0, count: count)
+        // The brightness yardstick: all sources arriving in phase at a
+        // typical mid-field distance.
+        let reference = job.sources.map(\.amplitude).reduce(0, +)
+            * WaveField.falloff(0.25)
+        for index in 0..<count {
+            let phasor = WaveField.phasorCoefficients(
+                at: latticePoints[index], sources: job.sources,
+                frequency: job.frequency, speed: job.speed)
+            c[index] = Float(phasor.c)
+            s[index] = Float(phasor.s)
+            // √(c² + s²) IS the standing envelope (tested) — the tint
+            // comes free with the cache.
+            let envelope = (phasor.c * phasor.c + phasor.s * phasor.s).squareRoot()
+            tints[index] = min(Int(envelope / max(reference, 1e-12) * 5), 5)
+        }
+        return LatticeResult(c: c, s: s, tints: tints, reference: Float(reference))
+    }
+
+    private func applyLattice(_ result: LatticeResult) {
+        guard result.c.count == latticePool.budget else { return }
+        latticeC = result.c
+        latticeS = result.s
+        latticeReference = result.reference
+        for (index, slot) in latticePool.slots.enumerated()
+        where latticeTintKeys[index] != result.tints[index] {
+            latticeTintKeys[index] = result.tints[index]
+            slot.payload.model?.materials = [latticePalette[result.tints[index]]]
+        }
     }
 
     // MARK: Silence surface extraction (background, coalescing)
@@ -231,17 +304,9 @@ final class WavesRenderer {
         }
     }
 
-    // MARK: Render loop
+    // MARK: Per-frame tick (from SceneEvents.Update)
 
-    func startObserving(_ model: WavesModel) {
-        self.model = model
-        renderLoop.start { [weak self, weak model] in
-            guard let self, let model else { return }
-            self.render(model)
-        }
-    }
-
-    private func render(_ model: WavesModel) {
+    func tick(_ model: WavesModel) {
         syncSources(model)
         syncConfiguration(model)
         pulseLattice(model)
@@ -314,8 +379,9 @@ final class WavesRenderer {
         }
     }
 
-    /// When the configuration changes: retint the lattice by the standing
-    /// envelope and resubmit the silence-surface job.
+    /// When the configuration changes: refresh the phasor cache (which
+    /// carries the tints) and resubmit the silence-surface job — both off
+    /// the main thread.
     private func syncConfiguration(_ model: WavesModel) {
         let inputs = FieldInputs(
             sources: model.waveSources, frequency: model.frequency,
@@ -324,19 +390,8 @@ final class WavesRenderer {
         guard inputs != lastFieldInputs else { return }
         lastFieldInputs = inputs
 
-        // Tint dots by how loud they'll ever get (the envelope).
-        let reference = inputs.sources.map(\.amplitude).reduce(0, +)
-            * WaveField.falloff(0.25)
-        for (index, slot) in latticePool.slots.enumerated() {
-            let envelope = WaveField.steadyAmplitude(
-                at: latticePoints[index], sources: inputs.sources,
-                frequency: inputs.frequency, speed: inputs.speed)
-            let tint = min(Int(envelope / max(reference, 1e-12) * 5), 5)
-            if latticeTintKeys[index] != tint {
-                latticeTintKeys[index] = tint
-                slot.payload.model?.materials = [latticePalette[tint]]
-            }
-        }
+        latticePipeline?.submit(LatticeJob(
+            sources: inputs.sources, frequency: inputs.frequency, speed: inputs.speed))
 
         if inputs.show {
             silencePipeline?.submit(SilenceJob(
@@ -347,20 +402,23 @@ final class WavesRenderer {
         silenceEntity.isEnabled = inputs.show
     }
 
-    /// The per-frame heartbeat: every dot scales with the live |u(r, t)|.
+    /// The per-frame heartbeat: every dot scales with the live |u(r, t)|,
+    /// folded to u = c·cos(ωt) − s·sin(ωt) — two trig calls per FRAME
+    /// (not per dot per source), then a multiply-add per dot. Scale
+    /// writes are skipped below visible change (~1.5% of dot size).
     private func pulseLattice(_ model: WavesModel) {
-        let sources = model.waveSources
-        let frequency = model.frequency
-        let speed = model.waveSpeed
-        let time = model.time
-        let reference = sources.map(\.amplitude).reduce(0, +) * WaveField.falloff(0.25)
+        let omega = 2 * .pi * model.frequency
+        let cosT = Float(cos(omega * model.time))
+        let sinT = Float(sin(omega * model.time))
+        let reference = max(latticeReference, 1e-12)
 
-        for (index, slot) in latticePool.slots.enumerated() {
-            let u = WaveField.displacement(
-                at: latticePoints[index], time: time,
-                sources: sources, frequency: frequency, speed: speed)
-            let normalized = min(abs(u) / max(reference, 1e-12), 1.6)
-            slot.entity.scale = SIMD3(repeating: Float(0.25 + 0.75 * normalized))
+        for index in latticePool.slots.indices {
+            let u = latticeC[index] * cosT - latticeS[index] * sinT
+            let normalized = min(abs(u) / reference, 1.6)
+            let scale = 0.25 + 0.75 * normalized
+            guard abs(scale - latticeScaleKeys[index]) > 0.015 else { continue }
+            latticeScaleKeys[index] = scale
+            latticePool.slots[index].entity.scale = SIMD3(repeating: scale)
         }
     }
 }
