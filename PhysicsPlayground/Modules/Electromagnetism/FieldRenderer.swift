@@ -322,7 +322,7 @@ final class FieldRenderer {
                     signPivot.addChild(vertical)
                 }
                 plate.addChild(signPivot)
-                Grabbable.configure(plate, collisionRadius: 0.26)
+                Grabbable.configureTouchTarget(plate, collisionRadius: 0.26)
                 var accessibility = AccessibilityComponent()
                 accessibility.isAccessibilityElement = true
                 accessibility.label = "Capacitor plate. Drag along the field axis to change the gap; carry it to move the capacitor."
@@ -490,7 +490,7 @@ final class FieldRenderer {
         // Name carries the charge's identity so manipulation event handlers
         // can map the grabbed entity back to a model object.
         sphere.name = charge.id.uuidString
-        Grabbable.configure(sphere, collisionRadius: Self.chargeRadius * 1.8)
+        Grabbable.configureTouchTarget(sphere, collisionRadius: Self.chargeRadius * 1.8)
         setAccessibilityLabel(on: sphere, for: charge)
 
         // Translucent halo shown on the selected charge (the one the sliders edit).
@@ -593,7 +593,7 @@ final class FieldRenderer {
             materials: [SimpleMaterial(color: Self.probePositiveColor, roughness: 0.3, isMetallic: false)]
         )
         sphere.name = Self.probeEntityName
-        Grabbable.configure(sphere, collisionRadius: max(Self.probeRadius * 2.4, 0.06))
+        Grabbable.configureTouchTarget(sphere, collisionRadius: max(Self.probeRadius * 2.4, 0.06))
 
         // Same sign glyph the source charges wear, scaled to probe size.
         let signPivot = Entity()

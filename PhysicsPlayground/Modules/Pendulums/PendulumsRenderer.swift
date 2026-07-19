@@ -220,14 +220,11 @@ final class PendulumsRenderer {
 
             visual.pivot.position = SIMD3<Float>(pendulum.pivot)
 
-            // The bob: hand-owned while grabbed, physics-owned otherwise.
-            let bobWorld: SIMD3<Float>
-            if pendulum.id == grabbedID {
-                bobWorld = visual.bob.position(relativeTo: nil)
-            } else {
-                bobWorld = SIMD3<Float>(pendulum.bobWorld)
-                visual.bob.position = bobWorld
-            }
+            // Model-owned always: during a grab the relative drag
+            // writes the model, and everything — bob, cable, arrows —
+            // draws from the same state in the same frame.
+            let bobWorld = SIMD3<Float>(pendulum.bobWorld)
+            visual.bob.position = bobWorld
             let radius = Float(pendulum.bobRadius)
             visual.bob.scale = SIMD3(repeating: radius / 0.035)
 
@@ -291,7 +288,7 @@ final class PendulumsRenderer {
             mesh: .generateSphere(radius: 0.035),
             materials: [steelMaterial])
         bob.name = pendulum.id.uuidString
-        Grabbable.configure(bob, collisionRadius: 0.075)
+        Grabbable.configureTouchTarget(bob, collisionRadius: 0.075)
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Pendulum bob. Grab it, carry it, and throw it."

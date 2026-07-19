@@ -19,7 +19,7 @@ import simd
 struct PendulumsSpaceView: View {
     @Environment(PendulumsModel.self) private var model
     @State private var renderer: PendulumsRenderer?
-    @State private var router = ManipulationRouter()
+    @State private var drag: RelativeDrag?
     @State private var handSamples: [(time: Double, position: SIMD3<Double>)] = []
     @Environment(AppModel.self) private var appModel
 
@@ -43,8 +43,6 @@ struct PendulumsSpaceView: View {
                 renderer.infoAnchor.addChild(info)
             }
 
-            configureRouter(renderer: renderer)
-            renderer.subscriptions = router.subscriptions(for: content)
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     renderer?.tick(dt: event.deltaTime, model: model)
@@ -77,6 +75,56 @@ struct PendulumsSpaceView: View {
                     .glassBackgroundEffect()
             }
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .targetedToAnyEntity()
+                .onChanged { value in
+                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    if drag == nil {
+                        var current: Entity? = value.entity
+                        while let candidate = current {
+                            if let id = UUID(uuidString: candidate.name),
+                               let pendulum = model.pendulums.first(where: { $0.id == id }) {
+                                renderer?.grabbedID = id
+                                renderer?.clearTrail()
+                                model.beginGrab(id: id)
+                                drag = RelativeDrag(
+                                    name: candidate.name,
+                                    target: pendulum.bobWorld, hand: hand)
+                                handSamples = [(Date.timeIntervalSinceReferenceDate,
+                                                pendulum.bobWorld)]
+                                break
+                            }
+                            current = candidate.parent
+                        }
+                    }
+                    guard let drag, let id = UUID(uuidString: drag.name) else { return }
+                    let world = drag.position(forHand: hand)
+                    model.moveGrabbed(id: id, toWorld: world)
+                    let now = Date.timeIntervalSinceReferenceDate
+                    handSamples.append((now, world))
+                    handSamples.removeAll { now - $0.time > 0.14 }
+                }
+                .onEnded { value in
+                    defer {
+                        renderer?.grabbedID = nil
+                        drag = nil
+                        handSamples = []
+                    }
+                    guard let drag, let id = UUID(uuidString: drag.name) else { return }
+                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    let world = drag.position(forHand: hand)
+                    model.moveGrabbed(id: id, toWorld: world)
+                    var velocity = SIMD3<Double>.zero
+                    let now = Date.timeIntervalSinceReferenceDate
+                    if let oldest = handSamples.first, now - oldest.time > 0.02 {
+                        velocity = (world - oldest.position) / (now - oldest.time)
+                    }
+                    model.release(id: id, handVelocity: velocity)
+                }
+        )
         .gesture(
             TapGesture()
                 .targetedToAnyEntity()
@@ -93,37 +141,6 @@ struct PendulumsSpaceView: View {
         )
     }
 
-    private func configureRouter(renderer: PendulumsRenderer) {
-        router.onBegin = { [weak renderer] name, position in
-            guard let id = UUID(uuidString: name) else { return }
-            renderer?.grabbedID = id
-            renderer?.clearTrail()
-            model.beginGrab(id: id)
-            handSamples = [(Date.timeIntervalSinceReferenceDate, SIMD3<Double>(position))]
-        }
-        router.onMove = { name, position in
-            guard let id = UUID(uuidString: name) else { return }
-            let world = SIMD3<Double>(position)
-            model.moveGrabbed(id: id, toWorld: world)
-            let now = Date.timeIntervalSinceReferenceDate
-            handSamples.append((now, world))
-            handSamples.removeAll { now - $0.time > 0.14 }
-        }
-        router.onEnd = { [weak renderer] name, position in
-            guard let id = UUID(uuidString: name) else { return }
-            let world = SIMD3<Double>(position)
-            model.moveGrabbed(id: id, toWorld: world)
-            // Release velocity: displacement over the sample window.
-            var velocity = SIMD3<Double>.zero
-            let now = Date.timeIntervalSinceReferenceDate
-            if let oldest = handSamples.first, now - oldest.time > 0.02 {
-                velocity = (world - oldest.position) / (now - oldest.time)
-            }
-            model.release(id: id, handVelocity: velocity)
-            renderer?.grabbedID = nil
-            handSamples = []
-        }
-    }
 }
 
 /// The bench: add pendulums, load the resonance demo.

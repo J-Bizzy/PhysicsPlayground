@@ -12,6 +12,7 @@
 //  The probe's clock is RealityKit's per-frame SceneEvents.Update.
 //
 
+import PhysicsCore
 import SwiftUI
 import RealityKit
 import RenderKit
@@ -20,7 +21,7 @@ struct FieldSpaceView: View {
     @Environment(FieldModel.self) private var model
     @Environment(AppModel.self) private var appModel
     @State private var renderer: FieldRenderer?
-    @State private var router = ManipulationRouter()
+    @State private var drag: RelativeDrag?
 
     var body: some View {
         RealityView { content, attachments in
@@ -45,8 +46,6 @@ struct FieldSpaceView: View {
             PodMount.mount(attachments.entity(for: "pod-stats"), name: "Numbers",
                            at: [0.62, 0.78, -0.75], in: podsRoot)
 
-            configureRouter(renderer: renderer)
-            renderer.subscriptions = router.subscriptions(for: content)
 
             // Simulation clock: step the probe every rendered frame, then
             // move its entity in the same tick — buttery motion that never
@@ -75,48 +74,74 @@ struct FieldSpaceView: View {
                 }
             }
         }
+        // Relative dragging, no system manipulation: the charge (or
+        // probe, or plate) moves by exactly the hand's displacement —
+        // it never lurches toward the hand, and the per-frame tick
+        // moves its field with it in the same frame.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .targetedToAnyEntity()
+                .onChanged { value in
+                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    if drag == nil {
+                        drag = beginDrag(entity: value.entity, hand: hand)
+                    }
+                    guard let drag else { return }
+                    apply(drag: drag, hand: hand)
+                }
+                .onEnded { value in
+                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    if let drag {
+                        apply(drag: drag, hand: hand)
+                        if drag.name == FieldRenderer.probeEntityName {
+                            model.releaseProbe()
+                        }
+                    }
+                    drag = nil
+                }
+        )
     }
 
-    private func configureRouter(renderer: FieldRenderer) {
-        func plateIndex(_ name: String) -> Int? {
-            name == "plate-0" ? 0 : name == "plate-1" ? 1 : nil
-        }
-        router.onBegin = { [weak renderer] name, position in
-            if let index = plateIndex(name) {
-                renderer?.manipulatingPlateIndex = index
-                model.movePlate(index, toWorld: SIMD3<Double>(position))
-            } else if name == FieldRenderer.probeEntityName {
-                renderer?.isManipulatingProbe = true
-                model.holdProbe(at: SIMD3<Double>(position))
-            } else if let id = UUID(uuidString: name) {
-                renderer?.manipulatingChargeID = id
+    /// Resolves what was pinched and anchors a relative-drag session.
+    private func beginDrag(entity: Entity, hand: SIMD3<Double>) -> RelativeDrag? {
+        var current: Entity? = entity
+        while let candidate = current {
+            let name = candidate.name
+            if name == "plate-0" || name == "plate-1" {
+                let index = name == "plate-0" ? 0 : 1
+                let offset = (index == 0 ? -1.0 : 1.0) * model.plateSeparation / 2
+                return RelativeDrag(
+                    name: name,
+                    target: model.capacitorCenter + SIMD3(offset, 0, 0),
+                    hand: hand)
+            }
+            if name == FieldRenderer.probeEntityName {
+                let target = model.probe?.position ?? hand
+                model.holdProbe(at: target)
+                return RelativeDrag(name: name, target: target, hand: hand)
+            }
+            if let id = UUID(uuidString: name),
+               let charge = model.charges.first(where: { $0.id == id }) {
                 model.select(id: id)
+                return RelativeDrag(name: name, target: charge.position, hand: hand)
             }
+            current = candidate.parent
         }
-        router.onMove = { name, position in
-            if let index = plateIndex(name) {
-                model.movePlate(index, toWorld: SIMD3<Double>(position))
-            } else if name == FieldRenderer.probeEntityName {
-                model.holdProbe(at: SIMD3<Double>(position))
-            } else if let id = UUID(uuidString: name) {
-                model.moveCharge(id: id, to: SIMD3<Double>(position))
-            }
-        }
-        router.onEnd = { [weak renderer] name, position in
-            if let index = plateIndex(name) {
-                model.movePlate(index, toWorld: SIMD3<Double>(position))
-                renderer?.manipulatingPlateIndex = nil
-            } else if name == FieldRenderer.probeEntityName {
-                renderer?.isManipulatingProbe = false
-                model.holdProbe(at: SIMD3<Double>(position))
-                model.releaseProbe()
-            } else if let id = UUID(uuidString: name) {
-                // Clear the in-flight flag first, then write the final
-                // position: the observation-triggered re-render then snaps
-                // the entity to the (floor-clamped) model position.
-                renderer?.manipulatingChargeID = nil
-                model.moveCharge(id: id, to: SIMD3<Double>(position))
-            }
+        return nil
+    }
+
+    private func apply(drag: RelativeDrag, hand: SIMD3<Double>) {
+        let position = drag.position(forHand: hand)
+        if drag.name == "plate-0" || drag.name == "plate-1" {
+            model.movePlate(drag.name == "plate-0" ? 0 : 1, toWorld: position)
+        } else if drag.name == FieldRenderer.probeEntityName {
+            model.holdProbe(at: position)
+        } else if let id = UUID(uuidString: drag.name) {
+            model.moveCharge(id: id, to: position)
         }
     }
+
+
 }

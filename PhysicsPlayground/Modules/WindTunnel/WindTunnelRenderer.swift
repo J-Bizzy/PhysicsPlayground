@@ -153,7 +153,7 @@ final class WindTunnelRenderer {
         if let fan = try? Entity.load(named: "TunnelFan") {
             fan.name = "fan"
             fan.position = SIMD3(-Float(WindTunnelModel.halfLength) - 0.24, 0, 0)
-            Grabbable.configure(fan, collisionRadius: 0.48)
+            Grabbable.configureTouchTarget(fan, collisionRadius: 0.48)
             var fanAccessibility = AccessibilityComponent()
             fanAccessibility.isAccessibilityElement = true
             fanAccessibility.label = "Wind fan. Its blades spin with the wind speed; carry it anywhere."
@@ -339,6 +339,17 @@ final class WindTunnelRenderer {
                 Float(mouth.y + radius * sin(phi)))
     }
 
+
+    /// The fan's world position, for the relative-drag session.
+    func fanWorldPosition() -> SIMD3<Double>? {
+        fanEntity.map { SIMD3<Double>($0.position(relativeTo: nil)) }
+    }
+
+    /// Moves the fan (world coords) — called by the drag, so the fan
+    /// only ever moves by the hand's displacement.
+    func moveFan(toWorld position: SIMD3<Double>) {
+        fanEntity?.setPosition(SIMD3<Float>(position), relativeTo: nil)
+    }
 
     /// World point → plane coordinates (meters from the section center).
     func planePoint(fromWorld world: SIMD3<Float>) -> SIMD2<Double> {

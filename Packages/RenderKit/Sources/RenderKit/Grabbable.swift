@@ -19,6 +19,18 @@ import simd
 
 @MainActor
 public enum Grabbable {
+    /// Makes an entity a gesture target WITHOUT the system
+    /// ManipulationComponent — no attraction toward the hand, no
+    /// system-owned motion. Pair with a DragGesture and RelativeDrag:
+    /// the model moves by the hand's displacement, and the renderer
+    /// (ticking per frame) moves the entity and everything attached
+    /// to it as one body.
+    public static func configureTouchTarget(_ entity: Entity, collisionRadius: Float) {
+        entity.components.set(InputTargetComponent())
+        entity.components.set(CollisionComponent(
+            shapes: [.generateSphere(radius: collisionRadius)]))
+        entity.components.set(HoverEffectComponent())
+    }
     /// Makes an entity grabbable with gaze+pinch or direct touch. The
     /// collision shape is bigger than the visible mesh so it's easy to grab.
     public static func configure(_ entity: Entity, collisionRadius: Float) {
@@ -37,6 +49,25 @@ public enum Grabbable {
             manipulation.dynamics.inertia = .zero
             entity.components.set(manipulation)
         }
+    }
+}
+
+/// A relative drag: the grabbed thing moves by the hand's displacement
+/// from the pinch, never jumping or lurching toward the hand.
+public struct RelativeDrag: Sendable {
+    public let name: String
+    private let startTarget: SIMD3<Double>
+    private let startHand: SIMD3<Double>
+
+    public init(name: String, target: SIMD3<Double>, hand: SIMD3<Double>) {
+        self.name = name
+        self.startTarget = target
+        self.startHand = hand
+    }
+
+    /// Where the target belongs for the given hand position.
+    public func position(forHand hand: SIMD3<Double>) -> SIMD3<Double> {
+        startTarget + (hand - startHand)
     }
 }
 

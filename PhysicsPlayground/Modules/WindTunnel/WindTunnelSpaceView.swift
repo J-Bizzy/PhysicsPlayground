@@ -17,6 +17,7 @@ struct WindTunnelSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @State private var renderer: WindTunnelRenderer?
     @State private var router = ManipulationRouter()
+    @State private var fanDrag: RelativeDrag?
     @State private var sensing = WindTunnelSensing()
 
     var body: some View {
@@ -68,6 +69,39 @@ struct WindTunnelSpaceView: View {
                     .glassBackgroundEffect()
             }
         }
+        // The fan moves by the hand's displacement — no system
+        // manipulation, no lurch toward the hand; its beam and hum ride
+        // along in the same frame.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .targetedToAnyEntity()
+                .onChanged { value in
+                    guard let renderer else { return }
+                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    if fanDrag == nil {
+                        var current: Entity? = value.entity
+                        while let candidate = current {
+                            if candidate.name == "fan" {
+                                guard let target = renderer.fanWorldPosition() else { return }
+                                fanDrag = RelativeDrag(name: "fan", target: target, hand: hand)
+                                break
+                            }
+                            current = candidate.parent
+                        }
+                    }
+                    guard let fanDrag else { return }
+                    renderer.moveFan(toWorld: fanDrag.position(forHand: hand))
+                }
+                .onEnded { value in
+                    if let fanDrag, let renderer {
+                        let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                            value.location3D, from: .local, to: .scene)))
+                        renderer.moveFan(toWorld: fanDrag.position(forHand: hand))
+                    }
+                    fanDrag = nil
+                }
+        )
         .task {
             // Hand tracking + scene reconstruction: device-only, quietly
             // absent in the simulator.
