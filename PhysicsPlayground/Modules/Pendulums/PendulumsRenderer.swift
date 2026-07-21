@@ -122,6 +122,16 @@ final class PendulumsRenderer {
 
     // Ghost prediction while grabbed.
     private let ghostEntity = ModelEntity()
+
+    // Period tags: T at each pivot — the number that ONLY length and
+    // gravity move, floating exactly where that story is anchored.
+    // Text meshes are string-cached; labels update only when the
+    // rendered string changes.
+    private var periodLabels: [UUID: (holder: Entity, text: ModelEntity)] = [:]
+    private var periodKeys: [UUID: String] = [:]
+    private var periodMeshCache: [String: MeshResource] = [:]
+    private let periodMaterial = UnlitMaterial(color: UIColor(
+        red: 0.55, green: 0.35, blue: 0.95, alpha: 1))
     private let ghostMaterial: UnlitMaterial = {
         var material = UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))
         material.blending = .transparent(opacity: 0.28)
@@ -218,12 +228,16 @@ final class PendulumsRenderer {
             [visual?.velocityArrow, visual?.accelerationArrow, visual?.gravityArrow,
              visual?.tensionArrow, visual?.netArrow].forEach { $0?.holder.removeFromParent() }
             visuals[id] = nil
+            periodLabels[id]?.holder.removeFromParent()
+            periodLabels[id] = nil
+            periodKeys[id] = nil
         }
 
         for pendulum in model.pendulums {
             let visual = visuals[pendulum.id] ?? makeVisual(for: pendulum)
 
             visual.pivot.position = SIMD3<Float>(pendulum.pivot)
+            syncPeriodLabel(for: pendulum, gravity: model.gravity)
 
             // Model-owned always: during a grab the relative drag
             // writes the model, and everything — bob, cable, arrows —
@@ -314,6 +328,41 @@ final class PendulumsRenderer {
     }
 
     // MARK: Trail
+
+    private func syncPeriodLabel(for pendulum: PendulumsModel.Pendulum, gravity: Double) {
+        let label: (holder: Entity, text: ModelEntity)
+        if let existing = periodLabels[pendulum.id] {
+            label = existing
+        } else {
+            let holder = Entity()
+            let pivot = Entity()
+            pivot.components.set(BillboardComponent())
+            let text = ModelEntity()
+            pivot.addChild(text)
+            holder.addChild(pivot)
+            root.addChild(holder)
+            label = (holder, text)
+            periodLabels[pendulum.id] = label
+        }
+        label.holder.position = SIMD3<Float>(pendulum.pivot) + SIMD3(0, 0.055, 0)
+
+        let string = String(format: "T = %.2f s", pendulum.period(gravity: gravity))
+        guard periodKeys[pendulum.id] != string else { return }
+        periodKeys[pendulum.id] = string
+        let mesh: MeshResource
+        if let cached = periodMeshCache[string] {
+            mesh = cached
+        } else {
+            if periodMeshCache.count > 200 { periodMeshCache.removeAll() }
+            mesh = MeshResource.generateText(
+                string, extrusionDepth: 0.002,
+                font: .systemFont(ofSize: 0.024, weight: .semibold))
+            periodMeshCache[string] = mesh
+        }
+        label.text.model = ModelComponent(mesh: mesh, materials: [periodMaterial])
+        let bounds = mesh.bounds
+        label.text.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
+    }
 
     private func syncTrail(dt: Double, model: PendulumsModel) {
         let lifetime: Double

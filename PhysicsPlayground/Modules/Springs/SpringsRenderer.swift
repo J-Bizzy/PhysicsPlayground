@@ -42,6 +42,16 @@ final class SpringsRenderer {
     private var springs: [ModelEntity] = []
     private var supports: [ModelEntity] = []
     private let rail: ModelEntity
+
+    // The period tag at the spring's anchor — T = 2π√(m/k), the number
+    // the stiffness and mass sliders are actually steering. Hidden in
+    // coupled mode (two normal modes; one T would mislead).
+    private let periodHolder = Entity()
+    private var periodText: ModelEntity!
+    private var periodKey = ""
+    private var periodMeshCache: [String: MeshResource] = [:]
+    private let periodMaterial = UnlitMaterial(color: UIColor(
+        red: 0.0, green: 0.55, blue: 0.52, alpha: 1))
     private let velocityArrow = PendulumsRenderer.Arrow(
         color: UIColor(red: 0.25, green: 0.55, blue: 1, alpha: 1))
     private let accelerationArrow = PendulumsRenderer.Arrow(
@@ -96,6 +106,13 @@ final class SpringsRenderer {
         rail.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
         rail.position = SIMD3<Float>(SpringsModel.center)
         root.addChild(rail)
+
+        let periodPivot = Entity()
+        periodPivot.components.set(BillboardComponent())
+        periodText = ModelEntity()
+        periodPivot.addChild(periodText)
+        periodHolder.addChild(periodPivot)
+        root.addChild(periodHolder)
 
         // Blocks (up to 2) and springs (up to 3), enabled per mode.
         let blockMesh = MeshResource.generateBox(size: [0.09, 0.08, 0.08], cornerRadius: 0.012)
@@ -195,6 +212,7 @@ final class SpringsRenderer {
     func tick(dt: Double, model: SpringsModel) {
         model.step(dt: dt)
         syncApparatus(model)
+        syncPeriodLabel(model)
         syncArrowsAndEnergy(model)
         syncGhost(model)
         syncGraph(model)
@@ -218,6 +236,32 @@ final class SpringsRenderer {
         spring.position = SIMD3<Float>(a)
         spring.orientation = VectorFieldArrows.rotationFromYAxis(to: span / length)
         spring.scale = SIMD3(1, length, 1)
+    }
+
+    private func syncPeriodLabel(_ model: SpringsModel) {
+        guard model.mode == .single else {
+            periodHolder.isEnabled = false
+            return
+        }
+        periodHolder.isEnabled = true
+        periodHolder.position = SIMD3<Float>(model.anchorWorld) + SIMD3(0, 0.17, 0)
+
+        let string = String(format: "T = %.2f s", model.period)
+        guard periodKey != string else { return }
+        periodKey = string
+        let mesh: MeshResource
+        if let cached = periodMeshCache[string] {
+            mesh = cached
+        } else {
+            if periodMeshCache.count > 200 { periodMeshCache.removeAll() }
+            mesh = MeshResource.generateText(
+                string, extrusionDepth: 0.002,
+                font: .systemFont(ofSize: 0.024, weight: .semibold))
+            periodMeshCache[string] = mesh
+        }
+        periodText.model = ModelComponent(mesh: mesh, materials: [periodMaterial])
+        let bounds = mesh.bounds
+        periodText.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
     }
 
     private func syncApparatus(_ model: SpringsModel) {
