@@ -64,17 +64,26 @@ final class OpticsRenderer {
             + SIMD3(Float(OpticsModel.sourceX + OpticsModel.railHalf) / 2, -0.22, 0)
         root.addChild(rail)
 
-        // The laser source: a dark box with a glowing emitter face.
-        let source = ModelEntity(
-            mesh: .generateBox(size: [0.1, 0.3, 0.08], cornerRadius: 0.01),
-            materials: [SimpleMaterial(color: UIColor(white: 0.15, alpha: 1),
-                                       roughness: 0.5, isMetallic: true)])
+        // The laser source: the Blender-authored housing (ribbed slab
+        // with a recessed emitter slot) when available, else the plain
+        // box. The glowing strip is the app's — it sits in the recess.
+        let source = ModelEntity()
+        var faceX: Float = 0.053
+        if let housing = try? Entity.load(named: "OpticsLaser") {
+            source.addChild(housing)
+            faceX = 0.045
+        } else {
+            source.model = ModelComponent(
+                mesh: .generateBox(size: [0.1, 0.3, 0.08], cornerRadius: 0.01),
+                materials: [SimpleMaterial(color: UIColor(white: 0.15, alpha: 1),
+                                           roughness: 0.5, isMetallic: true)])
+        }
         source.position = SIMD3<Float>(OpticsModel.center)
             + SIMD3(Float(OpticsModel.sourceX) - 0.05, 0, 0)
         let face = ModelEntity(
             mesh: .generateBox(size: [0.006, 0.28, 0.06]),
             materials: [UnlitMaterial(color: UIColor(red: 1, green: 0.3, blue: 0.25, alpha: 1))])
-        face.position = [0.053, 0, 0]
+        face.position = [faceX, 0, 0]
         source.addChild(face)
         root.addChild(source)
 
@@ -173,15 +182,24 @@ final class OpticsRenderer {
         let holder: ModelEntity
         switch element.kind {
         case .convergingLens, .divergingLens:
-            var glass = PhysicallyBasedMaterial()
-            glass.baseColor = .init(tint: UIColor(red: 0.85, green: 0.93, blue: 1, alpha: 1))
-            glass.roughness = 0.05
-            glass.blending = .transparent(opacity: .init(floatLiteral: 0.32))
-            holder = ModelEntity(
-                mesh: .generateCylinder(height: 0.02, radius: 0.17),
-                materials: [glass])
-            holder.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-            // A slim rim so the glass reads at a glance.
+            let assetName = element.kind == .convergingLens
+                ? "OpticsLensConvex" : "OpticsLensConcave"
+            holder = ModelEntity()
+            if let lens = try? Entity.load(named: assetName) {
+                // Blender glass: biconvex bulge or biconcave waist —
+                // the SHAPE says converging or diverging.
+                holder.addChild(lens)
+            } else {
+                var glass = PhysicallyBasedMaterial()
+                glass.baseColor = .init(tint: UIColor(red: 0.85, green: 0.93, blue: 1, alpha: 1))
+                glass.roughness = 0.05
+                glass.blending = .transparent(opacity: .init(floatLiteral: 0.32))
+                holder.model = ModelComponent(
+                    mesh: .generateCylinder(height: 0.02, radius: 0.17),
+                    materials: [glass])
+                holder.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            }
+            // The accent dot ties the glass to its focal markers' color.
             let rimColor: UIColor = element.kind == .convergingLens
                 ? UIColor(red: 0.3, green: 0.75, blue: 1, alpha: 1)
                 : UIColor(red: 1, green: 0.6, blue: 0.3, alpha: 1)
@@ -191,18 +209,28 @@ final class OpticsRenderer {
             rim.position = [0, 0, 0.172]
             holder.addChild(rim)
         case .mirror:
-            holder = ModelEntity(
-                mesh: .generateBox(size: [0.015, 0.34, 0.22], cornerRadius: 0.004),
-                materials: [SimpleMaterial(color: UIColor(white: 0.9, alpha: 1),
-                                           roughness: 0.05, isMetallic: true)])
+            holder = ModelEntity()
+            if let mirror = try? Entity.load(named: "OpticsMirror") {
+                holder.addChild(mirror)
+            } else {
+                holder.model = ModelComponent(
+                    mesh: .generateBox(size: [0.015, 0.34, 0.22], cornerRadius: 0.004),
+                    materials: [SimpleMaterial(color: UIColor(white: 0.9, alpha: 1),
+                                               roughness: 0.05, isMetallic: true)])
+            }
         case .screen:
-            var screen = PhysicallyBasedMaterial()
-            screen.baseColor = .init(tint: .white)
-            screen.roughness = 0.9
-            screen.blending = .transparent(opacity: .init(floatLiteral: 0.85))
-            holder = ModelEntity(
-                mesh: .generateBox(size: [0.008, 0.36, 0.26], cornerRadius: 0.004),
-                materials: [screen])
+            holder = ModelEntity()
+            if let screen = try? Entity.load(named: "OpticsScreen") {
+                holder.addChild(screen)
+            } else {
+                var canvas = PhysicallyBasedMaterial()
+                canvas.baseColor = .init(tint: .white)
+                canvas.roughness = 0.9
+                canvas.blending = .transparent(opacity: .init(floatLiteral: 0.85))
+                holder.model = ModelComponent(
+                    mesh: .generateBox(size: [0.008, 0.36, 0.26], cornerRadius: 0.004),
+                    materials: [canvas])
+            }
         }
         var focalMarkers: [ModelEntity] = []
         if element.kind == .convergingLens || element.kind == .divergingLens {
