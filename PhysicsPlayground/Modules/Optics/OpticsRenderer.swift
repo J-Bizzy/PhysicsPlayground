@@ -2,11 +2,13 @@
 //  OpticsRenderer.swift
 //  Physics Playground — Ray Optics module
 //
-//  Renders the optical bench: a rail, a laser source box, glass lens
-//  discs / mirror / screen the user drags along the rail, glowing ray
-//  tubes rebuilt whenever the configuration changes, and a bright
-//  marker where the image forms. Per-frame tick; tube rebuilds are
-//  dirty-flagged like the wind tunnel's streamlines.
+//  Renders the optics area of the studio: the bench (rail, laser,
+//  glass lenses, mirror, screen, glowing ray tubes rebuilt on config
+//  change, image marker) plus the DISPERSION STATION below it — white
+//  light meeting a real prism, fanning into a spectrum traced by
+//  Snell + Cauchy in PhysicsCore, with the entry angles annotated in
+//  the room and a callout when a face goes total-internal-reflection.
+//  Per-frame tick; all rebuilds dirty-flagged.
 //
 
 import Foundation
@@ -51,6 +53,29 @@ final class OpticsRenderer {
 
     private let aluminumMaterial = SimpleMaterial(
         color: UIColor(white: 0.7, alpha: 1), roughness: 0.35, isMetallic: true)
+
+    // MARK: Dispersion station state
+
+    private let stationRoot = Entity()
+    private var prismEntity: ModelEntity!
+    private var whiteBeam = ModelEntity()
+    private var spectrumEntities: [ModelEntity] = []
+    private var spectrumMaterials: [UnlitMaterial] = []
+    private var normalIndicator: ModelEntity!
+    private var anglePivot: Entity!
+    private var angleText: ModelEntity!
+    private var tirPivot: Entity!
+    private var tirText: ModelEntity!
+    private var stationMeshCache: [String: MeshResource] = [:]
+    private var lastStationKey = ""
+    private let whiteBeamMaterial: UnlitMaterial = {
+        var material = UnlitMaterial(color: .white)
+        material.blending = .transparent(opacity: 0.8)
+        return material
+    }()
+    private let angleLabelMaterial = UnlitMaterial(color: UIColor(white: 1, alpha: 0.9))
+    private let tirLabelMaterial = UnlitMaterial(color: UIColor(
+        red: 1, green: 0.45, blue: 0.35, alpha: 1))
 
     init() {
         // Rail.
@@ -97,6 +122,194 @@ final class OpticsRenderer {
 
         infoAnchor.components.set(BillboardComponent())
         root.addChild(infoAnchor)
+
+        buildDispersionStation()
+    }
+
+    // MARK: Dispersion station
+
+    private static func wavelengthColor(_ nanometers: Double) -> UIColor {
+        switch nanometers {
+        case ..<430: UIColor(red: 0.55, green: 0.25, blue: 1, alpha: 1)
+        case ..<465: UIColor(red: 0.25, green: 0.4, blue: 1, alpha: 1)
+        case ..<500: UIColor(red: 0.1, green: 0.65, blue: 1, alpha: 1)
+        case ..<540: UIColor(red: 0.2, green: 0.85, blue: 0.4, alpha: 1)
+        case ..<585: UIColor(red: 0.75, green: 0.9, blue: 0.2, alpha: 1)
+        case ..<635: UIColor(red: 1, green: 0.55, blue: 0.15, alpha: 1)
+        default: UIColor(red: 1, green: 0.25, blue: 0.2, alpha: 1)
+        }
+    }
+
+    private func buildDispersionStation() {
+        // The white-light source: a small dark housing with a glowing face.
+        let housing = ModelEntity(
+            mesh: .generateBox(size: [0.07, 0.07, 0.06], cornerRadius: 0.008),
+            materials: [SimpleMaterial(color: UIColor(white: 0.12, alpha: 1),
+                                       roughness: 0.5, isMetallic: true)])
+        housing.position = SIMD3<Float>(
+            Float(OpticsModel.prismSourceX) - 0.03,
+            Float(OpticsModel.prismStationCenter.y),
+            Float(OpticsModel.prismStationCenter.z))
+        let glow = ModelEntity(
+            mesh: .generateBox(size: [0.004, 0.03, 0.03]),
+            materials: [UnlitMaterial(color: .white)])
+        glow.position = [0.037, 0, 0]
+        housing.addChild(glow)
+        stationRoot.addChild(housing)
+
+        // The prism: its cross-section triangle extruded in z, built
+        // once in apex-local coordinates and ROTATED as an entity.
+        let base = Prism.Geometry(
+            apex: .zero, apexAngle: .pi / 3, rotation: 0, sideLength: 0.26)
+        let v = base.vertices.map { SIMD3<Float>(Float($0.x), Float($0.y), 0) }
+        let halfDepth: Float = 0.05
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        func triangle(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>) {
+            var normal = simd_cross(b - a, c - a)
+            let length = simd_length(normal)
+            normal = length > 1e-9 ? normal / length : SIMD3(0, 0, 1)
+            positions.append(contentsOf: [a, b, c])
+            normals.append(contentsOf: [normal, normal, normal])
+        }
+        let front = v.map { $0 + SIMD3(0, 0, halfDepth) }
+        let back = v.map { $0 - SIMD3(0, 0, halfDepth) }
+        triangle(front[0], front[1], front[2])
+        triangle(back[0], back[2], back[1])
+        for (a, b) in [(0, 1), (1, 2), (2, 0)] {
+            triangle(front[a], back[a], back[b])
+            triangle(front[a], back[b], front[b])
+        }
+        var descriptor = MeshDescriptor(name: "prism")
+        descriptor.positions = MeshBuffer(positions)
+        descriptor.normals = MeshBuffer(normals)
+        descriptor.primitives = .triangles(Array(0..<UInt32(positions.count)))
+        var glass = PhysicallyBasedMaterial()
+        glass.baseColor = .init(tint: UIColor(red: 0.88, green: 0.94, blue: 1, alpha: 1))
+        glass.roughness = 0.04
+        glass.blending = .transparent(opacity: .init(floatLiteral: 0.34))
+        prismEntity = ModelEntity(
+            mesh: (try? MeshResource.generate(from: [descriptor]))
+                ?? .generateBox(size: 0.2),
+            materials: [glass])
+        prismEntity.position = SIMD3<Float>(
+            Float(OpticsModel.prismStationCenter.x),
+            Float(OpticsModel.prismStationCenter.y + 0.16),
+            Float(OpticsModel.prismStationCenter.z))
+        stationRoot.addChild(prismEntity)
+
+        stationRoot.addChild(whiteBeam)
+        spectrumMaterials = OpticsModel.prismWavelengths.map { nanometers in
+            var material = UnlitMaterial(color: Self.wavelengthColor(nanometers))
+            material.blending = .transparent(opacity: 0.85)
+            return material
+        }
+        for material in spectrumMaterials {
+            let tube = ModelEntity()
+            _ = material
+            stationRoot.addChild(tube)
+            spectrumEntities.append(tube)
+        }
+
+        // Entry normal + angle annotation.
+        var normalMaterial = UnlitMaterial(color: .white)
+        normalMaterial.blending = .transparent(opacity: 0.35)
+        normalIndicator = ModelEntity(
+            mesh: .generateCylinder(height: 0.15, radius: 0.0012),
+            materials: [normalMaterial])
+        stationRoot.addChild(normalIndicator)
+        anglePivot = Entity()
+        anglePivot.components.set(BillboardComponent())
+        angleText = ModelEntity()
+        anglePivot.addChild(angleText)
+        stationRoot.addChild(anglePivot)
+        tirPivot = Entity()
+        tirPivot.components.set(BillboardComponent())
+        tirText = ModelEntity()
+        tirPivot.addChild(tirText)
+        tirPivot.isEnabled = false
+        stationRoot.addChild(tirPivot)
+
+        root.addChild(stationRoot)
+    }
+
+    private func stationLabelMesh(_ string: String) -> MeshResource {
+        if let cached = stationMeshCache[string] { return cached }
+        if stationMeshCache.count > 200 { stationMeshCache.removeAll() }
+        let mesh = MeshResource.generateText(
+            string, extrusionDepth: 0.002,
+            font: .systemFont(ofSize: 0.022, weight: .semibold))
+        stationMeshCache[string] = mesh
+        return mesh
+    }
+
+    private func syncDispersionStation(_ model: OpticsModel) {
+        let key = String(format: "%.2f", model.prismRotationDegrees)
+        guard key != lastStationKey else { return }
+        lastStationKey = key
+
+        prismEntity.orientation = simd_quatf(
+            angle: Float(model.prismRotationDegrees) * .pi / 180, axis: [0, 0, 1])
+
+        let z = Float(OpticsModel.prismStationCenter.z)
+        let traces = model.prismTraces
+        // The shared white leg: source → entry point (middle trace).
+        let middle = traces[traces.count / 2].line
+        if middle.count >= 2 {
+            let white = [SIMD3<Float>(Float(middle[0].x), Float(middle[0].y), z),
+                         SIMD3<Float>(Float(middle[1].x), Float(middle[1].y), z)]
+            if let mesh = TubeMesh.tube(lines: [white], radius: 0.0035, sides: 6) {
+                whiteBeam.model = ModelComponent(mesh: mesh, materials: [whiteBeamMaterial])
+            }
+        }
+        // Per-wavelength paths from the entry point on.
+        for (index, trace) in traces.enumerated() where index < spectrumEntities.count {
+            let tail = trace.line.dropFirst()
+            let points = tail.map { SIMD3<Float>(Float($0.x), Float($0.y), z) }
+            if points.count >= 2,
+               let mesh = TubeMesh.tube(lines: [Array(points)], radius: 0.0018, sides: 4) {
+                spectrumEntities[index].model = ModelComponent(
+                    mesh: mesh, materials: [spectrumMaterials[index]])
+            } else {
+                spectrumEntities[index].model = nil
+            }
+        }
+
+        // Normal + angles at the entry point.
+        if middle.count >= 2 {
+            let entry = SIMD3<Float>(Float(middle[1].x), Float(middle[1].y), z)
+            let rotation = Float(model.prismRotationDegrees) * .pi / 180
+            // Left-face outward normal, rotated with the prism.
+            let half = Float.pi / 6
+            let baseNormal = SIMD2<Float>(-cos(half), sin(half))
+            let normal = SIMD2(
+                baseNormal.x * cos(rotation) - baseNormal.y * sin(rotation),
+                baseNormal.x * sin(rotation) + baseNormal.y * cos(rotation))
+            normalIndicator.position = entry
+            normalIndicator.orientation = VectorFieldArrows.rotationFromYAxis(
+                to: SIMD3(normal.x, normal.y, 0))
+            let angles = model.prismEntryAngles
+            let label = String(
+                format: "θ₁ %.0f°  →  θ₂ %.0f°",
+                angles.incidence * 180 / .pi, angles.refraction * 180 / .pi)
+            angleText.model = ModelComponent(
+                mesh: stationLabelMesh(label), materials: [angleLabelMaterial])
+            let bounds = stationLabelMesh(label).bounds
+            angleText.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
+            anglePivot.position = entry + SIMD3(normal.x, normal.y, 0) * 0.17
+
+            let tir = model.prismShowsTIR
+            tirPivot.isEnabled = tir
+            if tir {
+                let mesh = stationLabelMesh("total internal reflection")
+                tirText.model = ModelComponent(mesh: mesh, materials: [tirLabelMaterial])
+                let tirBounds = mesh.bounds
+                tirText.position = [-(tirBounds.min.x + tirBounds.max.x) / 2, 0, 0]
+                tirPivot.position = SIMD3<Float>(
+                    Float(OpticsModel.prismStationCenter.x) + 0.22,
+                    Float(OpticsModel.prismStationCenter.y) + 0.02, z)
+            }
+        }
     }
 
     /// The pool for the screen's blur disc: bright and tiny in focus,
@@ -144,6 +357,7 @@ final class OpticsRenderer {
     func tick(model: OpticsModel) {
         syncElements(model)
         syncRays(model)
+        syncDispersionStation(model)
 
         if let selected = model.selected {
             infoAnchor.isEnabled = true

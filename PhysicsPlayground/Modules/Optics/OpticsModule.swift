@@ -15,11 +15,11 @@ enum OpticsModule {
     static func descriptor(appModel: AppModel) -> ModuleDescriptor {
         ModuleDescriptor(
             id: id,
-            title: "Ray Optics",
-            blurb: "A laser bench in mid-air: slide lenses and mirrors along the rail and watch the thin-lens equation draw itself in light.",
+            title: "Waves & Optics Studio",
+            blurb: "Two rooms of light and waves: a laser bench with a real prism spilling spectra, and a wave lab where you walk through interference and stand inside the double slit.",
             icon: "rays",
             accent: DesignTokens.Palette.opticsAccent,
-            firstRunHint: "The beam is live — drag the lens along the rail and watch the focus chase it. Switch to a point source and the gold marker sits exactly where 1/f = 1/dₒ + 1/dᵢ predicts. Add mirrors and screens from the panel.",
+            firstRunHint: "Two areas — switch at the top pod. OPTICS: drag lenses along the rail, rotate the prism until the exit face locks into total internal reflection. WAVE LAB: grab an emitter and glide it (Doppler happens around your hand), then flip on the double slit and walk between the fringes.",
             legend: legend,
             realWorld: story,
             isPaused: { false },
@@ -49,6 +49,8 @@ enum OpticsModule {
                    text: "Gold marker — the image point the thin-lens equation predicts; the rays cross right on it"),
         LegendItem(swatch: .fill(Color(red: 0.3, green: 0.75, blue: 1)),
                    text: "Blue-rimmed lens converges; orange-rimmed diverges (virtual focus behind it)"),
+        LegendItem(swatch: .line(Color(red: 0.35, green: 0.85, blue: 0.9)),
+                   text: "Teal shells — wave crests expanding from where they were emitted; teal dots pulse with the live interference field"),
     ]
 
     private static let story = RealWorldStory(
