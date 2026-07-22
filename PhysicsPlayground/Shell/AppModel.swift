@@ -128,4 +128,13 @@ final class AppModel {
         springs = model
         return model
     }
+
+    private var waveMedium: WaveMediumModel?
+
+    var waveMediumModel: WaveMediumModel {
+        if let waveMedium { return waveMedium }
+        let model = WaveMediumModel()
+        waveMedium = model
+        return model
+    }
 }
