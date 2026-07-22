@@ -531,6 +531,24 @@ final class CircuitsModel {
         let span = solution.nodeVoltages.dropFirst()
         voltageSpan = (min(span.min() ?? 0, 0), max(span.max() ?? 0, 0))
 
+        // Node potentials with a representative position (the centroid
+        // of the node's terminals) — the voltage skyline reads these:
+        // each node's potential becomes a height you can compare, so
+        // Kirchhoff's loop law becomes a walk over the terrain.
+        var nodeAccum: [Int: (sum: SIMD3<Double>, count: Int)] = [:]
+        for component in components {
+            for end in 0...1 {
+                let nd = node(Terminal(componentID: component.id, end: end))
+                let pos = component.terminalPosition(end)
+                let current = nodeAccum[nd] ?? (.zero, 0)
+                nodeAccum[nd] = (current.sum + pos, current.count + 1)
+            }
+        }
+        nodePotentials = nodeAccum.map { (nd, acc) in
+            NodePotential(position: acc.sum / Double(acc.count),
+                          voltage: solution.nodeVoltages[nd])
+        }
+
         // 4. Publish readouts; advance capacitor state (unless frozen).
         var newReadouts: [UUID: Readout] = [:]
         var sourcePower = 0.0
@@ -668,6 +686,17 @@ final class CircuitsModel {
     /// Live node voltages by terminal, for the voltage-gradient wires.
     private(set) var terminalVoltages: [Terminal: Double] = [:]
     private(set) var voltageSpan: (min: Double, max: Double) = (0, 0)
+
+    /// A circuit node's potential and where it sits — the voltage
+    /// skyline draws a tower of this height at this spot.
+    struct NodePotential: Equatable {
+        var position: SIMD3<Double>
+        var voltage: Double
+    }
+    private(set) var nodePotentials: [NodePotential] = []
+    /// The signature 3-D view: raise every node to a height equal to
+    /// its voltage, so potential becomes terrain.
+    var showVoltageHeights = false
     /// The Electron View toggle: the whole bench swells around the user.
     var electronView = false
     /// The latest failure explanation (shown until the part is replaced).

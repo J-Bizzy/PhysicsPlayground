@@ -397,6 +397,14 @@ struct CircuitBenchPod: View {
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
             }
+            Toggle("Voltage heights", isOn: $model.showVoltageHeights)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("Raises a glowing tower over every node to a height equal to its voltage — potential as terrain")
+            if model.showVoltageHeights {
+                Text("Each node's voltage becomes a height. The battery towers up, ground sits at the datum, every component steps the height down — walk the loop and the drops sum to zero. That's Kirchhoff's voltage law you can see.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            }
             Button {
                 model.clearBench()
             } label: {

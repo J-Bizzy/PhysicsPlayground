@@ -53,6 +53,20 @@ final class CircuitsRenderer {
     private var wireEntities: [UUID: ModelEntity] = [:]
     private var wirePhases: [UUID: Double] = [:]
 
+    // MARK: Voltage skyline (potential as terrain)
+    /// The datum the towers rise from — a common floor so heights are
+    /// comparable, floated above the bench.
+    private static let skylineDatumY: Float = 1.62
+    private static let voltsToMeters: Float = 0.028
+    private let skylineRoot = Entity()
+    private var towers: [ModelEntity] = []
+    private var towerCaps: [ModelEntity] = []
+    private var towerThreads: [ModelEntity] = []
+    private var towerLabels: [ModelEntity] = []
+    private var towerLabelPivots: [Entity] = []
+    private var towerLabelCache: [String: MeshResource] = [:]
+    private var towerLabelKeys: [String] = []
+
     /// The wire rod's generated mesh length; live length is a scale on top.
     private static let wireBaseLength: Float = 0.12
     /// The end grip being pulled right now (system-dragged — don't
@@ -107,6 +121,9 @@ final class CircuitsRenderer {
 
         selectedAnchor.components.set(BillboardComponent())
         root.addChild(selectedAnchor)
+
+        skylineRoot.isEnabled = false
+        root.addChild(skylineRoot)
 
         audioEmitter.components.set(SpatialAudioComponent())
         root.addChild(audioEmitter)
@@ -300,6 +317,7 @@ final class CircuitsRenderer {
         syncComponents(model)
         syncWires(model)
         syncElectrons(model, dt: dt)
+        syncVoltageSkyline(model)
 
         if let selected = model.selectedComponent {
             selectedAnchor.isEnabled = true
@@ -307,6 +325,133 @@ final class CircuitsRenderer {
         } else {
             selectedAnchor.isEnabled = false
         }
+    }
+
+    // MARK: Voltage skyline
+
+    /// Warm for high potential, cool for low — the same language the
+    /// gradient wires speak, saturated for the towers.
+    private static func potentialColor(_ volts: Double, span: Double) -> UIColor {
+        let t = span > 1e-6 ? CGFloat(max(-1, min(1, volts / span))) : 0   // −1…1
+        if t >= 0 {
+            return UIColor(red: 1.0, green: 0.6 - 0.35 * t, blue: 0.3 - 0.25 * t, alpha: 1)
+        }
+        return UIColor(red: 0.35 + 0.35 * t, green: 0.65 + 0.2 * t, blue: 1.0, alpha: 1)
+    }
+
+    /// Raises a translucent glowing tower over every circuit node to a
+    /// height equal to its voltage, linked to the node by a faint
+    /// thread. Potential becomes terrain you can compare at a glance —
+    /// the battery towers up, ground sits at the datum, each component
+    /// steps the height down (Kirchhoff's loop law, made spatial).
+    private func syncVoltageSkyline(_ model: CircuitsModel) {
+        skylineRoot.isEnabled = model.showVoltageHeights
+        guard model.showVoltageHeights else { return }
+
+        let nodes = model.nodePotentials
+        let span = max(abs(model.voltageSpan.min), abs(model.voltageSpan.max), 1.0)
+        while towers.count < nodes.count { growTower() }
+
+        for (index, tower) in towers.enumerated() {
+            guard index < nodes.count else {
+                tower.isEnabled = false
+                towerCaps[index].isEnabled = false
+                towerThreads[index].isEnabled = false
+                towerLabelPivots[index].isEnabled = false
+                continue
+            }
+            let node = nodes[index]
+            let base = SIMD3<Float>(Float(node.position.x), Self.skylineDatumY,
+                                    Float(node.position.z))
+            let height = Float(node.voltage) * Self.voltsToMeters
+            let color = Self.potentialColor(node.voltage, span: span)
+
+            // The tower: a slim column from the datum to the potential.
+            tower.isEnabled = true
+            let mag = max(abs(height), 0.001)
+            tower.position = base + SIMD3(0, height / 2, 0)
+            tower.scale = SIMD3(1, mag / 0.1, 1)   // base mesh is 0.1 tall
+            setEmissive(tower, color, intensity: 0.6)
+
+            // A glowing cap disc at the top.
+            let cap = towerCaps[index]
+            cap.isEnabled = true
+            cap.position = base + SIMD3(0, height, 0)
+            setEmissive(cap, color, intensity: 0.9)
+
+            // A faint thread from the node's real position up to the base.
+            let thread = towerThreads[index]
+            let nodeWorld = SIMD3<Float>(node.position)
+            thread.isEnabled = true
+            thread.position = (nodeWorld + base) / 2
+            let threadLen = max(simd_distance(nodeWorld, base), 0.001)
+            thread.scale = SIMD3(1, threadLen / 0.1, 1)
+            thread.orientation = VectorFieldArrows.rotationFromYAxis(
+                to: simd_normalize(base - nodeWorld + SIMD3(0, 1e-5, 0)))
+
+            // The voltage, floating at the cap (the billboard pivot
+            // rides the world spot; the label centers within it).
+            let pivot = towerLabelPivots[index]
+            pivot.isEnabled = true
+            pivot.position = base + SIMD3(0, height + (height >= 0 ? 0.05 : -0.06), 0)
+            let text = String(format: "%.1f V", node.voltage)
+            if towerLabelKeys[index] != text {
+                towerLabelKeys[index] = text
+                let mesh = towerLabelMesh(text)
+                towerLabels[index].model = ModelComponent(
+                    mesh: mesh, materials: [UnlitMaterial(color: color)])
+                let bounds = mesh.bounds
+                towerLabels[index].position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
+            }
+        }
+    }
+
+    private func setEmissive(_ entity: ModelEntity, _ color: UIColor, intensity: Float) {
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: color)
+        material.roughness = 0.4
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.6))
+        material.emissiveColor = .init(color: color)
+        material.emissiveIntensity = intensity
+        entity.model?.materials = [material]
+    }
+
+    private func growTower() {
+        let column = ModelEntity(mesh: .generateBox(
+            size: [0.012, 0.1, 0.012], cornerRadius: 0.003))
+        skylineRoot.addChild(column)
+        towers.append(column)
+
+        let cap = ModelEntity(mesh: .generateCylinder(height: 0.006, radius: 0.02))
+        skylineRoot.addChild(cap)
+        towerCaps.append(cap)
+
+        var threadMaterial = UnlitMaterial(color: .white)
+        threadMaterial.blending = .transparent(opacity: 0.2)
+        let thread = ModelEntity(
+            mesh: .generateCylinder(height: 0.1, radius: 0.0009),
+            materials: [threadMaterial])
+        skylineRoot.addChild(thread)
+        towerThreads.append(thread)
+
+        let label = ModelEntity()
+        let pivot = Entity()
+        pivot.components.set(BillboardComponent())
+        skylineRoot.addChild(pivot)
+        pivot.addChild(label)
+        towerLabels.append(label)
+        towerLabelPivots.append(pivot)
+        towerLabelKeys.append("")
+    }
+
+    private func towerLabelMesh(_ text: String) -> MeshResource {
+        if let cached = towerLabelCache[text] { return cached }
+        if towerLabelCache.count > 200 { towerLabelCache.removeAll() }
+        let mesh = MeshResource.generateText(
+            text, extrusionDepth: 0.001,
+            font: .systemFont(ofSize: 0.03, weight: .semibold))
+        towerLabelCache[text] = mesh
+        return mesh
     }
 
     // MARK: Components

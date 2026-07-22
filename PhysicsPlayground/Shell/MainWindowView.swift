@@ -43,6 +43,10 @@ struct MainWindowView: View {
                                              hand: pivot + SIMD3(0.35, 0.4, 0.05))
                         }
                     }
+                    // `-circuitVoltageHeights 1` raises the voltage skyline.
+                    if UserDefaults.standard.bool(forKey: "circuitVoltageHeights") {
+                        circuits.showVoltageHeights = true
+                    }
                 }
                 #endif
             }
