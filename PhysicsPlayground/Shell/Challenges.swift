@@ -90,13 +90,29 @@ enum ChallengeCatalog {
                  { model.pendulums.contains { $0.state.position.y > 0 } }),
             ]
         case "springs":
+            let model = appModel.springsModel
+            return [
+                (Challenge(id: "springs.limit", title: "To the stops",
+                           detail: "Pull the block to its maximum extension."),
+                 { model.mode == .single
+                     && abs(model.state.displacement) >= model.maxExtension * 0.97 }),
+                (Challenge(id: "springs.transfer", title: "Energy heist",
+                           detail: "In Coupled ×2, get 85% of the energy onto the second block."),
+                 { guard model.mode == .coupled else { return false }
+                   let pair = model.coupled.massEnergies(
+                       stiffness: model.stiffness, coupling: model.coupling,
+                       masses: SIMD2(model.mass, model.mass))
+                   let total = pair.x + pair.y
+                   return total > 0.005 && pair.y / total > 0.85 }),
+            ]
+        case "elasticfield":
             let model = appModel.waveMediumModel
             return [
-                (Challenge(id: "springs.pluck", title: "Make a splash",
+                (Challenge(id: "elastic.pluck", title: "Make a splash",
                            detail: "Pull a point on the sheet well off the flat."),
                  { model.sheet.heightRange.max > 0.17
                      || model.sheet.heightRange.min < -0.17 }),
-                (Challenge(id: "springs.free", title: "Cut it loose",
+                (Challenge(id: "elastic.free", title: "Cut it loose",
                            detail: "Free the rim, then disturb the sheet so an edge moves."),
                  { !model.boundaryFixed
                      && (model.sheet.height.first.map { abs($0) > 0.02 } ?? false) }),

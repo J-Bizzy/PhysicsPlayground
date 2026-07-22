@@ -15,85 +15,87 @@ enum SpringsModule {
     static func descriptor(appModel: AppModel) -> ModuleDescriptor {
         ModuleDescriptor(
             id: id,
-            title: "Elastic Field",
-            blurb: "A membrane of coupled springs floating in your room — the real 2-D wave equation. Reach in, pull any point, and let go: waves ripple out, reflect off the rim, and ring the drumhead's modes.",
-            icon: "waveform",
+            title: "Springs",
+            blurb: "Pull a block on a coiled spring — Hooke's law live, energy bars trading, a scrolling motion graph, and two coupled masses swapping energy.",
+            icon: "alternatingcurrent",
             accent: DesignTokens.Palette.springsAccent,
-            firstRunHint: "Reach into the sheet, pinch a point, and pull it up — then let go. A wave spreads at speed c, bounces off the edges, and settles into standing patterns. Walk around it, duck underneath, ring a pure mode, or free the rim and watch the whole sheet heave.",
+            firstRunHint: "Pull the block along its rail and let go — the coils spread with the true extension and the ghost blocks mark the turning points you'll reach. Try Coupled ×2 and pull one block: watch its energy drain into the other and slosh back.",
             legend: legend,
             realWorld: story,
-            isPaused: { appModel.waveMediumModel.isPaused },
-            togglePause: { appModel.waveMediumModel.isPaused.toggle() },
+            isPaused: { appModel.springsModel.isPaused },
+            togglePause: { appModel.springsModel.isPaused.toggle() },
             makeControls: {
                 AnyView(
-                    WaveMediumControlsView()
-                        .environment(appModel.waveMediumModel)
+                    SpringsControlsView()
+                        .environment(appModel.springsModel)
                 )
             },
             makeScene: {
                 AnyView(
-                    WaveMediumSpaceView()
-                        .environment(appModel.waveMediumModel)
+                    SpringsSpaceView()
+                        .environment(appModel.springsModel)
                 )
             },
             reset: {
-                appModel.waveMediumModel.reset()
+                appModel.springsModel.reset()
             }
         )
     }
 
     private static let legend: [LegendItem] = [
-        LegendItem(swatch: .fill(Color(red: 1.0, green: 0.4, blue: 0.32)),
-                   text: "Crests glow warm, troughs cool — the sheet's height IS the wave, shaded by real light so its 3-D shape reads from any side"),
-        LegendItem(swatch: .fill(Color(red: 0.3, green: 0.85, blue: 0.85)),
-                   text: "The rim traces the boundary — clamped (a drumhead) or free, changing how waves reflect"),
+        LegendItem(swatch: .fill(Color(red: 0.2, green: 0.8, blue: 0.35)),
+                   text: "Green arrow & bar — spring force F = −kx and potential energy ½kx²"),
+        LegendItem(swatch: .fill(Color(red: 0.25, green: 0.5, blue: 1)),
+                   text: "Blue arrow & bar — velocity and kinetic energy; the white bar is their constant total"),
+        LegendItem(swatch: .fill(Color(red: 0.4, green: 0.85, blue: 1)),
+                   text: "The floating graph scrolls the motion — walk around it, pause time, inspect any moment"),
         LegendItem(swatch: .fill(.white),
-                   text: "The halo marks the point in your hand; release it and the stored tension launches the wave"),
+                   text: "Ghost blocks while pulling — the exact turning points a release right now would reach"),
     ]
 
     private static let story = RealWorldStory(
-        tagline: "Every wave — sound, water, a guitar string — is a medium of coupled springs doing exactly this.",
+        tagline: "Almost everything that vibrates is secretly a mass on a spring.",
         applications: [
-            .init(title: "Drums & speakers", icon: "speaker.wave.3.fill",
-                  body: "A drumhead and a speaker cone are clamped membranes; the (m,p) modes you ring here are the timbres they make. Bigger or looser skins ring lower."),
-            .init(title: "Earthquakes", icon: "waveform.path",
-                  body: "Seismic waves travel through rock as this same wave equation — faster through stiff granite, slower through soft soil, reflecting off layer boundaries exactly like your rim."),
-            .init(title: "Guitar & piano", icon: "guitars.fill",
-                  body: "A plucked string is the 1-D version: pull it aside, release, and standing waves set the pitch. Tighter strings — higher c — sound higher; your wave-speed slider is the tuning peg."),
-            .init(title: "Why instruments differ", icon: "music.note",
-                  body: "A violin and a flute on the same note sound different because of the MIX of modes each excites — the standing patterns on this sheet, superposed."),
+            .init(title: "Car suspension", icon: "car.fill",
+                  body: "A spring supports each wheel and a damper drains the bounce — exactly your damping slider. Blown dampers make a car float and wallow; stiff ones make it skate."),
+            .init(title: "Quartz watches", icon: "clock.fill",
+                  body: "The quartz tuning fork inside a watch is a microscopic spring oscillating 32,768 times a second; its T = 2π√(m/k) steadiness is why watches keep time."),
+            .init(title: "Earthquake engineering", icon: "building.columns.fill",
+                  body: "Buildings are giant masses on springy frames. Engineers tune stiffness so the building's natural frequency avoids the ground's shaking frequencies — resonance is the enemy."),
+            .init(title: "Molecular bonds", icon: "atom",
+                  body: "Chemical bonds behave like tiny springs between atoms; infrared spectroscopy reads their vibration frequencies to identify molecules — coupled oscillators at nanometer scale."),
         ])
 }
 
-/// Window panel: the medium's parameters and the physics prose. The
-/// room holds the sheet and two small pods; the paragraphs live here.
-struct WaveMediumControlsView: View {
-    @Environment(WaveMediumModel.self) private var model
+/// Window panel: geometry parameters.
+struct SpringsControlsView: View {
+    @Environment(SpringsModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
 
         VStack(alignment: .leading, spacing: DesignTokens.Panel.sectionSpacing) {
-            PanelSection("The medium") {
+            PanelSection("Apparatus") {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Wave speed c = \(model.waveSpeed, specifier: "%.1f") m/s")
+                    Text("Rest length: \(model.restLength, specifier: "%.2f") m")
                         .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.waveSpeed, in: WaveMediumModel.waveSpeedRange)
+                    Slider(value: $model.restLength, in: SpringsModel.restLengthRange)
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Damping: \(model.damping, specifier: "%.2f")")
+                    Text("Max pull: \(model.maxExtension, specifier: "%.2f") m")
                         .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.damping, in: WaveMediumModel.dampingRange)
+                    Slider(value: $model.maxExtension, in: SpringsModel.extensionRange)
                 }
-                Toggle("Clamped rim (drumhead)", isOn: $model.boundaryFixed)
-                    .font(DesignTokens.TypeScale.control)
-            }
-
-            PanelSection("What you're seeing") {
-                Text("The sheet is a grid of masses joined by springs. In the small-displacement limit that IS the wave equation ∂²u/∂t² = c²∇²u: pull one point and the springs pull its neighbours, which pull theirs — a wave. Clamped edges reflect it inverted; the whole thing rings the drumhead's standing modes, the same shapes a real drum makes.")
-                    .font(DesignTokens.TypeScale.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if model.mode == .coupled {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Coupling spring: \(model.coupling, specifier: "%.0f") N/m")
+                            .font(DesignTokens.TypeScale.control.monospacedDigit())
+                        Slider(value: $model.coupling, in: 1...40)
+                    }
+                    Text("Softer coupling makes the energy hand-off slower — the beat period is 2π divided by the two normal-mode frequencies' difference.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if !model.insightText.isEmpty {

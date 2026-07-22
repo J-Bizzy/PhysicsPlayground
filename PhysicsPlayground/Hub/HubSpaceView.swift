@@ -179,6 +179,7 @@ final class HubScene {
         case "waves": buildWavesVignette(in: vignette)
         case "windtunnel": buildWindTunnelVignette(in: vignette)
         case "circuits": buildCircuitsVignette(in: vignette)
+        case "elasticfield": buildElasticVignette(in: vignette)
         default:
             // A new module gets a simple accent sphere until it has art.
             vignette.addChild(ModelEntity(
@@ -293,6 +294,33 @@ final class HubScene {
     }
 
     /// Two source pucks with interleaving ripple rings.
+    /// A little rippled membrane: a grid of tiles at a (2,1) standing-
+    /// mode height, tinted warm on the crest and cool in the trough.
+    private static func buildElasticVignette(in parent: Entity) {
+        let side = 9
+        let span: Float = 0.11
+        let step = span / Float(side - 1)
+        let tile = MeshResource.generateBox(size: [step * 0.92, 0.006, step * 0.92])
+        for j in 0..<side {
+            for i in 0..<side {
+                let u = Float(i) / Float(side - 1)
+                let v = Float(j) / Float(side - 1)
+                let h = 0.03 * sin(2 * .pi * u) * sin(.pi * v)   // (2,1) mode
+                let warmth = (h / 0.03 + 1) / 2                   // 0 trough … 1 crest
+                let color = UIColor(
+                    red: CGFloat(0.15 + 0.85 * warmth),
+                    green: CGFloat(0.75 - 0.35 * abs(warmth - 0.5) * 2),
+                    blue: CGFloat(0.9 - 0.6 * warmth), alpha: 1)
+                var material = UnlitMaterial(color: color)
+                material.blending = .transparent(opacity: 0.92)
+                let cell = ModelEntity(mesh: tile, materials: [material])
+                cell.position = SIMD3(-span / 2 + Float(i) * step, h,
+                                      -span / 2 + Float(j) * step)
+                parent.addChild(cell)
+            }
+        }
+    }
+
     private static func buildWavesVignette(in parent: Entity) {
         var ringMaterial = UnlitMaterial(color: DesignTokens.Palette.waveSourceUI)
         ringMaterial.blending = .transparent(opacity: 0.55)

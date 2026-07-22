@@ -27,7 +27,7 @@ struct WaveMediumSpaceView: View {
             let renderer = WaveMediumRenderer()
             content.add(renderer.root)
 
-            let podsRoot = PodMount.makeRoot(module: "springs")
+            let podsRoot = PodMount.makeRoot(module: "elasticfield")
             content.add(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-medium"), name: "Medium",
                            at: [-1.05, 1.3, -0.5], in: podsRoot)
