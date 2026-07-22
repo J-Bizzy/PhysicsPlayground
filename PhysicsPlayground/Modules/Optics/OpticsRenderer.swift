@@ -43,11 +43,25 @@ final class OpticsRenderer {
         "2F", extrusionDepth: 0.002, font: .systemFont(ofSize: 0.02, weight: .semibold))
 
     private let rayEntity = ModelEntity()
+    private let rayHaloEntity = ModelEntity()
     private let rayMaterial: UnlitMaterial = {
-        var material = UnlitMaterial(color: UIColor(red: 1, green: 0.32, blue: 0.26, alpha: 1))
-        material.blending = .transparent(opacity: 0.85)
+        var material = UnlitMaterial(color: UIColor(red: 1, green: 0.4, blue: 0.32, alpha: 1))
+        material.blending = .transparent(opacity: 0.95)
         return material
     }()
+    private let rayHaloMaterial: UnlitMaterial = {
+        // The bloom: a fat, faint tube behind the bright core so the
+        // beam reads as light in the air, not a drawn line.
+        var material = UnlitMaterial(color: UIColor(red: 1, green: 0.35, blue: 0.3, alpha: 1))
+        material.blending = .transparent(opacity: 0.13)
+        return material
+    }()
+
+    // MARK: Diegetic dials (the controls live in the room, not a box)
+    private var prismDial: SpatialDial!
+    private var indexDial: SpatialDial!
+    private var focalDial: SpatialDial!
+    var dials: [SpatialDial] { [prismDial, indexDial, focalDial] }
     private let imageMarker: ModelEntity
     private var lastSnapshot: String?
 
@@ -85,9 +99,15 @@ final class OpticsRenderer {
     private var blockEntity: ModelEntity!
     private var laserEntity: ModelEntity!
     private let beamEntity = ModelEntity()
+    private let beamHaloEntity = ModelEntity()
     private let beamMaterial: UnlitMaterial = {
-        var material = UnlitMaterial(color: UIColor(red: 1, green: 0.32, blue: 0.26, alpha: 1))
-        material.blending = .transparent(opacity: 0.9)
+        var material = UnlitMaterial(color: UIColor(red: 1, green: 0.42, blue: 0.34, alpha: 1))
+        material.blending = .transparent(opacity: 0.95)
+        return material
+    }()
+    private let beamHaloMaterial: UnlitMaterial = {
+        var material = UnlitMaterial(color: UIColor(red: 1, green: 0.35, blue: 0.3, alpha: 1))
+        material.blending = .transparent(opacity: 0.14)
         return material
     }()
     private var blockNormalIndicator: ModelEntity!
@@ -143,8 +163,70 @@ final class OpticsRenderer {
         infoAnchor.components.set(BillboardComponent())
         root.addChild(infoAnchor)
 
+        root.addChild(rayHaloEntity)
+
         buildDispersionStation()
         buildRefractionCorner()
+        buildDials()
+    }
+
+    // MARK: Dials
+
+    private func buildDials() {
+        // The three dials float at waist height in front of their
+        // zones — reachable consoles, below the system windows and the
+        // beam lines, each turned to face the standing user.
+        let accent = UIColor(red: 1.0, green: 0.42, blue: 0.38, alpha: 1)
+        // Prism-rotation dial: front-left, the dispersion side.
+        prismDial = SpatialDial(
+            name: "dial-prism", center: SIMD3(-0.62, 1.16, -0.34),
+            normal: simd_normalize(SIMD3(0.3, 0.1, 1.0)), accent: accent)
+        root.addChild(prismDial.root)
+
+        // Refractive-index dial: front-right, the refraction side.
+        indexDial = SpatialDial(
+            name: "dial-index", center: SIMD3(0.62, 1.16, -0.34),
+            normal: simd_normalize(SIMD3(-0.3, 0.1, 1.0)),
+            accent: UIColor(red: 0.6, green: 0.85, blue: 1, alpha: 1))
+        root.addChild(indexDial.root)
+
+        // Focal-length dial: retargeted BELOW whichever lens is selected
+        // (below the ray fan, tilted up toward the user; hidden when no
+        // lens is selected).
+        focalDial = SpatialDial(
+            name: "dial-focal", center: SIMD3<Float>(OpticsModel.center) + SIMD3(0, -0.34, 0.2),
+            normal: simd_normalize(SIMD3(0, 0.3, 1.0)),
+            accent: UIColor(red: 0.3, green: 0.75, blue: 1, alpha: 1))
+        focalDial.root.isEnabled = false
+        root.addChild(focalDial.root)
+    }
+
+    private func syncDials(_ model: OpticsModel) {
+        let prismSpan = OpticsModel.prismRotationRange
+        prismDial.setValueFraction(
+            (model.prismRotationDegrees - prismSpan.lowerBound)
+            / (prismSpan.upperBound - prismSpan.lowerBound))
+        prismDial.setLabel(String(format: "θ %.0f°", model.prismRotationDegrees))
+
+        let indexSpan = OpticsModel.blockIndexRange
+        indexDial.setValueFraction(
+            (model.blockIndex - indexSpan.lowerBound)
+            / (indexSpan.upperBound - indexSpan.lowerBound))
+        indexDial.setLabel(String(format: "n %.2f", model.blockIndex))
+
+        // The focal dial rides the selected lens.
+        if let lens = model.selected,
+           lens.kind == .convergingLens || lens.kind == .divergingLens {
+            focalDial.root.isEnabled = true
+            focalDial.root.position = SIMD3<Float>(OpticsModel.center)
+                + SIMD3(Float(lens.x), -0.34, 0.2)
+            let span = OpticsModel.focalRange
+            focalDial.setValueFraction(
+                (lens.focal - span.lowerBound) / (span.upperBound - span.lowerBound))
+            focalDial.setLabel(String(format: "f %.0f cm", lens.focal * 100))
+        } else {
+            focalDial.root.isEnabled = false
+        }
     }
 
     // MARK: Dispersion station (left wall)
@@ -371,6 +453,7 @@ final class OpticsRenderer {
         laserEntity.components.set(laserAccessibility)
         cornerRoot.addChild(laserEntity)
 
+        cornerRoot.addChild(beamHaloEntity)
         cornerRoot.addChild(beamEntity)
 
         var normalMaterial = UnlitMaterial(color: .white)
@@ -411,6 +494,9 @@ final class OpticsRenderer {
         let points = model.blockTrace.map { SIMD3<Float>($0) }
         if let mesh = TubeMesh.tube(lines: [points], radius: 0.0028, sides: 5) {
             beamEntity.model = ModelComponent(mesh: mesh, materials: [beamMaterial])
+        }
+        if let halo = TubeMesh.tube(lines: [points], radius: 0.009, sides: 5) {
+            beamHaloEntity.model = ModelComponent(mesh: halo, materials: [beamHaloMaterial])
         }
 
         if let entry = model.blockEntry {
@@ -486,6 +572,7 @@ final class OpticsRenderer {
         syncRays(model)
         syncDispersionStation(model)
         syncRefractionCorner(model)
+        syncDials(model)
 
         if let selected = model.selected {
             infoAnchor.isEnabled = true
@@ -628,6 +715,11 @@ final class OpticsRenderer {
             rayEntity.model = ModelComponent(mesh: mesh, materials: [rayMaterial])
         } else {
             rayEntity.model = nil
+        }
+        if let halo = TubeMesh.tube(lines: lines, radius: 0.007, sides: 4) {
+            rayHaloEntity.model = ModelComponent(mesh: halo, materials: [rayHaloMaterial])
+        } else {
+            rayHaloEntity.model = nil
         }
 
         if let prediction = model.imagePrediction,

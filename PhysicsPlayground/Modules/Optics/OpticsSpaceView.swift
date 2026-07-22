@@ -21,6 +21,7 @@ struct OpticsSpaceView: View {
     @Environment(OpticsModel.self) private var model
     @State private var renderer: OpticsRenderer?
     @State private var drag: RelativeDrag?
+    @State private var dialDrag: DialDrag?
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -37,10 +38,6 @@ struct OpticsSpaceView: View {
                            at: [-0.55, 1.85, -1.0], in: podsRoot)
             PodMount.mount(attachments.entity(for: "pod-selected"), name: "Selected element",
                            at: [0.55, 1.85, -1.0], in: podsRoot)
-            PodMount.mount(attachments.entity(for: "pod-prism"), name: "Prism",
-                           at: [-1.15, 1.9, -0.55], in: podsRoot)
-            PodMount.mount(attachments.entity(for: "pod-glass"), name: "Glass",
-                           at: [1.15, 1.9, -0.75], in: podsRoot)
             if let info = attachments.entity(for: "info") {
                 info.position = [0, 0.02, 0]
                 renderer.infoAnchor.addChild(info)
@@ -63,14 +60,6 @@ struct OpticsSpaceView: View {
                 OpticsSelectedPod()
                     .environment(model)
             }
-            Attachment(id: "pod-prism") {
-                PrismPod()
-                    .environment(model)
-            }
-            Attachment(id: "pod-glass") {
-                GlassBlockPod()
-                    .environment(model)
-            }
             Attachment(id: "info") {
                 OpticsInfoCard()
                     .environment(model)
@@ -84,14 +73,25 @@ struct OpticsSpaceView: View {
                 .onChanged { value in
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
-                    if drag == nil {
+                    if drag == nil, dialDrag == nil {
                         beginDrag(value.entity, hand: hand)
+                    }
+                    // A dial twist wins if one is engaged.
+                    if var dial = dialDrag, let renderer,
+                       let spatial = renderer.dials.first(where: { $0.name == dial.name }) {
+                        let newValue = dial.advance(toAngle: spatial.handAngle(hand))
+                        dialDrag = dial
+                        applyDial(name: dial.name, value: newValue)
+                        return
                     }
                     guard let drag else { return }
                     let position = drag.position(forHand: hand)
                     applyDrag(name: drag.name, position: position)
                 }
-                .onEnded { _ in drag = nil }
+                .onEnded { _ in
+                    drag = nil
+                    dialDrag = nil
+                }
         )
         .gesture(
             TapGesture()
@@ -113,6 +113,12 @@ struct OpticsSpaceView: View {
     private func beginDrag(_ entity: Entity, hand: SIMD3<Double>) {
         var current: Entity? = entity
         while let candidate = current {
+            if let renderer, let dial = renderer.dials.first(where: { $0.name == candidate.name }) {
+                dialDrag = DialDrag(
+                    name: dial.name, startValue: dialStartValue(dial.name),
+                    startAngle: dial.handAngle(hand), range: dialRange(dial.name))
+                return
+            }
             if let id = UUID(uuidString: candidate.name),
                let element = model.elements.first(where: { $0.id == id }) {
                 model.select(id: id)
@@ -145,59 +151,29 @@ struct OpticsSpaceView: View {
             model.moveBlock(toWorld: position)
         }
     }
-}
 
-/// The dispersion station's one control — and its one revelation.
-struct PrismPod: View {
-    @Environment(OpticsModel.self) private var model
-
-    var body: some View {
-        @Bindable var model = model
-        ControlPod(title: "Prism", icon: "triangle",
-                   tint: DesignTokens.Palette.opticsAccent) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Rotation: \(model.prismRotationDegrees, specifier: "%.0f")°")
-                    .font(DesignTokens.TypeScale.control.monospacedDigit())
-                Slider(value: $model.prismRotationDegrees,
-                       in: OpticsModel.prismRotationRange)
-                    .accessibilityLabel("Prism rotation")
-            }
-            Text(model.prismShowsTIR
-                 ? "The exit face has gone past the critical angle — it's a MIRROR now. That's total internal reflection, the trick inside every optical fiber."
-                 : "Blue sees more glass than red, so blue bends more — white light fans into a spectrum. Rotate toward +15° and watch the exit face lock shut.")
-                .font(DesignTokens.TypeScale.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+    private func dialRange(_ name: String) -> ClosedRange<Double> {
+        switch name {
+        case "dial-prism": OpticsModel.prismRotationRange
+        case "dial-index": OpticsModel.blockIndexRange
+        default: OpticsModel.focalRange
         }
     }
-}
 
-/// The refraction corner: one slider (n); the real control is the
-/// laser in your hand.
-struct GlassBlockPod: View {
-    @Environment(OpticsModel.self) private var model
+    private func dialStartValue(_ name: String) -> Double {
+        switch name {
+        case "dial-prism": model.prismRotationDegrees
+        case "dial-index": model.blockIndex
+        default: model.selected?.focal ?? 0.25
+        }
+    }
 
-    var body: some View {
-        @Bindable var model = model
-        ControlPod(title: "Glass block", icon: "cube.transparent",
-                   tint: DesignTokens.Palette.opticsAccent) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Refractive index n = \(model.blockIndex, specifier: "%.2f")")
-                    .font(DesignTokens.TypeScale.control.monospacedDigit())
-                Slider(value: $model.blockIndex, in: OpticsModel.blockIndexRange)
-                    .accessibilityLabel("Refractive index")
-            }
-            if let entry = model.blockEntry {
-                Text("sin \(entry.incidence * 180 / .pi, specifier: "%.0f")° = n · sin \(entry.refraction * 180 / .pi, specifier: "%.0f")° — Snell's law, live")
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            Text(model.blockShowsTIR
-                 ? "The beam is trapped — bouncing inside like light in a fiber. Ease the laser back toward face-on to let it out."
-                 : "Grab the LASER and carry it — it always aims at the block, so your hand position is the angle of incidence. Sneak it toward the block's edge-on side until the beam gets trapped inside.")
-                .font(DesignTokens.TypeScale.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+    private func applyDial(name: String, value: Double) {
+        switch name {
+        case "dial-prism": model.prismRotationDegrees = value
+        case "dial-index": model.blockIndex = value
+        default:
+            if let lens = model.selected { model.setFocal(id: lens.id, value) }
         }
     }
 }
@@ -243,15 +219,10 @@ struct OpticsSelectedPod: View {
         ControlPod(title: "Selected", icon: "viewfinder", tint: DesignTokens.Palette.opticsAccent) {
             if let selected = model.selected {
                 if selected.kind == .convergingLens || selected.kind == .divergingLens {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Focal length: \(selected.focal * 100, specifier: "%.0f") cm")
-                            .font(DesignTokens.TypeScale.control.monospacedDigit())
-                        Slider(value: Binding(
-                            get: { selected.focal },
-                            set: { model.setFocal(id: selected.id, $0) }
-                        ), in: OpticsModel.focalRange)
-                        .accessibilityLabel("Focal length")
-                    }
+                    Text("Twist the blue focal dial above the lens to change f.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Button(role: .destructive) {
                     model.removeSelected()
