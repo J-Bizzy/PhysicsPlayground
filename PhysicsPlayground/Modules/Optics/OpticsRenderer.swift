@@ -77,6 +77,26 @@ final class OpticsRenderer {
     private let tirLabelMaterial = UnlitMaterial(color: UIColor(
         red: 1, green: 0.45, blue: 0.35, alpha: 1))
 
+    // MARK: Refraction corner state
+
+    static let blockName = "glass-block"
+    static let laserName = "laser-pointer"
+    private let cornerRoot = Entity()
+    private var blockEntity: ModelEntity!
+    private var laserEntity: ModelEntity!
+    private let beamEntity = ModelEntity()
+    private let beamMaterial: UnlitMaterial = {
+        var material = UnlitMaterial(color: UIColor(red: 1, green: 0.32, blue: 0.26, alpha: 1))
+        material.blending = .transparent(opacity: 0.9)
+        return material
+    }()
+    private var blockNormalIndicator: ModelEntity!
+    private var blockAnglePivot: Entity!
+    private var blockAngleText: ModelEntity!
+    private var blockTIRPivot: Entity!
+    private var blockTIRText: ModelEntity!
+    private var lastCornerKey = ""
+
     init() {
         // Rail.
         let rail = ModelEntity(
@@ -124,9 +144,10 @@ final class OpticsRenderer {
         root.addChild(infoAnchor)
 
         buildDispersionStation()
+        buildRefractionCorner()
     }
 
-    // MARK: Dispersion station
+    // MARK: Dispersion station (left wall)
 
     private static func wavelengthColor(_ nanometers: Double) -> UIColor {
         switch nanometers {
@@ -140,16 +161,20 @@ final class OpticsRenderer {
         }
     }
 
+    /// Station-local orientation: local +x (the beam) runs along
+    /// world −z — the trace plane lives on the left wall, facing the
+    /// room center.
+    private static let stationYaw = simd_quatf(angle: .pi / 2, axis: [0, 1, 0])
+
     private func buildDispersionStation() {
-        // The white-light source: a small dark housing with a glowing face.
+        // White-light source: dark housing, glowing face down the wall.
         let housing = ModelEntity(
             mesh: .generateBox(size: [0.07, 0.07, 0.06], cornerRadius: 0.008),
             materials: [SimpleMaterial(color: UIColor(white: 0.12, alpha: 1),
                                        roughness: 0.5, isMetallic: true)])
-        housing.position = SIMD3<Float>(
-            Float(OpticsModel.prismSourceX) - 0.03,
-            Float(OpticsModel.prismStationCenter.y),
-            Float(OpticsModel.prismStationCenter.z))
+        housing.position = SIMD3<Float>(OpticsModel.dispersionWorld(
+            SIMD2(OpticsModel.prismSourceLocalX - 0.03, 0)))
+        housing.orientation = Self.stationYaw
         let glow = ModelEntity(
             mesh: .generateBox(size: [0.004, 0.03, 0.03]),
             materials: [UnlitMaterial(color: .white)])
@@ -157,8 +182,8 @@ final class OpticsRenderer {
         housing.addChild(glow)
         stationRoot.addChild(housing)
 
-        // The prism: its cross-section triangle extruded in z, built
-        // once in apex-local coordinates and ROTATED as an entity.
+        // The prism: cross-section in the station plane, extruded,
+        // built once and rotated as an entity.
         let base = Prism.Geometry(
             apex: .zero, apexAngle: .pi / 3, rotation: 0, sideLength: 0.26)
         let v = base.vertices.map { SIMD3<Float>(Float($0.x), Float($0.y), 0) }
@@ -192,10 +217,7 @@ final class OpticsRenderer {
             mesh: (try? MeshResource.generate(from: [descriptor]))
                 ?? .generateBox(size: 0.2),
             materials: [glass])
-        prismEntity.position = SIMD3<Float>(
-            Float(OpticsModel.prismStationCenter.x),
-            Float(OpticsModel.prismStationCenter.y + 0.16),
-            Float(OpticsModel.prismStationCenter.z))
+        prismEntity.position = SIMD3<Float>(OpticsModel.dispersionWorld(SIMD2(0, 0.15)))
         stationRoot.addChild(prismEntity)
 
         stationRoot.addChild(whiteBeam)
@@ -204,14 +226,12 @@ final class OpticsRenderer {
             material.blending = .transparent(opacity: 0.85)
             return material
         }
-        for material in spectrumMaterials {
+        for _ in spectrumMaterials {
             let tube = ModelEntity()
-            _ = material
             stationRoot.addChild(tube)
             spectrumEntities.append(tube)
         }
 
-        // Entry normal + angle annotation.
         var normalMaterial = UnlitMaterial(color: .white)
         normalMaterial.blending = .transparent(opacity: 0.35)
         normalIndicator = ModelEntity(
@@ -243,29 +263,36 @@ final class OpticsRenderer {
         return mesh
     }
 
+    private func setStationLabel(_ entity: ModelEntity, _ string: String,
+                                 material: UnlitMaterial) {
+        let mesh = stationLabelMesh(string)
+        entity.model = ModelComponent(mesh: mesh, materials: [material])
+        let bounds = mesh.bounds
+        entity.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
+    }
+
     private func syncDispersionStation(_ model: OpticsModel) {
         let key = String(format: "%.2f", model.prismRotationDegrees)
         guard key != lastStationKey else { return }
         lastStationKey = key
 
-        prismEntity.orientation = simd_quatf(
+        prismEntity.orientation = Self.stationYaw * simd_quatf(
             angle: Float(model.prismRotationDegrees) * .pi / 180, axis: [0, 0, 1])
 
-        let z = Float(OpticsModel.prismStationCenter.z)
+        func world(_ local: SIMD2<Double>) -> SIMD3<Float> {
+            SIMD3<Float>(OpticsModel.dispersionWorld(local))
+        }
+
         let traces = model.prismTraces
-        // The shared white leg: source → entry point (middle trace).
         let middle = traces[traces.count / 2].line
         if middle.count >= 2 {
-            let white = [SIMD3<Float>(Float(middle[0].x), Float(middle[0].y), z),
-                         SIMD3<Float>(Float(middle[1].x), Float(middle[1].y), z)]
+            let white = [world(middle[0]), world(middle[1])]
             if let mesh = TubeMesh.tube(lines: [white], radius: 0.0035, sides: 6) {
                 whiteBeam.model = ModelComponent(mesh: mesh, materials: [whiteBeamMaterial])
             }
         }
-        // Per-wavelength paths from the entry point on.
         for (index, trace) in traces.enumerated() where index < spectrumEntities.count {
-            let tail = trace.line.dropFirst()
-            let points = tail.map { SIMD3<Float>(Float($0.x), Float($0.y), z) }
+            let points = trace.line.dropFirst().map { world($0) }
             if points.count >= 2,
                let mesh = TubeMesh.tube(lines: [Array(points)], radius: 0.0018, sides: 4) {
                 spectrumEntities[index].model = ModelComponent(
@@ -275,40 +302,140 @@ final class OpticsRenderer {
             }
         }
 
-        // Normal + angles at the entry point.
         if middle.count >= 2 {
-            let entry = SIMD3<Float>(Float(middle[1].x), Float(middle[1].y), z)
-            let rotation = Float(model.prismRotationDegrees) * .pi / 180
-            // Left-face outward normal, rotated with the prism.
-            let half = Float.pi / 6
-            let baseNormal = SIMD2<Float>(-cos(half), sin(half))
-            let normal = SIMD2(
+            let entryLocal = middle[1]
+            let rotation = model.prismRotationDegrees * .pi / 180
+            let half = Double.pi / 6
+            let baseNormal = SIMD2(-cos(half), sin(half))
+            let localNormal = SIMD2(
                 baseNormal.x * cos(rotation) - baseNormal.y * sin(rotation),
                 baseNormal.x * sin(rotation) + baseNormal.y * cos(rotation))
-            normalIndicator.position = entry
-            normalIndicator.orientation = VectorFieldArrows.rotationFromYAxis(
-                to: SIMD3(normal.x, normal.y, 0))
+            // Station-local (x, y) → world (−z, y).
+            let worldNormal = SIMD3<Float>(0, Float(localNormal.y), Float(-localNormal.x))
+            normalIndicator.position = world(entryLocal)
+            normalIndicator.orientation = VectorFieldArrows.rotationFromYAxis(to: worldNormal)
             let angles = model.prismEntryAngles
-            let label = String(
+            setStationLabel(angleText, String(
                 format: "θ₁ %.0f°  →  θ₂ %.0f°",
-                angles.incidence * 180 / .pi, angles.refraction * 180 / .pi)
-            angleText.model = ModelComponent(
-                mesh: stationLabelMesh(label), materials: [angleLabelMaterial])
-            let bounds = stationLabelMesh(label).bounds
-            angleText.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
-            anglePivot.position = entry + SIMD3(normal.x, normal.y, 0) * 0.17
+                angles.incidence * 180 / .pi, angles.refraction * 180 / .pi),
+                material: angleLabelMaterial)
+            anglePivot.position = world(entryLocal) + worldNormal * 0.17
 
             let tir = model.prismShowsTIR
             tirPivot.isEnabled = tir
             if tir {
-                let mesh = stationLabelMesh("total internal reflection")
-                tirText.model = ModelComponent(mesh: mesh, materials: [tirLabelMaterial])
-                let tirBounds = mesh.bounds
-                tirText.position = [-(tirBounds.min.x + tirBounds.max.x) / 2, 0, 0]
-                tirPivot.position = SIMD3<Float>(
-                    Float(OpticsModel.prismStationCenter.x) + 0.22,
-                    Float(OpticsModel.prismStationCenter.y) + 0.02, z)
+                setStationLabel(tirText, "total internal reflection",
+                                material: tirLabelMaterial)
+                tirPivot.position = world(SIMD2(0.3, 0.0))
             }
+        }
+    }
+
+    // MARK: Refraction corner (right side)
+
+    private func buildRefractionCorner() {
+        var glass = PhysicallyBasedMaterial()
+        glass.baseColor = .init(tint: UIColor(red: 0.85, green: 0.93, blue: 1, alpha: 1))
+        glass.roughness = 0.05
+        glass.blending = .transparent(opacity: .init(floatLiteral: 0.3))
+        let h = OpticsModel.blockHalfExtents
+        blockEntity = ModelEntity(
+            mesh: .generateBox(size: SIMD3<Float>(SIMD3(h.x * 2, h.y * 2, h.z * 2)),
+                               cornerRadius: 0.004),
+            materials: [glass])
+        blockEntity.name = Self.blockName
+        Grabbable.configureTouchTarget(blockEntity, collisionRadius: 0.3)
+        var blockAccessibility = AccessibilityComponent()
+        blockAccessibility.isAccessibilityElement = true
+        blockAccessibility.label = "Glass block. Carry it anywhere — the laser follows."
+        blockEntity.components.set(blockAccessibility)
+        cornerRoot.addChild(blockEntity)
+
+        // The hand laser: a pocket pointer with a bright nose.
+        let body = ModelEntity(
+            mesh: .generateCylinder(height: 0.11, radius: 0.016),
+            materials: [SimpleMaterial(color: UIColor(white: 0.15, alpha: 1),
+                                       roughness: 0.4, isMetallic: true)])
+        let nose = ModelEntity(
+            mesh: .generateCylinder(height: 0.012, radius: 0.017),
+            materials: [UnlitMaterial(color: UIColor(red: 1, green: 0.32, blue: 0.26, alpha: 1))])
+        nose.position = [0, 0.06, 0]
+        laserEntity = ModelEntity()
+        laserEntity.addChild(body)
+        laserEntity.addChild(nose)
+        laserEntity.name = Self.laserName
+        Grabbable.configureTouchTarget(laserEntity, collisionRadius: 0.07)
+        var laserAccessibility = AccessibilityComponent()
+        laserAccessibility.isAccessibilityElement = true
+        laserAccessibility.label = "Laser pointer. It always aims at the glass block — where you hold it IS the angle of incidence."
+        laserEntity.components.set(laserAccessibility)
+        cornerRoot.addChild(laserEntity)
+
+        cornerRoot.addChild(beamEntity)
+
+        var normalMaterial = UnlitMaterial(color: .white)
+        normalMaterial.blending = .transparent(opacity: 0.35)
+        blockNormalIndicator = ModelEntity(
+            mesh: .generateCylinder(height: 0.16, radius: 0.0012),
+            materials: [normalMaterial])
+        cornerRoot.addChild(blockNormalIndicator)
+        blockAnglePivot = Entity()
+        blockAnglePivot.components.set(BillboardComponent())
+        blockAngleText = ModelEntity()
+        blockAnglePivot.addChild(blockAngleText)
+        cornerRoot.addChild(blockAnglePivot)
+        blockTIRPivot = Entity()
+        blockTIRPivot.components.set(BillboardComponent())
+        blockTIRText = ModelEntity()
+        blockTIRPivot.addChild(blockTIRText)
+        blockTIRPivot.isEnabled = false
+        cornerRoot.addChild(blockTIRPivot)
+
+        root.addChild(cornerRoot)
+    }
+
+    private func syncRefractionCorner(_ model: OpticsModel) {
+        blockEntity.position = SIMD3<Float>(model.blockCenter)
+        laserEntity.position = SIMD3<Float>(model.laserPosition)
+        laserEntity.orientation = VectorFieldArrows.rotationFromYAxis(
+            to: SIMD3<Float>(model.laserAim))
+
+        let key = String(
+            format: "%.3f,%.3f,%.3f|%.3f,%.3f,%.3f|%.2f",
+            model.laserPosition.x, model.laserPosition.y, model.laserPosition.z,
+            model.blockCenter.x, model.blockCenter.y, model.blockCenter.z,
+            model.blockIndex)
+        guard key != lastCornerKey else { return }
+        lastCornerKey = key
+
+        let points = model.blockTrace.map { SIMD3<Float>($0) }
+        if let mesh = TubeMesh.tube(lines: [points], radius: 0.0028, sides: 5) {
+            beamEntity.model = ModelComponent(mesh: mesh, materials: [beamMaterial])
+        }
+
+        if let entry = model.blockEntry {
+            blockNormalIndicator.isEnabled = true
+            blockAnglePivot.isEnabled = true
+            blockNormalIndicator.position = SIMD3<Float>(entry.point)
+            blockNormalIndicator.orientation = VectorFieldArrows.rotationFromYAxis(
+                to: SIMD3<Float>(entry.normal))
+            setStationLabel(blockAngleText, String(
+                format: "θ₁ %.0f°  →  θ₂ %.0f°",
+                entry.incidence * 180 / .pi, entry.refraction * 180 / .pi),
+                material: angleLabelMaterial)
+            blockAnglePivot.position = SIMD3<Float>(entry.point + entry.normal * 0.16)
+        } else {
+            blockNormalIndicator.isEnabled = false
+            blockAnglePivot.isEnabled = false
+        }
+
+        let tir = model.blockShowsTIR
+        blockTIRPivot.isEnabled = tir
+        if tir {
+            setStationLabel(blockTIRText, "total internal reflection — a light pipe",
+                            material: tirLabelMaterial)
+            blockTIRPivot.position = SIMD3<Float>(model.blockCenter)
+                + SIMD3(0, Float(OpticsModel.blockHalfExtents.y) + 0.07, 0)
         }
     }
 
@@ -358,6 +485,7 @@ final class OpticsRenderer {
         syncElements(model)
         syncRays(model)
         syncDispersionStation(model)
+        syncRefractionCorner(model)
 
         if let selected = model.selected {
             infoAnchor.isEnabled = true

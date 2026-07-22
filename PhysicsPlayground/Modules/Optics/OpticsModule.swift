@@ -15,11 +15,11 @@ enum OpticsModule {
     static func descriptor(appModel: AppModel) -> ModuleDescriptor {
         ModuleDescriptor(
             id: id,
-            title: "Waves & Optics Studio",
-            blurb: "Two rooms of light and waves: a laser bench with a real prism spilling spectra, and a wave lab where you walk through interference and stand inside the double slit.",
+            title: "Optics Studio",
+            blurb: "One room, three light stations: the lens bench dead ahead, a prism spilling spectra on your left, and a laser you carry in your hand on the right — where you hold it IS the angle of incidence.",
             icon: "rays",
             accent: DesignTokens.Palette.opticsAccent,
-            firstRunHint: "Two areas — switch at the top pod. OPTICS: drag lenses along the rail, rotate the prism until the exit face locks into total internal reflection. WAVE LAB: grab an emitter and glide it (Doppler happens around your hand), then flip on the double slit and walk between the fringes.",
+            firstRunHint: "Look around — three stations. AHEAD: drag lenses along the rail. LEFT: rotate the prism until the exit face locks into total internal reflection. RIGHT: grab the little laser and carry it around the glass block — Snell's law follows your hand; sneak up on the block edge-on and the beam gets trapped inside.",
             legend: legend,
             realWorld: story,
             isPaused: { false },
@@ -49,8 +49,8 @@ enum OpticsModule {
                    text: "Gold marker — the image point the thin-lens equation predicts; the rays cross right on it"),
         LegendItem(swatch: .fill(Color(red: 0.3, green: 0.75, blue: 1)),
                    text: "Blue-rimmed lens converges; orange-rimmed diverges (virtual focus behind it)"),
-        LegendItem(swatch: .line(Color(red: 0.35, green: 0.85, blue: 0.9)),
-                   text: "Teal shells — wave crests expanding from where they were emitted; teal dots pulse with the live interference field"),
+        LegendItem(swatch: .line(Color(red: 0.55, green: 0.25, blue: 1)),
+                   text: "The spectrum fan — seven wavelengths, each solving Snell's law with its own refractive index (Cauchy dispersion)"),
     ]
 
     private static let story = RealWorldStory(
