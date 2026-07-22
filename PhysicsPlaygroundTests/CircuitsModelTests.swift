@@ -790,6 +790,58 @@ final class CircuitsModelTests: XCTestCase {
         model.endCarry()
     }
 
+    // MARK: Motor (a real DC motor)
+
+    /// A motor across a battery settles at the steady speed the model's
+    /// constants predict, ω = kV/(bR + k²), and doubling the drive
+    /// voltage doubles the steady speed.
+    func testMotorSteadySpeedIsProportionalToVoltage() {
+        func steadySpeed(voltage: Double) -> Double {
+            let model = CircuitsModel()
+            model.clearBench()
+            guard let battery = model.add(.battery, at: SIMD3(-0.3, 1.2, -0.9)),
+                  let motor = model.add(.motor, at: SIMD3(0.3, 1.2, -0.9)) else {
+                XCTFail("bench refused parts"); return 0
+            }
+            model.select(id: battery)
+            model.selectedValue = voltage
+            model.connectTerminals(.init(componentID: battery, end: 0), .init(componentID: motor, end: 0))
+            model.connectTerminals(.init(componentID: battery, end: 1), .init(componentID: motor, end: 1))
+            for _ in 0..<3000 { model.step(dt: 1.0 / 240.0) }   // to steady state
+            return model.components.first { $0.id == motor }!.motorSpeed
+        }
+
+        let k = CircuitsModel.motorTorqueConstant
+        let b = CircuitsModel.motorFriction
+        let r = 8.0   // default coil resistance
+        let predicted = k * 9.0 / (b * r + k * k)
+
+        let omega9 = steadySpeed(voltage: 9)
+        XCTAssertEqual(omega9, predicted, accuracy: predicted * 0.05,
+                       "steady speed matches ω = kV/(bR + k²)")
+        XCTAssertGreaterThan(omega9, 1, "it actually spins")
+
+        let omega18 = steadySpeed(voltage: 18)
+        XCTAssertEqual(omega18 / omega9, 2, accuracy: 0.05, "speed ∝ voltage")
+    }
+
+    /// The rotor spins up from rest, not instantly — inertia is real.
+    func testMotorSpinsUpGradually() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let battery = model.add(.battery, at: SIMD3(-0.3, 1.2, -0.9)),
+              let motor = model.add(.motor, at: SIMD3(0.3, 1.2, -0.9)) else {
+            return XCTFail("bench refused parts")
+        }
+        model.connectTerminals(.init(componentID: battery, end: 0), .init(componentID: motor, end: 0))
+        model.connectTerminals(.init(componentID: battery, end: 1), .init(componentID: motor, end: 1))
+        model.step(dt: 1.0 / 240.0)
+        let early = model.components.first { $0.id == motor }!.motorSpeed
+        for _ in 0..<2000 { model.step(dt: 1.0 / 240.0) }
+        let late = model.components.first { $0.id == motor }!.motorSpeed
+        XCTAssertGreaterThan(late, early * 5, "it keeps accelerating toward steady state")
+    }
+
     /// A more forgiving snap radius: parts a few centimeters apart still
     /// auto-connect on release.
     func testAutoConnectReachesAcrossTheSnapDistance() {

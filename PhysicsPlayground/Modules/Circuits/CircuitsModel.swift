@@ -45,7 +45,7 @@ final class CircuitsModel {
         // Declaration order is drawer order: power, passives, outputs,
         // control, wire.
         case battery, acSource, resistor, capacitor, inductor
-        case bulb, led, fuse, switcher, wire
+        case bulb, led, motor, fuse, switcher, wire
 
         var id: String { rawValue }
 
@@ -58,6 +58,7 @@ final class CircuitsModel {
             case .inductor: "Inductor"
             case .bulb: "Bulb"
             case .led: "LED"
+            case .motor: "Motor"
             case .fuse: "Fuse"
             case .switcher: "Switch"
             case .wire: "Wire"
@@ -73,6 +74,7 @@ final class CircuitsModel {
             case .inductor: 0.5       // H
             case .bulb: 24.0          // Ω
             case .led: 0              // fixed 2 V drop, 12 Ω on
+            case .motor: 8.0          // Ω coil resistance
             case .fuse: 1.0           // A rating
             case .switcher: 0
             case .wire: 0.25          // m — a wire's value is its length
@@ -87,6 +89,14 @@ final class CircuitsModel {
     nonisolated static let ledMaxAmps = 0.03
     /// The AC source's fixed frequency — slow enough to watch.
     nonisolated static let acFrequency = 0.5
+
+    // A real DC motor: back-EMF and torque share the constant k (V·s/rad
+    // = N·m/A). The coil resistance is the component's value. Steady
+    // speed with no load settles at ω = kV/(bR + k²) — proportional to
+    // the applied voltage, the property the tests pin.
+    nonisolated static let motorTorqueConstant = 0.06
+    nonisolated static let motorFriction = 0.0008
+    nonisolated static let motorInertia = 0.0009
 
     /// Real 1 mm² copper: R = ρL/A with ρ = 1.68×10⁻⁸ Ω·m, so a wire's
     /// resistance honestly grows with the length the user gives it
@@ -135,6 +145,9 @@ final class CircuitsModel {
         var failed = false
         /// Inductors only: the integrated state — transient.
         var inductorCurrent = 0.0
+        /// Motors only: the spin speed (rad/s) — transient, integrated
+        /// each step from torque against back-EMF and friction.
+        var motorSpeed = 0.0
 
         private enum CodingKeys: String, CodingKey {
             case id, kind, position, value, axis, isClosed, capacitorVoltage
@@ -576,6 +589,12 @@ final class CircuitsModel {
             case .inductor:
                 .inductor(henries: component.value,
                           previousCurrent: component.inductorCurrent)
+            case .motor:
+                // The coil (its value) in series with a back-EMF source
+                // of k·ω opposing the drive — a battery companion whose
+                // EMF is the motor's own spin (from the last step).
+                .battery(volts: Self.motorTorqueConstant * component.motorSpeed,
+                         internalResistance: max(component.value, 0.1))
             case .led:
                 component.failed
                     ? .open
@@ -640,6 +659,15 @@ final class CircuitsModel {
             }
             if component.kind == .inductor, !isPaused {
                 components[index].inductorCurrent = solution.currents[index]
+            }
+            if component.kind == .motor, !isPaused {
+                // Torque from the coil current spins the rotor up against
+                // friction; the resulting speed feeds back as next step's
+                // back-EMF. τ = kI − bω,  ω += τ/J · dt.
+                let current = solution.currents[index]
+                let torque = Self.motorTorqueConstant * current
+                    - Self.motorFriction * components[index].motorSpeed
+                components[index].motorSpeed += torque / Self.motorInertia * timeStep
             }
             if !isPaused, !component.failed {
                 let amps = abs(solution.currents[index])

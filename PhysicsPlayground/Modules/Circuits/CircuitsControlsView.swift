@@ -116,6 +116,12 @@ struct CircuitsControlsView: View {
             Text("A real red LED: 2 V forward drop, one-way. More than 30 mA burns it out — give it a series resistor.")
                 .font(DesignTokens.TypeScale.footnote)
                 .foregroundStyle(.secondary)
+        case .motor:
+            valueSlider("Coil resistance", model: model, range: 2...40,
+                        format: { String(format: "%.0f Ω", $0) })
+            Text("A real DC motor: current makes torque, spin makes a back-EMF that fights the current. Add batteries and it spins faster; reverse them and it spins the other way; a bigger coil resistance slows it down.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
         case .fuse:
             valueSlider("Rating", model: model, range: 0.2...5,
                         format: { String(format: "%.1f A", $0) })

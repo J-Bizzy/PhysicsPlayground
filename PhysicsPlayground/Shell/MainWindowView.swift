@@ -47,6 +47,18 @@ struct MainWindowView: View {
                     if UserDefaults.standard.bool(forKey: "circuitVoltageHeights") {
                         circuits.showVoltageHeights = true
                     }
+                    // `-seedMotor 1` builds a battery→motor loop so the
+                    // rotor spins for a screenshot check.
+                    if UserDefaults.standard.bool(forKey: "seedMotor") {
+                        circuits.clearBench()
+                        if let battery = circuits.add(.battery, at: SIMD3(-0.3, 1.3, -0.85)),
+                           let motor = circuits.add(.motor, at: SIMD3(0.3, 1.3, -0.85)) {
+                            circuits.connectTerminals(.init(componentID: battery, end: 0),
+                                                      .init(componentID: motor, end: 0))
+                            circuits.connectTerminals(.init(componentID: battery, end: 1),
+                                                      .init(componentID: motor, end: 1))
+                        }
+                    }
                 }
                 #endif
             }

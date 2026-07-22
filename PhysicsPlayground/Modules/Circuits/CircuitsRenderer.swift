@@ -41,6 +41,8 @@ final class CircuitsRenderer {
         var glow: ModelEntity?
         var filament: ModelEntity?
         var lever: ModelEntity?
+        /// Motors only: the propeller that spins with the shaft.
+        var rotor: Entity?
         /// Wires only: the orange end grips ("s0-"/"s1-") pulled to
         /// change the length.
         var stretchHandles: [ModelEntity] = []
@@ -152,23 +154,25 @@ final class CircuitsRenderer {
         root.addChild(tray)
 
         let kinds = CircuitsModel.ComponentKind.allCases
-        let slabWidth = Float(kinds.count - 1) * 0.15 + 0.18
+        // Two balanced rows, however many parts there are.
+        let columns = (kinds.count + 1) / 2
+        let slabWidth = Float(columns - 1) * 0.15 + 0.18
 
         var glass = PhysicallyBasedMaterial()
         glass.baseColor = .init(tint: .white)
         glass.roughness = 0.15
         glass.blending = .transparent(opacity: .init(floatLiteral: 0.22))
         let slab = ModelEntity(
-            mesh: .generateBox(size: [slabWidth, 0.015, 0.24], cornerRadius: 0.008),
+            mesh: .generateBox(size: [slabWidth, 0.015, 0.3], cornerRadius: 0.008),
             materials: [glass]
         )
         tray.addChild(slab)
 
         for (index, kind) in kinds.enumerated() {
-            let column = index % 5
-            let row = index / 5
-            let x = Float(column) * 0.15 - 4 * 0.075
-            let z: Float = row == 0 ? -0.07 : 0.07
+            let column = index % columns
+            let row = index / columns
+            let x = Float(column) * 0.15 - Float(columns - 1) * 0.075
+            let z: Float = row == 0 ? -0.06 : 0.06
             let template = makeBody(for: CircuitsModel.Component(
                 id: UUID(), kind: kind, position: .zero, value: kind.defaultValue))
             template.scale = SIMD3(repeating: 0.8)
@@ -194,7 +198,7 @@ final class CircuitsRenderer {
                 materials: [UnlitMaterial(color: UIColor(white: 0.95, alpha: 0.85))])
             let bounds = labelMesh.bounds
             label.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
-            label.position = [x - (bounds.min.x + bounds.max.x) / 2, 0.009, 0.1]
+            label.position = [x - (bounds.min.x + bounds.max.x) / 2, 0.009, z + 0.052]
             tray.addChild(label)
         }
     }
@@ -315,6 +319,7 @@ final class CircuitsRenderer {
         }
 
         syncComponents(model)
+        spinMotors(model, dt: dt)
         syncWires(model)
         syncElectrons(model, dt: dt)
         syncVoltageSkyline(model)
@@ -456,6 +461,18 @@ final class CircuitsRenderer {
 
     // MARK: Components
 
+    /// Turn each motor's propeller at its live angular speed (rad/s),
+    /// accumulating on the rotor's own orientation — direction and all,
+    /// so reversing the battery reverses the spin.
+    private func spinMotors(_ model: CircuitsModel, dt: Double) {
+        for component in model.components where component.kind == .motor {
+            guard let rotor = visuals[component.id]?.rotor else { continue }
+            let delta = Float(component.motorSpeed * dt)
+            guard abs(delta) > 1e-6 else { continue }
+            rotor.orientation = simd_quatf(angle: delta, axis: [1, 0, 0]) * rotor.orientation
+        }
+    }
+
     private func syncComponents(_ model: CircuitsModel) {
         // Remove visuals whose components are gone.
         let liveIDs = Set(model.components.map(\.id))
@@ -569,6 +586,13 @@ final class CircuitsRenderer {
         return "\(code.digit1)-\(code.digit2)-\(code.multiplier)"
     }
 
+    /// Motor speed as coarse RPM (rounded so the label doesn't thrash
+    /// while the rotor accelerates).
+    private static func motorRPMLabel(_ speed: Double) -> String {
+        let rpm = (abs(speed) * 60 / (2 * .pi) / 50).rounded() * 50
+        return String(format: "%.0f rpm", rpm)
+    }
+
     private func labelText(for component: CircuitsModel.Component) -> String {
         switch component.kind {
         case .battery: String(format: "%.1f V", component.value)
@@ -584,6 +608,7 @@ final class CircuitsRenderer {
         case .acSource: String(format: "%.1f V~", component.value)
         case .inductor: String(format: "%.2f H", component.value)
         case .led: component.failed ? "burned out" : "LED"
+        case .motor: Self.motorRPMLabel(component.motorSpeed)
         case .fuse: component.failed
             ? "blown"
             : String(format: "%.1f A fuse", component.value)
@@ -735,6 +760,26 @@ final class CircuitsRenderer {
             glow.position = [0, 0.012, 0]
             holder.addChild(glow)
             visual.glow = glow
+        case .motor:
+            // A two-blade propeller on the shaft end, spun each frame by
+            // the motor's live speed.
+            let rotor = Entity()
+            rotor.position = [0.05, 0, 0]
+            let hub = ModelEntity(
+                mesh: .generateSphere(radius: 0.008),
+                materials: [SimpleMaterial(color: UIColor(white: 0.6, alpha: 1),
+                                           roughness: 0.3, isMetallic: true)])
+            rotor.addChild(hub)
+            let accent = UIColor(red: 0.2, green: 0.85, blue: 0.75, alpha: 1)
+            for axis: SIMD3<Float> in [[0, 1, 0], [0, 0, 1]] {
+                let blade = ModelEntity(
+                    mesh: .generateBox(size: [0.005, 0.05, 0.004], cornerRadius: 0.002),
+                    materials: [UnlitMaterial(color: accent)])
+                blade.orientation = simd_quatf(from: [0, 1, 0], to: axis)
+                rotor.addChild(blade)
+            }
+            holder.addChild(rotor)
+            visual.rotor = rotor
         case .switcher:
             // The lever pivots at the left contact; the tap target is the
             // pivot so the whole arm is pinchable.
@@ -874,6 +919,21 @@ final class CircuitsRenderer {
             cap.position = [0, 0.012, 0]
             base.addChild(cap)
             return base
+        case .motor:
+            // A dark can with a bright faceplate; the rotor is added in
+            // makeVisual so it can be spun.
+            let housing = ModelEntity(
+                mesh: .generateCylinder(height: 0.07, radius: 0.022),
+                materials: [SimpleMaterial(color: UIColor(white: 0.2, alpha: 1),
+                                           roughness: 0.4, isMetallic: true)])
+            housing.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            let plate = ModelEntity(
+                mesh: .generateCylinder(height: 0.006, radius: 0.023),
+                materials: [SimpleMaterial(color: UIColor(red: 0.15, green: 0.5, blue: 0.55, alpha: 1),
+                                           roughness: 0.35, isMetallic: true)])
+            plate.position = [0, -0.038, 0]   // local −y = +x (shaft end)
+            housing.addChild(plate)
+            return housing
         case .fuse:
             var glass = PhysicallyBasedMaterial()
             glass.baseColor = .init(tint: .white)
