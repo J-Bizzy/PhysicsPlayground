@@ -101,7 +101,12 @@ final class CircuitsModel {
     nonisolated static let endGripOffset = 0.03
 
     /// Terminals this close when a part is released connect themselves.
-    nonisolated static let snapDistance = 0.08
+    /// How near two terminals must come to snap together — generous so
+    /// bringing parts close is enough (they magnetise).
+    nonisolated static let snapDistance = 0.13
+    /// Carry a part until a snapped connection stretches past this and
+    /// it pops off — the same magnet, in reverse.
+    nonisolated static let breakDistance = 0.3
 
     nonisolated static func wireResistance(length: Double) -> Double {
         max(length, 0.01) * wireOhmsPerMeter
@@ -291,6 +296,69 @@ final class CircuitsModel {
         persistSoon()
     }
 
+    // MARK: Pull-apart detach (the magnet, in reverse)
+
+    /// Wires short enough at grab time to count as "snapped contacts"
+    /// — only these pop when stretched, so a deliberately long span
+    /// wire is never yanked off by moving a neighbour.
+    private var poppableWires: Set<UUID> = []
+
+    private func terminalWorldPosition(_ terminal: Terminal) -> SIMD3<Double>? {
+        components.first { $0.id == terminal.componentID }?
+            .terminalPosition(terminal.end)
+    }
+
+    /// The current end-to-end length of a wire in the room.
+    func wireLength(_ wire: Wire) -> Double {
+        guard let a = terminalWorldPosition(wire.from),
+              let b = terminalWorldPosition(wire.to) else { return 0 }
+        return simd_distance(a, b)
+    }
+
+    /// Call when a part starts being carried or stretched: remember
+    /// which of its connections are short contacts (poppable).
+    func beginCarry(id: UUID) {
+        poppableWires = Set(wires.filter { wire in
+            (wire.from.componentID == id || wire.to.componentID == id)
+                && wireLength(wire) < Self.breakDistance
+        }.map(\.id))
+    }
+
+    /// Call while carrying: any poppable contact stretched past the
+    /// break distance snaps off, with a thunk. Bring the part back and
+    /// it re-snaps on release.
+    func breakOverstretchedWires(id: UUID) {
+        guard !poppableWires.isEmpty else { return }
+        let snapped = wires.filter {
+            poppableWires.contains($0.id) && wireLength($0) > Self.breakDistance
+        }
+        guard !snapped.isEmpty else { return }
+        for wire in snapped {
+            wires.removeAll { $0.id == wire.id }
+            poppableWires.remove(wire.id)
+        }
+        if let component = components.first(where: { $0.id == id }) {
+            emitSound(.thud, at: component.position, volume: 0.5)
+        }
+        persistSoon()
+    }
+
+    func endCarry() { poppableWires.removeAll() }
+
+    /// Detach a whole component at once — every wire touching it drops.
+    /// The clean "take it out of the circuit" action for the readout.
+    func detachComponent(id: UUID) {
+        let touching = wires.filter {
+            $0.from.componentID == id || $0.to.componentID == id
+        }
+        guard !touching.isEmpty else { return }
+        wires.removeAll { wire in touching.contains { $0.id == wire.id } }
+        if let component = components.first(where: { $0.id == id }) {
+            emitSound(.thud, at: component.position, volume: 0.5)
+        }
+        persistSoon()
+    }
+
     /// Direct terminal-to-terminal wiring — the drag-to-wire gesture's
     /// landing. Same rules as tap-tap: no self-wires, no duplicates.
     func connectTerminals(_ a: Terminal, _ b: Terminal) {
@@ -401,6 +469,14 @@ final class CircuitsModel {
         selectedID = id
         emitSound(.thud, at: components[index].position, volume: 0.5)
         persistSoon()
+    }
+
+    /// True when the selected part has at least one wire on it.
+    var selectedIsWired: Bool {
+        guard let selectedID else { return false }
+        return wires.contains {
+            $0.from.componentID == selectedID || $0.to.componentID == selectedID
+        }
     }
 
     // MARK: Selected-component value editing

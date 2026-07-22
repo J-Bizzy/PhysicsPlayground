@@ -134,6 +134,7 @@ struct CircuitsSpaceView: View {
                         partDrag = nil
                         trayDragID = nil
                         gripDrag = nil
+                        model.endCarry()
                     }
                     guard let renderer else { return }
                     let handF = SIMD3<Float>(value.convert(
@@ -182,6 +183,7 @@ struct CircuitsSpaceView: View {
                 partDrag = RelativeDrag(name: name, target: gripWorld, hand: hand)
                 renderer.previewComponentID = grip.componentID
                 model.select(id: grip.componentID)
+                model.beginCarry(id: grip.componentID)
                 return
             }
             if name.hasPrefix("tray-") {
@@ -200,6 +202,7 @@ struct CircuitsSpaceView: View {
                 partDrag = RelativeDrag(name: name, target: component.position, hand: hand)
                 renderer.previewComponentID = id
                 model.select(id: id)
+                model.beginCarry(id: id)
                 return
             }
             current = candidate.parent
@@ -212,8 +215,10 @@ struct CircuitsSpaceView: View {
             model.dragEnd(id: gripDrag.grip.componentID,
                           grabbedEnd: gripDrag.grip.end,
                           pivot: gripDrag.pivot, hand: position)
+            model.breakOverstretchedWires(id: gripDrag.grip.componentID)
         } else if let id = trayDragID ?? UUID(uuidString: drag.name) {
             model.move(id: id, to: position)
+            model.breakOverstretchedWires(id: id)
         }
     }
 
@@ -601,6 +606,16 @@ struct CircuitsSelectedReadout: View {
                         .controlSize(.mini)
                         .tint(.orange)
                         .accessibilityLabel("Replace the failed \(component.kind.displayName)")
+                    }
+                    if model.selectedIsWired {
+                        Button {
+                            model.detachComponent(id: component.id)
+                        } label: {
+                            Label("Detach", systemImage: "scissors")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .accessibilityLabel("Detach this \(component.kind.displayName) — drop its wires but keep the part")
                     }
                     Button(role: .destructive) {
                         model.removeSelected()

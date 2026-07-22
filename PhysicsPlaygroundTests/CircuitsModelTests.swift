@@ -727,4 +727,84 @@ final class CircuitsModelTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: CircuitsModel.slotsKey)
         UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey)
     }
+
+    // MARK: Attach / detach (the magnet)
+
+    /// Detach drops every wire on a part but leaves the part itself.
+    func testDetachComponentDropsItsWiresButKeepsThePart() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let battery = model.add(.battery, at: SIMD3(-0.3, 1.2, -0.9)),
+              let resistor = model.add(.resistor, at: SIMD3(0.3, 1.2, -0.9)) else {
+            return XCTFail("bench refused parts")
+        }
+        model.connectTerminals(.init(componentID: battery, end: 0), .init(componentID: resistor, end: 0))
+        model.connectTerminals(.init(componentID: battery, end: 1), .init(componentID: resistor, end: 1))
+        XCTAssertEqual(model.wires.count, 2)
+
+        model.detachComponent(id: resistor)
+        XCTAssertTrue(model.wires.isEmpty, "both wires touched the resistor")
+        XCTAssertNotNil(model.components.first { $0.id == resistor }, "the part stays")
+    }
+
+    /// A snapped contact (short at grab time) pops when the part is
+    /// carried past the break distance — pull-apart to detach.
+    func testCarryingASnappedPartFarPopsItOff() {
+        let model = CircuitsModel()
+        model.clearBench()
+        // Two parts whose facing terminals coincide — a zero-length
+        // contact.
+        guard let a = model.add(.battery, at: SIMD3(0, 1.2, -0.9)),
+              let b = model.add(.resistor, at: SIMD3(0.17, 1.2, -0.9)) else {
+            return XCTFail("bench refused parts")
+        }
+        model.connectTerminals(.init(componentID: a, end: 1), .init(componentID: b, end: 0))
+        XCTAssertEqual(model.wires.count, 1)
+
+        model.beginCarry(id: b)
+        model.move(id: b, to: SIMD3(0.9, 1.2, -0.9))   // well past breakDistance
+        model.breakOverstretchedWires(id: b)
+        XCTAssertTrue(model.wires.isEmpty, "the stretched contact snapped off")
+        model.endCarry()
+    }
+
+    /// A deliberately long span wire (already long at grab time) is NOT
+    /// yanked off by moving a part — only short contacts pop.
+    func testLongSpanWireSurvivesACarry() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let a = model.add(.battery, at: SIMD3(-0.4, 1.2, -0.9)),
+              let b = model.add(.resistor, at: SIMD3(0.4, 1.2, -0.9)) else {
+            return XCTFail("bench refused parts")
+        }
+        // Facing terminals are ~0.63 apart — a long span from the start.
+        let wire = (CircuitsModel.Terminal(componentID: a, end: 1),
+                    CircuitsModel.Terminal(componentID: b, end: 0))
+        model.connectTerminals(wire.0, wire.1)
+        XCTAssertGreaterThan(model.wireLength(model.wires[0]), CircuitsModel.breakDistance)
+
+        model.beginCarry(id: b)
+        model.move(id: b, to: SIMD3(0.6, 1.2, -0.9))
+        model.breakOverstretchedWires(id: b)
+        XCTAssertEqual(model.wires.count, 1, "an intentional long wire is never auto-broken")
+        model.endCarry()
+    }
+
+    /// A more forgiving snap radius: parts a few centimeters apart still
+    /// auto-connect on release.
+    func testAutoConnectReachesAcrossTheSnapDistance() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let a = model.add(.battery, at: SIMD3(0, 1.2, -0.9)),
+              let b = model.add(.resistor, at: SIMD3(0.17 + 0.1, 1.2, -0.9)) else {
+            return XCTFail("bench refused parts")
+        }
+        // The facing terminals are ~0.1 m apart — inside the 0.13 snap.
+        let gap = simd_distance(
+            model.components.first { $0.id == a }!.terminalPosition(1),
+            model.components.first { $0.id == b }!.terminalPosition(0))
+        XCTAssertLessThan(gap, CircuitsModel.snapDistance)
+        model.autoConnect(id: b)
+        XCTAssertEqual(model.wires.count, 1, "close-enough terminals magnetise")
+    }
 }
