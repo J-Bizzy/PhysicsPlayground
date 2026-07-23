@@ -30,9 +30,6 @@ struct PlaygroundSpaceView: View {
                     // no per-module id, so it runs seamlessly across switches.
                     AmbientLabAudioView()
                         .id("ambient")
-                    // Watches this module's challenge predicates.
-                    ChallengeCheckerView(moduleID: module.id)
-                        .id("challenges-\(module.id)")
                 }
             } else {
                 HubSpaceView()

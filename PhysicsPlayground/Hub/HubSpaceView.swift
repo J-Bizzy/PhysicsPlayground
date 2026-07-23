@@ -97,21 +97,29 @@ final class HubScene {
     // MARK: The 3-D bubble title
 
     /// "Physics / Playground" as two lines of fat rounded 3-D letters —
-    /// glossy candy bubbles with a soft glow behind, floating at the
-    /// centre of the ring.
+    /// glossy bubbles with a soft glow behind, floating at the centre of
+    /// the ring.
     /// Lifted into a banner that clears the info window below and the
     /// top exhibit above — the ring's calm upper-middle band.
     private static let titleOffset = SIMD3<Float>(0, 0.2, 0.12)
+    /// The title reads as smoky, semi-transparent glass rather than
+    /// coloured candy — a quiet frosted grey.
+    private static let titleColor = UIColor(white: 0.62, alpha: 1)
+    private static let titleOpacity: Float = 0.55
 
     private func buildBubbleTitle() {
         titleAnchor.position = Self.ringCenter + Self.titleOffset
         // Two centred lines of fat rounded glyphs — inflated bubbles.
-        addBubbleLine("Physics", size: 0.17,
-                      color: UIColor(red: 0.35, green: 0.7, blue: 1.0, alpha: 1),
-                      y: 0.12)
-        addBubbleLine("Playground", size: 0.17,
-                      color: UIColor(red: 1.0, green: 0.55, blue: 0.75, alpha: 1),
-                      y: -0.12)
+        let physics = Self.bubbleText(
+            "Physics", size: 0.17, color: Self.titleColor,
+            opacity: Self.titleOpacity, emissive: 0.12)
+        physics.position.y = 0.12
+        let playground = Self.bubbleText(
+            "Playground", size: 0.17, color: Self.titleColor,
+            opacity: Self.titleOpacity, emissive: 0.12)
+        playground.position.y = -0.12
+        titleAnchor.addChild(physics)
+        titleAnchor.addChild(playground)
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Physics Playground"
@@ -119,15 +127,23 @@ final class HubScene {
         root.addChild(titleAnchor)
     }
 
-    private func addBubbleLine(_ text: String, size: CGFloat, color: UIColor, y: Float) {
+    /// The app's signature 3-D "bubble" type, in one reusable builder:
+    /// fat rounded heavy glyphs extruded into a glossy clear-coated
+    /// solid, with a soft translucent glow puff just behind so they read
+    /// as inflated and lit from within. Centred on its own origin and
+    /// returned as a group. The hub title and every exhibit name plate
+    /// share this one treatment. `opacity` < 1 turns the letters to
+    /// smoky glass; `emissive` sets how much they glow against the room.
+    static func bubbleText(_ text: String, size: CGFloat, color: UIColor,
+                           opacity: Float = 1, emissive: Float = 0.28) -> Entity {
+        let group = Entity()
+        let font = roundedFont(size: size)
         let mesh = MeshResource.generateText(
             text, extrusionDepth: Float(size) * 0.45,
-            font: Self.roundedFont(size: size),
-            alignment: .center)
+            font: font, alignment: .center)
         let bounds = mesh.bounds
+        let centerX = -(bounds.min.x + bounds.max.x) / 2
 
-        // Glossy candy bubble: bright, low-roughness, clear-coated, with
-        // a gentle emissive so it glows against the room.
         var glossy = PhysicallyBasedMaterial()
         glossy.baseColor = .init(tint: color)
         glossy.roughness = 0.16
@@ -135,23 +151,27 @@ final class HubScene {
         glossy.clearcoat = .init(floatLiteral: 1.0)
         glossy.clearcoatRoughness = .init(floatLiteral: 0.12)
         glossy.emissiveColor = .init(color: color)
-        glossy.emissiveIntensity = 0.28
+        glossy.emissiveIntensity = emissive
+        if opacity < 1 {
+            glossy.blending = .transparent(opacity: .init(floatLiteral: opacity))
+        }
         let letters = ModelEntity(mesh: mesh, materials: [glossy])
-        letters.position = [-(bounds.min.x + bounds.max.x) / 2, y, 0]
-        titleAnchor.addChild(letters)
+        letters.position = [centerX, 0, 0]
+        group.addChild(letters)
 
-        // A soft glow puff just behind, larger and translucent, so the
-        // letters read as inflated and lit from within.
+        // A soft glow puff just behind, larger and translucent — fainter
+        // still when the letters are already sheer.
         var halo = UnlitMaterial(color: color)
-        halo.blending = .transparent(opacity: 0.28)
+        halo.blending = .transparent(opacity: .init(floatLiteral: 0.28 * opacity))
         let glow = ModelEntity(
             mesh: MeshResource.generateText(
                 text, extrusionDepth: Float(size) * 0.2,
-                font: Self.roundedFont(size: size), alignment: .center),
+                font: font, alignment: .center),
             materials: [halo])
-        glow.position = [-(bounds.min.x + bounds.max.x) / 2, y, -0.02]
+        glow.position = [centerX, 0, -0.02]
         glow.scale = SIMD3(repeating: 1.06)
-        titleAnchor.addChild(glow)
+        group.addChild(glow)
+        return group
     }
 
     /// SF Rounded at a heavy weight — the fat, round glyphs that make
@@ -188,18 +208,11 @@ final class HubScene {
         vignette.scale = SIMD3(repeating: Self.vignetteScale)
         pulser.addChild(vignette)
 
-        // The floating name beneath, always facing the user.
-        let nameMesh = MeshResource.generateText(
-            module.title,
-            extrusionDepth: 0.004,
-            font: .systemFont(ofSize: 0.044, weight: .semibold)
-        )
-        let name = ModelEntity(
-            mesh: nameMesh,
-            materials: [UnlitMaterial(color: UIColor(module.accent))]
-        )
-        let nameBounds = nameMesh.bounds
-        name.position = [-(nameBounds.min.x + nameBounds.max.x) / 2, 0, 0]
+        // The floating name beneath, always facing the user — the same
+        // 3-D bubble type as the title, tinted in the module's accent.
+        let name = Self.bubbleText(
+            module.title, size: 0.042, color: UIColor(module.accent),
+            emissive: 0.35)
         let namePivot = Entity()
         namePivot.position = [0, -0.28, 0]
         namePivot.components.set(BillboardComponent())

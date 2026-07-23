@@ -41,8 +41,6 @@ struct ModuleHostView: View {
 
                 FirstRunHint(module: module)
 
-                ChallengesPanel(moduleID: module.id)
-
                 module.makeControls()
 
                 LegendView(items: module.legend)

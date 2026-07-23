@@ -20,22 +20,13 @@ struct HubView: View {
             Spacer(minLength: 12)
 
             // The name floats in 3-D as bubble letters above the exhibit
-            // ring (HubSpaceView); this window keeps only the hint, the
-            // tally, and the button so it never crowds the title.
+            // ring (HubSpaceView); this window keeps only the hint and
+            // the button so it never crowds the title.
             Text("Look at any exhibit in the ring and pinch to step inside.")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
-
-            if !appModel.challenges.completed.isEmpty {
-                Label(
-                    "\(appModel.challenges.completed.count) of \(ChallengeCatalog.total(appModel: appModel)) challenges",
-                    systemImage: "checkmark.seal.fill"
-                )
-                .font(.footnote)
-                .foregroundStyle(Color(red: 1, green: 0.85, blue: 0.4))
-            }
 
             if !appModel.isImmersiveSpaceOpen {
                 Button {
