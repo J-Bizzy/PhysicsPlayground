@@ -32,11 +32,18 @@ public struct WaveSource: Equatable, Sendable {
     /// Phase-inverted sources start half a cycle late (φ = π) — the
     /// principle behind active noise cancellation.
     public var phaseInverted: Bool
+    /// Velocity of the source through the medium, m/s. A moving source
+    /// bunches its wavefronts ahead and stretches them behind — the
+    /// Doppler effect — via the retarded distance below. Zero for a
+    /// source at rest, and the field is then exactly the static one.
+    public var velocity: SIMD3<Double>
 
-    public init(position: SIMD3<Double>, amplitude: Double = 0.008, phaseInverted: Bool = false) {
+    public init(position: SIMD3<Double>, amplitude: Double = 0.008,
+                phaseInverted: Bool = false, velocity: SIMD3<Double> = .zero) {
         self.position = position
         self.amplitude = amplitude
         self.phaseInverted = phaseInverted
+        self.velocity = velocity
     }
 
     public var phase: Double { phaseInverted ? .pi : 0 }
@@ -55,6 +62,35 @@ public enum WaveField {
         falloffRadius / max(distance, falloffRadius)
     }
 
+    // MARK: Retarded distance (the Doppler effect)
+
+    /// The distance the wave now arriving at `point` actually travelled
+    /// from `source`. A wave reaching `point` at the current instant left
+    /// the source back when it sat at p_s − v·s (s = flight time), so
+    /// with R = point − p_s and a = c² − |v|² it solves |R + v·s| = c·s:
+    ///
+    ///     a·s² − 2(R·v)·s − |R|² = 0
+    ///     s = [ (R·v) + √((R·v)² + a|R|²) ] / a,   r_ret = c·s.
+    ///
+    /// Reduces to |R| exactly when v = 0. This single substitution turns
+    /// the static field into a moving-source one: directly ahead of the
+    /// motion r_ret = c·d/(c−v) and its spatial gradient c/(c−v) > 1
+    /// (wavefronts bunched, wavelength short); directly behind,
+    /// r_ret = c·d/(c+v) with gradient c/(c+v) < 1 (stretched). A source
+    /// at or past the wave speed falls back to the straight-line
+    /// distance — no blow-up.
+    public static func retardedDistance(
+        from source: WaveSource, to point: SIMD3<Double>, speed: Double
+    ) -> Double {
+        let R = point - source.position
+        let rMag = simd_length(R)
+        let a = speed * speed - simd_length_squared(source.velocity)
+        guard a > 1e-12 else { return rMag }
+        let Rv = simd_dot(R, source.velocity)
+        let s = (Rv + (Rv * Rv + a * rMag * rMag).squareRoot()) / a
+        return speed * s
+    }
+
     // MARK: Live displacement
 
     /// Field value at `point` and `time` — the animated wave.
@@ -69,7 +105,7 @@ public enum WaveField {
         let omega = 2 * .pi * frequency
         var sum = 0.0
         for source in sources {
-            let r = simd_distance(point, source.position)
+            let r = retardedDistance(from: source, to: point, speed: speed)
             sum += source.amplitude * falloff(r) * sin(k * r - omega * time + source.phase)
         }
         return sum
@@ -95,7 +131,7 @@ public enum WaveField {
         var c = 0.0
         var s = 0.0
         for source in sources {
-            let r = simd_distance(point, source.position)
+            let r = retardedDistance(from: source, to: point, speed: speed)
             let magnitude = source.amplitude * falloff(r)
             let theta = k * r + source.phase
             c += magnitude * sin(theta)
@@ -119,7 +155,7 @@ public enum WaveField {
         var real = 0.0
         var imaginary = 0.0
         for source in sources {
-            let r = simd_distance(point, source.position)
+            let r = retardedDistance(from: source, to: point, speed: speed)
             let magnitude = source.amplitude * falloff(r)
             let phase = k * r + source.phase
             real += magnitude * cos(phase)

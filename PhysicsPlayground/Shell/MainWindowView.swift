@@ -60,6 +60,14 @@ struct MainWindowView: View {
                         }
                     }
                 }
+                // `-wavesDoppler 1` leaves a single source cruising so the
+                // Doppler wavefront-bunching can be screenshot-checked
+                // (the sim has no hands to drag one).
+                if UserDefaults.standard.bool(forKey: "wavesDoppler") {
+                    let waves = appModel.wavesModel
+                    while waves.sources.count > 1 { waves.removeSelectedSource() }
+                    waves.selectedIsFlying = true
+                }
                 #endif
             }
     }

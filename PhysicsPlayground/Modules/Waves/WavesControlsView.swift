@@ -54,6 +54,11 @@ struct WavesControlsView: View {
                     .disabled(model.selectedSource == nil)
                     .accessibilityHint("Starts this source half a cycle late — where the waves met loudly they now cancel")
 
+                Toggle("Doppler flyby", isOn: $model.selectedIsFlying)
+                    .font(DesignTokens.TypeScale.control)
+                    .disabled(model.selectedSource == nil)
+                    .accessibilityHint("Sends this source cruising across the field so its wavefronts bunch up ahead — the ambulance-passing Doppler effect. Or just grab a source and sweep it yourself.")
+
                 Text("\(model.sources.count) of \(WavesModel.sourceBudget) sources — the last one grabbed is the one these edit.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
@@ -76,6 +81,10 @@ struct WavesControlsView: View {
                 Toggle("Silence surfaces", isOn: $model.showSilenceSurfaces)
                     .font(DesignTokens.TypeScale.control)
                     .accessibilityHint("Translucent 3D sheets where the waves cancel to nothing — walk around them")
+
+                Toggle("Wavefronts", isOn: $model.showWavefronts)
+                    .font(DesignTokens.TypeScale.control)
+                    .accessibilityHint("Expanding crest spheres from each source; sweep a source and they bunch ahead — the Doppler effect made visible")
 
                 HStack(spacing: DesignTokens.Panel.rowSpacing) {
                     Button {

@@ -63,5 +63,9 @@ enum WavesModule {
             swatch: .stroke(DesignTokens.Palette.predictedArc),
             text: "Probe — park it anywhere for the local amplitude and path-difference math"
         ),
+        LegendItem(
+            swatch: .fill(DesignTokens.Palette.waveSource),
+            text: "Sweep a source through the field (or switch on Doppler flyby) and its wavefronts bunch ahead, stretch behind — the Doppler effect"
+        ),
     ]
 }

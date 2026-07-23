@@ -83,6 +83,25 @@ final class WavesRenderer {
     }
     private var lastFieldInputs: FieldInputs?
 
+    // Expanding wavefront shells: each source sheds a translucent sphere
+    // every wave period, growing at the wave speed — the crests made
+    // visible. A moving source's shells bunch ahead and stretch behind,
+    // so this is where the Doppler effect actually shows.
+    private static let shellBudget = 40
+    private static let shellMaxRadius = Float(WavesModel.regionHalfExtent * 1.4)
+    private static let shellFadeBuckets = 6
+    private let wavefrontsRoot = Entity()
+    private var shellPool: EntityPool<ModelEntity>!
+    private var wavefrontMaterials: [[UnlitMaterial]] = []   // [tint][fade bucket]
+    private var shellBirths = [Double](repeating: 0, count: shellBudget)
+    private var shellCenters = [SIMD3<Float>](repeating: .zero, count: shellBudget)
+    private var shellActive = [Bool](repeating: false, count: shellBudget)
+    private var shellTints = [Int](repeating: 0, count: shellBudget)
+    private var shellMatKeys = [Int](repeating: -1, count: shellBudget)
+    private var nextShell = 0
+    /// The last crest time emitted, per source index.
+    private var lastEmit: [Double] = []
+
     init() {
         // The lattice: shared mesh, per-dot material from a brightness
         // palette assigned when the configuration changes.
@@ -111,6 +130,33 @@ final class WavesRenderer {
             slot.entity.isEnabled = true
         }
         root.addChild(latticePool.root)
+
+        // Wavefront crests: a small pool of thin rings, each a unit
+        // circle that always faces the viewer (so it reads as a clean
+        // expanding outline, never a solid ball that fogs the room), and
+        // is recycled round-robin as sources shed new crests.
+        let shellMaterials = [
+            Self.shellMaterials(DesignTokens.Palette.waveSourceUI),
+            Self.shellMaterials(DesignTokens.Palette.waveInvertedUI),
+        ]
+        wavefrontMaterials = shellMaterials
+        let unitCircle: [SIMD3<Float>] = (0...56).map { i in
+            let t = Float(i) / 56 * 2 * .pi
+            return SIMD3(cos(t), sin(t), 0)
+        }
+        let ringMesh = TubeMesh.tube(lines: [unitCircle], radius: 0.008)
+            ?? MeshResource.generateSphere(radius: 0.02)
+        shellPool = EntityPool(budget: Self.shellBudget) { container in
+            let ring = ModelEntity(mesh: ringMesh, materials: [shellMaterials[0][0]])
+            container.addChild(ring)
+            // Face the user, so a sphere of crests always reads as a
+            // circle outline centred on where the source emitted it.
+            container.components.set(BillboardComponent())
+            container.isEnabled = false
+            return ring
+        }
+        wavefrontsRoot.addChild(shellPool.root)
+        root.addChild(wavefrontsRoot)
 
         // Silence surfaces.
         var silence = UnlitMaterial(color: DesignTokens.Palette.forceVectorUI)
@@ -343,11 +389,100 @@ final class WavesRenderer {
         syncSources(model)
         syncConfiguration(model)
         pulseLattice(model)
+        updateWavefronts(model)
 
         if !isManipulatingProbe {
             probe.position = SIMD3<Float>(model.probePosition)
         }
         probeAnchor.position = SIMD3<Float>(model.probePosition) + SIMD3(0, 0.09, 0)
+    }
+
+    // MARK: Wavefront shells (the Doppler visualization)
+
+    /// One material per fade bucket: bright when the crest is fresh and
+    /// small, fading toward nothing as it spreads — the real 1/r decay,
+    /// and it keeps the big outer rings from crowding the room.
+    private static func shellMaterials(_ color: UIColor) -> [UnlitMaterial] {
+        (0..<shellFadeBuckets).map { bucket in
+            let f = Float(bucket) / Float(shellFadeBuckets - 1)   // 0 fresh … 1 far
+            var material = UnlitMaterial(color: color)
+            material.blending = .transparent(
+                opacity: .init(floatLiteral: 0.55 * (1 - f) + 0.05))
+            return material
+        }
+    }
+
+    /// Sheds and grows the wavefront spheres. Each source emits one crest
+    /// per wave period at its live position; every shell then expands at
+    /// the wave speed. Because a shell is anchored to where the source
+    /// WAS when it emitted, a moving source's shells crowd together ahead
+    /// of it and spread behind — the Doppler picture, straight from the
+    /// same motion that drives the field's retarded-distance shift.
+    private func updateWavefronts(_ model: WavesModel) {
+        guard model.showWavefronts else {
+            if wavefrontsRoot.isEnabled {
+                wavefrontsRoot.isEnabled = false
+                for i in shellActive.indices where shellActive[i] {
+                    shellActive[i] = false
+                    shellPool.slots[i].entity.isEnabled = false
+                }
+                lastEmit.removeAll()
+            }
+            return
+        }
+        wavefrontsRoot.isEnabled = true
+
+        // One emission clock per current source; (re)seed to now so a
+        // freshly shown layer doesn't dump a burst of old crests.
+        if lastEmit.count != model.sources.count {
+            lastEmit = Array(repeating: model.time, count: model.sources.count)
+        }
+        let period = 1.0 / max(model.frequency, 0.01)   // sim seconds between crests
+        for (index, source) in model.sources.enumerated() {
+            var emitted = 0
+            while model.time - lastEmit[index] >= period, emitted < 4 {
+                lastEmit[index] += period
+                emitShell(at: SIMD3<Float>(source.wave.position),
+                          birth: lastEmit[index],
+                          tint: source.wave.phaseInverted ? 1 : 0)
+                emitted += 1
+            }
+        }
+
+        // Grow the live shells; retire any that have swept past the room.
+        for i in shellActive.indices where shellActive[i] {
+            let radius = Float(model.waveSpeed * (model.time - shellBirths[i]))
+            if radius <= 0 || radius > Self.shellMaxRadius {
+                shellActive[i] = false
+                shellPool.slots[i].entity.isEnabled = false
+                continue
+            }
+            let slot = shellPool.slots[i]
+            slot.entity.position = shellCenters[i]
+            slot.entity.scale = SIMD3(repeating: radius)
+            // Fade with size; only touch the material when the bucket flips.
+            let bucket = min(Int(radius / Self.shellMaxRadius * Float(Self.shellFadeBuckets)),
+                             Self.shellFadeBuckets - 1)
+            let key = shellTints[i] * Self.shellFadeBuckets + bucket
+            if shellMatKeys[i] != key {
+                shellMatKeys[i] = key
+                slot.payload.model?.materials = [wavefrontMaterials[shellTints[i]][bucket]]
+            }
+        }
+    }
+
+    private func emitShell(at center: SIMD3<Float>, birth: Double, tint: Int) {
+        let i = nextShell
+        nextShell = (nextShell + 1) % Self.shellBudget
+        shellActive[i] = true
+        shellBirths[i] = birth
+        shellCenters[i] = center
+        shellTints[i] = tint
+        shellMatKeys[i] = -1   // force a material assign on the first grow
+        let slot = shellPool.slots[i]
+        slot.entity.position = center
+        slot.entity.scale = SIMD3(repeating: 0.001)
+        slot.entity.isEnabled = true
     }
 
     /// The +/− sign language from the EM module: a billboarded glyph

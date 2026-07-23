@@ -176,4 +176,58 @@ final class WaveFieldTests: XCTestCase {
                                         sources: sources, frequency: frequency, speed: speed)
         XCTAssertEqual(u1, u2, accuracy: 1e-12)
     }
+
+    // MARK: Doppler — a moving source
+
+    /// With the source at rest the retarded distance is just the straight
+    /// line, so the moving-source field reduces EXACTLY to the static one
+    /// (every test above still holds).
+    func testRetardedDistanceReducesToGeometryAtRest() {
+        let source = WaveSource(position: SIMD3(0.1, -0.2, 0.05))
+        let point = SIMD3(0.4, 0.3, -0.15)
+        XCTAssertEqual(
+            WaveField.retardedDistance(from: source, to: point, speed: speed),
+            simd_distance(point, source.position), accuracy: 1e-12)
+    }
+
+    /// The light-cone solution in closed form: a source moving at v along
+    /// +x gives r_ret = c·d/(c−v) directly ahead, c·d/(c+v) directly
+    /// behind, and c·d/√(c²−v²) straight to the side.
+    func testRetardedDistanceMatchesClosedForms() {
+        let c = 0.5, v = 0.2, d = 0.6
+        let source = WaveSource(position: .zero, velocity: SIMD3(v, 0, 0))
+        let ahead = WaveField.retardedDistance(from: source, to: SIMD3(d, 0, 0), speed: c)
+        let behind = WaveField.retardedDistance(from: source, to: SIMD3(-d, 0, 0), speed: c)
+        let beside = WaveField.retardedDistance(from: source, to: SIMD3(0, d, 0), speed: c)
+        XCTAssertEqual(ahead, c * d / (c - v), accuracy: 1e-9)
+        XCTAssertEqual(behind, c * d / (c + v), accuracy: 1e-9)
+        XCTAssertEqual(beside, c * d / (c * c - v * v).squareRoot(), accuracy: 1e-9)
+        // And the Doppler ordering: the wave ahead came the long way round
+        // (source has since approached), behind the short way.
+        XCTAssertGreaterThan(ahead, behind)
+    }
+
+    /// The physical signature of Doppler: at a single instant a moving
+    /// source's wavefronts are packed tighter ahead of it than behind —
+    /// more crests per metre in front. Count the field's zero crossings
+    /// along the axis of motion, both directions.
+    func testMovingSourceBunchesWavefrontsAhead() {
+        let source = WaveSource(position: .zero, velocity: SIMD3(0.2, 0, 0))
+        func crossings(from x0: Double, to x1: Double) -> Int {
+            var last = 0.0, count = 0
+            let samples = 400
+            for i in 0...samples {
+                let x = x0 + (x1 - x0) * Double(i) / Double(samples)
+                let u = WaveField.displacement(
+                    at: SIMD3(x, 0, 0), time: 0.0,
+                    sources: [source], frequency: frequency, speed: speed)
+                if i > 0, u * last < 0 { count += 1 }
+                last = u
+            }
+            return count
+        }
+        XCTAssertGreaterThan(crossings(from: 0.3, to: 1.3),
+                             crossings(from: -0.3, to: -1.3),
+                             "wavefronts must be denser ahead of the motion")
+    }
 }

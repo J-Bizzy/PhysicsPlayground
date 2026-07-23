@@ -115,6 +115,56 @@ final class WavesModelTests: XCTestCase {
         XCTAssertEqual(model.sources.count, 1, "the last source can't be removed")
     }
 
+    /// A source held still carries no Doppler velocity; swept across the
+    /// field it gains one (pointing the way it was dragged), and once it
+    /// stops the field relaxes exactly back to rest.
+    func testDraggingASourceProducesThenReleasesDopplerVelocity() {
+        let model = WavesModel()
+        let id = model.sources[0].id
+        let center = WavesModel.regionCenter
+        var x = -0.2
+        for _ in 0..<10 {
+            x += 0.03
+            model.moveSource(id: id, to: center + SIMD3(x, 0, 0))
+            model.step(dt: 1.0 / 90.0)
+        }
+        let moving = model.sources[0].wave.velocity
+        XCTAssertGreaterThan(simd_length(moving), 0.05, "a swept source moves through the medium")
+        XCTAssertGreaterThan(moving.x, 0, "the way it was dragged")
+
+        for _ in 0..<80 { model.step(dt: 1.0 / 90.0) }
+        XCTAssertEqual(simd_length(model.sources[0].wave.velocity), 0, accuracy: 1e-9,
+                       "a source at rest relaxes the field back to the static pattern")
+    }
+
+    /// The Doppler flyby cruises the selected source across the field —
+    /// giving it a real velocity — and never leaves the region (it
+    /// bounces off the walls); switching it off parks it.
+    func testDopplerFlybyMovesBouncesAndStops() {
+        let model = WavesModel()
+        model.select(id: model.sources[1].id)
+        model.selectedIsFlying = true
+        let start = model.selectedSource!.wave.position
+        let center = WavesModel.regionCenter
+        let half = WavesModel.regionHalfExtent
+
+        var travelled = 0.0
+        for _ in 0..<600 {
+            model.step(dt: 1.0 / 90.0)
+            let p = model.selectedSource!.wave.position
+            travelled = max(travelled, abs(p.x - start.x))
+            XCTAssertLessThanOrEqual(p.x, center.x + half + 1e-9)
+            XCTAssertGreaterThanOrEqual(p.x, center.x - half - 1e-9)
+        }
+        XCTAssertGreaterThan(travelled, 0.1, "the flyby actually travels")
+        XCTAssertGreaterThan(simd_length(model.selectedSource!.wave.velocity), 0.05,
+                             "carrying a Doppler velocity")
+
+        model.selectedIsFlying = false
+        for _ in 0..<80 { model.step(dt: 1.0 / 90.0) }
+        XCTAssertEqual(simd_length(model.selectedSource!.wave.velocity), 0, accuracy: 1e-9)
+    }
+
     func testResetRestoresOpeningScene() {
         let model = WavesModel()
         model.addSource()

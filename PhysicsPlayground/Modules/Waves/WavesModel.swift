@@ -46,6 +46,10 @@ final class WavesModel {
     struct Source: Identifiable, Equatable {
         let id: UUID
         var wave: WaveSource
+        /// Non-zero when this source is auto-cruising (the Doppler
+        /// flyby). Its motion feeds the very same velocity path a hand
+        /// drag does, so the field bunches ahead of it either way.
+        var drift = SIMD3<Double>.zero
     }
 
     private(set) var sources: [Source] = []
@@ -64,6 +68,10 @@ final class WavesModel {
 
     /// Show the 3D sheets where the field cancels to silence.
     var showSilenceSurfaces = true
+    /// Shed an expanding wavefront sphere from each source every period —
+    /// the crests made visible. A moving source's shells bunch ahead and
+    /// stretch behind, so this is where the Doppler effect really shows.
+    var showWavefronts = true
 
     // MARK: Time
 
@@ -73,7 +81,73 @@ final class WavesModel {
 
     func step(dt: Double) {
         guard !isPaused else { return }
-        time += min(dt, 1.0 / 30.0) * timeScale
+        let simDt = min(dt, 1.0 / 30.0) * timeScale
+        time += simDt
+        advanceDrift(simDt: simDt)
+        updateSourceVelocities(simDt: simDt)
+    }
+
+    // MARK: Doppler — source motion through the medium
+
+    /// Advances every auto-cruising source along its drift, bouncing it
+    /// off the region walls so the flyby loops in view. The position
+    /// change is all it takes — updateSourceVelocities turns it into the
+    /// Doppler velocity, exactly as a drag would.
+    private func advanceDrift(simDt: Double) {
+        let lo = Self.regionCenter - SIMD3(repeating: Self.regionHalfExtent)
+        let hi = Self.regionCenter + SIMD3(repeating: Self.regionHalfExtent)
+        for index in sources.indices where sources[index].drift != .zero {
+            var position = sources[index].wave.position + sources[index].drift * simDt
+            var drift = sources[index].drift
+            for axis in 0..<3 {
+                if position[axis] < lo[axis] {
+                    position[axis] = lo[axis]; drift[axis] = abs(drift[axis])
+                } else if position[axis] > hi[axis] {
+                    position[axis] = hi[axis]; drift[axis] = -abs(drift[axis])
+                }
+            }
+            if position.y < Self.regionFloor {
+                position.y = Self.regionFloor; drift.y = abs(drift.y)
+            }
+            sources[index].drift = drift
+            sources[index].wave.position = position
+        }
+    }
+
+    /// Each source's position last step, for the finite-difference speed.
+    private var previousPositions: [UUID: SIMD3<Double>] = [:]
+
+    /// Gives every source the velocity that drives its Doppler shift:
+    /// how far it moved this step, measured in the SIMULATION time the
+    /// waves live in (so slow-mo makes a drag effectively more
+    /// supersonic — exactly as the crawling crests would). Smoothed so a
+    /// single jittery frame can't spike it, capped just under the wave
+    /// speed to keep the physics subsonic, and snapped back to rest when
+    /// a drag stops so the field relaxes to the exact static pattern.
+    private func updateSourceVelocities(simDt: Double) {
+        let maxSpeed = 0.9 * waveSpeed
+        for index in sources.indices {
+            let id = sources[index].id
+            let position = sources[index].wave.position
+            let previous = previousPositions[id] ?? position
+            previousPositions[id] = position
+
+            var velocity = sources[index].wave.velocity
+            if simDt > 1e-6 {
+                let raw = (position - previous) / simDt
+                velocity += (raw - velocity) * 0.35   // exponential smoothing
+            }
+            let speed = simd_length(velocity)
+            if speed > maxSpeed {
+                velocity *= maxSpeed / speed
+            } else if speed < 1e-4 {
+                velocity = .zero                       // truly at rest
+            }
+            sources[index].wave.velocity = velocity
+        }
+        previousPositions = previousPositions.filter { id, _ in
+            sources.contains { $0.id == id }
+        }
     }
 
     // MARK: Source editing
@@ -129,6 +203,22 @@ final class WavesModel {
         set {
             guard let index = sources.firstIndex(where: { $0.id == selectedID }) else { return }
             sources[index].wave.phaseInverted = newValue
+        }
+    }
+
+    /// The selected source's Doppler flyby: on, it cruises across the
+    /// field at Mach 0.65 so you can watch the wavefronts pile up ahead
+    /// of it — the ambulance driving past, hands-free.
+    var selectedIsFlying: Bool {
+        get { (selectedSource?.drift ?? .zero) != .zero }
+        set {
+            guard let index = sources.firstIndex(where: { $0.id == selectedID }) else { return }
+            if newValue {
+                sources[index].drift = SIMD3(0.65 * waveSpeed, 0, 0)
+            } else {
+                sources[index].drift = .zero
+                sources[index].wave.velocity = .zero
+            }
         }
     }
 
@@ -216,9 +306,11 @@ final class WavesModel {
         frequency = 1.5
         waveSpeed = 0.5
         showSilenceSurfaces = true
+        showWavefronts = true
         isPaused = false
         timeScale = 1.0
         time = 0
+        previousPositions.removeAll()
         probePosition = Self.regionCenter + SIMD3(0, 0.3, 0.4)
     }
 
