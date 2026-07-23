@@ -104,7 +104,7 @@ final class HubScene {
     /// The title reads as smoky, semi-transparent glass rather than
     /// coloured candy — a quiet frosted grey.
     private static let titleColor = UIColor(white: 0.62, alpha: 1)
-    private static let titleOpacity: Float = 0.55
+    private static let titleOpacity: Float = 0.8
 
     private func buildBubbleTitle() {
         titleAnchor.position = Self.ringCenter + Self.titleOffset
