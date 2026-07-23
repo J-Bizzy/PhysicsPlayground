@@ -5,10 +5,13 @@
 //  Renders the membrane as a live shaded surface: the height field is
 //  triangulated every frame with real per-vertex normals, so room
 //  light rakes across the ripples and the 3-D wave shape reads from
-//  any angle. Triangles are split into height bands (trough blue →
-//  rest teal → crest red), a glowing rim traces the boundary, and the
-//  point in your hand wears a halo. All the vertex math runs on a
-//  GeometryPipeline worker; the main thread only uploads meshes.
+//  any angle. Colour is a smooth topographic heatmap — each vertex
+//  carries a texture coordinate equal to its height, and a gradient
+//  texture (deep-blue trough → teal rest → red crest) is sampled
+//  per-pixel, so the colour flows continuously instead of stepping in
+//  jagged bands. A glowing rim traces the boundary; the point in your
+//  hand wears a halo. The vertex math runs on a GeometryPipeline
+//  worker; the main thread only uploads the mesh.
 //
 
 import Foundation
@@ -25,10 +28,10 @@ final class WaveMediumRenderer {
 
     static let surfaceName = "sheet-surface"
 
-    private static let bandCount = 13
-    /// Height (m) spanned by the color ramp, ± this.
-    private static let bandSpan: Float = 0.14
-    private var bandEntities: [ModelEntity] = []
+    /// Height (m) the colour ramp spans, ±this.
+    private static let heightSpan: Float = 0.14
+
+    private let surfaceEntity = ModelEntity()
     private let rimEntity = ModelEntity()
     private let rimMaterial: UnlitMaterial = {
         var m = UnlitMaterial(color: UIColor(red: 0.3, green: 0.85, blue: 0.85, alpha: 1))
@@ -39,27 +42,24 @@ final class WaveMediumRenderer {
     private var surfacePipeline: GeometryPipeline<SurfaceJob, SurfaceResult>?
 
     init() {
-        // Band materials: a fine deep-blue → teal → red ramp so the
-        // height field reads as a smooth topographic heatmap, lit
-        // (normals reveal the 3-D shape) with a glow toward the
-        // extremes so big crests and troughs read as energy.
-        for index in 0..<Self.bandCount {
-            let t = Float(index) / Float(Self.bandCount - 1)   // 0…1
-            let color = Self.rampColor(t)
-            var material = PhysicallyBasedMaterial()
-            material.baseColor = .init(tint: color)
-            material.roughness = 0.3
-            material.metallic = 0.0
-            material.faceCulling = .none
-            let energy = abs(t - 0.5) * 2      // 0 at rest, 1 at extremes
-            material.emissiveColor = .init(color: color)
-            material.emissiveIntensity = 0.15 + 0.5 * energy
-            let entity = ModelEntity()
-            entity.model = ModelComponent(mesh: .generateSphere(radius: 0.0001),
-                                          materials: [material])
-            root.addChild(entity)
-            bandEntities.append(entity)
+        // One lit surface with a gradient-texture heatmap: baseColor
+        // (and a gentle emissive) are sampled along the ramp by each
+        // vertex's height, so the colour is smooth and the normals
+        // still let room light reveal the 3-D shape.
+        var material = PhysicallyBasedMaterial()
+        if let texture = Self.gradientTexture() {
+            material.baseColor = .init(tint: .white, texture: .init(texture))
+            material.emissiveColor = .init(color: .white, texture: .init(texture))
+            material.emissiveIntensity = 0.45
+        } else {
+            material.baseColor = .init(tint: UIColor(red: 0.15, green: 0.78, blue: 0.68, alpha: 1))
         }
+        material.roughness = 0.28
+        material.metallic = 0.0
+        material.faceCulling = .none
+        surfaceEntity.model = ModelComponent(
+            mesh: .generateSphere(radius: 0.0001), materials: [material])
+        root.addChild(surfaceEntity)
         root.addChild(rimEntity)
 
         // The grab volume: an invisible slab over the sheet's footprint,
@@ -95,8 +95,7 @@ final class WaveMediumRenderer {
     }
 
     /// A perceptual blue→teal→red ramp for a signed height field.
-    private nonisolated static func rampColor(_ t: Float) -> UIColor {
-        // Control stops, evenly spaced across 0…1.
+    private nonisolated static func rampColor(_ t: Float) -> (r: CGFloat, g: CGFloat, b: CGFloat) {
         let stops: [(Float, Float, Float)] = [
             (0.10, 0.30, 0.95),   // deep trough — blue
             (0.15, 0.55, 0.95),
@@ -110,9 +109,30 @@ final class WaveMediumRenderer {
         let i = min(Int(scaled), stops.count - 2)
         let f = scaled - Float(i)
         let a = stops[i], b = stops[i + 1]
-        return UIColor(red: CGFloat(a.0 + (b.0 - a.0) * f),
-                       green: CGFloat(a.1 + (b.1 - a.1) * f),
-                       blue: CGFloat(a.2 + (b.2 - a.2) * f), alpha: 1)
+        return (CGFloat(a.0 + (b.0 - a.0) * f),
+                CGFloat(a.1 + (b.1 - a.1) * f),
+                CGFloat(a.2 + (b.2 - a.2) * f))
+    }
+
+    /// A 256×1 gradient baked from the ramp, sampled smoothly by the
+    /// surface's height texture coordinate.
+    private static func gradientTexture() -> TextureResource? {
+        let width = 256
+        var bytes = [UInt8](repeating: 0, count: width * 4)
+        for x in 0..<width {
+            let c = rampColor(Float(x) / Float(width - 1))
+            bytes[x * 4 + 0] = UInt8(max(0, min(255, c.r * 255)))
+            bytes[x * 4 + 1] = UInt8(max(0, min(255, c.g * 255)))
+            bytes[x * 4 + 2] = UInt8(max(0, min(255, c.b * 255)))
+            bytes[x * 4 + 3] = 255
+        }
+        guard let context = CGContext(
+            data: &bytes, width: width, height: 1, bitsPerComponent: 8,
+            bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let image = context.makeImage() else { return nil }
+        return try? TextureResource.generate(
+            from: image, options: .init(semantic: .color))
     }
 
     // MARK: Per-frame
@@ -144,8 +164,10 @@ final class WaveMediumRenderer {
     }
 
     private nonisolated struct SurfaceResult: Sendable {
-        var positions: [[SIMD3<Float>]]   // per band
-        var normals: [[SIMD3<Float>]]
+        var positions: [SIMD3<Float>]
+        var normals: [SIMD3<Float>]
+        var uvs: [SIMD2<Float>]
+        var indices: [UInt32]
         var rim: [SIMD3<Float>]
     }
 
@@ -155,73 +177,65 @@ final class WaveMediumRenderer {
         let half = Float(n - 1) * a / 2
         let h = job.heights
 
-        @inline(__always) func height(_ i: Int, _ j: Int) -> Float {
-            h[j * n + i]
-        }
-        @inline(__always) func position(_ i: Int, _ j: Int) -> SIMD3<Float> {
-            job.center + SIMD3(Float(i) * a - half, height(i, j), Float(j) * a - half)
-        }
-        // Surface normal from the height gradient (clamped at edges).
-        func normal(_ i: Int, _ j: Int) -> SIMD3<Float> {
-            let il = max(i - 1, 0), ir = min(i + 1, n - 1)
-            let jl = max(j - 1, 0), jr = min(j + 1, n - 1)
-            let dhdx = (height(ir, j) - height(il, j)) / (Float(ir - il) * a)
-            let dhdz = (height(i, jr) - height(i, jl)) / (Float(jr - jl) * a)
-            return simd_normalize(SIMD3(-dhdx, 1, -dhdz))
+        @inline(__always) func height(_ i: Int, _ j: Int) -> Float { h[j * n + i] }
+
+        // One shared vertex per grid node — indexed triangles, so the
+        // normals and the height texture coordinate interpolate
+        // continuously across the whole sheet (no per-triangle seams).
+        var positions = [SIMD3<Float>](); positions.reserveCapacity(n * n)
+        var normals = [SIMD3<Float>](); normals.reserveCapacity(n * n)
+        var uvs = [SIMD2<Float>](); uvs.reserveCapacity(n * n)
+        for j in 0..<n {
+            for i in 0..<n {
+                let y = height(i, j)
+                positions.append(job.center + SIMD3(Float(i) * a - half, y, Float(j) * a - half))
+                let il = max(i - 1, 0), ir = min(i + 1, n - 1)
+                let jl = max(j - 1, 0), jr = min(j + 1, n - 1)
+                let dhdx = (height(ir, j) - height(il, j)) / (Float(ir - il) * a)
+                let dhdz = (height(i, jr) - height(i, jl)) / (Float(jr - jl) * a)
+                normals.append(simd_normalize(SIMD3(-dhdx, 1, -dhdz)))
+                // u = height along the ramp; v anywhere on the 1-D texture.
+                let u = min(max((y + heightSpan) / (2 * heightSpan), 0), 1)
+                uvs.append(SIMD2(u, 0.5))
+            }
         }
 
-        // Even thresholds across ±bandSpan → bandCount contour bands.
-        func band(_ y: Float) -> Int {
-            let f = (y + bandSpan) / (2 * bandSpan)   // 0…1 across the ramp
-            return min(max(Int(f * Float(bandCount)), 0), bandCount - 1)
-        }
-
-        var positions = Array(repeating: [SIMD3<Float>](), count: bandCount)
-        var normals = Array(repeating: [SIMD3<Float>](), count: bandCount)
-
-        func emit(_ i0: Int, _ j0: Int, _ i1: Int, _ j1: Int, _ i2: Int, _ j2: Int) {
-            let avg = (height(i0, j0) + height(i1, j1) + height(i2, j2)) / 3
-            let b = band(avg)
-            positions[b].append(position(i0, j0))
-            positions[b].append(position(i1, j1))
-            positions[b].append(position(i2, j2))
-            normals[b].append(normal(i0, j0))
-            normals[b].append(normal(i1, j1))
-            normals[b].append(normal(i2, j2))
-        }
-
+        var indices = [UInt32](); indices.reserveCapacity((n - 1) * (n - 1) * 6)
         for j in 0..<(n - 1) {
             for i in 0..<(n - 1) {
-                emit(i, j, i + 1, j, i + 1, j + 1)
-                emit(i, j, i + 1, j + 1, i, j + 1)
+                let v00 = UInt32(j * n + i), v10 = UInt32(j * n + i + 1)
+                let v01 = UInt32((j + 1) * n + i), v11 = UInt32((j + 1) * n + i + 1)
+                indices += [v00, v10, v11, v00, v11, v01]
             }
         }
 
         // Rim loop for the boundary tube.
+        @inline(__always) func position(_ i: Int, _ j: Int) -> SIMD3<Float> {
+            positions[j * n + i]
+        }
         var rim: [SIMD3<Float>] = []
         for i in 0..<n { rim.append(position(i, 0)) }
         for j in 1..<n { rim.append(position(n - 1, j)) }
         for i in stride(from: n - 2, through: 0, by: -1) { rim.append(position(i, n - 1)) }
         for j in stride(from: n - 2, through: 0, by: -1) { rim.append(position(0, j)) }
 
-        return SurfaceResult(positions: positions, normals: normals, rim: rim)
+        return SurfaceResult(positions: positions, normals: normals,
+                             uvs: uvs, indices: indices, rim: rim)
     }
 
     private func applySurface(_ result: SurfaceResult) {
-        for (index, entity) in bandEntities.enumerated() {
-            let positions = result.positions[index]
-            guard positions.count >= 3 else {
-                entity.isEnabled = false
-                continue
-            }
-            entity.isEnabled = true
-            var descriptor = MeshDescriptor(name: "band")
-            descriptor.positions = MeshBuffer(positions)
-            descriptor.normals = MeshBuffer(result.normals[index])
-            descriptor.primitives = .triangles(Array(0..<UInt32(positions.count)))
-            if let mesh = try? MeshResource.generate(from: [descriptor]) {
-                entity.model?.mesh = mesh
-            }
+        guard result.positions.count >= 3, result.indices.count >= 3 else {
+            surfaceEntity.isEnabled = false
+            return
+        }
+        surfaceEntity.isEnabled = true
+        var descriptor = MeshDescriptor(name: "membrane")
+        descriptor.positions = MeshBuffer(result.positions)
+        descriptor.normals = MeshBuffer(result.normals)
+        descriptor.textureCoordinates = MeshBuffer(result.uvs)
+        descriptor.primitives = .triangles(result.indices)
+        if let mesh = try? MeshResource.generate(from: [descriptor]) {
+            surfaceEntity.model?.mesh = mesh
         }
         if result.rim.count >= 2,
            let mesh = TubeMesh.tube(lines: [result.rim], radius: 0.004, sides: 4) {
