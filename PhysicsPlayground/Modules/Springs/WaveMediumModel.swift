@@ -34,6 +34,10 @@ final class WaveMediumModel {
     nonisolated static let waveSpeedRange = 0.4...2.4
     nonisolated static let dampingRange = 0.0...2.5
     nonisolated static let pluckClamp = 0.28
+    /// The free field can't rise past this — a governor so driving a
+    /// point can't make the sheet run away and glitch (just above the
+    /// pull clamp, so a single deliberate pull isn't touched).
+    nonisolated static let amplitudeCeiling = 0.3
 
     private(set) var sheet: ElasticSheet
     var isPaused = false
@@ -63,9 +67,10 @@ final class WaveMediumModel {
     private var heldStartHandY = 0.0
 
     init() {
-        let sheet = ElasticSheet(
+        var sheet = ElasticSheet(
             n: Self.gridCount, spacing: Self.spacing,
             waveSpeed: 1.2, damping: 0.1, boundary: .fixed)
+        sheet.amplitudeLimit = Self.amplitudeCeiling
         self.sheet = sheet
         self.waveSpeed = sheet.waveSpeed
         self.damping = sheet.damping
@@ -169,6 +174,7 @@ final class WaveMediumModel {
         sheet = ElasticSheet(
             n: Self.gridCount, spacing: Self.spacing,
             waveSpeed: 1.2, damping: 0.1, boundary: .fixed)
+        sheet.amplitudeLimit = Self.amplitudeCeiling
         waveSpeed = 1.2
         damping = 0.1
         boundaryFixed = true

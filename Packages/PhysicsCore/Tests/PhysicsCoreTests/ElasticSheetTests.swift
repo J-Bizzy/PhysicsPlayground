@@ -62,6 +62,41 @@ final class ElasticSheetTests: XCTestCase {
                        "and never loses it")
     }
 
+    /// The amplitude governor caps a DRIVEN sheet: pump energy in by
+    /// re-plucking every step and the free field still never passes the
+    /// ceiling — no runaway, no glitch.
+    func testAmplitudeGovernorCapsADrivenSheet() {
+        var sheet = ElasticSheet(n: 21, spacing: 0.05, waveSpeed: 1.2,
+                                 damping: 0, boundary: .fixed)
+        sheet.amplitudeLimit = 0.2
+        for _ in 0..<600 {
+            // A relentless driver — far more energy than any hand.
+            sheet.pluck(i: 10, j: 10, amplitude: 0.1, radius: 0.08)
+            sheet.step(dt: 1.0 / 120.0)
+            let peak = sheet.height.map { abs($0) }.max()!
+            XCTAssertLessThanOrEqual(peak, 0.2 + 1e-9, "the ceiling holds every frame")
+        }
+    }
+
+    /// Below the ceiling the governor does nothing — a gentle pluck
+    /// keeps its full amplitude and its energy (no silent clipping).
+    func testGovernorLeavesSmallWavesUntouched() {
+        var withLimit = ElasticSheet(n: 21, spacing: 0.05, waveSpeed: 1.0,
+                                     damping: 0, boundary: .fixed)
+        withLimit.amplitudeLimit = 0.3
+        withLimit.pluck(i: 10, j: 10, amplitude: 0.05, radius: 0.1)
+        var without = ElasticSheet(n: 21, spacing: 0.05, waveSpeed: 1.0,
+                                   damping: 0, boundary: .fixed)
+        without.pluck(i: 10, j: 10, amplitude: 0.05, radius: 0.1)
+        for _ in 0..<300 {
+            withLimit.step(dt: 1.0 / 120.0)
+            without.step(dt: 1.0 / 120.0)
+        }
+        for k in 0..<withLimit.height.count {
+            XCTAssertEqual(withLimit.height[k], without.height[k], accuracy: 1e-12)
+        }
+    }
+
     /// A sharp broadband pluck stays BOUNDED — the integrator injects
     /// no energy even when the spectrum reaches the lattice's fastest
     /// modes (the CFL guard holds).

@@ -36,6 +36,14 @@ public struct ElasticSheet: Sendable {
     /// Velocity damping γ (1/s); 0 = lossless.
     public var damping: Double
     public var boundary: Boundary
+    /// A ceiling on the free field's amplitude (m). The linear wave
+    /// equation can't blow up on its own, but a hand DRIVING a point —
+    /// holding and shaking it — pumps in energy without bound. When the
+    /// peak of the un-held field passes this, the whole field is gently
+    /// scaled back to it (energy bled off), so the sheet can never run
+    /// away and glitch. Default .infinity = no limit (the tests run
+    /// unclamped).
+    public var amplitudeLimit: Double = .infinity
 
     /// Transverse height and velocity, row-major (index = j*n + i).
     public private(set) var height: [Double]
@@ -133,6 +141,24 @@ public struct ElasticSheet: Sendable {
         let substeps = max(1, Int((dt / safe).rounded(.up)))
         let h = dt / Double(substeps)
         for _ in 0..<substeps { integrate(h) }
+        governAmplitude()
+    }
+
+    /// Scales the free (un-held) field back under the amplitude ceiling
+    /// when it's exceeded — the safety governor. Held nodes are left
+    /// alone (their height is the hand's, re-pinned each frame).
+    private mutating func governAmplitude() {
+        guard amplitudeLimit.isFinite else { return }
+        var peak = 0.0
+        for k in 0..<height.count where pinned[k] == nil {
+            peak = max(peak, abs(height[k]))
+        }
+        guard peak > amplitudeLimit else { return }
+        let scale = amplitudeLimit / peak
+        for k in 0..<height.count where pinned[k] == nil {
+            height[k] *= scale
+            velocity[k] *= scale
+        }
     }
 
     private func sample(_ i: Int, _ j: Int) -> Double {
