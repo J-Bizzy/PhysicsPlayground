@@ -99,9 +99,8 @@ final class HubScene {
     /// "Physics / Playground" as two lines of fat rounded 3-D letters —
     /// glossy bubbles with a soft glow behind, floating at the centre of
     /// the ring.
-    /// Lifted into a banner that clears the info window below and the
-    /// top exhibit above — the ring's calm upper-middle band.
-    private static let titleOffset = SIMD3<Float>(0, 0.2, 0.12)
+    /// Centred in the ring, a step forward in depth from the exhibits.
+    private static let titleOffset = SIMD3<Float>(0, 0, 0.12)
     /// The title reads as smoky, semi-transparent glass rather than
     /// coloured candy — a quiet frosted grey.
     private static let titleColor = UIColor(white: 0.62, alpha: 1)
@@ -129,11 +128,10 @@ final class HubScene {
 
     /// The app's signature 3-D "bubble" type, in one reusable builder:
     /// fat rounded heavy glyphs extruded into a glossy clear-coated
-    /// solid, with a soft translucent glow puff just behind so they read
-    /// as inflated and lit from within. Centred on its own origin and
-    /// returned as a group. The hub title and every exhibit name plate
-    /// share this one treatment. `opacity` < 1 turns the letters to
-    /// smoky glass; `emissive` sets how much they glow against the room.
+    /// solid. Centred on its own origin and returned as a group. The hub
+    /// title and every exhibit name plate share this one treatment.
+    /// `opacity` < 1 turns the letters to smoky glass; `emissive` sets
+    /// how much they glow against the room.
     static func bubbleText(_ text: String, size: CGFloat, color: UIColor,
                            opacity: Float = 1, emissive: Float = 0.28) -> Entity {
         let group = Entity()
@@ -158,19 +156,6 @@ final class HubScene {
         let letters = ModelEntity(mesh: mesh, materials: [glossy])
         letters.position = [centerX, 0, 0]
         group.addChild(letters)
-
-        // A soft glow puff just behind, larger and translucent — fainter
-        // still when the letters are already sheer.
-        var halo = UnlitMaterial(color: color)
-        halo.blending = .transparent(opacity: .init(floatLiteral: 0.28 * opacity))
-        let glow = ModelEntity(
-            mesh: MeshResource.generateText(
-                text, extrusionDepth: Float(size) * 0.2,
-                font: font, alignment: .center),
-            materials: [halo])
-        glow.position = [centerX, 0, -0.02]
-        glow.scale = SIMD3(repeating: 1.06)
-        group.addChild(glow)
         return group
     }
 
