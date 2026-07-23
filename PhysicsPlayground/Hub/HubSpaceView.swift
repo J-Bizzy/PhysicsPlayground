@@ -66,9 +66,11 @@ final class HubScene {
     }
     private var exhibits: [Exhibit] = []
     private var time = 0.0
+    /// The 3-D bubble title the exhibits ring, bobbing at the centre.
+    private let titleAnchor = Entity()
 
-    /// The ring encircles the title window: a vertical circle in the
-    /// frontal plane, a step beyond the window's depth.
+    /// The ring encircles the title: a vertical circle in the frontal
+    /// plane, a step beyond it in depth.
     private static let ringCenter = SIMD3<Float>(0, 1.6, -2.2)
     private static let ringRadius: Float = 0.95
     /// The miniatures, unbottled and enlarged.
@@ -77,8 +79,9 @@ final class HubScene {
     // MARK: Build
 
     func build(modules: [ModuleDescriptor]) {
-        // The window carries the app title; the exhibits ring it like a
-        // clock face, starting at twelve and going clockwise.
+        // The 3-D bubble title sits at the centre; the exhibits ring it
+        // like a clock face, starting at twelve and going clockwise.
+        buildBubbleTitle()
         let count = max(modules.count, 1)
         for (index, module) in modules.enumerated() {
             let angle = Float.pi / 2 - 2 * .pi * Float(index) / Float(count)
@@ -89,6 +92,76 @@ final class HubScene {
             )
             buildExhibit(for: module, at: basePosition)
         }
+    }
+
+    // MARK: The 3-D bubble title
+
+    /// "Physics / Playground" as two lines of fat rounded 3-D letters —
+    /// glossy candy bubbles with a soft glow behind, floating at the
+    /// centre of the ring.
+    /// Lifted into a banner that clears the info window below and the
+    /// top exhibit above — the ring's calm upper-middle band.
+    private static let titleOffset = SIMD3<Float>(0, 0.2, 0.12)
+
+    private func buildBubbleTitle() {
+        titleAnchor.position = Self.ringCenter + Self.titleOffset
+        // Two centred lines of fat rounded glyphs — inflated bubbles.
+        addBubbleLine("Physics", size: 0.17,
+                      color: UIColor(red: 0.35, green: 0.7, blue: 1.0, alpha: 1),
+                      y: 0.12)
+        addBubbleLine("Playground", size: 0.17,
+                      color: UIColor(red: 1.0, green: 0.55, blue: 0.75, alpha: 1),
+                      y: -0.12)
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = "Physics Playground"
+        titleAnchor.components.set(accessibility)
+        root.addChild(titleAnchor)
+    }
+
+    private func addBubbleLine(_ text: String, size: CGFloat, color: UIColor, y: Float) {
+        let mesh = MeshResource.generateText(
+            text, extrusionDepth: Float(size) * 0.45,
+            font: Self.roundedFont(size: size),
+            alignment: .center)
+        let bounds = mesh.bounds
+
+        // Glossy candy bubble: bright, low-roughness, clear-coated, with
+        // a gentle emissive so it glows against the room.
+        var glossy = PhysicallyBasedMaterial()
+        glossy.baseColor = .init(tint: color)
+        glossy.roughness = 0.16
+        glossy.metallic = 0.0
+        glossy.clearcoat = .init(floatLiteral: 1.0)
+        glossy.clearcoatRoughness = .init(floatLiteral: 0.12)
+        glossy.emissiveColor = .init(color: color)
+        glossy.emissiveIntensity = 0.28
+        let letters = ModelEntity(mesh: mesh, materials: [glossy])
+        letters.position = [-(bounds.min.x + bounds.max.x) / 2, y, 0]
+        titleAnchor.addChild(letters)
+
+        // A soft glow puff just behind, larger and translucent, so the
+        // letters read as inflated and lit from within.
+        var halo = UnlitMaterial(color: color)
+        halo.blending = .transparent(opacity: 0.28)
+        let glow = ModelEntity(
+            mesh: MeshResource.generateText(
+                text, extrusionDepth: Float(size) * 0.2,
+                font: Self.roundedFont(size: size), alignment: .center),
+            materials: [halo])
+        glow.position = [-(bounds.min.x + bounds.max.x) / 2, y, -0.02]
+        glow.scale = SIMD3(repeating: 1.06)
+        titleAnchor.addChild(glow)
+    }
+
+    /// SF Rounded at a heavy weight — the fat, round glyphs that make
+    /// the extruded text read as bubbles.
+    private static func roundedFont(size: CGFloat) -> MeshResource.Font {
+        let base = UIFont.systemFont(ofSize: size, weight: .heavy)
+        if let descriptor = base.fontDescriptor.withDesign(.rounded) {
+            return UIFont(descriptor: descriptor, size: size)
+        }
+        return base
     }
 
     private func buildExhibit(for module: ModuleDescriptor, at basePosition: SIMD3<Float>) {
@@ -386,6 +459,11 @@ final class HubScene {
             exhibit.vignette.orientation = simd_quatf(
                 angle: Float(time * 0.3 + Double(index)), axis: [0, 1, 0])
         }
+        // The title floats and breathes, like a balloon on a string.
+        let bob = 0.02 * Float(sin(time * 0.6))
+        titleAnchor.position = Self.ringCenter + Self.titleOffset + SIMD3(0, bob, 0)
+        let breathe = 1 + 0.015 * Float(sin(time * 0.9))
+        titleAnchor.scale = SIMD3(repeating: breathe)
     }
 
     /// Maps a tapped entity (target or any child) back to its module.

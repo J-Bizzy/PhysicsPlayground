@@ -19,21 +19,14 @@ struct HubView: View {
         VStack(spacing: 16) {
             Spacer(minLength: 12)
 
-            Image(systemName: "atom")
-                .font(.system(size: 40))
-                .foregroundStyle(.white.opacity(0.75))
-                .accessibilityHidden(true)
-
-            Text("Physics Playground")
-                .font(.system(size: 46, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
-
-            Text("The exhibits circle this title.\nLook at one and pinch to step inside.")
+            // The name floats in 3-D as bubble letters above the exhibit
+            // ring (HubSpaceView); this window keeps only the hint, the
+            // tally, and the button so it never crowds the title.
+            Text("Look at any exhibit in the ring and pinch to step inside.")
                 .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(.white.opacity(0.8))
                 .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.isHeader)
 
             if !appModel.challenges.completed.isEmpty {
                 Label(
