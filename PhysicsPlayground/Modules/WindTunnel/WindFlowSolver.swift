@@ -39,25 +39,14 @@ actor WindFlowSolver {
     /// the smoke positions. Nothing here needs the main thread to do more
     /// than upload it.
     struct Snapshot: Sendable {
-        /// One tube buffer per speed-colour bucket (slow → fast).
-        var ribbonBuffers: [TubeBuffers] = []
-        /// The smoke as ONE ready-to-upload sprite mesh. Built here so the
-        /// main thread uploads a single mesh instead of writing a
-        /// transform onto hundreds of separate entities every frame.
-        var smoke = SmokeBuffers()
+        /// One tube buffer per speed-colour bucket (slow → fast). Empty
+        /// when this pass did not re-trace them.
+        var ribbonBuffers: [TubeBuffers]?
+        /// The solved field, for the renderer to advect smoke through
+        /// every frame.
+        var field: FlowField
         /// Free-stream speed this snapshot was taken at, for normalising.
         var referenceSpeed: Float = 1
-    }
-
-    /// Camera-facing quads for the smoke, with UVs into a soft radial
-    /// puff texture — many overlapping translucent puffs is what reads as
-    /// volume, where hard little spheres read as confetti.
-    struct SmokeBuffers: Sendable {
-        var positions: [SIMD3<Float>] = []
-        var normals: [SIMD3<Float>] = []
-        var uvs: [SIMD2<Float>] = []
-        var indices: [UInt32] = []
-        var isEmpty: Bool { indices.isEmpty }
     }
 
     /// Local speed ratio → colour bucket, matching the renderer's palette:
@@ -97,37 +86,12 @@ actor WindFlowSolver {
     private static let ribbonSteps = 150
     private static let ribbonStride = 0.022
 
-    // MARK: Smoke
-
-    /// One mesh means the cost is geometry, not entities, so the cloud
-    /// can be dense enough to actually look like smoke.
-    private static let smokeCount = 950
-    private var smoke: [SIMD3<Double>] = []
-    private var smokeAge: [Double] = []
-    /// A mote crosses the 2.1 m section in about two seconds at 1 m/s.
-    /// Much more life than that and the ones caught in the slow
-    /// recirculation behind a body pile into a solid wall of smoke
-    /// instead of reading as a wake.
-    private static let smokeLife = 4.0
-
     init() {
         grid = FluidGrid(
             nx: Self.nx, ny: Self.ny, nz: Self.nz, h: Self.h,
             origin: Self.origin, inflowSpeed: 1.0,
             vorticityConfinement: 9.0,
             pressureIterations: 24)
-        smoke = (0..<Self.smokeCount).map { _ in Self.randomInletPoint() }
-        smokeAge = (0..<Self.smokeCount).map { _ in Double.random(in: 0..<Self.smokeLife) }
-    }
-
-    /// Motes enter in the same band the ribbon rake covers, so the smoke
-    /// is dense where the body is instead of thinly filling the tunnel.
-    private static func randomInletPoint() -> SIMD3<Double> {
-        SIMD3(
-            Double.random(in: -1.02 ... -0.90),
-            Double.random(in: -0.20 ... 0.28),
-            Double.random(in: -0.30 ... 0.30)
-        )
     }
 
     // MARK: Configuration
@@ -168,87 +132,17 @@ actor WindFlowSolver {
 
     // MARK: Per-frame
 
-    func advance(dt: Double, traceRibbons wantRibbons: Bool,
-                 smokeVisible: Bool) -> Snapshot {
+    /// Advances the field and hands back a sampled copy of it. The smoke
+    /// is NOT advected here — the renderer rides this field every frame,
+    /// which is what keeps the motion continuous even though the solve
+    /// itself only refreshes a dozen or so times a second.
+    func advance(dt: Double, traceRibbons wantRibbons: Bool) -> Snapshot {
         grid.step(dt: min(max(dt, 1.0 / 120.0), 1.0 / 20.0))
-        if smokeVisible { advectSmoke(dt: dt) }
         return Snapshot(
-            ribbonBuffers: wantRibbons ? buildRibbonBuffers() : [],
-            smoke: smokeVisible ? buildSmokeQuads() : SmokeBuffers(),
+            ribbonBuffers: wantRibbons ? buildRibbonBuffers() : nil,
+            field: grid.exportField(),
             referenceSpeed: Float(grid.inflowSpeed))
     }
-
-    /// Builds the smoke sprite mesh. Each mote is a quad facing the front
-    /// of the section (where the tunnel is watched from), sized by how
-    /// long it has been drifting — young motes are tight and bright,
-    /// older ones spread and soften, so the wake blooms into haze rather
-    /// than staying a cloud of identical dots.
-    private func buildSmokeQuads() -> SmokeBuffers {
-        var buffers = SmokeBuffers()
-        let count = smoke.count
-        buffers.positions.reserveCapacity(count * 4)
-        buffers.normals.reserveCapacity(count * 4)
-        buffers.uvs.reserveCapacity(count * 4)
-        buffers.indices.reserveCapacity(count * 6)
-
-        for (index, p) in smoke.enumerated() {
-            let age = Float(smokeAge[index] / Self.smokeLife)     // 0…1
-            let size = Self.smokeSizeNear + (Self.smokeSizeFar - Self.smokeSizeNear) * age
-            let c = SIMD3<Float>(p)
-            let base = UInt32(buffers.positions.count)
-            buffers.positions.append(c + SIMD3(-size, -size, 0))
-            buffers.positions.append(c + SIMD3(size, -size, 0))
-            buffers.positions.append(c + SIMD3(size, size, 0))
-            buffers.positions.append(c + SIMD3(-size, size, 0))
-            for _ in 0..<4 { buffers.normals.append([0, 0, 1]) }
-            buffers.uvs.append([0, 1]); buffers.uvs.append([1, 1])
-            buffers.uvs.append([1, 0]); buffers.uvs.append([0, 0])
-            buffers.indices += [base, base + 1, base + 2, base, base + 2, base + 3]
-        }
-        return buffers
-    }
-
-    /// A puff starts tight and spreads as it drifts downstream.
-    private static let smokeSizeNear: Float = 0.009
-    private static let smokeSizeFar: Float = 0.024
-
-    /// Traces the rake and turns it straight into tube geometry, split by
-    /// speed colour — all of it here on the solver, so the main thread
-    /// only ever uploads a finished mesh.
-    private func buildRibbonBuffers() -> [TubeBuffers] {
-        let reference = max(grid.inflowSpeed, 1e-9)
-        var bucketLines: [[[SIMD3<Float>]]] =
-            Array(repeating: [], count: Self.bucketCount)
-
-        for ribbon in traceRibbons() {
-            // Smooth the speed along the filament before choosing colours.
-            // Raw per-vertex speeds cross a bucket edge back and forth in
-            // the turbulent wake, which chops the tube into dashes; a short
-            // moving average keeps each filament a continuous ribbon.
-            let smoothed = Self.movingAverage(ribbon.speeds, window: 7)
-            var run: [SIMD3<Float>] = []
-            var runBucket = -1
-            for (index, point) in ribbon.points.enumerated() {
-                let bucket = Self.speedBucket(Double(smoothed[index]) / reference)
-                if runBucket == -1 { runBucket = bucket }
-                run.append(point)
-                if bucket != runBucket {
-                    if run.count > 1 { bucketLines[runBucket].append(run) }
-                    // Start the next run AT this point so the ribbon is
-                    // visually continuous across a colour change.
-                    run = [point]
-                    runBucket = bucket
-                }
-            }
-            if run.count > 1, runBucket >= 0 { bucketLines[runBucket].append(run) }
-        }
-        return bucketLines.map {
-            TubeMesh.buffers(lines: $0, radius: Self.ribbonRadius, sides: 4)
-        }
-    }
-
-    /// Fat enough to read as a sheet of smoke rather than a wire.
-    private static let ribbonRadius: Float = 0.0055
 
     private static func movingAverage(_ values: [Float], window: Int) -> [Float] {
         guard values.count > window, window > 1 else { return values }
@@ -306,30 +200,38 @@ actor WindFlowSolver {
         return result
     }
 
-    // MARK: Smoke
+    /// Traces the rake and turns it straight into tube geometry, split by
+    /// speed colour — all of it here on the solver, so the main thread
+    /// only ever uploads a finished mesh.
+    private func buildRibbonBuffers() -> [TubeBuffers] {
+        let reference = max(grid.inflowSpeed, 1e-9)
+        var bucketLines: [[[SIMD3<Float>]]] =
+            Array(repeating: [], count: Self.bucketCount)
 
-    private func advectSmoke(dt: Double) {
-        // Confine the smoke to the volume that is actually solved. Beyond
-        // the grid the sampler only clamps, so a mote that escapes drifts
-        // on stale velocity and ends up scattered around the room instead
-        // of in the tunnel.
-        let (lo, hi) = grid.bounds
-        let margin = Self.h
-        for index in smoke.indices {
-            var p = smoke[index]
-            p += grid.velocity(at: p) * dt
-            smokeAge[index] += dt
-
-            // Recycle at the inlet once a mote leaves the tunnel, ages
-            // out, or is overtaken by a solid (a hand closing over it).
-            if p.x > hi.x - margin || smokeAge[index] > Self.smokeLife
-                || grid.isSolid(atWorld: p)
-                || p.y < lo.y + margin || p.y > hi.y - margin
-                || p.z < lo.z + margin || p.z > hi.z - margin {
-                p = Self.randomInletPoint()
-                smokeAge[index] = 0
+        for ribbon in traceRibbons() {
+            // Smooth the speed along the filament before choosing colours.
+            // Raw per-vertex speeds cross a bucket edge back and forth in
+            // the turbulent wake, which chops the tube into dashes.
+            let smoothed = Self.movingAverage(ribbon.speeds, window: 7)
+            var run: [SIMD3<Float>] = []
+            var runBucket = -1
+            for (index, point) in ribbon.points.enumerated() {
+                let bucket = Self.speedBucket(Double(smoothed[index]) / reference)
+                if runBucket == -1 { runBucket = bucket }
+                run.append(point)
+                if bucket != runBucket {
+                    if run.count > 1 { bucketLines[runBucket].append(run) }
+                    run = [point]
+                    runBucket = bucket
+                }
             }
-            smoke[index] = p
+            if run.count > 1, runBucket >= 0 { bucketLines[runBucket].append(run) }
+        }
+        return bucketLines.map {
+            TubeMesh.buffers(lines: $0, radius: Self.ribbonRadius, sides: 4)
         }
     }
+
+    /// Fat enough to read as a sheet of smoke rather than a wire.
+    private static let ribbonRadius: Float = 0.0055
 }

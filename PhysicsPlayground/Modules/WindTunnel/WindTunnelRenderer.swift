@@ -82,6 +82,32 @@ final class WindTunnelRenderer {
 
     /// The whole smoke cloud: one entity, one mesh of soft puff sprites.
     private let smokeEntity = ModelEntity()
+
+    // The smoke lives HERE, not on the solver, and is advected every
+    // single frame against the most recently solved field. The solve is
+    // expensive and lands maybe a dozen times a second; the motes must
+    // not move in those same steps, or the air visibly stutters while
+    // everything else in the scene runs smooth.
+    private var flowField: FlowField?
+    private var smoke: [SIMD3<Double>] = []
+    private var smokeAge: [Double] = []
+    private static let smokeCount = 950
+    /// A mote crosses the 2.1 m section in about two seconds at 1 m/s.
+    /// Much more life than that and the ones caught in the slow
+    /// recirculation behind a body pile into a wall of smoke.
+    private static let smokeLife = 4.0
+    private static let smokeSizeNear: Float = 0.009
+    private static let smokeSizeFar: Float = 0.020
+
+    /// Motes enter in the band the ribbon rake covers, so the smoke is
+    /// dense where the body is instead of thinly filling the tunnel.
+    private static func randomInletPoint() -> SIMD3<Double> {
+        SIMD3(
+            Double.random(in: -1.02 ... -0.90),
+            Double.random(in: -0.20 ... 0.28),
+            Double.random(in: -0.30 ... 0.30)
+        )
+    }
     private lazy var smokeMaterial: UnlitMaterial = Self.makeSmokeMaterial()
 
     /// A soft radial puff: opaque-ish in the middle, feathering to
@@ -103,7 +129,7 @@ final class WindTunnelRenderer {
         // still reads against a brightly-lit passthrough wall, which is
         // the hard case — over a dark surface it is comfortably visible.
         material.blending = .transparent(
-            opacity: .init(scale: 0.40, texture: .init(texture)))
+            opacity: .init(scale: 0.20, texture: .init(texture)))
         return material
     }
 
@@ -301,6 +327,68 @@ final class WindTunnelRenderer {
         }
 
         driveSolver(dt: scaledDt, model: model)
+        // Independent of the solve: the smoke rides the latest field on
+        // EVERY frame, which is what makes the air look continuous.
+        advanceSmoke(dt: scaledDt, model: model)
+    }
+
+    // MARK: Smoke — advected per frame on the cached field
+
+    private func advanceSmoke(dt: Double, model: WindTunnelModel) {
+        guard model.showParticles, let field = flowField else {
+            if smokeEntity.model != nil { smokeEntity.model = nil }
+            return
+        }
+        if smoke.count != Self.smokeCount {
+            smoke = (0..<Self.smokeCount).map { _ in Self.randomInletPoint() }
+            smokeAge = (0..<Self.smokeCount).map { _ in Double.random(in: 0..<Self.smokeLife) }
+        }
+
+        let (lo, hi) = field.bounds
+        let margin = field.h
+        for index in smoke.indices {
+            var p = smoke[index]
+            p += SIMD3<Double>(field.velocity(at: p)) * dt
+            smokeAge[index] += dt
+            if p.x > hi.x - margin || smokeAge[index] > Self.smokeLife
+                || field.isSolid(at: p)
+                || p.y < lo.y + margin || p.y > hi.y - margin
+                || p.z < lo.z + margin || p.z > hi.z - margin {
+                p = Self.randomInletPoint()
+                smokeAge[index] = 0
+            }
+            smoke[index] = p
+        }
+        rebuildSmokeMesh()
+    }
+
+    /// One mesh of soft camera-facing puffs. Each starts tight and
+    /// spreads as it drifts, so the wake blooms into haze.
+    private func rebuildSmokeMesh() {
+        var positions = [SIMD3<Float>](); positions.reserveCapacity(smoke.count * 4)
+        var uvs = [SIMD2<Float>](); uvs.reserveCapacity(smoke.count * 4)
+        var indices = [UInt32](); indices.reserveCapacity(smoke.count * 6)
+        for (index, p) in smoke.enumerated() {
+            let age = Float(smokeAge[index] / Self.smokeLife)
+            let size = Self.smokeSizeNear + (Self.smokeSizeFar - Self.smokeSizeNear) * age
+            let c = SIMD3<Float>(p)
+            let base = UInt32(positions.count)
+            positions.append(c + SIMD3(-size, -size, 0))
+            positions.append(c + SIMD3(size, -size, 0))
+            positions.append(c + SIMD3(size, size, 0))
+            positions.append(c + SIMD3(-size, size, 0))
+            uvs.append([0, 1]); uvs.append([1, 1]); uvs.append([1, 0]); uvs.append([0, 0])
+            indices += [base, base + 1, base + 2, base, base + 2, base + 3]
+        }
+        var descriptor = MeshDescriptor(name: "smoke")
+        descriptor.positions = MeshBuffer(positions)
+        descriptor.normals = MeshBuffer(
+            [SIMD3<Float>](repeating: [0, 0, 1], count: positions.count))
+        descriptor.textureCoordinates = MeshBuffer(uvs)
+        descriptor.primitives = .triangles(indices)
+        if let mesh = try? MeshResource.generate(from: [descriptor]) {
+            smokeEntity.model = ModelComponent(mesh: mesh, materials: [smokeMaterial])
+        }
     }
 
     // MARK: The live CFD flow
@@ -323,7 +411,6 @@ final class WindTunnelRenderer {
         let obstacles = solidObstacles(for: model)
         let inflow = model.windSpeed
         let wantRibbons = model.showStreamlines
-        let wantSmoke = model.showParticles
 
         Task { [weak self] in
             guard let self else { return }
@@ -331,7 +418,7 @@ final class WindTunnelRenderer {
             await solver.setObstacles(obstacles)
             await solver.primeIfNeeded()
             let snapshot = await solver.advance(
-                dt: step, traceRibbons: wantRibbons, smokeVisible: wantSmoke)
+                dt: step, traceRibbons: wantRibbons)
             self.applyFlow(snapshot, model: model)
             self.solveInFlight = false
         }
@@ -367,38 +454,28 @@ final class WindTunnelRenderer {
     }
 
     private func applyFlow(_ snapshot: WindFlowSolver.Snapshot, model: WindTunnelModel) {
-        // Streamline ribbons — one mesh per speed-colour bucket.
-        if model.showStreamlines, !snapshot.ribbonBuffers.isEmpty {
-            for (index, entity) in streamlineBuckets.enumerated() {
-                guard index < snapshot.ribbonBuffers.count,
-                      let mesh = TubeMesh.mesh(from: snapshot.ribbonBuffers[index]) else {
-                    entity.model = nil
-                    continue
-                }
-                var material = UnlitMaterial(color: Self.streamlineColors[index])
-                material.blending = .transparent(opacity: 0.75)
-                entity.model = ModelComponent(mesh: mesh, materials: [material])
-            }
-        } else if !model.showStreamlines {
-            for bucket in streamlineBuckets { bucket.model = nil }
-        }
+        // Cache the field; the per-frame smoke rides this until the next
+        // solve lands.
+        flowField = snapshot.field
 
-        // Smoke: ONE sprite mesh, uploaded whole. Hundreds of separate
-        // entities meant hundreds of transform writes and draw calls a
-        // frame; this is a single upload and a single draw.
-        guard model.showParticles, !snapshot.smoke.isEmpty else {
-            smokeEntity.model = nil
+        // Streamline ribbons — one mesh per speed-colour bucket.
+        guard model.showStreamlines else {
+            for bucket in streamlineBuckets { bucket.model = nil }
             return
         }
-        var descriptor = MeshDescriptor(name: "smoke")
-        descriptor.positions = MeshBuffer(snapshot.smoke.positions)
-        descriptor.normals = MeshBuffer(snapshot.smoke.normals)
-        descriptor.textureCoordinates = MeshBuffer(snapshot.smoke.uvs)
-        descriptor.primitives = .triangles(snapshot.smoke.indices)
-        if let mesh = try? MeshResource.generate(from: [descriptor]) {
-            smokeEntity.model = ModelComponent(mesh: mesh, materials: [smokeMaterial])
+        guard let buffers = snapshot.ribbonBuffers else { return }
+        for (index, entity) in streamlineBuckets.enumerated() {
+            guard index < buffers.count,
+                  let mesh = TubeMesh.mesh(from: buffers[index]) else {
+                entity.model = nil
+                continue
+            }
+            var material = UnlitMaterial(color: Self.streamlineColors[index])
+            material.blending = .transparent(opacity: 0.75)
+            entity.model = ModelComponent(mesh: mesh, materials: [material])
         }
     }
+
 
     /// The fan's world position, for the relative-drag session.
     func fanWorldPosition() -> SIMD3<Double>? {

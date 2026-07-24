@@ -501,4 +501,70 @@ public struct FluidGrid: Sendable {
 
         enforceSolidFaces()
     }
+
+    // MARK: Export
+
+    /// A cheap, immutable copy of the solved field: one velocity per cell
+    /// centre plus the solid mask. Handing this to a renderer lets the
+    /// visuals ride the flow EVERY frame while the (far more expensive)
+    /// solve refreshes the field at its own slower pace. The field itself
+    /// changes slowly; what must never look stepped is the motion of the
+    /// things drifting through it.
+    public func exportField() -> FlowField {
+        var cells = [SIMD3<Float>](repeating: .zero, count: nx * ny * nz)
+        for k in 0..<nz {
+            for j in 0..<ny {
+                for i in 0..<nx {
+                    cells[cellIndex(i, j, k)] = SIMD3<Float>(centerVelocity(i, j, k))
+                }
+            }
+        }
+        return FlowField(nx: nx, ny: ny, nz: nz, h: h, origin: origin,
+                         cells: cells, solid: solid)
+    }
+}
+
+/// A sampled snapshot of a solved flow — velocity at every cell centre
+/// plus the solid mask, and nothing else. Sendable and self-contained, so
+/// it can cross to the main thread and be sampled per frame without
+/// touching the solver.
+public struct FlowField: Sendable {
+    public let nx: Int, ny: Int, nz: Int
+    public let h: Double
+    public let origin: SIMD3<Double>
+    public let cells: [SIMD3<Float>]
+    public let solid: [Bool]
+
+    public var bounds: (min: SIMD3<Double>, max: SIMD3<Double>) {
+        (origin, origin + SIMD3(Double(nx), Double(ny), Double(nz)) * h)
+    }
+
+    public func isSolid(at point: SIMD3<Double>) -> Bool {
+        let g = (point - origin) / h
+        let i = Int(g.x.rounded(.down)), j = Int(g.y.rounded(.down)), k = Int(g.z.rounded(.down))
+        guard i >= 0, j >= 0, k >= 0, i < nx, j < ny, k < nz else { return false }
+        return solid[(k * ny + j) * nx + i]
+    }
+
+    /// Trilinearly interpolated velocity at a world point.
+    public func velocity(at point: SIMD3<Double>) -> SIMD3<Float> {
+        let g = (point - origin) / h
+        let cx = min(max(g.x - 0.5, 0), Double(nx - 1))
+        let cy = min(max(g.y - 0.5, 0), Double(ny - 1))
+        let cz = min(max(g.z - 0.5, 0), Double(nz - 1))
+        let i0 = min(Int(cx), nx - 1), j0 = min(Int(cy), ny - 1), k0 = min(Int(cz), nz - 1)
+        let i1 = min(i0 + 1, nx - 1), j1 = min(j0 + 1, ny - 1), k1 = min(k0 + 1, nz - 1)
+        let fx = Float(cx - Double(i0)), fy = Float(cy - Double(j0)), fz = Float(cz - Double(k0))
+
+        @inline(__always) func at(_ i: Int, _ j: Int, _ k: Int) -> SIMD3<Float> {
+            cells[(k * ny + j) * nx + i]
+        }
+        let c00 = at(i0, j0, k0) * (1 - fx) + at(i1, j0, k0) * fx
+        let c10 = at(i0, j1, k0) * (1 - fx) + at(i1, j1, k0) * fx
+        let c01 = at(i0, j0, k1) * (1 - fx) + at(i1, j0, k1) * fx
+        let c11 = at(i0, j1, k1) * (1 - fx) + at(i1, j1, k1) * fx
+        let c0 = c00 * (1 - fy) + c10 * fy
+        let c1 = c01 * (1 - fy) + c11 * fy
+        return c0 * (1 - fz) + c1 * fz
+    }
 }
