@@ -71,6 +71,25 @@ actor WindFlowSolver {
 
     private var grid: FluidGrid
     private var isPrimed = false
+    private var referenceObstacles: [Obstacle] = []
+    private var needsCatchUp = false
+    /// Enough sweeps to look settled around the new position without
+    /// making the drag itself stutter.
+    private static let catchUpSteps = 6
+
+    /// A move worth re-establishing the flow for: about a cell's travel
+    /// since the flow was last established, or any change in the number
+    /// of solids (a hand entering or leaving the stream).
+    private static func moved(from old: [Obstacle], to new: [Obstacle]) -> Bool {
+        guard old.count == new.count else { return true }
+        let threshold = h * h
+        for (a, b) in zip(old, new)
+        where simd_length_squared(a.center - b.center) > threshold
+            || abs(a.radius - b.radius) > h * 0.5 {
+            return true
+        }
+        return false
+    }
 
     init() {
         grid = FluidGrid(
@@ -91,6 +110,17 @@ actor WindFlowSolver {
     /// Cheap enough to call every frame, which is what lets a moving hand
     /// push the air around live.
     func setObstacles(_ obstacles: [Obstacle]) {
+        // Did anything actually MOVE? A body dragged through the stream
+        // invalidates the flow pattern already in the grid, which
+        // describes where it used to be.
+        // Compared against where things were at the LAST catch-up, not
+        // the last frame: a slow drag never trips a per-frame threshold
+        // yet still ends up far from where the flow was established.
+        if Self.moved(from: referenceObstacles, to: obstacles) {
+            needsCatchUp = true
+            referenceObstacles = obstacles
+        }
+
         grid.clearSolids()
         for obstacle in obstacles {
             // Anything the tracker reports has to be at least one cell
@@ -123,6 +153,15 @@ actor WindFlowSolver {
     /// which is what keeps the motion continuous even though the solve
     /// itself only refreshes a dozen or so times a second.
     func advance(dt: Double) -> Snapshot {
+        if needsCatchUp {
+            needsCatchUp = false
+            // Waiting for the stale pattern to convect away costs a full
+            // domain crossing (L/U ≈ 2 s here) — that is the lag you see
+            // as the lines "catching up" with your hand. Wipe it and
+            // re-establish around the new position instead.
+            grid.resetFlow()
+            grid.prime(steps: Self.catchUpSteps, dt: 1.0 / 60.0)
+        }
         grid.step(dt: min(max(dt, 1.0 / 120.0), 1.0 / 20.0))
         return Snapshot(field: grid.exportField(),
                         referenceSpeed: Float(grid.inflowSpeed))

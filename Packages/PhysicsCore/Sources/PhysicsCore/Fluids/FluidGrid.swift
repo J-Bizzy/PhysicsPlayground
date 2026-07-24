@@ -502,6 +502,20 @@ public struct FluidGrid: Sendable {
         enforceSolidFaces()
     }
 
+    /// Wipes the flow back to a clean uniform stream. When an obstacle
+    /// MOVES, the pattern already in the grid describes where it used to
+    /// be, and letting that drain away naturally takes a full domain
+    /// crossing (L/U — about two seconds here), which reads as the
+    /// visualization lagging behind your hand. Resetting and re-priming
+    /// re-establishes the flow around the new position immediately.
+    public mutating func resetFlow() {
+        for index in u.indices { u[index] = inflowSpeed }
+        for index in v.indices { v[index] = 0 }
+        for index in w.indices { w[index] = 0 }
+        for index in pressure.indices { pressure[index] = 0 }
+        enforceSolidFaces()
+    }
+
     // MARK: Export
 
     /// A cheap, immutable copy of the solved field: one velocity per cell
