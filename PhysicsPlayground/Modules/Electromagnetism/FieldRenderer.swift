@@ -71,9 +71,15 @@ final class FieldRenderer {
     private var probeSignVertical: ModelEntity?
     private var appliedProbePolarity: Bool?
     private let linesEntity = ModelEntity()
+    private let lineGlowEntity = ModelEntity()
     private let positiveShellsEntity = ModelEntity()
     private let negativeShellsEntity = ModelEntity()
     private let lineMaterial = UnlitMaterial(color: FieldRenderer.lineColor)
+    private let lineGlowMaterial: UnlitMaterial = {
+        var material = UnlitMaterial(color: FieldRenderer.lineColor)
+        material.blending = .transparent(opacity: 0.2)
+        return material
+    }()
     private let positiveShellMaterial = FieldRenderer.shellMaterial(color: FieldRenderer.positiveShellColor)
     private let negativeShellMaterial = FieldRenderer.shellMaterial(color: FieldRenderer.negativeShellColor)
 
@@ -102,11 +108,15 @@ final class FieldRenderer {
         // rigidly with it (exact for one charge — the field just moves),
         // so the lines stick to the hand while the re-trace catches up.
         root.addChild(fieldFlowRoot)
+        // The glow halo sits under the arrowheads and the bright core so
+        // the crisp line and heads read over the soft bloom.
+        fieldFlowRoot.addChild(lineGlowEntity)
         fieldFlowRoot.addChild(arrowHeads.root)
         for entity in [linesEntity, positiveShellsEntity, negativeShellsEntity] {
             entity.isEnabled = false
             fieldFlowRoot.addChild(entity)
         }
+        lineGlowEntity.isEnabled = false
 
         geometryPipeline = GeometryPipeline(
             compute: { Self.computeGeometry($0) },
@@ -172,6 +182,7 @@ final class FieldRenderer {
         // Expensive path — lines (with their riding arrowheads) and shells
         // rebuild on the geometry pipeline.
         linesEntity.isEnabled = showLines && !charges.isEmpty
+        lineGlowEntity.isEnabled = showLines && !charges.isEmpty
         if !showLines || charges.isEmpty {
             arrowHeads.hideAll()
         }
@@ -351,6 +362,9 @@ final class FieldRenderer {
     private nonisolated struct GeometryResult: Sendable {
         var sourceCharges: [PointCharge] = []
         var tube = TubeBuffers()
+        /// A fatter, fainter tube along the same lines — the soft glow
+        /// halo that makes the field read as light, not wire.
+        var tubeGlow = TubeBuffers()
         /// Sample points along the lines where arrowheads ride, with the
         /// true field vector there (direction AND strength for the pool's
         /// log-brightness ramp).
@@ -375,6 +389,7 @@ final class FieldRenderer {
             let lines = FieldLineTracer.trace(charges: job.charges, config: config)
                 .map { $0.map(SIMD3<Float>.init) }
             result.tube = TubeMesh.buffers(lines: lines)
+            result.tubeGlow = TubeMesh.buffers(lines: lines, radius: 0.0044)
 
             // Arrowheads at regular arc length along every line — the line
             // carries the path, the arrows carry the direction.
@@ -430,6 +445,11 @@ final class FieldRenderer {
             linesEntity.model = ModelComponent(mesh: mesh, materials: [lineMaterial])
         } else {
             linesEntity.model = nil
+        }
+        if let glowMesh = TubeMesh.mesh(from: result.tubeGlow) {
+            lineGlowEntity.model = ModelComponent(mesh: glowMesh, materials: [lineGlowMaterial])
+        } else {
+            lineGlowEntity.model = nil
         }
         syncArrowHeads(points: result.arrowPoints, directions: result.arrowVectors)
         // Fresh geometry is anchored to its own charge layout; re-derive
