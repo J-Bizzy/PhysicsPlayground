@@ -27,6 +27,12 @@ let package = Package(
     targets: [
         .target(
             name: "RenderKit",
-            dependencies: ["PhysicsCore"]),
+            dependencies: ["PhysicsCore"],
+            swiftSettings: [
+                // Same rationale as PhysicsCore: geometry builders (tube
+                // sweeps, streamline tracing) are hot per-frame paths and
+                // must not run at -Onone in Debug app builds.
+                .unsafeFlags(["-O"], .when(configuration: .debug)),
+            ]),
     ]
 )

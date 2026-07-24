@@ -18,6 +18,7 @@
 
 import Foundation
 import PhysicsCore
+import Metal
 import RealityKit
 import RenderKit
 import SwiftUI
@@ -48,9 +49,6 @@ final class WindTunnelRenderer {
     private let sectionRoot = Entity()
     private let cylinder: ModelEntity
     private let spinMarker: ModelEntity
-    /// One tube entity per speed color — CFD-plot style: red where the
-    /// air stagnates against the body, cyan where it whips around it.
-    private var streamlineBuckets: [ModelEntity] = []
     /// A smoke palette: the filaments read as lit vapour first and a CFD
     /// plot second. Speed still colours them — air piled up against the
     /// nose warms toward amber, air whipping around the shoulders cools
@@ -83,12 +81,30 @@ final class WindTunnelRenderer {
     /// The whole smoke cloud: one entity, one mesh of soft puff sprites.
     private let smokeEntity = ModelEntity()
 
-    // The smoke lives HERE, not on the solver, and is advected every
-    // single frame against the most recently solved field. The solve is
-    // expensive and lands maybe a dozen times a second; the motes must
-    // not move in those same steps, or the air visibly stutters while
-    // everything else in the scene runs smooth.
-    private var flowField: FlowField?
+    // The smoke and streamlines live HERE, not on the solver, and are
+    // rebuilt every frame. The solve lands a dozen times a second; the
+    // renderer keeps the last TWO fields and blends between them as it
+    // samples, so the visuals morph continuously instead of stepping
+    // whenever a snapshot arrives.
+    private var currentField: FlowField?
+    private var previousField: FlowField?
+    /// 0→1 progress from previousField toward currentField.
+    private var fieldBlend: Float = 1
+    private var fieldElapsed = 0.0
+    private var fieldInterval = 1.0 / 12.0
+
+    /// Fixed-capacity GPU meshes, rewritten in place each frame — the
+    /// frame loop never calls MeshResource.generate.
+    private var smokeMesh: DynamicMesh?
+    private var ribbonMesh: DynamicMesh?
+    private var smokeScratch: [Float] = []
+    private var smokeIndices: [UInt32] = []
+    private var ribbonScratch: [Float] = []
+    private var ribbonIndexScratch: [UInt32] = []
+    private static let ribbonVertexCapacity =
+        ribbonHeights.count * ribbonLaterals.count * ribbonSteps * 2
+    private static let ribbonIndexCapacity =
+        ribbonHeights.count * ribbonLaterals.count * (ribbonSteps - 1) * 6
     /// One entity for ALL streamlines. Local speed rides each vertex's
     /// texture coordinate into a gradient, so the colour varies
     /// continuously along a filament — cheaper than five bucketed tube
@@ -290,9 +306,39 @@ final class WindTunnelRenderer {
         dragBodyHolder.isEnabled = false
         sectionRoot.addChild(dragBodyHolder)
 
-        // Smoke and streamlines: one entity each, meshes rebuilt per frame.
+        // Smoke and streamlines: fixed-capacity GPU meshes created ONCE;
+        // every frame just rewrites their vertex bytes in place.
+        let sectionBounds = BoundingBox(min: [-1.15, -0.55, -0.75],
+                                        max: [1.15, 0.55, 0.75])
+        smokeMesh = DynamicMesh(vertexCapacity: Self.smokeCount * 4,
+                                indexCapacity: Self.smokeCount * 6,
+                                bounds: sectionBounds)
+        ribbonMesh = DynamicMesh(vertexCapacity: Self.ribbonVertexCapacity,
+                                 indexCapacity: Self.ribbonIndexCapacity,
+                                 bounds: sectionBounds)
+        if let smokeMesh {
+            smokeEntity.model = ModelComponent(mesh: smokeMesh.resource,
+                                               materials: [smokeMaterial])
+        }
+        if let ribbonMesh {
+            ribbonEntity.model = ModelComponent(mesh: ribbonMesh.resource,
+                                                materials: [ribbonMaterial])
+        }
+        // The smoke's quad topology never changes — indices written once.
+        smokeIndices.reserveCapacity(Self.smokeCount * 6)
+        for m in 0..<Self.smokeCount {
+            let b = UInt32(m * 4)
+            smokeIndices += [b, b + 1, b + 2, b, b + 2, b + 3]
+        }
         sectionRoot.addChild(smokeEntity)
         sectionRoot.addChild(ribbonEntity)
+        // Two big transparent meshes occupying the SAME volume have no
+        // natural draw order — left ambiguous, the puff quads punch
+        // square holes through the ribbons behind them. Pin the order:
+        // ribbons first, smoke composited over them.
+        let flowSortGroup = ModelSortGroup(depthPass: nil)
+        ribbonEntity.components.set(ModelSortGroupComponent(group: flowSortGroup, order: 0))
+        smokeEntity.components.set(ModelSortGroupComponent(group: flowSortGroup, order: 1))
     }
 
     // MARK: Per-frame tick (particles + true-rate spin animation)
@@ -339,11 +385,25 @@ final class WindTunnelRenderer {
         rebuildRibbons(model: model)
     }
 
-    // MARK: Smoke — advected per frame on the cached field
+    // MARK: Smoke — advected per frame on the blended field
+
+    /// The blended flow velocity: previous field → current field as the
+    /// blend runs 0→1. This is what every visual samples.
+    @inline(__always)
+    private func flowVelocity(at point: SIMD3<Double>) -> SIMD3<Double> {
+        guard let current = currentField else { return .zero }
+        let vNew = current.velocity(at: point)
+        guard fieldBlend < 1, let previous = previousField else {
+            return SIMD3<Double>(vNew)
+        }
+        let vOld = previous.velocity(at: point)
+        return SIMD3<Double>(vOld + (vNew - vOld) * fieldBlend)
+    }
 
     private func advanceSmoke(dt: Double, model: WindTunnelModel) {
-        guard model.showParticles, let field = flowField else {
-            if smokeEntity.model != nil { smokeEntity.model = nil }
+        guard let mesh = smokeMesh else { return }
+        guard model.showParticles, let field = currentField else {
+            mesh.clear()
             return
         }
         if smoke.count != Self.smokeCount {
@@ -353,9 +413,12 @@ final class WindTunnelRenderer {
 
         let (lo, hi) = field.bounds
         let margin = field.h
+        smokeScratch.removeAll(keepingCapacity: true)
+        smokeScratch.reserveCapacity(Self.smokeCount * 20)
+
         for index in smoke.indices {
             var p = smoke[index]
-            p += SIMD3<Double>(field.velocity(at: p)) * dt
+            p += flowVelocity(at: p) * dt
             smokeAge[index] += dt
             if p.x > hi.x - margin || smokeAge[index] > Self.smokeLife
                 || field.isSolid(at: p)
@@ -365,37 +428,18 @@ final class WindTunnelRenderer {
                 smokeAge[index] = 0
             }
             smoke[index] = p
-        }
-        rebuildSmokeMesh()
-    }
 
-    /// One mesh of soft camera-facing puffs. Each starts tight and
-    /// spreads as it drifts, so the wake blooms into haze.
-    private func rebuildSmokeMesh() {
-        var positions = [SIMD3<Float>](); positions.reserveCapacity(smoke.count * 4)
-        var uvs = [SIMD2<Float>](); uvs.reserveCapacity(smoke.count * 4)
-        var indices = [UInt32](); indices.reserveCapacity(smoke.count * 6)
-        for (index, p) in smoke.enumerated() {
+            // Four corners of a camera-facing puff, tight when young and
+            // spreading as it drifts, straight into the vertex stream.
             let age = Float(smokeAge[index] / Self.smokeLife)
             let size = Self.smokeSizeNear + (Self.smokeSizeFar - Self.smokeSizeNear) * age
-            let c = SIMD3<Float>(p)
-            let base = UInt32(positions.count)
-            positions.append(c + SIMD3(-size, -size, 0))
-            positions.append(c + SIMD3(size, -size, 0))
-            positions.append(c + SIMD3(size, size, 0))
-            positions.append(c + SIMD3(-size, size, 0))
-            uvs.append([0, 1]); uvs.append([1, 1]); uvs.append([1, 0]); uvs.append([0, 0])
-            indices += [base, base + 1, base + 2, base, base + 2, base + 3]
+            let x = Float(p.x), y = Float(p.y), z = Float(p.z)
+            smokeScratch += [x - size, y - size, z, 0, 1,
+                             x + size, y - size, z, 1, 1,
+                             x + size, y + size, z, 1, 0,
+                             x - size, y + size, z, 0, 0]
         }
-        var descriptor = MeshDescriptor(name: "smoke")
-        descriptor.positions = MeshBuffer(positions)
-        descriptor.normals = MeshBuffer(
-            [SIMD3<Float>](repeating: [0, 0, 1], count: positions.count))
-        descriptor.textureCoordinates = MeshBuffer(uvs)
-        descriptor.primitives = .triangles(indices)
-        if let mesh = try? MeshResource.generate(from: [descriptor]) {
-            smokeEntity.model = ModelComponent(mesh: mesh, materials: [smokeMaterial])
-        }
+        mesh.update(vertexFloats: smokeScratch, indices: smokeIndices)
     }
 
     // MARK: The live CFD flow
@@ -410,8 +454,11 @@ final class WindTunnelRenderer {
 
     private func driveSolver(dt: Double, model: WindTunnelModel) {
         flowAccumulator += dt
-        guard !solveInFlight, flowAccumulator > 1.0 / 60.0 else { return }
-        let step = min(flowAccumulator, 1.0 / 20.0)
+        // The blend hides the solve cadence completely, so the solve can
+        // run at ~15 Hz — a fraction of the CPU of chasing every frame —
+        // with zero visible stepping.
+        guard !solveInFlight, flowAccumulator > 1.0 / 15.0 else { return }
+        let step = min(flowAccumulator, 1.0 / 10.0)
         flowAccumulator = 0
         solveInFlight = true
 
@@ -459,9 +506,15 @@ final class WindTunnelRenderer {
     }
 
     private func applyFlow(_ snapshot: WindFlowSolver.Snapshot, model: WindTunnelModel) {
-        // The solve's only job now is to keep the field fresh; every
-        // visual is rebuilt per frame from it.
-        flowField = snapshot.field
+        // Roll the double buffer: the field we were blending TOWARD
+        // becomes the one we blend FROM, and the blend restarts against
+        // the measured arrival interval, so the morph always lands just
+        // as the next snapshot does.
+        previousField = currentField ?? snapshot.field
+        currentField = snapshot.field
+        fieldInterval = min(max(fieldElapsed, 1.0 / 30.0), 0.3)
+        fieldElapsed = 0
+        fieldBlend = 0
     }
 
 
@@ -597,11 +650,12 @@ final class WindTunnelRenderer {
         }
     }
 
-    // MARK: Streamlines — re-traced per frame on the cached field
+    // MARK: Streamlines — re-traced per frame on the blended field
 
     private func rebuildRibbons(model: WindTunnelModel) {
-        guard model.showStreamlines, let field = flowField else {
-            if ribbonEntity.model != nil { ribbonEntity.model = nil }
+        guard let mesh = ribbonMesh else { return }
+        guard model.showStreamlines, let field = currentField else {
+            mesh.clear()
             return
         }
         let reference = max(model.windSpeed, 1e-6)
@@ -609,59 +663,47 @@ final class WindTunnelRenderer {
         let xStart = lo.x + field.h * 0.6
         let maxX = hi.x - field.h
 
-        var positions = [SIMD3<Float>]()
-        var normals = [SIMD3<Float>]()
-        var uvs = [SIMD2<Float>]()
-        var indices = [UInt32]()
+        ribbonScratch.removeAll(keepingCapacity: true)
+        ribbonIndexScratch.removeAll(keepingCapacity: true)
+        var vertexCount: UInt32 = 0
 
         for height in Self.ribbonHeights {
             for lateral in Self.ribbonLaterals {
                 var p = SIMD3(xStart, height, lateral)
                 var previousBase: UInt32?
                 for _ in 0..<Self.ribbonSteps {
-                    let v = SIMD3<Double>(field.velocity(at: p))
+                    let v = flowVelocity(at: p)
                     let speed = simd_length(v)
                     guard speed > 1e-5 else { break }
                     let tangent = v / speed
-                    // A flat ribbon facing the front of the section, its
-                    // width laid across the flow.
+                    // A flat ribbon facing the viewer, width across the flow.
                     var side = simd_cross(tangent, SIMD3<Double>(0, 0, 1))
                     let sideLength = simd_length(side)
                     side = sideLength > 1e-6 ? side / sideLength : SIMD3(0, 1, 0)
                     let half = side * Self.ribbonHalfWidth
 
-                    let base = UInt32(positions.count)
-                    positions.append(SIMD3<Float>(p - half))
-                    positions.append(SIMD3<Float>(p + half))
-                    normals.append([0, 0, 1]); normals.append([0, 0, 1])
                     let u = Float(min(max(speed / reference - 0.35, 0), 1))
-                    uvs.append([u, 0.5]); uvs.append([u, 0.5])
+                    let a = p - half, b = p + half
+                    ribbonScratch += [Float(a.x), Float(a.y), Float(a.z), u, 0.5,
+                                      Float(b.x), Float(b.y), Float(b.z), u, 0.5]
+                    let base = vertexCount
+                    vertexCount += 2
                     if let previous = previousBase {
-                        indices += [previous, previous + 1, base + 1,
-                                    previous, base + 1, base]
+                        ribbonIndexScratch += [previous, previous + 1, base + 1,
+                                               previous, base + 1, base]
                     }
                     previousBase = base
 
-                    // RK2 midpoint at fixed arc length, so vertex spacing
-                    // stays even however fast the air is moving.
+                    // RK2 midpoint at fixed arc length.
                     let mid = p + tangent * (Self.ribbonStride * 0.5)
-                    let v2 = SIMD3<Double>(field.velocity(at: mid))
+                    let v2 = flowVelocity(at: mid)
                     let s2 = simd_length(v2)
                     p += (s2 > 1e-6 ? v2 / s2 : tangent) * Self.ribbonStride
                     if p.x > maxX || field.isSolid(at: p) { break }
                 }
             }
         }
-
-        guard indices.count > 2 else { ribbonEntity.model = nil; return }
-        var descriptor = MeshDescriptor(name: "streamlines")
-        descriptor.positions = MeshBuffer(positions)
-        descriptor.normals = MeshBuffer(normals)
-        descriptor.textureCoordinates = MeshBuffer(uvs)
-        descriptor.primitives = .triangles(indices)
-        if let mesh = try? MeshResource.generate(from: [descriptor]) {
-            ribbonEntity.model = ModelComponent(mesh: mesh, materials: [ribbonMaterial])
-        }
+        mesh.update(vertexFloats: ribbonScratch, indices: ribbonIndexScratch)
     }
 
     private static func makeRibbonMaterial() -> UnlitMaterial {
@@ -700,5 +742,71 @@ final class WindTunnelRenderer {
                 provider: provider, decode: nil, shouldInterpolate: true,
                 intent: .defaultIntent) else { return nil }
         return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
+}
+
+
+/// A fixed-capacity mesh whose vertex bytes are rewritten in place every
+/// frame via LowLevelMesh. Creating a MeshResource per frame (generate)
+/// allocates, re-uploads, and rebuilds bounds 60+ times a second for two
+/// meshes — THE main-thread cost the profiler pointed at. This writes
+/// straight into RealityKit's buffer instead: zero allocation, one copy.
+/// Layout: position float3 + uv float2, 20 bytes per vertex.
+@MainActor
+final class DynamicMesh {
+    let resource: MeshResource
+    private let mesh: LowLevelMesh
+    private let vertexCapacity: Int
+    private let indexCapacity: Int
+    private let bounds: BoundingBox
+    private static let stride = MemoryLayout<Float>.stride * 5
+
+    init?(vertexCapacity: Int, indexCapacity: Int, bounds: BoundingBox) {
+        self.vertexCapacity = vertexCapacity
+        self.indexCapacity = indexCapacity
+        self.bounds = bounds
+        var descriptor = LowLevelMesh.Descriptor()
+        descriptor.vertexCapacity = vertexCapacity
+        descriptor.vertexAttributes = [
+            .init(semantic: .position, format: .float3, layoutIndex: 0, offset: 0),
+            .init(semantic: .uv0, format: .float2, layoutIndex: 0, offset: 12),
+        ]
+        descriptor.vertexLayouts = [.init(bufferIndex: 0, bufferOffset: 0,
+                                          bufferStride: Self.stride)]
+        descriptor.indexCapacity = indexCapacity
+        descriptor.indexType = .uint32
+        guard let mesh = try? LowLevelMesh(descriptor: descriptor),
+              let resource = try? MeshResource(from: mesh) else { return nil }
+        self.mesh = mesh
+        self.resource = resource
+        clear()
+    }
+
+    /// Rewrites the drawn geometry: 5 floats per vertex, triangle indices.
+    func update(vertexFloats: [Float], indices: [UInt32]) {
+        let vertexCount = min(vertexFloats.count / 5, vertexCapacity)
+        let indexCount = min(indices.count, indexCapacity)
+        guard vertexCount > 0, indexCount > 0 else { clear(); return }
+        mesh.withUnsafeMutableBytes(bufferIndex: 0) { raw in
+            vertexFloats.withUnsafeBytes { src in
+                raw.copyMemory(from: UnsafeRawBufferPointer(
+                    start: src.baseAddress, count: vertexCount * Self.stride))
+            }
+        }
+        mesh.withUnsafeMutableIndices { raw in
+            indices.withUnsafeBytes { src in
+                raw.copyMemory(from: UnsafeRawBufferPointer(
+                    start: src.baseAddress, count: indexCount * MemoryLayout<UInt32>.stride))
+            }
+        }
+        mesh.parts.replaceAll([
+            LowLevelMesh.Part(indexCount: indexCount, topology: .triangle,
+                              bounds: bounds)
+        ])
+    }
+
+    /// Draw nothing (kept allocated; showing again is just an update).
+    func clear() {
+        mesh.parts.replaceAll([])
     }
 }

@@ -21,7 +21,16 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "PhysicsCore"),
+            name: "PhysicsCore",
+            swiftSettings: [
+                // The physics IS the product. Debug app builds otherwise
+                // compile packages at -Onone, which measured 46x slower on
+                // the flow solver (499 ms vs 10.9 ms a step) - every module
+                // felt broken when run from Xcode. Local packages may use
+                // unsafeFlags; this never ships un-reviewed since Release
+                // builds ignore it.
+                .unsafeFlags(["-O"], .when(configuration: .debug)),
+            ]),
         .testTarget(
             name: "PhysicsCoreTests",
             dependencies: ["PhysicsCore"]),

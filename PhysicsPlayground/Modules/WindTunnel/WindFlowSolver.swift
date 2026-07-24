@@ -6,12 +6,12 @@
 //  a real incompressible flow solve — so the whole simulation runs off
 //  the main thread and only finished geometry ever crosses back.
 //
-//  Every frame it:
-//    · rebuilds the solid mask from whatever is in the stream (the test
-//      body, the user's tracked hands, reconstructed room surfaces),
-//    · advances the flow one step,
-//    · traces a rake of streamlines through the solved field, and
-//    · advects a cloud of smoke particles along it.
+//  Each pass it rebuilds the solid mask from whatever is in the stream
+//  (the test body, the user's tracked hands, reconstructed room
+//  surfaces), advances the flow, and hands back a sampled copy of the
+//  field. The RENDERER owns everything visual: it interpolates between
+//  the last two fields and rebuilds smoke and streamlines every frame,
+//  so nothing on screen moves at the solve's slower cadence.
 //
 //  Because the obstacles are voxels in the pressure solve rather than
 //  local deflectors, the air bends around ANYTHING — a car, a chair, a
@@ -25,7 +25,6 @@
 
 import Foundation
 import PhysicsCore
-import RenderKit
 import simd
 
 actor WindFlowSolver {
@@ -35,9 +34,7 @@ actor WindFlowSolver {
         var radius: Double
     }
 
-    /// What the renderer draws: tube geometry that is already built, plus
-    /// the smoke positions. Nothing here needs the main thread to do more
-    /// than upload it.
+    /// What crosses back to the renderer: just the sampled field.
     struct Snapshot: Sendable {
         /// The solved field, for the renderer to advect smoke through
         /// every frame.
@@ -45,20 +42,6 @@ actor WindFlowSolver {
         /// Free-stream speed this snapshot was taken at, for normalising.
         var referenceSpeed: Float = 1
     }
-
-    /// Local speed ratio → colour bucket, matching the renderer's palette:
-    /// red where the air stagnates, green in the free stream, cyan where
-    /// the body squeezes it faster.
-    static func speedBucket(_ ratio: Double) -> Int {
-        switch ratio {
-        case ..<0.40: 0
-        case ..<0.72: 1
-        case ..<0.95: 2
-        case ..<1.08: 3
-        default: 4
-        }
-    }
-    static let bucketCount = 5
 
     // MARK: Grid geometry (section-local)
 
@@ -162,7 +145,7 @@ actor WindFlowSolver {
             grid.resetFlow()
             grid.prime(steps: Self.catchUpSteps, dt: 1.0 / 60.0)
         }
-        grid.step(dt: min(max(dt, 1.0 / 120.0), 1.0 / 20.0))
+        grid.step(dt: min(max(dt, 1.0 / 120.0), 1.0 / 10.0))
         return Snapshot(field: grid.exportField(),
                         referenceSpeed: Float(grid.inflowSpeed))
     }
