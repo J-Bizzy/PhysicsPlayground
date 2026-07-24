@@ -227,28 +227,38 @@ final class OrbScene {
         attachIcon(resetIcon, to: resetOrb)
     }
 
+    /// A crafted lit-glass bead: clear-coated for a crisp highlight and
+    /// faintly self-lit so it reads as a present instrument, not a ghost.
+    static func orbGlass(tint: UIColor = .white, opacity: Float = 0.34,
+                         emissive: Float = 0.14) -> PhysicallyBasedMaterial {
+        var glass = PhysicallyBasedMaterial()
+        glass.baseColor = .init(tint: tint)
+        glass.roughness = 0.1
+        glass.metallic = 0.0
+        glass.clearcoat = .init(floatLiteral: 1.0)
+        glass.clearcoatRoughness = .init(floatLiteral: 0.1)
+        glass.blending = .transparent(opacity: .init(floatLiteral: opacity))
+        glass.emissiveColor = .init(color: tint)
+        glass.emissiveIntensity = emissive
+        return glass
+    }
+
     /// Armed: the orb warms to red until the confirming pinch (or the
     /// three-second window closes).
     func showResetArmed(_ armed: Bool) {
         guard armed != showingResetArmed else { return }
         showingResetArmed = armed
-        var glass = PhysicallyBasedMaterial()
-        glass.baseColor = .init(tint: armed
-            ? UIColor(red: 1, green: 0.32, blue: 0.28, alpha: 1) : .white)
-        glass.roughness = 0.12
-        glass.blending = .transparent(opacity: .init(floatLiteral: armed ? 0.5 : 0.22))
-        resetOrb.model?.materials = [glass]
+        resetOrb.model?.materials = [armed
+            ? Self.orbGlass(tint: UIColor(red: 1, green: 0.32, blue: 0.28, alpha: 1),
+                            opacity: 0.55, emissive: 0.35)
+            : Self.orbGlass()]
     }
 
     private func makeOrb(name: String, at position: SIMD3<Float>,
                          accessibilityLabel: String) -> ModelEntity {
-        var glass = PhysicallyBasedMaterial()
-        glass.baseColor = .init(tint: .white)
-        glass.roughness = 0.12
-        glass.blending = .transparent(opacity: .init(floatLiteral: 0.22))
         let orb = ModelEntity(
             mesh: .generateSphere(radius: Self.orbRadius),
-            materials: [glass]
+            materials: [Self.orbGlass()]
         )
         orb.name = name
         orb.position = position

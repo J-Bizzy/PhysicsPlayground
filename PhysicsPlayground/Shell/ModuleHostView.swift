@@ -20,8 +20,6 @@ struct ModuleHostView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: DesignTokens.Panel.sectionSpacing) {
-                header
-
                 // Appears only if the user closed the space (e.g. with the
                 // crown) and wants the module back in the room.
                 if !appModel.isImmersiveSpaceOpen {
@@ -51,6 +49,7 @@ struct ModuleHostView: View {
             }
             .padding(DesignTokens.Panel.outerPadding)
         }
+        .navigationTitle(module.title)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
@@ -76,13 +75,5 @@ struct ModuleHostView: View {
                 accent: module.accent
             )
         }
-    }
-
-    private var header: some View {
-        VStack(spacing: 4) {
-            Text(module.title)
-                .font(DesignTokens.TypeScale.screenTitle)
-        }
-        .accessibilityAddTraits(.isHeader)
     }
 }
