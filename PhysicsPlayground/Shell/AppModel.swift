@@ -135,4 +135,13 @@ final class AppModel {
         waveMedium = model
         return model
     }
+
+    private var magnetism: MagnetismModel?
+
+    var magnetismModel: MagnetismModel {
+        if let magnetism { return magnetism }
+        let model = MagnetismModel()
+        magnetism = model
+        return model
+    }
 }

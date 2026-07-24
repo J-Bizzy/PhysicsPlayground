@@ -92,6 +92,7 @@ enum ModuleCatalog {
             SpringsModule.descriptor(appModel: appModel),
             ElasticFieldModule.descriptor(appModel: appModel),
             OpticsModule.descriptor(appModel: appModel),
+            MagnetismModule.descriptor(appModel: appModel),
         ]
     }
 }

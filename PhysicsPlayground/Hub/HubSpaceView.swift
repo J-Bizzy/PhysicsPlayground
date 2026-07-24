@@ -251,6 +251,7 @@ final class HubScene {
         case "windtunnel": buildWindTunnelVignette(in: vignette)
         case "circuits": buildCircuitsVignette(in: vignette)
         case "elasticfield": buildElasticVignette(in: vignette)
+        case "magnetism": buildMagnetismVignette(in: vignette)
         default:
             // A new module gets a simple accent sphere until it has art.
             vignette.addChild(ModelEntity(
@@ -414,6 +415,37 @@ final class HubScene {
                 if let mesh = TubeMesh.tube(lines: [circle], radius: 0.0014) {
                     parent.addChild(ModelEntity(mesh: mesh, materials: [ringMaterial]))
                 }
+            }
+        }
+    }
+
+    /// A little bar magnet (red N over blue S) with two field-line loops
+    /// arcing from pole to pole.
+    private static func buildMagnetismVignette(in parent: Entity) {
+        let half: Float = 0.032
+        let w: Float = 0.02
+        let north = ModelEntity(
+            mesh: .generateBox(size: [w, half, w], cornerRadius: 0.004),
+            materials: [SimpleMaterial(color: DesignTokens.Palette.positiveUI,
+                                       roughness: 0.35, isMetallic: false)])
+        north.position = [0, half / 2, 0]
+        let south = ModelEntity(
+            mesh: .generateBox(size: [w, half, w], cornerRadius: 0.004),
+            materials: [SimpleMaterial(color: DesignTokens.Palette.negativeUI,
+                                       roughness: 0.35, isMetallic: false)])
+        south.position = [0, -half / 2, 0]
+        parent.addChild(north)
+        parent.addChild(south)
+
+        var lineMaterial = UnlitMaterial(color: MagnetismRenderer.lineColor)
+        lineMaterial.blending = .transparent(opacity: 0.85)
+        for flip: Float in [1, -1] {
+            let arc: [SIMD3<Float>] = (0...24).map { step in
+                let theta = Float(step) / 24 * .pi
+                return SIMD3(flip * 0.058 * sin(theta), half * cos(theta), 0)
+            }
+            if let mesh = TubeMesh.tube(lines: [arc], radius: 0.0016) {
+                parent.addChild(ModelEntity(mesh: mesh, materials: [lineMaterial]))
             }
         }
     }
