@@ -15,14 +15,14 @@ struct RealWorldButton: View {
     let action: () -> Void
 
     var body: some View {
+        // A quiet "learn more" affordance, not a primary control — so it
+        // reads below the actual sim controls in the hierarchy.
         Button(action: action) {
-            Label("Where this shows up in the real world", systemImage: "globe.americas.fill")
+            Label("In the real world", systemImage: "globe.americas.fill")
                 .font(DesignTokens.TypeScale.control)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
         }
-        .buttonStyle(.podProminent)
-        .tint(accent)
+        .buttonStyle(.podQuiet)
         .accessibilityHint("Real applications of this physics, from everyday devices to natural phenomena")
     }
 }

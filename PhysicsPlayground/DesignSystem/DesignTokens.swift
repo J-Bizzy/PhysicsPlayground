@@ -108,8 +108,10 @@ enum DesignTokens {
         static let cornerRadius: CGFloat = 20
         static let hintCornerRadius: CGFloat = 16
         static let padding: CGFloat = 20
-        static let outerPadding: CGFloat = 28
-        static let sectionSpacing: CGFloat = 24
+        // Tightened for a more condensed window/pod rhythm (card interiors
+        // keep their padding; only the gaps between blocks shrink).
+        static let outerPadding: CGFloat = 22
+        static let sectionSpacing: CGFloat = 20
         static let rowSpacing: CGFloat = 12
     }
 
