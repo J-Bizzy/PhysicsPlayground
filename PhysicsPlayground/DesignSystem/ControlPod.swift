@@ -129,13 +129,28 @@ enum PodMount {
         pivot.components.set(BillboardComponent())
         holder.addChild(pivot)
 
+        // A crafted grip: frosted, clear-coated glass with a faint inner
+        // glow, matching the navigation orbs' rail so every grabbable glass
+        // surface in the app reads as one designed system — not a flat stick.
         var barMaterial = PhysicallyBasedMaterial()
         barMaterial.baseColor = .init(tint: .white)
-        barMaterial.roughness = 0.15
-        barMaterial.blending = .transparent(opacity: .init(floatLiteral: 0.42))
+        barMaterial.roughness = 0.12
+        barMaterial.metallic = 0.0
+        barMaterial.clearcoat = .init(floatLiteral: 1.0)
+        barMaterial.clearcoatRoughness = .init(floatLiteral: 0.12)
+        barMaterial.blending = .transparent(opacity: .init(floatLiteral: 0.5))
+        barMaterial.emissiveColor = .init(color: .white)
+        barMaterial.emissiveIntensity = 0.16
         let bar = ModelEntity(
-            mesh: .generateBox(size: [0.085, 0.011, 0.011], cornerRadius: 0.0055),
+            mesh: .generateBox(size: [0.085, 0.012, 0.012], cornerRadius: 0.006),
             materials: [barMaterial])
+        // Two small knob end-caps finish the grip and telegraph "grab me".
+        for capX: Float in [-0.045, 0.045] {
+            let cap = ModelEntity(mesh: .generateSphere(radius: 0.0085),
+                                  materials: [barMaterial])
+            cap.position = [capX, 0, 0]
+            bar.addChild(cap)
+        }
         pivot.addChild(bar)
 
         attachment.position = [0, -drop, 0]
