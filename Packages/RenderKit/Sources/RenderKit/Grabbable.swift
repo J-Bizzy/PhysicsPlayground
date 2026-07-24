@@ -30,6 +30,11 @@ public enum Grabbable {
         entity.components.set(CollisionComponent(
             shapes: [.generateSphere(radius: collisionRadius)]))
         entity.components.set(HoverEffectComponent())
+        // Ground it: a soft contact shadow onto the real surfaces below,
+        // so the floating object feels present in the room rather than
+        // pasted on. (Renders against detected real-world geometry — a
+        // device behaviour; the simulator has no room mesh to catch it.)
+        entity.components.set(GroundingShadowComponent(castsShadow: true))
     }
     /// Makes an entity grabbable with gaze+pinch or direct touch. The
     /// collision shape is bigger than the visible mesh so it's easy to grab.
