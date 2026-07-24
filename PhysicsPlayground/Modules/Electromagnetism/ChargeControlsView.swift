@@ -27,7 +27,7 @@ struct ChargeControlsView: View {
                     Label("Add +", systemImage: "plus.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .tint(DesignTokens.Palette.positive)
+                .buttonStyle(.podProminent(DesignTokens.Palette.positive))
                 .accessibilityLabel("Add positive charge")
 
                 Button {
@@ -36,10 +36,9 @@ struct ChargeControlsView: View {
                     Label("Add −", systemImage: "minus.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .tint(DesignTokens.Palette.negative)
+                .buttonStyle(.podProminent(DesignTokens.Palette.negative))
                 .accessibilityLabel("Add negative charge")
             }
-            .buttonStyle(.borderedProminent)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Strength: \(model.selectedMagnitudeMicroCoulombs, specifier: "%.1f") µC")
@@ -77,7 +76,7 @@ struct ChargeControlsView: View {
                 .disabled(model.charges.isEmpty)
                 .accessibilityLabel("Remove all charges")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.podQuiet)
 
             HStack(spacing: 12) {
                 Button {
@@ -116,7 +115,7 @@ struct ChargeControlsView: View {
                     .accessibilityLabel("Remove test charge")
                 }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.podQuiet)
 
             Text(statusLine)
                 .font(.footnote)

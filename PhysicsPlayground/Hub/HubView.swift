@@ -39,7 +39,7 @@ struct HubView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.podProminent)
                 .accessibilityHint("Places the exhibit ring in your room")
             }
 

@@ -21,7 +21,7 @@ struct RealWorldButton: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.podProminent)
         .tint(accent)
         .accessibilityHint("Real applications of this physics, from everyday devices to natural phenomena")
     }

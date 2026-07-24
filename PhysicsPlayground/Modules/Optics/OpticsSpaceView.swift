@@ -191,7 +191,7 @@ struct OpticsBenchPod: View {
                     Button(kind.displayName) {
                         model.addElement(kind)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .font(DesignTokens.TypeScale.footnote)
                     .disabled(model.elements.count >= OpticsModel.elementBudget)
                 }
@@ -229,7 +229,7 @@ struct OpticsSelectedPod: View {
                 } label: {
                     Label("Remove", systemImage: "trash")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
             } else {
                 Text("Pinch an element on the bench to select it.")
                     .font(DesignTokens.TypeScale.footnote)

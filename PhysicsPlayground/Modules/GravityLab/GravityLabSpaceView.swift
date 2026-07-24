@@ -127,7 +127,7 @@ struct GravityLabTimePanel: View {
             } label: {
                 Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.podQuiet)
             .accessibilityLabel(model.isPaused ? "Resume time" : "Pause time")
 
             Picker("Speed", selection: $model.timeScale) {
@@ -167,7 +167,7 @@ struct GravityBodiesPod: View {
                     Button(preset.displayName) {
                         model.spawn(preset)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .font(DesignTokens.TypeScale.footnote)
                     .disabled(model.bodies.count >= GravityLabModel.bodyBudget
                               || model.mode == .lagrange)
@@ -181,7 +181,7 @@ struct GravityBodiesPod: View {
                     Image(systemName: "trash")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 .disabled(model.selectedBody == nil
                           || model.selectedBody?.id == model.primaryBody?.id)
                 .accessibilityLabel("Remove selected body")
@@ -194,7 +194,7 @@ struct GravityBodiesPod: View {
                             .font(DesignTokens.TypeScale.footnote)
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.podProminent)
                     .tint(DesignTokens.Palette.gravityAccent)
                     .disabled(model.bodies.count >= GravityLabModel.bodyBudget)
                     .accessibilityHint("Splits the Sun into a binary pair — mass and momentum conserved")

@@ -26,7 +26,7 @@ struct GravityLabControlsView: View {
                         Button(preset.displayName) {
                             model.spawn(preset)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.podQuiet)
                         .disabled(model.bodies.count >= GravityLabModel.bodyBudget
                                   || model.mode == .lagrange)
                         .accessibilityLabel("Spawn \(preset.displayName) on its real orbit")
@@ -39,7 +39,7 @@ struct GravityLabControlsView: View {
                     Label("Remove selected body", systemImage: "trash")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 .disabled(model.selectedBody == nil || model.selectedBody?.id == model.primaryBody?.id)
 
                 if model.mode == .solarSystem, model.hasSingleSun {
@@ -49,7 +49,7 @@ struct GravityLabControlsView: View {
                         Label("Split into a binary star", systemImage: "circle.grid.2x1.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.podProminent)
                     .tint(DesignTokens.Palette.gravityAccent)
                     .disabled(model.bodies.count >= GravityLabModel.bodyBudget)
                     .accessibilityHint("Splits the Sun into two half-mass suns orbiting each other — total mass and momentum conserved, then the three-body chaos begins")
@@ -84,7 +84,7 @@ struct GravityLabControlsView: View {
                     Label("Spawn", systemImage: "plus.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.podProminent)
                 .tint(DesignTokens.Palette.gravityAccent)
                 .disabled(model.bodies.count >= GravityLabModel.bodyBudget
                           || model.mode == .lagrange)
@@ -101,7 +101,7 @@ struct GravityLabControlsView: View {
                         Label("Enter Lagrange mode", systemImage: "circle.hexagongrid")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.podProminent)
                     .tint(DesignTokens.Palette.gravityAccent)
                     .accessibilityHint("Replaces the scene with Earth, the Moon, and a satellite you can park at the five points")
                 } else {
@@ -124,7 +124,7 @@ struct GravityLabControlsView: View {
                         Label("Back to the solar system", systemImage: "sun.max")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                 }
             }
 

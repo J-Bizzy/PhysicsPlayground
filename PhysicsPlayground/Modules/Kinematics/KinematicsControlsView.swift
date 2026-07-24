@@ -35,7 +35,7 @@ struct KinematicsControlsView: View {
                         Label("Fire", systemImage: "paperplane.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.podProminent)
                     .tint(DesignTokens.Palette.kinematicsAccent)
                     .accessibilityHint("Launches a ball from the launcher")
 
@@ -45,7 +45,7 @@ struct KinematicsControlsView: View {
                         Label("New ball", systemImage: "circle.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .accessibilityHint("A ball appears in the room — grab and throw it")
 
                     Button(role: .destructive) {
@@ -54,7 +54,7 @@ struct KinematicsControlsView: View {
                         Label("Clear", systemImage: "trash")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .disabled(model.flights.isEmpty)
                     .accessibilityLabel("Clear all balls")
                 }
@@ -76,7 +76,7 @@ struct KinematicsControlsView: View {
                         Button(preset.name) {
                             model.gravity = preset.value
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.podQuiet)
                         .frame(maxWidth: .infinity)
                         .accessibilityLabel("Set gravity to \(preset.name): \(preset.value, specifier: "%.2f") meters per second squared")
                     }
@@ -142,7 +142,7 @@ struct KinematicsControlsView: View {
                               systemImage: model.isPaused ? "play.fill" : "pause.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .accessibilityHint("Freezes every ball mid-air so you can walk around them")
                 }
                 labeledSlider(
@@ -157,7 +157,7 @@ struct KinematicsControlsView: View {
                         Label("Add hoop", systemImage: "circle.circle")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .disabled(model.rings.count >= KinematicsModel.ringBudget)
                     .accessibilityHint("A hoop appears in the room — drag it anywhere; balls passing down through it score")
 
@@ -167,7 +167,7 @@ struct KinematicsControlsView: View {
                         Label("Remove", systemImage: "circle.slash")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .disabled(model.rings.isEmpty)
                     .accessibilityLabel("Remove last hoop")
                 }

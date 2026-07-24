@@ -180,7 +180,7 @@ struct WindPod: View {
                 } label: {
                     Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 .accessibilityLabel(model.isPaused ? "Resume air" : "Freeze air")
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Slow motion ×\(model.timeScale, specifier: "%.1f")")
@@ -214,7 +214,7 @@ struct TestBodyPod: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .tint(model.testBody == body ? DesignTokens.Palette.windAccent : nil)
                     .accessibilityLabel("Put the \(bodyName(body)) in the wind")
                 }

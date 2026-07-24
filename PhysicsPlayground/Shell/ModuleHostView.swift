@@ -33,7 +33,7 @@ struct ModuleHostView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 6)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.podProminent)
                     .accessibilityHint("Places the simulation in your room")
                 }
 
@@ -48,6 +48,8 @@ struct ModuleHostView: View {
                 }
             }
             .padding(DesignTokens.Panel.outerPadding)
+            // House buttons in the window fill/stroke in the module accent.
+            .environment(\.podAccent, module.accent)
         }
         .navigationTitle(module.title)
         .toolbar {

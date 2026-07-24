@@ -62,6 +62,8 @@ struct ControlPod<Content: View>: View {
         }
         .padding(16)
         .frame(width: width)
+        // House buttons in this pod fill/stroke in the pod's accent.
+        .environment(\.podAccent, tint)
         .glassBackgroundEffect(
             in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cornerRadius, style: .continuous)
         )

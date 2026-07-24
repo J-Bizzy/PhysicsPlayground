@@ -141,10 +141,10 @@ struct SpringsApparatusPod: View {
         ControlPod(title: "Apparatus", icon: "wrench.and.screwdriver", tint: DesignTokens.Palette.springsAccent) {
             HStack(spacing: 8) {
                 Button("Single") { model.setMode(.single) }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .tint(model.mode == .single ? DesignTokens.Palette.springsAccent : nil)
                 Button("Coupled ×2") { model.setMode(.coupled) }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .tint(model.mode == .coupled ? DesignTokens.Palette.springsAccent : nil)
             }
             .font(DesignTokens.TypeScale.footnote)
@@ -154,14 +154,14 @@ struct SpringsApparatusPod: View {
                 } label: {
                     Label("Rail", systemImage: "arrow.left.and.right")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 .tint(model.orientation == .horizontal ? DesignTokens.Palette.springsAccent : nil)
                 Button {
                     model.setOrientation(.vertical)
                 } label: {
                     Label("Hanging", systemImage: "arrow.down")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 .tint(model.orientation == .vertical ? DesignTokens.Palette.springsAccent : nil)
                 .disabled(model.mode == .coupled)
             }
@@ -188,13 +188,13 @@ struct SpringsTimePod: View {
                 } label: {
                     Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 ForEach(timeScales, id: \.1) { label, scale in
                     Button(label) {
                         model.timeScale = scale
                         model.isPaused = false
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .tint(model.timeScale == scale && !model.isPaused ? DesignTokens.Palette.springsAccent : nil)
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                 }

@@ -315,7 +315,7 @@ struct CircuitPresetsPod: View {
                     Button(preset.displayName) {
                         model.loadPreset(preset)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .accessibilityLabel("Build the \(preset.displayName) circuit")
                 }
             }
@@ -347,7 +347,7 @@ struct CircuitSavedPod: View {
                 } label: {
                     Image(systemName: "square.and.arrow.down")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 .disabled(slotName.trimmingCharacters(in: .whitespaces).isEmpty
                           || model.components.isEmpty)
                 .accessibilityLabel("Save the current circuit")
@@ -362,7 +362,7 @@ struct CircuitSavedPod: View {
                         Button(name) {
                             model.loadSlot(named: name)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.podQuiet)
                         .font(DesignTokens.TypeScale.footnote)
                         .accessibilityLabel("Load \(name)")
                         Spacer(minLength: 0)
@@ -415,7 +415,7 @@ struct CircuitBenchPod: View {
             } label: {
                 Label("Clear bench", systemImage: "eraser")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.podQuiet)
             .disabled(model.components.isEmpty)
             .accessibilityHint("Removes every part and wire; Reset brings the starter loop back")
 
@@ -602,7 +602,7 @@ struct CircuitsSelectedReadout: View {
                         } label: {
                             Label("Replace", systemImage: "arrow.triangle.2.circlepath")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.podQuiet)
                         .controlSize(.mini)
                         .tint(.orange)
                         .accessibilityLabel("Replace the failed \(component.kind.displayName)")
@@ -613,7 +613,7 @@ struct CircuitsSelectedReadout: View {
                         } label: {
                             Label("Detach", systemImage: "scissors")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.podQuiet)
                         .controlSize(.mini)
                         .accessibilityLabel("Detach this \(component.kind.displayName) — drop its wires but keep the part")
                     }

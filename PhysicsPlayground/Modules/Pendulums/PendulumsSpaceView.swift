@@ -156,7 +156,7 @@ struct PendulumsBenchPod: View {
                     Label("Add", systemImage: "plus")
                         .font(DesignTokens.TypeScale.footnote)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 .disabled(model.pendulums.count >= PendulumsModel.pendulumBudget)
 
                 Button {
@@ -165,7 +165,7 @@ struct PendulumsBenchPod: View {
                     Label("Resonance ×5", systemImage: "waveform.path")
                         .font(DesignTokens.TypeScale.footnote)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
             }
         }
     }
@@ -189,7 +189,7 @@ struct PendulumsTimePod: View {
                 } label: {
                     Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 .accessibilityLabel(model.isPaused ? "Resume" : "Pause")
 
                 ForEach(timeScales, id: \.1) { label, scale in
@@ -197,7 +197,7 @@ struct PendulumsTimePod: View {
                         model.timeScale = scale
                         model.isPaused = false
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .tint(model.timeScale == scale && !model.isPaused ? DesignTokens.Palette.pendulumsAccent : nil)
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                 }

@@ -26,7 +26,7 @@ struct WavesControlsView: View {
                         Label("Add source", systemImage: "plus.circle.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.podProminent)
                     .tint(DesignTokens.Palette.wavesAccent)
                     .disabled(model.sources.count >= WavesModel.sourceBudget)
 
@@ -36,7 +36,7 @@ struct WavesControlsView: View {
                         Label("Remove", systemImage: "trash")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .disabled(model.sources.count <= 1)
                     .accessibilityLabel("Remove selected source")
                 }
@@ -94,7 +94,7 @@ struct WavesControlsView: View {
                               systemImage: model.isPaused ? "play.fill" : "pause.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Slow motion: ×\(model.timeScale, specifier: "%.1f")")

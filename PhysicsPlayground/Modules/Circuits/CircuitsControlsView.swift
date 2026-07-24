@@ -27,7 +27,7 @@ struct CircuitsControlsView: View {
                         Button(kind.displayName) {
                             model.add(kind)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.podQuiet)
                         .disabled(model.components.count >= CircuitsModel.componentBudget)
                         .accessibilityLabel("Add a \(kind.displayName)")
                     }
@@ -39,7 +39,7 @@ struct CircuitsControlsView: View {
                     Label("Remove selected part", systemImage: "trash")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 .disabled(model.selectedComponent == nil)
 
                 Text("Grab parts to carry them anywhere. Pinch a copper terminal, then another, to wire them; pinch a wire to remove it.")

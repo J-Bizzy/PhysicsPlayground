@@ -166,7 +166,7 @@ struct LauncherPod: View {
                         .font(.title3)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.podProminent)
                 .tint(DesignTokens.Palette.kinematicsAccent)
                 .accessibilityHint("Launches a ball from the launcher")
 
@@ -177,7 +177,7 @@ struct LauncherPod: View {
                         .font(.title3)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 .accessibilityLabel("New ball to throw")
                 .accessibilityHint("A ball appears in front of you — grab and throw it")
             }
@@ -207,7 +207,7 @@ struct KinematicsTimePod: View {
                 } label: {
                     Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 .accessibilityLabel(model.isPaused ? "Resume time" : "Pause time")
 
                 VStack(alignment: .leading, spacing: 2) {

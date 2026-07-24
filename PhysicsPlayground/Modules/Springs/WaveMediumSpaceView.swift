@@ -126,7 +126,7 @@ struct WaveMediumSetupPod: View {
                 Label("Strike the center", systemImage: "hand.point.up.left.fill")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.podProminent)
             .tint(DesignTokens.Palette.springsAccent)
 
             Text("Ring a standing mode")
@@ -137,7 +137,7 @@ struct WaveMediumSetupPod: View {
                     Button("\(mode.0),\(mode.1)") {
                         model.ringMode(m: mode.0, p: mode.1)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.podQuiet)
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                 }
             }
@@ -148,7 +148,7 @@ struct WaveMediumSetupPod: View {
                 Label("Still", systemImage: "square")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.podQuiet)
         }
     }
 }

@@ -135,7 +135,7 @@ struct WavesTimePod: View {
                 } label: {
                     Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.podQuiet)
                 .accessibilityLabel(model.isPaused ? "Resume waves" : "Freeze waves")
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Slow motion ×\(model.timeScale, specifier: "%.1f")")

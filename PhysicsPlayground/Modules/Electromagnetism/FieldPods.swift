@@ -29,7 +29,7 @@ struct ChargesPod: View {
                     Label("Add +", systemImage: "plus.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .tint(DesignTokens.Palette.positive)
+                .buttonStyle(.podProminent(DesignTokens.Palette.positive))
                 .accessibilityLabel("Add positive charge")
                 Button {
                     model.addCharge(positive: false)
@@ -37,10 +37,9 @@ struct ChargesPod: View {
                     Label("Add −", systemImage: "minus.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .tint(DesignTokens.Palette.negative)
+                .buttonStyle(.podProminent(DesignTokens.Palette.negative))
                 .accessibilityLabel("Add negative charge")
             }
-            .buttonStyle(.borderedProminent)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Strength: \(model.selectedMagnitudeMicroCoulombs, specifier: "%.1f") µC")
@@ -75,7 +74,7 @@ struct ChargesPod: View {
                 .disabled(model.charges.isEmpty)
                 .accessibilityLabel("Remove all charges")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.podQuiet)
         }
     }
 }
@@ -121,7 +120,7 @@ struct TestChargePod: View {
                     .accessibilityLabel("Remove test charge")
                 }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.podQuiet)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("q = \(model.probeIsPositive ? "+" : "−")\(model.probeChargeMagnitude * 1e9, specifier: "%.0f") nC — F = qE scales with it")
