@@ -214,7 +214,7 @@ final class WavesRenderer {
         // Probe.
         probe = ModelEntity(
             mesh: .generateSphere(radius: 0.016),
-            materials: [UnlitMaterial(color: .white)]
+            materials: [Materials.energized(.white, roughness: 0.25, glow: 0.18)]
         )
         probe.name = Self.probeName
         Grabbable.configureTouchTarget(probe, collisionRadius: 0.05)
