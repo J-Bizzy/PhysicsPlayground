@@ -99,6 +99,7 @@ final class CircuitsRenderer {
 
 
     init() {
+        root.addChild(Lighting.keyLight())
         // Bulb glow brightness buckets (materials made once).
         glowMaterials = (0..<6).map { step in
             var material = UnlitMaterial(

@@ -42,6 +42,7 @@ final class WaveMediumRenderer {
     private var surfacePipeline: GeometryPipeline<SurfaceJob, SurfaceResult>?
 
     init() {
+        root.addChild(Lighting.keyLight())
         // One lit surface with a gradient-texture heatmap: baseColor
         // (and a gentle emissive) are sampled along the ramp by each
         // vertex's height, so the colour is smooth and the normals

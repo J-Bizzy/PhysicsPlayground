@@ -94,6 +94,7 @@ final class SpringsRenderer {
     }
 
     init() {
+        root.addChild(Lighting.keyLight())
         // Supports and rail.
         let supportMesh = MeshResource.generateBox(
             size: [0.05, 0.34, 0.1], cornerRadius: 0.01)

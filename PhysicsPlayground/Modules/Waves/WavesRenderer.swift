@@ -103,6 +103,7 @@ final class WavesRenderer {
     private var lastEmit: [Double] = []
 
     init() {
+        root.addChild(Lighting.keyLight())
         // The lattice: shared mesh, per-dot material from a brightness
         // palette assigned when the configuration changes.
         let dotMesh = MeshResource.generateSphere(radius: 0.011)

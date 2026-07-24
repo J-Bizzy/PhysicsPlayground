@@ -112,6 +112,7 @@ final class WindTunnelRenderer {
     private var fanMouth = SIMD3<Double>(-WindTunnelModel.halfLength - 0.10, 0, 0)
 
     init() {
+        root.addChild(Lighting.keyLight())
         sectionRoot.position = Self.sectionCenter
         root.addChild(sectionRoot)
 

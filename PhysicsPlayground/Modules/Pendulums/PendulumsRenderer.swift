@@ -154,6 +154,7 @@ final class PendulumsRenderer {
     private var lastSoundID = 0
 
     init() {
+        root.addChild(Lighting.keyLight())
         // The machined beam overhead.
         beam = ModelEntity(
             mesh: .generateBox(

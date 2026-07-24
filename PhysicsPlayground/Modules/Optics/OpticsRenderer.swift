@@ -118,6 +118,7 @@ final class OpticsRenderer {
     private var lastCornerKey = ""
 
     init() {
+        root.addChild(Lighting.keyLight())
         // Rail.
         let rail = ModelEntity(
             mesh: .generateCylinder(

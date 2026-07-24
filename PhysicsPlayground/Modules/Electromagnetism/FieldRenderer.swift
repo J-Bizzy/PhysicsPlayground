@@ -107,6 +107,7 @@ final class FieldRenderer {
         // while a single charge is dragged, the whole pattern translates
         // rigidly with it (exact for one charge — the field just moves),
         // so the lines stick to the hand while the re-trace catches up.
+        root.addChild(Lighting.keyLight())
         root.addChild(fieldFlowRoot)
         // The glow halo sits under the arrowheads and the bright core so
         // the crisp line and heads read over the soft bloom.

@@ -112,6 +112,7 @@ final class KinematicsRenderer {
     private var lastArcInputs: ArcInputs?
 
     init() {
+        root.addChild(Lighting.keyLight())
         // Launcher: grabbable base sphere, barrel, aim bead — siblings at
         // room coordinates so manipulation never fights a parent transform.
         let launcherMaterial = Materials.energized(
