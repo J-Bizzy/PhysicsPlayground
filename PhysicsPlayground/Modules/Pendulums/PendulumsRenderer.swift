@@ -55,13 +55,16 @@ final class PendulumsRenderer {
         let head: ModelEntity
 
         init(color: UIColor) {
-            let material = UnlitMaterial(color: color)
+            // Clean bright shaft, glossy self-lit head — a crisp crafted
+            // vector shared by Pendulums and Springs.
+            let shaftMaterial = UnlitMaterial(color: color)
+            let headMaterial = Materials.energized(color, roughness: 0.2, glow: 0.35)
             shaft = ModelEntity(
-                mesh: .generateCylinder(height: 0.1, radius: 0.0028),
-                materials: [material])
+                mesh: .generateCylinder(height: 0.1, radius: 0.0035),
+                materials: [shaftMaterial])
             head = ModelEntity(
-                mesh: .generateCone(height: 0.024, radius: 0.008),
-                materials: [material])
+                mesh: .generateCone(height: 0.028, radius: 0.011),
+                materials: [headMaterial])
             holder.addChild(shaft)
             holder.addChild(head)
             holder.isEnabled = false

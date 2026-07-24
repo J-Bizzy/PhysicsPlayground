@@ -252,11 +252,14 @@ final class GravityLabRenderer {
 
 
     private static func makeArrow(color: UIColor) -> Arrow {
-        let material = UnlitMaterial(color: color)
+        // Clean bright shaft (a line), glossy self-lit head (a crafted tip
+        // that catches the key light) — a confident vector, not a wire.
+        let shaftMaterial = UnlitMaterial(color: color)
+        let headMaterial = Materials.energized(color, roughness: 0.2, glow: 0.35)
         let shaft = ModelEntity(
-            mesh: .generateCylinder(height: 0.1, radius: 0.0035), materials: [material])
+            mesh: .generateCylinder(height: 0.1, radius: 0.0035), materials: [shaftMaterial])
         let head = ModelEntity(
-            mesh: .generateCone(height: 0.028, radius: 0.010), materials: [material])
+            mesh: .generateCone(height: 0.03, radius: 0.011), materials: [headMaterial])
         let container = Entity()
         container.addChild(shaft)
         container.addChild(head)
