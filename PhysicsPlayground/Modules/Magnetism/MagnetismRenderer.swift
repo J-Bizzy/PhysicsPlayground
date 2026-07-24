@@ -112,6 +112,14 @@ final class MagnetismRenderer {
         container.addChild(north)
         container.addChild(south)
 
+        // A polished chrome band at the waist — the seam of a real bar
+        // magnet, and a crisp divider between the poles.
+        let band = ModelEntity(
+            mesh: .generateBox(size: [w + 0.006, 0.014, w + 0.006], cornerRadius: 0.004),
+            materials: [Materials.energized(UIColor(white: 0.86, alpha: 1),
+                                            roughness: 0.14, metallic: 1.0, glow: 0)])
+        container.addChild(band)
+
         // Selection halo (a soft box shell), hidden until selected.
         var haloMaterial = UnlitMaterial(color: DesignTokens.Palette.selectionHaloUI)
         haloMaterial.blending = .transparent(opacity: 0.22)
@@ -194,16 +202,19 @@ final class MagnetismRenderer {
     }()
 
     private func buildCompassGrid() {
-        let shaftMaterial = UnlitMaterial(color: UIColor(white: 0.75, alpha: 1))
-        var headMaterial = UnlitMaterial(color: Self.lineColor)
-        headMaterial.blending = .transparent(opacity: 0.95)
-        let shaftMesh = MeshResource.generateCylinder(height: 0.075, radius: 0.0034)
-        let headMesh = MeshResource.generateCone(height: 0.024, radius: 0.0085)
+        // A soft, translucent silver body so the dense grid reads as a
+        // haze of needles, not a thicket of stark white sticks; the tip
+        // is a bright glossy violet that carries the direction.
+        var shaftMaterial = UnlitMaterial(color: UIColor(white: 0.85, alpha: 1))
+        shaftMaterial.blending = .transparent(opacity: 0.5)
+        let headMaterial = Materials.energized(Self.lineColor, roughness: 0.18, glow: 0.45)
+        let shaftMesh = MeshResource.generateCylinder(height: 0.07, radius: 0.0026)
+        let headMesh = MeshResource.generateCone(height: 0.026, radius: 0.009)
         for point in Self.gridPoints {
             let needle = Entity()
             let shaft = ModelEntity(mesh: shaftMesh, materials: [shaftMaterial])
             let head = ModelEntity(mesh: headMesh, materials: [headMaterial])
-            head.position = [0, 0.05, 0]
+            head.position = [0, 0.048, 0]
             needle.addChild(shaft)
             needle.addChild(head)
             needle.position = point
