@@ -50,7 +50,7 @@ final class MagnetismRenderer {
     // Compass needle grid.
     private let compassRoot = Entity()
     private var needles: [Entity] = []
-    private nonisolated static let compassColumns = (x: 5, y: 4, z: 5)
+    private nonisolated static let compassColumns = (x: 7, y: 5, z: 7)
 
     init() {
         root.addChild(Lighting.keyLight())
@@ -84,9 +84,10 @@ final class MagnetismRenderer {
         }
         for magnet in model.magnets {
             let entity = magnetEntities[magnet.id] ?? makeMagnet(magnet)
-            if magnet.id != model.heldID {
-                entity.position = SIMD3<Float>(magnet.position)
-            }
+            // The model owns motion (relative drag, no system manipulation),
+            // so the entity follows it EVERY frame — including while held,
+            // or the magnet lags the hand until release.
+            entity.position = SIMD3<Float>(magnet.position)
             // Orient the bar's +Y along the moment (S→N).
             entity.orientation = simd_quatf(
                 from: [0, 1, 0], to: SIMD3<Float>(magnet.axis))
@@ -144,7 +145,12 @@ final class MagnetismRenderer {
     private nonisolated static func computeLines(_ job: LinesJob) -> LinesResult {
         var config = MagneticFieldLineTracer.Config()
         config.boundsCenter = MagnetismModel.regionCenter
-        config.boundsRadius = MagnetismModel.regionHalfExtent * 1.5
+        // Denser, longer, and let each loop run far enough to close — the
+        // full curvy dipole pattern, not a few short arcs.
+        config.boundsRadius = MagnetismModel.regionHalfExtent * 1.9
+        config.seedsPerMagnet = 24
+        config.maxSteps = 520
+        config.stepSize = 0.011
         let lines = MagneticFieldLineTracer.trace(magnets: job.magnets, config: config)
             .map { $0.map(SIMD3<Float>.init) }
         var result = LinesResult()
@@ -191,13 +197,13 @@ final class MagnetismRenderer {
         let shaftMaterial = UnlitMaterial(color: UIColor(white: 0.75, alpha: 1))
         var headMaterial = UnlitMaterial(color: Self.lineColor)
         headMaterial.blending = .transparent(opacity: 0.95)
-        let shaftMesh = MeshResource.generateCylinder(height: 0.05, radius: 0.0032)
-        let headMesh = MeshResource.generateCone(height: 0.018, radius: 0.0075)
+        let shaftMesh = MeshResource.generateCylinder(height: 0.075, radius: 0.0034)
+        let headMesh = MeshResource.generateCone(height: 0.024, radius: 0.0085)
         for point in Self.gridPoints {
             let needle = Entity()
             let shaft = ModelEntity(mesh: shaftMesh, materials: [shaftMaterial])
             let head = ModelEntity(mesh: headMesh, materials: [headMaterial])
-            head.position = [0, 0.034, 0]
+            head.position = [0, 0.05, 0]
             needle.addChild(shaft)
             needle.addChild(head)
             needle.position = point
