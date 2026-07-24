@@ -167,10 +167,11 @@ final class PendulumsRenderer {
         beam.position = SIMD3<Float>(PendulumsModel.beamCenter)
         root.addChild(beam)
 
-        var kineticMaterial = UnlitMaterial(color: UIColor(red: 0.25, green: 0.5, blue: 1.0, alpha: 1))
-        kineticMaterial.blending = .transparent(opacity: 0.85)
-        var potentialMaterial = UnlitMaterial(color: UIColor(red: 0.2, green: 0.8, blue: 0.35, alpha: 1))
-        potentialMaterial.blending = .transparent(opacity: 0.85)
+        // Glowing glossy columns — they read as energy, not plastic bars.
+        let kineticMaterial = Materials.energized(
+            UIColor(red: 0.25, green: 0.5, blue: 1.0, alpha: 1), roughness: 0.25, glow: 0.4)
+        let potentialMaterial = Materials.energized(
+            UIColor(red: 0.2, green: 0.8, blue: 0.35, alpha: 1), roughness: 0.25, glow: 0.4)
         kineticBar = ModelEntity(
             mesh: .generateBox(size: [0.05, 1, 0.05], cornerRadius: 0.01),
             materials: [kineticMaterial])

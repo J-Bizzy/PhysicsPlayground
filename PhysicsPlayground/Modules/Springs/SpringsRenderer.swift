@@ -146,10 +146,11 @@ final class SpringsRenderer {
         root.addChild(accelerationArrow.holder)
         root.addChild(forceArrow.holder)
 
-        var kineticMaterial = UnlitMaterial(color: UIColor(red: 0.25, green: 0.5, blue: 1, alpha: 1))
-        kineticMaterial.blending = .transparent(opacity: 0.85)
-        var potentialMaterial = UnlitMaterial(color: UIColor(red: 0.2, green: 0.8, blue: 0.35, alpha: 1))
-        potentialMaterial.blending = .transparent(opacity: 0.85)
+        // Glowing glossy columns — they read as energy, not plastic bars.
+        let kineticMaterial = Materials.energized(
+            UIColor(red: 0.25, green: 0.5, blue: 1, alpha: 1), roughness: 0.25, glow: 0.4)
+        let potentialMaterial = Materials.energized(
+            UIColor(red: 0.2, green: 0.8, blue: 0.35, alpha: 1), roughness: 0.25, glow: 0.4)
         var totalMaterial = UnlitMaterial(color: UIColor(white: 0.9, alpha: 1))
         totalMaterial.blending = .transparent(opacity: 0.4)
         let barMesh = MeshResource.generateBox(size: [0.045, 1, 0.045], cornerRadius: 0.008)
