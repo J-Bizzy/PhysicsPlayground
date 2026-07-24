@@ -125,7 +125,6 @@ final class OrbScene {
     private var showingResetArmed = false
 
     private static let orbRadius: Float = 0.048
-    private static let iconColor = UIColor(white: 0.95, alpha: 1)
 
     // The cluster: four bubbles centred and strung on a shallow glass rail
     // that bows gently toward the user, like beads on a wire.
@@ -165,83 +164,147 @@ final class OrbScene {
             accessibilityLabel: "Reset the module. Pinch once to arm, again to reset."
         )
 
-        // Back: a chevron pointing left.
-        let chevron = Entity()
-        let strokeMesh = MeshResource.generateBox(
-            size: [0.032, 0.009, 0.009], cornerRadius: 0.004)
-        let iconMaterial = UnlitMaterial(color: Self.iconColor)
-        let upper = ModelEntity(mesh: strokeMesh, materials: [iconMaterial])
-        upper.orientation = simd_quatf(angle: 0.65, axis: [0, 0, 1])
-        upper.position = [0.004, 0.0105, 0]
-        let lower = ModelEntity(mesh: strokeMesh, materials: [iconMaterial])
-        lower.orientation = simd_quatf(angle: -0.65, axis: [0, 0, 1])
-        lower.position = [0.004, -0.0105, 0]
-        chevron.addChild(upper)
-        chevron.addChild(lower)
-        attachIcon(chevron, to: backOrb)
+        // Icons are small, smooth, chrome-like models that catch the room
+        // light and read against any background — not flat glyphs that wash
+        // out inside the clear glass, and not jagged box assemblies.
+        attachIcon(chevronIcon(), to: backOrb)
 
-        // Pause: two bars; play: a triangle (cone lying on its side).
-        let barMesh = MeshResource.generateBox(
-            size: [0.011, 0.036, 0.009], cornerRadius: 0.004)
-        for x: Float in [-0.0105, 0.0105] {
-            let bar = ModelEntity(mesh: barMesh, materials: [iconMaterial])
-            bar.position = [x, 0, 0]
-            pauseBars.addChild(bar)
-        }
-        let triangle = ModelEntity(
-            mesh: .generateCone(height: 0.038, radius: 0.022),
-            materials: [iconMaterial]
-        )
-        // Cones point +y; lay it over so it points +x — a play glyph.
-        triangle.orientation = simd_quatf(angle: -.pi / 2, axis: [0, 0, 1])
-        triangle.position = [0.004, 0, 0]
-        playTriangle.addChild(triangle)
+        // Pause bars vs a play triangle, toggled by state.
+        pauseBars = pauseBarsIcon()
+        playTriangle = playTriangleIcon()
         playTriangle.isEnabled = false
-
         let pauseIcon = Entity()
         pauseIcon.addChild(pauseBars)
         pauseIcon.addChild(playTriangle)
         attachIcon(pauseIcon, to: pauseOrb)
 
-        // Pods: three little cards fanned out; a lone dim card while
-        // the pods are hidden.
-        let tileMesh = MeshResource.generateBox(
-            size: [0.016, 0.0115, 0.004], cornerRadius: 0.002)
-        for offset in [SIMD3<Float>(-0.011, 0.010, 0), SIMD3(0.011, 0.004, 0),
-                       SIMD3(0, -0.009, 0)] {
-            let tile = ModelEntity(mesh: tileMesh, materials: [iconMaterial])
-            tile.position = offset
-            podTiles.addChild(tile)
-        }
-        let soloTile = ModelEntity(
-            mesh: tileMesh,
-            materials: [UnlitMaterial(color: UIColor(white: 0.55, alpha: 1))])
-        podTileSolo.addChild(soloTile)
+        // Pods shown (a 2×2 grid of tiles) vs hidden (one dim tile).
+        podTiles = podGridIcon()
+        podTileSolo = podSoloIcon()
         podTileSolo.isEnabled = false
         let podsIcon = Entity()
         podsIcon.addChild(podTiles)
         podsIcon.addChild(podTileSolo)
         attachIcon(podsIcon, to: podsOrb)
 
-        // Reset: a ring with a little arrowhead — the universal ↺.
-        let resetIcon = Entity()
-        // Ring built from short segments (RealityKit has no torus).
-        let segmentMesh = MeshResource.generateBox(
-            size: [0.0105, 0.0055, 0.0055], cornerRadius: 0.0025)
-        for step in 0..<10 {
-            let angle = Float(step) / 10 * 2 * .pi
-            let segment = ModelEntity(mesh: segmentMesh, materials: [iconMaterial])
-            segment.position = [0.0155 * cos(angle), 0.0155 * sin(angle), 0]
-            segment.orientation = simd_quatf(angle: angle + .pi / 2, axis: [0, 0, 1])
-            resetIcon.addChild(segment)
+        // Reset: a smooth counter-clockwise ring-arrow.
+        attachIcon(resetRingIcon(), to: resetOrb)
+    }
+
+    // MARK: Icon geometry
+    //
+    // Every glyph is built from smooth primitives — rounded boxes, a filled
+    // triangle, and a tube-swept ring — in a faintly-lit chrome so it reads
+    // as a crafted little instrument through the glass, on light walls or
+    // dark furniture alike.
+
+    /// Chrome with a whisper of self-illumination, so the icon never sinks
+    /// to a flat silhouette even when it falls into shadow.
+    private static func iconMetal(_ tint: UIColor = UIColor(white: 0.9, alpha: 1),
+                                  emissive: Float = 0.14) -> PhysicallyBasedMaterial {
+        var m = PhysicallyBasedMaterial()
+        m.baseColor = .init(tint: tint)
+        m.metallic = 0.9
+        m.roughness = 0.24
+        m.clearcoat = .init(floatLiteral: 0.6)
+        m.clearcoatRoughness = .init(floatLiteral: 0.2)
+        m.emissiveColor = .init(color: tint)
+        m.emissiveIntensity = emissive
+        return m
+    }
+
+    /// A flat, filled triangle pointing along +X, facing the camera (+Z),
+    /// double-sided so the billboard can never show its back.
+    private static func triangleMesh(width: Float, height: Float) -> MeshResource {
+        let w = width * 0.5, h = height * 0.5
+        var d = MeshDescriptor(name: "triangle")
+        d.positions = MeshBuffers.Positions([[w, 0, 0], [-w, h, 0], [-w, -h, 0]])
+        d.normals = MeshBuffers.Normals([[0, 0, 1], [0, 0, 1], [0, 0, 1]])
+        d.primitives = .triangles([0, 1, 2, 0, 2, 1])
+        return (try? MeshResource.generate(from: [d])) ?? .generateBox(size: 0.01)
+    }
+
+    /// A "‹" chevron: two rounded bars meeting at a left-hand vertex.
+    private func chevronIcon() -> Entity {
+        let icon = Entity()
+        let bar = MeshResource.generateBox(size: [0.021, 0.007, 0.007], cornerRadius: 0.0035)
+        let vertexX: Float = -0.013
+        let half: Float = 0.0105
+        for sign: Float in [1, -1] {
+            let arm = ModelEntity(mesh: bar, materials: [Self.iconMetal()])
+            let angle = sign * (.pi * 0.28)   // ~50° open
+            arm.orientation = simd_quatf(angle: angle, axis: [0, 0, 1])
+            arm.position = [vertexX + half * cos(angle), half * sin(angle), 0]
+            icon.addChild(arm)
         }
-        let head = ModelEntity(
-            mesh: .generateCone(height: 0.012, radius: 0.0065),
-            materials: [iconMaterial])
-        head.position = [-0.004, 0.0155, 0]
-        head.orientation = simd_quatf(angle: -.pi / 2, axis: [0, 0, 1])
-        resetIcon.addChild(head)
-        attachIcon(resetIcon, to: resetOrb)
+        return icon
+    }
+
+    private func pauseBarsIcon() -> Entity {
+        let icon = Entity()
+        let bar = MeshResource.generateBox(size: [0.008, 0.03, 0.008], cornerRadius: 0.004)
+        for x: Float in [-0.008, 0.008] {
+            let e = ModelEntity(mesh: bar, materials: [Self.iconMetal()])
+            e.position = [x, 0, 0]
+            icon.addChild(e)
+        }
+        return icon
+    }
+
+    private func playTriangleIcon() -> Entity {
+        let icon = Entity()
+        let tri = ModelEntity(mesh: Self.triangleMesh(width: 0.028, height: 0.032),
+                              materials: [Self.iconMetal()])
+        tri.position = [0.028 / 6, 0, 0]   // centre the triangle's centroid
+        icon.addChild(tri)
+        return icon
+    }
+
+    private func podGridIcon() -> Entity {
+        let icon = Entity()
+        let tile = MeshResource.generateBox(size: [0.013, 0.013, 0.006], cornerRadius: 0.0028)
+        for x: Float in [-0.008, 0.008] {
+            for y: Float in [-0.008, 0.008] {
+                let e = ModelEntity(mesh: tile, materials: [Self.iconMetal()])
+                e.position = [x, y, 0]
+                icon.addChild(e)
+            }
+        }
+        return icon
+    }
+
+    private func podSoloIcon() -> Entity {
+        let icon = Entity()
+        let tile = ModelEntity(
+            mesh: .generateBox(size: [0.017, 0.017, 0.006], cornerRadius: 0.003),
+            materials: [Self.iconMetal(UIColor(white: 0.55, alpha: 1), emissive: 0.06)])
+        icon.addChild(tile)
+        return icon
+    }
+
+    /// A smooth ~290° ring swept as a tube, capped by a tangent arrowhead —
+    /// the universal "start over" glyph, with no faceted segments.
+    private func resetRingIcon() -> Entity {
+        let icon = Entity()
+        let radius: Float = 0.016
+        let start: Float = .pi * 0.35
+        let sweep: Float = .pi * 1.62
+        let steps = 44
+        let points: [SIMD3<Float>] = (0...steps).map { i in
+            let a = start + sweep * Float(i) / Float(steps)
+            return [cos(a) * radius, sin(a) * radius, 0]
+        }
+        if let mesh = TubeMesh.tube(lines: [points], radius: 0.0034, sides: 8) {
+            icon.addChild(ModelEntity(mesh: mesh, materials: [Self.iconMetal()]))
+        }
+        // Arrowhead at the swept end, aimed along the counter-clockwise tangent.
+        let endAngle = start + sweep
+        let head = ModelEntity(mesh: Self.triangleMesh(width: 0.013, height: 0.013),
+                               materials: [Self.iconMetal()])
+        head.position = [cos(endAngle) * radius, sin(endAngle) * radius, 0]
+        head.orientation = simd_quatf(angle: endAngle + .pi / 2, axis: [0, 0, 1])
+        icon.addChild(head)
+        return icon
     }
 
     /// A crafted lit-glass bead: clear-coated for a crisp highlight and
@@ -316,6 +379,9 @@ final class OrbScene {
     private func attachIcon(_ icon: Entity, to orb: ModelEntity) {
         let pivot = Entity()
         pivot.components.set(BillboardComponent())
+        // Ride toward the front of the bead so the icon reads crisply
+        // instead of sinking behind a hemisphere of glass.
+        icon.position = [0, 0, 0.024]
         pivot.addChild(icon)
         orb.addChild(pivot)
     }
