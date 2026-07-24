@@ -19,6 +19,7 @@
 
 import SwiftUI
 import RealityKit
+import RenderKit
 
 struct ModuleOrbControlsView: View {
     let module: ModuleDescriptor
@@ -123,28 +124,44 @@ final class OrbScene {
     private var showingPods = true
     private var showingResetArmed = false
 
-    private static let orbRadius: Float = 0.05
+    private static let orbRadius: Float = 0.048
     private static let iconColor = UIColor(white: 0.95, alpha: 1)
 
+    // The cluster: four bubbles centred and strung on a shallow glass rail
+    // that bows gently toward the user, like beads on a wire.
+    private static let orbY: Float = 0.85
+    private static let orbZ: Float = -0.72
+    private static let orbSpacing: Float = 0.185
+    private static func orbPosition(_ index: Int) -> SIMD3<Float> {
+        let x = (Float(index) - 1.5) * orbSpacing
+        return SIMD3(x, orbY, orbZ + bow(atX: x))
+    }
+    /// A gentle forward bow (toward the user) that grows toward the ends.
+    private static func bow(atX x: Float) -> Float {
+        let t = x / (orbSpacing * 1.5)
+        return 0.028 * t * t
+    }
+
     func build() {
+        buildRail()
         backOrb = makeOrb(
             name: "orb-back",
-            at: SIMD3(-0.22, 0.85, -0.72),
+            at: Self.orbPosition(0),
             accessibilityLabel: "Back to the exhibit menu"
         )
         pauseOrb = makeOrb(
             name: "orb-pause",
-            at: SIMD3(0, 0.85, -0.72),
+            at: Self.orbPosition(1),
             accessibilityLabel: "Pause or resume the physics"
         )
         podsOrb = makeOrb(
             name: "orb-pods",
-            at: SIMD3(0.22, 0.85, -0.72),
+            at: Self.orbPosition(2),
             accessibilityLabel: "Show or hide the floating control pods"
         )
         resetOrb = makeOrb(
             name: "orb-reset",
-            at: SIMD3(0.44, 0.85, -0.72),
+            at: Self.orbPosition(3),
             accessibilityLabel: "Reset the module. Pinch once to arm, again to reset."
         )
 
@@ -252,6 +269,28 @@ final class OrbScene {
             ? Self.orbGlass(tint: UIColor(red: 1, green: 0.32, blue: 0.28, alpha: 1),
                             opacity: 0.55, emissive: 0.35)
             : Self.orbGlass()]
+    }
+
+    /// The glass rail the bubbles are strung on — a slim, gently-bowed
+    /// tube of frosted glass with a soft inner glow, threaded just under
+    /// the bubbles so the cluster reads as one crafted control, not four
+    /// stray spheres. Extends a little past the end bubbles.
+    private func buildRail() {
+        let points: [SIMD3<Float>] = stride(from: -0.36, through: 0.36, by: 0.02).map { x in
+            SIMD3(x, Self.orbY - 0.05, Self.orbZ + Self.bow(atX: x))
+        }
+        guard let mesh = TubeMesh.tube(lines: [points], radius: 0.008, sides: 10) else { return }
+        let rail = ModelEntity(mesh: mesh, materials: [Self.orbGlass(opacity: 0.4, emissive: 0.16)])
+        root.addChild(rail)
+
+        // Two small end-caps so the rail reads as a finished bar.
+        for x: Float in [-0.36, 0.36] {
+            let cap = ModelEntity(
+                mesh: .generateSphere(radius: 0.011),
+                materials: [Self.orbGlass(opacity: 0.45, emissive: 0.18)])
+            cap.position = SIMD3(x, Self.orbY - 0.05, Self.orbZ + Self.bow(atX: x))
+            root.addChild(cap)
+        }
     }
 
     private func makeOrb(name: String, at position: SIMD3<Float>,
