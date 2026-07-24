@@ -27,9 +27,19 @@ struct PanelSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Panel.padding) {
             if let title {
-                Text(title)
-                    .font(DesignTokens.TypeScale.sectionHeader)
-                    .accessibilityAddTraits(.isHeader)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(title)
+                        .font(DesignTokens.TypeScale.sectionHeader)
+                        .accessibilityAddTraits(.isHeader)
+                    // A quiet hairline under every section header — the
+                    // same designed underline the pods use, so the flat
+                    // panel and the spatial pods read as one system.
+                    LinearGradient(
+                        colors: [.secondary.opacity(0.35), .secondary.opacity(0.04)],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                    .frame(height: 1)
+                }
             }
             content
         }
@@ -37,7 +47,7 @@ struct PanelSection<Content: View>: View {
         .padding(DesignTokens.Panel.padding)
         .background(
             .regularMaterial,
-            in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cornerRadius)
+            in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cornerRadius, style: .continuous)
         )
     }
 }

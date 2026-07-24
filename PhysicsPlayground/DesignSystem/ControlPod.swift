@@ -23,8 +23,11 @@ import SwiftUI
 import RealityKit
 import RenderKit
 
-/// A small single-purpose glass card: icon + title header, then the
-/// few controls that belong to exactly that idea.
+/// A small single-purpose glass card: an accent-chipped title header
+/// over a hairline rule, then the few controls that belong to exactly
+/// that idea. The header reads as a labelled instrument, not a stock
+/// card — the icon sits in its own tinted chip, the title carries the
+/// weight, and a thin accent rule separates label from controls.
 struct ControlPod<Content: View>: View {
     let title: String
     let icon: String
@@ -33,15 +36,35 @@ struct ControlPod<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: icon)
-                .font(DesignTokens.TypeScale.label)
-                .foregroundStyle(tint)
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 9) {
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(tint)
+                        .frame(width: 26, height: 26)
+                        .background(tint.opacity(0.18),
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 0)
+                }
+                // A hairline that starts in the accent and fades out — a
+                // designed underline, not a full-width divider.
+                LinearGradient(
+                    colors: [tint.opacity(0.55), tint.opacity(0.05)],
+                    startPoint: .leading, endPoint: .trailing
+                )
+                .frame(height: 1)
+            }
             content
         }
-        .padding(14)
+        .padding(16)
         .frame(width: width)
-        .glassBackgroundEffect()
+        .glassBackgroundEffect(
+            in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cornerRadius, style: .continuous)
+        )
     }
 }
 
