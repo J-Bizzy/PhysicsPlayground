@@ -145,8 +145,8 @@ final class PendulumsRenderer {
     /// glow (it's a mass, not a source).
     private static let bobMaterial = Materials.energized(
         UIColor(white: 0.9, alpha: 1), roughness: 0.1, metallic: 1.0, glow: 0.0)
-    private let aluminumMaterial = SimpleMaterial(
-        color: UIColor(white: 0.7, alpha: 1), roughness: 0.35, isMetallic: true)
+    private let aluminumMaterial = Materials.energized(
+        UIColor(white: 0.7, alpha: 1), roughness: 0.3, metallic: 1.0, glow: 0.0)
     private let cableMaterial = SimpleMaterial(
         color: UIColor(white: 0.25, alpha: 1), roughness: 0.6, isMetallic: true)
 

@@ -120,8 +120,8 @@ final class WindTunnelRenderer {
         // grabbable, visibly spinning at its true rate.
         cylinder = ModelEntity(
             mesh: .generateCylinder(height: 2 * Self.halfHeight, radius: Self.baseCylinderRadius),
-            materials: [SimpleMaterial(color: DesignTokens.Palette.launcherUI,
-                                       roughness: 0.35, isMetallic: true)]
+            materials: [Materials.energized(DesignTokens.Palette.launcherUI,
+                                            roughness: 0.3, metallic: 1.0, glow: 0.0)]
         )
         cylinder.name = Self.cylinderName
         Grabbable.configureTouchTarget(cylinder, collisionRadius: 0.16)

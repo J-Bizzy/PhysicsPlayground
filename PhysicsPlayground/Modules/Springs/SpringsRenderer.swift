@@ -32,11 +32,11 @@ final class SpringsRenderer {
 
     private let steelMaterial = SimpleMaterial(
         color: UIColor(white: 0.85, alpha: 1), roughness: 0.15, isMetallic: true)
-    private let aluminumMaterial = SimpleMaterial(
-        color: UIColor(white: 0.7, alpha: 1), roughness: 0.35, isMetallic: true)
-    private let springMaterial = SimpleMaterial(
-        color: UIColor(red: 0.75, green: 0.76, blue: 0.8, alpha: 1),
-        roughness: 0.25, isMetallic: true)
+    private let aluminumMaterial = Materials.energized(
+        UIColor(white: 0.7, alpha: 1), roughness: 0.3, metallic: 1.0, glow: 0.0)
+    private let springMaterial = Materials.energized(
+        UIColor(red: 0.75, green: 0.76, blue: 0.8, alpha: 1),
+        roughness: 0.22, metallic: 1.0, glow: 0.0)
     /// The block: polished machined metal — clear-coat gloss over metal,
     /// no glow (a mass, not a source).
     private static let blockMaterial = Materials.energized(
