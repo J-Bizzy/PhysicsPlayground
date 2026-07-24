@@ -53,24 +53,59 @@ struct PanelSection<Content: View>: View {
 }
 
 /// The house legend: one row per LegendItem, swatch shapes matching how
-/// each concept is drawn in the scene.
+/// each concept is drawn in the scene. Collapsed by default so it's a
+/// quiet reference the window can tuck away, one tap from the full key.
 struct LegendView: View {
     let items: [LegendItem]
+    @State private var expanded = false
 
     var body: some View {
-        PanelSection("Legend") {
-            VStack(alignment: .leading, spacing: DesignTokens.Panel.rowSpacing) {
-                ForEach(items) { item in
-                    HStack(spacing: DesignTokens.Panel.rowSpacing) {
-                        swatch(item.swatch)
-                            .frame(width: 22, alignment: .center)
-                        Text(item.text)
-                            .font(DesignTokens.TypeScale.label)
+        VStack(alignment: .leading, spacing: expanded ? 14 : 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Text("Legend")
+                        .font(DesignTokens.TypeScale.sectionHeader)
+                    Text("\(items.count)")
+                        .font(.footnote.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(expanded ? "Hide legend" : "Show legend, \(items.count) items")
+
+            if expanded {
+                LinearGradient(
+                    colors: [.secondary.opacity(0.35), .secondary.opacity(0.04)],
+                    startPoint: .leading, endPoint: .trailing
+                )
+                .frame(height: 1)
+                VStack(alignment: .leading, spacing: DesignTokens.Panel.rowSpacing) {
+                    ForEach(items) { item in
+                        HStack(spacing: DesignTokens.Panel.rowSpacing) {
+                            swatch(item.swatch)
+                                .frame(width: 22, alignment: .center)
+                            Text(item.text)
+                                .font(DesignTokens.TypeScale.label)
+                        }
                     }
                 }
+                .accessibilityElement(children: .combine)
             }
         }
-        .accessibilityElement(children: .combine)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DesignTokens.Panel.padding)
+        .background(
+            .regularMaterial,
+            in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cornerRadius, style: .continuous)
+        )
     }
 
     @ViewBuilder
