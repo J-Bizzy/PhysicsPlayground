@@ -89,6 +89,17 @@ final class WindTunnelRenderer {
     // not move in those same steps, or the air visibly stutters while
     // everything else in the scene runs smooth.
     private var flowField: FlowField?
+    /// One entity for ALL streamlines. Local speed rides each vertex's
+    /// texture coordinate into a gradient, so the colour varies
+    /// continuously along a filament — cheaper than five bucketed tube
+    /// meshes, and with no bucket seams to chop them into dashes.
+    private let ribbonEntity = ModelEntity()
+    private lazy var ribbonMaterial: UnlitMaterial = Self.makeRibbonMaterial()
+    private static let ribbonHeights: [Double] = [-0.13, -0.05, 0.03, 0.11, 0.20]
+    private static let ribbonLaterals: [Double] = [-0.21, -0.14, -0.07, 0, 0.07, 0.14, 0.21]
+    private static let ribbonSteps = 130
+    private static let ribbonStride = 0.024
+    private static let ribbonHalfWidth = 0.006
     private var smoke: [SIMD3<Double>] = []
     private var smokeAge: [Double] = []
     private static let smokeCount = 950
@@ -212,12 +223,6 @@ final class WindTunnelRenderer {
         // carried fan so the beam sticks to the duct while the
         // background re-trace catches up (the EM warp pattern).
         sectionRoot.addChild(beamRoot)
-        for color in Self.streamlineColors {
-            let entity = ModelEntity()
-            streamlineBuckets.append(entity)
-            beamRoot.addChild(entity)
-            _ = color  // materials applied at mesh build
-        }
 
         // The fan at the tunnel mouth: grab it and park it anywhere;
         // its blades spin with the wind.
@@ -285,8 +290,9 @@ final class WindTunnelRenderer {
         dragBodyHolder.isEnabled = false
         sectionRoot.addChild(dragBodyHolder)
 
-        // The smoke cloud: a single entity whose mesh the solver rebuilds.
+        // Smoke and streamlines: one entity each, meshes rebuilt per frame.
         sectionRoot.addChild(smokeEntity)
+        sectionRoot.addChild(ribbonEntity)
     }
 
     // MARK: Per-frame tick (particles + true-rate spin animation)
@@ -330,6 +336,7 @@ final class WindTunnelRenderer {
         // Independent of the solve: the smoke rides the latest field on
         // EVERY frame, which is what makes the air look continuous.
         advanceSmoke(dt: scaledDt, model: model)
+        rebuildRibbons(model: model)
     }
 
     // MARK: Smoke — advected per frame on the cached field
@@ -410,15 +417,13 @@ final class WindTunnelRenderer {
 
         let obstacles = solidObstacles(for: model)
         let inflow = model.windSpeed
-        let wantRibbons = model.showStreamlines
 
         Task { [weak self] in
             guard let self else { return }
             await solver.setInflow(inflow)
             await solver.setObstacles(obstacles)
             await solver.primeIfNeeded()
-            let snapshot = await solver.advance(
-                dt: step, traceRibbons: wantRibbons)
+            let snapshot = await solver.advance(dt: step)
             self.applyFlow(snapshot, model: model)
             self.solveInFlight = false
         }
@@ -454,26 +459,9 @@ final class WindTunnelRenderer {
     }
 
     private func applyFlow(_ snapshot: WindFlowSolver.Snapshot, model: WindTunnelModel) {
-        // Cache the field; the per-frame smoke rides this until the next
-        // solve lands.
+        // The solve's only job now is to keep the field fresh; every
+        // visual is rebuilt per frame from it.
         flowField = snapshot.field
-
-        // Streamline ribbons — one mesh per speed-colour bucket.
-        guard model.showStreamlines else {
-            for bucket in streamlineBuckets { bucket.model = nil }
-            return
-        }
-        guard let buffers = snapshot.ribbonBuffers else { return }
-        for (index, entity) in streamlineBuckets.enumerated() {
-            guard index < buffers.count,
-                  let mesh = TubeMesh.mesh(from: buffers[index]) else {
-                entity.model = nil
-                continue
-            }
-            var material = UnlitMaterial(color: Self.streamlineColors[index])
-            material.blending = .transparent(opacity: 0.75)
-            entity.model = ModelComponent(mesh: mesh, materials: [material])
-        }
     }
 
 
@@ -609,4 +597,108 @@ final class WindTunnelRenderer {
         }
     }
 
+    // MARK: Streamlines — re-traced per frame on the cached field
+
+    private func rebuildRibbons(model: WindTunnelModel) {
+        guard model.showStreamlines, let field = flowField else {
+            if ribbonEntity.model != nil { ribbonEntity.model = nil }
+            return
+        }
+        let reference = max(model.windSpeed, 1e-6)
+        let (lo, hi) = field.bounds
+        let xStart = lo.x + field.h * 0.6
+        let maxX = hi.x - field.h
+
+        var positions = [SIMD3<Float>]()
+        var normals = [SIMD3<Float>]()
+        var uvs = [SIMD2<Float>]()
+        var indices = [UInt32]()
+
+        for height in Self.ribbonHeights {
+            for lateral in Self.ribbonLaterals {
+                var p = SIMD3(xStart, height, lateral)
+                var previousBase: UInt32?
+                for _ in 0..<Self.ribbonSteps {
+                    let v = SIMD3<Double>(field.velocity(at: p))
+                    let speed = simd_length(v)
+                    guard speed > 1e-5 else { break }
+                    let tangent = v / speed
+                    // A flat ribbon facing the front of the section, its
+                    // width laid across the flow.
+                    var side = simd_cross(tangent, SIMD3<Double>(0, 0, 1))
+                    let sideLength = simd_length(side)
+                    side = sideLength > 1e-6 ? side / sideLength : SIMD3(0, 1, 0)
+                    let half = side * Self.ribbonHalfWidth
+
+                    let base = UInt32(positions.count)
+                    positions.append(SIMD3<Float>(p - half))
+                    positions.append(SIMD3<Float>(p + half))
+                    normals.append([0, 0, 1]); normals.append([0, 0, 1])
+                    let u = Float(min(max(speed / reference - 0.35, 0), 1))
+                    uvs.append([u, 0.5]); uvs.append([u, 0.5])
+                    if let previous = previousBase {
+                        indices += [previous, previous + 1, base + 1,
+                                    previous, base + 1, base]
+                    }
+                    previousBase = base
+
+                    // RK2 midpoint at fixed arc length, so vertex spacing
+                    // stays even however fast the air is moving.
+                    let mid = p + tangent * (Self.ribbonStride * 0.5)
+                    let v2 = SIMD3<Double>(field.velocity(at: mid))
+                    let s2 = simd_length(v2)
+                    p += (s2 > 1e-6 ? v2 / s2 : tangent) * Self.ribbonStride
+                    if p.x > maxX || field.isSolid(at: p) { break }
+                }
+            }
+        }
+
+        guard indices.count > 2 else { ribbonEntity.model = nil; return }
+        var descriptor = MeshDescriptor(name: "streamlines")
+        descriptor.positions = MeshBuffer(positions)
+        descriptor.normals = MeshBuffer(normals)
+        descriptor.textureCoordinates = MeshBuffer(uvs)
+        descriptor.primitives = .triangles(indices)
+        if let mesh = try? MeshResource.generate(from: [descriptor]) {
+            ribbonEntity.model = ModelComponent(mesh: mesh, materials: [ribbonMaterial])
+        }
+    }
+
+    private static func makeRibbonMaterial() -> UnlitMaterial {
+        var material = UnlitMaterial(color: .white)
+        material.blending = .transparent(opacity: 0.8)
+        if let texture = rampTexture() {
+            material.color = .init(tint: .white, texture: .init(texture))
+        }
+        return material
+    }
+
+    /// The smoke palette baked into a 256x1 ramp: warm where the air
+    /// piles up and slows, near-white in the free stream, cool where it
+    /// accelerates around a shoulder.
+    private static func rampTexture() -> TextureResource? {
+        let width = 256
+        var bytes = [UInt8](repeating: 0, count: width * 4)
+        for x in 0..<width {
+            let t = Float(x) / Float(width - 1) * Float(streamlineColors.count - 1)
+            let i = min(Int(t), streamlineColors.count - 2)
+            let f = CGFloat(t - Float(i))
+            var r0: CGFloat = 0, g0: CGFloat = 0, b0: CGFloat = 0, a0: CGFloat = 0
+            var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+            streamlineColors[i].getRed(&r0, green: &g0, blue: &b0, alpha: &a0)
+            streamlineColors[i + 1].getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+            bytes[x * 4 + 0] = UInt8(max(0, min(255, (r0 + (r1 - r0) * f) * 255)))
+            bytes[x * 4 + 1] = UInt8(max(0, min(255, (g0 + (g1 - g0) * f) * 255)))
+            bytes[x * 4 + 2] = UInt8(max(0, min(255, (b0 + (b1 - b0) * f) * 255)))
+            bytes[x * 4 + 3] = 255
+        }
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData),
+              let image = CGImage(
+                width: width, height: 1, bitsPerComponent: 8, bitsPerPixel: 32,
+                bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: true,
+                intent: .defaultIntent) else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
 }

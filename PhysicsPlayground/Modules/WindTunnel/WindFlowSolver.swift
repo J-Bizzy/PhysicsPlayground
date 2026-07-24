@@ -39,9 +39,6 @@ actor WindFlowSolver {
     /// the smoke positions. Nothing here needs the main thread to do more
     /// than upload it.
     struct Snapshot: Sendable {
-        /// One tube buffer per speed-colour bucket (slow → fast). Empty
-        /// when this pass did not re-trace them.
-        var ribbonBuffers: [TubeBuffers]?
         /// The solved field, for the renderer to advect smoke through
         /// every frame.
         var field: FlowField
@@ -74,17 +71,6 @@ actor WindFlowSolver {
 
     private var grid: FluidGrid
     private var isPrimed = false
-
-    // MARK: Streamline rake
-
-    /// Ribbons are seeded on a rake just inside the inlet, concentrated
-    /// on the body rather than spread across the whole tunnel — like a
-    /// real smoke rake, every filament is aimed at the shape so every one
-    /// of them visibly has to get around it.
-    private static let ribbonHeights: [Double] = [-0.13, -0.05, 0.03, 0.11, 0.20]
-    private static let ribbonLaterals: [Double] = [-0.21, -0.14, -0.07, 0, 0.07, 0.14, 0.21]
-    private static let ribbonSteps = 150
-    private static let ribbonStride = 0.022
 
     init() {
         grid = FluidGrid(
@@ -136,102 +122,9 @@ actor WindFlowSolver {
     /// is NOT advected here — the renderer rides this field every frame,
     /// which is what keeps the motion continuous even though the solve
     /// itself only refreshes a dozen or so times a second.
-    func advance(dt: Double, traceRibbons wantRibbons: Bool) -> Snapshot {
+    func advance(dt: Double) -> Snapshot {
         grid.step(dt: min(max(dt, 1.0 / 120.0), 1.0 / 20.0))
-        return Snapshot(
-            ribbonBuffers: wantRibbons ? buildRibbonBuffers() : nil,
-            field: grid.exportField(),
-            referenceSpeed: Float(grid.inflowSpeed))
+        return Snapshot(field: grid.exportField(),
+                        referenceSpeed: Float(grid.inflowSpeed))
     }
-
-    private static func movingAverage(_ values: [Float], window: Int) -> [Float] {
-        guard values.count > window, window > 1 else { return values }
-        let half = window / 2
-        var result = [Float](repeating: 0, count: values.count)
-        for index in values.indices {
-            let lo = max(0, index - half), hi = min(values.count - 1, index + half)
-            var sum: Float = 0
-            for k in lo...hi { sum += values[k] }
-            result[index] = sum / Float(hi - lo + 1)
-        }
-        return result
-    }
-
-    // MARK: Streamlines
-
-    private struct Ribbon {
-        var points: [SIMD3<Float>] = []
-        var speeds: [Float] = []
-    }
-
-    /// Integrates streamlines through the solved field (RK2). A streamline
-    /// is everywhere tangent to the velocity, so these ARE the paths the
-    /// air takes — they wrap the body because the field does.
-    private func traceRibbons() -> [Ribbon] {
-        var result: [Ribbon] = []
-        result.reserveCapacity(Self.ribbonHeights.count * Self.ribbonLaterals.count)
-        let xStart = Self.origin.x + Self.h * 0.6
-        let maxX = Self.origin.x + Double(Self.nx) * Self.h - Self.h
-
-        for height in Self.ribbonHeights {
-            for lateral in Self.ribbonLaterals {
-                var ribbon = Ribbon()
-                ribbon.points.reserveCapacity(Self.ribbonSteps)
-                var p = SIMD3(xStart, height, lateral)
-                for _ in 0..<Self.ribbonSteps {
-                    let v1 = grid.velocity(at: p)
-                    let speed = simd_length(v1)
-                    ribbon.points.append(SIMD3<Float>(p))
-                    ribbon.speeds.append(Float(speed))
-                    guard speed > 1e-5 else { break }
-                    // RK2 midpoint, marching a fixed arc length so the
-                    // vertex spacing stays even however fast the air moves.
-                    let half = p + (v1 / speed) * (Self.ribbonStride * 0.5)
-                    let v2 = grid.velocity(at: half)
-                    let s2 = simd_length(v2)
-                    let direction = s2 > 1e-6 ? v2 / s2 : v1 / speed
-                    p += direction * Self.ribbonStride
-                    if p.x > maxX { break }
-                    if grid.isSolid(atWorld: p) { break }
-                }
-                if ribbon.points.count > 3 { result.append(ribbon) }
-            }
-        }
-        return result
-    }
-
-    /// Traces the rake and turns it straight into tube geometry, split by
-    /// speed colour — all of it here on the solver, so the main thread
-    /// only ever uploads a finished mesh.
-    private func buildRibbonBuffers() -> [TubeBuffers] {
-        let reference = max(grid.inflowSpeed, 1e-9)
-        var bucketLines: [[[SIMD3<Float>]]] =
-            Array(repeating: [], count: Self.bucketCount)
-
-        for ribbon in traceRibbons() {
-            // Smooth the speed along the filament before choosing colours.
-            // Raw per-vertex speeds cross a bucket edge back and forth in
-            // the turbulent wake, which chops the tube into dashes.
-            let smoothed = Self.movingAverage(ribbon.speeds, window: 7)
-            var run: [SIMD3<Float>] = []
-            var runBucket = -1
-            for (index, point) in ribbon.points.enumerated() {
-                let bucket = Self.speedBucket(Double(smoothed[index]) / reference)
-                if runBucket == -1 { runBucket = bucket }
-                run.append(point)
-                if bucket != runBucket {
-                    if run.count > 1 { bucketLines[runBucket].append(run) }
-                    run = [point]
-                    runBucket = bucket
-                }
-            }
-            if run.count > 1, runBucket >= 0 { bucketLines[runBucket].append(run) }
-        }
-        return bucketLines.map {
-            TubeMesh.buffers(lines: $0, radius: Self.ribbonRadius, sides: 4)
-        }
-    }
-
-    /// Fat enough to read as a sheet of smoke rather than a wire.
-    private static let ribbonRadius: Float = 0.0055
 }
