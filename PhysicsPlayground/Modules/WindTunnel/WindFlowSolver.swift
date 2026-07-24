@@ -63,10 +63,11 @@ actor WindFlowSolver {
     // MARK: Grid geometry (section-local)
 
     /// Cell size. Small enough to resolve a car's shoulder, large enough
-    /// that the pressure solve finishes inside a frame.
-    private static let h = 0.05
-    private static let origin = SIMD3<Double>(-1.05, -0.42, -0.625)
-    private static let nx = 42, ny = 18, nz = 25
+    /// that the pressure solve finishes well inside a frame — measured at
+    /// ~10 ms a step for this grid, on a background actor.
+    private static let h = 0.042
+    private static let origin = SIMD3<Double>(-1.05, -0.44, -0.63)
+    private static let nx = 50, ny = 21, nz = 30
 
     private var grid: FluidGrid
     private var isPrimed = false
@@ -93,17 +94,19 @@ actor WindFlowSolver {
         grid = FluidGrid(
             nx: Self.nx, ny: Self.ny, nz: Self.nz, h: Self.h,
             origin: Self.origin, inflowSpeed: 1.0,
-            vorticityConfinement: 8.0,
-            pressureIterations: 20)
+            vorticityConfinement: 9.0,
+            pressureIterations: 24)
         smoke = (0..<Self.smokeCount).map { _ in Self.randomInletPoint() }
         smokeAge = (0..<Self.smokeCount).map { _ in Double.random(in: 0..<Self.smokeLife) }
     }
 
+    /// Motes enter in the same band the ribbon rake covers, so the smoke
+    /// is dense where the body is instead of thinly filling the tunnel.
     private static func randomInletPoint() -> SIMD3<Double> {
         SIMD3(
-            Double.random(in: -1.02 ... -0.92),
-            Double.random(in: -0.34 ... 0.36),
-            Double.random(in: -0.55 ... 0.55)
+            Double.random(in: -1.02 ... -0.90),
+            Double.random(in: -0.20 ... 0.28),
+            Double.random(in: -0.30 ... 0.30)
         )
     }
 
@@ -137,7 +140,10 @@ actor WindFlowSolver {
     func primeIfNeeded() {
         guard !isPrimed else { return }
         isPrimed = true
-        grid.prime(steps: 60, dt: 1.0 / 60.0)
+        // Enough to establish the flow around the body without holding
+        // the first frame — the rest develops live, which reads as the
+        // tunnel spinning up rather than as a stall.
+        grid.prime(steps: 25, dt: 1.0 / 60.0)
     }
 
     // MARK: Per-frame
@@ -248,18 +254,23 @@ actor WindFlowSolver {
     // MARK: Smoke
 
     private func advectSmoke(dt: Double) {
-        let maxX = Self.origin.x + Double(Self.nx) * Self.h - Self.h
+        // Confine the smoke to the volume that is actually solved. Beyond
+        // the grid the sampler only clamps, so a mote that escapes drifts
+        // on stale velocity and ends up scattered around the room instead
+        // of in the tunnel.
+        let (lo, hi) = grid.bounds
+        let margin = Self.h
         for index in smoke.indices {
             var p = smoke[index]
-            let velocity = grid.velocity(at: p)
-            p += velocity * dt
+            p += grid.velocity(at: p) * dt
             smokeAge[index] += dt
 
-            // Recycle at the inlet once a particle leaves, ages out, or
-            // wanders into a solid (a hand closing over it).
-            if p.x > maxX || smokeAge[index] > Self.smokeLife
+            // Recycle at the inlet once a mote leaves the tunnel, ages
+            // out, or is overtaken by a solid (a hand closing over it).
+            if p.x > hi.x - margin || smokeAge[index] > Self.smokeLife
                 || grid.isSolid(atWorld: p)
-                || abs(p.y) > 0.6 || abs(p.z) > 0.7 {
+                || p.y < lo.y + margin || p.y > hi.y - margin
+                || p.z < lo.z + margin || p.z > hi.z - margin {
                 p = Self.randomInletPoint()
                 smokeAge[index] = 0
             }
