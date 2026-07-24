@@ -549,6 +549,13 @@ public struct FlowField: Sendable {
     public let cells: [SIMD3<Float>]
     public let solid: [Bool]
 
+    public init(nx: Int, ny: Int, nz: Int, h: Double, origin: SIMD3<Double>,
+                cells: [SIMD3<Float>], solid: [Bool]) {
+        self.nx = nx; self.ny = ny; self.nz = nz
+        self.h = h; self.origin = origin
+        self.cells = cells; self.solid = solid
+    }
+
     public var bounds: (min: SIMD3<Double>, max: SIMD3<Double>) {
         (origin, origin + SIMD3(Double(nx), Double(ny), Double(nz)) * h)
     }

@@ -92,6 +92,18 @@ final class WindTunnelRenderer {
     private var fieldBlend: Float = 1
     private var fieldElapsed = 0.0
     private var fieldInterval = 1.0 / 12.0
+    /// The blend, materialised ONCE per frame so every sample afterwards
+    /// reads a single field instead of lerping two — half the sampling
+    /// cost across smoke and ribbons. Ping-pong buffers so the previous
+    /// frame's field (still referenced by an in-flight ribbon job) never
+    /// forces a copy-on-write.
+    private var blendedField: FlowField?
+    private var blendScratchA: [SIMD3<Float>] = []
+    private var blendScratchB: [SIMD3<Float>] = []
+    private var blendUseA = true
+    private var fieldVersion = 0
+    private var lastRibbonBlend: Float = -1
+    private var lastRibbonVersion = -1
 
     /// Fixed-capacity GPU meshes, rewritten in place each frame — the
     /// frame loop never calls MeshResource.generate.
@@ -111,20 +123,24 @@ final class WindTunnelRenderer {
     /// meshes, and with no bucket seams to chop them into dashes.
     private let ribbonEntity = ModelEntity()
     private lazy var ribbonMaterial: UnlitMaterial = Self.makeRibbonMaterial()
-    private static let ribbonHeights: [Double] = [-0.13, -0.05, 0.03, 0.11, 0.20]
-    private static let ribbonLaterals: [Double] = [-0.21, -0.14, -0.07, 0, 0.07, 0.14, 0.21]
-    private static let ribbonSteps = 130
+    // Counts sized for the Vision Pro's fill-rate budget: two eyes at 4K
+    // make stacked translucency the scarcest resource in the app, so the
+    // rake and the cloud are as small as they can be while still reading
+    // as smoke.
+    private static let ribbonHeights: [Double] = [-0.12, -0.04, 0.04, 0.14]
+    private static let ribbonLaterals: [Double] = [-0.20, -0.12, -0.04, 0.04, 0.12, 0.20]
+    private static let ribbonSteps = 96
     private static let ribbonStride = 0.024
-    private static let ribbonHalfWidth = 0.006
+    private static let ribbonHalfWidth = 0.005
     private var smoke: [SIMD3<Double>] = []
     private var smokeAge: [Double] = []
-    private static let smokeCount = 950
+    private static let smokeCount = 520
     /// A mote crosses the 2.1 m section in about two seconds at 1 m/s.
     /// Much more life than that and the ones caught in the slow
     /// recirculation behind a body pile into a wall of smoke.
     private static let smokeLife = 4.0
-    private static let smokeSizeNear: Float = 0.009
-    private static let smokeSizeFar: Float = 0.020
+    private static let smokeSizeNear: Float = 0.008
+    private static let smokeSizeFar: Float = 0.017
 
     /// Motes enter in the band the ribbon rake covers, so the smoke is
     /// dense where the body is instead of thinly filling the tunnel.
@@ -156,7 +172,7 @@ final class WindTunnelRenderer {
         // still reads against a brightly-lit passthrough wall, which is
         // the hard case — over a dark surface it is comfortably visible.
         material.blending = .transparent(
-            opacity: .init(scale: 0.20, texture: .init(texture)))
+            opacity: .init(scale: 0.30, texture: .init(texture)))
         return material
     }
 
@@ -379,30 +395,60 @@ final class WindTunnelRenderer {
         }
 
         driveSolver(dt: scaledDt, model: model)
-        // Independent of the solve: the smoke rides the latest field on
-        // EVERY frame, which is what makes the air look continuous.
+        // Independent of the solve: the blend clock advances every frame,
+        // the two newest fields are materialised into ONE blended field,
+        // and the visuals are rebuilt from it at display rate — smoke on
+        // the main thread (cheap), ribbons on a worker.
+        fieldElapsed += scaledDt
+        fieldBlend = Float(min(fieldElapsed / fieldInterval, 1))
+        rebuildBlendedField()
         advanceSmoke(dt: scaledDt, model: model)
-        rebuildRibbons(model: model)
+        submitRibbons(model: model)
     }
 
     // MARK: Smoke — advected per frame on the blended field
 
-    /// The blended flow velocity: previous field → current field as the
-    /// blend runs 0→1. This is what every visual samples.
+    /// Materialises previous→current at today's blend into one field.
+    /// 33k SIMD lerps is a fraction of a millisecond; doing it once here
+    /// means every subsequent sample touches a single field.
+    private func rebuildBlendedField() {
+        guard let current = currentField else { blendedField = nil; return }
+        guard fieldBlend < 1, let previous = previousField,
+              previous.cells.count == current.cells.count else {
+            blendedField = current
+            return
+        }
+        let count = current.cells.count
+        var scratch = blendUseA ? blendScratchA : blendScratchB
+        if scratch.count != count {
+            scratch = [SIMD3<Float>](repeating: .zero, count: count)
+        }
+        let t = fieldBlend
+        previous.cells.withUnsafeBufferPointer { old in
+            current.cells.withUnsafeBufferPointer { new in
+                scratch.withUnsafeMutableBufferPointer { out in
+                    for index in 0..<count {
+                        out[index] = old[index] + (new[index] - old[index]) * t
+                    }
+                }
+            }
+        }
+        if blendUseA { blendScratchA = scratch } else { blendScratchB = scratch }
+        blendUseA.toggle()
+        blendedField = FlowField(nx: current.nx, ny: current.ny, nz: current.nz,
+                                 h: current.h, origin: current.origin,
+                                 cells: scratch, solid: current.solid)
+    }
+
     @inline(__always)
     private func flowVelocity(at point: SIMD3<Double>) -> SIMD3<Double> {
-        guard let current = currentField else { return .zero }
-        let vNew = current.velocity(at: point)
-        guard fieldBlend < 1, let previous = previousField else {
-            return SIMD3<Double>(vNew)
-        }
-        let vOld = previous.velocity(at: point)
-        return SIMD3<Double>(vOld + (vNew - vOld) * fieldBlend)
+        guard let field = blendedField else { return .zero }
+        return SIMD3<Double>(field.velocity(at: point))
     }
 
     private func advanceSmoke(dt: Double, model: WindTunnelModel) {
         guard let mesh = smokeMesh else { return }
-        guard model.showParticles, let field = currentField else {
+        guard model.showParticles, let field = blendedField else {
             mesh.clear()
             return
         }
@@ -515,6 +561,7 @@ final class WindTunnelRenderer {
         fieldInterval = min(max(fieldElapsed, 1.0 / 30.0), 0.3)
         fieldElapsed = 0
         fieldBlend = 0
+        fieldVersion &+= 1
     }
 
 
@@ -650,60 +697,94 @@ final class WindTunnelRenderer {
         }
     }
 
-    // MARK: Streamlines — re-traced per frame on the blended field
+    // MARK: Streamlines — traced on a worker, uploaded on main
 
-    private func rebuildRibbons(model: WindTunnelModel) {
+    private nonisolated struct RibbonJob: Sendable {
+        var field: FlowField
+        var reference: Double
+    }
+    private nonisolated struct RibbonOutput: Sendable {
+        var vertexFloats: [Float]
+        var indices: [UInt32]
+    }
+    private var ribbonPipeline: GeometryPipeline<RibbonJob, RibbonOutput>?
+
+    /// Hands this frame's blended field to the worker. Newest-wins
+    /// coalescing means a busy worker just skips to the latest field —
+    /// the ribbons can lag the smoke by a frame, which is invisible;
+    /// what matters is that the main thread only ever memcpys.
+    private func submitRibbons(model: WindTunnelModel) {
         guard let mesh = ribbonMesh else { return }
-        guard model.showStreamlines, let field = currentField else {
+        guard model.showStreamlines, let field = blendedField else {
             mesh.clear()
+            lastRibbonBlend = -1
             return
         }
-        let reference = max(model.windSpeed, 1e-6)
+        // Nothing changed since the last trace (steady state between
+        // solves at blend 1): keep the mesh as it is, trace nothing.
+        if fieldBlend == lastRibbonBlend, fieldVersion == lastRibbonVersion { return }
+        lastRibbonBlend = fieldBlend
+        lastRibbonVersion = fieldVersion
+
+        if ribbonPipeline == nil {
+            ribbonPipeline = GeometryPipeline(
+                compute: { Self.traceRibbons($0) },
+                apply: { [weak self] output in
+                    self?.ribbonMesh?.update(vertexFloats: output.vertexFloats,
+                                             indices: output.indices)
+                })
+        }
+        ribbonPipeline?.submit(RibbonJob(field: field,
+                                         reference: max(model.windSpeed, 1e-6)))
+    }
+
+    private nonisolated static func traceRibbons(_ job: RibbonJob) -> RibbonOutput {
+        let field = job.field
         let (lo, hi) = field.bounds
         let xStart = lo.x + field.h * 0.6
         let maxX = hi.x - field.h
 
-        ribbonScratch.removeAll(keepingCapacity: true)
-        ribbonIndexScratch.removeAll(keepingCapacity: true)
+        var vertexFloats = [Float]()
+        vertexFloats.reserveCapacity(ribbonVertexCapacity * 5)
+        var indices = [UInt32]()
+        indices.reserveCapacity(ribbonIndexCapacity)
         var vertexCount: UInt32 = 0
 
-        for height in Self.ribbonHeights {
-            for lateral in Self.ribbonLaterals {
+        for height in ribbonHeights {
+            for lateral in ribbonLaterals {
                 var p = SIMD3(xStart, height, lateral)
                 var previousBase: UInt32?
-                for _ in 0..<Self.ribbonSteps {
-                    let v = flowVelocity(at: p)
+                for _ in 0..<ribbonSteps {
+                    let v = SIMD3<Double>(field.velocity(at: p))
                     let speed = simd_length(v)
                     guard speed > 1e-5 else { break }
                     let tangent = v / speed
-                    // A flat ribbon facing the viewer, width across the flow.
                     var side = simd_cross(tangent, SIMD3<Double>(0, 0, 1))
                     let sideLength = simd_length(side)
                     side = sideLength > 1e-6 ? side / sideLength : SIMD3(0, 1, 0)
-                    let half = side * Self.ribbonHalfWidth
+                    let half = side * ribbonHalfWidth
 
-                    let u = Float(min(max(speed / reference - 0.35, 0), 1))
+                    let u = Float(min(max(speed / job.reference - 0.35, 0), 1))
                     let a = p - half, b = p + half
-                    ribbonScratch += [Float(a.x), Float(a.y), Float(a.z), u, 0.5,
-                                      Float(b.x), Float(b.y), Float(b.z), u, 0.5]
+                    vertexFloats += [Float(a.x), Float(a.y), Float(a.z), u, 0.5,
+                                     Float(b.x), Float(b.y), Float(b.z), u, 0.5]
                     let base = vertexCount
                     vertexCount += 2
                     if let previous = previousBase {
-                        ribbonIndexScratch += [previous, previous + 1, base + 1,
-                                               previous, base + 1, base]
+                        indices += [previous, previous + 1, base + 1,
+                                    previous, base + 1, base]
                     }
                     previousBase = base
 
-                    // RK2 midpoint at fixed arc length.
-                    let mid = p + tangent * (Self.ribbonStride * 0.5)
-                    let v2 = flowVelocity(at: mid)
+                    let mid = p + tangent * (ribbonStride * 0.5)
+                    let v2 = SIMD3<Double>(field.velocity(at: mid))
                     let s2 = simd_length(v2)
-                    p += (s2 > 1e-6 ? v2 / s2 : tangent) * Self.ribbonStride
+                    p += (s2 > 1e-6 ? v2 / s2 : tangent) * ribbonStride
                     if p.x > maxX || field.isSolid(at: p) { break }
                 }
             }
         }
-        mesh.update(vertexFloats: ribbonScratch, indices: ribbonIndexScratch)
+        return RibbonOutput(vertexFloats: vertexFloats, indices: indices)
     }
 
     private static func makeRibbonMaterial() -> UnlitMaterial {
