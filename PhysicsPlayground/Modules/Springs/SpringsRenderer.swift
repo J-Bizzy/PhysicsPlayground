@@ -37,6 +37,10 @@ final class SpringsRenderer {
     private let springMaterial = SimpleMaterial(
         color: UIColor(red: 0.75, green: 0.76, blue: 0.8, alpha: 1),
         roughness: 0.25, isMetallic: true)
+    /// The block: polished machined metal — clear-coat gloss over metal,
+    /// no glow (a mass, not a source).
+    private static let blockMaterial = Materials.energized(
+        UIColor(white: 0.82, alpha: 1), roughness: 0.12, metallic: 1.0, glow: 0.0)
 
     private var blocks: [ModelEntity] = []
     private var springs: [ModelEntity] = []
@@ -117,7 +121,7 @@ final class SpringsRenderer {
         // Blocks (up to 2) and springs (up to 3), enabled per mode.
         let blockMesh = MeshResource.generateBox(size: [0.09, 0.08, 0.08], cornerRadius: 0.012)
         for index in 0..<2 {
-            let block = ModelEntity(mesh: blockMesh, materials: [steelMaterial])
+            let block = ModelEntity(mesh: blockMesh, materials: [Self.blockMaterial])
             block.name = "s-block-\(index)"
             Grabbable.configureTouchTarget(block, collisionRadius: 0.1)
             var accessibility = AccessibilityComponent()

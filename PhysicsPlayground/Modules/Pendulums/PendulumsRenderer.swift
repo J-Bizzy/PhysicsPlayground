@@ -141,6 +141,10 @@ final class PendulumsRenderer {
 
     private let steelMaterial = SimpleMaterial(
         color: UIColor(white: 0.85, alpha: 1), roughness: 0.15, isMetallic: true)
+    /// The bob: mirror-polished chrome — clear-coat gloss over metal, no
+    /// glow (it's a mass, not a source).
+    private static let bobMaterial = Materials.energized(
+        UIColor(white: 0.9, alpha: 1), roughness: 0.1, metallic: 1.0, glow: 0.0)
     private let aluminumMaterial = SimpleMaterial(
         color: UIColor(white: 0.7, alpha: 1), roughness: 0.35, isMetallic: true)
     private let cableMaterial = SimpleMaterial(
@@ -305,7 +309,7 @@ final class PendulumsRenderer {
 
         let bob = ModelEntity(
             mesh: .generateSphere(radius: 0.035),
-            materials: [steelMaterial])
+            materials: [Self.bobMaterial])
         bob.name = pendulum.id.uuidString
         Grabbable.configureTouchTarget(bob, collisionRadius: 0.075)
         var accessibility = AccessibilityComponent()

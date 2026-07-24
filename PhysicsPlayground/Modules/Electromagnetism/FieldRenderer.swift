@@ -530,22 +530,7 @@ final class FieldRenderer {
     }
 
     private static func chargeMaterial(isPositive: Bool) -> PhysicallyBasedMaterial {
-        energizedMaterial(isPositive ? positiveColor : negativeColor)
-    }
-
-    /// A charge reads as energy, not a matte ball: a glossy clear-coat
-    /// highlight rides over the colour, and a soft self-lit glow makes it
-    /// look lit from within rather than painted.
-    static func energizedMaterial(_ color: UIColor) -> PhysicallyBasedMaterial {
-        var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: color)
-        material.roughness = 0.18
-        material.metallic = 0.0
-        material.clearcoat = .init(floatLiteral: 0.8)
-        material.clearcoatRoughness = .init(floatLiteral: 0.15)
-        material.emissiveColor = .init(color: color)
-        material.emissiveIntensity = 0.4
-        return material
+        Materials.energized(isPositive ? positiveColor : negativeColor)
     }
 
     private func setAccessibilityLabel(on entity: ModelEntity, for charge: PointCharge) {
@@ -577,7 +562,7 @@ final class FieldRenderer {
         }
         let entity = probeEntity ?? makeProbeEntity()
         if appliedProbePolarity != isPositive {
-            entity.model?.materials = [Self.energizedMaterial(
+            entity.model?.materials = [Materials.energized(
                 isPositive ? Self.probePositiveColor : Self.probeNegativeColor)]
             appliedProbePolarity = isPositive
             probeSignVertical?.isEnabled = isPositive
@@ -598,7 +583,7 @@ final class FieldRenderer {
     private func makeProbeEntity() -> ModelEntity {
         let sphere = ModelEntity(
             mesh: .generateSphere(radius: Self.probeRadius),
-            materials: [Self.energizedMaterial(Self.probePositiveColor)]
+            materials: [Materials.energized(Self.probePositiveColor)]
         )
         sphere.name = Self.probeEntityName
         Grabbable.configureTouchTarget(sphere, collisionRadius: max(Self.probeRadius * 2.4, 0.06))
