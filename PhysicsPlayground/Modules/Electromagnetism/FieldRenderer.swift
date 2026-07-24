@@ -529,12 +529,23 @@ final class FieldRenderer {
         return sphere
     }
 
-    private static func chargeMaterial(isPositive: Bool) -> SimpleMaterial {
-        SimpleMaterial(
-            color: isPositive ? positiveColor : negativeColor,
-            roughness: 0.35,
-            isMetallic: false
-        )
+    private static func chargeMaterial(isPositive: Bool) -> PhysicallyBasedMaterial {
+        energizedMaterial(isPositive ? positiveColor : negativeColor)
+    }
+
+    /// A charge reads as energy, not a matte ball: a glossy clear-coat
+    /// highlight rides over the colour, and a soft self-lit glow makes it
+    /// look lit from within rather than painted.
+    static func energizedMaterial(_ color: UIColor) -> PhysicallyBasedMaterial {
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: color)
+        material.roughness = 0.18
+        material.metallic = 0.0
+        material.clearcoat = .init(floatLiteral: 0.8)
+        material.clearcoatRoughness = .init(floatLiteral: 0.15)
+        material.emissiveColor = .init(color: color)
+        material.emissiveIntensity = 0.4
+        return material
     }
 
     private func setAccessibilityLabel(on entity: ModelEntity, for charge: PointCharge) {
@@ -566,11 +577,8 @@ final class FieldRenderer {
         }
         let entity = probeEntity ?? makeProbeEntity()
         if appliedProbePolarity != isPositive {
-            entity.model?.materials = [SimpleMaterial(
-                color: isPositive ? Self.probePositiveColor : Self.probeNegativeColor,
-                roughness: 0.3,
-                isMetallic: false
-            )]
+            entity.model?.materials = [Self.energizedMaterial(
+                isPositive ? Self.probePositiveColor : Self.probeNegativeColor)]
             appliedProbePolarity = isPositive
             probeSignVertical?.isEnabled = isPositive
 
@@ -590,7 +598,7 @@ final class FieldRenderer {
     private func makeProbeEntity() -> ModelEntity {
         let sphere = ModelEntity(
             mesh: .generateSphere(radius: Self.probeRadius),
-            materials: [SimpleMaterial(color: Self.probePositiveColor, roughness: 0.3, isMetallic: false)]
+            materials: [Self.energizedMaterial(Self.probePositiveColor)]
         )
         sphere.name = Self.probeEntityName
         Grabbable.configureTouchTarget(sphere, collisionRadius: max(Self.probeRadius * 2.4, 0.06))
