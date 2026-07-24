@@ -62,8 +62,10 @@ struct ControlPod<Content: View>: View {
         }
         .padding(16)
         .frame(width: width)
-        // House buttons in this pod fill/stroke in the pod's accent.
+        // The whole pod speaks in its accent: house buttons via podAccent,
+        // and sliders / toggles / segmented pickers via the SwiftUI tint.
         .environment(\.podAccent, tint)
+        .tint(tint)
         .glassBackgroundEffect(
             in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cornerRadius, style: .continuous)
         )

@@ -48,8 +48,10 @@ struct ModuleHostView: View {
                 }
             }
             .padding(DesignTokens.Panel.outerPadding)
-            // House buttons in the window fill/stroke in the module accent.
+            // The window's controls speak in the module accent: house
+            // buttons via podAccent, sliders / toggles / pickers via tint.
             .environment(\.podAccent, module.accent)
+            .tint(module.accent)
         }
         .navigationTitle(module.title)
         .toolbar {
