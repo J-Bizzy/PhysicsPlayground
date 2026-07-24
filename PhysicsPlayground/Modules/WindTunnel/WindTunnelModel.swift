@@ -72,39 +72,16 @@ final class WindTunnelModel {
     }
 
     /// Live obstacles from ARKit on device — tracked hands/forearms and
-    /// coarse room-mesh voxels — that the air visibly bends around.
-    /// Always empty in the simulator. The deflection is
-    /// visualization-grade (disclosed in the legend), the drag numbers
-    /// above are the real measured physics.
+    /// coarse room-mesh voxels. These are voxelised straight into the
+    /// flow solver's solid mask, so the air goes around them for the same
+    /// reason it goes around the test body: it cannot pass through.
+    /// Always empty in the simulator.
     var obstacles = ObstacleField()
 
-    /// 0 (teardrop) … 1 (flat disc): how bluntly the body meets the wind.
-    var bluntness: Double {
-        min(testBody.dragCoefficient / DragBody.flatDisc.dragCoefficient, 1)
-    }
-
-    /// The deflection field the streamlines and particles ride. For the
-    /// cylinder it IS the exact solution; for the drag bodies it's the
-    /// same ideal deflection with an effective radius scaled by
-    /// bluntness — a streamlined body parts the air gently (small
-    /// stagnant zone), a blunt one shoulders it aside (big red zone).
-    /// Visualization-grade for non-cylinders, disclosed in the legend.
-    var visualFlow: CylinderFlow {
-        if testBody == .cylinder { return flow }
-        // Non-cylinder bodies deflect the flow through their sphere
-        // silhouettes (bodyObstacles) instead of a stand-in cylinder,
-        // so the base flow here is effectively uniform.
-        return CylinderFlow(
-            freeStreamSpeed: windSpeed,
-            center: cylinderCenter,
-            radius: 0.001,
-            circulation: 0
-        )
-    }
-
     /// The current body's sphere silhouette in section coordinates
-    /// (origin on the beam axis) — what streamlines and particles
-    /// actually wrap around. Empty for the cylinder (exact solution).
+    /// (origin on the beam axis) — what gets stamped into the solver's
+    /// solid mask. Empty for the cylinder, which the renderer voxelises
+    /// as a full-span column instead.
     var bodyObstacles: ObstacleField {
         guard testBody != .cylinder else { return ObstacleField() }
         return ObstacleField(spheres: testBody.obstacleSpheres(

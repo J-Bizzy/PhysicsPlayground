@@ -16,10 +16,10 @@ enum WindTunnelModule {
         ModuleDescriptor(
             id: id,
             title: "Wind Tunnel",
-            blurb: "An air-resistance lab: race a teardrop against a flat disc, spin the exact-flow cylinder for lift — and on device the wind bends around your own hands.",
+            blurb: "A real wind tunnel: a live incompressible flow solve routes the air around whatever you put in the stream, wraps it over the shoulders, and sheds a wake behind — and on device it does the same around your own hands and the furniture in your room.",
             icon: "wind",
             accent: DesignTokens.Palette.windAccent,
-            firstRunHint: "Pick a test body — the teardrop slips through the wind while the flat disc fights it 30 times harder at the same size. The cylinder keeps the exact ideal-flow exhibit: drag it, spin it, watch the lift arrow. On device, the air also bends around your hands and real objects in the room.",
+            firstRunHint: "Watch the smoke: it splits at the nose, races over the shoulders, and tumbles into a wake behind. Swap bodies to see shape decide everything — a box truck shoves the whole tunnel aside, an airliner barely creases it. On device, reach into the stream and the air breaks around your hand too.",
             legend: legend,
             realWorld: WindTunnelRealWorld.story,
             isPaused: { appModel.windTunnelModel.isPaused },
@@ -48,12 +48,12 @@ enum WindTunnelModule {
             text: "Cylinder — grab and drag it; it visibly spins at the rate its circulation implies"
         ),
         LegendItem(
-            swatch: .line(Color(uiColor: DesignTokens.Palette.streamlineUI)),
-            text: "Streamlines — the paths the air actually follows (exact solution, not simulated)"
+            swatch: .line(.white),
+            text: "Smoke filaments — streamlines of a live incompressible flow solve, so they bend around any shape the way real air does. Warm where the air piles up and slows, cool where it accelerates past a shoulder"
         ),
         LegendItem(
             swatch: .fill(DesignTokens.Palette.predictedArc),
-            text: "Air particles riding the flow at true speed — watch them rush over the shoulders"
+            text: "Smoke motes carried by that same solved field — they churn in the wake behind a bluff body and stay smooth behind a streamlined one"
         ),
         LegendItem(
             swatch: .fill(DesignTokens.Palette.forceVector),

@@ -10,8 +10,11 @@
 //
 //  Both providers are device-only (unsupported in the simulator) and
 //  permission-gated; when unavailable the field simply stays empty.
-//  The deflection itself is visualization-grade and disclosed as such
-//  in the module legend — the drag readouts remain the real physics.
+//  What comes out of here is voxelised into the flow solver's SOLID
+//  MASK, so a raised hand or a chair blocks the air exactly the way the
+//  test body does — the pressure solve routes the flow around it and
+//  sheds a wake behind. The only approximation is resolution: anything
+//  smaller than a grid cell is rounded up to one.
 //
 
 import ARKit
