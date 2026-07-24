@@ -21,9 +21,15 @@ struct FirstRunHint: View {
     var body: some View {
         if !dismissed {
             HStack(alignment: .top, spacing: DesignTokens.Panel.rowSpacing) {
+                // The icon rides in a tinted chip — the same labelled-
+                // instrument language as the pod headers and the window's
+                // identity row.
                 Image(systemName: "hand.pinch")
-                    .font(.title2)
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.tint)
+                    .frame(width: 30, height: 30)
+                    .background(.tint.opacity(0.16),
+                                in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .accessibilityHidden(true)
                 Text(text)
                     .font(DesignTokens.TypeScale.label)

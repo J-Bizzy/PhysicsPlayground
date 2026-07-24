@@ -30,11 +30,12 @@ final class WaveMediumModel {
 
     /// Center of the sheet's rest plane. The sheet stands VERTICAL — its
     /// face in the room's x–y plane, displacement toward/away along z —
-    /// so you look straight at the pattern and its grab slab is well in
-    /// front (more negative z) of the orb controls below.
-    nonisolated static let center = SIMD3<Double>(0, 1.35, -1.2)
+    /// so you look straight at the pattern. It hangs back like a wall
+    /// exhibit: behind the main window's default spot (≈ −1.3 m) so the
+    /// controls never vanish behind it, and far from the nav orbs below.
+    nonisolated static let center = SIMD3<Double>(0, 1.5, -1.7)
     nonisolated static let gridCount = 24
-    nonisolated static let spacing = 0.036
+    nonisolated static let spacing = 0.044
     /// Half the sheet's side, for clamping and framing.
     nonisolated static var halfSide: Double { Double(gridCount - 1) * spacing / 2 }
 
@@ -54,11 +55,22 @@ final class WaveMediumModel {
     /// The center node the shaker pushes.
     nonisolated static var driveCoord: (i: Int, j: Int) { (gridCount / 2, gridCount / 2) }
 
-    /// The center-excitable resonances (both mode numbers odd, so the
-    /// mode has an antinode under the shaker), in rising frequency —
-    /// the ones you can actually ring and seek.
-    nonisolated static let drivableModes: [(m: Int, p: Int)] =
-        [(1, 1), (1, 3), (3, 3), (3, 5), (5, 5)]
+    /// A center-excitable resonance: both mode numbers odd, so the mode
+    /// has an antinode under the shaker and can actually be rung.
+    struct Mode: Identifiable, Hashable, Sendable {
+        let m: Int
+        let p: Int
+        /// Unique across the list — (1,3) and (3,3) share no id, which a
+        /// bare `m` key would collide on in a ForEach.
+        var id: Int { m * 100 + p }
+        var label: String { "\(m),\(p)" }
+    }
+
+    /// The drivable resonances, in rising frequency.
+    nonisolated static let drivableModes: [Mode] = [
+        Mode(m: 1, p: 1), Mode(m: 1, p: 3), Mode(m: 3, p: 3),
+        Mode(m: 3, p: 5), Mode(m: 5, p: 5),
+    ]
 
     private(set) var sheet: ElasticSheet
     var isPaused = false
@@ -66,7 +78,13 @@ final class WaveMediumModel {
     // MARK: Medium parameters (pods)
 
     var waveSpeed: Double {
-        didSet { sheet.waveSpeed = waveSpeed; if waveSpeed != oldValue { retuneInsight() } }
+        didSet {
+            sheet.waveSpeed = waveSpeed
+            if waveSpeed != oldValue {
+                rebuildModeCache()
+                retuneInsight()
+            }
+        }
     }
     var damping: Double {
         didSet { sheet.damping = damping }
@@ -92,10 +110,21 @@ final class WaveMediumModel {
         didSet { sheet.driveFrequency = driveFrequency }
     }
 
-    /// A smoothed measure of how hard the sheet is ringing (raw RMS m).
-    private(set) var responseRMS = 0.0
-    /// The same, normalized to 0…1 for meters, sound, and bloom.
-    var resonance: Double { min(responseRMS / (Self.amplitudeCeiling * 0.42), 1) }
+    /// The smoothed ring measure the RENDERER reads every frame (raw RMS
+    /// m). Observation-ignored so the 60 Hz smoothing never invalidates
+    /// SwiftUI — the pods watch the quantized `resonance` instead.
+    @ObservationIgnored private(set) var responseRMS = 0.0
+    /// How hard the sheet is ringing, 0…1, for the meter and readouts.
+    /// Published only in 1 % steps, so the Shaker pod re-renders when the
+    /// needle visibly moves — not sixty times a second.
+    private(set) var resonance = 0.0
+
+    /// The un-quantized ring measure for audio and bloom (no observation).
+    var resonanceLive: Double { min(responseRMS / (Self.amplitudeCeiling * 0.42), 1) }
+
+    /// The drivable modes' natural frequencies on the current medium,
+    /// cached so views never have to touch the per-frame-mutating sheet.
+    @ObservationIgnored private var cachedModeFrequencies: [(m: Int, p: Int, f: Double)] = []
 
     private(set) var insightText = ""
     /// The hand-held node, if any (grid indices), so the renderer can
@@ -130,6 +159,11 @@ final class WaveMediumModel {
         guard !isPaused else { return }
         sheet.step(dt: min(dt, 1.0 / 60.0))
         responseRMS += 0.12 * (sheet.rms - responseRMS)
+        // Publish to the pods only when the meter visibly moves (1 %).
+        let live = resonanceLive
+        if abs(live - resonance) >= 0.01 || (live == 0 && resonance != 0) {
+            resonance = live
+        }
     }
 
     // MARK: Local ⇄ world  (vertical plate: x,y span the face; z = height)
@@ -184,30 +218,39 @@ final class WaveMediumModel {
 
     // MARK: Resonance hunting
 
-    /// The center-excitable mode whose frequency is nearest the current
-    /// drive, and how far the drive is detuned from it (Hz).
-    func nearestResonance() -> (mode: (m: Int, p: Int), frequency: Double, detune: Double) {
-        var best = Self.drivableModes[0]
-        var bestFreq = sheet.modeFrequency(m: best.m, p: best.p)
-        var bestDetune = Double.infinity
-        for mode in Self.drivableModes {
-            let f = sheet.modeFrequency(m: mode.m, p: mode.p)
-            let d = abs(f - driveFrequency)
-            if d < bestDetune { bestDetune = d; best = mode; bestFreq = f }
+    /// Recomputes the drivable modes' natural frequencies. Called when
+    /// the medium retunes — views read the cache, never the live sheet
+    /// (which mutates every frame and would drag them into 60 Hz churn).
+    private func rebuildModeCache() {
+        cachedModeFrequencies = Self.drivableModes.map {
+            ($0.m, $0.p, sheet.modeFrequency(m: $0.m, p: $0.p))
         }
-        return (best, bestFreq, driveFrequency - bestFreq)
     }
 
-    /// The natural frequency of a mode on the current lattice.
-    func frequency(ofMode m: Int, _ p: Int) -> Double {
-        sheet.modeFrequency(m: m, p: p)
+    /// The center-excitable mode whose frequency is nearest the current
+    /// drive, and how far the drive is detuned from it (Hz).
+    func nearestResonance() -> (mode: Mode, frequency: Double, detune: Double) {
+        if cachedModeFrequencies.isEmpty { rebuildModeCache() }
+        var best = cachedModeFrequencies[0]
+        for entry in cachedModeFrequencies
+        where abs(entry.f - driveFrequency) < abs(best.f - driveFrequency) {
+            best = entry
+        }
+        return (Mode(m: best.m, p: best.p), best.f, driveFrequency - best.f)
+    }
+
+    /// The natural frequency of a drivable mode on the current medium.
+    func frequency(of mode: Mode) -> Double {
+        if cachedModeFrequencies.isEmpty { rebuildModeCache() }
+        return cachedModeFrequencies.first { $0.m == mode.m && $0.p == mode.p }?.f
+            ?? sheet.modeFrequency(m: mode.m, p: mode.p)
     }
 
     /// Snaps the drive exactly onto a mode's resonance.
-    func seekMode(m: Int, p: Int) {
+    func seekMode(_ mode: Mode) {
         driveOn = true
-        driveFrequency = sheet.modeFrequency(m: m, p: p)
-        insightText = "Driven right on the (\(m), \(p)) resonance. The mode blooms; grains settle onto its nodal lines, where the sheet barely moves."
+        driveFrequency = frequency(of: mode)
+        insightText = "Driven right on the (\(mode.m), \(mode.p)) resonance. The mode blooms; grains settle onto its nodal lines, where the sheet barely moves."
     }
 
     // MARK: Presets
@@ -215,6 +258,7 @@ final class WaveMediumModel {
     func flatten() {
         sheet.flatten()
         responseRMS = 0
+        resonance = 0
         insightText = "Silenced. Turn the shaker on and sweep for a resonance, or reach in and pull the sheet."
     }
 
@@ -244,6 +288,7 @@ final class WaveMediumModel {
         boundaryFixed = true
         heldNode = nil
         responseRMS = 0
+        resonance = 0
         isPaused = false
         driveOn = true
         driveFrequency = sheet.modeFrequency(m: 1, p: 1)

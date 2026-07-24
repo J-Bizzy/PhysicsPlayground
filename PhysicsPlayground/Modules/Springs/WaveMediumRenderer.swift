@@ -34,8 +34,10 @@ final class WaveMediumRenderer {
 
     static let surfaceName = "sheet-surface"
 
-    /// Displacement (m) the colour ramp spans, ±this.
-    private static let heightSpan: Float = 0.14
+    /// Displacement (m) the colour ramp spans, ±this. Tighter than the
+    /// pull clamp so the higher modes — which ring at smaller amplitude —
+    /// still sweep well into the warm and cool ends of the ramp.
+    private static let heightSpan: Float = 0.09
 
     private let surfaceEntity = ModelEntity()
     private let rimEntity = ModelEntity()
@@ -190,13 +192,17 @@ final class WaveMediumRenderer {
     func tick(dt: Double, model: WaveMediumModel) {
         model.step(dt: dt)
 
+        // Advance the grain random-walk (cheap), then hand the heavy
+        // geometry — membrane triangulation AND grain quads — to the
+        // worker in one job.
         let sheet = model.sheet
+        let grainCenters = advanceGrains(sheet: sheet)
         surfacePipeline?.submit(SurfaceJob(
             heights: sheet.height.map { Float($0) },
             n: sheet.n, spacing: Float(WaveMediumModel.spacing),
-            center: SIMD3<Float>(WaveMediumModel.center)))
+            center: SIMD3<Float>(WaveMediumModel.center),
+            grainCenters: grainCenters))
 
-        updateGrains(sheet: sheet)
         updateDriver(model: model)
         updateBloom(model: model)
         updateAudio(model: model)
@@ -211,7 +217,10 @@ final class WaveMediumRenderer {
 
     // MARK: Chladni grains
 
-    private func updateGrains(sheet: ElasticSheet) {
+    /// Advances the grain random-walk one frame and returns each grain's
+    /// world center. Cheap (a few hundred iterations); the quad geometry
+    /// is built from these on the worker.
+    private func advanceGrains(sheet: ElasticSheet) -> [SIMD3<Float>] {
         let n = WaveMediumModel.gridCount
         let a = Float(WaveMediumModel.spacing)
         let half = Float(WaveMediumModel.halfSide)
@@ -247,29 +256,7 @@ final class WaveMediumRenderer {
             let z = Float(heights[gj * n + gi])
             centers.append(center + SIMD3(g.x, g.y, z + 0.006))
         }
-        rebuildGrains(centers)
-    }
-
-    private func rebuildGrains(_ centers: [SIMD3<Float>]) {
-        guard !centers.isEmpty else { return }
-        let s: Float = 0.0038
-        var positions = [SIMD3<Float>](); positions.reserveCapacity(centers.count * 4)
-        var indices = [UInt32](); indices.reserveCapacity(centers.count * 6)
-        for (m, c) in centers.enumerated() {
-            let b = UInt32(m * 4)
-            positions.append(c + SIMD3(-s, -s, 0))
-            positions.append(c + SIMD3(s, -s, 0))
-            positions.append(c + SIMD3(s, s, 0))
-            positions.append(c + SIMD3(-s, s, 0))
-            indices += [b, b + 1, b + 2, b, b + 2, b + 3]
-        }
-        var descriptor = MeshDescriptor(name: "grains")
-        descriptor.positions = MeshBuffer(positions)
-        descriptor.normals = MeshBuffer([SIMD3<Float>](repeating: [0, 0, 1], count: positions.count))
-        descriptor.primitives = .triangles(indices)
-        if let mesh = try? MeshResource.generate(from: [descriptor]) {
-            grainsEntity.model?.mesh = mesh
-        }
+        return centers
     }
 
     // MARK: Driver puck & bloom
@@ -284,27 +271,41 @@ final class WaveMediumRenderer {
     /// Brighten the whole sheet as it rings, change-gated so we only
     /// re-assign the material when the glow visibly steps.
     private func updateBloom(model: WaveMediumModel) {
-        let bucket = Int(model.resonance * 6)
+        let live = model.resonanceLive
+        let bucket = Int(live * 6)
         guard bucket != lastBloomBucket else { return }
         lastBloomBucket = bucket
-        surfaceMaterial.emissiveIntensity = 0.32 + Float(model.resonance) * 0.7
+        surfaceMaterial.emissiveIntensity = 0.32 + Float(live) * 0.7
         surfaceEntity.model?.materials = [surfaceMaterial]
     }
 
     // MARK: Audio
+
+    private var lastToneGain: Double = .nan
+    private var lastToneSpeed: Double = .nan
 
     private func updateAudio(model: WaveMediumModel) {
         if toneController == nil {
             toneController = SoundPalette.startResonanceTone(on: audioEmitter)
         }
         guard let controller = toneController else { return }
-        // Sweep the audible pitch with the (subsonic) drive frequency.
+        // Sweep the audible pitch with the (subsonic) drive frequency —
+        // writes gated to real changes so the controller isn't poked
+        // sixty times a second while nothing moves.
         let range = WaveMediumModel.driveFrequencyRange
         let t = (model.driveFrequency - range.lowerBound) / (range.upperBound - range.lowerBound)
         let pitch = 150.0 + min(max(t, 0), 1) * (820.0 - 150.0)
-        controller.speed = pitch / SoundPalette.resonanceToneBaseHz
+        let speed = pitch / SoundPalette.resonanceToneBaseHz
+        if abs(speed - lastToneSpeed) > 0.002 {
+            lastToneSpeed = speed
+            controller.speed = speed
+        }
         // Louder the harder it rings; silent when the shaker is off.
-        controller.gain = model.driveOn ? (-68 + model.resonance * 58) : -80
+        let gain = model.driveOn ? (-68 + model.resonanceLive * 58) : -80
+        if abs(gain - lastToneGain) > 0.4 {
+            lastToneGain = gain
+            controller.gain = gain
+        }
     }
 
     // MARK: Surface build (worker)
@@ -314,6 +315,7 @@ final class WaveMediumRenderer {
         var n: Int
         var spacing: Float
         var center: SIMD3<Float>
+        var grainCenters: [SIMD3<Float>]
     }
 
     private nonisolated struct SurfaceResult: Sendable {
@@ -322,6 +324,8 @@ final class WaveMediumRenderer {
         var uvs: [SIMD2<Float>]
         var indices: [UInt32]
         var rim: [SIMD3<Float>]
+        var grainPositions: [SIMD3<Float>]
+        var grainIndices: [UInt32]
     }
 
     private nonisolated static func computeSurface(_ job: SurfaceJob) -> SurfaceResult {
@@ -371,8 +375,25 @@ final class WaveMediumRenderer {
         for i in stride(from: n - 2, through: 0, by: -1) { rim.append(position(i, n - 1)) }
         for j in stride(from: n - 2, through: 0, by: -1) { rim.append(position(0, j)) }
 
+        // Grain quads — small camera-facing squares at each grain center.
+        let s: Float = 0.0038
+        var grainPositions = [SIMD3<Float>]()
+        grainPositions.reserveCapacity(job.grainCenters.count * 4)
+        var grainIndices = [UInt32]()
+        grainIndices.reserveCapacity(job.grainCenters.count * 6)
+        for (m, c) in job.grainCenters.enumerated() {
+            let b = UInt32(m * 4)
+            grainPositions.append(c + SIMD3(-s, -s, 0))
+            grainPositions.append(c + SIMD3(s, -s, 0))
+            grainPositions.append(c + SIMD3(s, s, 0))
+            grainPositions.append(c + SIMD3(-s, s, 0))
+            grainIndices += [b, b + 1, b + 2, b, b + 2, b + 3]
+        }
+
         return SurfaceResult(positions: positions, normals: normals,
-                             uvs: uvs, indices: indices, rim: rim)
+                             uvs: uvs, indices: indices, rim: rim,
+                             grainPositions: grainPositions,
+                             grainIndices: grainIndices)
     }
 
     private func applySurface(_ result: SurfaceResult) {
@@ -392,6 +413,16 @@ final class WaveMediumRenderer {
         if result.rim.count >= 2,
            let mesh = TubeMesh.tube(lines: [result.rim], radius: 0.004, sides: 4) {
             rimEntity.model = ModelComponent(mesh: mesh, materials: [rimMaterial])
+        }
+        if !result.grainPositions.isEmpty {
+            var grainDescriptor = MeshDescriptor(name: "grains")
+            grainDescriptor.positions = MeshBuffer(result.grainPositions)
+            grainDescriptor.normals = MeshBuffer(
+                [SIMD3<Float>](repeating: [0, 0, 1], count: result.grainPositions.count))
+            grainDescriptor.primitives = .triangles(result.grainIndices)
+            if let mesh = try? MeshResource.generate(from: [grainDescriptor]) {
+                grainsEntity.model?.mesh = mesh
+            }
         }
     }
 }

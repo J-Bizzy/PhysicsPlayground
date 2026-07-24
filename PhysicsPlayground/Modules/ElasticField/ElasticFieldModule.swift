@@ -95,10 +95,11 @@ struct WaveMediumControlsView: View {
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 6) {
-                    ForEach(WaveMediumModel.drivableModes, id: \.m) { mode in
-                        Button("\(mode.m),\(mode.p)") { model.seekMode(m: mode.m, p: mode.p) }
-                            .buttonStyle(.podQuiet)
-                            .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                    ForEach(WaveMediumModel.drivableModes) { mode in
+                        ModeSeekButton(
+                            mode: mode,
+                            isCurrent: mode == near.mode && abs(near.detune) < 0.02
+                        ) { model.seekMode(mode) }
                     }
                 }
             }

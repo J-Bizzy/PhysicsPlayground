@@ -37,6 +37,8 @@ struct ModuleHostView: View {
                     .accessibilityHint("Places the simulation in your room")
                 }
 
+                identityHeader
+
                 FirstRunHint(module: module)
 
                 module.makeControls()
@@ -79,5 +81,34 @@ struct ModuleHostView: View {
                 accent: module.accent
             )
         }
+    }
+
+    /// The module's identity row: its icon in an accent chip beside the
+    /// one-paragraph story of what's in the room, over the house fading
+    /// accent rule — the same labelled-instrument header the pods wear,
+    /// so the window and the space read as one designed system. (This is
+    /// also the only place the module's blurb is actually shown.)
+    private var identityHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: DesignTokens.Panel.rowSpacing) {
+                Image(systemName: module.icon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(module.accent)
+                    .frame(width: 34, height: 34)
+                    .background(module.accent.opacity(0.18),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .accessibilityHidden(true)
+                Text(module.blurb)
+                    .font(DesignTokens.TypeScale.label)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            LinearGradient(
+                colors: [module.accent.opacity(0.55), module.accent.opacity(0.05)],
+                startPoint: .leading, endPoint: .trailing
+            )
+            .frame(height: 1)
+        }
+        .accessibilityElement(children: .combine)
     }
 }

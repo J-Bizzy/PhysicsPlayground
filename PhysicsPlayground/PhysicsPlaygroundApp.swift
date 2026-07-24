@@ -25,7 +25,10 @@ struct PhysicsPlaygroundApp: App {
         // (MainWindowView adds it back for that branch).
         .windowStyle(.plain)
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 520, height: 340)
+        // Tall enough for a module's control panel (its content asks for
+        // 620 pt); any shorter and the panel clips top and bottom. The
+        // hub nameplate centers itself in whatever height it gets.
+        .defaultSize(width: 560, height: 720)
 
         ImmersiveSpace(id: PlaygroundSpaceView.spaceID) {
             PlaygroundSpaceView()

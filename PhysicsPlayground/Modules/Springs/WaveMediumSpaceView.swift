@@ -113,15 +113,37 @@ struct WaveDrivePod: View {
                 .font(DesignTokens.TypeScale.footnote)
                 .foregroundStyle(.secondary)
             HStack(spacing: 6) {
-                ForEach(WaveMediumModel.drivableModes, id: \.m) { mode in
-                    Button("\(mode.m),\(mode.p)") {
-                        model.seekMode(m: mode.m, p: mode.p)
-                    }
-                    .buttonStyle(.podQuiet)
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                ForEach(WaveMediumModel.drivableModes) { mode in
+                    // The mode the drive is parked on wears the accent, so
+                    // the row shows where in the spectrum you are.
+                    ModeSeekButton(
+                        mode: mode,
+                        isCurrent: mode == near.mode && abs(near.detune) < 0.02
+                    ) { model.seekMode(mode) }
                 }
             }
         }
+    }
+}
+
+/// One resonance in the jump-to row. The mode the drive is parked on
+/// fills with the accent; the rest stay quiet glass.
+struct ModeSeekButton: View {
+    let mode: WaveMediumModel.Mode
+    let isCurrent: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Group {
+            if isCurrent {
+                Button(mode.label, action: action).buttonStyle(.podProminent)
+            } else {
+                Button(mode.label, action: action).buttonStyle(.podQuiet)
+            }
+        }
+        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+        .accessibilityLabel("Drive mode \(mode.m), \(mode.p)")
+        .accessibilityAddTraits(isCurrent ? [.isSelected] : [])
     }
 }
 
