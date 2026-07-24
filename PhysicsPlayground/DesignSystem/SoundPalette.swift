@@ -127,26 +127,64 @@ enum SoundPalette {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("PhysicsPlaygroundSounds", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent("ambient-lab.wav")
+        // Versioned name: synthesis is cached to disk, so a redesign of
+        // the soundscape must write a NEW file or every existing install
+        // keeps playing the old one forever.
+        let url = directory.appendingPathComponent("ambient-lab-2.wav")
         if !FileManager.default.fileExists(atPath: url.path) {
             try wavData(samples: synthesizeAmbient()).write(to: url)
         }
         return url
     }
 
-    /// A 6-second seamless loop: brown-ish rumble + 100/200 Hz hum with
-    /// a slow breath + faint hiss, ends crossfaded so the seam vanishes.
+    /// The house soundscape: a 24-second seamless loop that reads as a
+    /// quiet planetarium rather than a server room. Three layers:
+    ///
+    ///  · a warm open-fifth drone (A2·E3·A3·E4 over a 55 Hz sub), each
+    ///    voice doubled a fraction of a hertz apart so the pairs beat
+    ///    slowly and the chord shimmers instead of standing still;
+    ///  · a slow breath — the whole bed swells and relaxes on a 12 s
+    ///    cycle, with airy filtered noise that breathes along;
+    ///  · four soft chime partials spaced through the loop (A5 E5 C#6 B5),
+    ///    barely there, so the room occasionally glints.
+    ///
+    /// The last 1.2 s crossfades into the first so the seam vanishes.
     private static func synthesizeAmbient() -> [Float] {
+        let voices: [(frequency: Double, amplitude: Double)] = [
+            (55.0, 0.10),      // sub warmth
+            (110.0, 0.30),     // A2
+            (164.81, 0.22),    // E3
+            (220.0, 0.15),     // A3
+            (329.63, 0.08),    // E4
+        ]
+        let chimes: [(start: Double, frequency: Double)] = [
+            (3.0, 880.0), (9.0, 659.26), (15.0, 1108.73), (21.0, 987.77),
+        ]
         var lowPassed = 0.0
-        var samples = render(duration: 6.0) { t, _ in
+        var samples = render(duration: 24.0) { t, _ in
+            // The drone: detuned pairs beat at ~0.13 Hz.
+            var drone = 0.0
+            for (index, voice) in voices.enumerated() {
+                let detune = 0.11 + 0.02 * Double(index)
+                drone += voice.amplitude * 0.5 * (
+                    sin(2 * .pi * voice.frequency * t)
+                        + sin(2 * .pi * (voice.frequency + detune) * t))
+            }
+            // The breath: everything swells gently on a 12 s cycle.
+            let breath = 1 + 0.13 * sin(2 * .pi * t / 12)
+            // Air: soft filtered noise, breathing slightly out of phase.
             let noise = Double.random(in: -1...1)
-            lowPassed += 0.02 * (noise - lowPassed)
-            let hum = 0.20 * sin(2 * .pi * 100 * t) + 0.08 * sin(2 * .pi * 200 * t)
-            let breath = 1 + 0.08 * sin(2 * .pi * t / 3)
-            let hiss = 0.05 * Double.random(in: -1...1)
-            return lowPassed * 2.4 * breath + hum + hiss
+            lowPassed += 0.035 * (noise - lowPassed)
+            let air = lowPassed * 1.1 * (1 + 0.3 * sin(2 * .pi * t / 8 + 1.3))
+            // Occasional glints.
+            var chime = 0.0
+            for (start, frequency) in chimes where t >= start {
+                let age = t - start
+                chime += 0.045 * sin(2 * .pi * frequency * age) * exp(-age * 1.6)
+            }
+            return (drone + air) * breath + chime
         }
-        let fade = Int(0.5 * sampleRate)
+        let fade = Int(1.2 * sampleRate)
         for index in 0..<fade {
             let mix = Float(index) / Float(fade)
             let tail = samples[samples.count - fade + index]

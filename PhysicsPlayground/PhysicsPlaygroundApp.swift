@@ -36,7 +36,7 @@ struct PhysicsPlaygroundApp: App {
         }
         .immersionStyle(
             selection: Bindable(appModel).immersionStyle,
-            in: .mixed, .progressive
+            in: .mixed, .progressive, .full
         )
     }
 }

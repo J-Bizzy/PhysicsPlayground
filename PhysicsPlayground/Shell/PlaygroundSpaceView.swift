@@ -19,6 +19,12 @@ struct PlaygroundSpaceView: View {
 
     var body: some View {
         Group {
+            // Studio Mode's dark gallery sits behind whatever is active —
+            // hub ring or module — and survives switches between them.
+            if appModel.studioMode {
+                StudioEnvironmentView()
+                    .id("studio")
+            }
             if let module = appModel.activeModule {
                 ZStack {
                     module.makeScene()

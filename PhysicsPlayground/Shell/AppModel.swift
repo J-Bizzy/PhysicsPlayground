@@ -14,9 +14,18 @@ import Observation
 @Observable
 final class AppModel {
     var activeModuleID: String? {
-        didSet {
-            immersionStyle = activeModule?.immersionStyle ?? .mixed
-        }
+        didSet { refreshImmersionStyle() }
+    }
+
+    /// Studio Mode: full immersion that shuts the room out and stages the
+    /// physics in a dark gallery (StudioEnvironmentView). Overrides every
+    /// module's own immersion preference until switched off.
+    var studioMode = false {
+        didSet { refreshImmersionStyle() }
+    }
+
+    private func refreshImmersionStyle() {
+        immersionStyle = studioMode ? .full : (activeModule?.immersionStyle ?? .mixed)
     }
     var isImmersiveSpaceOpen = false
     /// Driven by the active module's descriptor; bound to the shared
@@ -39,6 +48,9 @@ final class AppModel {
         #if DEBUG
         if let id = UserDefaults.standard.string(forKey: "openModule") {
             activeModuleID = id
+        }
+        if UserDefaults.standard.bool(forKey: "studioMode") {
+            studioMode = true
         }
         #endif
     }

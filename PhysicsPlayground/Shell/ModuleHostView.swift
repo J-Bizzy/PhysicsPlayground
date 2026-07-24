@@ -67,6 +67,15 @@ struct ModuleHostView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    appModel.studioMode.toggle()
+                } label: {
+                    Label("Studio Mode",
+                          systemImage: appModel.studioMode ? "moon.stars.fill" : "moon.stars")
+                }
+                .accessibilityHint("Replaces your room with a dark studio so the physics glows at full contrast")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
                     module.reset()
                 } label: {
                     Label("Reset", systemImage: "arrow.counterclockwise")

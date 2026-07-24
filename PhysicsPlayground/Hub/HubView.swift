@@ -28,6 +28,19 @@ struct HubView: View {
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
 
+            Button {
+                appModel.studioMode.toggle()
+            } label: {
+                Label(appModel.studioMode ? "Leave the studio" : "Studio Mode",
+                      systemImage: appModel.studioMode ? "moon.stars.fill" : "moon.stars")
+                    .font(.subheadline)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+            }
+            .buttonStyle(.podQuiet)
+            .fixedSize()
+            .accessibilityHint("Replaces your room with a dark studio so every exhibit glows at full contrast")
+
             if !appModel.isImmersiveSpaceOpen {
                 Button {
                     Task {
