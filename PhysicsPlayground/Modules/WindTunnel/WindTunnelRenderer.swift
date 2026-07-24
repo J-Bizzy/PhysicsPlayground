@@ -43,10 +43,6 @@ final class WindTunnelRenderer {
     /// Parent for the probe's floating readout attachment.
     let probeAnchor = Entity()
 
-    /// Smoke motes. Dense enough that the wake behind a bluff body reads
-    /// as churning vapour rather than a scatter of dots.
-    private static let particleBudget = 900
-    private static let particleLife = 12.0
     private static let baseCylinderRadius: Float = 0.05
 
     private let sectionRoot = Entity()
@@ -84,11 +80,62 @@ final class WindTunnelRenderer {
     private var solveInFlight = false
     private var flowAccumulator = 0.0
 
-    private let particlePool: EntityPool<Void>
-    private var particlePositions: [SIMD2<Double>] = []
-    private var particleHeights: [Float] = []
-    private var particleAges: [Double] = []
-    private var particlesVisible = false
+    /// The whole smoke cloud: one entity, one mesh of soft puff sprites.
+    private let smokeEntity = ModelEntity()
+    private lazy var smokeMaterial: UnlitMaterial = Self.makeSmokeMaterial()
+
+    /// A soft radial puff: opaque-ish in the middle, feathering to
+    /// nothing at the rim. Overlapping these is what makes the wake read
+    /// as volume instead of as a swarm of dots.
+    private static func makeSmokeMaterial() -> UnlitMaterial {
+        var material = UnlitMaterial(color: .white)
+        // The falloff has to drive OPACITY. A base-colour texture's alpha
+        // is not used for transparency here — supplying it that way gave
+        // dark, hard-edged squares instead of soft puffs.
+        guard let texture = puffTexture() else {
+            material.blending = .transparent(opacity: 0.35)
+            return material
+        }
+        material.color = .init(tint: .white)
+        // Each puff is faint on its own; density comes from many of them
+        // overlapping. Individually-opaque sprites read as a pile of
+        // coins, not as smoke. This sits high enough that white vapour
+        // still reads against a brightly-lit passthrough wall, which is
+        // the hard case — over a dark surface it is comfortably visible.
+        material.blending = .transparent(
+            opacity: .init(scale: 0.40, texture: .init(texture)))
+        return material
+    }
+
+    /// A greyscale radial falloff, written into every channel so it reads
+    /// correctly whichever one the opacity map samples: bright at the
+    /// centre, zero at the rim, so overlapping puffs blend into haze with
+    /// no sprite edge anywhere.
+    private static func puffTexture() -> TextureResource? {
+        let side = 64
+        var bytes = [UInt8](repeating: 0, count: side * side * 4)
+        let centre = Float(side - 1) / 2
+        for y in 0..<side {
+            for x in 0..<side {
+                let dx = (Float(x) - centre) / centre
+                let dy = (Float(y) - centre) / centre
+                let r = min(sqrt(dx * dx + dy * dy), 1)
+                let falloff = powf(1 - r, 2.0)
+                let value = UInt8(max(0, min(255, falloff * 255)))
+                let index = (y * side + x) * 4
+                bytes[index] = value; bytes[index + 1] = value
+                bytes[index + 2] = value; bytes[index + 3] = value
+            }
+        }
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData),
+              let image = CGImage(
+                width: side, height: side, bitsPerComponent: 8, bitsPerPixel: 32,
+                bytesPerRow: side * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: true,
+                intent: .defaultIntent) else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .raw))
+    }
 
     /// Holder for the non-cylinder drag bodies; the current USDZ clone
     /// is its only child.
@@ -212,22 +259,8 @@ final class WindTunnelRenderer {
         dragBodyHolder.isEnabled = false
         sectionRoot.addChild(dragBodyHolder)
 
-        // Air particles: a full 3D cloud (the extruded field is exact at
-        // every height, so every layer of air moves identically).
-        var particleMaterial = UnlitMaterial(color: .white)
-        particleMaterial.blending = .transparent(opacity: 0.55)
-        let particleMesh = MeshResource.generateSphere(radius: 0.0042)
-        particlePool = EntityPool(budget: Self.particleBudget) { container in
-            container.addChild(ModelEntity(mesh: particleMesh, materials: [particleMaterial]))
-        }
-        let spawns = (0..<Self.particleBudget).map { _ in
-            Self.randomBeamPoint(anywhere: true,
-                                 mouth: SIMD3(-WindTunnelModel.halfLength - 0.10, 0, 0))
-        }
-        particlePositions = spawns.map(\.position)
-        particleHeights = spawns.map(\.height)
-        particleAges = (0..<Self.particleBudget).map { _ in Double.random(in: 0..<Self.particleLife) }
-        sectionRoot.addChild(particlePool.root)
+        // The smoke cloud: a single entity whose mesh the solver rebuilds.
+        sectionRoot.addChild(smokeEntity)
     }
 
     // MARK: Per-frame tick (particles + true-rate spin animation)
@@ -290,13 +323,15 @@ final class WindTunnelRenderer {
         let obstacles = solidObstacles(for: model)
         let inflow = model.windSpeed
         let wantRibbons = model.showStreamlines
+        let wantSmoke = model.showParticles
 
         Task { [weak self] in
             guard let self else { return }
             await solver.setInflow(inflow)
             await solver.setObstacles(obstacles)
             await solver.primeIfNeeded()
-            let snapshot = await solver.advance(dt: step, traceRibbons: wantRibbons)
+            let snapshot = await solver.advance(
+                dt: step, traceRibbons: wantRibbons, smokeVisible: wantSmoke)
             self.applyFlow(snapshot, model: model)
             self.solveInFlight = false
         }
@@ -348,42 +383,22 @@ final class WindTunnelRenderer {
             for bucket in streamlineBuckets { bucket.model = nil }
         }
 
-        // Smoke.
-        guard model.showParticles else {
-            if particlesVisible {
-                particlePool.hideAll()
-                particlesVisible = false
-            }
+        // Smoke: ONE sprite mesh, uploaded whole. Hundreds of separate
+        // entities meant hundreds of transform writes and draw calls a
+        // frame; this is a single upload and a single draw.
+        guard model.showParticles, !snapshot.smoke.isEmpty else {
+            smokeEntity.model = nil
             return
         }
-        particlesVisible = true
-        let count = min(snapshot.smoke.count, particlePool.slots.count)
-        for index in 0..<count {
-            let slot = particlePool.slots[index]
-            slot.entity.isEnabled = true
-            slot.entity.position = snapshot.smoke[index]
-        }
-        for index in count..<particlePool.slots.count {
-            particlePool.slots[index].entity.isEnabled = false
+        var descriptor = MeshDescriptor(name: "smoke")
+        descriptor.positions = MeshBuffer(snapshot.smoke.positions)
+        descriptor.normals = MeshBuffer(snapshot.smoke.normals)
+        descriptor.textureCoordinates = MeshBuffer(snapshot.smoke.uvs)
+        descriptor.primitives = .triangles(snapshot.smoke.indices)
+        if let mesh = try? MeshResource.generate(from: [descriptor]) {
+            smokeEntity.model = ModelComponent(mesh: mesh, materials: [smokeMaterial])
         }
     }
-
-    /// A random point inside the fan's beam: uniform over the duct
-    /// disc (lateral, height), at the fan mouth or anywhere along it.
-    private static let beamRadius = 0.36
-
-    private static func randomBeamPoint(
-        anywhere: Bool, mouth: SIMD3<Double>
-    ) -> (position: SIMD2<Double>, height: Float) {
-        let radius = beamRadius * Double.random(in: 0...1).squareRoot()
-        let phi = Double.random(in: 0..<(2 * .pi))
-        let x = anywhere
-            ? Double.random(in: mouth.x...WindTunnelModel.halfLength)
-            : mouth.x
-        return (SIMD2(x, mouth.z + radius * cos(phi)),
-                Float(mouth.y + radius * sin(phi)))
-    }
-
 
     /// The fan's world position, for the relative-drag session.
     func fanWorldPosition() -> SIMD3<Double>? {

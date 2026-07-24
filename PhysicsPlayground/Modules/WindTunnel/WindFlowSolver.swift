@@ -41,9 +41,23 @@ actor WindFlowSolver {
     struct Snapshot: Sendable {
         /// One tube buffer per speed-colour bucket (slow → fast).
         var ribbonBuffers: [TubeBuffers] = []
-        var smoke: [SIMD3<Float>] = []
+        /// The smoke as ONE ready-to-upload sprite mesh. Built here so the
+        /// main thread uploads a single mesh instead of writing a
+        /// transform onto hundreds of separate entities every frame.
+        var smoke = SmokeBuffers()
         /// Free-stream speed this snapshot was taken at, for normalising.
         var referenceSpeed: Float = 1
+    }
+
+    /// Camera-facing quads for the smoke, with UVs into a soft radial
+    /// puff texture — many overlapping translucent puffs is what reads as
+    /// volume, where hard little spheres read as confetti.
+    struct SmokeBuffers: Sendable {
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var uvs: [SIMD2<Float>] = []
+        var indices: [UInt32] = []
+        var isEmpty: Bool { indices.isEmpty }
     }
 
     /// Local speed ratio → colour bucket, matching the renderer's palette:
@@ -85,10 +99,16 @@ actor WindFlowSolver {
 
     // MARK: Smoke
 
-    private static let smokeCount = 1100
+    /// One mesh means the cost is geometry, not entities, so the cloud
+    /// can be dense enough to actually look like smoke.
+    private static let smokeCount = 950
     private var smoke: [SIMD3<Double>] = []
     private var smokeAge: [Double] = []
-    private static let smokeLife = 7.0
+    /// A mote crosses the 2.1 m section in about two seconds at 1 m/s.
+    /// Much more life than that and the ones caught in the slow
+    /// recirculation behind a body pile into a solid wall of smoke
+    /// instead of reading as a wake.
+    private static let smokeLife = 4.0
 
     init() {
         grid = FluidGrid(
@@ -148,14 +168,49 @@ actor WindFlowSolver {
 
     // MARK: Per-frame
 
-    func advance(dt: Double, traceRibbons wantRibbons: Bool) -> Snapshot {
+    func advance(dt: Double, traceRibbons wantRibbons: Bool,
+                 smokeVisible: Bool) -> Snapshot {
         grid.step(dt: min(max(dt, 1.0 / 120.0), 1.0 / 20.0))
-        advectSmoke(dt: dt)
+        if smokeVisible { advectSmoke(dt: dt) }
         return Snapshot(
             ribbonBuffers: wantRibbons ? buildRibbonBuffers() : [],
-            smoke: smoke.map { SIMD3<Float>($0) },
+            smoke: smokeVisible ? buildSmokeQuads() : SmokeBuffers(),
             referenceSpeed: Float(grid.inflowSpeed))
     }
+
+    /// Builds the smoke sprite mesh. Each mote is a quad facing the front
+    /// of the section (where the tunnel is watched from), sized by how
+    /// long it has been drifting — young motes are tight and bright,
+    /// older ones spread and soften, so the wake blooms into haze rather
+    /// than staying a cloud of identical dots.
+    private func buildSmokeQuads() -> SmokeBuffers {
+        var buffers = SmokeBuffers()
+        let count = smoke.count
+        buffers.positions.reserveCapacity(count * 4)
+        buffers.normals.reserveCapacity(count * 4)
+        buffers.uvs.reserveCapacity(count * 4)
+        buffers.indices.reserveCapacity(count * 6)
+
+        for (index, p) in smoke.enumerated() {
+            let age = Float(smokeAge[index] / Self.smokeLife)     // 0…1
+            let size = Self.smokeSizeNear + (Self.smokeSizeFar - Self.smokeSizeNear) * age
+            let c = SIMD3<Float>(p)
+            let base = UInt32(buffers.positions.count)
+            buffers.positions.append(c + SIMD3(-size, -size, 0))
+            buffers.positions.append(c + SIMD3(size, -size, 0))
+            buffers.positions.append(c + SIMD3(size, size, 0))
+            buffers.positions.append(c + SIMD3(-size, size, 0))
+            for _ in 0..<4 { buffers.normals.append([0, 0, 1]) }
+            buffers.uvs.append([0, 1]); buffers.uvs.append([1, 1])
+            buffers.uvs.append([1, 0]); buffers.uvs.append([0, 0])
+            buffers.indices += [base, base + 1, base + 2, base, base + 2, base + 3]
+        }
+        return buffers
+    }
+
+    /// A puff starts tight and spreads as it drifts downstream.
+    private static let smokeSizeNear: Float = 0.009
+    private static let smokeSizeFar: Float = 0.024
 
     /// Traces the rake and turns it straight into tube geometry, split by
     /// speed colour — all of it here on the solver, so the main thread

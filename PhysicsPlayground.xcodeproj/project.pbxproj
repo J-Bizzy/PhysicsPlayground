@@ -360,7 +360,8 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = xros;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_COMPILATION_MODE = incremental;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				XROS_DEPLOYMENT_TARGET = 26.5;
 			};
 			name = Debug;
