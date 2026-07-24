@@ -75,8 +75,8 @@ final class KinematicsRenderer {
     }
     private let ringPool: EntityPool<ModelEntity>
     private var ringSlots: [RingSlot] = []
-    private let ringMaterial: UnlitMaterial
-    private let ringFlashMaterial: UnlitMaterial
+    private let ringMaterial: PhysicallyBasedMaterial
+    private let ringFlashMaterial: PhysicallyBasedMaterial
 
     private var arcPipeline: GeometryPipeline<[SIMD3<Float>], TubeBuffers>?
 
@@ -114,8 +114,8 @@ final class KinematicsRenderer {
     init() {
         // Launcher: grabbable base sphere, barrel, aim bead — siblings at
         // room coordinates so manipulation never fights a parent transform.
-        let launcherMaterial = SimpleMaterial(
-            color: DesignTokens.Palette.launcherUI, roughness: 0.4, isMetallic: true)
+        let launcherMaterial = Materials.energized(
+            DesignTokens.Palette.launcherUI, roughness: 0.15, metallic: 1.0, glow: 0.0)
         launcherBase = ModelEntity(
             mesh: .generateSphere(radius: 0.05), materials: [launcherMaterial])
         launcherBase.name = Self.launcherName
@@ -140,7 +140,7 @@ final class KinematicsRenderer {
 
         bead = ModelEntity(
             mesh: .generateSphere(radius: 0.035),
-            materials: [UnlitMaterial(color: DesignTokens.Palette.projectileUI)]
+            materials: [Materials.energized(DesignTokens.Palette.projectileUI, glow: 0.4)]
         )
         bead.name = Self.aimBeadName
         Grabbable.configureTouchTarget(bead, collisionRadius: 0.06)
@@ -191,10 +191,12 @@ final class KinematicsRenderer {
         root.addChild(shadowPool.root)
 
         // Hoops: torus via TubeMesh circle, score text floating above.
-        ringMaterial = UnlitMaterial(color: DesignTokens.Palette.targetUI)
-        var flash = UnlitMaterial(color: .systemGreen)
-        flash.blending = .transparent(opacity: 0.95)
-        ringFlashMaterial = flash
+        // A crafted target: a glossy, softly-glowing mint hoop that flares
+        // bright glowing green the instant a ball drops through it.
+        ringMaterial = Materials.energized(DesignTokens.Palette.targetUI,
+                                           roughness: 0.2, glow: 0.3)
+        ringFlashMaterial = Materials.energized(.systemGreen,
+                                                roughness: 0.15, glow: 0.6)
 
         let circle: [SIMD3<Float>] = (0...32).map { index in
             let angle = 2 * Float.pi * Float(index) / 32
