@@ -20,10 +20,10 @@ enum ElasticFieldModule {
         ModuleDescriptor(
             id: id,
             title: "Elastic Field",
-            blurb: "A membrane of coupled springs floating in your room — the real 2-D wave equation. Reach in, pull any point, and let go: waves ripple out, reflect off the rim, and ring the drumhead's modes.",
+            blurb: "A resonance drumhead you can hear. A shaker drives a membrane of coupled springs — the real 2-D wave equation. Sweep the drive frequency: at each natural frequency the drumhead blooms into a standing mode, marker grains gather on the still nodal lines, and the tone peaks.",
             icon: "waveform",
             accent: DesignTokens.Palette.springsAccent,
-            firstRunHint: "Reach into the sheet, pinch a point, and pull it up — then let go. A wave spreads at speed c, bounces off the edges, and settles into standing patterns. Walk around it, duck underneath, ring a pure mode, or free the rim and watch the whole sheet heave.",
+            firstRunHint: "A shaker pushes the sheet's center. Drag the Drive frequency slowly: the sheet stays calm until you hit a resonance, when a standing mode blooms and the grains rush onto its nodal lines — and the tone swells. Lower the damping for sharper peaks, jump straight onto a mode, or reach in and pull the sheet yourself.",
             legend: legend,
             realWorld: story,
             isPaused: { appModel.waveMediumModel.isPaused },
@@ -48,11 +48,13 @@ enum ElasticFieldModule {
 
     private static let legend: [LegendItem] = [
         LegendItem(swatch: .fill(Color(red: 1.0, green: 0.4, blue: 0.32)),
-                   text: "Crests glow warm, troughs cool — the sheet's height IS the wave, shaded by real light so its 3-D shape reads from any side"),
+                   text: "Crests toward you glow warm, troughs away cool — the sheet's displacement IS the wave, lit so its 3-D shape reads straight on"),
+        LegendItem(swatch: .fill(Color(red: 1.0, green: 0.96, blue: 0.86)),
+                   text: "Marker grains flee the shaking antinodes and pile onto the still nodal lines — the drumhead's Chladni figure for that mode"),
         LegendItem(swatch: .fill(Color(red: 0.3, green: 0.85, blue: 0.85)),
-                   text: "The rim traces the boundary — clamped (a drumhead) or free, changing how waves reflect"),
+                   text: "The driver puck rides the shaken center, pumping in and out; the rim traces the boundary — clamped or free"),
         LegendItem(swatch: .fill(.white),
-                   text: "The halo marks the point in your hand; release it and the stored tension launches the wave"),
+                   text: "The halo marks the point in your hand; release it and the stored tension launches a wave"),
     ]
 
     private static let story = RealWorldStory(
@@ -76,8 +78,31 @@ struct WaveMediumControlsView: View {
 
     var body: some View {
         @Bindable var model = model
+        let near = model.nearestResonance()
 
         VStack(alignment: .leading, spacing: DesignTokens.Panel.sectionSpacing) {
+            PanelSection("The shaker") {
+                Toggle("Drive the drumhead", isOn: $model.driveOn)
+                    .font(DesignTokens.TypeScale.control)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Drive frequency: \(model.driveFrequency, specifier: "%.2f") Hz")
+                        .font(DesignTokens.TypeScale.control.monospacedDigit())
+                    Slider(value: $model.driveFrequency, in: WaveMediumModel.driveFrequencyRange)
+                        .disabled(!model.driveOn)
+                }
+                ResonanceMeter(resonance: model.resonance)
+                Text("Nearest mode (\(near.mode.m),\(near.mode.p)) rings at \(near.frequency, specifier: "%.2f") Hz")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    ForEach(WaveMediumModel.drivableModes, id: \.m) { mode in
+                        Button("\(mode.m),\(mode.p)") { model.seekMode(m: mode.m, p: mode.p) }
+                            .buttonStyle(.podQuiet)
+                            .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                    }
+                }
+            }
+
             PanelSection("The medium") {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Wave speed c = \(model.waveSpeed, specifier: "%.1f") m/s")
@@ -94,7 +119,7 @@ struct WaveMediumControlsView: View {
             }
 
             PanelSection("What you're seeing") {
-                Text("The sheet is a grid of masses joined by springs. In the small-displacement limit that IS the wave equation ∂²u/∂t² = c²∇²u: pull one point and the springs pull its neighbours, which pull theirs — a wave. Clamped edges reflect it inverted; the whole thing rings the drumhead's standing modes, the same shapes a real drum makes.")
+                Text("The sheet is a grid of masses joined by springs — in the small-displacement limit, the exact wave equation ∂²u/∂t² = c²∇²u. A shaker pushes the center with a force F = A·sin(2πf·t). Off resonance the sheet barely responds; when f matches a natural frequency f = (c/2)√((m/L)²+(p/L)²), that standing mode builds to full amplitude. Grains migrate off the shaking antinodes to the still nodal lines — the same Chladni figures a bowed metal plate makes.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

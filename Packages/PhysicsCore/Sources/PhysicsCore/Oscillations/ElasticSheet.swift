@@ -52,6 +52,25 @@ public struct ElasticSheet: Sendable {
     /// integrate; the medium around them does.
     private var pinned: [Int: Double] = [:]
 
+    // MARK: Sinusoidal drive (the shaker)
+    //
+    // A mechanical shaker attached to one or more nodes, pushing them
+    // with a force F(t) = A·sin(2πf·t). The driven nodes still obey the
+    // wave equation — the force is added to their acceleration — so the
+    // disturbance radiates out into the medium. Sweep f: when it nears a
+    // natural frequency the matching standing mode builds to a large
+    // amplitude (resonance), capped only by damping and the governor.
+
+    /// Nodes the shaker pushes (index = j*n + i). Empty = no drive.
+    public var driveNodes: Set<Int> = []
+    /// Drive frequency (Hz).
+    public var driveFrequency: Double = 0
+    /// Drive force amplitude, as an acceleration (m/s²).
+    public var driveAmplitude: Double = 0
+    /// The shaker's running clock (s), advanced every substep so the
+    /// phase is continuous across frames and frequency changes.
+    private var driveClock: Double = 0
+
     public init(n: Int = 22, spacing: Double = 0.06,
                 waveSpeed: Double = 1.2, damping: Double = 0.25,
                 boundary: Boundary = .fixed) {
@@ -177,6 +196,10 @@ public struct ElasticSheet: Sendable {
     private mutating func integrate(_ dt: Double) {
         let c2 = waveSpeed * waveSpeed
         let invA2 = 1 / (spacing * spacing)
+        // The shaker's push this instant, shared by every driven node.
+        let drive = (driveAmplitude != 0 && !driveNodes.isEmpty)
+            ? driveAmplitude * sin(2 * .pi * driveFrequency * driveClock)
+            : 0
         var newVelocity = velocity
         for j in 0..<n {
             for i in 0..<n {
@@ -186,7 +209,8 @@ public struct ElasticSheet: Sendable {
                 let laplacian = (sample(i + 1, j) + sample(i - 1, j)
                     + sample(i, j + 1) + sample(i, j - 1)
                     - 4 * height[k]) * invA2
-                let accel = c2 * laplacian - damping * velocity[k]
+                var accel = c2 * laplacian - damping * velocity[k]
+                if drive != 0, driveNodes.contains(k) { accel += drive }
                 newVelocity[k] = velocity[k] + accel * dt
             }
         }
@@ -194,6 +218,7 @@ public struct ElasticSheet: Sendable {
         for k in 0..<height.count where pinned[k] == nil {
             height[k] += velocity[k] * dt
         }
+        driveClock += dt
     }
 
     // MARK: Diagnostics
@@ -221,5 +246,28 @@ public struct ElasticSheet: Sendable {
     /// The signed height extremes right now — the visualization's range.
     public var heightRange: (min: Double, max: Double) {
         (height.min() ?? 0, height.max() ?? 0)
+    }
+
+    /// Root-mean-square height across the whole sheet — a stable measure
+    /// of how strongly it's vibrating right now. It swells at resonance
+    /// and all but vanishes off it, so it drives both the sound's volume
+    /// and the resonance meter.
+    public var rms: Double {
+        guard !height.isEmpty else { return 0 }
+        var sum = 0.0
+        for h in height { sum += h * h }
+        return (sum / Double(height.count)).squareRoot()
+    }
+
+    /// The exact natural frequency (Hz) of the clamped-drumhead standing
+    /// mode (m, p) ON THIS LATTICE — not the continuum approximation. The
+    /// discrete Laplacian's eigenvalue for sin(mπi/(N−1))·sin(pπj/(N−1))
+    /// is 4[sin²(mπ/2(N−1)) + sin²(pπ/2(N−1))]/a², and ω = c·√λ. Driving
+    /// at this frequency rings mode (m, p) into resonance.
+    public func modeFrequency(m: Int, p: Int) -> Double {
+        let sx = sin(Double(m) * .pi / (2 * Double(n - 1)))
+        let sy = sin(Double(p) * .pi / (2 * Double(n - 1)))
+        let lambda = 4 * (sx * sx + sy * sy) / (spacing * spacing)
+        return waveSpeed * lambda.squareRoot() / (2 * .pi)
     }
 }

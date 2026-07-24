@@ -2,16 +2,22 @@
 //  WaveMediumRenderer.swift
 //  Physics Playground — Elastic Field (Springs module)
 //
-//  Renders the membrane as a live shaded surface: the height field is
-//  triangulated every frame with real per-vertex normals, so room
-//  light rakes across the ripples and the 3-D wave shape reads from
-//  any angle. Colour is a smooth topographic heatmap — each vertex
-//  carries a texture coordinate equal to its height, and a gradient
-//  texture (deep-blue trough → teal rest → red crest) is sampled
-//  per-pixel, so the colour flows continuously instead of stepping in
-//  jagged bands. A glowing rim traces the boundary; the point in your
-//  hand wears a halo. The vertex math runs on a GeometryPipeline
-//  worker; the main thread only uploads the mesh.
+//  Renders the resonance drumhead: a VERTICAL shaded membrane facing
+//  the user, so the mode shapes and nodal lines read straight on. The
+//  height field is triangulated every frame with real per-vertex
+//  normals (room light rakes the ripples) and shaded by a smooth
+//  topographic heatmap sampled per-pixel from a gradient texture.
+//
+//  Three things make the resonance legible:
+//   · marker grains scattered on the face migrate away from the shaking
+//     antinodes and pile up on the still nodal lines — live Chladni
+//     figures;
+//   · a driver puck rides the shaken center, visibly pumping in and out;
+//   · the whole sheet blooms brighter as it rings, and a spatial tone
+//     sings louder and higher with the drive.
+//
+//  The heavy vertex math runs on a GeometryPipeline worker; the main
+//  thread uploads the mesh and animates the light grain layer.
 //
 
 import Foundation
@@ -28,56 +34,98 @@ final class WaveMediumRenderer {
 
     static let surfaceName = "sheet-surface"
 
-    /// Height (m) the colour ramp spans, ±this.
+    /// Displacement (m) the colour ramp spans, ±this.
     private static let heightSpan: Float = 0.14
 
     private let surfaceEntity = ModelEntity()
     private let rimEntity = ModelEntity()
+    private let grainsEntity = ModelEntity()
+    private let driverEntity = ModelEntity()
+    private let heldHalo = ModelEntity()
+    private let audioEmitter = Entity()
+
+    private var surfaceMaterial = PhysicallyBasedMaterial()
+    private var lastBloomBucket = -1
+
     private let rimMaterial: UnlitMaterial = {
         var m = UnlitMaterial(color: UIColor(red: 0.3, green: 0.85, blue: 0.85, alpha: 1))
         m.blending = .transparent(opacity: 0.85)
         return m
     }()
-    private let heldHalo = ModelEntity()
+    private let grainMaterial = UnlitMaterial(color: UIColor(red: 1.0, green: 0.96, blue: 0.86, alpha: 1))
+
     private var surfacePipeline: GeometryPipeline<SurfaceJob, SurfaceResult>?
+    private var toneController: AudioPlaybackController?
+
+    // MARK: Chladni grains
+
+    private struct Grain { var x: Float; var y: Float }
+    private static let grainCount = 340
+    private var grains: [Grain] = []
+    /// A slow envelope of how much each node shakes — high at antinodes,
+    /// near zero on the nodal lines. Grains flee the high spots.
+    private var vibEnvelope: [Float]
 
     init() {
-        root.addChild(Lighting.keyLight())
-        // One lit surface with a gradient-texture heatmap: baseColor
-        // (and a gentle emissive) are sampled along the ramp by each
-        // vertex's height, so the colour is smooth and the normals
-        // still let room light reveal the 3-D shape.
-        var material = PhysicallyBasedMaterial()
-        if let texture = Self.gradientTexture() {
-            material.baseColor = .init(tint: .white, texture: .init(texture))
-            material.emissiveColor = .init(color: .white, texture: .init(texture))
-            material.emissiveIntensity = 0.45
-        } else {
-            material.baseColor = .init(tint: UIColor(red: 0.15, green: 0.78, blue: 0.68, alpha: 1))
+        let half = Float(WaveMediumModel.halfSide)
+        vibEnvelope = [Float](repeating: 0, count: WaveMediumModel.gridCount * WaveMediumModel.gridCount)
+        grains = (0..<Self.grainCount).map { _ in
+            Grain(x: Float.random(in: -half...half), y: Float.random(in: -half...half))
         }
-        material.roughness = 0.28
-        material.metallic = 0.0
-        material.faceCulling = .none
+
+        root.addChild(Lighting.keyLight())
+
+        // The lit surface, heatmap-shaded by height.
+        if let texture = Self.gradientTexture() {
+            surfaceMaterial.baseColor = .init(tint: .white, texture: .init(texture))
+            surfaceMaterial.emissiveColor = .init(color: .white, texture: .init(texture))
+            surfaceMaterial.emissiveIntensity = 0.35
+        } else {
+            surfaceMaterial.baseColor = .init(tint: UIColor(red: 0.15, green: 0.78, blue: 0.68, alpha: 1))
+        }
+        surfaceMaterial.roughness = 0.28
+        surfaceMaterial.metallic = 0.0
+        surfaceMaterial.faceCulling = .none
         surfaceEntity.model = ModelComponent(
-            mesh: .generateSphere(radius: 0.0001), materials: [material])
+            mesh: .generateSphere(radius: 0.0001), materials: [surfaceMaterial])
         root.addChild(surfaceEntity)
         root.addChild(rimEntity)
 
-        // The grab volume: an invisible slab over the sheet's footprint,
-        // tall enough to catch a hand reaching to any crest or trough.
-        let half = Float(WaveMediumModel.halfSide)
+        // The grain layer (Chladni sand) — one rebuilt mesh of tiny
+        // camera-facing quads.
+        grainsEntity.model = ModelComponent(
+            mesh: .generateSphere(radius: 0.0001), materials: [grainMaterial])
+        root.addChild(grainsEntity)
+
+        // The driver puck at the shaken center.
+        var driverMat = PhysicallyBasedMaterial()
+        driverMat.baseColor = .init(tint: UIColor(red: 0.3, green: 0.85, blue: 0.85, alpha: 1))
+        driverMat.roughness = 0.2
+        driverMat.metallic = 0.7
+        driverMat.emissiveColor = .init(color: UIColor(red: 0.3, green: 0.9, blue: 0.9, alpha: 1))
+        driverMat.emissiveIntensity = 0.5
+        driverEntity.model = ModelComponent(
+            mesh: .generateCylinder(height: 0.02, radius: 0.028), materials: [driverMat])
+        // The cylinder's axis is Y; lay it along Z so its face points at
+        // the user and it pumps in and out.
+        driverEntity.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+        root.addChild(driverEntity)
+
+        // The grab volume: an invisible slab over the vertical face,
+        // thin front-to-back (displacement) so it sits well clear of the
+        // orb controls below and in front of it.
         let collider = ModelEntity()
         collider.name = Self.surfaceName
         collider.position = SIMD3<Float>(WaveMediumModel.center)
         collider.components.set(InputTargetComponent())
         collider.components.set(CollisionComponent(shapes: [
-            .generateBox(width: half * 2 + 0.08,
-                         height: Float(WaveMediumModel.pluckClamp) * 2 + 0.1,
-                         depth: half * 2 + 0.08)
+            .generateBox(width: half * 2 + 0.06,
+                         height: half * 2 + 0.06,
+                         depth: Float(WaveMediumModel.pluckClamp) * 2 + 0.1)
         ]))
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
-        accessibility.label = "Elastic membrane. Reach in, pull any point, and let go to send a wave."
+        accessibility.label = "Resonance drumhead. Reach in and pull it, or let the shaker ring its modes."
         collider.components.set(accessibility)
         root.addChild(collider)
 
@@ -89,13 +137,16 @@ final class WaveMediumRenderer {
         heldHalo.isEnabled = false
         root.addChild(heldHalo)
 
+        audioEmitter.position = SIMD3<Float>(WaveMediumModel.center)
+        root.addChild(audioEmitter)
+
         surfacePipeline = GeometryPipeline(
             compute: { Self.computeSurface($0) },
             apply: { [weak self] in self?.applySurface($0) }
         )
     }
 
-    /// A perceptual blue→teal→red ramp for a signed height field.
+    /// A perceptual blue→teal→red ramp for a signed displacement field.
     private nonisolated static func rampColor(_ t: Float) -> (r: CGFloat, g: CGFloat, b: CGFloat) {
         let stops: [(Float, Float, Float)] = [
             (0.10, 0.30, 0.95),   // deep trough — blue
@@ -115,8 +166,6 @@ final class WaveMediumRenderer {
                 CGFloat(a.2 + (b.2 - a.2) * f))
     }
 
-    /// A 256×1 gradient baked from the ramp, sampled smoothly by the
-    /// surface's height texture coordinate.
     private static func gradientTexture() -> TextureResource? {
         let width = 256
         var bytes = [UInt8](repeating: 0, count: width * 4)
@@ -147,12 +196,115 @@ final class WaveMediumRenderer {
             n: sheet.n, spacing: Float(WaveMediumModel.spacing),
             center: SIMD3<Float>(WaveMediumModel.center)))
 
+        updateGrains(sheet: sheet)
+        updateDriver(model: model)
+        updateBloom(model: model)
+        updateAudio(model: model)
+
         if let node = model.heldNode {
             heldHalo.isEnabled = true
             heldHalo.position = SIMD3<Float>(model.world(i: node.i, j: node.j))
         } else {
             heldHalo.isEnabled = false
         }
+    }
+
+    // MARK: Chladni grains
+
+    private func updateGrains(sheet: ElasticSheet) {
+        let n = WaveMediumModel.gridCount
+        let a = Float(WaveMediumModel.spacing)
+        let half = Float(WaveMediumModel.halfSide)
+        let center = SIMD3<Float>(WaveMediumModel.center)
+        let margin = a
+        let heights = sheet.height
+
+        @inline(__always) func node(_ x: Float, _ y: Float) -> (Int, Int) {
+            let i = min(max(Int(((x + half) / a).rounded()), 0), n - 1)
+            let j = min(max(Int(((y + half) / a).rounded()), 0), n - 1)
+            return (i, j)
+        }
+
+        for k in 0..<vibEnvelope.count {
+            vibEnvelope[k] += 0.06 * (Float(abs(heights[k])) - vibEnvelope[k])
+        }
+
+        var centers = [SIMD3<Float>](); centers.reserveCapacity(grains.count)
+        for idx in 0..<grains.count {
+            var g = grains[idx]
+            let (i, j) = node(g.x, g.y)
+            let env = vibEnvelope[j * n + i]
+            // Where the sheet shakes, grains hop randomly and drift off;
+            // on the still nodal lines they settle and stack up.
+            if env > 0.006 {
+                let angle = Float.random(in: 0..<(2 * .pi))
+                let step = min(env * 6.5, a * 0.9)
+                g.x = min(max(g.x + cos(angle) * step, -half + margin), half - margin)
+                g.y = min(max(g.y + sin(angle) * step, -half + margin), half - margin)
+            }
+            grains[idx] = g
+            let (gi, gj) = node(g.x, g.y)
+            let z = Float(heights[gj * n + gi])
+            centers.append(center + SIMD3(g.x, g.y, z + 0.006))
+        }
+        rebuildGrains(centers)
+    }
+
+    private func rebuildGrains(_ centers: [SIMD3<Float>]) {
+        guard !centers.isEmpty else { return }
+        let s: Float = 0.0038
+        var positions = [SIMD3<Float>](); positions.reserveCapacity(centers.count * 4)
+        var indices = [UInt32](); indices.reserveCapacity(centers.count * 6)
+        for (m, c) in centers.enumerated() {
+            let b = UInt32(m * 4)
+            positions.append(c + SIMD3(-s, -s, 0))
+            positions.append(c + SIMD3(s, -s, 0))
+            positions.append(c + SIMD3(s, s, 0))
+            positions.append(c + SIMD3(-s, s, 0))
+            indices += [b, b + 1, b + 2, b, b + 2, b + 3]
+        }
+        var descriptor = MeshDescriptor(name: "grains")
+        descriptor.positions = MeshBuffer(positions)
+        descriptor.normals = MeshBuffer([SIMD3<Float>](repeating: [0, 0, 1], count: positions.count))
+        descriptor.primitives = .triangles(indices)
+        if let mesh = try? MeshResource.generate(from: [descriptor]) {
+            grainsEntity.model?.mesh = mesh
+        }
+    }
+
+    // MARK: Driver puck & bloom
+
+    private func updateDriver(model: WaveMediumModel) {
+        driverEntity.isEnabled = model.driveOn
+        guard model.driveOn else { return }
+        let c = WaveMediumModel.driveCoord
+        driverEntity.position = SIMD3<Float>(model.world(i: c.i, j: c.j)) + SIMD3(0, 0, 0.012)
+    }
+
+    /// Brighten the whole sheet as it rings, change-gated so we only
+    /// re-assign the material when the glow visibly steps.
+    private func updateBloom(model: WaveMediumModel) {
+        let bucket = Int(model.resonance * 6)
+        guard bucket != lastBloomBucket else { return }
+        lastBloomBucket = bucket
+        surfaceMaterial.emissiveIntensity = 0.32 + Float(model.resonance) * 0.7
+        surfaceEntity.model?.materials = [surfaceMaterial]
+    }
+
+    // MARK: Audio
+
+    private func updateAudio(model: WaveMediumModel) {
+        if toneController == nil {
+            toneController = SoundPalette.startResonanceTone(on: audioEmitter)
+        }
+        guard let controller = toneController else { return }
+        // Sweep the audible pitch with the (subsonic) drive frequency.
+        let range = WaveMediumModel.driveFrequencyRange
+        let t = (model.driveFrequency - range.lowerBound) / (range.upperBound - range.lowerBound)
+        let pitch = 150.0 + min(max(t, 0), 1) * (820.0 - 150.0)
+        controller.speed = pitch / SoundPalette.resonanceToneBaseHz
+        // Louder the harder it rings; silent when the shaker is off.
+        controller.gain = model.driveOn ? (-68 + model.resonance * 58) : -80
     }
 
     // MARK: Surface build (worker)
@@ -180,23 +332,23 @@ final class WaveMediumRenderer {
 
         @inline(__always) func height(_ i: Int, _ j: Int) -> Float { h[j * n + i] }
 
-        // One shared vertex per grid node — indexed triangles, so the
-        // normals and the height texture coordinate interpolate
-        // continuously across the whole sheet (no per-triangle seams).
+        // One shared vertex per node — indexed triangles, so normals and
+        // the height texture coordinate interpolate continuously. The
+        // sheet is VERTICAL: (i, j) span the room's x and y, and the
+        // displacement rides +z toward the user.
         var positions = [SIMD3<Float>](); positions.reserveCapacity(n * n)
         var normals = [SIMD3<Float>](); normals.reserveCapacity(n * n)
         var uvs = [SIMD2<Float>](); uvs.reserveCapacity(n * n)
         for j in 0..<n {
             for i in 0..<n {
-                let y = height(i, j)
-                positions.append(job.center + SIMD3(Float(i) * a - half, y, Float(j) * a - half))
+                let z = height(i, j)
+                positions.append(job.center + SIMD3(Float(i) * a - half, Float(j) * a - half, z))
                 let il = max(i - 1, 0), ir = min(i + 1, n - 1)
                 let jl = max(j - 1, 0), jr = min(j + 1, n - 1)
-                let dhdx = (height(ir, j) - height(il, j)) / (Float(ir - il) * a)
-                let dhdz = (height(i, jr) - height(i, jl)) / (Float(jr - jl) * a)
-                normals.append(simd_normalize(SIMD3(-dhdx, 1, -dhdz)))
-                // u = height along the ramp; v anywhere on the 1-D texture.
-                let u = min(max((y + heightSpan) / (2 * heightSpan), 0), 1)
+                let dzdx = (height(ir, j) - height(il, j)) / (Float(ir - il) * a)
+                let dzdy = (height(i, jr) - height(i, jl)) / (Float(jr - jl) * a)
+                normals.append(simd_normalize(SIMD3(-dzdx, -dzdy, 1)))
+                let u = min(max((z + heightSpan) / (2 * heightSpan), 0), 1)
                 uvs.append(SIMD2(u, 0.5))
             }
         }
@@ -210,7 +362,6 @@ final class WaveMediumRenderer {
             }
         }
 
-        // Rim loop for the boundary tube.
         @inline(__always) func position(_ i: Int, _ j: Int) -> SIMD3<Float> {
             positions[j * n + i]
         }

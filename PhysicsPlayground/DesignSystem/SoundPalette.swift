@@ -60,6 +60,53 @@ enum SoundPalette {
                     contentsOf: url,
                     configuration: .init(shouldLoop: true))
             }
+            if let url = try? writeResonanceToneIfNeeded() {
+                resonanceToneResource = try? await AudioFileResource(
+                    contentsOf: url,
+                    configuration: .init(shouldLoop: true))
+            }
+        }
+    }
+
+    // MARK: Resonance tone (elastic-field drumhead)
+
+    private static var resonanceToneResource: AudioFileResource?
+    /// The base pitch (Hz) the tone is synthesized at; the caller shifts
+    /// it with the controller's `speed` to sing the swept drive.
+    static let resonanceToneBaseHz = 220.0
+
+    /// Starts the looping resonance tone on `entity`, silent to begin
+    /// with. The caller sets the controller's `gain` from how hard the
+    /// membrane is ringing and its `speed` from the drive frequency, so
+    /// the drum sings louder at resonance and higher as you sweep up.
+    static func startResonanceTone(on entity: Entity) -> AudioPlaybackController? {
+        guard let resonanceToneResource else { return nil }
+        entity.components.set(SpatialAudioComponent(gain: Audio.Decibel(-80)))
+        let controller = entity.playAudio(resonanceToneResource)
+        controller.gain = -80
+        return controller
+    }
+
+    private static func writeResonanceToneIfNeeded() throws -> URL {
+        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("PhysicsPlaygroundSounds", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("resonance-tone.wav")
+        if !FileManager.default.fileExists(atPath: url.path) {
+            try wavData(samples: synthesizeResonanceTone()).write(to: url)
+        }
+        return url
+    }
+
+    /// A 1-second seamless loop of a warm drum-like tone: a 220 Hz
+    /// fundamental with a couple of soft harmonics (all integer cycles in
+    /// one second, so the loop seam vanishes).
+    private static func synthesizeResonanceTone() -> [Float] {
+        render(duration: 1.0) { t, _ in
+            let f = resonanceToneBaseHz
+            return 0.7 * sin(2 * .pi * f * t)
+                + 0.22 * sin(2 * .pi * 2 * f * t)
+                + 0.09 * sin(2 * .pi * 3 * f * t)
         }
     }
 

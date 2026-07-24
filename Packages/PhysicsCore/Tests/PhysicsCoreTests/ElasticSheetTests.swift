@@ -188,4 +188,62 @@ final class ElasticSheetTests: XCTestCase {
         XCTAssertGreaterThan(abs(free.height[free.index(0, 10)]), 1e-4,
                              "an open edge is free to move")
     }
+
+    // MARK: The shaker & resonance
+
+    /// The lattice mode frequencies climb with the mode numbers and with
+    /// the wave speed, and match ω = c·√λ for the discrete Laplacian.
+    func testModeFrequenciesOrderAndScale() {
+        let sheet = ElasticSheet(n: 21, spacing: 0.05, waveSpeed: 1.0,
+                                 damping: 0, boundary: .fixed)
+        let f11 = sheet.modeFrequency(m: 1, p: 1)
+        let f21 = sheet.modeFrequency(m: 2, p: 1)
+        let f22 = sheet.modeFrequency(m: 2, p: 2)
+        XCTAssertGreaterThan(f11, 0)
+        XCTAssertGreaterThan(f21, f11, "higher modes ring higher")
+        XCTAssertGreaterThan(f22, f21)
+
+        // Doubling the wave speed doubles every mode frequency.
+        let fast = ElasticSheet(n: 21, spacing: 0.05, waveSpeed: 2.0,
+                                damping: 0, boundary: .fixed)
+        XCTAssertEqual(fast.modeFrequency(m: 1, p: 1), 2 * f11, accuracy: f11 * 1e-9)
+    }
+
+    /// Drive the center node at mode (1,1)'s natural frequency and the
+    /// sheet rings up to a large amplitude; drive it at a frequency well
+    /// between modes and it stays comparatively dead. That contrast IS
+    /// resonance.
+    func testDrivingAtAModeResonates() {
+        func steadyRMS(driveHz: Double) -> Double {
+            var sheet = ElasticSheet(n: 21, spacing: 0.05, waveSpeed: 1.0,
+                                     damping: 0.4, boundary: .fixed)
+            sheet.driveNodes = [sheet.index(10, 10)]
+            sheet.driveAmplitude = 4.0
+            sheet.driveFrequency = driveHz
+            // Let the driven steady state establish.
+            for _ in 0..<2400 { sheet.step(dt: 1.0 / 240.0) }
+            // Average RMS over a further stretch (through the drive cycle).
+            var acc = 0.0
+            for _ in 0..<240 { sheet.step(dt: 1.0 / 240.0); acc += sheet.rms }
+            return acc / 240
+        }
+
+        let f11 = ElasticSheet(n: 21, spacing: 0.05, waveSpeed: 1.0,
+                               damping: 0.4, boundary: .fixed).modeFrequency(m: 1, p: 1)
+        let onResonance = steadyRMS(driveHz: f11)
+        let offResonance = steadyRMS(driveHz: f11 * 0.45)   // between DC and mode 1
+        XCTAssertGreaterThan(onResonance, offResonance * 3,
+                             "driving on a mode should ring far louder than off it")
+    }
+
+    /// With no shaker attached, a sheet that starts flat stays flat — the
+    /// drive fields are inert until a node is actually driven.
+    func testUndrivenSheetStaysFlat() {
+        var sheet = ElasticSheet(n: 21, spacing: 0.05, waveSpeed: 1.2,
+                                 damping: 0.1, boundary: .fixed)
+        sheet.driveAmplitude = 5.0     // amplitude set, but no driveNodes
+        sheet.driveFrequency = 1.0
+        for _ in 0..<600 { sheet.step(dt: 1.0 / 120.0) }
+        XCTAssertEqual(sheet.rms, 0, accuracy: 1e-12)
+    }
 }
