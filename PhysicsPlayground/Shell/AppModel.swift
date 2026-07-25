@@ -31,6 +31,9 @@ final class AppModel {
     /// Driven by the active module's descriptor; bound to the shared
     /// immersive space's style selection.
     var immersionStyle: ImmersionStyle = .mixed
+    /// Completed-experiment bookkeeping, shared app-wide and persisted.
+    let experiments = ExperimentProgress()
+
     /// Whether the floating control pods are shown. The pods orb
     /// toggles this to clear the space for an unobstructed look at
     /// the physics; the 2D window remains the full fallback.

@@ -43,6 +43,8 @@ struct ModuleHostView: View {
 
                 module.makeControls()
 
+                ExperimentsPanel(moduleID: module.id)
+
                 LegendView(items: module.legend)
 
                 RealWorldButton(accent: module.accent) {

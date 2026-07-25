@@ -32,6 +32,10 @@ struct PlaygroundSpaceView: View {
                     // The shared orb controls (pause / back) every module gets.
                     ModuleOrbControlsView(module: module)
                         .id("orbs-\(module.id)")
+                    // The experiments watcher: notices when the physics
+                    // reaches a goal and chimes exactly once.
+                    ExperimentCheckerView(moduleID: module.id)
+                        .id("experiments-\(module.id)")
                     // Quiet lab room tone under every module (not the hub);
                     // no per-module id, so it runs seamlessly across switches.
                     AmbientLabAudioView()

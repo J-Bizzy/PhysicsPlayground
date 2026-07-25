@@ -41,6 +41,20 @@ struct HubView: View {
             .fixedSize()
             .accessibilityHint("Replaces your room with a dark studio so every exhibit glows at full contrast")
 
+            // The lab notebook's spine: overall experiment progress.
+            let totalExperiments = ExperimentCatalog.total(appModel: appModel)
+            let doneExperiments = ExperimentCatalog.completedCount(appModel: appModel)
+            if totalExperiments > 0 {
+                Label("\(doneExperiments) of \(totalExperiments) experiments complete",
+                      systemImage: doneExperiments == totalExperiments
+                          ? "flask.fill" : "flask")
+                    .font(.footnote)
+                    .foregroundStyle(doneExperiments == totalExperiments
+                        ? AnyShapeStyle(.green) : AnyShapeStyle(.white.opacity(0.75)))
+                    .accessibilityLabel(
+                        "\(doneExperiments) of \(totalExperiments) experiments complete")
+            }
+
             if !appModel.isImmersiveSpaceOpen {
                 Button {
                     Task {
