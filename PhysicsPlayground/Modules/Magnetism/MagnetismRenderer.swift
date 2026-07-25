@@ -95,6 +95,28 @@ final class MagnetismRenderer {
         }
     }
 
+    /// An extruded, centred pole letter in warm ivory — generateText's
+    /// origin is the baseline's left edge, so the glyph is re-centred
+    /// from its measured bounds.
+    private static func poleLetter(_ text: String) -> ModelEntity {
+        let mesh = MeshResource.generateText(
+            text,
+            extrusionDepth: 0.006,
+            font: .systemFont(ofSize: 0.034, weight: .heavy),
+            containerFrame: .zero,
+            alignment: .center,
+            lineBreakMode: .byClipping)
+        let entity = ModelEntity(
+            mesh: mesh,
+            materials: [Materials.energized(UIColor(red: 0.98, green: 0.96, blue: 0.90, alpha: 1),
+                                            roughness: 0.3, glow: 0.12)])
+        let bounds = entity.visualBounds(relativeTo: nil)
+        entity.position = [-bounds.center.x, -bounds.center.y, 0]
+        let pivot = ModelEntity()
+        pivot.addChild(entity)
+        return pivot
+    }
+
     private func makeMagnet(_ magnet: BarMagnet) -> Entity {
         let container = Entity()
         container.name = magnet.id.uuidString
@@ -111,6 +133,19 @@ final class MagnetismRenderer {
         south.position = [0, -half / 2, 0]
         container.addChild(north)
         container.addChild(south)
+
+        // Embossed pole letters — raised 3-D type on the front and back
+        // faces, like the stamped lettering on a real lab magnet.
+        for (text, y) in [("N", half / 2), ("S", -half / 2)] {
+            for zSign: Float in [1, -1] {
+                let letter = Self.poleLetter(text)
+                letter.position = [0, y, zSign * (w / 2)]
+                if zSign < 0 {
+                    letter.orientation = simd_quatf(angle: .pi, axis: [0, 1, 0])
+                }
+                container.addChild(letter)
+            }
+        }
 
         // A polished chrome band at the waist — the seam of a real bar
         // magnet, and a crisp divider between the poles.

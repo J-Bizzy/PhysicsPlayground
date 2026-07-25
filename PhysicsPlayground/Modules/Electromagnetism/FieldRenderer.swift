@@ -528,13 +528,16 @@ final class FieldRenderer {
         // hidden) floating just proud of the sphere, always facing the user.
         let signPivot = Entity()
         signPivot.components.set(BillboardComponent())
-        let strokeMaterial = UnlitMaterial(color: UIColor(white: 1.0, alpha: 1))
+        // Chrome strokes with real depth, not flat unlit bars — the glyph
+        // catches the key light like stamped metal.
+        let strokeMaterial = Materials.energized(
+            UIColor(white: 0.97, alpha: 1), roughness: 0.22, glow: 0.2)
         let horizontal = ModelEntity(
-            mesh: .generateBox(size: [0.024, 0.006, 0.003], cornerRadius: 0.0015),
+            mesh: .generateBox(size: [0.024, 0.0062, 0.005], cornerRadius: 0.0022),
             materials: [strokeMaterial])
         horizontal.position = [0, 0, Self.chargeRadius * 1.15]
         let vertical = ModelEntity(
-            mesh: .generateBox(size: [0.006, 0.024, 0.003], cornerRadius: 0.0015),
+            mesh: .generateBox(size: [0.0062, 0.024, 0.005], cornerRadius: 0.0022),
             materials: [strokeMaterial])
         vertical.position = [0, 0, Self.chargeRadius * 1.15]
         vertical.isEnabled = charge.isPositive
