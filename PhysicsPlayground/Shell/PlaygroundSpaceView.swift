@@ -32,6 +32,10 @@ struct PlaygroundSpaceView: View {
                     // The shared orb controls (pause / back) every module gets.
                     ModuleOrbControlsView(module: module)
                         .id("orbs-\(module.id)")
+                    // The shared shell pods: the module's controls, its
+                    // experiments, and its legend, surrounding the user.
+                    ShellPodsView(module: module)
+                        .id("shellpods-\(module.id)")
                     // The experiments watcher: notices when the physics
                     // reaches a goal and chimes exactly once.
                     ExperimentCheckerView(moduleID: module.id)

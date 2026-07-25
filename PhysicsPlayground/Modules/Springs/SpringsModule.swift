@@ -21,7 +21,6 @@ enum SpringsModule {
             accent: DesignTokens.Palette.springsAccent,
             firstRunHint: "Pull the block along its rail and let go — the coils spread with the true extension and the ghost blocks mark the turning points you'll reach. Try Coupled ×2 and pull one block: watch its energy drain into the other and slosh back.",
             legend: legend,
-            realWorld: story,
             isPaused: { appModel.springsModel.isPaused },
             togglePause: { appModel.springsModel.isPaused.toggle() },
             makeControls: {
@@ -53,18 +52,6 @@ enum SpringsModule {
                    text: "Ghost blocks while pulling — the exact turning points a release right now would reach"),
     ]
 
-    private static let story = RealWorldStory(
-        tagline: "Almost everything that vibrates is secretly a mass on a spring.",
-        applications: [
-            .init(title: "Car suspension", icon: "car.fill",
-                  body: "A spring supports each wheel and a damper drains the bounce — exactly your damping slider. Blown dampers make a car float and wallow; stiff ones make it skate."),
-            .init(title: "Quartz watches", icon: "clock.fill",
-                  body: "The quartz tuning fork inside a watch is a microscopic spring oscillating 32,768 times a second; its T = 2π√(m/k) steadiness is why watches keep time."),
-            .init(title: "Earthquake engineering", icon: "building.columns.fill",
-                  body: "Buildings are giant masses on springy frames. Engineers tune stiffness so the building's natural frequency avoids the ground's shaking frequencies — resonance is the enemy."),
-            .init(title: "Molecular bonds", icon: "atom",
-                  body: "Chemical bonds behave like tiny springs between atoms; infrared spectroscopy reads their vibration frequencies to identify molecules — coupled oscillators at nanometer scale."),
-        ])
 }
 
 /// Window panel: geometry parameters.

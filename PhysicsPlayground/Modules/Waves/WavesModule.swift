@@ -3,7 +3,6 @@
 //  Physics Playground — Waves module
 //
 //  Catalog registration for the ripple tank: descriptor, legend, and
-//  first-run hint. The real-world story lives in WavesRealWorld.swift.
 //
 
 import SwiftUI
@@ -21,7 +20,6 @@ enum WavesModule {
             accent: DesignTokens.Palette.wavesAccent,
             firstRunHint: "Pinch a teal source and float it anywhere — the whole field reorganizes live. Flip 'Invert phase' and a silence sheet appears between the sources.",
             legend: legend,
-            realWorld: WavesRealWorld.story,
             isPaused: { appModel.wavesModel.isPaused },
             togglePause: { appModel.wavesModel.isPaused.toggle() },
             makeControls: {

@@ -3,7 +3,6 @@
 //  Physics Playground — Wind Tunnel module
 //
 //  Catalog registration for the wind tunnel: descriptor, legend, and
-//  first-run hint. The real-world story lives in WindTunnelRealWorld.swift.
 //
 
 import SwiftUI
@@ -21,7 +20,6 @@ enum WindTunnelModule {
             accent: DesignTokens.Palette.windAccent,
             firstRunHint: "Watch the smoke: it splits at the nose, races over the shoulders, and tumbles into a wake behind. Swap bodies to see shape decide everything — a box truck shoves the whole tunnel aside, an airliner barely creases it. On device, reach into the stream and the air breaks around your hand too.",
             legend: legend,
-            realWorld: WindTunnelRealWorld.story,
             isPaused: { appModel.windTunnelModel.isPaused },
             togglePause: { appModel.windTunnelModel.isPaused.toggle() },
             makeControls: {

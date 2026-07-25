@@ -25,7 +25,6 @@ enum ElasticFieldModule {
             accent: DesignTokens.Palette.springsAccent,
             firstRunHint: "A shaker pushes the sheet's center. Drag the Drive frequency slowly: the sheet stays calm until you hit a resonance, when a standing mode blooms and the grains rush onto its nodal lines — and the tone swells. Lower the damping for sharper peaks, jump straight onto a mode, or reach in and pull the sheet yourself.",
             legend: legend,
-            realWorld: story,
             isPaused: { appModel.waveMediumModel.isPaused },
             togglePause: { appModel.waveMediumModel.isPaused.toggle() },
             makeControls: {
@@ -57,18 +56,6 @@ enum ElasticFieldModule {
                    text: "The halo marks the point in your hand; release it and the stored tension launches a wave"),
     ]
 
-    private static let story = RealWorldStory(
-        tagline: "Every wave — sound, water, a guitar string — is a medium of coupled springs doing exactly this.",
-        applications: [
-            .init(title: "Drums & speakers", icon: "speaker.wave.3.fill",
-                  body: "A drumhead and a speaker cone are clamped membranes; the (m,p) modes you ring here are the timbres they make. Bigger or looser skins ring lower."),
-            .init(title: "Earthquakes", icon: "waveform.path",
-                  body: "Seismic waves travel through rock as this same wave equation — faster through stiff granite, slower through soft soil, reflecting off layer boundaries exactly like your rim."),
-            .init(title: "Guitar & piano", icon: "guitars.fill",
-                  body: "A plucked string is the 1-D version: pull it aside, release, and standing waves set the pitch. Tighter strings — higher c — sound higher; your wave-speed slider is the tuning peg."),
-            .init(title: "Why instruments differ", icon: "music.note",
-                  body: "A violin and a flute on the same note sound different because of the MIX of modes each excites — the standing patterns on this sheet, superposed."),
-        ])
 }
 
 /// Window panel: the medium's parameters and the physics prose. The

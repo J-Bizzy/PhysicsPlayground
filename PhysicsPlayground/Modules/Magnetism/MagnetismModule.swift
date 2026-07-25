@@ -20,9 +20,9 @@ enum MagnetismModule {
             blurb: "Carry bar magnets around the room; their looping field reorganises live and they attract, repel, and snap into alignment.",
             icon: "cylinder.fill",
             accent: DesignTokens.Palette.magnetismAccent,
+            podsCoverControls: true,
             firstRunHint: "Look at a magnet and pinch to carry it. Bring two close and watch — they pull together head-to-tail, push apart N-to-N, and swing to align. Flip a magnet's poles to switch attraction for repulsion.",
             legend: legend,
-            realWorld: realWorld,
             isPaused: { appModel.magnetismModel.isPaused },
             togglePause: { appModel.magnetismModel.isPaused.toggle() },
             makeControls: {
@@ -48,17 +48,4 @@ enum MagnetismModule {
                    text: "Halo marks the selected magnet"),
     ]
 
-    private static let realWorld = RealWorldStory(
-        tagline: "The same dipole field that snaps two fridge magnets together runs the machines that image your body and store your data.",
-        applications: [
-            .init(title: "MRI scanners", icon: "waveform.path.ecg",
-                  body: "A superconducting magnet aligns the spins of hydrogen nuclei in your body, then reads how they relax — a picture built entirely from magnetic dipoles, the same physics as these bars."),
-            .init(title: "Hard drives & tape", icon: "externaldrive.fill",
-                  body: "Data is stored as billions of tiny magnetic domains, each a dipole flipped N or S. A read head senses the field of each one flying past — your files are a field map."),
-            .init(title: "Electric motors", icon: "gearshape.2.fill",
-                  body: "A motor is a magnet trying to align with a field that keeps rotating out from under it — the torque τ = m × B you feel when two magnets swing to line up, harnessed to spin a shaft."),
-            .init(title: "Compasses & Earth's field", icon: "location.north.line.fill",
-                  body: "A compass needle is a bar magnet free to turn; it points along Earth's own dipole field. Move a magnet near it and, like the needles here, it swings to the stronger local field."),
-        ]
-    )
 }

@@ -22,7 +22,6 @@ enum PendulumsModule {
             accent: DesignTokens.Palette.pendulumsAccent,
             firstRunHint: "The bob is already swinging — grab it and throw it sideways. While you hold it, the faint line shows the swing you're about to launch. Pinch a bob to select it and read its numbers.",
             legend: legend,
-            realWorld: story,
             isPaused: { appModel.pendulumsModel.isPaused },
             togglePause: { appModel.pendulumsModel.isPaused.toggle() },
             makeControls: {
@@ -54,18 +53,6 @@ enum PendulumsModule {
                    text: "White ghost line while holding a bob — the exact swing a release right now would launch"),
     ]
 
-    private static let story = RealWorldStory(
-        tagline: "For 270 years, the most accurate machine on Earth was a swing.",
-        applications: [
-            .init(title: "Pendulum clocks", icon: "clock.fill",
-                  body: "Galileo saw a Pisa chandelier keep the same beat wide or narrow — small-arc period depends only on length and gravity. Huygens built that into the clock that ruled timekeeping until the 1930s; clockmakers kept arcs tiny because wide swings really do run slow."),
-            .init(title: "Foucault's pendulum", icon: "globe.americas.fill",
-                  body: "A long, heavy pendulum swings in a fixed plane while the Earth turns underneath it — the first direct, watch-it-happen proof that the planet rotates."),
-            .init(title: "Tuned-mass dampers", icon: "building.2.fill",
-                  body: "Taipei 101 hangs a 660-tonne steel pendulum near its top; tuned to the tower's sway period, it steals energy from typhoon gusts exactly the way your damped bob dies down."),
-            .init(title: "Seismometers", icon: "waveform.path.ecg",
-                  body: "A suspended mass stays put while the ground jerks beneath it — earthquake instruments read the difference, pendulum physics in reverse."),
-        ])
 }
 
 /// Window panel: per-pendulum parameter sliders.

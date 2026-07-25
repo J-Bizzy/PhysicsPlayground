@@ -75,17 +75,10 @@ struct MainWindowView: View {
     @ViewBuilder
     private var content: some View {
         if let module = appModel.activeModule {
-            // The NavigationStack is what gives the window a top bar: without
-            // a navigation context, visionOS silently drops topBarLeading/
-            // trailing toolbar items (the back and reset buttons). The window
-            // itself is .plain, so the module panel brings its own glass.
-            NavigationStack {
-                ModuleHostView(module: module)
-                    .id(module.id)
-                    .frame(minWidth: 540, maxWidth: .infinity,
-                           minHeight: 620, maxHeight: .infinity)
-            }
-            .glassBackgroundEffect()
+            // The plain window carries just the floating title bar; the
+            // bar brings its own glass capsule.
+            ModuleHostView(module: module)
+                .id(module.id)
         } else {
             // The nameplate: bare floating type — the plain window adds
             // no slab, and the hub adds none of its own.

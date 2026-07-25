@@ -3,8 +3,6 @@
 //  Physics Playground — Gravity Lab module
 //
 //  Catalog registration for the orbital mechanics lab: descriptor,
-//  legend, and first-run hint. The real-world story lives in
-//  GravityLabRealWorld.swift.
 //
 
 import SwiftUI
@@ -23,7 +21,6 @@ enum GravityLabModule {
             immersionStyle: .mixed,
             firstRunHint: "Pinch Earth and drag — the white line shows the orbit you're about to create. Release gently for an ellipse, throw hard to escape the Sun. Turn the crown to dim your room into deep space.",
             legend: legend,
-            realWorld: GravityLabRealWorld.story,
             isPaused: { appModel.gravityLabModel.isPaused },
             togglePause: { appModel.gravityLabModel.isPaused.toggle() },
             makeControls: {

@@ -21,7 +21,6 @@ enum OpticsModule {
             accent: DesignTokens.Palette.opticsAccent,
             firstRunHint: "Look around — three stations. AHEAD: drag lenses along the rail. LEFT: rotate the prism until the exit face locks into total internal reflection. RIGHT: grab the little laser and carry it around the glass block — Snell's law follows your hand; sneak up on the block edge-on and the beam gets trapped inside.",
             legend: legend,
-            realWorld: story,
             isPaused: { false },
             togglePause: { },
             makeControls: {
@@ -53,18 +52,6 @@ enum OpticsModule {
                    text: "The spectrum fan — seven wavelengths, each solving Snell's law with its own refractive index (Cauchy dispersion)"),
     ]
 
-    private static let story = RealWorldStory(
-        tagline: "Every camera, telescope, and eyeball is this bench, folded up.",
-        applications: [
-            .init(title: "Your own eye", icon: "eye.fill",
-                  body: "The cornea and lens form a converging system imaging the world onto your retina — near- and far-sightedness are just the image landing off the screen, and glasses slide the focus back."),
-            .init(title: "Cameras", icon: "camera.fill",
-                  body: "Focusing a lens is exactly dragging it along this rail: changing dₒ and dᵢ so the image lands on the sensor. f-numbers, zoom, macro — all thin-lens arithmetic."),
-            .init(title: "Telescopes & microscopes", icon: "binoculars.fill",
-                  body: "Two lenses sharing a focal point: one forms a real image, the second magnifies it. Galileo's telescope was this bench with better mounts."),
-            .init(title: "Fiber optics", icon: "network",
-                  body: "Past the critical angle, glass becomes a perfect mirror — total internal reflection traps light inside a hair-thin fiber for thousands of kilometers of internet."),
-        ])
 }
 
 /// Window panel: the readouts and the physics prose. In-space the
