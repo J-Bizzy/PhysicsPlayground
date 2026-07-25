@@ -67,6 +67,27 @@ struct ModuleHostView: View {
                 }
                 .accessibilityHint("Returns to the simulation catalog")
             }
+            ToolbarItem(placement: .topBarLeading) {
+                // Jump straight to any module — no round trip through the
+                // hub. The menu lists the whole catalog with each module's
+                // own icon; the current one is checked.
+                Menu {
+                    ForEach(ModuleCatalog.all(appModel: appModel)) { entry in
+                        Button {
+                            appModel.activeModuleID = entry.id
+                        } label: {
+                            if entry.id == module.id {
+                                Label(entry.title, systemImage: "checkmark")
+                            } else {
+                                Label(entry.title, systemImage: entry.icon)
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Switch simulation", systemImage: "square.grid.3x3")
+                }
+                .accessibilityHint("Jump directly to another simulation")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     appModel.studioMode.toggle()

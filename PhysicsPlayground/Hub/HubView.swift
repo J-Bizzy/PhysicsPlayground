@@ -70,6 +70,44 @@ struct HubView: View {
                 .accessibilityHint("Places the exhibit ring in your room")
             }
 
+            // The catalog, as tappable cards — the fast lane into any
+            // module for anyone who'd rather tap a window than pinch an
+            // exhibit (and the only lane while the space is closed).
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10),
+                                GridItem(.flexible(), spacing: 10)],
+                      spacing: 10) {
+                ForEach(ModuleCatalog.all(appModel: appModel)) { module in
+                    Button {
+                        appModel.activeModuleID = module.id
+                    } label: {
+                        HStack(spacing: 9) {
+                            Image(systemName: module.icon)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(module.accent)
+                                .frame(width: 27, height: 27)
+                                .background(module.accent.opacity(0.18),
+                                            in: RoundedRectangle(cornerRadius: 8,
+                                                                 style: .continuous))
+                            Text(module.title)
+                                .font(.callout)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .background(
+                        .regularMaterial,
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .hoverEffect()
+                    .accessibilityHint("Opens \(module.title)")
+                }
+            }
+            .frame(maxWidth: 500)
+
             Spacer(minLength: 12)
         }
         .padding(DesignTokens.Panel.outerPadding)
