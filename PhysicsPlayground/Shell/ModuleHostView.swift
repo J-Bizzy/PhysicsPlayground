@@ -68,24 +68,9 @@ struct ModuleHostView: View {
 
                 Spacer(minLength: 12)
 
-                // Right: run state and modes.
-                Button {
-                    module.togglePause()
-                } label: {
-                    Image(systemName: module.isPaused() ? "play.fill" : "pause.fill")
-                }
-                .accessibilityLabel(module.isPaused() ? "Resume" : "Pause")
-                .accessibilityHint("Freezes the physics so you can walk around it")
-
-                Button {
-                    appModel.controlPodsVisible.toggle()
-                } label: {
-                    Image(systemName: appModel.controlPodsVisible
-                          ? "circle.grid.2x2.fill" : "circle.grid.2x2")
-                }
-                .accessibilityLabel(appModel.controlPodsVisible ? "Hide pods" : "Show pods")
-                .accessibilityHint("Clears the floating control pods for an unobstructed view")
-
+                // Right: modes. (Pause, pods and reset live on the
+                // four-bead cluster at the user's feet — the frequent-use
+                // controls stay on the buttons built for frequent use.)
                 Button {
                     appModel.studioMode.toggle()
                 } label: {

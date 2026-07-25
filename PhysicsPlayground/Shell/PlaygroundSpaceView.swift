@@ -29,6 +29,11 @@ struct PlaygroundSpaceView: View {
                 ZStack {
                     module.makeScene()
                         .id(module.id)
+                    // The four-bead navigation cluster — kept as the
+                    // ZStack's second child, the slot where RealityView
+                    // content provably renders.
+                    ModuleOrbControlsView(module: module)
+                        .id("orbs-\(module.id)")
                     // The shared shell pods: the module's controls, its
                     // experiments, and its legend, surrounding the user.
                     ShellPodsView(module: module)
