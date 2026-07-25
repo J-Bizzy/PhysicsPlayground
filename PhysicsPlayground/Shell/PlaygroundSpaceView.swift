@@ -29,9 +29,6 @@ struct PlaygroundSpaceView: View {
                 ZStack {
                     module.makeScene()
                         .id(module.id)
-                    // The shared orb controls (pause / back) every module gets.
-                    ModuleOrbControlsView(module: module)
-                        .id("orbs-\(module.id)")
                     // The shared shell pods: the module's controls, its
                     // experiments, and its legend, surrounding the user.
                     ShellPodsView(module: module)
