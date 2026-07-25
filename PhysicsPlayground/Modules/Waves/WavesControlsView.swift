@@ -66,42 +66,16 @@ struct WavesControlsView: View {
 
             PanelSection("Waves") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Frequency: \(model.frequency, specifier: "%.2f") Hz")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.frequency, in: WavesModel.frequencyRange)
-                        .accessibilityLabel("Frequency")
-                }
-                VStack(alignment: .leading, spacing: 6) {
                     Text("Wave speed: \(model.waveSpeed, specifier: "%.2f") m/s")
                         .font(DesignTokens.TypeScale.control.monospacedDigit())
                     Slider(value: $model.waveSpeed, in: WavesModel.speedRange)
                         .accessibilityLabel("Wave speed")
                 }
 
-                Toggle("Silence surfaces", isOn: $model.showSilenceSurfaces)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("Translucent 3D sheets where the waves cancel to nothing — walk around them")
-
                 Toggle("Wavefronts", isOn: $model.showWavefronts)
                     .font(DesignTokens.TypeScale.control)
                     .accessibilityHint("Expanding crest spheres from each source; sweep a source and they bunch ahead — the Doppler effect made visible")
 
-                HStack(spacing: DesignTokens.Panel.rowSpacing) {
-                    Button {
-                        model.isPaused.toggle()
-                    } label: {
-                        Label(model.isPaused ? "Resume" : "Freeze",
-                              systemImage: model.isPaused ? "play.fill" : "pause.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.podQuiet)
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Slow motion: ×\(model.timeScale, specifier: "%.1f")")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.timeScale, in: WavesModel.timeScaleRange)
-                        .accessibilityLabel("Time scale")
-                }
             }
 
             PanelSection {

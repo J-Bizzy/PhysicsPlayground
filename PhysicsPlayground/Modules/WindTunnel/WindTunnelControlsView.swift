@@ -17,11 +17,7 @@ struct WindTunnelControlsView: View {
         @Bindable var model = model
 
         VStack(spacing: DesignTokens.Panel.sectionSpacing) {
-            PanelSection("Wind tunnel") {
-                labeledSlider(
-                    "Wind speed", value: $model.windSpeed,
-                    range: WindTunnelModel.windSpeedRange, format: "%.2f m/s"
-                )
+            PanelSection("Test section") {
                 labeledSlider(
                     model.testBody == .cylinder ? "Cylinder radius" : "Body size",
                     value: $model.cylinderRadius,
@@ -35,11 +31,7 @@ struct WindTunnelControlsView: View {
             }
             .font(DesignTokens.TypeScale.control)
 
-            PanelSection("Spin — the Magnus effect") {
-                labeledSlider(
-                    "Spin", value: $model.circulation,
-                    range: WindTunnelModel.circulationRange, format: "%.2f m²/s"
-                )
+            PanelSection("Magnus readouts — spin lives on the Wind pod") {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                     row("Spin rate", String(format: "%.0f", model.spinRPM), "rpm")
                     row("Lift (ρUΓ)", String(format: "%.2f", abs(model.liftPerSpan)),
@@ -125,7 +117,7 @@ struct WindTunnelStatsView: View {
 
             Divider()
 
-            Text("Drag here is exactly zero — d'Alembert's paradox. Ideal air has no friction; real drag comes from viscosity and the wake, which is why streamlining matters (see the real-world panel).")
+            Text("Drag here is exactly zero — d'Alembert's paradox. Ideal air has no friction; real drag comes from viscosity and the wake — which is why streamlining matters.")
                 .font(DesignTokens.TypeScale.footnote)
                 .foregroundStyle(.secondary)
         }

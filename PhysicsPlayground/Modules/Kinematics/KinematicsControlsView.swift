@@ -20,10 +20,6 @@ struct KinematicsControlsView: View {
         VStack(spacing: DesignTokens.Panel.sectionSpacing) {
             PanelSection("Launch & throw") {
                 labeledSlider(
-                    "Speed", value: $model.launchSpeed,
-                    range: KinematicsModel.speedRange, format: "%.1f m/s"
-                )
-                labeledSlider(
                     "Angle", value: $model.elevationDegrees,
                     range: KinematicsModel.elevationRangeDegrees, format: "%.0f°"
                 )
@@ -86,9 +82,6 @@ struct KinematicsControlsView: View {
                     range: KinematicsModel.gravityRange, format: "%.2f m/s²"
                 )
 
-                Toggle("Air resistance", isOn: $model.airResistance)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("Quadratic drag — compare how much each ball cares")
 
                 labeledSlider(
                     "Wind", value: $model.windSpeed,
@@ -133,23 +126,7 @@ struct KinematicsControlsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            PanelSection("Time & hoops") {
-                HStack(spacing: DesignTokens.Panel.rowSpacing) {
-                    Button {
-                        model.isPaused.toggle()
-                    } label: {
-                        Label(model.isPaused ? "Resume" : "Pause",
-                              systemImage: model.isPaused ? "play.fill" : "pause.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.podQuiet)
-                    .accessibilityHint("Freezes every ball mid-air so you can walk around them")
-                }
-                labeledSlider(
-                    "Slow motion", value: $model.timeScale,
-                    range: KinematicsModel.timeScaleRange, format: "×%.1f"
-                )
-
+            PanelSection("Hoops") {
                 HStack(spacing: DesignTokens.Panel.rowSpacing) {
                     Button {
                         model.addRing()

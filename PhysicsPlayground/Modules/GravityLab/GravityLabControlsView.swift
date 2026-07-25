@@ -20,46 +20,6 @@ struct GravityLabControlsView: View {
         @Bindable var model = model
 
         VStack(spacing: DesignTokens.Panel.sectionSpacing) {
-            PanelSection("Bodies") {
-                LazyVGrid(columns: presetColumns, spacing: 8) {
-                    ForEach(GravityLabModel.Preset.allCases) { preset in
-                        Button(preset.displayName) {
-                            model.spawn(preset)
-                        }
-                        .buttonStyle(.podQuiet)
-                        .disabled(model.bodies.count >= GravityLabModel.bodyBudget
-                                  || model.mode == .lagrange)
-                        .accessibilityLabel("Spawn \(preset.displayName) on its real orbit")
-                    }
-                }
-
-                Button(role: .destructive) {
-                    model.removeSelected()
-                } label: {
-                    Label("Remove selected body", systemImage: "trash")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.podQuiet)
-                .disabled(model.selectedBody == nil || model.selectedBody?.id == model.primaryBody?.id)
-
-                if model.mode == .solarSystem, model.hasSingleSun {
-                    Button {
-                        model.makeBinary()
-                    } label: {
-                        Label("Split into a binary star", systemImage: "circle.grid.2x1.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.podProminent)
-                    .tint(DesignTokens.Palette.gravityAccent)
-                    .disabled(model.bodies.count >= GravityLabModel.bodyBudget)
-                    .accessibilityHint("Splits the Sun into two half-mass suns orbiting each other — total mass and momentum conserved, then the three-body chaos begins")
-                }
-
-                Text("\(model.bodies.count) of \(GravityLabModel.bodyBudget) bodies. Grab any of them — or the Sun.")
-                    .font(DesignTokens.TypeScale.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
             PanelSection("Custom planet") {
                 labeledSlider(
                     "Distance", value: $model.customDistanceAU,
@@ -139,33 +99,6 @@ struct GravityLabControlsView: View {
                     "Gravity (G)", value: $model.gMultiplier,
                     range: 0.1...5, format: "×%.1f"
                 )
-                Picker("Trails", selection: $model.trailLength) {
-                    ForEach(GravityLabModel.TrailLength.allCases) { length in
-                        Text(length.rawValue.capitalized).tag(length)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .accessibilityLabel("Trail length")
-
-                Toggle("Velocity vector (blue)", isOn: $model.showVelocityVector)
-                Toggle("Acceleration vector (orange)", isOn: $model.showAccelerationVector)
-                Toggle("Force vector (red)", isOn: $model.showForceVector)
-
-                Toggle("Gravity field particles", isOn: $model.showFieldParticles)
-                    .accessibilityHint("Faint particles drifting along the field — they crowd together where gravity is stronger")
-                if model.showFieldParticles {
-                    Text("Each particle drifts along the true local field, Σ GM/r² — the crowding near masses isn't drawn, it emerges.")
-                        .font(DesignTokens.TypeScale.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
-                Toggle("Spacetime grid (conceptual)", isOn: $model.showSpacetimeGrid)
-                    .accessibilityHint("The rubber-sheet picture: masses dent a grid beneath the system")
-                if model.showSpacetimeGrid {
-                    Text("The classic rubber-sheet picture — an analogy, not the simulation. Well depths are compressed (∝ m¼) so planets dent the sheet visibly beside the Sun.")
-                        .font(DesignTokens.TypeScale.footnote)
-                        .foregroundStyle(.secondary)
-                }
             }
             .font(DesignTokens.TypeScale.control)
 
