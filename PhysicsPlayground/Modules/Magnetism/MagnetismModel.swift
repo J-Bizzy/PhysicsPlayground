@@ -58,8 +58,22 @@ final class MagnetismModel {
 
     // MARK: Clock — the overdamped magnetic dynamics
 
+    /// Whether the magnets translate and turn under their mutual forces.
+    /// On (the default), the bench is alive: bring two magnets near and
+    /// they attract, repel, and swing into alignment. Off, every magnet
+    /// holds exactly where you park it — a frozen arrangement whose
+    /// field you can study, mirroring the electric bench's stationary
+    /// charges.
+    var dynamicsOn = true
+
     func step(dt: Double) {
         guard !isPaused else { return }
+        guard dynamicsOn else {
+            // Frozen: no forces, but contact separation still holds so a
+            // dragged magnet can't be parked inside another.
+            magnets = separated(magnets)
+            return
+        }
         let h = min(dt, 1.0 / 60.0)
         var next = magnets
         for i in magnets.indices where magnets[i].id != heldID {
@@ -203,5 +217,13 @@ final class MagnetismModel {
         showCompasses = true
     }
 
-    init() { reset() }
+    init() {
+        reset()
+        #if DEBUG
+        // `-magFrozen 1`: open with dynamics off (CLI screenshot checks).
+        if UserDefaults.standard.bool(forKey: "magFrozen") {
+            dynamicsOn = false
+        }
+        #endif
+    }
 }

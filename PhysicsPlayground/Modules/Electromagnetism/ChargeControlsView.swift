@@ -49,6 +49,10 @@ struct ChargeControlsView: View {
                     .accessibilityValue("\(model.selectedMagnitudeMicroCoulombs, specifier: "%.1f") microcoulombs")
             }
 
+            Toggle("Charges respond to forces", isOn: $model.chargesRespond)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("Free the charges: opposites drift together, likes push apart. Off, they stay exactly where you put them.")
+
             Picker("Polarity", selection: $model.selectedIsPositive) {
                 Text("Positive +").tag(true)
                 Text("Negative −").tag(false)

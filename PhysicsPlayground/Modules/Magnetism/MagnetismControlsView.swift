@@ -58,6 +58,10 @@ private struct MagnetEditControls: View {
             }
             .buttonStyle(.podQuiet)
             .disabled(model.selectedMagnet == nil)
+
+            Toggle("Magnets respond to forces", isOn: $model.dynamicsOn)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("Off, magnets hold exactly where you park them — study a frozen arrangement's field. On, they attract, repel, and swing to align.")
             .accessibilityHint("Reverses the selected magnet — turns attraction into repulsion")
 
             VStack(alignment: .leading, spacing: 6) {

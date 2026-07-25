@@ -187,8 +187,90 @@ final class FieldModel {
         ElectricField.vector(at: point, dueTo: charges) + capacitorField(at: point)
     }
 
-    /// Freezes the probe's flight (the module's only time evolution).
+    /// Freezes the probe's flight and any free-charge drift.
     var isPaused = false
+
+    // MARK: Free charges
+    //
+    // Stationary by default — the classic electrostatics exhibit, where
+    // YOU are the thing that moves charges. Flip this on and the source
+    // charges themselves respond to the net Coulomb force from every
+    // other charge (plus the plates' field): opposites drift together
+    // until they touch, likes shove each other apart — the same
+    // overdamped force→velocity presentation the magnetism bench uses,
+    // with the force direction exact and the speed capped.
+    var chargesRespond = false
+    /// The charge pinned under the user's hand — it follows the drag,
+    /// never the drift, while everything else reacts to it live.
+    var heldChargeID: UUID?
+
+    nonisolated static let chargeDriftGain = 3.0     // m/s per newton, overdamped
+    nonisolated static let chargeMaxSpeed = 0.4      // m/s cap
+    /// Two charge spheres touch at this centre distance (m); the drift
+    /// can't push them closer, which also keeps 1/r² finite.
+    nonisolated static let chargeContact = 0.075
+
+    /// One frame of overdamped Coulomb drift for the source charges.
+    func stepFreeCharges(dt: Double) {
+        guard chargesRespond, !isPaused, charges.count > 1 || capacitorOn else { return }
+        let h = min(dt, 1.0 / 30.0)
+
+        // Keep the flock from wandering off: drift stays within the
+        // region the arrows sample, centred on the charges themselves.
+        let centroid = charges.map(\.position).reduce(.zero, +) / Double(charges.count)
+        let bound = Self.regionExtent * 0.55
+
+        var next = charges.map(\.position)
+        for j in charges.indices {
+            let mover = charges[j]
+            if mover.id == heldChargeID { continue }
+            let others = charges.enumerated()
+                .filter { $0.offset != j }
+                .map(\.element)
+            var field = SIMD3<Double>.zero
+            if !others.isEmpty {
+                field = ElectricField.vector(at: mover.position, dueTo: others)
+            }
+            field += capacitorField(at: mover.position)
+            let force = mover.charge * field
+            var velocity = Self.chargeDriftGain * force
+            let speed = simd_length(velocity)
+            guard speed > 1e-12 else { continue }
+            if speed > Self.chargeMaxSpeed {
+                velocity *= Self.chargeMaxSpeed / speed
+            }
+            var position = mover.position + velocity * h
+            position.y = max(position.y, Self.floorClearance)
+            position = simd_clamp(position,
+                                  centroid - SIMD3(repeating: bound),
+                                  centroid + SIMD3(repeating: bound))
+            next[j] = position
+        }
+
+        // Contact: spheres can touch but never interpenetrate (which also
+        // keeps the 1/r² forces finite). Pairs push apart symmetrically;
+        // a held charge is immovable and its partner takes the full push.
+        for _ in 0..<2 {
+            for a in next.indices {
+                for b in (a + 1)..<next.count {
+                    let offset = next[b] - next[a]
+                    let distance = simd_length(offset)
+                    guard distance < Self.chargeContact, distance > 1e-9 else { continue }
+                    let push = (Self.chargeContact - distance) / 2
+                    let direction = offset / distance
+                    let aHeld = charges[a].id == heldChargeID
+                    let bHeld = charges[b].id == heldChargeID
+                    if aHeld && bHeld { continue }
+                    if aHeld { next[b] += direction * push * 2 }
+                    else if bHeld { next[a] -= direction * push * 2 }
+                    else { next[a] -= direction * push; next[b] += direction * push }
+                }
+            }
+        }
+        for j in charges.indices where charges[j].position != next[j] {
+            charges[j].position = next[j]
+        }
+    }
 
     /// Counts placements so each new charge lands at a different spot.
     private var placementIndex = 1
@@ -206,6 +288,12 @@ final class FieldModel {
         }
         if UserDefaults.standard.bool(forKey: "emProbe") {
             dropProbe()
+        }
+        // `-emFree 1`: free-charge mode with an opposite pair already
+        // attracting, so the drift is screenshot-checkable from the CLI.
+        if UserDefaults.standard.bool(forKey: "emFree") {
+            addCharge(positive: false)
+            chargesRespond = true
         }
         #endif
     }

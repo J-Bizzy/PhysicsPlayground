@@ -55,6 +55,10 @@ struct ChargesPod: View {
             .disabled(!hasSelection)
             .accessibilityLabel("Charge polarity")
 
+            Toggle("Charges respond to forces", isOn: $model.chargesRespond)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("Free the charges: opposites drift together, likes push apart. Off, they stay exactly where you put them.")
+
             HStack(spacing: 8) {
                 Button(role: .destructive) {
                     model.removeSelectedCharge()

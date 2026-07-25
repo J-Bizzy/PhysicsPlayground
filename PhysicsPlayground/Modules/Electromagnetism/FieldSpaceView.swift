@@ -51,6 +51,7 @@ struct FieldSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.stepProbe(dt: event.deltaTime)
+                    model.stepFreeCharges(dt: event.deltaTime)
                     renderer?.tick(model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
@@ -97,6 +98,7 @@ struct FieldSpaceView: View {
                         }
                     }
                     drag = nil
+                    model.heldChargeID = nil
                 }
         )
     }
@@ -136,6 +138,7 @@ struct FieldSpaceView: View {
         } else if drag.name == FieldRenderer.probeEntityName {
             model.holdProbe(at: position)
         } else if let id = UUID(uuidString: drag.name) {
+            model.heldChargeID = id
             model.moveCharge(id: id, to: position)
         }
     }
