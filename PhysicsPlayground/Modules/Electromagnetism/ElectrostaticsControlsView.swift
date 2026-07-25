@@ -2,10 +2,14 @@
 //  ElectrostaticsControlsView.swift
 //  Physics Playground — Electromagnetism module
 //
-//  The electromagnetism control panel content. The shell wraps it with the
-//  shared chrome (first-run hint above, legend and real-world button below),
-//  so this view supplies only the module-specific sections: charge editing,
-//  display toggles, fallback position sliders, and the live stats readout.
+//  The electromagnetism window content. While the immersive space is
+//  open, the floating pods around the field own the everyday controls —
+//  repeating them here was pure dead weight, a second place to do the
+//  same thing. The window keeps only what the pods can't offer: the
+//  precise position sliders for the selected charge (also the
+//  accessibility path for moving one without a hand-drag). When the
+//  space is closed the pods don't exist, so the full control stack
+//  returns as the fallback.
 //
 
 import SwiftUI
@@ -13,18 +17,33 @@ import SwiftUI
 struct ElectrostaticsControlsView: View {
     @Environment(FieldModel.self) private var model
 
+    @Environment(AppModel.self) private var appModel
+
     var body: some View {
         @Bindable var model = model
 
         VStack(spacing: DesignTokens.Panel.sectionSpacing) {
-            PanelSection("Charges") {
-                ChargeControlsView()
-                displayToggles(model: $model)
-                positionSliders(model: $model)
-            }
+            if appModel.isImmersiveSpaceOpen {
+                PanelSection("Place a charge precisely") {
+                    Text("Select a charge in the field, then set its position exactly — or just drag it by hand.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    positionSliders(model: $model)
+                }
+                Text("Everything else lives on the floating pods around the field.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                PanelSection("Charges") {
+                    ChargeControlsView()
+                    displayToggles(model: $model)
+                    positionSliders(model: $model)
+                }
 
-            PanelSection {
-                PhysicsStatsView()
+                PanelSection {
+                    PhysicsStatsView()
+                }
             }
         }
     }

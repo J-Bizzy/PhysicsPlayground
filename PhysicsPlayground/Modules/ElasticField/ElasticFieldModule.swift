@@ -75,12 +75,34 @@ enum ElasticFieldModule {
 /// room holds the sheet and two small pods; the paragraphs live here.
 struct WaveMediumControlsView: View {
     @Environment(WaveMediumModel.self) private var model
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         @Bindable var model = model
         let near = model.nearestResonance()
 
         VStack(alignment: .leading, spacing: DesignTokens.Panel.sectionSpacing) {
+            // While the space is open, the Shaker and Medium pods beside
+            // the drum own these controls — repeating them here was a
+            // second place to do the same thing. The window keeps the
+            // physics prose the pods don't carry.
+            if appModel.isImmersiveSpaceOpen {
+                PanelSection("What you're seeing") {
+                    Text("The sheet is a grid of masses joined by springs — in the small-displacement limit, the exact wave equation ∂²u/∂t² = c²∇²u. A shaker pushes the center with a force F = A·sin(2πf·t). Off resonance the sheet barely responds; when f matches a natural frequency f = (c/2)√((m/L)²+(p/L)²), that standing mode builds to full amplitude. Grains migrate off the shaking antinodes to the still nodal lines — the same Chladni figures a bowed metal plate makes.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if !model.insightText.isEmpty {
+                    Text(model.insightText)
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text("The Shaker and Medium pods beside the drum hold the controls.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
             PanelSection("The shaker") {
                 Toggle("Drive the drumhead", isOn: $model.driveOn)
                     .font(DesignTokens.TypeScale.control)
@@ -131,6 +153,7 @@ struct WaveMediumControlsView: View {
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
             }
         }
     }
