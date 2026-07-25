@@ -2,12 +2,11 @@
 //  FieldPods.swift
 //  Physics Playground — Electromagnetism module
 //
-//  The EM module's control pods — the old single mega-panel split
-//  into five single-purpose cards spread around the field region:
-//  charges on the upper left, the test charge below them, the
-//  capacitor on the upper right (beside where the plates live), the
-//  magnet below it, and the view toggles down low. The stats card
-//  keeps its own pod. See ControlPod.swift for the system's rules.
+//  The EM module's control pods — four single-purpose cards spread
+//  around the field region: charges upper left, the test charge below
+//  them, the two imposed uniform fields (plates + magnet) upper right,
+//  and the numbers card (with the view toggles) lower right. See
+//  ControlPod.swift for the system's rules.
 //
 
 import PhysicsCore
@@ -132,13 +131,13 @@ struct TestChargePod: View {
     }
 }
 
-struct CapacitorPod: View {
+struct UniformFieldsPod: View {
     @Environment(FieldModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
 
-        ControlPod(title: "Capacitor", icon: "plus.forwardslash.minus",
+        ControlPod(title: "Uniform fields", icon: "plus.forwardslash.minus",
                    tint: DesignTokens.Palette.forceVector) {
             Toggle("Parallel plates", isOn: $model.capacitorOn)
                 .font(DesignTokens.TypeScale.control)
@@ -153,24 +152,13 @@ struct CapacitorPod: View {
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
             }
-        }
-    }
-}
 
-struct MagneticPod: View {
-    @Environment(FieldModel.self) private var model
-
-    var body: some View {
-        @Bindable var model = model
-
-        ControlPod(title: "Magnetic field", icon: "atom",
-                   tint: DesignTokens.Palette.probeNegative) {
             Toggle("Uniform B (up)", isOn: $model.magneticFieldOn)
                 .font(DesignTokens.TypeScale.control)
-            Toggle("Electron mode", isOn: $model.electronMode)
-                .font(DesignTokens.TypeScale.control)
-                .accessibilityHint("The probe becomes a real electron; realistic fields curve it")
             if model.magneticFieldOn {
+                Toggle("Electron mode", isOn: $model.electronMode)
+                    .font(DesignTokens.TypeScale.control)
+                    .accessibilityHint("The probe becomes a real electron; realistic fields curve it")
                 if model.electronMode {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("B \(model.electronFieldTesla * 1000, specifier: "%.2f") mT   r = mv/qB = \(model.cyclotronRadius * 100, specifier: "%.0f") cm")
@@ -197,23 +185,20 @@ struct MagneticPod: View {
     }
 }
 
-struct FieldViewPod: View {
+/// The display toggles, now living at the top of the Numbers pod — a
+/// glance-and-set row rather than a whole card of their own.
+struct FieldViewToggles: View {
     @Environment(FieldModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
-
-        ControlPod(title: "View", icon: "eye",
-                   tint: .secondary) {
-            Toggle("Field lines", isOn: $model.showLines)
-                .accessibilityLabel("Show field lines with direction arrows")
-            Toggle("Equipotential shells", isOn: $model.showEquipotentials)
-                .accessibilityLabel("Show equipotential shells")
-            if model.showEquipotentials {
-                Stepper("Casings: \(model.equipotentialShells)",
-                        value: $model.equipotentialShells, in: 1...6)
-            }
+        Toggle("Field lines", isOn: $model.showLines)
+            .accessibilityLabel("Show field lines with direction arrows")
+        Toggle("Equipotential shells", isOn: $model.showEquipotentials)
+            .accessibilityLabel("Show equipotential shells")
+        if model.showEquipotentials {
+            Stepper("Casings: \(model.equipotentialShells)",
+                    value: $model.equipotentialShells, in: 1...6)
         }
-        .font(DesignTokens.TypeScale.control)
     }
 }

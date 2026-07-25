@@ -99,8 +99,10 @@ final class HubScene {
     /// "Physics / Playground" as two lines of fat rounded 3-D letters —
     /// glossy bubbles with a soft glow behind, floating at the centre of
     /// the ring.
-    /// Centred in the ring, a step forward in depth from the exhibits.
-    private static let titleOffset = SIMD3<Float>(0, 0, 0.12)
+    /// Centred in the ring, a step forward in depth from the exhibits —
+    /// and lifted above the hub window, which grew a catalog grid and
+    /// now reaches well up into the old title height.
+    private static let titleOffset = SIMD3<Float>(0, 0.34, 0.12)
     /// The title reads as smoky, semi-transparent glass rather than
     /// coloured candy — a quiet frosted grey.
     private static let titleColor = UIColor(white: 0.62, alpha: 1)

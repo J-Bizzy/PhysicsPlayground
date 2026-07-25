@@ -33,18 +33,16 @@ struct FieldSpaceView: View {
             // hangs from a grabbable bar; the pods orb clears them all.
             let podsRoot = PodMount.makeRoot(module: "electrostatics")
             renderer.root.addChild(podsRoot)
+            // Four pods, one idea each: sources left, imposed fields and
+            // the numbers right.
             PodMount.mount(attachments.entity(for: "pod-charges"), name: "Charges",
                            at: [-1.05, 1.72, -0.85], in: podsRoot)
             PodMount.mount(attachments.entity(for: "pod-probe"), name: "Test charge",
                            at: [-1.2, 1.12, -0.65], in: podsRoot)
-            PodMount.mount(attachments.entity(for: "pod-capacitor"), name: "Capacitor",
+            PodMount.mount(attachments.entity(for: "pod-fields"), name: "Uniform fields",
                            at: [1.05, 1.72, -0.85], in: podsRoot)
-            PodMount.mount(attachments.entity(for: "pod-magnetic"), name: "Magnetic field",
-                           at: [1.2, 1.12, -0.65], in: podsRoot)
-            PodMount.mount(attachments.entity(for: "pod-view"), name: "View",
-                           at: [-0.62, 0.78, -0.75], drop: 0.13, in: podsRoot)
             PodMount.mount(attachments.entity(for: "pod-stats"), name: "Numbers",
-                           at: [0.62, 0.78, -0.75], in: podsRoot)
+                           at: [1.2, 1.08, -0.65], in: podsRoot)
 
 
             // Simulation clock: step the probe every rendered frame, then
@@ -64,12 +62,11 @@ struct FieldSpaceView: View {
         } attachments: {
             Attachment(id: "pod-charges") { ChargesPod() }
             Attachment(id: "pod-probe") { TestChargePod() }
-            Attachment(id: "pod-capacitor") { CapacitorPod() }
-            Attachment(id: "pod-magnetic") { MagneticPod() }
-            Attachment(id: "pod-view") { FieldViewPod() }
+            Attachment(id: "pod-fields") { UniformFieldsPod() }
             Attachment(id: "pod-stats") {
-                ControlPod(title: "Numbers", icon: "number",
+                ControlPod(title: "View & numbers", icon: "eye",
                            tint: .secondary, width: 330) {
+                    FieldViewToggles()
                     PhysicsStatsView()
                 }
             }
