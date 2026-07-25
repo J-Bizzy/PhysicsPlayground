@@ -31,7 +31,7 @@ struct ModuleOrbControlsView: View {
 
     var body: some View {
         RealityView { content, attachments in
-            scene.build()
+            scene.build(accent: UIColor(module.accent))
             content.add(scene.root)
             if let tip = attachments.entity(for: "pod-tip") {
                 tip.position = [0, 1.02, -0.72]
@@ -112,6 +112,9 @@ final class OrbScene {
     let root = Entity()
     var subscription: EventSubscription?
 
+    private var accent: UIColor = .white
+    private var resetNucleus: ModelEntity?
+
     private(set) var pauseOrb = ModelEntity()
     private(set) var backOrb = ModelEntity()
     private(set) var podsOrb = ModelEntity()
@@ -141,8 +144,9 @@ final class OrbScene {
         return 0.028 * t * t
     }
 
-    func build() {
-        buildRail()
+    func build(accent: UIColor) {
+        self.accent = accent
+        buildRail(accent: accent)
         backOrb = makeOrb(
             name: "orb-back",
             at: Self.orbPosition(0),
@@ -189,6 +193,11 @@ final class OrbScene {
 
         // Reset: a smooth counter-clockwise ring-arrow.
         attachIcon(resetRingIcon(), to: resetOrb)
+
+        for orb in [backOrb, pauseOrb, podsOrb] {
+            _ = addNucleus(to: orb)
+        }
+        resetNucleus = addNucleus(to: resetOrb)
     }
 
     // MARK: Icon geometry
@@ -200,8 +209,8 @@ final class OrbScene {
 
     /// Chrome with a whisper of self-illumination, so the icon never sinks
     /// to a flat silhouette even when it falls into shadow.
-    private static func iconMetal(_ tint: UIColor = UIColor(white: 0.9, alpha: 1),
-                                  emissive: Float = 0.14) -> PhysicallyBasedMaterial {
+    private static func iconMetal(_ tint: UIColor = UIColor(white: 0.93, alpha: 1),
+                                  emissive: Float = 0.22) -> PhysicallyBasedMaterial {
         var m = PhysicallyBasedMaterial()
         m.baseColor = .init(tint: tint)
         m.metallic = 0.9
@@ -328,31 +337,59 @@ final class OrbScene {
     func showResetArmed(_ armed: Bool) {
         guard armed != showingResetArmed else { return }
         showingResetArmed = armed
+        let warning = UIColor(red: 1, green: 0.32, blue: 0.28, alpha: 1)
         resetOrb.model?.materials = [armed
-            ? Self.orbGlass(tint: UIColor(red: 1, green: 0.32, blue: 0.28, alpha: 1),
-                            opacity: 0.55, emissive: 0.35)
+            ? Self.orbGlass(tint: warning, opacity: 0.55, emissive: 0.35)
             : Self.orbGlass()]
+        var nucleusMaterial = UnlitMaterial(color: armed ? warning : accent)
+        nucleusMaterial.blending = .transparent(opacity: armed ? 0.9 : 0.5)
+        resetNucleus?.model?.materials = [nucleusMaterial]
     }
 
     /// The glass rail the bubbles are strung on — a slim, gently-bowed
-    /// tube of frosted glass with a soft inner glow, threaded just under
-    /// the bubbles so the cluster reads as one crafted control, not four
-    /// stray spheres. Extends a little past the end bubbles.
-    private func buildRail() {
+    /// frosted tube with a GLOWING CORE in the active module's accent
+    /// running through it, like a lit fiber. Each bubble sits on a small
+    /// glowing seat ring, so the cluster reads as one crafted, powered
+    /// instrument that visibly belongs to the module it controls.
+    private func buildRail(accent: UIColor) {
         let points: [SIMD3<Float>] = stride(from: -0.36, through: 0.36, by: 0.02).map { x in
             SIMD3(x, Self.orbY - 0.05, Self.orbZ + Self.bow(atX: x))
         }
-        guard let mesh = TubeMesh.tube(lines: [points], radius: 0.008, sides: 10) else { return }
-        let rail = ModelEntity(mesh: mesh, materials: [Self.orbGlass(opacity: 0.4, emissive: 0.16)])
-        root.addChild(rail)
+        // Outer frosted glass.
+        if let mesh = TubeMesh.tube(lines: [points], radius: 0.008, sides: 10) {
+            root.addChild(ModelEntity(
+                mesh: mesh, materials: [Self.orbGlass(opacity: 0.38, emissive: 0.12)]))
+        }
+        // The lit accent core, visible through the frost.
+        if let core = TubeMesh.tube(lines: [points], radius: 0.0032, sides: 8) {
+            var coreMaterial = UnlitMaterial(color: accent)
+            coreMaterial.blending = .transparent(opacity: 0.85)
+            root.addChild(ModelEntity(mesh: core, materials: [coreMaterial]))
+        }
 
-        // Two small end-caps so the rail reads as a finished bar.
+        // Accent-warmed end caps finish the bar.
         for x: Float in [-0.36, 0.36] {
             let cap = ModelEntity(
                 mesh: .generateSphere(radius: 0.011),
-                materials: [Self.orbGlass(opacity: 0.45, emissive: 0.18)])
+                materials: [Self.orbGlass(tint: accent, opacity: 0.5, emissive: 0.35)])
             cap.position = SIMD3(x, Self.orbY - 0.05, Self.orbZ + Self.bow(atX: x))
             root.addChild(cap)
+        }
+
+        // A soft glowing seat ring where each bubble meets the rail.
+        for index in 0..<4 {
+            let position = Self.orbPosition(index)
+            let ringPoints: [SIMD3<Float>] = (0...40).map { step in
+                let angle = Float(step) / 40 * 2 * .pi
+                return SIMD3(position.x + cos(angle) * 0.017,
+                             Self.orbY - 0.044,
+                             position.z + sin(angle) * 0.017)
+            }
+            guard let ring = TubeMesh.tube(lines: [ringPoints], radius: 0.0022, sides: 6)
+            else { continue }
+            var ringMaterial = UnlitMaterial(color: accent)
+            ringMaterial.blending = .transparent(opacity: 0.55)
+            root.addChild(ModelEntity(mesh: ring, materials: [ringMaterial]))
         }
     }
 
@@ -374,6 +411,17 @@ final class OrbScene {
         orb.components.set(accessibility)
         root.addChild(orb)
         return orb
+    }
+
+    /// A faint lit nucleus at the bead's heart — the "powered" cue that
+    /// reads through the glass from any angle, in the module's accent.
+    private func addNucleus(to orb: ModelEntity) -> ModelEntity {
+        var material = UnlitMaterial(color: accent)
+        material.blending = .transparent(opacity: 0.5)
+        let nucleus = ModelEntity(
+            mesh: .generateSphere(radius: 0.007), materials: [material])
+        orb.addChild(nucleus)
+        return nucleus
     }
 
     private func attachIcon(_ icon: Entity, to orb: ModelEntity) {
