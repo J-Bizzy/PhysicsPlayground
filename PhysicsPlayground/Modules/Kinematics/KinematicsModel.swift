@@ -618,15 +618,22 @@ final class KinematicsModel {
 
     // MARK: Reset
 
-    /// Returns the module to its freshly-entered state. Wired to the
-    /// shell's Reset button through the module descriptor.
+    /// Returns the module to its freshly-entered state — and that state
+    /// is a PLAYGROUND, not an empty range.
+    ///
+    /// It used to open with a launcher, a ghost arc, and nothing else:
+    /// no ball to throw, no hoop to aim at, and a default launch speed
+    /// of 6 m/s, which at 45° carries 4.7 m — further than most rooms
+    /// are long, so the very first arc left through the wall. Now it
+    /// opens with hoops hung in the air, balls staged ready to grab,
+    /// and a speed picked so the whole flight lands inside the room.
     func reset() {
         clearFlights()
         rings.removeAll()
         hoopsOrbit = false
         streak = 0
         launcherPosition = Self.launcherHome
-        launchSpeed = 6.0
+        launchSpeed = Self.roomFittingSpeed
         gravity = 9.81
         airResistance = false
         windSpeed = 0
@@ -638,5 +645,22 @@ final class KinematicsModel {
         customMass = 0.25
         customDiameter = 0.10
         aimDirection = Self.direction(elevationDegrees: 45, azimuthDegrees: 0)
+
+        // The welcome scene: two hoops to aim at and two balls in reach.
+        addRing()
+        addRing()
+        spawnBall()
+        spawnBall()
+        // And one shot already in the air, so the module is alive the
+        // instant it appears rather than waiting to be started.
+        fire()
     }
+
+    /// A launch speed whose 45° range fits inside a typical room.
+    ///
+    /// Range at 45° is v²/g, so v = √(g · R). Aiming for a 2.5 m range
+    /// puts the landing point comfortably short of the far wall and
+    /// keeps the whole parabola — apex included — inside the space the
+    /// user can actually see.
+    nonisolated static let roomFittingSpeed = (9.81 * 2.5).squareRoot()
 }

@@ -15,20 +15,24 @@ import simd
 @MainActor
 final class FieldModelTests: XCTestCase {
 
-    func testStartsWithOneSelectedPositiveCharge() {
+    /// The module opens on a dipole: the positive charge is selected,
+    /// so the sliders act on the one wearing the white halo.
+    func testStartsWithASelectedDipole() {
         let model = FieldModel()
-        XCTAssertEqual(model.charges.count, 1)
+        XCTAssertEqual(model.charges.count, 2)
         XCTAssertEqual(model.selectedChargeID, model.charges[0].id)
         XCTAssertTrue(model.charges[0].isPositive)
+        XCTAssertFalse(model.charges[1].isPositive)
     }
 
     func testAddChargeAppendsSelectsAndSetsPolarity() {
         let model = FieldModel()
+        let before = model.charges.count
         model.addCharge(positive: false)
-        XCTAssertEqual(model.charges.count, 2)
-        XCTAssertEqual(model.selectedChargeID, model.charges[1].id)
-        XCTAssertFalse(model.charges[1].isPositive)
-        XCTAssertEqual(model.charges[1].charge, -FieldModel.defaultMagnitude)
+        XCTAssertEqual(model.charges.count, before + 1)
+        XCTAssertEqual(model.selectedChargeID, model.charges.last?.id)
+        XCTAssertFalse(model.charges.last!.isPositive)
+        XCTAssertEqual(model.charges.last!.charge, -FieldModel.defaultMagnitude)
     }
 
     func testAddedChargesDoNotStack() {
@@ -45,12 +49,13 @@ final class FieldModelTests: XCTestCase {
 
     func testRemoveSelectedReselectsAnother() {
         let model = FieldModel()
+        let before = model.charges.count
         model.addCharge(positive: false)
         let removedID = model.selectedChargeID
         model.removeSelectedCharge()
-        XCTAssertEqual(model.charges.count, 1)
+        XCTAssertEqual(model.charges.count, before)
         XCTAssertNotEqual(model.selectedChargeID, removedID)
-        XCTAssertEqual(model.selectedChargeID, model.charges[0].id)
+        XCTAssertTrue(model.charges.contains { $0.id == model.selectedChargeID })
     }
 
     func testRemoveAllClearsSelection() {
@@ -64,14 +69,16 @@ final class FieldModelTests: XCTestCase {
     func testSelectedBindingsEditOnlyTheSelectedCharge() {
         let model = FieldModel()
         let firstID = model.charges[0].id
-        model.addCharge(positive: true)  // second charge, now selected
+        model.addCharge(positive: true)  // a new charge, now selected
+        let editedID = model.selectedChargeID
 
         model.selectedMagnitudeMicroCoulombs = 3.0
         model.selectedIsPositive = false
 
         let first = model.charges.first { $0.id == firstID }!
         XCTAssertEqual(first.charge, FieldModel.defaultMagnitude, "unselected charge must be untouched")
-        XCTAssertEqual(model.charges[1].charge, -3.0e-6, accuracy: 1e-12)
+        let edited = model.charges.first { $0.id == editedID }!
+        XCTAssertEqual(edited.charge, -3.0e-6, accuracy: 1e-12)
     }
 
     func testMoveChargeClampsAboveFloor() {
@@ -85,10 +92,10 @@ final class FieldModelTests: XCTestCase {
     func testMoveChargeMovesOnlyTheTarget() {
         let model = FieldModel()
         model.addCharge(positive: false)
-        let secondPositionBefore = model.charges[1].position
+        let othersBefore = model.charges.dropFirst().map(\.position)
         model.moveCharge(id: model.charges[0].id, to: SIMD3(0.1, 1.0, -0.9))
         XCTAssertEqual(model.charges[0].position, SIMD3(0.1, 1.0, -0.9))
-        XCTAssertEqual(model.charges[1].position, secondPositionBefore)
+        XCTAssertEqual(Array(model.charges.dropFirst().map(\.position)), othersBefore)
     }
 
     func testSelectIgnoresUnknownID() {
@@ -246,27 +253,38 @@ final class FieldModelTests: XCTestCase {
 
     // MARK: Reset (the shell's Reset button calls this via the descriptor)
 
-    func testResetRestoresFreshlyEnteredState() {
+    /// The module opens as a DIPOLE, not a monopole: a single charge's
+    /// field is straight rays to infinity, which reads as a starburst
+    /// rather than a field. The pair must be equal and opposite and
+    /// straddle the region centre, so the picture is the textbook one.
+    func testResetOpensOnADipole() {
         let model = FieldModel()
         model.addCharge(positive: false)
         model.addCharge(positive: true)
         model.dropProbe()
         model.showLines = false
-        model.showEquipotentials = true
         model.probeIsPositive = false
 
         model.reset()
 
-        XCTAssertEqual(model.charges.count, 1)
-        XCTAssertTrue(model.charges[0].isPositive)
-        XCTAssertEqual(model.charges[0].position, FieldModel.regionCenter)
+        XCTAssertEqual(model.charges.count, 2)
+        XCTAssertEqual(model.charges.filter(\.isPositive).count, 1)
+        XCTAssertEqual(model.charges.filter { !$0.isPositive }.count, 1)
+        XCTAssertEqual(model.charges[0].charge, -model.charges[1].charge, accuracy: 1e-18,
+                       "equal and opposite — the net charge is zero")
+        let midpoint = (model.charges[0].position + model.charges[1].position) / 2
+        XCTAssertEqual(simd_distance(midpoint, FieldModel.regionCenter), 0, accuracy: 1e-12,
+                       "the pair straddles the home centre")
+        XCTAssertGreaterThan(
+            simd_distance(model.charges[0].position, model.charges[1].position), 0.1,
+            "far enough apart to read as two charges")
         XCTAssertEqual(model.selectedChargeID, model.charges[0].id)
         XCTAssertNil(model.probe)
         XCTAssertEqual(model.probeStatus, .none)
         XCTAssertTrue(model.probeIsPositive)
         XCTAssertTrue(model.showLines)
-        XCTAssertFalse(model.showEquipotentials,
-                       "shells start hidden — they're an opt-in layer")
+        XCTAssertTrue(model.showEquipotentials,
+                      "the shells are the module's best asset — they open with it")
     }
 
     /// The casing count is honored per polarity, and the capacitor

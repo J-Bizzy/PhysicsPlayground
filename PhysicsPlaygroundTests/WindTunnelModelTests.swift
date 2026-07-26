@@ -110,7 +110,9 @@ final class WindTunnelModelTests: XCTestCase {
 
         model.reset()
 
-        XCTAssertEqual(model.windSpeed, 1.0)
+        XCTAssertEqual(model.windSpeed, 1.4)
+        XCTAssertEqual(model.testBody, .car,
+                       "opens on a shape people recognise, not the bare cylinder")
         XCTAssertEqual(model.cylinderRadius, 0.06)
         XCTAssertEqual(model.cylinderCenter, SIMD2(-0.3, 0))
         XCTAssertEqual(model.circulation, 0)
@@ -138,7 +140,7 @@ final class WindTunnelModelTests: XCTestCase {
         XCTAssertLessThan(model.dragForce, expected / 10)
 
         model.reset()
-        XCTAssertEqual(model.testBody, .cylinder)
+        XCTAssertEqual(model.testBody, .car)
         XCTAssertTrue(model.obstacles.spheres.isEmpty)
     }
 }

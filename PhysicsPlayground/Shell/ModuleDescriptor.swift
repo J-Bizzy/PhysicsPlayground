@@ -27,22 +27,18 @@ struct ModuleDescriptor: Identifiable {
     /// the room (default); .progressive lets the crown open into a full
     /// environment the module renders (Gravity Lab's starfield).
     var immersionStyle: ImmersionStyle = .mixed
+    /// True when the module's own pods already carry every control, so
+    /// the shell should not mount a Controls pod at all — anything else
+    /// would be a second place to do the same thing.
+    var podsCoverControls: Bool = false
+    /// One sentence, shown once per module until dismissed.
+    let firstRunHint: String
     /// How far the dimming shell should be closed when this module
     /// opens, 0…1. Passthrough is a bright medium and several modules
     /// (a pale Sun, white smoke, red rays) have no contrast against a
     /// sunlit wall — those open part-dimmed rather than asking the user
     /// to discover a toggle before the module looks like anything.
     var preferredDimming: Double = 0
-    /// True when the module's own pods already carry every control, so
-    /// the shell should not mount a Controls pod at all — anything else
-    /// would be a second place to do the same thing.
-    var podsCoverControls: Bool = false
-    /// The readings the notebook writes down when the user captures a
-    /// moment in this module. Read live from the module's model, so a
-    /// captured row is exactly what the physics said at that instant.
-    var captureReadings: () -> [NotebookEntry.Reading] = { [] }
-    /// One sentence, shown once per module until dismissed.
-    let firstRunHint: String
     /// Rendered by the shell in the shared legend style.
     let legend: [LegendItem]
     /// Freeze-everything state, driving the shared in-space pause orb.
@@ -50,6 +46,10 @@ struct ModuleDescriptor: Identifiable {
     let togglePause: () -> Void
     let makeControls: () -> AnyView
     let makeScene: () -> AnyView
+    /// The readings the notebook writes down when the user captures a
+    /// moment in this module. Read live from the module's model, so a
+    /// captured row is exactly what the physics said at that instant.
+    var captureReadings: () -> [NotebookEntry.Reading] = { [] }
     /// Returns the module's model to its freshly-entered state.
     let reset: () -> Void
 }

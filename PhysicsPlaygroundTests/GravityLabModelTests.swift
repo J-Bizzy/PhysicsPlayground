@@ -19,8 +19,8 @@ final class GravityLabModelTests: XCTestCase {
 
     func testOpeningSceneIsSunAndEarthOnRealOrbit() {
         let model = GravityLabModel()
-        // The whole solar system opens live: Sun + 8 planets.
-        XCTAssertEqual(model.bodies.count, 9)
+        // The whole solar system opens live: Sun + 8 planets + a comet.
+        XCTAssertEqual(model.bodies.count, 10)
         XCTAssertEqual(model.primaryBody?.body.name, "Sun")
         for name in ["Mercury", "Venus", "Earth", "Mars",
                      "Jupiter", "Saturn", "Uranus", "Neptune"] {
@@ -35,6 +35,32 @@ final class GravityLabModelTests: XCTestCase {
         XCTAssertEqual(try! XCTUnwrap(readout.periodDays), 365.25, accuracy: 1.0)
         XCTAssertTrue(readout.isBound)
         XCTAssertLessThan(readout.totalEnergy, 0, "a bound orbit has negative total energy")
+    }
+
+    /// The comet is what gives the system a third dimension: the planets
+    /// all share one plane, and a flat disc of a solar system gives the
+    /// viewer no reason to move their head. It has to be genuinely out of
+    /// that plane, genuinely eccentric, and genuinely bound.
+    func testOpeningSceneIncludesAnInclinedComet() {
+        let model = GravityLabModel()
+        let comet = try! XCTUnwrap(model.bodies.first { $0.body.name == "Comet" })
+        let sun = try! XCTUnwrap(model.bodies.first { $0.body.name == "Sun" })
+
+        let h = simd_cross(comet.body.position - sun.body.position,
+                           comet.body.velocity - sun.body.velocity)
+        let tilt = acos(min(max(simd_dot(simd_normalize(h), SIMD3<Double>(0, 1, 0)), -1), 1))
+        XCTAssertGreaterThan(tilt, 1.0,
+                             "steeply inclined — it leaves the planets' plane")
+
+        let readout = try! XCTUnwrap(model.readout(for: comet))
+        XCTAssertTrue(readout.isBound, "a comet on a closed orbit, not an escapee")
+        XCTAssertLessThan(readout.distanceAU, 1.0,
+                          "starts at perihelion, inside Earth's orbit")
+
+        // Every planet still shares the ecliptic — only the comet leaves it.
+        for body in model.bodies where !["Sun", "Comet"].contains(body.body.name) {
+            XCTAssertEqual(body.body.position.y, 0, accuracy: 1e-6)
+        }
     }
 
     /// One simulated frame at 1× advances 3 days ÷ 90 of orbit; a held
@@ -89,7 +115,7 @@ final class GravityLabModelTests: XCTestCase {
         model.release(id: earth.id, timestamp: 80.1)
         model.step(dt: 1.0 / 90.0)
 
-        XCTAssertEqual(model.bodies.count, 8, "nine bodies minus one merger")
+        XCTAssertEqual(model.bodies.count, 9, "ten bodies minus one merger")
         let merged = try! XCTUnwrap(model.bodies.first {
             abs($0.body.mass - expectedMass) < expectedMass * 1e-6
         }, "one body carries the combined Venus+Earth mass")
@@ -198,7 +224,7 @@ final class GravityLabModelTests: XCTestCase {
         model.exitLagrangeMode()
 
         XCTAssertEqual(model.mode, .solarSystem)
-        XCTAssertEqual(model.bodies.count, 9)
+        XCTAssertEqual(model.bodies.count, 10)
         XCTAssertEqual(model.primaryBody?.body.name, "Sun")
         XCTAssertEqual(model.displayToSim,
                        CelestialBody.astronomicalUnit / GravityLabModel.metersPerAU,
@@ -245,12 +271,13 @@ final class GravityLabModelTests: XCTestCase {
 
         model.reset()
 
-        XCTAssertEqual(model.bodies.count, 9)
+        XCTAssertEqual(model.bodies.count, 10)
         XCTAssertEqual(model.timeScale, 1)
         XCTAssertEqual(model.gMultiplier, 1)
         XCTAssertEqual(model.trailLength, .medium)
         XCTAssertEqual(model.simulatedDays, 0)
         XCTAssertFalse(model.showFieldParticles)
-        XCTAssertFalse(model.showSpacetimeGrid)
+        XCTAssertTrue(model.showSpacetimeGrid,
+                      "the curvature grid is the module's signature image — it opens with it")
     }
 }

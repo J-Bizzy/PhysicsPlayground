@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PhysicsCore
 
 @MainActor
 enum WavesModule {
@@ -19,6 +20,8 @@ enum WavesModule {
             icon: "water.waves",
             accent: DesignTokens.Palette.wavesAccent,
             firstRunHint: "Pinch a teal source and float it anywhere — the whole field reorganizes live. Flip 'Invert phase' and a silence sheet appears between the sources.",
+            // Opens part-dimmed: the wavefront rings and silence sheets are translucent and wash out.
+            preferredDimming: 0.45,
             legend: legend,
             isPaused: { appModel.wavesModel.isPaused },
             togglePause: { appModel.wavesModel.isPaused.toggle() },
@@ -33,6 +36,35 @@ enum WavesModule {
                     WavesSpaceView()
                         .environment(appModel.wavesModel)
                 )
+            },
+            captureReadings: {
+                let model = appModel.wavesModel
+                let probe = model.probeReadout
+                var rows: [NotebookEntry.Reading] = [
+                    .init("Sources", "\(model.sources.count)"),
+                    .init("Frequency", String(format: "%.3f", model.frequency), "Hz"),
+                    .init("Wave speed", String(format: "%.3f", model.waveSpeed), "m/s"),
+                    .init("Wavelength", String(format: "%.4f", model.wavelength), "m"),
+                    .init("Amplitude at probe",
+                          String(format: "%.4f", probe.amplitude * 1000), "mm"),
+                ]
+                if let difference = probe.pathDifference,
+                   let inWavelengths = probe.pathDifferenceInWavelengths {
+                    rows.append(.init("Path difference",
+                                      String(format: "%.4f", difference), "m"))
+                    rows.append(.init("Δr / λ", String(format: "%.3f", inWavelengths)))
+                }
+                if let interference = probe.interference {
+                    rows.append(.init("Interference", "\(interference)"))
+                }
+                if let separation = model.sourceSeparation {
+                    rows.append(.init("Source separation",
+                                      String(format: "%.4f", separation), "m"))
+                }
+                if let count = model.silentSurfaceCount {
+                    rows.append(.init("Silence surfaces", "\(count)"))
+                }
+                return rows
             },
             reset: {
                 appModel.wavesModel.reset()

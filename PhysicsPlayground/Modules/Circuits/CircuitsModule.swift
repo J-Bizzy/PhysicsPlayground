@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PhysicsCore
 
 @MainActor
 enum CircuitsModule {
@@ -33,6 +34,24 @@ enum CircuitsModule {
                     CircuitsSpaceView()
                         .environment(appModel.circuitsModel)
                 )
+            },
+            captureReadings: {
+                let model = appModel.circuitsModel
+                var rows: [NotebookEntry.Reading] = [
+                    .init("Components", "\(model.components.count)"),
+                    .init("Wires", "\(model.wires.count)"),
+                ]
+                for component in model.components {
+                    guard let readout = model.readouts[component.id] else { continue }
+                    let name = component.kind.displayName
+                    rows.append(.init("\(name) current",
+                                      String(format: "%.4f", readout.amps), "A"))
+                    rows.append(.init("\(name) voltage",
+                                      String(format: "%.3f", readout.volts), "V"))
+                    rows.append(.init("\(name) power",
+                                      String(format: "%.4f", readout.watts), "W"))
+                }
+                return rows
             },
             reset: {
                 appModel.circuitsModel.reset()

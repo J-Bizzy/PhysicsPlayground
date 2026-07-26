@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PhysicsCore
 
 @MainActor
 enum GravityLabModule {
@@ -20,6 +21,8 @@ enum GravityLabModule {
             accent: DesignTokens.Palette.gravityAccent,
             immersionStyle: .mixed,
             firstRunHint: "Pinch Earth and drag — the white line shows the orbit you're about to create. Release gently for an ellipse, throw hard to escape the Sun. Turn the crown to dim your room into deep space.",
+            // Opens part-dimmed: a pale Sun and specks of planet have no contrast at all against a bright wall — this module is unreadable in daylight.
+            preferredDimming: 0.85,
             legend: legend,
             isPaused: { appModel.gravityLabModel.isPaused },
             togglePause: { appModel.gravityLabModel.isPaused.toggle() },
@@ -34,6 +37,27 @@ enum GravityLabModule {
                     GravityLabSpaceView()
                         .environment(appModel.gravityLabModel)
                 )
+            },
+            captureReadings: {
+                let model = appModel.gravityLabModel
+                var rows: [NotebookEntry.Reading] = [
+                    .init("Bodies", "\(model.bodies.count)"),
+                    .init("Elapsed", String(format: "%.1f", model.simulatedDays), "days"),
+                    .init("G multiplier", String(format: "%.2f", model.gMultiplier)),
+                    .init("Sun mass", String(format: "%.2f", model.sunMassMultiplier), "× real"),
+                ]
+                if let body = model.selectedBody, let readout = model.readout(for: body) {
+                    rows.append(.init("Selected", body.body.name))
+                    rows.append(.init("Distance", String(format: "%.4f", readout.distanceAU), "AU"))
+                    rows.append(.init("Speed", String(format: "%.3f", readout.speedKmPerS), "km/s"))
+                    rows.append(.init("Escape speed",
+                                      String(format: "%.3f", readout.escapeSpeedKmPerS), "km/s"))
+                    rows.append(.init("Bound", readout.isBound ? "yes" : "no — unbound"))
+                    if let period = readout.periodDays {
+                        rows.append(.init("Period", String(format: "%.2f", period), "days"))
+                    }
+                }
+                return rows
             },
             reset: {
                 appModel.gravityLabModel.reset()

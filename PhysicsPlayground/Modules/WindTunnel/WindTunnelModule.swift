@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PhysicsCore
 
 @MainActor
 enum WindTunnelModule {
@@ -19,6 +20,8 @@ enum WindTunnelModule {
             icon: "wind",
             accent: DesignTokens.Palette.windAccent,
             firstRunHint: "Watch the smoke: it splits at the nose, races over the shoulders, and tumbles into a wake behind. Swap bodies to see shape decide everything — a box truck shoves the whole tunnel aside, an airliner barely creases it. On device, reach into the stream and the air breaks around your hand too.",
+            // Opens part-dimmed: smoke is near-white and disappeared entirely into white walls.
+            preferredDimming: 0.3,
             legend: legend,
             isPaused: { appModel.windTunnelModel.isPaused },
             togglePause: { appModel.windTunnelModel.isPaused.toggle() },
@@ -33,6 +36,26 @@ enum WindTunnelModule {
                     WindTunnelSpaceView()
                         .environment(appModel.windTunnelModel)
                 )
+            },
+            captureReadings: {
+                let model = appModel.windTunnelModel
+                let probe = model.probeReadout
+                var rows: [NotebookEntry.Reading] = [
+                    .init("Test body", model.testBody.displayName),
+                    .init("Drag coefficient",
+                          String(format: "%.3f", model.testBody.dragCoefficient)),
+                    .init("Wind speed", String(format: "%.2f", model.windSpeed), "m/s"),
+                    .init("Drag force", String(format: "%.4f", model.dragForce), "N"),
+                    .init("Speed at probe", String(format: "%.3f", probe.speed), "m/s"),
+                    .init("Pressure coefficient", String(format: "%.3f", probe.pressureCoefficient)),
+                ]
+                if model.testBody == .cylinder {
+                    rows.append(.init("Circulation", String(format: "%.3f", model.circulation), "m²/s"))
+                    rows.append(.init("Spin", String(format: "%.0f", model.spinRPM), "rpm"))
+                    rows.append(.init("Lift per span",
+                                      String(format: "%.4f", model.liftPerSpan), "N/m"))
+                }
+                return rows
             },
             reset: {
                 appModel.windTunnelModel.reset()

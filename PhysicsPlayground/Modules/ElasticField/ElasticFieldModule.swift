@@ -24,6 +24,8 @@ enum ElasticFieldModule {
             icon: "waveform",
             accent: DesignTokens.Palette.springsAccent,
             firstRunHint: "A shaker pushes the sheet's center. Drag the Drive frequency slowly: the sheet stays calm until you hit a resonance, when a standing mode blooms and the grains rush onto its nodal lines — and the tone swells. Lower the damping for sharper peaks, jump straight onto a mode, or reach in and pull the sheet yourself.",
+            // Opens part-dimmed: the membrane's shading gradient is subtle and flattens under bright ambient.
+            preferredDimming: 0.25,
             legend: legend,
             isPaused: { appModel.waveMediumModel.isPaused },
             togglePause: { appModel.waveMediumModel.isPaused.toggle() },
@@ -38,6 +40,21 @@ enum ElasticFieldModule {
                     WaveMediumSpaceView()
                         .environment(appModel.waveMediumModel)
                 )
+            },
+            captureReadings: {
+                let model = appModel.waveMediumModel
+                let nearest = model.nearestResonance()
+                return [
+                    .init("Wave speed c", String(format: "%.3f", model.waveSpeed), "m/s"),
+                    .init("Damping", String(format: "%.3f", model.damping)),
+                    .init("Rim", model.boundaryFixed ? "clamped" : "free"),
+                    .init("Drive", model.driveOn ? "on" : "off"),
+                    .init("Drive frequency", String(format: "%.4f", model.driveFrequency), "Hz"),
+                    .init("Nearest mode", "(\(nearest.mode.m), \(nearest.mode.p))"),
+                    .init("Its resonance", String(format: "%.4f", nearest.frequency), "Hz"),
+                    .init("Detuning", String(format: "%.4f", nearest.detune), "Hz"),
+                    .init("Response", String(format: "%.1f", model.resonance * 100), "% of full"),
+                ]
             },
             reset: {
                 appModel.waveMediumModel.reset()

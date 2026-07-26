@@ -298,18 +298,31 @@ final class FieldModel {
         #endif
     }
 
-    /// Returns the module to its freshly-entered state: one positive charge
-    /// at the home center, no probe, all display layers on. Wired to the
-    /// shell's Reset button through the module descriptor.
+    /// Returns the module to its freshly-entered state: a DIPOLE.
+    ///
+    /// This used to open with a single positive charge, which is the
+    /// least interesting field there is — straight rays to infinity,
+    /// reading as a laser starburst rather than a field. A dipole is the
+    /// picture everyone recognises (it is what the hub's own exhibit
+    /// shows), it curves, it closes, and it fills the volume around the
+    /// user. Equipotential shells come up with it: the marching-tets
+    /// isosurfaces are the module's most beautiful asset and were hidden
+    /// behind an opt-in toggle.
     func reset() {
-        let first = PointCharge(position: Self.regionCenter, charge: Self.defaultMagnitude)
-        charges = [first]
-        selectedChargeID = first.id
+        let separation = 0.26
+        let positive = PointCharge(
+            position: Self.regionCenter + SIMD3(-separation, 0, 0),
+            charge: Self.defaultMagnitude)
+        let negative = PointCharge(
+            position: Self.regionCenter + SIMD3(separation, 0, 0),
+            charge: -Self.defaultMagnitude)
+        charges = [positive, negative]
+        selectedChargeID = positive.id
         probe = nil
         probeStatus = .none
         probeIsPositive = true
         showLines = true
-        showEquipotentials = false
+        showEquipotentials = true
         equipotentialShells = 3
         capacitorOn = false
         plateVoltage = 20_000
@@ -321,7 +334,7 @@ final class FieldModel {
         electronMode = false
         electronFieldTesla = 1e-4
         isPaused = false
-        placementIndex = 1
+        placementIndex = 2
     }
 
     var selectedCharge: PointCharge? {

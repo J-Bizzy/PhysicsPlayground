@@ -90,4 +90,51 @@ public struct CelestialBody: Equatable, Sendable {
         body.velocity = central.velocity + SIMD3(0, 0, -speed)
         return body
     }
+
+    /// This body placed at PERIHELION of an inclined elliptical orbit.
+    ///
+    /// The solar system's planets all orbit within a few degrees of one
+    /// plane, which is true and — rendered in a room — completely flat:
+    /// a disc at chest height that gives the viewer no reason to move
+    /// their head. Comets do not. A steeply inclined, highly eccentric
+    /// orbit is real physics that genuinely uses all three dimensions,
+    /// and it is the orbit where the vis-viva speed-up at perihelion is
+    /// dramatic enough to watch.
+    ///
+    /// Exact: at perihelion the velocity is perpendicular to the radius,
+    /// with magnitude v_p = √(GM(1+e)/(a(1−e))) — the vis-viva equation
+    /// evaluated at r = a(1−e). The orbit plane is the ecliptic tilted
+    /// by `inclination` about the +x axis, so perihelion still lies on
+    /// +x and the whole ellipse rides up out of the planets' plane.
+    ///
+    /// - Parameters:
+    ///   - semiMajorAxis: a, metres.
+    ///   - eccentricity: e, 0 ..< 1.
+    ///   - inclination: tilt of the orbit plane, radians.
+    public func onEllipticalOrbit(
+        of central: CelestialBody,
+        semiMajorAxis: Double,
+        eccentricity: Double,
+        inclination: Double,
+        gravitationalConstant G: Double = NBody.gravitationalConstant
+    ) -> CelestialBody {
+        var body = self
+        let e = min(max(eccentricity, 0), 0.999)
+        let perihelion = semiMajorAxis * (1 - e)
+        let speed = (G * central.mass * (1 + e) / perihelion).squareRoot()
+        // In-plane basis: radius along +x, velocity along −z, both then
+        // tilted about +x so the plane rises out of the ecliptic.
+        let cosI = cos(inclination), sinI = sin(inclination)
+        let radial = SIMD3<Double>(1, 0, 0)
+        let along = SIMD3<Double>(0, sinI, -cosI)
+        body.position = central.position + radial * perihelion
+        body.velocity = central.velocity + along * speed
+        return body
+    }
+
+    /// Halley's comet, to scale: a = 17.834 AU, e = 0.967, and the
+    /// famously retrograde 162° inclination that takes it right out of
+    /// the planets' plane.
+    public static let comet = CelestialBody(
+        name: "Comet", mass: 2.2e14, radius: 5.5e3)
 }

@@ -245,17 +245,27 @@ final class GravityLabModel {
         selectedID = orbiting.id
     }
 
+    /// Exaggerated display sizes — the disclosed cheat that makes the
+    /// system readable. At true scale Earth at 1 AU = 0.5 m would be
+    /// about 30 microns across.
+    ///
+    /// These were roughly doubled: the inner planets were rendering as
+    /// four-pixel specks against a bright wall, too small to recognise,
+    /// admire, or reliably pinch. The ordering (and so the story — the
+    /// gas giants dwarf the rocky planets, the Sun dwarfs everything)
+    /// is preserved exactly; only the overall magnification changed.
     private static func displayRadius(for body: CelestialBody) -> Double {
         switch body.name {
-        case "Sun": 0.075
-        case "Jupiter": 0.042
-        case "Saturn": 0.036
-        case "Uranus", "Neptune": 0.024
-        case "Earth", "Venus": 0.018
-        case "Mars": 0.014
-        case "Mercury": 0.011
-        case "Moon": 0.008
-        default: 0.007
+        case "Sun": 0.135
+        case "Jupiter": 0.078
+        case "Saturn": 0.066
+        case "Uranus", "Neptune": 0.046
+        case "Earth", "Venus": 0.036
+        case "Mars": 0.028
+        case "Mercury": 0.023
+        case "Moon": 0.016
+        case "Comet": 0.013
+        default: 0.014
         }
     }
 
@@ -630,7 +640,11 @@ final class GravityLabModel {
         showAccelerationVector = false
         showForceVector = true
         showFieldParticles = false
-        showSpacetimeGrid = false
+        // The rubber-sheet grid is the single most iconic image in
+        // gravitation and it was hidden behind a toggle. It opens with
+        // the module now; the m^(1/4) depth compression stays disclosed
+        // in the UI footnote, as before.
+        showSpacetimeGrid = true
         simulatedDays = 0
         customCount = 0
         customDistanceAU = 1.5
@@ -649,6 +663,19 @@ final class GravityLabModel {
             append(planet.onCircularOrbit(of: .sun, distance: distance),
                    displayRadius: Self.displayRadius(for: planet))
         }
+        // And a comet on Halley's real orbit — a = 17.8 AU, e = 0.967,
+        // retrograde at 162°. The planets share one plane, which is true
+        // and, rendered in a room, a flat disc at chest height. The comet
+        // climbs right out of it, so the system finally has a reason to
+        // be looked at from above and below, and its perihelion sprint is
+        // the vis-viva equation made watchable.
+        append(CelestialBody.comet.onEllipticalOrbit(
+            of: .sun,
+            semiMajorAxis: 17.834 * CelestialBody.astronomicalUnit,
+            eccentricity: 0.967,
+            inclination: 162 * .pi / 180,
+            gravitationalConstant: effectiveG),
+            displayRadius: Self.displayRadius(for: .comet))
         selectedID = bodies.first(where: { $0.body.name == "Earth" })?.id
     }
 }

@@ -248,10 +248,20 @@ final class KinematicsModelTests: XCTestCase {
 
         model.reset()
 
-        XCTAssertTrue(model.flights.isEmpty)
-        XCTAssertTrue(model.rings.isEmpty)
-        XCTAssertNil(model.lastFlight)
-        XCTAssertEqual(model.launchSpeed, 6.0)
+        // The module opens as a playground: hoops hung, balls staged,
+        // and one shot already in the air.
+        XCTAssertFalse(model.rings.isEmpty, "hoops are part of the opening scene")
+        XCTAssertFalse(model.flights.isEmpty, "balls are staged and one is flying")
+        XCTAssertTrue(model.flights.contains { $0.status == .staged },
+                      "at least one ball is within reach to grab")
+        XCTAssertTrue(model.flights.contains { $0.status == .flying },
+                      "the module is alive the instant it appears")
+        XCTAssertEqual(model.totalScore, 0)
+        // The default launch must land inside a room: range = v²/g at 45°.
+        let range = model.launchSpeed * model.launchSpeed / model.gravity
+        XCTAssertLessThan(range, 3.0,
+                          "a first shot must not leave through the far wall")
+        XCTAssertEqual(model.launchSpeed, KinematicsModel.roomFittingSpeed, accuracy: 1e-12)
         XCTAssertEqual(model.gravity, 9.81)
         XCTAssertFalse(model.airResistance)
         XCTAssertEqual(model.windSpeed, 0)

@@ -276,24 +276,37 @@ final class WaveMediumModel {
 
     // MARK: Reset
 
+    /// Opens RINGING, on (3,3), already at amplitude.
+    ///
+    /// It used to open on the fundamental (1,1) at a small amplitude
+    /// with the drive still climbing, and (1,1) is exactly the mode that
+    /// shows LEAST from the front: one central antinode, all of whose
+    /// displacement points at the viewer, so a head-on look at the sheet
+    /// saw a flat coloured square. (3,3) has interior nodal lines running
+    /// both ways — structure that reads as structure from any angle, and
+    /// the pattern the marker grains draw most legibly. Damping starts
+    /// lower so the peak is sharp and the mode is unmistakably ringing.
     func reset() {
         var fresh = ElasticSheet(
             n: Self.gridCount, spacing: Self.spacing,
-            waveSpeed: 1.2, damping: 0.14, boundary: .fixed)
+            waveSpeed: 1.2, damping: 0.09, boundary: .fixed)
         fresh.amplitudeLimit = Self.amplitudeCeiling
         fresh.driveAmplitude = Self.driveForce
         sheet = fresh
         waveSpeed = 1.2
-        damping = 0.14
+        damping = 0.09
         boundaryFixed = true
         heldNode = nil
         responseRMS = 0
         resonance = 0
         isPaused = false
         driveOn = true
-        driveFrequency = sheet.modeFrequency(m: 1, p: 1)
+        let opening = Mode(m: 3, p: 3)
+        driveFrequency = sheet.modeFrequency(m: opening.m, p: opening.p)
         sheet.driveNodes = [sheet.index(Self.driveCoord.i, Self.driveCoord.j)]
-        sheet.setStandingMode(m: 1, p: 1, amplitude: 0.12)
-        insightText = "Reset — the shaker rings the fundamental (1, 1) again. Sweep up to find the higher modes."
+        // Seeded near the ceiling so the sheet is visibly in relief from
+        // the first frame rather than ringing up over several seconds.
+        sheet.setStandingMode(m: opening.m, p: opening.p, amplitude: 0.17)
+        insightText = "Driven right on the (3, 3) resonance — the sheet is standing in nine cells, and the grains have gathered on the still lines between them. Sweep the drive off the peak and watch it die away."
     }
 }

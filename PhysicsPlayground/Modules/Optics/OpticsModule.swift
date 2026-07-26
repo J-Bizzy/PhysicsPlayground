@@ -20,6 +20,8 @@ enum OpticsModule {
             icon: "rays",
             accent: DesignTokens.Palette.opticsAccent,
             firstRunHint: "Look around — three stations. AHEAD: drag lenses along the rail. LEFT: rotate the prism until the exit face locks into total internal reflection. RIGHT: grab the little laser and carry it around the glass block — Snell's law follows your hand; sneak up on the block edge-on and the beam gets trapped inside.",
+            // Opens part-dimmed: beams only read as light when there is dark around them.
+            preferredDimming: 0.7,
             legend: legend,
             isPaused: { false },
             togglePause: { },
@@ -34,6 +36,37 @@ enum OpticsModule {
                     OpticsSpaceView()
                         .environment(appModel.opticsModel)
                 )
+            },
+            captureReadings: {
+                let model = appModel.opticsModel
+                var rows: [NotebookEntry.Reading] = [
+                    .init("Elements", "\(model.elements.count)"),
+                    .init("Source", model.sourceMode == .parallel ? "parallel beam" : "point"),
+                ]
+                if let lens = model.elements.first(where: {
+                    $0.kind == .convergingLens || $0.kind == .divergingLens }) {
+                    rows.append(.init("Focal length", String(format: "%.4f", lens.focal), "m"))
+                }
+                if let image = model.imagePrediction {
+                    rows.append(.init("Object distance",
+                                      String(format: "%.4f", image.objectDistance), "m"))
+                    rows.append(.init("Image distance",
+                                      String(format: "%.4f", image.imageDistance), "m"))
+                    rows.append(.init("Magnification",
+                                      String(format: "%.4f", image.magnification), "×"))
+                }
+                if let entry = model.blockEntry {
+                    rows.append(.init("Block index n", String(format: "%.3f", model.blockIndex)))
+                    rows.append(.init("Angle of incidence",
+                                      String(format: "%.2f", entry.incidence * 180 / .pi), "°"))
+                    rows.append(.init("Angle of refraction",
+                                      String(format: "%.2f", entry.refraction * 180 / .pi), "°"))
+                    rows.append(.init("Total internal reflection",
+                                      model.blockShowsTIR ? "yes" : "no"))
+                }
+                rows.append(.init("Prism rotation",
+                                  String(format: "%.2f", model.prismRotationDegrees), "°"))
+                return rows
             },
             reset: {
                 appModel.opticsModel.reset()

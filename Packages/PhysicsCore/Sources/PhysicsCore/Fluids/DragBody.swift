@@ -36,6 +36,21 @@ public enum DragBody: String, CaseIterable, Sendable, Identifiable {
 
     public var id: String { rawValue }
 
+    /// Human-readable name, for readouts and the notebook.
+    public var displayName: String {
+        switch self {
+        case .cylinder: "Cylinder"
+        case .sphere: "Sphere"
+        case .teardrop: "Teardrop"
+        case .cube: "Cube"
+        case .flatDisc: "Flat disc"
+        case .cone: "Cone"
+        case .car: "Car"
+        case .truck: "Box truck"
+        case .plane: "Airliner"
+        }
+    }
+
     /// The three real-world vehicles (vs. the canonical lab shapes).
     public var isVehicle: Bool {
         switch self {

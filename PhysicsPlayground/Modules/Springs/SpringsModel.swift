@@ -324,9 +324,14 @@ final class SpringsModel {
         gravityOn = false
         isPaused = false
         timeScale = 1.0
-        mode = .single
+        // Opens COUPLED, mid-slosh. A single block sitting still on a
+        // rail is a textbook figure; two masses trading energy back and
+        // forth is the thing worth watching, and it is the mode that
+        // teaches the harder idea (normal modes and beats).
+        mode = .coupled
+        orientation = .horizontal
         state = SpringOscillator(displacement: 0.12, velocity: 0)
-        coupled = CoupledSprings(displacements: SIMD2(0.18, 0))
+        coupled = CoupledSprings(displacements: SIMD2(0.24, 0))
         grabbedBlock = nil
         graphMode = .position
         showVelocity = true

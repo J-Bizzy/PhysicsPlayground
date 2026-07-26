@@ -316,6 +316,14 @@ final class PendulumsModel {
 
     // MARK: Reset
 
+    /// Opens on the FIVE-PENDULUM WAVE.
+    ///
+    /// It used to open with a single bob on a thread — the module's most
+    /// mesmerising exhibit was sitting behind a button called
+    /// "Resonance ×5". Five lengths stepped 4% apart leave together,
+    /// drift into a travelling wave, scramble, and re-align; it is alive
+    /// and legible from the first second, and every parameter the module
+    /// teaches (length sets period, mass doesn't) is visible in it.
     func reset() {
         pendulums = []
         selectedID = nil
@@ -329,12 +337,7 @@ final class PendulumsModel {
         showEnergyBars = true
         insightText = ""
         accumulator = 0
-        addPendulum()
-        // A welcome swing, already alive.
-        if let id = pendulums.first?.id,
-           let index = pendulums.firstIndex(where: { $0.id == id }) {
-            pendulums[index].state.velocity = SIMD3(0.3, 0, 0)
-        }
+        loadResonancePreset()
     }
 
     init() {

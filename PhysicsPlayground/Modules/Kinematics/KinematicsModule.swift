@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PhysicsCore
 
 @MainActor
 enum KinematicsModule {
@@ -33,6 +34,25 @@ enum KinematicsModule {
                     KinematicsSpaceView()
                         .environment(appModel.kinematicsModel)
                 )
+            },
+            captureReadings: {
+                let model = appModel.kinematicsModel
+                var rows: [NotebookEntry.Reading] = [
+                    .init("Projectile", model.kind.rawValue),
+                    .init("Mass", String(format: "%.3f", model.projectile.mass), "kg"),
+                    .init("Gravity", String(format: "%.2f", model.gravity), "m/s²"),
+                    .init("Launch speed", String(format: "%.2f", model.launchSpeed), "m/s"),
+                    .init("Elevation", String(format: "%.1f", model.elevationDegrees), "°"),
+                    .init("Air resistance", model.airResistance ? "on" : "off"),
+                ]
+                if let last = model.lastFlight {
+                    rows.append(.init("Measured range", String(format: "%.3f", last.range), "m"))
+                    rows.append(.init("Apex height", String(format: "%.3f", last.apexHeight), "m"))
+                    rows.append(.init("Flight time", String(format: "%.3f", last.flightTime), "s"))
+                    rows.append(.init("Launched by", last.wasThrown ? "hand" : "launcher"))
+                }
+                rows.append(.init("Score", "\(model.totalScore)"))
+                return rows
             },
             reset: {
                 appModel.kinematicsModel.reset()

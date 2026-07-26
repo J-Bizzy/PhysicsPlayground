@@ -202,13 +202,24 @@ final class MagnetismModel {
     // MARK: Reset
 
     func reset() {
-        // Two magnets a little apart, both pointing +x (head-to-tail): they
-        // open ALIVE, gliding together to align and touch.
+        // Three magnets, well apart and deliberately MISALIGNED: they
+        // open alive, gliding and swinging into a chain.
+        //
+        // The old opening put two magnets close enough that they had
+        // already snapped into a single bar before anyone looked — you
+        // could not tell there were two, and the snap, which is the whole
+        // point of the module, had already happened off-screen. Starting
+        // them further out, at angles, and staggered in depth means the
+        // approach IS the opening scene, and it uses all three axes.
         magnets = [
-            BarMagnet(position: Self.regionCenter + SIMD3(-0.42, 0, 0),
+            BarMagnet(position: Self.regionCenter + SIMD3(-0.62, -0.12, 0.18),
                       moment: SIMD3(Self.defaultStrength, 0, 0)),
-            BarMagnet(position: Self.regionCenter + SIMD3(0.42, 0, 0),
-                      moment: SIMD3(Self.defaultStrength, 0, 0)),
+            BarMagnet(position: Self.regionCenter + SIMD3(0.62, 0.10, -0.20),
+                      moment: SIMD3(Self.defaultStrength * 0.72,
+                                    Self.defaultStrength * 0.62, 0)),
+            BarMagnet(position: Self.regionCenter + SIMD3(0.05, 0.46, 0.34),
+                      moment: SIMD3(0, -Self.defaultStrength * 0.85,
+                                    Self.defaultStrength * 0.4)),
         ]
         selectedID = magnets.last?.id
         heldID = nil

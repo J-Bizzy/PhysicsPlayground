@@ -36,6 +36,28 @@ enum PendulumsModule {
                         .environment(appModel.pendulumsModel)
                 )
             },
+            captureReadings: {
+                let model = appModel.pendulumsModel
+                var rows: [NotebookEntry.Reading] = [
+                    .init("Pendulums", "\(model.pendulums.count)"),
+                    .init("Gravity", String(format: "%.3f", model.gravity), "m/s²"),
+                    .init("Friction", model.frictionOn ? "on" : "off"),
+                ]
+                if let selected = model.selected {
+                    let energies = selected.state.energies(
+                        length: selected.length,
+                        gravity: model.gravity, mass: selected.mass)
+                    rows.append(.init("Length", String(format: "%.4f", selected.length), "m"))
+                    rows.append(.init("Mass", String(format: "%.3f", selected.mass), "kg"))
+                    rows.append(.init("Period 2π√(L/g)",
+                                      String(format: "%.4f", selected.period(gravity: model.gravity)), "s"))
+                    rows.append(.init("Speed",
+                                      String(format: "%.4f", simd_length(selected.state.velocity)), "m/s"))
+                    rows.append(.init("Kinetic energy", String(format: "%.5f", energies.kinetic), "J"))
+                    rows.append(.init("Potential energy", String(format: "%.5f", energies.potential), "J"))
+                }
+                return rows
+            },
             reset: {
                 appModel.pendulumsModel.reset()
             }

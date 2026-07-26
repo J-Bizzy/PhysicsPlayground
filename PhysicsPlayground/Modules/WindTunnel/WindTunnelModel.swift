@@ -173,8 +173,19 @@ final class WindTunnelModel {
 
     // MARK: Reset
 
+    /// Opens on the CAR, not the cylinder.
+    ///
+    /// The default test body was a cylinder that spans the section from
+    /// floor to ceiling: it is the shape with the exact analytic
+    /// solution, which is why it was chosen, but as an opening scene it
+    /// is a chrome column that nobody recognises and whose flow looks
+    /// two-dimensional. A car is a shape everyone has an intuition
+    /// about, its wake is dramatic, and it makes the module's real
+    /// point — that SHAPE decides everything — visible before the user
+    /// has touched a control. The cylinder is one tap away in the
+    /// picker, with its exact solution and Magnus lift intact.
     func reset() {
-        windSpeed = 1.0
+        windSpeed = 1.4
         cylinderRadius = 0.06
         cylinderCenter = SIMD2(-0.3, 0)
         circulation = 0.0
@@ -183,7 +194,7 @@ final class WindTunnelModel {
         isPaused = false
         timeScale = 1.0
         probePosition = SIMD2(0.45, 0.25)
-        testBody = .cylinder
+        testBody = .car
         obstacles = ObstacleField()
     }
 
