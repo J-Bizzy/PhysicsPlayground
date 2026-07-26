@@ -28,6 +28,8 @@ struct ModuleOrbControlsView: View {
     @State private var scene = OrbScene()
     @State private var showPodTip = !UserDefaults.standard.bool(forKey: "hint.pods.dismissed")
     @State private var resetArmedUntil = Date.distantPast
+    /// A brief confirmation over the rail after a notebook capture.
+    @State private var captureFlash: String?
 
     var body: some View {
         RealityView { content, attachments in
@@ -38,10 +40,16 @@ struct ModuleOrbControlsView: View {
                 tip.components.set(BillboardComponent())
                 scene.root.addChild(tip)
             }
+            if let flash = attachments.entity(for: "capture-flash") {
+                flash.position = [0, 1.0, -0.7]
+                flash.components.set(BillboardComponent())
+                scene.root.addChild(flash)
+            }
             scene.subscription = content.subscribe(to: SceneEvents.Update.self) { _ in
                 scene.showPausedState(module.isPaused())
                 scene.showPodsState(appModel.controlPodsVisible)
                 scene.showResetArmed(Date() < resetArmedUntil)
+                scene.showDimming(appModel.roomDimming)
             }
         } attachments: {
             Attachment(id: "pod-tip") {
@@ -53,6 +61,17 @@ struct ModuleOrbControlsView: View {
                         .padding(.vertical, 7)
                         .frame(maxWidth: 300)
                         .multilineTextAlignment(.center)
+                        .glassBackgroundEffect()
+                        .transition(.opacity)
+                }
+            }
+            Attachment(id: "capture-flash") {
+                if let captureFlash {
+                    Label(captureFlash, systemImage: "checkmark.seal.fill")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
                         .glassBackgroundEffect()
                         .transition(.opacity)
                 }
@@ -88,6 +107,22 @@ struct ModuleOrbControlsView: View {
                             SoundPalette.play(.pop, on: scene.resetOrb, volume: 0.5)
                         }
                         scene.pulse(scene.resetOrb)
+                    case .dim:
+                        appModel.cycleDimming()
+                        SoundPalette.play(.pop, on: scene.dimOrb, volume: 0.4)
+                        scene.pulse(scene.dimOrb)
+                    case .capture:
+                        let entry = appModel.notebook.record(
+                            moduleID: module.id, moduleTitle: module.title,
+                            title: module.title,
+                            readings: module.captureReadings())
+                        SoundPalette.play(.chime, on: scene.captureOrb, volume: 0.55)
+                        scene.pulse(scene.captureOrb)
+                        captureFlash = "Noted — \(entry.readings.count) readings"
+                        Task {
+                            try? await Task.sleep(for: .seconds(2.4))
+                            captureFlash = nil
+                        }
                     case .back:
                         SoundPalette.play(.pop, on: scene.backOrb, volume: 0.5)
                         scene.pulse(scene.backOrb)
@@ -107,7 +142,7 @@ struct ModuleOrbControlsView: View {
 @MainActor
 @Observable
 final class OrbScene {
-    enum Action { case pause, back, pods, reset }
+    enum Action { case pause, back, pods, reset, dim, capture }
 
     let root = Entity()
     var subscription: EventSubscription?
@@ -119,6 +154,9 @@ final class OrbScene {
     private(set) var backOrb = ModelEntity()
     private(set) var podsOrb = ModelEntity()
     private(set) var resetOrb = ModelEntity()
+    private(set) var dimOrb = ModelEntity()
+    private(set) var captureOrb = ModelEntity()
+    private var dimCrescent = Entity()
     private var pauseBars = Entity()
     private var playTriangle = Entity()
     private var podTiles = Entity()
@@ -126,21 +164,23 @@ final class OrbScene {
     private var showingPaused = false
     private var showingPods = true
     private var showingResetArmed = false
+    private var showingDimming = -1.0
 
     private static let orbRadius: Float = 0.048
 
-    // The cluster: four bubbles centred and strung on a shallow glass rail
+    // The cluster: six bubbles centred and strung on a shallow glass rail
     // that bows gently toward the user, like beads on a wire.
+    private static let orbCount = 6
     private static let orbY: Float = 0.85
     private static let orbZ: Float = -0.72
-    private static let orbSpacing: Float = 0.17
+    private static let orbSpacing: Float = 0.15
     private static func orbPosition(_ index: Int) -> SIMD3<Float> {
-        let x = (Float(index) - 1.5) * orbSpacing
+        let x = (Float(index) - Float(orbCount - 1) / 2) * orbSpacing
         return SIMD3(x, orbY, orbZ + bow(atX: x))
     }
     /// A gentle forward bow (toward the user) that grows toward the ends.
     private static func bow(atX x: Float) -> Float {
-        let t = x / (orbSpacing * 1.5)
+        let t = x / (orbSpacing * Float(orbCount - 1) / 2)
         return 0.014 * t * t
     }
 
@@ -156,16 +196,32 @@ final class OrbScene {
             at: Self.orbPosition(1),
             accessibilityLabel: "Pause or resume the physics"
         )
+        dimOrb = makeOrb(
+            name: "orb-dim",
+            at: Self.orbPosition(2),
+            accessibilityLabel: "Dim the room. Pinch to cycle off, half, and full."
+        )
+        captureOrb = makeOrb(
+            name: "orb-capture",
+            at: Self.orbPosition(3),
+            accessibilityLabel: "Write this moment into the lab notebook"
+        )
         podsOrb = makeOrb(
             name: "orb-pods",
-            at: Self.orbPosition(2),
+            at: Self.orbPosition(4),
             accessibilityLabel: "Show or hide the floating control pods"
         )
         resetOrb = makeOrb(
             name: "orb-reset",
-            at: Self.orbPosition(3),
+            at: Self.orbPosition(5),
             accessibilityLabel: "Reset the module. Pinch once to arm, again to reset."
         )
+
+        // Dim: a crescent — a filled disc with a smaller one cut in front
+        // of it, the universal "shade" mark, sized like the other glyphs.
+        attachIcon(dimIcon(), to: dimOrb)
+        // Capture: a small open book, the notebook's own mark.
+        attachIcon(notebookIcon(), to: captureOrb)
 
         // Icons are small, smooth, chrome-like models that catch the room
         // light and read against any background — not flat glyphs that wash
@@ -397,6 +453,61 @@ final class OrbScene {
         return orb
     }
 
+    /// A crescent: a bright disc with a darker one overlapping it, the
+    /// universal "shade" mark. Its fill tracks how far the room is dimmed.
+    private func dimIcon() -> Entity {
+        let icon = Entity()
+        let disc = ModelEntity(
+            mesh: .generateCylinder(height: 0.0025, radius: 0.014),
+            materials: [Self.iconMetal(UIColor(white: 0.30, alpha: 1), emissive: 0.04)])
+        disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+        icon.addChild(disc)
+
+        // The bite out of it — shown when the room is dimmed at all.
+        let bite = ModelEntity(
+            mesh: .generateCylinder(height: 0.004, radius: 0.0105),
+            materials: [Self.iconMetal(UIColor(white: 0.07, alpha: 1), emissive: 0.0)])
+        bite.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+        bite.position = [0.007, 0.005, 0.0012]
+        dimCrescent = bite
+        icon.addChild(bite)
+        return icon
+    }
+
+    /// A little open book — two thin leaves tilted apart on a spine.
+    private func notebookIcon() -> Entity {
+        let icon = Entity()
+        let leaf = MeshResource.generateBox(size: [0.014, 0.0022, 0.019],
+                                            cornerRadius: 0.0012)
+        for sign: Float in [1, -1] {
+            let page = ModelEntity(mesh: leaf, materials: [
+                Self.iconMetal(UIColor(white: 0.82, alpha: 1), emissive: 0.06)])
+            page.orientation = simd_quatf(angle: sign * 0.30, axis: [0, 0, 1])
+            page.position = [sign * 0.0075, -0.0015, 0]
+            icon.addChild(page)
+        }
+        // The spine, in the module accent.
+        var spineMaterial = UnlitMaterial(color: accent)
+        spineMaterial.blending = .transparent(opacity: 0.9)
+        let spine = ModelEntity(
+            mesh: .generateBox(size: [0.0026, 0.0055, 0.019], cornerRadius: 0.0012),
+            materials: [spineMaterial])
+        icon.addChild(spine)
+        // Reading the page as a page: the icon lies flat, facing the user.
+        icon.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
+        return icon
+    }
+
+    /// The crescent's bite grows as the room darkens, so the bead reads
+    /// its own state at a glance.
+    func showDimming(_ level: Double) {
+        guard abs(level - showingDimming) > 0.02 else { return }
+        showingDimming = level
+        dimCrescent.isEnabled = level > 0.02
+        let slide = Float(0.004 + 0.006 * (1 - level))
+        dimCrescent.position = [slide, 0.005, 0.0012]
+    }
+
     private func attachIcon(_ icon: Entity, to orb: ModelEntity) {
         let pivot = Entity()
         pivot.components.set(BillboardComponent())
@@ -430,6 +541,8 @@ final class OrbScene {
             if candidate.name == "orb-back" { return .back }
             if candidate.name == "orb-pods" { return .pods }
             if candidate.name == "orb-reset" { return .reset }
+            if candidate.name == "orb-dim" { return .dim }
+            if candidate.name == "orb-capture" { return .capture }
             current = candidate.parent
         }
         return nil

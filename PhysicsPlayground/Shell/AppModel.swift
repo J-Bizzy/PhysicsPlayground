@@ -14,7 +14,10 @@ import Observation
 @Observable
 final class AppModel {
     var activeModuleID: String? {
-        didSet { refreshImmersionStyle() }
+        didSet {
+            refreshImmersionStyle()
+            adoptModuleAtmosphere()
+        }
     }
 
     /// Studio Mode: full immersion that shuts the room out and stages the
@@ -24,9 +27,45 @@ final class AppModel {
         didSet { refreshImmersionStyle() }
     }
 
+    /// How far the dimming shell is closed, 0…1. The middle setting
+    /// between "bright room" and "no room": the physics gets its
+    /// contrast back while the user keeps their furniture and their
+    /// feet. Modules that can't be read in a sunlit room open with it
+    /// already part-closed (ModuleDescriptor.preferredDimming).
+    /// A manual change sticks for as long as the user stays in the
+    /// module; entering a different one adopts that module's preference.
+    var roomDimming: Double = 0
+
+    func setDimming(_ level: Double) {
+        roomDimming = min(max(level, 0), 1)
+    }
+
+    /// Steps the shell through off → half → full, for the nav bead.
+    func cycleDimming() {
+        let next: Double
+        switch roomDimming {
+        case ..<0.05: next = 0.55
+        case ..<0.8: next = 1.0
+        default: next = 0
+        }
+        setDimming(next)
+    }
+
+    private func adoptModuleAtmosphere() {
+        roomDimming = activeModule?.preferredDimming ?? 0
+    }
+
     private func refreshImmersionStyle() {
         immersionStyle = studioMode ? .full : (activeModule?.immersionStyle ?? .mixed)
     }
+
+    /// One shared understanding of the user's real room — bounds to clip
+    /// against, walls to bounce off, furniture to be occluded by. Every
+    /// module reads it; the ARKit session is reference-counted.
+    let room = RoomModel()
+
+    /// The lab notebook: captured moments with their parameters.
+    let notebook = LabNotebook()
     var isImmersiveSpaceOpen = false
     /// Driven by the active module's descriptor; bound to the shared
     /// immersive space's style selection.

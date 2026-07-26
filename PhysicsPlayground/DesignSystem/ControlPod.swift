@@ -116,12 +116,16 @@ enum PodMount {
         guard let attachment else { return nil }
         let holder = Entity()
         holder.name = "pod-\(name)"
-        // A previously parked spot wins over the default.
+        // A previously parked spot wins over the default. A DEFAULT, on
+        // the other hand, is projected into the comfort shell first — a
+        // pod must never open outside the user's field of view, however
+        // convenient the number looked in the module's source. Parked
+        // positions are the user's own choice and are left alone.
         if let saved = UserDefaults.standard.array(forKey: layoutKey(parent.name, "pod-\(name)"))
             as? [Double], saved.count == 3 {
             holder.position = SIMD3(Float(saved[0]), Float(saved[1]), Float(saved[2]))
         } else {
-            holder.position = position
+            holder.position = PodPlacement.clamped(position)
         }
         savedPositions[layoutKey(parent.name, "pod-\(name)")] = holder.position
 

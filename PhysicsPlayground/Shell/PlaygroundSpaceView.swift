@@ -24,11 +24,21 @@ struct PlaygroundSpaceView: View {
             if appModel.studioMode {
                 StudioEnvironmentView()
                     .id("studio")
+            } else if appModel.roomDimming > 0.01 {
+                // The middle setting: the room stays, but a dark shell
+                // gives the physics its contrast back.
+                RoomDimmerView(level: appModel.roomDimming)
+                    .id("dimmer")
             }
             if let module = appModel.activeModule {
                 ZStack {
                     module.makeScene()
                         .id(module.id)
+                    // Real furniture hides virtual content behind it, and
+                    // the shared room sensing stays alive while a module
+                    // is on screen (device-only; inert in the simulator).
+                    RoomOcclusionView()
+                        .id("occlusion")
                     // The four-bead navigation cluster — kept as the
                     // ZStack's second child, the slot where RealityView
                     // content provably renders.
