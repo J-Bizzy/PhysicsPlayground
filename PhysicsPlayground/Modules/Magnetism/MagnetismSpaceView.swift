@@ -37,12 +37,12 @@ struct MagnetismSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.step(dt: event.deltaTime)
-                    renderer?.tick(model)
+                    renderer?.tick(model, viewer: appModel.room.headPosition)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                 }
             )
-            renderer.tick(model)
+            renderer.tick(model, viewer: appModel.room.headPosition)
             self.renderer = renderer
         } attachments: {
             Attachment(id: "pod-magnets") { MagnetsPod() }
@@ -62,12 +62,15 @@ struct MagnetismSpaceView: View {
                         value.location3D, from: .local, to: .scene)))
                     if drag == nil { drag = beginDrag(entity: value.entity, hand: hand) }
                     guard let drag else { return }
-                    if let id = UUID(uuidString: drag.name) {
+                    if drag.name == MagnetismRenderer.handCompassName {
+                        model.moveCompass(to: drag.position(forHand: hand))
+                    } else if let id = UUID(uuidString: drag.name) {
                         model.move(id: id, to: drag.position(forHand: hand))
                     }
                 }
                 .onEnded { _ in
                     model.release()
+                    renderer?.isCarryingCompass = false
                     drag = nil
                 }
         )
@@ -76,6 +79,11 @@ struct MagnetismSpaceView: View {
     private func beginDrag(entity: Entity, hand: SIMD3<Double>) -> RelativeDrag? {
         var current: Entity? = entity
         while let candidate = current {
+            if candidate.name == MagnetismRenderer.handCompassName {
+                renderer?.isCarryingCompass = true
+                return RelativeDrag(name: candidate.name,
+                                    target: model.compassPosition, hand: hand)
+            }
             if let id = UUID(uuidString: candidate.name),
                let magnet = model.magnets.first(where: { $0.id == id }) {
                 model.grab(id: id)

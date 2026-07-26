@@ -38,13 +38,13 @@ struct WavesSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.step(dt: event.deltaTime)
-                    renderer?.tick(model)
+                    renderer?.tick(model, listener: appModel.room.headPosition)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                 }
             )
 
-            renderer.tick(model)
+            renderer.tick(model, listener: appModel.room.headPosition)
             self.renderer = renderer
         } attachments: {
             Attachment(id: "pod-waves") {
@@ -116,7 +116,13 @@ struct WavesPod: View {
             }
             Toggle("Silence surfaces", isOn: $model.showSilenceSurfaces)
                 .font(DesignTokens.TypeScale.control)
-                .accessibilityHint("The 3D sheets where the waves cancel to nothing")
+                .accessibilityHint("Contour rings tracing the 3D sheets where the waves cancel to nothing")
+            Toggle("Hear the field", isOn: $model.listenToField)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("Sounds the wave amplitude at your own head — walk into a silence sheet and it goes quiet")
+            Text("Walk into a silence sheet and the tone drops away — the amplitude at your ears, not at a probe.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 }

@@ -39,7 +39,15 @@ final class WaveMediumRenderer {
     /// still sweep well into the warm and cool ends of the ramp.
     private static let heightSpan: Float = 0.09
 
+    /// The tilted frame the whole drumhead lives in.
+    private let plateRoot = Entity()
     private let surfaceEntity = ModelEntity()
+    private let contourEntity = ModelEntity()
+    private let contourMaterial: UnlitMaterial = {
+        var material = UnlitMaterial(color: UIColor(white: 0.06, alpha: 1))
+        material.blending = .transparent(opacity: 0.55)
+        return material
+    }()
     private let rimEntity = ModelEntity()
     private let grainsEntity = ModelEntity()
     private let driverEntity = ModelEntity()
@@ -90,14 +98,23 @@ final class WaveMediumRenderer {
         surfaceMaterial.faceCulling = .none
         surfaceEntity.model = ModelComponent(
             mesh: .generateSphere(radius: 0.0001), materials: [surfaceMaterial])
-        root.addChild(surfaceEntity)
-        root.addChild(rimEntity)
+        // The whole plate hangs off one tilted root: the mesh builder
+        // keeps working in the sheet's own flat frame, and the lean is a
+        // single orientation. Nothing in the wave equation, the grain
+        // walk or the mode shapes knows the plate is tilted.
+        plateRoot.position = SIMD3<Float>(WaveMediumModel.center)
+        plateRoot.orientation = simd_quatf(
+            angle: -Float(WaveMediumModel.tilt), axis: [1, 0, 0])
+        root.addChild(plateRoot)
+        plateRoot.addChild(surfaceEntity)
+        plateRoot.addChild(contourEntity)
+        plateRoot.addChild(rimEntity)
 
         // The grain layer (Chladni sand) — one rebuilt mesh of tiny
         // camera-facing quads.
         grainsEntity.model = ModelComponent(
             mesh: .generateSphere(radius: 0.0001), materials: [grainMaterial])
-        root.addChild(grainsEntity)
+        plateRoot.addChild(grainsEntity)
 
         // The driver puck at the shaken center.
         var driverMat = PhysicallyBasedMaterial()
@@ -118,7 +135,6 @@ final class WaveMediumRenderer {
         // orb controls below and in front of it.
         let collider = ModelEntity()
         collider.name = Self.surfaceName
-        collider.position = SIMD3<Float>(WaveMediumModel.center)
         collider.components.set(InputTargetComponent())
         collider.components.set(CollisionComponent(shapes: [
             .generateBox(width: half * 2 + 0.06,
@@ -129,7 +145,7 @@ final class WaveMediumRenderer {
         accessibility.isAccessibilityElement = true
         accessibility.label = "Resonance drumhead. Reach in and pull it, or let the shaker ring its modes."
         collider.components.set(accessibility)
-        root.addChild(collider)
+        plateRoot.addChild(collider)
 
         // The held-point halo.
         var haloMaterial = UnlitMaterial(color: .white)
@@ -200,7 +216,7 @@ final class WaveMediumRenderer {
         surfacePipeline?.submit(SurfaceJob(
             heights: sheet.height.map { Float($0) },
             n: sheet.n, spacing: Float(WaveMediumModel.spacing),
-            center: SIMD3<Float>(WaveMediumModel.center),
+            center: .zero,
             grainCenters: grainCenters))
 
         updateDriver(model: model)
@@ -224,7 +240,6 @@ final class WaveMediumRenderer {
         let n = WaveMediumModel.gridCount
         let a = Float(WaveMediumModel.spacing)
         let half = Float(WaveMediumModel.halfSide)
-        let center = SIMD3<Float>(WaveMediumModel.center)
         let margin = a
         let heights = sheet.height
 
@@ -254,7 +269,7 @@ final class WaveMediumRenderer {
             grains[idx] = g
             let (gi, gj) = node(g.x, g.y)
             let z = Float(heights[gj * n + gi])
-            centers.append(center + SIMD3(g.x, g.y, z + 0.006))
+            centers.append(SIMD3(g.x, g.y, z + 0.006))
         }
         return centers
     }
@@ -265,7 +280,8 @@ final class WaveMediumRenderer {
         driverEntity.isEnabled = model.driveOn
         guard model.driveOn else { return }
         let c = WaveMediumModel.driveCoord
-        driverEntity.position = SIMD3<Float>(model.world(i: c.i, j: c.j)) + SIMD3(0, 0, 0.012)
+        driverEntity.position = SIMD3<Float>(model.world(i: c.i, j: c.j))
+            + SIMD3<Float>(WaveMediumModel.faceNormal) * 0.012
     }
 
     /// Brighten the whole sheet as it rings, change-gated so we only
@@ -326,7 +342,15 @@ final class WaveMediumRenderer {
         var rim: [SIMD3<Float>]
         var grainPositions: [SIMD3<Float>]
         var grainIndices: [UInt32]
+        /// Iso-height contours drawn ON the surface.
+        var contours = TubeBuffers()
     }
+
+    /// The height levels contour lines are drawn at, as a fraction of
+    /// the colormap's span. Symmetric about the rest plane so crest and
+    /// trough read alike.
+    private nonisolated static let contourLevels: [Float] =
+        [-0.72, -0.48, -0.24, 0.24, 0.48, 0.72]
 
     private nonisolated static func computeSurface(_ job: SurfaceJob) -> SurfaceResult {
         let n = job.n
@@ -390,13 +414,62 @@ final class WaveMediumRenderer {
             grainIndices += [b, b + 1, b + 2, b, b + 2, b + 3]
         }
 
+        // Iso-height CONTOURS, drawn on the surface itself.
+        //
+        // A shaded height field only reads as relief when the light
+        // happens to rake it; under flat room ambient a rippling
+        // membrane can look like a smooth colour wash — which is exactly
+        // how the drumhead was reading. Contour lines make the shape
+        // explicit and quantitative: closed rings around each antinode,
+        // crowding where the surface is steep, vanishing on the nodal
+        // lines. It is the same trick a map uses for a mountain, and it
+        // survives any lighting.
+        var contourLines: [[SIMD3<Float>]] = []
+        for level in contourLevels {
+            let value = level * heightSpan
+            let segments = MarchingSquares.contour(
+                level: Double(value),
+                scalar: { local in
+                    // Bilinear sample of the height lattice.
+                    let fx = (Float(local.x) + half) / a
+                    let fy = (Float(local.y) + half) / a
+                    let i0 = min(max(Int(fx), 0), n - 1), j0 = min(max(Int(fy), 0), n - 1)
+                    let i1 = min(i0 + 1, n - 1), j1 = min(j0 + 1, n - 1)
+                    let tx = fx - Float(i0), ty = fy - Float(j0)
+                    let h00 = height(i0, j0), h10 = height(i1, j0)
+                    let h01 = height(i0, j1), h11 = height(i1, j1)
+                    let top = h00 + (h10 - h00) * tx
+                    let bottom = h01 + (h11 - h01) * tx
+                    return Double(top + (bottom - top) * ty)
+                },
+                center: .zero,
+                extents: SIMD2(Double(half * 2), Double(half * 2)),
+                resolution: 54)
+            for polyline in MarchingSquares.chain(segments, tolerance: 1e-7)
+            where polyline.count > 3 {
+                // Lift each contour a hair off the surface so it never
+                // z-fights the shaded mesh it is describing.
+                contourLines.append(polyline.map {
+                    SIMD3<Float>(Float($0.x), Float($0.y), value + 0.0022)
+                })
+            }
+        }
+
         return SurfaceResult(positions: positions, normals: normals,
                              uvs: uvs, indices: indices, rim: rim,
                              grainPositions: grainPositions,
-                             grainIndices: grainIndices)
+                             grainIndices: grainIndices,
+                             contours: TubeMesh.buffers(lines: contourLines, radius: 0.0013))
     }
 
     private func applySurface(_ result: SurfaceResult) {
+        if let contourMesh = TubeMesh.mesh(from: result.contours) {
+            contourEntity.model = ModelComponent(mesh: contourMesh,
+                                                 materials: [contourMaterial])
+            contourEntity.isEnabled = true
+        } else {
+            contourEntity.isEnabled = false
+        }
         guard result.positions.count >= 3, result.indices.count >= 3 else {
             surfaceEntity.isEnabled = false
             return

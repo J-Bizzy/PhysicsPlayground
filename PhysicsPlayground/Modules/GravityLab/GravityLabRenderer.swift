@@ -41,6 +41,15 @@ final class GravityLabRenderer {
     let selectedAnchor = Entity()
 
     private let systemRoot = Entity()
+    /// A pure VIEW transform between the scene root and the system: the
+    /// two-handed scale/turn rig drives this and nothing else, so the
+    /// simulation keeps running in true SI units at its own scale while
+    /// the user changes how big it looks. Pinch with both hands and pull
+    /// apart to go from a tabletop orrery to a solar system you stand
+    /// inside — the one gesture that only exists in a headset, and the
+    /// module that most needed it, since at 1 AU = 0.5 m the inner
+    /// planets are a disc you could cover with a dinner plate.
+    let viewRoot = Entity()
     /// Mode-dependent (AU scale vs. Earth–Moon scale); refreshed per render.
     private var scale: Float = 1
 
@@ -106,7 +115,12 @@ final class GravityLabRenderer {
         gridMaterial = grid
 
         systemRoot.position = Self.systemPosition
-        root.addChild(systemRoot)
+        viewRoot.addChild(systemRoot)
+        root.addChild(viewRoot)
+        // The invisible plate two hands can grab when they are not on a
+        // planet, so the gesture works anywhere in the system's volume.
+        viewRoot.addChild(SpatialScaleHandle.make(
+            center: Self.systemPosition, radius: 1.4))
 
         // The floating platform under the system — a quiet glass disc.
         // Hidden while the spacetime grid takes over as the floor.
@@ -269,13 +283,83 @@ final class GravityLabRenderer {
 
     // MARK: Per-frame tick (from SceneEvents.Update)
 
-    /// Room coordinates → display coordinates relative to the system center.
+    /// Room coordinates → display coordinates relative to the system
+    /// centre.
+    ///
+    /// This used to subtract a constant, which was correct only while
+    /// the system sat at 1× with no turn. Now that the view root can be
+    /// scaled and rotated by the two-handed gesture, the conversion has
+    /// to go through the actual transform — otherwise grabbing a planet
+    /// in a zoomed-in view would fling it, because the hand's motion
+    /// would be read as a much larger motion in simulation space.
+    /// `convert` inverts whatever the view rig has done, exactly.
     func displayPoint(fromWorld world: SIMD3<Float>) -> SIMD3<Double> {
-        SIMD3<Double>(world - Self.systemPosition)
+        SIMD3<Double>(systemRoot.convert(position: world, from: nil))
+    }
+
+    // MARK: The orbital chord — Kepler's third law, heard
+
+    /// One voice per body, pitched by its orbital period.
+    ///
+    /// Kepler's harmonices mundi, made literal: a period maps to a
+    /// frequency, so the solar system is a CHORD. Earth's year is the
+    /// reference note; Mercury's 88-day year sings about two octaves
+    /// above it, Neptune's 165 years growls at the floor. The point is
+    /// what happens when you interfere: throw a planet into a new orbit
+    /// and you HEAR its note slide, and hear the chord go out of tune,
+    /// while you are still looking at your hands. T² ∝ a³ stops being a
+    /// formula and becomes an interval you can recognise.
+    private var chordVoices: [UUID: ToneVoice] = [:]
+    private var chordEmitters: [UUID: Entity] = [:]
+
+    private func tickOrbitalChord(_ model: GravityLabModel) {
+        guard model.playOrbitalChord else {
+            chordVoices.values.forEach { $0.mute() }
+            return
+        }
+        var live = Set<UUID>()
+        // Earth's year is the anchor, so the reference note is fixed and
+        // the chord doesn't transpose as bodies come and go.
+        let referencePeriod = 365.25
+
+        for orbiting in model.bodies {
+            guard let readout = model.readout(for: orbiting),
+                  let periodDays = readout.periodDays, readout.isBound else { continue }
+            live.insert(orbiting.id)
+
+            let emitter: Entity
+            if let existing = chordEmitters[orbiting.id] {
+                emitter = existing
+            } else {
+                emitter = Entity()
+                systemRoot.addChild(emitter)
+                chordEmitters[orbiting.id] = emitter
+                chordVoices[orbiting.id] = ToneVoice(on: emitter, range: (-64)...(-30))
+            }
+            // Sounds from where the body IS, so the chord moves around
+            // the room the way the planets do.
+            emitter.position = SIMD3<Float>(orbiting.body.position * model.simToDisplay)
+            guard chordVoices[orbiting.id]?.start() == true else { continue }
+
+            // Heavier bodies sing louder — the chord is dominated by the
+            // planets that dominate the system.
+            let loudness = Sonification.loudness(
+                log10(max(orbiting.body.mass, 1)) - 20, full: 8, knee: 1.0)
+            chordVoices[orbiting.id]?.update(
+                pitchHz: Sonification.pitch(forPeriodSeconds: periodDays,
+                                            referencePeriod: referencePeriod),
+                loudness: max(loudness, 0.12),
+                smoothing: 0.08)
+        }
+        // A body that merged, escaped, or was deleted goes silent.
+        for (id, voice) in chordVoices where !live.contains(id) {
+            voice.mute()
+        }
     }
 
     func tick(_ model: GravityLabModel) {
         frameCounter &+= 1
+        tickOrbitalChord(model)
         scale = Float(model.simToDisplay)
 
         // Fresh procedural textures arrived: reapply body materials.

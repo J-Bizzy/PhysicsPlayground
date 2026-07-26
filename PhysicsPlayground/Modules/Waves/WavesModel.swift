@@ -72,6 +72,10 @@ final class WavesModel {
     /// the crests made visible. A moving source's shells bunch ahead and
     /// stretch behind, so this is where the Doppler effect really shows.
     var showWavefronts = true
+    /// Sound the field at the listener's own head: walk into a node and
+    /// hear it go quiet. This is the experience the module exists for,
+    /// and it was previously only readable as a number on a probe card.
+    var listenToField = true
 
     // MARK: Time
 
@@ -307,6 +311,7 @@ final class WavesModel {
         waveSpeed = 0.5
         showSilenceSurfaces = true
         showWavefronts = true
+        listenToField = true
         isPaused = false
         timeScale = 1.0
         time = 0

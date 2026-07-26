@@ -51,6 +51,34 @@ final class MagnetismModel {
     var showFieldLines = true
     var showCompasses = true
 
+    // MARK: The compass you carry
+
+    /// A single hand-held compass, separate from the lattice.
+    ///
+    /// The lattice shows the field's SHAPE; a compass in your hand is
+    /// the experience everyone actually remembers — you walk it around
+    /// a magnet and watch the needle swing. It is the same physics
+    /// (τ = m × B aligning a dipole with the local field), just at the
+    /// end of your arm instead of pinned to a grid, and it is the one
+    /// affordance in this module that only exists because you have hands
+    /// in the scene.
+    var compassOn = true
+    var compassPosition = MagnetismModel.regionCenter + SIMD3(0.0, -0.42, 0.55)
+
+    func moveCompass(to point: SIMD3<Double>) {
+        var clamped = point
+        clamped.y = max(clamped.y, Self.regionFloor)
+        compassPosition = clamped
+    }
+
+    /// The field where the compass is — what the needle points along.
+    var compassField: SIMD3<Double> {
+        MagneticField.vector(at: compassPosition, dueTo: magnets)
+    }
+
+    /// |B| at the compass in microtesla, for its dial label.
+    var compassMicroTesla: Double { simd_length(compassField) * 1e6 }
+
     var selectedMagnet: BarMagnet? {
         guard let selectedID else { return nil }
         return magnets.first { $0.id == selectedID }
@@ -226,6 +254,8 @@ final class MagnetismModel {
         isPaused = false
         showFieldLines = true
         showCompasses = true
+        compassOn = true
+        compassPosition = Self.regionCenter + SIMD3(0.0, -0.42, 0.55)
     }
 
     init() {

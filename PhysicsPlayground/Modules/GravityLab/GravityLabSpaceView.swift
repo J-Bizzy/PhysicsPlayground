@@ -18,6 +18,11 @@ struct GravityLabSpaceView: View {
     @Environment(GravityLabModel.self) private var model
     @State private var renderer: GravityLabRenderer?
     @State private var drag: RelativeDrag?
+    /// Two-handed scale and turn for the whole system: pull your hands
+    /// apart to grow the solar system around you, twist to look at the
+    /// comet's inclined orbit from the side.
+    @State private var scaleRig = SpatialScaleRig(
+        pivot: GravityLabRenderer.systemPosition, range: 0.4...4.0)
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -45,6 +50,7 @@ struct GravityLabSpaceView: View {
                     // Separate from the tick so the field keeps flowing
                     // even while the simulation is paused.
                     renderer?.tickFieldParticles(dt: event.deltaTime, model: model)
+                    scaleRig.apply(to: renderer?.viewRoot ?? Entity())
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                 }
@@ -110,6 +116,7 @@ struct GravityLabSpaceView: View {
                     model.release(id: id)
                 }
         )
+        .spatialScale(scaleRig)
     }
 
 }

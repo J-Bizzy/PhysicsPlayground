@@ -204,5 +204,59 @@ struct FieldViewToggles: View {
             Stepper("Casings: \(model.equipotentialShells)",
                     value: $model.equipotentialShells, in: 1...6)
         }
+        GaussSurfaceControls()
+    }
+}
+
+/// Gauss's law, as a thing you carry through the field.
+///
+/// A page can state ∮E·dA = Q/ε₀; it cannot let you move the surface.
+/// The closed bubble is the demonstration: put a charge inside and the
+/// flux jumps to exactly Q/ε₀, take it out and it drops to zero, and
+/// nothing you do to the shape's position changes that.
+struct GaussSurfaceControls: View {
+    @Environment(FieldModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        Divider().opacity(0.4)
+        Toggle("Gauss surface", isOn: $model.gaussSurfaceOn)
+            .accessibilityHint("A flux meter you carry through the field")
+        if model.gaussSurfaceOn {
+            Picker("Shape", selection: $model.gaussSurfaceKind) {
+                ForEach(FieldModel.GaussSurfaceKind.allCases) { kind in
+                    Text(kind.displayName).tag(kind)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Radius: \(model.gaussSurfaceRadius * 100, specifier: "%.0f") cm")
+                    .font(DesignTokens.TypeScale.control)
+                Slider(value: $model.gaussSurfaceRadius,
+                       in: FieldModel.gaussRadiusRange)
+                    .accessibilityLabel("Gauss surface radius")
+            }
+
+            if let enclosed = model.gaussEnclosedCharge,
+               let predicted = model.gaussPredictedFlux {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Φ measured  \(PhysicsFormat.scientific(model.gaussFlux)) N·m²/C")
+                    Text("Q enclosed  \(PhysicsFormat.scientific(enclosed)) C")
+                    Text("Q/ε₀        \(PhysicsFormat.scientific(predicted)) N·m²/C")
+                }
+                .font(DesignTokens.TypeScale.footnote.monospaced())
+                Text("Closed surface: the flux is the enclosed charge over ε₀ and nothing else. Carry the bubble anywhere — outside charges contribute exactly zero.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Φ  \(PhysicsFormat.scientific(model.gaussFlux)) N·m²/C")
+                    .font(DesignTokens.TypeScale.footnote.monospaced())
+                Text("Open surface: tilt it edge-on to the field and the flux falls to zero. Switch to the bubble for Gauss's law.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }

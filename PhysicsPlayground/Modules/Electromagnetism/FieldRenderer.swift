@@ -45,6 +45,9 @@ final class FieldRenderer {
     static let probePositiveColor = DesignTokens.Palette.probePositiveUI
     static let probeNegativeColor = DesignTokens.Palette.probeNegativeUI
     static let lineColor = DesignTokens.Palette.fieldLineUI
+    /// The Gauss surface's own colour — deliberately not the field's, so
+    /// the measuring instrument never reads as part of the field.
+    static let gaussColor = UIColor(red: 1.0, green: 0.84, blue: 0.35, alpha: 1)
     static let positiveShellColor = DesignTokens.Palette.positiveShellUI
     static let negativeShellColor = DesignTokens.Palette.negativeShellUI
     static let chargeRadius: Float = 0.03
@@ -71,10 +74,15 @@ final class FieldRenderer {
     private var probeSignVertical: ModelEntity?
     private var appliedProbePolarity: Bool?
     private let linesEntity = ModelEntity()
+    private let lineCasingEntity = ModelEntity()
     private let lineGlowEntity = ModelEntity()
     private let positiveShellsEntity = ModelEntity()
     private let negativeShellsEntity = ModelEntity()
+    /// Core radius of a field line; the casing is swept from it.
+    static let lineRadius: Float = 0.0016
     private let lineMaterial = UnlitMaterial(color: FieldRenderer.lineColor)
+    private let lineCasingMaterial =
+        Materials.contrastLine(FieldRenderer.lineColor).casing
     private let lineGlowMaterial: UnlitMaterial = {
         var material = UnlitMaterial(color: FieldRenderer.lineColor)
         material.blending = .transparent(opacity: 0.2)
@@ -112,12 +120,15 @@ final class FieldRenderer {
         // The glow halo sits under the arrowheads and the bright core so
         // the crisp line and heads read over the soft bloom.
         fieldFlowRoot.addChild(lineGlowEntity)
+        // Casing under the bright core: darkness first, light on top.
+        fieldFlowRoot.addChild(lineCasingEntity)
         fieldFlowRoot.addChild(arrowHeads.root)
         for entity in [linesEntity, positiveShellsEntity, negativeShellsEntity] {
             entity.isEnabled = false
             fieldFlowRoot.addChild(entity)
         }
         lineGlowEntity.isEnabled = false
+        lineCasingEntity.isEnabled = false
 
         geometryPipeline = GeometryPipeline(
             compute: { Self.computeGeometry($0) },
@@ -138,8 +149,9 @@ final class FieldRenderer {
     /// loop starves during system manipulation, so EM ticks directly
     /// like every continuously-animating module. All expensive paths
     /// inside render() are change-gated, so the per-frame cost is tiny.
-    func tick(_ model: FieldModel) {
+    func tick(_ model: FieldModel, room: RoomBox = .unscanned) {
         self.model = model
+        syncGaussSurface(model)
         render(
                 charges: model.charges,
                 region: model.samplingRegion,
@@ -152,8 +164,97 @@ final class FieldRenderer {
                 capacitorOn: model.capacitorOn,
                 capacitorCenter: model.capacitorCenter,
                 plateSeparation: model.plateSeparation,
-                magneticFieldOn: model.magneticFieldOn
+                magneticFieldOn: model.magneticFieldOn,
+                room: room
         )
+    }
+
+    // MARK: The Gauss surface — a flux meter you carry
+
+    private let gaussRoot = Entity()
+    private var gaussDisc: ModelEntity?
+    private var gaussBubble: ModelEntity?
+    private var gaussCallout: Callout?
+    private var appliedGaussRadius: Double = -1
+
+    private func buildGaussSurface() {
+        gaussRoot.name = "gauss-surface"
+        // The DISC: a thin translucent plate with a bright rim, so the
+        // orientation is unmistakable — an untinted disc read as a
+        // featureless blob when tilted.
+        var faceMaterial = UnlitMaterial(color: FieldRenderer.gaussColor)
+        faceMaterial.blending = .transparent(opacity: 0.16)
+        let disc = ModelEntity(mesh: .generateCylinder(height: 0.002, radius: 1),
+                               materials: [faceMaterial])
+        disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+        gaussDisc = disc
+        gaussRoot.addChild(disc)
+
+        // The BUBBLE: a closed soap-film sphere. Faint, because the user
+        // has to see the charges and lines THROUGH it — the whole point
+        // is watching what is inside.
+        var filmMaterial = UnlitMaterial(color: FieldRenderer.gaussColor)
+        filmMaterial.blending = .transparent(opacity: 0.1)
+        let bubble = ModelEntity(mesh: .generateSphere(radius: 1),
+                                 materials: [filmMaterial])
+        gaussBubble = bubble
+        gaussRoot.addChild(bubble)
+
+        let callout = Callout(color: FieldRenderer.gaussColor, textSize: 0.03,
+                              offset: SIMD3(0, 0.16, 0))
+        gaussCallout = callout
+        gaussRoot.addChild(callout.root)
+
+        Grabbable.configureTouchTarget(gaussRoot, collisionRadius: 0.1)
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = "Gauss surface. Carry it through the field to read the flux through it."
+        gaussRoot.components.set(accessibility)
+        root.addChild(gaussRoot)
+    }
+
+    private func syncGaussSurface(_ model: FieldModel) {
+        if gaussDisc == nil { buildGaussSurface() }
+        gaussRoot.isEnabled = model.gaussSurfaceOn
+        guard model.gaussSurfaceOn else { return }
+
+        gaussRoot.position = SIMD3<Float>(model.gaussSurfaceCenter)
+        let isBubble = model.gaussSurfaceKind == .bubble
+        gaussBubble?.isEnabled = isBubble
+        gaussDisc?.isEnabled = !isBubble
+
+        // Radius rides on the unit meshes as a scale — never regenerate
+        // a mesh on a slider.
+        if abs(model.gaussSurfaceRadius - appliedGaussRadius) > 1e-4 {
+            appliedGaussRadius = model.gaussSurfaceRadius
+            let r = Float(model.gaussSurfaceRadius)
+            gaussBubble?.scale = SIMD3(repeating: r)
+            // The disc's own mesh runs along +Y before its quarter turn,
+            // so thickness stays on Y and the face scales in X and Z.
+            gaussDisc?.scale = SIMD3(r, 1, r)
+            gaussRoot.components.set(CollisionComponent(
+                shapes: [.generateSphere(radius: max(r, 0.06))]))
+        }
+        if !isBubble {
+            let normal = simd_normalize(SIMD3<Float>(model.gaussSurfaceNormal))
+            // The disc's face normal is its local +Y after the quarter turn.
+            gaussDisc?.orientation = simd_quatf(from: [0, 1, 0], to: normal)
+        }
+
+        // The readout, tethered to the surface itself rather than parked
+        // on a distant card: flux, and for the closed bubble the enclosed
+        // charge and what Gauss says the flux therefore has to be.
+        if let enclosed = model.gaussEnclosedCharge,
+           let predicted = model.gaussPredictedFlux {
+            gaussCallout?.setText(String(
+                format: "Φ %@   Q %@\nGauss: %@",
+                PhysicsFormat.scientific(model.gaussFlux),
+                PhysicsFormat.scientific(enclosed),
+                PhysicsFormat.scientific(predicted)))
+        } else {
+            gaussCallout?.setText("Φ " + PhysicsFormat.scientific(model.gaussFlux))
+        }
+        gaussCallout?.anchor(at: SIMD3(0, Float(model.gaussSurfaceRadius), 0))
     }
 
     /// Re-syncs all visuals to the given state.
@@ -169,7 +270,8 @@ final class FieldRenderer {
         capacitorOn: Bool = false,
         capacitorCenter: SIMD3<Double> = .zero,
         plateSeparation: Double = 0.44,
-        magneticFieldOn: Bool = false
+        magneticFieldOn: Bool = false,
+        room: RoomBox = .unscanned
     ) {
         // Cheap path — runs every render.
         syncChargeEntities(charges, selectedID: selectedID)
@@ -183,6 +285,7 @@ final class FieldRenderer {
         // Expensive path — lines (with their riding arrowheads) and shells
         // rebuild on the geometry pipeline.
         linesEntity.isEnabled = showLines && !charges.isEmpty
+        lineCasingEntity.isEnabled = showLines && !charges.isEmpty
         lineGlowEntity.isEnabled = showLines && !charges.isEmpty
         if !showLines || charges.isEmpty {
             arrowHeads.hideAll()
@@ -191,16 +294,20 @@ final class FieldRenderer {
         negativeShellsEntity.isEnabled = showShells && !charges.isEmpty
         let visibilityChanged = showLines != lastShowLines || showShells != lastShowShells
         let shellsChanged = shells != lastShells
-        if (showLines || showShells) && (chargesChanged || visibilityChanged || shellsChanged)
+        let roomChanged = room != lastRoom
+        if (showLines || showShells)
+            && (chargesChanged || visibilityChanged || shellsChanged || roomChanged)
             && !charges.isEmpty {
             geometryPipeline?.submit(GeometryJob(
                 charges: charges,
                 region: region,
                 wantLines: showLines,
                 wantShells: showShells,
-                shells: shells
+                shells: shells,
+                room: room
             ))
         }
+        lastRoom = room
         lastShells = shells
         lastShowLines = showLines
         lastShowShells = showShells
@@ -216,9 +323,16 @@ final class FieldRenderer {
         var wantLines: Bool
         var wantShells: Bool
         var shells: Int
+        /// The user's real room. Lines are clipped to it, so the field
+        /// stops at the wall instead of leaving the building — which is
+        /// not a cheat: a wall is a conductor's boundary as far as this
+        /// picture is concerned, and an infinite straight ray shooting
+        /// through the ceiling is the least field-like thing there is.
+        var room: RoomBox
     }
 
     private var lastShells = 3
+    private var lastRoom: RoomBox?
 
     /// Re-aims the arrowhead pool at the given points, each cone rotated
     /// from its rest +y onto the line's local direction there.
@@ -363,6 +477,12 @@ final class FieldRenderer {
     private nonisolated struct GeometryResult: Sendable {
         var sourceCharges: [PointCharge] = []
         var tube = TubeBuffers()
+        /// A near-black tube swept slightly fatter than the core, drawn
+        /// underneath it. Passthrough is a BRIGHT medium — a pale cyan
+        /// filament over a cream wall has almost no luminance contrast
+        /// and simply disappears. The casing gives every line its own
+        /// darkness to sit against, whatever is behind it.
+        var tubeCasing = TubeBuffers()
         /// A fatter, fainter tube along the same lines — the soft glow
         /// halo that makes the field read as light, not wire.
         var tubeGlow = TubeBuffers()
@@ -387,9 +507,17 @@ final class FieldRenderer {
             // the tracer's default, so drags re-trace at a higher rate.
             config.stepSize = 0.012
             config.maxSteps = 220
-            let lines = FieldLineTracer.trace(charges: job.charges, config: config)
+            let traced = FieldLineTracer.trace(charges: job.charges, config: config)
+            // Clip to the room, then drop the crumbs: a two-point stub
+            // left over from a clip carries no shape and only adds
+            // overdraw.
+            let lines = job.room.clip(polylines: traced)
+                .filter { $0.count > 2 }
                 .map { $0.map(SIMD3<Float>.init) }
-            result.tube = TubeMesh.buffers(lines: lines)
+            result.tube = TubeMesh.buffers(lines: lines, radius: FieldRenderer.lineRadius)
+            result.tubeCasing = TubeMesh.buffers(
+                lines: lines,
+                radius: Materials.casingRadius(forCore: FieldRenderer.lineRadius))
             result.tubeGlow = TubeMesh.buffers(lines: lines, radius: 0.0044)
 
             // Arrowheads at regular arc length along every line — the line
@@ -442,6 +570,12 @@ final class FieldRenderer {
     }
 
     private func applyGeometry(_ result: GeometryResult) {
+        if let casingMesh = TubeMesh.mesh(from: result.tubeCasing) {
+            lineCasingEntity.model = ModelComponent(mesh: casingMesh,
+                                                    materials: [lineCasingMaterial])
+        } else {
+            lineCasingEntity.model = nil
+        }
         if let mesh = TubeMesh.mesh(from: result.tube) {
             linesEntity.model = ModelComponent(mesh: mesh, materials: [lineMaterial])
         } else {

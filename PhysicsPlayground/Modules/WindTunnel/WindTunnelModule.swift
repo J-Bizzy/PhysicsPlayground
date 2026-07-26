@@ -69,8 +69,12 @@ enum WindTunnelModule {
             text: "Cylinder — grab and drag it; it visibly spins at the rate its circulation implies"
         ),
         LegendItem(
-            swatch: .line(.white),
-            text: "Smoke filaments — streamlines of a live incompressible flow solve, so they bend around any shape the way real air does. Warm where the air piles up and slows, cool where it accelerates past a shoulder"
+            swatch: .line(Color(red: 0.85, green: 0.24, blue: 0.10)),
+            text: "Red filament — air piled up and slowed. Because the flow is incompressible, Cp = 1 − (v/U)², so slow means HIGH PRESSURE: the red band across a nose is the pressure that becomes drag"
+        ),
+        LegendItem(
+            swatch: .line(Color(red: 0.11, green: 0.78, blue: 0.92)),
+            text: "Cyan filament — air accelerated past a shoulder, and so at LOW pressure. Over a wing that is exactly where lift comes from"
         ),
         LegendItem(
             swatch: .fill(DesignTokens.Palette.predictedArc),

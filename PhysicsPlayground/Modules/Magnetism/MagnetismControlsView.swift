@@ -91,6 +91,14 @@ private struct MagnetViewControls: View {
             Toggle("Compass needles", isOn: $model.showCompasses)
                 .font(DesignTokens.TypeScale.control)
                 .accessibilityHint("A grid of needles filling the room, each pointing along the local field")
+            Toggle("Hand compass", isOn: $model.compassOn)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("A brass compass you carry; the needle swings to the field wherever you take it")
+            if model.compassOn {
+                Text("Carry it around a magnet — \(model.compassMicroTesla, specifier: "%.1f") µT where it is now.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            }
 
             Button {
                 model.isPaused.toggle()

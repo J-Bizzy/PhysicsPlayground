@@ -49,17 +49,27 @@ final class WindTunnelRenderer {
     private let sectionRoot = Entity()
     private let cylinder: ModelEntity
     private let spinMarker: ModelEntity
-    /// A smoke palette: the filaments read as lit vapour first and a CFD
-    /// plot second. Speed still colours them — air piled up against the
-    /// nose warms toward amber, air whipping around the shoulders cools
-    /// toward blue — but everything sits close to white, so the tunnel
-    /// looks like a tunnel instead of a rainbow.
+    /// The speed palette, re-pitched for a BRIGHT room.
+    ///
+    /// The old ramp sat deliberately close to white so the filaments
+    /// read as vapour — and in a cream-walled living room they read as
+    /// nothing at all: white smoke on a white ceiling has no luminance
+    /// contrast, and the whole flow field disappeared. Realism that is
+    /// invisible is not realism.
+    ///
+    /// This keeps the same physical encoding (warm = piled up and
+    /// slowed at the nose, cool = accelerated over the shoulders) but
+    /// pushes saturation and drops value, so every filament is DARKER
+    /// than the room behind it and the colour is carrying the pressure
+    /// story rather than decorating it. Paired with a dark casing on
+    /// the ribbons, this is legible against paint, a window, or the
+    /// dimming shell alike.
     private static let streamlineColors: [UIColor] = [
-        UIColor(red: 1.00, green: 0.72, blue: 0.45, alpha: 1),  // stagnant
-        UIColor(red: 1.00, green: 0.88, blue: 0.74, alpha: 1),
-        UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1),
-        UIColor(red: 0.96, green: 0.98, blue: 1.00, alpha: 1),  // free stream
-        UIColor(red: 0.72, green: 0.88, blue: 1.00, alpha: 1),  // accelerated
+        UIColor(red: 0.85, green: 0.24, blue: 0.10, alpha: 1),  // stagnant, high pressure
+        UIColor(red: 0.93, green: 0.55, blue: 0.16, alpha: 1),
+        UIColor(red: 0.36, green: 0.42, blue: 0.52, alpha: 1),  // free stream
+        UIColor(red: 0.16, green: 0.52, blue: 0.82, alpha: 1),
+        UIColor(red: 0.11, green: 0.78, blue: 0.92, alpha: 1),  // accelerated, low pressure
     ]
     /// The industrial fan the wind pours out of — free-floating, its
     /// blades spun by the wind slider.

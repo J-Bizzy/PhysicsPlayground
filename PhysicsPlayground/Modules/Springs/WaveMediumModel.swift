@@ -134,9 +134,14 @@ final class WaveMediumModel {
     private var heldStartHandZ = 0.0
 
     init() {
+        // Built once, then handed straight to reset() so the opening
+        // scene is defined in exactly ONE place. These two used to
+        // disagree — init seeded the fundamental at low amplitude while
+        // reset seeded (3,3) at full — so the module you first saw was
+        // not the module the reset bead gave you back.
         var sheet = ElasticSheet(
             n: Self.gridCount, spacing: Self.spacing,
-            waveSpeed: 1.2, damping: 0.14, boundary: .fixed)
+            waveSpeed: 1.2, damping: 0.09, boundary: .fixed)
         sheet.amplitudeLimit = Self.amplitudeCeiling
         sheet.driveAmplitude = Self.driveForce
         self.sheet = sheet
@@ -144,13 +149,8 @@ final class WaveMediumModel {
         self.damping = sheet.damping
         self.boundaryFixed = true
         self.driveOn = true
-        // Open ALIVE, ringing the fundamental resonance.
-        let f11 = sheet.modeFrequency(m: 1, p: 1)
-        self.driveFrequency = f11
-        self.sheet.driveFrequency = f11
-        self.sheet.driveNodes = [sheet.index(Self.driveCoord.i, Self.driveCoord.j)]
-        self.sheet.setStandingMode(m: 1, p: 1, amplitude: 0.12)
-        insightText = "A shaker drives the sheet's center. Sweep the drive frequency: nothing much happens — until you hit a natural frequency and the drumhead blooms into a standing mode. Watch the grains gather on the still nodal lines, and listen for the peak."
+        self.driveFrequency = sheet.modeFrequency(m: 3, p: 3)
+        reset()
     }
 
     // MARK: Clock
@@ -166,26 +166,64 @@ final class WaveMediumModel {
         }
     }
 
-    // MARK: Local ⇄ world  (vertical plate: x,y span the face; z = height)
+    // MARK: Local ⇄ world
+
+    /// How far the drumhead leans back from vertical, radians.
+    ///
+    /// The plate used to stand exactly upright facing the user, with its
+    /// displacement pointing straight AT them — which is the one
+    /// orientation in which a vibrating surface shows nothing. Motion
+    /// along the view direction produces no silhouette change and almost
+    /// no shading change, so a mode ringing at full amplitude rendered as
+    /// a flat coloured square. Leaning it back puts the displacement
+    /// partly across the view, so crests and troughs read as relief and
+    /// the standing pattern is visible from the moment the module opens.
+    nonisolated static let tilt = 38.0 * .pi / 180
+
+    /// Local (across, up-the-face, displacement) → world.
+    ///
+    /// The lattice, the wave equation, the modes and the grabbing all
+    /// stay in the plate's own frame — only this mapping knows the plate
+    /// is tilted, so no physics changed.
+    nonisolated static func localToWorld(_ local: SIMD3<Double>) -> SIMD3<Double> {
+        let c = cos(tilt), s = sin(tilt)
+        return center + SIMD3(local.x,
+                              local.y * c + local.z * s,
+                              -local.y * s + local.z * c)
+    }
+
+    /// World → local. The exact inverse (a rotation's transpose).
+    nonisolated static func worldToLocal(_ world: SIMD3<Double>) -> SIMD3<Double> {
+        let d = world - center
+        let c = cos(tilt), s = sin(tilt)
+        return SIMD3(d.x, d.y * c - d.z * s, d.y * s + d.z * c)
+    }
 
     /// A grid node's world position at its current displacement.
     func world(i: Int, j: Int) -> SIMD3<Double> {
         let x = Double(i) * Self.spacing - Self.halfSide
         let y = Double(j) * Self.spacing - Self.halfSide
-        return Self.center + SIMD3(x, y, sheet.height[sheet.index(i, j)])
+        return Self.localToWorld(SIMD3(x, y, sheet.height[sheet.index(i, j)]))
+    }
+
+    /// The plate's outward normal in world space — what the renderer
+    /// needs to place anything that must stand off the surface.
+    nonisolated static var faceNormal: SIMD3<Double> {
+        SIMD3(0, sin(tilt), cos(tilt))
     }
 
     /// The rest-plane world position (displacement ignored).
     nonisolated static func restWorld(i: Int, j: Int) -> SIMD3<Double> {
         let x = Double(i) * spacing - halfSide
         let y = Double(j) * spacing - halfSide
-        return center + SIMD3(x, y, 0)
+        return localToWorld(SIMD3(x, y, 0))
     }
 
-    /// The node nearest a world point (by its x/y footprint on the face).
+    /// The node nearest a world point (by its footprint on the face).
     func nearestNode(toWorld p: SIMD3<Double>) -> (i: Int, j: Int) {
-        sheet.nearestNode(localX: p.x - Self.center.x + Self.halfSide,
-                           localY: p.y - Self.center.y + Self.halfSide)
+        let local = Self.worldToLocal(p)
+        return sheet.nearestNode(localX: local.x + Self.halfSide,
+                                 localY: local.y + Self.halfSide)
     }
 
     // MARK: Reach in and pull
@@ -197,14 +235,17 @@ final class WaveMediumModel {
         if boundaryFixed, sheet.isEdge(node.i, node.j) { return }
         heldNode = node
         heldStartHeight = sheet.height[sheet.index(node.i, node.j)]
-        heldStartHandZ = p.z
+        // Track the hand along the plate's OWN normal, so pulling still
+        // means "toward me" now that the plate leans back.
+        heldStartHandZ = Self.worldToLocal(p).z
         sheet.pin(node.i, node.j, to: heldStartHeight)
     }
 
     /// Moves the held node by the hand's displacement toward/away (z).
     func moveHeld(toWorld p: SIMD3<Double>) {
         guard let node = heldNode else { return }
-        let h = min(max(heldStartHeight + (p.z - heldStartHandZ),
+        let reach = Self.worldToLocal(p).z
+        let h = min(max(heldStartHeight + (reach - heldStartHandZ),
                         -Self.pluckClamp), Self.pluckClamp)
         sheet.pin(node.i, node.j, to: h)
     }

@@ -87,6 +87,70 @@ final class FieldModel {
     /// How many equipotential casings wrap each polarity (1…6).
     var equipotentialShells = 3
 
+    // MARK: Gauss surface — the flux meter you carry
+
+    /// A surface you hold in the field and move through it, reading the
+    /// flux ∮E·dA through it live.
+    ///
+    /// This is the one idea in electrostatics that a page genuinely
+    /// cannot show, because showing it means moving a surface through a
+    /// field and watching the number respond. As a BUBBLE (closed) it is
+    /// Gauss's law itself: whatever shape the field is in and wherever
+    /// the outside charges sit, the flux is exactly Q_enclosed/ε₀ — put
+    /// a charge inside and the number jumps, take it out and it returns
+    /// to zero, and no amount of waving it about changes that.
+    var gaussSurfaceOn = false
+    enum GaussSurfaceKind: String, CaseIterable, Identifiable {
+        /// An open disc: flux depends on where and how it's tilted.
+        case disc
+        /// A closed bubble: flux is Q_enclosed/ε₀ and nothing else.
+        case bubble
+        var id: String { rawValue }
+        var displayName: String { self == .disc ? "Disc" : "Bubble" }
+    }
+    var gaussSurfaceKind: GaussSurfaceKind = .bubble
+    var gaussSurfaceCenter = SIMD3<Double>(0, 1.35, -0.55)
+    /// The disc's facing direction (ignored by the bubble).
+    var gaussSurfaceNormal = SIMD3<Double>(0, 0, 1)
+    var gaussSurfaceRadius = 0.22
+    nonisolated static let gaussRadiusRange = 0.08...0.6
+
+    func moveGaussSurface(to point: SIMD3<Double>) {
+        var clamped = point
+        clamped.y = max(clamped.y, Self.regionFloor)
+        gaussSurfaceCenter = clamped
+    }
+
+    /// Live flux through the surface, N·m²/C.
+    var gaussFlux: Double {
+        switch gaussSurfaceKind {
+        case .disc:
+            GaussSurface.flux(
+                throughDiscAt: gaussSurfaceCenter, normal: gaussSurfaceNormal,
+                radius: gaussSurfaceRadius, charges: charges)
+        case .bubble:
+            GaussSurface.flux(
+                throughSphereAt: gaussSurfaceCenter, radius: gaussSurfaceRadius,
+                charges: charges, samples: 900)
+        }
+    }
+
+    /// Charge strictly inside the bubble (nil for the open disc, where
+    /// "enclosed" has no meaning).
+    var gaussEnclosedCharge: Double? {
+        guard gaussSurfaceKind == .bubble else { return nil }
+        return GaussSurface.enclosedCharge(
+            inSphereAt: gaussSurfaceCenter, radius: gaussSurfaceRadius, charges: charges)
+    }
+
+    /// What Gauss's law says the bubble's flux must be — shown beside the
+    /// measured value so the two can be watched agreeing.
+    var gaussPredictedFlux: Double? {
+        guard gaussSurfaceKind == .bubble else { return nil }
+        return GaussSurface.predictedFlux(
+            inSphereAt: gaussSurfaceCenter, radius: gaussSurfaceRadius, charges: charges)
+    }
+
     // MARK: Parallel-plate capacitor
 
     /// Two square plates bracketing the region: left (−x) positive,
@@ -333,6 +397,11 @@ final class FieldModel {
         magneticFieldTesla = 5e4
         electronMode = false
         electronFieldTesla = 1e-4
+        gaussSurfaceOn = false
+        gaussSurfaceKind = .bubble
+        gaussSurfaceCenter = SIMD3(0, 1.35, -0.55)
+        gaussSurfaceNormal = SIMD3(0, 0, 1)
+        gaussSurfaceRadius = 0.22
         isPaused = false
         placementIndex = 2
     }

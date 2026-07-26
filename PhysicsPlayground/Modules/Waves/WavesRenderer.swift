@@ -61,7 +61,9 @@ final class WavesRenderer {
     private let probe: ModelEntity
 
     private let silenceEntity = ModelEntity()
+    private let silenceCasingEntity = ModelEntity()
     private let silenceMaterial: UnlitMaterial
+    private let silenceCasingMaterial: UnlitMaterial
     private var silencePipeline: GeometryPipeline<SilenceJob, SilenceResult>?
 
     // The wavelength ruler: a physical lambda between the first two
@@ -159,11 +161,14 @@ final class WavesRenderer {
         wavefrontsRoot.addChild(shellPool.root)
         root.addChild(wavefrontsRoot)
 
-        // Silence surfaces.
-        var silence = UnlitMaterial(color: DesignTokens.Palette.forceVectorUI)
-        silence.blending = .transparent(opacity: 0.16)
-        silence.faceCulling = .none
-        silenceMaterial = silence
+        // Silence contours: a bright ring over a dark casing. Nearly
+        // opaque — an outline can afford to be solid where a sheet
+        // could not.
+        let silencePair = Materials.contrastLine(
+            DesignTokens.Palette.forceVectorUI, coreOpacity: 0.95, casingOpacity: 0.5)
+        silenceMaterial = silencePair.core
+        silenceCasingMaterial = silencePair.casing
+        root.addChild(silenceCasingEntity)
         root.addChild(silenceEntity)
 
         // Wavelength ruler segments: alternation is by index, so each
@@ -316,86 +321,163 @@ final class WavesRenderer {
     }
 
     private nonisolated struct SilenceResult: Sendable {
-        var positions: [SIMD3<Float>] = []
-        var normals: [SIMD3<Float>] = []
+        var contours = TubeBuffers()
+        /// Dark casing under the bright contour, so a nodal ring reads
+        /// against a sunlit wall as clearly as against the dark shell.
+        var casing = TubeBuffers()
+        var isEmpty = true
     }
 
+    /// How many horizontal slices the nodal set is cut into, and how
+    /// finely each is marched. Enough to show the nesting; few enough
+    /// that the whole extraction still fits comfortably in a worker.
+    private nonisolated static let silenceSliceCount = 7
+    private nonisolated static let silenceResolution = 56
+
+    /// The silence surfaces, drawn as CONTOUR RINGS rather than a solid
+    /// sheet.
+    ///
+    /// The nodal set is a stack of hyperboloid sheets that wrap the whole
+    /// region — and the user is standing inside it. Extracted as a solid
+    /// translucent surface (which is what this used to do) every wall in
+    /// the room ends up behind several layers of the same alpha, and the
+    /// passthrough scene turns into red fog: the furniture disappears,
+    /// the pods tint, and the sheets occlude each other so you cannot
+    /// tell how many there are.
+    ///
+    /// Slicing the same scalar field with a stack of horizontal planes
+    /// and drawing where it crosses them gives the identical information
+    /// with a hundredth of the overdraw. Outlines never hide what is
+    /// behind them, the nesting is countable, and the shape reads from
+    /// any angle — which is exactly how contour maps have always worked.
     private nonisolated static func extractSilenceSurfaces(_ job: SilenceJob) -> SilenceResult {
         guard job.sources.count > 1 else { return SilenceResult() }
         // Threshold: a small fraction of a typical mid-field arrival, so
-        // the surface hugs the true zero set without wrapping quiet
+        // the contour hugs the true zero set without chasing quiet
         // far-field corners.
         let meanAmplitude = job.sources.map(\.amplitude).reduce(0, +) / Double(job.sources.count)
         let level = 0.12 * meanAmplitude * (WaveField.falloffRadius / 0.3)
 
-        func amplitude(_ p: SIMD3<Double>) -> Double {
-            WaveField.steadyAmplitude(at: p, sources: job.sources,
-                                      frequency: job.frequency, speed: job.speed)
+        // Slice only the band the SOURCES actually occupy, not the whole
+        // region. Far from every source the field is weak and the level
+        // set degenerates into noise — slicing out there produced dense
+        // scribbles of meaningless contour at the ceiling, which is worse
+        // than the fog it replaced. The interference pattern lives
+        // between and around the sources; that is where it gets drawn.
+        var low = job.sources[0].position, high = job.sources[0].position
+        for source in job.sources.dropFirst() {
+            low = simd_min(low, source.position)
+            high = simd_max(high, source.position)
         }
+        let span = max(simd_distance(low, high), 0.3)
+        let margin = min(span * 0.7, 0.75)
+        let sliceLow = low.y - margin, sliceHigh = high.y + margin
+        let center = SIMD2((low.x + high.x) / 2, (low.z + high.z) / 2)
+        let extents = SIMD2(high.x - low.x + 2 * margin, high.z - low.z + 2 * margin)
 
-        let triangles = Isosurface.triangles(
-            level: level,
-            scalar: amplitude,
-            outwardDirection: { point in
-                // ∇A by central differences — "outward" is "away from silence".
-                let h = 0.012
-                return SIMD3(
-                    amplitude(point + SIMD3(h, 0, 0)) - amplitude(point - SIMD3(h, 0, 0)),
-                    amplitude(point + SIMD3(0, h, 0)) - amplitude(point - SIMD3(0, h, 0)),
-                    amplitude(point + SIMD3(0, 0, h)) - amplitude(point - SIMD3(0, 0, h))
-                )
-            },
-            center: WavesModel.regionCenter,
-            extents: SIMD3(repeating: 2 * WavesModel.regionHalfExtent),
-            resolution: 26
-        )
+        var lines: [[SIMD3<Float>]] = []
+        for step in 0..<Self.silenceSliceCount {
+            let t = (Double(step) + 0.5) / Double(Self.silenceSliceCount)
+            let y = sliceLow + (sliceHigh - sliceLow) * t
+            let segments = MarchingSquares.contour(
+                level: level,
+                scalar: { plane in
+                    WaveField.steadyAmplitude(
+                        at: SIMD3(plane.x, y, plane.y),
+                        sources: job.sources,
+                        frequency: job.frequency, speed: job.speed)
+                },
+                center: center, extents: extents,
+                resolution: Self.silenceResolution)
+            // Drop the shortest pieces: a contour that survives only a
+            // few cells is numerical lint, not a nodal sheet.
+            for polyline in MarchingSquares.chain(segments, tolerance: 1e-7) {
+                let length = zip(polyline, polyline.dropFirst())
+                    .reduce(0.0) { $0 + simd_distance($1.0, $1.1) }
+                guard polyline.count > 3, length > 0.12 else { continue }
+                lines.append(polyline.map { SIMD3<Float>(Float($0.x), Float(y), Float($0.y)) })
+            }
+        }
 
         var result = SilenceResult()
-        result.positions.reserveCapacity(triangles.count)
-        for vertex in triangles {
-            result.positions.append(SIMD3<Float>(vertex))
-        }
-        // Flat normals per triangle (adequate for a translucent sheet).
-        var index = 0
-        while index + 2 < result.positions.count {
-            let a = result.positions[index]
-            let b = result.positions[index + 1]
-            let c = result.positions[index + 2]
-            var normal = simd_cross(b - a, c - a)
-            let length = simd_length(normal)
-            normal = length > 1e-9 ? normal / length : SIMD3(0, 1, 0)
-            result.normals.append(contentsOf: [normal, normal, normal])
-            index += 3
-        }
+        result.contours = TubeMesh.buffers(lines: lines, radius: 0.0022)
+        result.casing = TubeMesh.buffers(
+            lines: lines, radius: Materials.casingRadius(forCore: 0.0022))
+        result.isEmpty = lines.isEmpty
         return result
     }
 
     private func applySilenceSurfaces(_ result: SilenceResult) {
-        guard !result.positions.isEmpty else {
+        guard !result.isEmpty, let mesh = TubeMesh.mesh(from: result.contours) else {
             silenceEntity.model = nil
+            silenceCasingEntity.model = nil
             return
         }
-        var descriptor = MeshDescriptor(name: "silence")
-        descriptor.positions = MeshBuffer(result.positions)
-        descriptor.normals = MeshBuffer(result.normals)
-        descriptor.primitives = .triangles(Array(0..<UInt32(result.positions.count)))
-        if let mesh = try? MeshResource.generate(from: [descriptor]) {
-            silenceEntity.model = ModelComponent(mesh: mesh, materials: [silenceMaterial])
+        silenceEntity.model = ModelComponent(mesh: mesh, materials: [silenceMaterial])
+        if let casing = TubeMesh.mesh(from: result.casing) {
+            silenceCasingEntity.model = ModelComponent(
+                mesh: casing, materials: [silenceCasingMaterial])
         }
     }
 
     // MARK: Per-frame tick (from SceneEvents.Update)
 
-    func tick(_ model: WavesModel) {
+    func tick(_ model: WavesModel, listener: SIMD3<Double>? = nil) {
         syncSources(model)
         syncConfiguration(model)
         pulseLattice(model)
         updateWavefronts(model)
+        updateListening(model, at: listener)
 
         if !isManipulatingProbe {
             probe.position = SIMD3<Float>(model.probePosition)
         }
         probeAnchor.position = SIMD3<Float>(model.probePosition) + SIMD3(0, 0.09, 0)
+    }
+
+    // MARK: Hearing the field at your own head
+
+    /// The module's real payoff, and nothing invited it before: the
+    /// interference pattern is a pattern in the ROOM, so you should be
+    /// able to walk into a node and hear it go quiet.
+    ///
+    /// A tone plays at the source frequency and its loudness tracks the
+    /// steady-state amplitude at the listener's actual head position,
+    /// evaluated with exactly the same WaveField the visuals use. Step
+    /// sideways across a nodal sheet and the sound drops away; step back
+    /// and it returns. Reading a number off a probe card is not the same
+    /// experience as losing the sound in your own ears.
+    private var listenerVoice: ToneVoice?
+    private let listenerEmitter = Entity()
+
+    private func updateListening(_ model: WavesModel, at listener: SIMD3<Double>?) {
+        guard model.listenToField, let listener else {
+            listenerVoice?.mute()
+            return
+        }
+        if listenerVoice == nil {
+            root.addChild(listenerEmitter)
+            listenerVoice = ToneVoice(on: listenerEmitter, range: (-70)...(-14))
+        }
+        // Play from the head, so it is heard as "the room is quiet here",
+        // not "that speaker over there is quiet".
+        listenerEmitter.position = SIMD3<Float>(listener)
+        guard listenerVoice?.start() == true else { return }
+
+        let amplitude = WaveField.steadyAmplitude(
+            at: listener, sources: model.waveSources,
+            frequency: model.frequency, speed: model.waveSpeed)
+        // Full scale = every source arriving in phase at the reference
+        // distance, so a true antinode reads as loud and a node as silent.
+        let full = model.sources.reduce(0.0) { $0 + $1.wave.amplitude }
+        // Audible pitch from the (deliberately slowed) wave frequency:
+        // the field runs at ~1.5 Hz so the crests are walkable, which is
+        // far below hearing. Two decades up puts it in the ear while
+        // keeping every ratio — double the frequency, double the note.
+        let pitch = model.frequency * 150
+        listenerVoice?.update(
+            pitchHz: pitch,
+            loudness: Sonification.loudness(amplitude, full: max(full, 1e-9), knee: 0.85))
     }
 
     // MARK: Wavefront shells (the Doppler visualization)
@@ -567,8 +649,10 @@ final class WavesRenderer {
                 sources: inputs.sources, frequency: inputs.frequency, speed: inputs.speed))
         } else {
             silenceEntity.model = nil
+            silenceCasingEntity.model = nil
         }
         silenceEntity.isEnabled = inputs.show
+        silenceCasingEntity.isEnabled = inputs.show
 
         syncWavelengthRuler(model)
     }
@@ -613,7 +697,7 @@ final class WavesRenderer {
         } else {
             mesh = MeshResource.generateText(
                 "λ = \(centimeters) cm", extrusionDepth: 0.002,
-                font: .systemFont(ofSize: 0.032, weight: .semibold))
+                font: .systemFont(ofSize: 0.022, weight: .semibold))
             rulerMeshCache[centimeters] = mesh
         }
         rulerLabel.model = ModelComponent(mesh: mesh, materials: [rulerLabelMaterial])

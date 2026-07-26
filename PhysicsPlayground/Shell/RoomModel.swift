@@ -65,6 +65,22 @@ final class RoomModel {
     private let planes = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
     private let hands = HandTrackingProvider()
     private let sceneMesh = SceneReconstructionProvider()
+    private let worldTracking = WorldTrackingProvider()
+
+    /// Where the user's head is, right now, in immersive-space
+    /// coordinates — the one piece of state that lets a module respond
+    /// to the user MOVING rather than to the user's hands. Waves reads
+    /// it to sound the field at the listener's own ears.
+    ///
+    /// nil until world tracking is running (always, in the simulator),
+    /// so every caller has to have a sensible answer without it.
+    var headPosition: SIMD3<Double>? {
+        guard worldTracking.state == .running,
+              let anchor = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime())
+        else { return nil }
+        let c = anchor.originFromAnchorTransform.columns.3
+        return SIMD3(Double(c.x), Double(c.y), Double(c.z))
+    }
 
     private var clients = 0
     private var isRunning = false
@@ -80,6 +96,7 @@ final class RoomModel {
         if PlaneDetectionProvider.isSupported { providers.append(planes) }
         if HandTrackingProvider.isSupported { providers.append(hands) }
         if SceneReconstructionProvider.isSupported { providers.append(sceneMesh) }
+        if WorldTrackingProvider.isSupported { providers.append(worldTracking) }
         guard !providers.isEmpty else { return }   // simulator: nothing to run
         do {
             try await session.run(providers)

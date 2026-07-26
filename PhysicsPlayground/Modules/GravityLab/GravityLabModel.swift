@@ -130,6 +130,9 @@ final class GravityLabModel {
     var showFieldParticles = false
     /// The rubber-sheet picture — conceptual, and labeled as such.
     var showSpacetimeGrid = false
+    /// Kepler's third law as a chord: every bound body sings at a pitch
+    /// set by its period, so perturbing an orbit is audible.
+    var playOrbitalChord = true
 
     /// The scene's natural length: 1 AU in solar mode, the Earth–Moon
     /// separation in Lagrange mode. Visualizations normalize against the
@@ -645,6 +648,7 @@ final class GravityLabModel {
         // the module now; the m^(1/4) depth compression stays disclosed
         // in the UI footnote, as before.
         showSpacetimeGrid = true
+        playOrbitalChord = true
         simulatedDays = 0
         customCount = 0
         customDistanceAU = 1.5

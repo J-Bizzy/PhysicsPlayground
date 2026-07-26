@@ -113,8 +113,8 @@ final class CircuitsRenderer {
         let coreMaterial = UnlitMaterial(color: UIColor(red: 0.8, green: 1.0, blue: 1.0, alpha: 1))
         var haloMaterial = UnlitMaterial(color: DesignTokens.Palette.electronUI)
         haloMaterial.blending = .transparent(opacity: 0.35)
-        let coreMesh = MeshResource.generateSphere(radius: 0.006)
-        let haloMesh = MeshResource.generateSphere(radius: 0.013)
+        let coreMesh = MeshResource.generateSphere(radius: 0.0034)
+        let haloMesh = MeshResource.generateSphere(radius: 0.0075)
         electronPool = EntityPool(budget: Self.electronBudget) { container in
             let core = ModelEntity(mesh: coreMesh, materials: [coreMaterial])
             core.addChild(ModelEntity(mesh: haloMesh, materials: [haloMaterial]))
@@ -190,13 +190,17 @@ final class CircuitsRenderer {
             tray.addChild(template)
             trayTemplates[template.name] = template
 
-            // A small flat label on the tray surface.
+            // A small flat label on the tray surface. Near-white type at
+            // 85% opacity on a pale glass tray in a pale room was simply
+            // unreadable — every part name vanished. Dark, opaque and a
+            // little larger: the tray is the light surface, so the type
+            // on it has to be the dark one.
             let labelMesh = MeshResource.generateText(
-                kind.displayName, extrusionDepth: 0.0005,
-                font: .systemFont(ofSize: 0.014, weight: .medium))
+                kind.displayName, extrusionDepth: 0.0006,
+                font: .systemFont(ofSize: 0.017, weight: .semibold))
             let label = ModelEntity(
                 mesh: labelMesh,
-                materials: [UnlitMaterial(color: UIColor(white: 0.95, alpha: 0.85))])
+                materials: [UnlitMaterial(color: UIColor(white: 0.08, alpha: 1))])
             let bounds = labelMesh.bounds
             label.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
             label.position = [x - (bounds.min.x + bounds.max.x) / 2, 0.009, z + 0.052]
@@ -975,6 +979,18 @@ final class CircuitsRenderer {
 
     // MARK: Wires
 
+    /// The insulating jacket: a dark matte sleeve that gives every wire
+    /// a silhouette against a bright room and lets the coloured core
+    /// read as the conductor rather than as the whole cable.
+    private static let wireJacketMaterial: PhysicallyBasedMaterial = {
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: UIColor(white: 0.12, alpha: 1))
+        material.roughness = 0.55
+        material.metallic = 0.0
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.82))
+        return material
+    }()
+
     /// Eight-step warm↔cool palette for the live voltage gradient.
     private static let voltageMaterials: [UnlitMaterial] = (0..<8).map { step in
         let t = Double(step) / 7
@@ -1001,9 +1017,22 @@ final class CircuitsRenderer {
             if let existing = wireEntities[wire.id] {
                 entity = existing
             } else {
+                // A wire must LOOK like a wire. The conductor alone,
+                // drawn thin and mid-blue, lost the competition with the
+                // bright electron beads riding on it: the bench read as
+                // strings of floating beads with nothing joining them.
+                // A real cable is a dark insulating jacket with the
+                // conductor inside, so that is what gets built — the
+                // jacket carries the silhouette, the core carries the
+                // live voltage colour, and the electrons ride inside.
                 entity = ModelEntity(
-                    mesh: .generateCylinder(height: 1, radius: 0.004),
+                    mesh: .generateCylinder(height: 1, radius: 0.0032),
                     materials: [copperMaterial])
+                let jacket = ModelEntity(
+                    mesh: .generateCylinder(height: 1, radius: 0.0062),
+                    materials: [Self.wireJacketMaterial])
+                jacket.name = "jacket"
+                entity.addChild(jacket)
                 entity.name = "w-\(wire.id.uuidString)"
                 entity.components.set(InputTargetComponent())
                 entity.components.set(CollisionComponent(

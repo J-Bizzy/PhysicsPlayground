@@ -131,4 +131,50 @@ final class FieldLineTracerTests: XCTestCase {
     func testNoChargesProducesNoLines() {
         XCTAssertTrue(FieldLineTracer.trace(charges: [], config: config).isEmpty)
     }
+    // MARK: Line density encodes charge magnitude (Gauss's law, drawn)
+
+    /// Doubling a charge doubles the lines it radiates. This is what
+    /// makes the picture carry strength information at all — before it,
+    /// every charge drew an identical bundle whatever its size.
+    func testSeedCountIsProportionalToCharge() {
+        var config = FieldLineTracer.Config()
+        config.seedsPerCharge = 14
+        config.referenceCharge = 1e-6
+        XCTAssertEqual(config.seedCount(forCharge: 1e-6), 14)
+        XCTAssertEqual(config.seedCount(forCharge: 2e-6), 28)
+        XCTAssertEqual(config.seedCount(forCharge: 0.5e-6), 7)
+    }
+
+    /// Sign never changes the count — only magnitude does.
+    func testSeedCountIgnoresPolarity() {
+        let config = FieldLineTracer.Config()
+        XCTAssertEqual(config.seedCount(forCharge: 3e-6),
+                       config.seedCount(forCharge: -3e-6))
+    }
+
+    /// Bounded at both ends: a whisper of a charge still reads as a
+    /// source, and a monster charge cannot blow the frame budget.
+    func testSeedCountIsClampedAtBothEnds() {
+        var config = FieldLineTracer.Config()
+        config.seedRange = 4...48
+        XCTAssertEqual(config.seedCount(forCharge: 1e-12), 4)
+        XCTAssertEqual(config.seedCount(forCharge: 1e3), 48)
+    }
+
+    /// End to end: a bigger charge really does produce more traced lines.
+    func testABiggerChargeRadiatesMoreLines() {
+        var config = FieldLineTracer.Config()
+        config.boundsCenter = .zero
+        config.boundsRadius = 1.0
+        config.maxSteps = 60
+
+        let small = FieldLineTracer.trace(
+            charges: [PointCharge(id: UUID(), position: .zero, charge: 1e-6)],
+            config: config)
+        let large = FieldLineTracer.trace(
+            charges: [PointCharge(id: UUID(), position: .zero, charge: 3e-6)],
+            config: config)
+        XCTAssertGreaterThan(large.count, small.count * 2,
+                             "three times the charge, about three times the lines")
+    }
 }

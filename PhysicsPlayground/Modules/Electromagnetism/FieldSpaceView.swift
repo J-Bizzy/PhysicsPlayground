@@ -52,7 +52,7 @@ struct FieldSpaceView: View {
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.stepProbe(dt: event.deltaTime)
                     model.stepFreeCharges(dt: event.deltaTime)
-                    renderer?.tick(model)
+                    renderer?.tick(model, room: appModel.room.bounds)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                 }
@@ -116,6 +116,9 @@ struct FieldSpaceView: View {
                     target: model.capacitorCenter + SIMD3(offset, 0, 0),
                     hand: hand)
             }
+            if name == "gauss-surface" {
+                return RelativeDrag(name: name, target: model.gaussSurfaceCenter, hand: hand)
+            }
             if name == FieldRenderer.probeEntityName {
                 let target = model.probe?.position ?? hand
                 model.holdProbe(at: target)
@@ -135,6 +138,8 @@ struct FieldSpaceView: View {
         let position = drag.position(forHand: hand)
         if drag.name == "plate-0" || drag.name == "plate-1" {
             model.movePlate(drag.name == "plate-0" ? 0 : 1, toWorld: position)
+        } else if drag.name == "gauss-surface" {
+            model.moveGaussSurface(to: position)
         } else if drag.name == FieldRenderer.probeEntityName {
             model.holdProbe(at: position)
         } else if let id = UUID(uuidString: drag.name) {

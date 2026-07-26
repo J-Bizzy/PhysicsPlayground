@@ -30,9 +30,35 @@ public enum FieldLineTracer {
         /// Lines also end when they wander this far from `boundsCenter`.
         public var boundsCenter: SIMD3<Double> = .zero
         public var boundsRadius = 0.85
+        /// Lines drawn for a charge of `referenceCharge` magnitude.
         public var seedsPerCharge = 14
+        /// The magnitude `seedsPerCharge` is quoted for. A charge twice
+        /// this big gets twice as many lines.
+        ///
+        /// This is what makes a field-line diagram READ as a field.
+        /// Every charge used to get the same fixed number of lines
+        /// regardless of its size, so a 5 µC charge and a 0.5 µC charge
+        /// drew identical bundles and the picture carried no information
+        /// about strength at all — only brightness did. Line DENSITY is
+        /// the classical encoding, and it is not a stylistic choice: the
+        /// number of lines crossing a closed surface is proportional to
+        /// the charge it encloses, which is Gauss's law drawn rather
+        /// than written.
+        public var referenceCharge = 1e-6
+        /// Density is proportional, but bounded: one line is never
+        /// enough to read as a source, and a huge charge must not blow
+        /// the frame budget.
+        public var seedRange: ClosedRange<Int> = 4...48
 
         public init() {}
+
+        /// How many lines a given charge earns.
+        public func seedCount(forCharge magnitude: Double) -> Int {
+            guard referenceCharge > 0 else { return seedsPerCharge }
+            let proportional = Double(seedsPerCharge) * abs(magnitude) / referenceCharge
+            let rounded = Int(proportional.rounded())
+            return min(max(rounded, seedRange.lowerBound), seedRange.upperBound)
+        }
 
         var streamlineConfig: StreamlineTracer.Config {
             var config = StreamlineTracer.Config()
@@ -51,7 +77,8 @@ public enum FieldLineTracer {
         var lines: [[SIMD3<Double>]] = []
         for charge in charges {
             let direction: Double = charge.isPositive ? 1 : -1
-            for seedDir in fibonacciSphere(count: config.seedsPerCharge) {
+            let seeds = config.seedCount(forCharge: charge.charge)
+            for seedDir in fibonacciSphere(count: seeds) {
                 let seed = charge.position + config.seedRadius * seedDir
                 let line = traceLine(from: seed, sign: direction, charges: charges, config: config)
                 if line.count > 1 { lines.append(line) }

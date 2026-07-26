@@ -67,11 +67,92 @@ final class MagnetismRenderer {
 
     // MARK: Per-frame
 
-    func tick(_ model: MagnetismModel) {
+    func tick(_ model: MagnetismModel, viewer: SIMD3<Double>? = nil) {
         syncMagnets(model)
         syncFieldLines(model)
-        syncCompasses(model)
+        syncCompasses(model, viewer: viewer.map(SIMD3<Float>.init))
+        syncHandCompass(model)
     }
+
+    // MARK: The compass you carry
+
+    static let handCompassName = "hand-compass"
+    private let handCompass = Entity()
+    private var handCompassNeedle: Entity?
+    private var handCompassCallout: Callout?
+
+    private func buildHandCompass() {
+        handCompass.name = Self.handCompassName
+
+        // A brass case with a pale dial — an instrument, not a marker.
+        let caseBody = ModelEntity(
+            mesh: .generateCylinder(height: 0.016, radius: 0.052),
+            materials: [Materials.energized(
+                UIColor(red: 0.72, green: 0.56, blue: 0.28, alpha: 1),
+                roughness: 0.22, metallic: 1.0, glow: 0.0)])
+        caseBody.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+        handCompass.addChild(caseBody)
+
+        var dialMaterial = UnlitMaterial(color: UIColor(white: 0.93, alpha: 1))
+        dialMaterial.blending = .transparent(opacity: 0.92)
+        let dial = ModelEntity(mesh: .generateCylinder(height: 0.002, radius: 0.045),
+                               materials: [dialMaterial])
+        dial.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+        dial.position = [0, 0, 0.009]
+        handCompass.addChild(dial)
+
+        // The needle: red north, white south, on a pivot that turns to
+        // the local B — the same alignment torque as every free magnet.
+        let needle = Entity()
+        let north = ModelEntity(
+            mesh: .generateBox(size: [0.007, 0.036, 0.003], cornerRadius: 0.0015),
+            materials: [Materials.energized(DesignTokens.Palette.positiveUI, glow: 0.35)])
+        north.position = [0, 0.018, 0]
+        let south = ModelEntity(
+            mesh: .generateBox(size: [0.007, 0.036, 0.003], cornerRadius: 0.0015),
+            materials: [Materials.energized(UIColor(white: 0.9, alpha: 1),
+                                            metallic: 0.6, glow: 0.0)])
+        south.position = [0, -0.018, 0]
+        needle.addChild(north)
+        needle.addChild(south)
+        needle.position = [0, 0, 0.012]
+        handCompass.addChild(needle)
+        handCompassNeedle = needle
+
+        let callout = Callout(color: UIColor(red: 0.95, green: 0.78, blue: 0.42, alpha: 1),
+                              textSize: 0.024, offset: SIMD3(0, 0.09, 0))
+        handCompassCallout = callout
+        handCompass.addChild(callout.root)
+
+        Grabbable.configureTouchTarget(handCompass, collisionRadius: 0.06)
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = "Compass. Carry it around the magnets and watch the needle swing to the field."
+        handCompass.components.set(accessibility)
+        root.addChild(handCompass)
+    }
+
+    private func syncHandCompass(_ model: MagnetismModel) {
+        if handCompassNeedle == nil { buildHandCompass() }
+        handCompass.isEnabled = model.compassOn
+        guard model.compassOn else { return }
+        if !isCarryingCompass {
+            handCompass.position = SIMD3<Float>(model.compassPosition)
+        }
+        let field = model.compassField
+        let magnitude = simd_length(field)
+        if magnitude > 1e-12 {
+            // The needle lies in the dial's plane, so project B onto it:
+            // a real compass only shows the component it can turn to.
+            let direction = SIMD3<Float>(field / magnitude)
+            handCompassNeedle?.orientation = simd_quatf(from: [0, 1, 0], to: direction)
+        }
+        handCompassCallout?.setText(String(format: "%.1f µT", model.compassMicroTesla))
+        handCompassCallout?.anchor(at: SIMD3(0, 0.05, 0))
+    }
+
+    /// Set while the hand owns the compass, so the model never fights it.
+    var isCarryingCompass = false
 
     // MARK: Magnets
 
@@ -237,19 +318,26 @@ final class MagnetismRenderer {
     }()
 
     private func buildCompassGrid() {
-        // A soft, translucent silver body so the dense grid reads as a
-        // haze of needles, not a thicket of stark white sticks; the tip
-        // is a bright glossy violet that carries the direction.
-        var shaftMaterial = UnlitMaterial(color: UIColor(white: 0.85, alpha: 1))
-        shaftMaterial.blending = .transparent(opacity: 0.5)
+        // Iron filings, not a swarm of darts.
+        //
+        // The needles were rendered at one fixed, generous size across
+        // the whole 245-point lattice, which meant the ones nearest the
+        // viewer became big opaque purple arrowheads clipping into the
+        // camera and occluding the magnets, the field lines, and each
+        // other. What a field of filings actually looks like is SMALL
+        // and MANY: each needle short, dim, and fading with distance, so
+        // the eye reads a texture with a direction rather than counting
+        // individual objects.
+        var shaftMaterial = UnlitMaterial(color: UIColor(white: 0.88, alpha: 1))
+        shaftMaterial.blending = .transparent(opacity: 0.35)
         let headMaterial = Materials.energized(Self.lineColor, roughness: 0.18, glow: 0.45)
-        let shaftMesh = MeshResource.generateCylinder(height: 0.07, radius: 0.0026)
-        let headMesh = MeshResource.generateCone(height: 0.026, radius: 0.009)
+        let shaftMesh = MeshResource.generateCylinder(height: 0.042, radius: 0.0016)
+        let headMesh = MeshResource.generateCone(height: 0.015, radius: 0.005)
         for point in Self.gridPoints {
             let needle = Entity()
             let shaft = ModelEntity(mesh: shaftMesh, materials: [shaftMaterial])
             let head = ModelEntity(mesh: headMesh, materials: [headMaterial])
-            head.position = [0, 0.048, 0]
+            head.position = [0, 0.029, 0]
             needle.addChild(shaft)
             needle.addChild(head)
             needle.position = point
@@ -259,25 +347,38 @@ final class MagnetismRenderer {
         }
     }
 
-    private func syncCompasses(_ model: MagnetismModel) {
+    /// Needles this close to the viewer are hidden outright — a compass
+    /// needle 20 cm from your eye is not information, it is an obstacle.
+    private nonisolated static let compassNearCull: Float = 0.55
+
+    private func syncCompasses(_ model: MagnetismModel, viewer: SIMD3<Float>?) {
         compassRoot.isEnabled = model.showCompasses
         guard model.showCompasses else { return }
-        // Hide needles too close to a magnet (inside the singular near field)
-        // or where the field is too weak to read.
+        // Hide needles too close to a magnet (inside the singular near
+        // field), where the field is too weak to read, or right in the
+        // viewer's face.
         let magnets = model.magnets
+        let eye = viewer ?? SIMD3<Float>(0, 1.5, 0)
         for (index, needle) in needles.enumerated() {
-            let point = SIMD3<Double>(Self.gridPoints[index])
+            let gridPoint = Self.gridPoints[index]
+            let point = SIMD3<Double>(gridPoint)
             let tooClose = magnets.contains {
                 simd_distance($0.position, point) < MagnetismModel.magnetLength
             }
+            let distance = simd_distance(gridPoint, eye)
             let b = MagneticField.vector(at: point, dueTo: magnets)
             let mag = simd_length(b)
-            if tooClose || mag < 2e-6 {
+            if tooClose || mag < 2e-6 || distance < Self.compassNearCull {
                 needle.isEnabled = false
                 continue
             }
             needle.isEnabled = true
             needle.orientation = simd_quatf(from: [0, 1, 0], to: SIMD3<Float>(b / mag))
+            // Near needles shrink toward nothing over the cull distance,
+            // so the grid thins out around the viewer instead of
+            // slamming into them, and never pops as they walk.
+            let fade = min(max((distance - Self.compassNearCull) / 0.45, 0), 1)
+            needle.scale = SIMD3(repeating: 0.35 + 0.65 * fade)
         }
     }
 }
