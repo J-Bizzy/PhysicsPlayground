@@ -224,11 +224,24 @@ final class OpticsModel {
     /// facing the room center: local x runs INTO the room's depth
     /// (world −z), local y is up. Turn your head left and the whole
     /// experiment is in profile.
-    nonisolated static let dispersionAnchor = SIMD3<Double>(-1.15, 1.32, -0.55)
+    /// Brought forward and round from the far left wall.
+    ///
+    /// At its old spot the whole dispersion experiment sat almost
+    /// side-on at the edge of vision, and its spectrum — the single most
+    /// beautiful thing this module produces — was a six-inch smear in a
+    /// corner. Separating the stations by azimuth was right; putting one
+    /// of them 90 degrees out was too far. This sits on a shallow arc in
+    /// front of the user: turn your head a little and it is the whole
+    /// view.
+    nonisolated static let dispersionAnchor = SIMD3<Double>(-0.95, 1.36, -1.15)
     nonisolated static let prismSourceLocalX = -0.5
     nonisolated static let prismRotationRange = -20.0...15.0
-    /// Seven wavelengths spanning violet to red, nm.
-    nonisolated static let prismWavelengths: [Double] = [410, 445, 480, 520, 560, 610, 660]
+    /// Wavelengths spanning violet to red, nm. Thirteen rather than
+    /// seven: the exit fan reads as a continuous spectrum instead of a
+    /// handful of separate coloured sticks.
+    nonisolated static let prismWavelengths: [Double] = [
+        400, 425, 445, 465, 485, 505, 525, 545, 570, 595, 620, 645, 670,
+    ]
 
     /// Starts at −6°: every wavelength clears the exit face (at 0°
     /// blue is ALREADY past its critical angle — the critical angle is
@@ -248,7 +261,9 @@ final class OpticsModel {
             apex: SIMD2(0, 0.15),
             apexAngle: .pi / 3,
             rotation: prismRotationDegrees * .pi / 180,
-            sideLength: 0.26)
+            // A prism you could actually pick up, throwing a spectrum
+            // wide enough to count the colours in.
+            sideLength: 0.38)
     }
 
     /// One traced polyline per wavelength, in station-local coords.
@@ -259,7 +274,10 @@ final class OpticsModel {
             (nanometers, Prism.trace(
                 from: origin, direction: SIMD2(1, 0), geometry: geometry,
                 index: Refraction.cauchyIndex(wavelengthNanometers: nanometers),
-                escape: 0.5))
+                // The emergent rays run on for a metre and a quarter, so
+                // the fan has room to SEPARATE — dispersion is an angle,
+                // and an angle only becomes a rainbow given distance.
+                escape: 1.25))
         }
     }
 

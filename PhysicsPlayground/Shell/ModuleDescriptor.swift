@@ -75,18 +75,24 @@ enum ModuleCatalog {
     /// Every module in the playground, in display order. New modules
     /// register by adding one line here.
     static func all(appModel: AppModel) -> [ModuleDescriptor] {
+        // NINE modules, not eleven.
+        //
+        // Electric Fields and Magnetism were the same experience with
+        // different math behind the line; Pendulums and Springs were one
+        // chapter split in two. Merging each pair into a module with two
+        // benches makes the comparison the point instead of hiding it —
+        // and leaves every remaining entry with a reason to exist that
+        // no other entry already covers.
         [
-            ElectromagnetismModule.descriptor(appModel: appModel),
+            FieldsModule.descriptor(appModel: appModel),
             KinematicsModule.descriptor(appModel: appModel),
             GravityLabModule.descriptor(appModel: appModel),
             WavesModule.descriptor(appModel: appModel),
             WindTunnelModule.descriptor(appModel: appModel),
             CircuitsModule.descriptor(appModel: appModel),
-            PendulumsModule.descriptor(appModel: appModel),
-            SpringsModule.descriptor(appModel: appModel),
+            OscillatorsModule.descriptor(appModel: appModel),
             ElasticFieldModule.descriptor(appModel: appModel),
             OpticsModule.descriptor(appModel: appModel),
-            MagnetismModule.descriptor(appModel: appModel),
         ]
     }
 }

@@ -63,6 +63,9 @@ final class HubScene {
         let pulser: Entity      // scale pulse on selection
         let vignette: Entity    // slowly rotating miniature
         let basePosition: SIMD3<Float>
+        /// Per-frame life beyond the shared bob and turn: the exhibit's
+        /// own physics, running.
+        var animate: ((Entity, Double) -> Void)?
     }
     private var exhibits: [Exhibit] = []
     private var time = 0.0
@@ -71,8 +74,19 @@ final class HubScene {
 
     /// The ring encircles the title: a vertical circle in the frontal
     /// plane, a step beyond it in depth.
-    private static let ringCenter = SIMD3<Float>(0, 1.6, -2.2)
-    private static let ringRadius: Float = 0.95
+    private static let ringCenter = SIMD3<Float>(0, 1.68, -2.3)
+    /// An ELLIPSE, not a circle: rooms are wider than they are tall.
+    /// A circle big enough to space nine exhibits put the top ones
+    /// through the ceiling and the bottom ones inside the sofa. Widening
+    /// it and flattening it keeps the same spacing along the ring while
+    /// staying inside the wall the user is looking at.
+    private static let ringRadiusX: Float = 1.42
+    private static let ringRadiusY: Float = 0.82
+    /// How far the ring's sides curve toward the user. A flat circle at
+    /// one depth is a poster; bowing the edges forward makes it a space
+    /// you are standing in the mouth of, and gives the side exhibits the
+    /// parallax that tells you they are objects rather than pictures.
+    private static let ringBow: Float = 0.55
     /// The miniatures, unbottled and enlarged.
     private static let vignetteScale: Float = 2.6
 
@@ -85,11 +99,12 @@ final class HubScene {
         let count = max(modules.count, 1)
         for (index, module) in modules.enumerated() {
             let angle = Float.pi / 2 - 2 * .pi * Float(index) / Float(count)
+            let x = Self.ringRadiusX * cos(angle)
+            let y = Self.ringRadiusY * sin(angle)
+            // Bow: the further round the sides an exhibit sits, the
+            // further forward it comes.
             let basePosition = Self.ringCenter + SIMD3(
-                Self.ringRadius * cos(angle),
-                Self.ringRadius * sin(angle),
-                0
-            )
+                x, y, Self.ringBow * (x * x) / (Self.ringRadiusX * Self.ringRadiusX))
             buildExhibit(for: module, at: basePosition)
         }
     }
@@ -103,24 +118,35 @@ final class HubScene {
     /// and lifted above the hub window, which grew a catalog grid and
     /// now reaches well up into the old title height.
     private static let titleOffset = SIMD3<Float>(0, 0.34, 0.12)
-    /// The title reads as smoky, semi-transparent glass rather than
-    /// coloured candy — a quiet frosted grey.
-    private static let titleColor = UIColor(white: 0.62, alpha: 1)
-    private static let titleOpacity: Float = 0.8
+    /// The title has to be READ, and a frosted grey at 80% opacity over
+    /// a cream wall is a smudge — that is exactly how it rendered.
+    /// Warm off-white letters, fully opaque, self-lit enough to hold
+    /// their own against daylight, with a dark casing behind them
+    /// (added in buildBubbleTitle) so they never sit on a wall the same
+    /// value as themselves.
+    private static let titleColor = UIColor(red: 0.98, green: 0.97, blue: 0.94, alpha: 1)
+    private static let titleOpacity: Float = 1.0
 
     private func buildBubbleTitle() {
         titleAnchor.position = Self.ringCenter + Self.titleOffset
         // Two centred lines of fat rounded glyphs — inflated bubbles.
-        let physics = Self.bubbleText(
-            "Physics", size: 0.17, color: Self.titleColor,
-            opacity: Self.titleOpacity, emissive: 0.12)
-        physics.position.y = 0.12
-        let playground = Self.bubbleText(
-            "Playground", size: 0.17, color: Self.titleColor,
-            opacity: Self.titleOpacity, emissive: 0.12)
-        playground.position.y = -0.12
-        titleAnchor.addChild(physics)
-        titleAnchor.addChild(playground)
+        for (text, y) in [("Physics", Float(0.12)), ("Playground", Float(-0.12))] {
+            // A near-black copy sits a hair behind, very slightly larger:
+            // the same casing trick the field lines use, so the letters
+            // read against a white wall, a window, or a dark sofa alike.
+            let shadow = Self.bubbleText(
+                text, size: 0.17, color: UIColor(white: 0.04, alpha: 1),
+                opacity: 0.85, emissive: 0)
+            shadow.position = [0, y, -0.028]
+            shadow.scale = SIMD3(repeating: 1.045)
+            titleAnchor.addChild(shadow)
+
+            let line = Self.bubbleText(
+                text, size: 0.17, color: Self.titleColor,
+                opacity: Self.titleOpacity, emissive: 0.35)
+            line.position.y = y
+            titleAnchor.addChild(line)
+        }
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Physics Playground"
@@ -208,7 +234,8 @@ final class HubScene {
 
         exhibits.append(Exhibit(
             moduleID: module.id, anchor: anchor, pulser: pulser,
-            vignette: vignette, basePosition: basePosition))
+            vignette: vignette, basePosition: basePosition,
+            animate: Self.liveAnimation(for: module.id)))
     }
 
     // MARK: Vignettes (miniatures of each experience)
@@ -270,11 +297,13 @@ final class HubScene {
             mesh: .generateSphere(radius: 0.026),
             materials: [SimpleMaterial(color: DesignTokens.Palette.positiveUI,
                                        roughness: 0.35, isMetallic: false)])
+        positive.name = "positive"
         positive.position = [-0.045, 0, 0]
         let negative = ModelEntity(
             mesh: .generateSphere(radius: 0.026),
             materials: [SimpleMaterial(color: DesignTokens.Palette.negativeUI,
                                        roughness: 0.35, isMetallic: false)])
+        negative.name = "negative"
         negative.position = [0.045, 0, 0]
         parent.addChild(positive)
         parent.addChild(negative)
@@ -328,6 +357,7 @@ final class HubScene {
         var glow = UnlitMaterial(color: UIColor(red: 1, green: 0.85, blue: 0.4, alpha: 1))
         glow.blending = .transparent(opacity: 0.85)
         let bulb = ModelEntity(mesh: .generateSphere(radius: 0.014), materials: [glow])
+        bulb.name = "bulb"
         bulb.position = [0.035, 0, 0]
         parent.addChild(bulb)
 
@@ -388,6 +418,7 @@ final class HubScene {
                 var material = UnlitMaterial(color: color)
                 material.blending = .transparent(opacity: 0.92)
                 let cell = ModelEntity(mesh: tile, materials: [material])
+                cell.name = "cell\(h)"
                 cell.position = SIMD3(-span / 2 + Float(i) * step, h,
                                       -span / 2 + Float(j) * step)
                 parent.addChild(cell)
@@ -467,6 +498,7 @@ final class HubScene {
         }
         if let mesh = TubeMesh.tube(lines: [ring], radius: 0.0016) {
             let orbit = ModelEntity(mesh: mesh, materials: [ringMaterial])
+            orbit.name = "orbit"
             orbit.orientation = simd_quatf(angle: 0.35, axis: [1, 0, 0])
             parent.addChild(orbit)
 
@@ -476,6 +508,89 @@ final class HubScene {
                                            roughness: 0.5, isMetallic: false)])
             planet.position = SIMD3(0.062, 0, 0)
             orbit.addChild(planet)
+        }
+    }
+
+    // MARK: Live exhibits
+    //
+    // A menu of nine physics simulations should not be nine statues that
+    // bob. Each exhibit RUNS: the pendulum swings, the ripples ripple,
+    // the orrery orbits, the fan turns. It costs a handful of transform
+    // writes per frame — the vignettes are a few dozen entities in total
+    // — and it turns the hub from a poster into the thing the app is
+    // actually about, before the user has entered anything.
+    //
+    // These are cosmetic loops, deliberately: the hub is a menu, and
+    // running nine real integrators to decorate it would be silly. Each
+    // is the honest SHAPE of its module's motion.
+
+    private static func liveAnimation(for moduleID: String) -> ((Entity, Double) -> Void)? {
+        switch moduleID {
+        case "pendulums":
+            // Two bobs swinging at different rates, drifting in and out
+            // of step — the beat the module opens on.
+            return { vignette, t in
+                for (index, child) in vignette.children.enumerated()
+                where child.name.hasPrefix("swing") {
+                    let rate = 1.6 + Double(index) * 0.22
+                    child.orientation = simd_quatf(
+                        angle: Float(0.5 * sin(t * rate)), axis: [0, 0, 1])
+                }
+            }
+        case "gravitylab":
+            // The planet goes round.
+            return { vignette, t in
+                for child in vignette.children where child.name == "orbit" {
+                    child.orientation = simd_quatf(angle: 0.35, axis: [1, 0, 0])
+                        * simd_quatf(angle: Float(t * 0.9), axis: [0, 1, 0])
+                }
+            }
+        case "waves":
+            // The rings expand and fade, over and over.
+            return { vignette, t in
+                for child in vignette.children where child.name.hasPrefix("ripple") {
+                    let phase = Double(child.name.dropFirst(6)) ?? 0
+                    let grow = Float((t * 0.6 + phase).truncatingRemainder(dividingBy: 1))
+                    child.scale = SIMD3(repeating: 0.25 + grow * 1.4)
+                    child.components.set(OpacityComponent(opacity: 1 - grow))
+                }
+            }
+        case "windtunnel":
+            return { vignette, t in
+                for child in vignette.children where child.name == "blades" {
+                    child.orientation = simd_quatf(angle: Float(t * 5), axis: [0, 0, 1])
+                }
+            }
+        case "elasticfield":
+            // The membrane breathes through its standing mode.
+            return { vignette, t in
+                let swing = Float(sin(t * 2.2))
+                for child in vignette.children where child.name.hasPrefix("cell") {
+                    let amplitude = Float(Double(child.name.dropFirst(4)) ?? 0)
+                    child.position.y = amplitude * swing
+                }
+            }
+        case "circuits":
+            // The bulb pulses as if the current were being switched.
+            return { vignette, t in
+                for child in vignette.children where child.name == "bulb" {
+                    let glow = 0.55 + 0.45 * Float(sin(t * 1.7))
+                    child.scale = SIMD3(repeating: 0.9 + glow * 0.25)
+                    child.components.set(OpacityComponent(opacity: 0.35 + glow * 0.6))
+                }
+            }
+        case "electrostatics":
+            // The dipole's field breathes — the charges ease apart and
+            // back, so the arcs visibly reorganise.
+            return { vignette, t in
+                let breath = Float(0.008 * sin(t * 1.1))
+                for child in vignette.children {
+                    if child.name == "positive" { child.position.x = -0.045 - breath }
+                    if child.name == "negative" { child.position.x = 0.045 + breath }
+                }
+            }
+        default:
+            return nil
         }
     }
 
@@ -490,6 +605,8 @@ final class HubScene {
             exhibit.anchor.position = exhibit.basePosition + SIMD3(0, bob, 0)
             exhibit.vignette.orientation = simd_quatf(
                 angle: Float(time * 0.3 + Double(index)), axis: [0, 1, 0])
+            // …and whatever this particular exhibit does for a living.
+            exhibit.animate?(exhibit.vignette, time)
         }
         // The title floats and breathes, like a balloon on a string.
         let bob = 0.02 * Float(sin(time * 0.6))

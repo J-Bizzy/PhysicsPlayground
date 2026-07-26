@@ -568,9 +568,9 @@ final class OpticsRenderer {
     private var screenSpotMaterials: [Int: UnlitMaterial] = [:]
     private var appliedSpotBucket = -1
 
-    func tick(model: OpticsModel) {
+    func tick(model: OpticsModel, room: RoomBox = .unscanned) {
         syncElements(model)
-        syncRays(model)
+        syncRays(model, room: room)
         syncDispersionStation(model)
         syncRefractionCorner(model)
         syncDials(model)
@@ -608,6 +608,28 @@ final class OpticsRenderer {
         }
     }
 
+    /// Real optical glass: smooth, clear-coated, mostly transparent with
+    /// the faintest blue. Applied over an authored asset's own materials
+    /// so the loaded model keeps its SHAPE and gains a glass surface.
+    private static func applyGlass(to entity: Entity) {
+        var glass = PhysicallyBasedMaterial()
+        glass.baseColor = .init(tint: UIColor(red: 0.82, green: 0.92, blue: 1.0, alpha: 1))
+        glass.roughness = .init(floatLiteral: 0.03)
+        glass.metallic = .init(floatLiteral: 0.0)
+        glass.clearcoat = .init(floatLiteral: 1.0)
+        glass.clearcoatRoughness = .init(floatLiteral: 0.03)
+        glass.blending = .transparent(opacity: .init(floatLiteral: 0.26))
+        glass.specular = .init(floatLiteral: 1.0)
+        func walk(_ node: Entity) {
+            if var model = node.components[ModelComponent.self] {
+                model.materials = model.materials.map { _ in glass }
+                node.components.set(model)
+            }
+            node.children.forEach(walk)
+        }
+        walk(entity)
+    }
+
     private func makeVisual(for element: OpticsModel.Element) -> ElementVisual {
         let holder: ModelEntity
         switch element.kind {
@@ -618,6 +640,16 @@ final class OpticsRenderer {
             if let lens = try? Entity.load(named: assetName) {
                 // Blender glass: biconvex bulge or biconcave waist —
                 // the SHAPE says converging or diverging.
+                //
+                // The authored material read as a pale opaque solid,
+                // which in a bright room made the most important object
+                // on the bench — the lens itself — look like a white
+                // pillar the beam happened to pass through. Overriding
+                // it with real glass (very smooth, clear-coated, mostly
+                // transparent, faintly blue) restores the curvature: you
+                // can see the highlight travel around the bulge, and see
+                // the rays THROUGH it.
+                Self.applyGlass(to: lens)
                 holder.addChild(lens)
             } else {
                 var glass = PhysicallyBasedMaterial()
@@ -629,15 +661,29 @@ final class OpticsRenderer {
                     materials: [glass])
                 holder.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             }
-            // The accent dot ties the glass to its focal markers' color.
+            // A bright rim RING around the glass, not just a dot: a
+            // transparent lens has almost no silhouette against a
+            // bright room, so the mount is what tells you where the
+            // element is and how big its aperture is. The colour ties it
+            // to its focal markers.
             let rimColor: UIColor = element.kind == .convergingLens
                 ? UIColor(red: 0.3, green: 0.75, blue: 1, alpha: 1)
                 : UIColor(red: 1, green: 0.6, blue: 0.3, alpha: 1)
-            let rim = ModelEntity(
-                mesh: .generateCylinder(height: 0.021, radius: 0.012),
-                materials: [UnlitMaterial(color: rimColor)])
-            rim.position = [0, 0, 0.172]
-            holder.addChild(rim)
+            let ring: [SIMD3<Float>] = (0...64).map { step in
+                let angle = Float(step) / 64 * 2 * .pi
+                return SIMD3(0, cos(angle) * 0.172, sin(angle) * 0.172)
+            }
+            if let ringMesh = TubeMesh.tube(lines: [ring], radius: 0.005, sides: 6) {
+                let rim = ModelEntity(
+                    mesh: ringMesh,
+                    materials: [Materials.energized(rimColor, glow: 0.5)])
+                holder.addChild(rim)
+            }
+            let marker = ModelEntity(
+                mesh: .generateSphere(radius: 0.012),
+                materials: [Materials.energized(rimColor, glow: 0.6)])
+            marker.position = [0, 0, 0.172]
+            holder.addChild(marker)
         case .mirror:
             holder = ModelEntity()
             if let mirror = try? Entity.load(named: "OpticsMirror") {
@@ -699,16 +745,23 @@ final class OpticsRenderer {
         return ElementVisual(holder: holder, focalMarkers: focalMarkers)
     }
 
-    private func syncRays(_ model: OpticsModel) {
-        // Rebuild only when the optical configuration changes.
+    private func syncRays(_ model: OpticsModel, room: RoomBox) {
+        // Rebuild only when the optical configuration — or the room the
+        // beams are clipped against — changes.
         let snapshot = model.sourceMode.rawValue + model.elements.map {
             "\($0.kind.rawValue):\(String(format: "%.4f", $0.x)):\(String(format: "%.4f", $0.focal))"
-        }.joined()
+        }.joined() + "|\(room.center)|\(room.halfExtents)"
         guard snapshot != lastSnapshot else { return }
         lastSnapshot = snapshot
 
+        // Light stops at the wall. The traced bundle ran to the bench
+        // bounds and then kept going as far as the geometry allowed,
+        // so a converging beam shot out through the bookshelf and the
+        // window and carried on into the neighbours' flat — which reads
+        // as "the renderer does not know the room is there", because it
+        // did not.
         var lines: [[SIMD3<Float>]] = []
-        for ray in model.tracedRays3D where ray.count > 1 {
+        for ray in room.clip(polylines: model.tracedRays3D) where ray.count > 1 {
             lines.append(ray.map { SIMD3<Float>($0) })
         }
         syncScreenSpot(model)

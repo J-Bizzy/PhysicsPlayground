@@ -69,12 +69,60 @@ enum ExperimentCatalog {
             .count
     }
 
+
+    /// The magnetic bench's experiments, folded into the merged Fields
+    /// module's list.
+    private static func magnetismExperiments(_ model: MagnetismModel)
+    -> [(experiment: Experiment, isMet: () -> Bool)] {
+        [
+            (Experiment(id: "magnetism.snap", title: "The snap",
+                        detail: "Let two magnets pull together until they touch."),
+             { let magnets = model.magnets
+               for i in 0..<magnets.count {
+                   for j in (i + 1)..<magnets.count
+                   where simd_distance(magnets[i].position, magnets[j].position)
+                       < MagnetismModel.magnetLength * 0.95 {
+                       return true
+                   }
+               }
+               return false }),
+            (Experiment(id: "magnetism.bench", title: "Full bench",
+                        detail: "Get all four bar magnets into the field at once."),
+             { model.magnets.count >= 4 }),
+        ]
+    }
+
+    /// The spring bench's experiments, folded into the merged
+    /// Oscillators module's list.
+    private static func springExperiments(_ model: SpringsModel)
+    -> [(experiment: Experiment, isMet: () -> Bool)] {
+        [
+            (Experiment(id: "springs.limit", title: "To the stops",
+                        detail: "Pull the block to its maximum extension."),
+             { model.mode == .single
+                 && abs(model.state.displacement) >= model.maxExtension * 0.97 }),
+            (Experiment(id: "springs.transfer", title: "Energy heist",
+                        detail: "In Coupled ×2, get 85% of the energy onto the second block."),
+             { guard model.mode == .coupled else { return false }
+               let pair = model.coupled.massEnergies(
+                   stiffness: model.stiffness, coupling: model.coupling,
+                   masses: SIMD2(model.mass, model.mass))
+               let total = pair.x + pair.y
+               return total > 0.005 && pair.y / total > 0.85 }),
+        ]
+    }
+
     static func experiments(for moduleID: String, appModel: AppModel)
     -> [(experiment: Experiment, isMet: () -> Bool)] {
         switch moduleID {
         case "electrostatics":
+            // The merged Fields module: the electric bench's experiments
+            // and the magnetic bench's, in one list — they are one module
+            // now, and a user who only ever opens one bench should still
+            // see that the other half exists.
             let model = appModel.electromagnetismModel
-            return [
+            let magnets = appModel.magnetismModel
+            return magnetismExperiments(magnets) + [
                 (Experiment(id: "field.dipole", title: "Opposites attract",
                             detail: "Build a dipole — one positive and one negative charge sharing the field."),
                  { model.charges.contains(where: \.isPositive)
@@ -103,24 +151,6 @@ enum ExperimentCatalog {
                             detail: "Send a source flying and see its wavefronts bunch ahead of it."),
                  { model.selectedIsFlying }),
             ]
-        case "magnetism":
-            let model = appModel.magnetismModel
-            return [
-                (Experiment(id: "magnetism.snap", title: "The snap",
-                            detail: "Let two magnets pull together until they touch."),
-                 { let magnets = model.magnets
-                   for i in 0..<magnets.count {
-                       for j in (i + 1)..<magnets.count
-                       where simd_distance(magnets[i].position, magnets[j].position)
-                           < MagnetismModel.magnetLength * 0.95 {
-                           return true
-                       }
-                   }
-                   return false }),
-                (Experiment(id: "magnetism.bench", title: "Full bench",
-                            detail: "Get all four bar magnets into the field at once."),
-                 { model.magnets.count >= 4 }),
-            ]
         case "circuits":
             let model = appModel.circuitsModel
             return [
@@ -144,8 +174,10 @@ enum ExperimentCatalog {
                          && abs(model.readouts[component.id]?.amps ?? 0) < 0.03 } }),
             ]
         case "pendulums":
+            // The merged Oscillators module: both benches' experiments.
             let model = appModel.pendulumsModel
-            return [
+            let springs = appModel.springsModel
+            return springExperiments(springs) + [
                 (Experiment(id: "pendulums.orbit", title: "Around the world",
                             detail: "Throw a bob into a true 3D orbit — sideways, hard."),
                  { model.pendulums.contains {
@@ -153,22 +185,6 @@ enum ExperimentCatalog {
                 (Experiment(id: "pendulums.high", title: "Over the top",
                             detail: "Get a bob swinging above its pivot."),
                  { model.pendulums.contains { $0.state.position.y > 0 } }),
-            ]
-        case "springs":
-            let model = appModel.springsModel
-            return [
-                (Experiment(id: "springs.limit", title: "To the stops",
-                            detail: "Pull the block to its maximum extension."),
-                 { model.mode == .single
-                     && abs(model.state.displacement) >= model.maxExtension * 0.97 }),
-                (Experiment(id: "springs.transfer", title: "Energy heist",
-                            detail: "In Coupled ×2, get 85% of the energy onto the second block."),
-                 { guard model.mode == .coupled else { return false }
-                   let pair = model.coupled.massEnergies(
-                       stiffness: model.stiffness, coupling: model.coupling,
-                       masses: SIMD2(model.mass, model.mass))
-                   let total = pair.x + pair.y
-                   return total > 0.005 && pair.y / total > 0.85 }),
             ]
         case "elasticfield":
             let model = appModel.waveMediumModel

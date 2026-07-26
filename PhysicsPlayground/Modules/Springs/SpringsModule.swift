@@ -21,7 +21,7 @@ enum SpringsModule {
             icon: "alternatingcurrent",
             accent: DesignTokens.Palette.springsAccent,
             firstRunHint: "Pull the block along its rail and let go — the coils spread with the true extension and the ghost blocks mark the turning points you'll reach. Try Coupled ×2 and pull one block: watch its energy drain into the other and slosh back.",
-            legend: legend,
+            legend: legendItems,
             isPaused: { appModel.springsModel.isPaused },
             togglePause: { appModel.springsModel.isPaused.toggle() },
             makeControls: {
@@ -36,43 +36,47 @@ enum SpringsModule {
                         .environment(appModel.springsModel)
                 )
             },
-            captureReadings: {
-                let model = appModel.springsModel
-                let energies = model.energies()
-                var rows: [NotebookEntry.Reading] = [
-                    .init("Mode", model.mode == .single ? "single" : "coupled ×2"),
-                    .init("Stiffness k", String(format: "%.2f", model.stiffness), "N/m"),
-                    .init("Mass", String(format: "%.3f", model.mass), "kg"),
-                    .init("Damping", String(format: "%.3f", model.effectiveDamping), "N·s/m"),
-                    .init("Period 2π√(m/k)", String(format: "%.4f", model.period), "s"),
-                    .init("Frequency", String(format: "%.4f", model.frequency), "Hz"),
-                ]
-                if model.mode == .single {
-                    rows.append(.init("Displacement",
-                                      String(format: "%.4f", model.state.displacement), "m"))
-                    rows.append(.init("Velocity",
-                                      String(format: "%.4f", model.state.velocity), "m/s"))
-                    rows.append(.init("Spring force",
-                                      String(format: "%.4f", model.springForce), "N"))
-                    rows.append(.init("Kinetic energy", String(format: "%.5f", energies.kinetic), "J"))
-                    rows.append(.init("Potential energy", String(format: "%.5f", energies.potential), "J"))
-                } else {
-                    let pair = model.coupled.massEnergies(
-                        stiffness: model.stiffness, coupling: model.coupling,
-                        masses: SIMD2(model.mass, model.mass))
-                    rows.append(.init("Coupling", String(format: "%.2f", model.coupling), "N/m"))
-                    rows.append(.init("Energy, block 1", String(format: "%.5f", pair.x), "J"))
-                    rows.append(.init("Energy, block 2", String(format: "%.5f", pair.y), "J"))
-                }
-                return rows
-            },
+            captureReadings: { readings(appModel: appModel) },
             reset: {
                 appModel.springsModel.reset()
             }
         )
     }
 
-    private static let legend: [LegendItem] = [
+    /// The readings this bench writes into the lab notebook.
+    /// Shared with the combined module that now hosts it.
+    static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
+        let model = appModel.springsModel
+        let energies = model.energies()
+        var rows: [NotebookEntry.Reading] = [
+            .init("Mode", model.mode == .single ? "single" : "coupled ×2"),
+            .init("Stiffness k", String(format: "%.2f", model.stiffness), "N/m"),
+            .init("Mass", String(format: "%.3f", model.mass), "kg"),
+            .init("Damping", String(format: "%.3f", model.effectiveDamping), "N·s/m"),
+            .init("Period 2π√(m/k)", String(format: "%.4f", model.period), "s"),
+            .init("Frequency", String(format: "%.4f", model.frequency), "Hz"),
+        ]
+        if model.mode == .single {
+            rows.append(.init("Displacement",
+                              String(format: "%.4f", model.state.displacement), "m"))
+            rows.append(.init("Velocity",
+                              String(format: "%.4f", model.state.velocity), "m/s"))
+            rows.append(.init("Spring force",
+                              String(format: "%.4f", model.springForce), "N"))
+            rows.append(.init("Kinetic energy", String(format: "%.5f", energies.kinetic), "J"))
+            rows.append(.init("Potential energy", String(format: "%.5f", energies.potential), "J"))
+        } else {
+            let pair = model.coupled.massEnergies(
+                stiffness: model.stiffness, coupling: model.coupling,
+                masses: SIMD2(model.mass, model.mass))
+            rows.append(.init("Coupling", String(format: "%.2f", model.coupling), "N/m"))
+            rows.append(.init("Energy, block 1", String(format: "%.5f", pair.x), "J"))
+            rows.append(.init("Energy, block 2", String(format: "%.5f", pair.y), "J"))
+        }
+        return rows
+    }
+
+    static let legendItems: [LegendItem] = [
         LegendItem(swatch: .fill(Color(red: 0.2, green: 0.8, blue: 0.35)),
                    text: "Green arrow & bar — spring force F = −kx and potential energy ½kx²"),
         LegendItem(swatch: .fill(Color(red: 0.25, green: 0.5, blue: 1)),

@@ -78,6 +78,13 @@ final class AppModel {
     /// the physics; the 2D window remains the full fallback.
     var controlPodsVisible = true
 
+    /// Which bench the merged Fields module is showing (electric or
+    /// magnetic), and which the merged Oscillators module is showing.
+    /// They live here rather than in either physics model because they
+    /// choose BETWEEN models.
+    var fieldsBench: FieldsBench = .electric
+    var oscillatorBench: OscillatorBench = .pendulum
+
     var activeModule: ModuleDescriptor? {
         guard let activeModuleID else { return nil }
         return ModuleCatalog.all(appModel: self).first { $0.id == activeModuleID }

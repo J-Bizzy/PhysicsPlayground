@@ -45,6 +45,12 @@ struct KinematicsSpaceView: View {
                         model.roomWalls = sensing.walls
                     }
                     model.step(dt: event.deltaTime)
+                    // A ball that reaches an open hand is caught: the
+                    // one moment in the module where the simulation
+                    // reaches back to you. Device-only — the simulator
+                    // reports no fingertips, so this is simply inert
+                    // there.
+                    model.catchBalls(atFingertips: appModel.room.fingertips)
                     renderer?.tick(model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)

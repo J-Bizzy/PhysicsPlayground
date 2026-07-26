@@ -170,10 +170,20 @@ final class KinematicsRenderer {
         ballMaterialKeys = Array(repeating: "", count: ballPool.budget)
         root.addChild(ballPool.root)
 
-        // Strobe dots.
-        var dotMaterial = UnlitMaterial(color: DesignTokens.Palette.projectileUI)
-        dotMaterial.blending = .transparent(opacity: 0.7)
-        let dotMesh = MeshResource.generateSphere(radius: 0.008)
+        // Strobe dots — the module's best idea, finally at a size that
+        // shows it.
+        //
+        // Dots dropped at EQUAL TIME intervals are the whole of
+        // projectile motion in one picture: their horizontal spacing is
+        // constant (nothing accelerates sideways) while their vertical
+        // spacing shrinks to nothing at the apex and grows again on the
+        // way down. That decomposition is legible only if you can see
+        // the dots — at 8 mm and 70% opacity they were a faint dotted
+        // line. Bright, opaque, and half again as large, they read as
+        // the strobe photograph they are imitating.
+        let dotMaterial = Materials.energized(
+            DesignTokens.Palette.projectileUI, roughness: 0.3, glow: 0.7)
+        let dotMesh = MeshResource.generateSphere(radius: 0.013)
         dotPool = EntityPool(
             budget: KinematicsModel.flightBudget * KinematicsModel.dotsPerFlight
         ) { container in
@@ -378,7 +388,35 @@ final class KinematicsRenderer {
 
     // MARK: Per-frame tick (from SceneEvents.Update)
 
+    // MARK: The catch readout
+
+    /// What the ball was doing at the instant it hit your hand, floating
+    /// at the ball rather than parked on a distant card.
+    private var catchCallout: Callout?
+    private var lastCatchID: UUID?
+    private var catchShownAt: Double = -100
+
+    private func syncCatch(_ model: KinematicsModel) {
+        if catchCallout == nil {
+            let callout = Callout(color: DesignTokens.Palette.projectileUI,
+                                  textSize: 0.026, offset: SIMD3(0, 0.14, 0))
+            catchCallout = callout
+            root.addChild(callout.root)
+        }
+        if let caught = model.lastCatch, caught.id != lastCatchID {
+            lastCatchID = caught.id
+            catchShownAt = CACurrentMediaTime()
+            catchCallout?.anchor(at: SIMD3<Float>(caught.position))
+            catchCallout?.setText(String(
+                format: "Caught\n%.2f m/s   %.2f m\n%.2f s   %.3f J",
+                caught.speed, caught.height, caught.flightTime, caught.kineticEnergy))
+        }
+        // The readout lingers a few seconds, then bows out.
+        catchCallout?.isEnabled = CACurrentMediaTime() - catchShownAt < 4.5
+    }
+
     func tick(_ model: KinematicsModel) {
+        syncCatch(model)
         // Fresh procedural textures arrived: reapply ball materials.
         if appliedTextureVersion != BallTextures.version {
             appliedTextureVersion = BallTextures.version

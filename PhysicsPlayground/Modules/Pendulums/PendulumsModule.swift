@@ -21,7 +21,7 @@ enum PendulumsModule {
             icon: "metronome.fill",
             accent: DesignTokens.Palette.pendulumsAccent,
             firstRunHint: "The bob is already swinging — grab it and throw it sideways. While you hold it, the faint line shows the swing you're about to launch. Pinch a bob to select it and read its numbers.",
-            legend: legend,
+            legend: legendItems,
             isPaused: { appModel.pendulumsModel.isPaused },
             togglePause: { appModel.pendulumsModel.isPaused.toggle() },
             makeControls: {
@@ -36,35 +36,39 @@ enum PendulumsModule {
                         .environment(appModel.pendulumsModel)
                 )
             },
-            captureReadings: {
-                let model = appModel.pendulumsModel
-                var rows: [NotebookEntry.Reading] = [
-                    .init("Pendulums", "\(model.pendulums.count)"),
-                    .init("Gravity", String(format: "%.3f", model.gravity), "m/s²"),
-                    .init("Friction", model.frictionOn ? "on" : "off"),
-                ]
-                if let selected = model.selected {
-                    let energies = selected.state.energies(
-                        length: selected.length,
-                        gravity: model.gravity, mass: selected.mass)
-                    rows.append(.init("Length", String(format: "%.4f", selected.length), "m"))
-                    rows.append(.init("Mass", String(format: "%.3f", selected.mass), "kg"))
-                    rows.append(.init("Period 2π√(L/g)",
-                                      String(format: "%.4f", selected.period(gravity: model.gravity)), "s"))
-                    rows.append(.init("Speed",
-                                      String(format: "%.4f", simd_length(selected.state.velocity)), "m/s"))
-                    rows.append(.init("Kinetic energy", String(format: "%.5f", energies.kinetic), "J"))
-                    rows.append(.init("Potential energy", String(format: "%.5f", energies.potential), "J"))
-                }
-                return rows
-            },
+            captureReadings: { readings(appModel: appModel) },
             reset: {
                 appModel.pendulumsModel.reset()
             }
         )
     }
 
-    private static let legend: [LegendItem] = [
+    /// The readings this bench writes into the lab notebook.
+    /// Shared with the combined module that now hosts it.
+    static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
+        let model = appModel.pendulumsModel
+        var rows: [NotebookEntry.Reading] = [
+            .init("Pendulums", "\(model.pendulums.count)"),
+            .init("Gravity", String(format: "%.3f", model.gravity), "m/s²"),
+            .init("Friction", model.frictionOn ? "on" : "off"),
+        ]
+        if let selected = model.selected {
+            let energies = selected.state.energies(
+                length: selected.length,
+                gravity: model.gravity, mass: selected.mass)
+            rows.append(.init("Length", String(format: "%.4f", selected.length), "m"))
+            rows.append(.init("Mass", String(format: "%.3f", selected.mass), "kg"))
+            rows.append(.init("Period 2π√(L/g)",
+                              String(format: "%.4f", selected.period(gravity: model.gravity)), "s"))
+            rows.append(.init("Speed",
+                              String(format: "%.4f", simd_length(selected.state.velocity)), "m/s"))
+            rows.append(.init("Kinetic energy", String(format: "%.5f", energies.kinetic), "J"))
+            rows.append(.init("Potential energy", String(format: "%.5f", energies.potential), "J"))
+        }
+        return rows
+    }
+
+    static let legendItems: [LegendItem] = [
         LegendItem(swatch: .fill(Color(red: 0.25, green: 0.5, blue: 1)),
                    text: "Blue bar & arrow — kinetic energy and velocity; trail runs blue (slow) to orange (fast)"),
         LegendItem(swatch: .fill(Color(red: 0.2, green: 0.8, blue: 0.35)),

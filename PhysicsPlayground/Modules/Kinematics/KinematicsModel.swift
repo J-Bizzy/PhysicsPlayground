@@ -259,6 +259,61 @@ final class KinematicsModel {
 
     private(set) var lastFlight: FlightSummary?
 
+    // MARK: Catching
+
+    /// How near a fingertip has to be to a flying ball to catch it.
+    /// Generous — a real catch is a hand, not a point.
+    nonisolated static let catchRadius = 0.14
+
+    /// The last catch, for the callout that appears at the caught ball.
+    struct Catch: Equatable {
+        var id: UUID
+        var speed: Double
+        var height: Double
+        var flightTime: Double
+        var kineticEnergy: Double
+        var position: SIMD3<Double>
+    }
+    private(set) var lastCatch: Catch?
+    var catchingEnabled = true
+
+    /// Catches any flying ball that reaches an open hand: freezes it,
+    /// records what it was doing at that instant, and stages it to be
+    /// thrown again.
+    ///
+    /// This is the piece the module was missing. Everything else here is
+    /// launch-and-watch; a catch is the moment the simulation reaches
+    /// BACK to you, and it is only possible because there are real hands
+    /// in the scene. The numbers it freezes — impact speed, height,
+    /// flight time, kinetic energy — are the ones a stopwatch and a
+    /// tape measure could never give you mid-flight.
+    @discardableResult
+    func catchBalls(atFingertips fingertips: [SIMD3<Double>]) -> Bool {
+        guard catchingEnabled, !fingertips.isEmpty else { return false }
+        var caught = false
+        for index in flights.indices where flights[index].status == .flying {
+            let position = flights[index].state.position
+            guard fingertips.contains(where: {
+                simd_distance($0, position) < Self.catchRadius
+            }) else { continue }
+
+            let velocity = flights[index].state.velocity
+            let speed = simd_length(velocity)
+            lastCatch = Catch(
+                id: flights[index].id,
+                speed: speed,
+                height: position.y,
+                flightTime: flights[index].elapsed,
+                kineticEnergy: 0.5 * flights[index].projectile.mass * speed * speed,
+                position: position)
+            flights[index].state.velocity = .zero
+            flights[index].status = .staged
+            emitSound(.thud, at: position, volume: min(0.3 + speed * 0.1, 0.9))
+            caught = true
+        }
+        return caught
+    }
+
     /// Hand-motion samples for the ball currently being held.
     private var holdSamples: [(time: Double, position: SIMD3<Double>)] = []
     private var heldFlightID: UUID?
@@ -644,6 +699,8 @@ final class KinematicsModel {
         kind = .basketball
         customMass = 0.25
         customDiameter = 0.10
+        lastCatch = nil
+        catchingEnabled = true
         aimDirection = Self.direction(elevationDegrees: 45, azimuthDegrees: 0)
 
         // The welcome scene: two hoops to aim at and two balls in reach.

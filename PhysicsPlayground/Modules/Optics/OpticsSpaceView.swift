@@ -45,7 +45,7 @@ struct OpticsSpaceView: View {
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] _ in
-                    renderer?.tick(model: model)
+                    renderer?.tick(model: model, room: appModel.room.bounds)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                 }

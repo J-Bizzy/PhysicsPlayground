@@ -70,43 +70,20 @@ struct HubView: View {
                 .accessibilityHint("Places the exhibit ring in your room")
             }
 
-            // The catalog, as tappable cards — the fast lane into any
-            // module for anyone who'd rather tap a window than pinch an
-            // exhibit (and the only lane while the space is closed).
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10),
-                                GridItem(.flexible(), spacing: 10)],
-                      spacing: 10) {
-                ForEach(ModuleCatalog.all(appModel: appModel)) { module in
-                    Button {
-                        appModel.activeModuleID = module.id
-                    } label: {
-                        HStack(spacing: 9) {
-                            Image(systemName: module.icon)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(module.accent)
-                                .frame(width: 27, height: 27)
-                                .background(module.accent.opacity(0.18),
-                                            in: RoundedRectangle(cornerRadius: 8,
-                                                                 style: .continuous))
-                            Text(module.title)
-                                .font(.callout)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .background(
-                        .regularMaterial,
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .hoverEffect()
-                    .accessibilityHint("Opens \(module.title)")
-                }
+            // The catalog list is NOT shown beside the ring.
+            //
+            // It used to be: a two-column grid of every module, floating
+            // in the middle of the exhibit ring that already showed every
+            // module. Two menus for one catalog, the flat one landing
+            // right on top of the spatial one, and the ring — the whole
+            // reason this app is worth wearing — reduced to decoration
+            // around a list. The ring is the menu. The list survives only
+            // as the fallback for when the space is closed, and as the
+            // accessible path, which the in-space exhibits also provide
+            // as VoiceOver elements.
+            if !appModel.isImmersiveSpaceOpen {
+                HubCatalogList()
             }
-            .frame(maxWidth: 500)
 
             Spacer(minLength: 12)
         }
@@ -121,5 +98,48 @@ struct HubView: View {
                 _ = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
             }
         }
+    }
+}
+
+/// The flat catalog, shown only when the exhibit ring is not in the room.
+/// In space, the ring IS this list — rendered as objects you can look at.
+struct HubCatalogList: View {
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10),
+                            GridItem(.flexible(), spacing: 10)],
+                  spacing: 10) {
+            ForEach(ModuleCatalog.all(appModel: appModel)) { module in
+                Button {
+                    appModel.activeModuleID = module.id
+                } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: module.icon)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(module.accent)
+                            .frame(width: 27, height: 27)
+                            .background(module.accent.opacity(0.18),
+                                        in: RoundedRectangle(cornerRadius: 8,
+                                                             style: .continuous))
+                        Text(module.title)
+                            .font(.callout)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background(
+                    .regularMaterial,
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .hoverEffect()
+                .accessibilityHint("Opens \(module.title)")
+            }
+        }
+        .frame(maxWidth: 500)
     }
 }
