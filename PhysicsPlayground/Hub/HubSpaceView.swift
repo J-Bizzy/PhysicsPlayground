@@ -111,42 +111,71 @@ final class HubScene {
 
     // MARK: The 3-D bubble title
 
-    /// "Physics / Playground" as two lines of fat rounded 3-D letters —
-    /// glossy bubbles with a soft glow behind, floating at the centre of
-    /// the ring.
-    /// Centred in the ring, a step forward in depth from the exhibits —
-    /// and lifted above the hub window, which grew a catalog grid and
-    /// now reaches well up into the old title height.
-    private static let titleOffset = SIMD3<Float>(0, 0.34, 0.12)
-    /// The title has to be READ, and a frosted grey at 80% opacity over
-    /// a cream wall is a smudge — that is exactly how it rendered.
-    /// Warm off-white letters, fully opaque, self-lit enough to hold
-    /// their own against daylight, with a dark casing behind them
-    /// (added in buildBubbleTitle) so they never sit on a wall the same
-    /// value as themselves.
-    private static let titleColor = UIColor(red: 0.98, green: 0.97, blue: 0.94, alpha: 1)
-    private static let titleOpacity: Float = 1.0
+    /// Where the title sits relative to the ring's centre.
+    ///
+    /// It used to sit 34 cm up, which put it against the top exhibit and
+    /// left a hole in the middle of the composition. With the ring now a
+    /// flatter ellipse and the hub window no longer carrying a catalog
+    /// grid, the name can come down to where a name in the middle of a
+    /// ring belongs.
+    private static let titleOffset = SIMD3<Float>(0, 0.27, 0.12)
 
+    /// Warm ivory, opaque, self-lit enough to hold its own against
+    /// daylight. (It was a frosted grey at 80% opacity, which over a
+    /// cream wall is a smudge.)
+    private static let titleColor = UIColor(red: 0.99, green: 0.98, blue: 0.95, alpha: 1)
+    /// The warm edge-light behind the letters — the thing that turns
+    /// flat white type into something that looks lit. Champagne rather
+    /// than gold: at full saturation it read as a toy.
+    private static let titleRimColor = UIColor(red: 1.0, green: 0.88, blue: 0.70, alpha: 1)
+    /// The lockup's overall width, metres. Both lines are scaled to
+    /// exactly this, which is what makes it read as a designed mark.
+    private static let titleWidth: Float = 0.86
+    /// Gap between the two lines, as a fraction of a line's cap height.
+    private static let titleLeading: Float = 0.30
+
+    /// "Physics / Playground" as a two-line LOCKUP, not two words that
+    /// happen to be near each other.
+    ///
+    /// Three things were wrong. It was not actually centred: `bubbleText`
+    /// only ever centred on X, so every line hung with its baseline on
+    /// the anchor and the whole block floated high. The two lines were
+    /// spaced by a hard-coded ±12 cm unrelated to how tall the glyphs
+    /// actually are. And "Physics" is seven characters against
+    /// "Playground"'s ten, so at one point size the lines were wildly
+    /// different widths and the pair read as an accident.
+    ///
+    /// Now both lines are measured and scaled to a common width, stacked
+    /// with leading derived from their real cap height, and the whole
+    /// block is centred on its anchor — the flush-both-sides two-line
+    /// lockup that every good wordmark uses.
     private func buildBubbleTitle() {
         titleAnchor.position = Self.ringCenter + Self.titleOffset
-        // Two centred lines of fat rounded glyphs — inflated bubbles.
-        for (text, y) in [("Physics", Float(0.12)), ("Playground", Float(-0.12))] {
-            // A near-black copy sits a hair behind, very slightly larger:
-            // the same casing trick the field lines use, so the letters
-            // read against a white wall, a window, or a dark sofa alike.
-            let shadow = Self.bubbleText(
-                text, size: 0.17, color: UIColor(white: 0.04, alpha: 1),
-                opacity: 0.85, emissive: 0)
-            shadow.position = [0, y, -0.028]
-            shadow.scale = SIMD3(repeating: 1.045)
-            titleAnchor.addChild(shadow)
 
-            let line = Self.bubbleText(
-                text, size: 0.17, color: Self.titleColor,
-                opacity: Self.titleOpacity, emissive: 0.35)
-            line.position.y = y
-            titleAnchor.addChild(line)
+        let lines = ["Physics", "Playground"]
+        // Build at a reference size, then scale each to the common width.
+        let reference: CGFloat = 0.17
+        let built = lines.map { text -> (entity: Entity, extents: SIMD3<Float>) in
+            (Self.titleLine(text, size: reference), Self.textExtents(text, size: reference))
         }
+        let scales = built.map { Self.titleWidth / max($0.extents.x, 1e-4) }
+        // Cap heights AFTER scaling — a wider scale makes taller letters.
+        let heights = zip(built, scales).map { $0.0.extents.y * $0.1 }
+        let gap = heights.reduce(0, +) / Float(heights.count) * Self.titleLeading
+        let blockHeight = heights.reduce(0, +) + gap * Float(heights.count - 1)
+
+        // Walk down from the top of the block, so the whole lockup ends
+        // up centred on the anchor whatever the words are.
+        var cursor = blockHeight / 2
+        for (index, item) in built.enumerated() {
+            let scale = scales[index]
+            let height = heights[index]
+            item.entity.scale = SIMD3(repeating: scale)
+            item.entity.position.y = cursor - height / 2
+            titleAnchor.addChild(item.entity)
+            cursor -= height + gap
+        }
+
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Physics Playground"
@@ -154,10 +183,61 @@ final class HubScene {
         root.addChild(titleAnchor)
     }
 
+    /// One line of the title, as three stacked passes.
+    ///
+    /// The old treatment was a near-black copy shoved down and back,
+    /// which is a drop shadow — and a hard offset drop shadow is exactly
+    /// what makes 3-D type look like clip art. These layers sit
+    /// CONCENTRICALLY instead: a soft dark plate that gives the letters
+    /// something to be light against whatever wall is behind them, a
+    /// warm rim just proud of the glyph edge that reads as light
+    /// catching them, and the ivory letters themselves on top.
+    private static func titleLine(_ text: String, size: CGFloat) -> Entity {
+        let line = Entity()
+
+        let backing = bubbleText(text, size: size,
+                                 color: UIColor(white: 0.03, alpha: 1),
+                                 opacity: 0.45, emissive: 0)
+        // Pulled in tight behind the glyphs. The layers were far enough
+        // back that parallax revealed them off to one side, which is the
+        // hard offset drop shadow this was meant to replace; keeping
+        // them close makes the separation come from SCALE, which reads
+        // as a rim from any angle.
+        backing.scale = SIMD3(repeating: 1.10)
+        backing.position.z = -0.022
+        line.addChild(backing)
+
+        let rim = bubbleText(text, size: size, color: titleRimColor,
+                             opacity: 0.55, emissive: 0.75)
+        rim.scale = SIMD3(repeating: 1.042)
+        rim.position.z = -0.009
+        line.addChild(rim)
+
+        let letters = bubbleText(text, size: size, color: titleColor,
+                                 opacity: 1, emissive: 0.32)
+        line.addChild(letters)
+        return line
+    }
+
+    /// The measured size of a run of the title face, for the lockup.
+    private static func textExtents(_ text: String, size: CGFloat) -> SIMD3<Float> {
+        MeshResource.generateText(
+            text, extrusionDepth: Float(size) * 0.45,
+            font: roundedFont(size: size), alignment: .center
+        ).bounds.extents
+    }
+
     /// The app's signature 3-D "bubble" type, in one reusable builder:
     /// fat rounded heavy glyphs extruded into a glossy clear-coated
-    /// solid. Centred on its own origin and returned as a group. The hub
+    /// solid, centred on its own origin and returned as a group. The hub
     /// title and every exhibit name plate share this one treatment.
+    ///
+    /// "Centred" now means centred on BOTH axes. It only ever centred on
+    /// X, so every run of this type hung with its baseline on the anchor
+    /// and its visible mass floating above — which is why the hub title
+    /// sat high in its ring and every exhibit name sat high under its
+    /// miniature. One line, two words of a fix.
+    ///
     /// `opacity` < 1 turns the letters to smoky glass; `emissive` sets
     /// how much they glow against the room.
     static func bubbleText(_ text: String, size: CGFloat, color: UIColor,
@@ -169,6 +249,7 @@ final class HubScene {
             font: font, alignment: .center)
         let bounds = mesh.bounds
         let centerX = -(bounds.min.x + bounds.max.x) / 2
+        let centerY = -(bounds.min.y + bounds.max.y) / 2
 
         var glossy = PhysicallyBasedMaterial()
         glossy.baseColor = .init(tint: color)
@@ -182,7 +263,7 @@ final class HubScene {
             glossy.blending = .transparent(opacity: .init(floatLiteral: opacity))
         }
         let letters = ModelEntity(mesh: mesh, materials: [glossy])
-        letters.position = [centerX, 0, 0]
+        letters.position = [centerX, centerY, 0]
         group.addChild(letters)
         return group
     }
