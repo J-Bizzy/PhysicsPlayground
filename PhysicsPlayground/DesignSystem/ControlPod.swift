@@ -36,7 +36,7 @@ struct ControlPod<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 9) {
                     Image(systemName: icon)
@@ -60,7 +60,7 @@ struct ControlPod<Content: View>: View {
             }
             content
         }
-        .padding(16)
+        .padding(14)
         .frame(width: width)
         // The whole pod speaks in its accent: house buttons via podAccent,
         // and sliders / toggles / segmented pickers via the SwiftUI tint.

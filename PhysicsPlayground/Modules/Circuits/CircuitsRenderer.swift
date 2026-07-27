@@ -176,7 +176,7 @@ final class CircuitsRenderer {
         glass.roughness = 0.15
         glass.blending = .transparent(opacity: .init(floatLiteral: 0.22))
         let slab = ModelEntity(
-            mesh: .generateBox(size: [slabWidth, 0.015, 0.3], cornerRadius: 0.008),
+            mesh: .generateBox(size: [slabWidth, 0.015, 0.38], cornerRadius: 0.008),
             materials: [glass]
         )
         tray.addChild(slab)
@@ -185,7 +185,20 @@ final class CircuitsRenderer {
             let column = index % columns
             let row = index / columns
             let x = Float(column) * 0.15 - Float(columns - 1) * 0.075
-            let z: Float = row == 0 ? -0.06 : 0.06
+            // ROW SEPARATION IS A SIGHT-LINE PROBLEM, not a taste one.
+            //
+            // The tray sits at 1.02 m and is read from about eye height
+            // a metre away, so the line of sight comes down at roughly
+            // 29°. A part stands 4 cm proud of the tray, which means it
+            // hides anything within 4/tan(29°) ≈ 7 cm behind it. The rows
+            // were 12 cm apart with the labels 5 cm forward of their own
+            // parts, leaving 6.8 cm — just inside that shadow, so the
+            // front row stood squarely on the back row's names and the
+            // tray read "attery", "esistor", "Ind…". At ±8.5 cm the back
+            // labels clear the front parts by 11.8 cm. ±10 cm, in the
+            // end: the motor is a fat cylinder rather than the 4 cm the
+            // arithmetic assumed, and it was still standing on "Source".
+            let z: Float = row == 0 ? -0.10 : 0.10
             let template = makeBody(for: CircuitsModel.Component(
                 id: UUID(), kind: kind, position: .zero, value: kind.defaultValue))
             template.scale = SIMD3(repeating: 0.8)

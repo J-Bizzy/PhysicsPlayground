@@ -19,8 +19,12 @@ struct ChargesPod: View {
         @Bindable var model = model
         let hasSelection = model.selectedChargeID != nil
 
+        // Wider than the default so "Charges respond to forces" fits on
+        // ONE line. At 252 it wrapped to two, which pushed the row of
+        // destructive buttons past the bottom of the pod — they were
+        // sliced in half by the glass they were sitting on.
         ControlPod(title: "Charges", icon: "bolt.fill",
-                   tint: DesignTokens.Palette.positive) {
+                   tint: DesignTokens.Palette.positive, width: 330) {
             HStack(spacing: 8) {
                 Button {
                     model.addCharge(positive: true)
@@ -40,30 +44,47 @@ struct ChargesPod: View {
                 .accessibilityLabel("Add negative charge")
             }
 
+            // Sign and magnitude on ONE row, because they are one
+            // quantity: the charge is q, and "+ 1.0 µC" is a single
+            // reading. Splitting them cost a whole extra row, and this
+            // pod had run out of room — the attachment caps its height,
+            // so the buttons at the bottom were being drawn below the
+            // glass they belong to, outside the pod entirely.
             VStack(alignment: .leading, spacing: 4) {
-                Text("Strength: \(model.selectedMagnitudeMicroCoulombs, specifier: "%.1f") µC")
-                    .font(DesignTokens.TypeScale.control.monospacedDigit())
+                HStack(spacing: 10) {
+                    Text("Strength: \(model.selectedMagnitudeMicroCoulombs, specifier: "%.1f") µC")
+                        .font(DesignTokens.TypeScale.control.monospacedDigit())
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Picker("Polarity", selection: $model.selectedIsPositive) {
+                        Text("+").tag(true)
+                        Text("−").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 96)
+                    .disabled(!hasSelection)
+                    .accessibilityLabel("Charge polarity")
+                }
                 Slider(value: $model.selectedMagnitudeMicroCoulombs, in: 0.1...5.0, step: 0.1)
                     .disabled(!hasSelection)
                     .accessibilityLabel("Charge strength")
             }
-            Picker("Polarity", selection: $model.selectedIsPositive) {
-                Text("+").tag(true)
-                Text("−").tag(false)
-            }
-            .pickerStyle(.segmented)
-            .disabled(!hasSelection)
-            .accessibilityLabel("Charge polarity")
 
-            Toggle("Charges respond to forces", isOn: $model.chargesRespond)
+            // Short label, sentence in the hint: a control's label is not
+            // the place to explain the physics.
+            Toggle("Free to move", isOn: $model.chargesRespond)
                 .font(DesignTokens.TypeScale.control)
+                .lineLimit(1)
                 .accessibilityHint("Free the charges: opposites drift together, likes push apart. Off, they stay exactly where you put them.")
 
             HStack(spacing: 8) {
                 Button(role: .destructive) {
                     model.removeSelectedCharge()
                 } label: {
-                    Image(systemName: "trash")
+                    // Named, not just a glyph. "trash" and "trash.slash"
+                    // side by side are indistinguishable at arm's length,
+                    // and one of them clears the whole room.
+                    Label("Remove", systemImage: "trash")
                         .frame(maxWidth: .infinity)
                 }
                 .disabled(!hasSelection)
@@ -71,7 +92,7 @@ struct ChargesPod: View {
                 Button(role: .destructive) {
                     model.removeAllCharges()
                 } label: {
-                    Image(systemName: "trash.slash")
+                    Label("Clear all", systemImage: "trash.slash")
                         .frame(maxWidth: .infinity)
                 }
                 .disabled(model.charges.isEmpty)

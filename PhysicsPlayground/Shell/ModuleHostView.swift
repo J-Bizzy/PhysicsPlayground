@@ -146,7 +146,14 @@ struct ModuleHostView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
-        .frame(minWidth: 560)
+        // Wide enough for the LONGEST module name.
+        //
+        // At 560 the bar ran out of room and truncated: "Circuit
+        // Workshop" arrived as "Circuit Works…", which is the module's
+        // own name, misspelled by the layout, in the largest type on
+        // screen. Five circular buttons take about 280 points before the
+        // title gets any, and "Wave Interference" needs about 200 more.
+        .frame(minWidth: 680)
         .glassBackgroundEffect(
             in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }

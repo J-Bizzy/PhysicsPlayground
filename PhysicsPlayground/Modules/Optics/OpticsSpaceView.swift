@@ -193,22 +193,34 @@ struct OpticsBenchPod: View {
     var body: some View {
         @Bindable var model = model
 
-        ControlPod(title: "Bench", icon: "camera.aperture", tint: DesignTokens.Palette.opticsAccent) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 6)], spacing: 6) {
+        // 300 wide, not the default 252. Two columns out of 252 left
+        // 107 points per button, and "Converging lens" does not fit in
+        // 107 points — so SwiftUI broke it across two lines, mid-word,
+        // as "Converg-ing lens". A hyphen inside a product's own noun is
+        // the kind of detail that makes an app feel unfinished.
+        ControlPod(title: "Bench", icon: "camera.aperture",
+                   tint: DesignTokens.Palette.opticsAccent, width: 300) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 124), spacing: 6)], spacing: 6) {
                 ForEach(OpticsModel.ElementKind.allCases, id: \.rawValue) { kind in
                     Button(kind.displayName) {
                         model.addElement(kind)
                     }
                     .buttonStyle(.podQuiet)
                     .font(DesignTokens.TypeScale.footnote)
+                    // Shrink before wrapping, and never hyphenate: a
+                    // longer element name added later must not be able
+                    // to bring the mid-word break back.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .disabled(model.elements.count >= OpticsModel.elementBudget)
                 }
             }
             Picker("Source", selection: $model.sourceMode) {
-                Text("Parallel beam").tag(OpticsModel.SourceMode.parallel)
-                Text("Point source").tag(OpticsModel.SourceMode.point)
+                Text("Parallel").tag(OpticsModel.SourceMode.parallel)
+                Text("Point").tag(OpticsModel.SourceMode.point)
             }
             .pickerStyle(.segmented)
+            .accessibilityLabel("Light source")
             if !model.insightText.isEmpty {
                 Text(model.insightText)
                     .font(DesignTokens.TypeScale.footnote)
