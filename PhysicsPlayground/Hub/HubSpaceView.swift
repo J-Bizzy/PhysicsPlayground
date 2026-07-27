@@ -26,12 +26,29 @@ struct HubSpaceView: View {
     @State private var scene = HubScene()
 
     var body: some View {
-        RealityView { content in
+        RealityView { content, attachments in
             scene.build(modules: ModuleCatalog.all(appModel: appModel))
             content.add(scene.root)
 
+            if let card = attachments.entity(for: "detail") {
+                // The reading shelf: a fixed spot under the gallery,
+                // billboarded so it always faces the reader.
+                card.position = HubScene.detailCardPosition
+                card.components.set(BillboardComponent())
+                card.isEnabled = false
+                scene.root.addChild(card)
+                scene.detailCard = card
+            }
+
             scene.subscription = content.subscribe(to: SceneEvents.Update.self) { event in
-                scene.animate(dt: event.deltaTime)
+                scene.animate(dt: event.deltaTime, lookRay: appModel.room.lookRay)
+            }
+        } attachments: {
+            Attachment(id: "detail") {
+                if let module = ModuleCatalog.all(appModel: appModel)
+                    .first(where: { $0.id == scene.focusedModuleID }) {
+                    HubDetailCard(module: module)
+                }
             }
         }
         .gesture(
@@ -62,11 +79,26 @@ final class HubScene {
         let anchor: Entity      // ring position (bobbed every frame)
         let pulser: Entity      // scale pulse on selection
         let vignette: Entity    // slowly rotating miniature
+        let namePivot: Entity   // billboarded name plate
+        let halo: Entity        // accent glow, focused only
         let basePosition: SIMD3<Float>
         /// Per-frame life beyond the shared bob and turn: the exhibit's
         /// own physics, running.
         var animate: ((Entity, Double) -> Void)?
+        /// 0 = resting in the ring, 1 = the one you are facing. Eased.
+        var focus: Float = 0
     }
+
+    /// Which exhibit the user is facing, published only when it CHANGES
+    /// so the detail card can re-render without SwiftUI seeing sixty
+    /// updates a second.
+    private(set) var focusedModuleID: String?
+    /// Where the focused exhibit is, for the detail card to hang under.
+    private(set) var focusedAnchor: Entity?
+    /// The SwiftUI reading shelf, shown while something has focus.
+    var detailCard: Entity?
+    /// Under the lower arc, clear of the hub window above it.
+    static let detailCardPosition = SIMD3<Float>(0, 0.94, -1.42)
     private var exhibits: [Exhibit] = []
     private var time = 0.0
     /// The 3-D bubble title the exhibits ring, bobbing at the centre.
@@ -74,21 +106,78 @@ final class HubScene {
 
     /// The ring encircles the title: a vertical circle in the frontal
     /// plane, a step beyond it in depth.
-    private static let ringCenter = SIMD3<Float>(0, 1.68, -2.3)
-    /// An ELLIPSE, not a circle: rooms are wider than they are tall.
-    /// A circle big enough to space nine exhibits put the top ones
-    /// through the ceiling and the bottom ones inside the sofa. Widening
-    /// it and flattening it keeps the same spacing along the ring while
-    /// staying inside the wall the user is looking at.
-    private static let ringRadiusX: Float = 1.42
-    private static let ringRadiusY: Float = 0.82
-    /// How far the ring's sides curve toward the user. A flat circle at
-    /// one depth is a poster; bowing the edges forward makes it a space
-    /// you are standing in the mouth of, and gives the side exhibits the
-    /// parallax that tells you they are objects rather than pictures.
-    private static let ringBow: Float = 0.55
-    /// The miniatures, unbottled and enlarged.
-    private static let vignetteScale: Float = 2.6
+    // MARK: Layout — two staggered arcs, not a ring
+    //
+    // The ring was a clock face of nine miniatures, and it had two
+    // problems that no amount of polish fixed. It was effectively
+    // PAINTED ON THE FAR WALL — every exhibit at one depth, so the whole
+    // menu read as a poster rather than as objects in a room. And a ring
+    // wide enough to space nine things put its left and right extremes
+    // past 50 degrees of azimuth, out at the edge of vision where you
+    // cannot see them without turning your whole head.
+    //
+    // Two shallow arcs wrapped around the user fix both. Everything sits
+    // on a cylinder at arm's-length-and-a-bit, so each exhibit genuinely
+    // faces you and the ones to the side are nearer than the ones ahead
+    // — real parallax as you move. Five above, four below, staggered so
+    // no exhibit hides another and so a gap falls dead ahead at the
+    // bottom, where the hub window lives.
+
+    /// Distance from the user to every exhibit.
+    private static let arcRadius: Float = 2.35
+    /// The two rows, as (height, azimuths in degrees). The bottom row is
+    /// offset half a step so the two rows interleave rather than
+    /// stacking into columns.
+    private static let arcRows: [(y: Float, azimuths: [Float])] = [
+        (1.86, [-30, -15, 0, 15, 30]),
+        (1.16, [-22.5, -7.5, 7.5, 22.5]),
+    ]
+
+    /// Where an exhibit sits, by its index in the catalog.
+    private static func arcPosition(_ index: Int) -> SIMD3<Float> {
+        var remaining = index
+        for row in arcRows {
+            if remaining < row.azimuths.count {
+                let azimuth = row.azimuths[remaining] * .pi / 180
+                return SIMD3(arcRadius * sin(azimuth), row.y,
+                             -arcRadius * cos(azimuth))
+            }
+            remaining -= row.azimuths.count
+        }
+        // More modules than slots: tuck extras behind the middle.
+        return SIMD3(0, arcRows[0].y, -arcRadius - 0.6)
+    }
+
+    /// The miniatures, unbottled and enlarged. They were trinkets.
+    private static let vignetteScale: Float = 1.78
+
+    // MARK: Focus
+    //
+    // Nine exhibits shouting equally is a wall of clutter with no way in.
+    // A menu in a headset can do what a menu on a screen cannot: notice
+    // which one you have TURNED TOWARD, and answer. The one you face
+    // grows, brightens, lights an accent halo and names itself in full,
+    // with a card underneath telling you what it is and how far through
+    // it you are; the other eight recede and their names drop to a
+    // whisper. Nothing moves on its own — the motion is yours.
+    //
+    // Head direction, not eye gaze: visionOS never hands an app the
+    // eyes. Turning your head at something is the honest signal, and it
+    // is the same look ray the field probes use.
+
+    /// How far off your look direction an exhibit can be and still take
+    /// focus, radians.
+    private static let focusCone: Float = 26 * .pi / 180
+    /// The focused exhibit has to be this much closer to your look
+    /// direction than the current one before focus jumps — hysteresis,
+    /// so a scanning glance doesn't strobe the ring.
+    private static let focusStickiness: Float = 0.72
+    /// Resting scale of an unfocused exhibit once ANY exhibit is
+    /// focused, and how much the focused one grows.
+    private static let unfocusedScale: Float = 0.90
+    private static let focusedScale: Float = 1.34
+    /// How far the focused exhibit steps toward the user.
+    private static let focusedApproach: Float = 0.16
 
     // MARK: Build
 
@@ -96,29 +185,16 @@ final class HubScene {
         // The 3-D bubble title sits at the centre; the exhibits ring it
         // like a clock face, starting at twelve and going clockwise.
         buildBubbleTitle()
-        let count = max(modules.count, 1)
         for (index, module) in modules.enumerated() {
-            let angle = Float.pi / 2 - 2 * .pi * Float(index) / Float(count)
-            let x = Self.ringRadiusX * cos(angle)
-            let y = Self.ringRadiusY * sin(angle)
-            // Bow: the further round the sides an exhibit sits, the
-            // further forward it comes.
-            let basePosition = Self.ringCenter + SIMD3(
-                x, y, Self.ringBow * (x * x) / (Self.ringRadiusX * Self.ringRadiusX))
-            buildExhibit(for: module, at: basePosition)
+            buildExhibit(for: module, at: Self.arcPosition(index))
         }
     }
 
     // MARK: The 3-D bubble title
 
-    /// Where the title sits relative to the ring's centre.
-    ///
-    /// It used to sit 34 cm up, which put it against the top exhibit and
-    /// left a hole in the middle of the composition. With the ring now a
-    /// flatter ellipse and the hub window no longer carrying a catalog
-    /// grid, the name can come down to where a name in the middle of a
-    /// ring belongs.
-    private static let titleOffset = SIMD3<Float>(0, 0.27, 0.12)
+    /// The title crowns the arcs rather than being ringed by them —
+    /// there is no longer a middle for it to sit in.
+    private static let titlePosition = SIMD3<Float>(0, 2.32, -2.05)
 
     /// Warm ivory, opaque, self-lit enough to hold its own against
     /// daylight. (It was a frosted grey at 80% opacity, which over a
@@ -130,7 +206,7 @@ final class HubScene {
     private static let titleRimColor = UIColor(red: 1.0, green: 0.88, blue: 0.70, alpha: 1)
     /// The lockup's overall width, metres. Both lines are scaled to
     /// exactly this, which is what makes it read as a designed mark.
-    private static let titleWidth: Float = 0.86
+    private static let titleWidth: Float = 0.72
     /// Gap between the two lines, as a fraction of a line's cap height.
     private static let titleLeading: Float = 0.30
 
@@ -150,7 +226,7 @@ final class HubScene {
     /// block is centred on its anchor — the flush-both-sides two-line
     /// lockup that every good wordmark uses.
     private func buildBubbleTitle() {
-        titleAnchor.position = Self.ringCenter + Self.titleOffset
+        titleAnchor.position = Self.titlePosition
 
         let lines = ["Physics", "Playground"]
         // Build at a reference size, then scale each to the common width.
@@ -297,26 +373,110 @@ final class HubScene {
         let pulser = Entity()
         anchor.addChild(pulser)
 
+        // The card the exhibit stands on, and the accent rim that lights
+        // when it is the one you are facing.
+        let (card, rim) = Self.exhibitCard(accent: UIColor(module.accent))
+        rim.components.set(OpacityComponent(opacity: 0))
+        pulser.addChild(card)
+
         // The living miniature — big enough to read from across the room.
         let vignette = Self.vignette(for: module)
         vignette.scale = SIMD3(repeating: Self.vignetteScale)
+        // Standing proud of the card, so it reads as an object in front
+        // of a frame rather than as a picture printed on one.
+        vignette.position = [0, 0.028, 0.02]
         pulser.addChild(vignette)
 
         // The floating name beneath, always facing the user — the same
         // 3-D bubble type as the title, tinted in the module's accent.
         let name = Self.bubbleText(
-            module.title, size: 0.042, color: UIColor(module.accent),
-            emissive: 0.35)
+            module.title, size: 0.028, color: UIColor(module.accent),
+            emissive: 0.7)
         let namePivot = Entity()
-        namePivot.position = [0, -0.28, 0]
+        // On the card's own face, at its foot — not floating over the
+        // wallpaper, which is where nine labels used to end up.
+        namePivot.position = [0, -Self.cardSize.y / 2 + 0.045, -0.088]
         namePivot.components.set(BillboardComponent())
         namePivot.addChild(name)
         pulser.addChild(namePivot)
 
         exhibits.append(Exhibit(
             moduleID: module.id, anchor: anchor, pulser: pulser,
-            vignette: vignette, basePosition: basePosition,
+            vignette: vignette, namePivot: namePivot, halo: rim,
+            basePosition: basePosition,
             animate: Self.liveAnimation(for: module.id)))
+    }
+
+    /// The card an exhibit stands on.
+    ///
+    /// Nine bare miniatures scattered across a living room read as
+    /// trinkets sprinkled over the furniture: no edges, no grouping,
+    /// labels landing on picture frames and lampshades. A card gives
+    /// each one a frame to be seen against, puts its name on a surface
+    /// instead of on the wallpaper behind it, and makes nine of them
+    /// read as one gallery.
+    ///
+    /// This is NOT the glass shell each exhibit used to wear — that
+    /// wrapped the miniature in chrome and was rightly cut. The card
+    /// sits BEHIND: smoked glass, a thin accent edge, and the miniature
+    /// floating proud of it. At rest it is nearly invisible; the accent
+    /// edge lights only for the exhibit you are facing.
+    private static let cardSize = SIMD2<Float>(0.30, 0.38)
+
+    private static func exhibitCard(accent: UIColor) -> (card: Entity, rim: Entity) {
+        let card = Entity()
+
+        // A whisper of the module's colour mixed into near-black, so the
+        // nine cards read as a family with nine identities rather than
+        // as nine identical grey slabs.
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        accent.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        let mix: CGFloat = 0.16
+        var glass = PhysicallyBasedMaterial()
+        glass.baseColor = .init(tint: UIColor(red: 0.05 + red * mix,
+                                              green: 0.05 + green * mix,
+                                              blue: 0.06 + blue * mix, alpha: 1))
+        glass.roughness = 0.28
+        glass.metallic = 0.0
+        glass.clearcoat = .init(floatLiteral: 0.7)
+        glass.blending = .transparent(opacity: .init(floatLiteral: 0.46))
+        let plate = ModelEntity(
+            mesh: .generateBox(size: [cardSize.x, cardSize.y, 0.008],
+                               cornerRadius: 0.032),
+            materials: [glass])
+        plate.position.z = -0.10
+        card.addChild(plate)
+
+        // The accent edge, built as four BARS rather than as a bigger
+        // plate behind. A plate shows straight through the smoked glass
+        // and floods the whole card with colour — which is what it did.
+        // A frame can only ever be a frame.
+        var edgeMaterial = UnlitMaterial(color: accent)
+        edgeMaterial.blending = .transparent(opacity: 0.95)
+        let rim = Entity()
+        let thickness: Float = 0.007
+        let halfX = cardSize.x / 2 + thickness / 2
+        let halfY = cardSize.y / 2 + thickness / 2
+        for (size, offset) in [
+            (SIMD3<Float>(cardSize.x + thickness * 2, thickness, 0.006),
+             SIMD3<Float>(0, halfY, 0)),
+            (SIMD3<Float>(cardSize.x + thickness * 2, thickness, 0.006),
+             SIMD3<Float>(0, -halfY, 0)),
+            (SIMD3<Float>(thickness, cardSize.y, 0.006), SIMD3<Float>(halfX, 0, 0)),
+            (SIMD3<Float>(thickness, cardSize.y, 0.006), SIMD3<Float>(-halfX, 0, 0)),
+        ] {
+            let bar = ModelEntity(
+                mesh: .generateBox(size: size, cornerRadius: thickness / 2),
+                materials: [edgeMaterial])
+            bar.position = offset
+            rim.addChild(bar)
+        }
+        rim.position.z = -0.099
+        card.addChild(rim)
+
+        // Faces the user wherever they stand.
+        card.components.set(BillboardComponent())
+        return (card, rim)
     }
 
     // MARK: Vignettes (miniatures of each experience)
@@ -677,13 +837,33 @@ final class HubScene {
 
     // MARK: Idle animation & interaction
 
-    /// The exhibits hold their places on the ring — only the gentle bob
-    /// and each miniature's slow turn keep them alive.
-    func animate(dt: Double) {
+    /// The exhibits hold their places on the ring; the life in them is
+    /// their own physics running, plus a gentle bob — and the ANSWER to
+    /// where you are looking.
+    func animate(dt: Double, lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?) {
         time += dt
+        updateFocus(lookRay: lookRay, dt: dt)
+
         for (index, exhibit) in exhibits.enumerated() {
             let bob = 0.012 * Float(sin(time * 0.8 + Double(index) * 2.1))
-            exhibit.anchor.position = exhibit.basePosition + SIMD3(0, bob, 0)
+            let focus = exhibit.focus
+            // The focused exhibit steps toward the user as it grows —
+            // the parallax is what sells it as an object rather than a
+            // picture that got bigger.
+            let approach = Self.focusedApproach * focus
+            exhibit.anchor.position = exhibit.basePosition
+                + SIMD3(0, bob, approach)
+
+            let resting = hasLookRay ? Self.unfocusedScale : 1
+            let scale = resting + (Self.focusedScale - resting) * focus
+            exhibit.pulser.scale = SIMD3(repeating: scale)
+
+            exhibit.halo.components.set(OpacityComponent(opacity: focus))
+            // Unfocused names drop to a whisper so the ring stops being
+            // nine labels competing over the furniture.
+            let nameOpacity = hasLookRay ? (0.58 + 0.42 * focus) : 1
+            exhibit.namePivot.components.set(OpacityComponent(opacity: nameOpacity))
+
             exhibit.vignette.orientation = simd_quatf(
                 angle: Float(time * 0.3 + Double(index)), axis: [0, 1, 0])
             // …and whatever this particular exhibit does for a living.
@@ -691,9 +871,77 @@ final class HubScene {
         }
         // The title floats and breathes, like a balloon on a string.
         let bob = 0.02 * Float(sin(time * 0.6))
-        titleAnchor.position = Self.ringCenter + Self.titleOffset + SIMD3(0, bob, 0)
+        titleAnchor.position = Self.titlePosition + SIMD3(0, bob, 0)
         let breathe = 1 + 0.015 * Float(sin(time * 0.9))
         titleAnchor.scale = SIMD3(repeating: breathe)
+    }
+
+    private var hasLookRay = false
+
+    /// Picks the exhibit nearest the user's look direction and eases
+    /// every exhibit's focus value toward its target.
+    private func updateFocus(lookRay: (origin: SIMD3<Double>,
+                                       direction: SIMD3<Double>)?, dt: Double) {
+        var winner: String?
+        #if DEBUG
+        // `-hubFocus <module id>` pins the focus so the focused state can
+        // be screenshot-checked from the CLI: the simulator has no world
+        // tracking, so there is no look ray to aim with.
+        if let forced = UserDefaults.standard.string(forKey: "hubFocus"),
+           exhibits.contains(where: { $0.moduleID == forced }) {
+            hasLookRay = true
+            applyFocus(winner: forced, dt: dt)
+            return
+        }
+        #endif
+        if let lookRay {
+            hasLookRay = true
+            let origin = SIMD3<Float>(lookRay.origin)
+            let forward = simd_normalize(SIMD3<Float>(lookRay.direction))
+            var best = Self.focusCone
+            for exhibit in exhibits {
+                let toExhibit = exhibit.basePosition - origin
+                let distance = simd_length(toExhibit)
+                guard distance > 1e-4 else { continue }
+                let cosine = simd_dot(toExhibit / distance, forward)
+                let angle = acos(min(max(cosine, -1), 1))
+                // Hysteresis: the exhibit already in focus keeps it
+                // unless another is clearly closer to where you look.
+                let bias: Float = exhibit.moduleID == focusedModuleID
+                    ? Self.focusStickiness : 1
+                if angle * bias < best {
+                    best = angle * bias
+                    winner = exhibit.moduleID
+                }
+            }
+        } else {
+            hasLookRay = false
+        }
+
+        applyFocus(winner: winner, dt: dt)
+    }
+
+    private func applyFocus(winner: String?, dt: Double) {
+        // Publish only on change — SwiftUI must not see this per frame.
+        if winner != focusedModuleID {
+            focusedModuleID = winner
+            let anchor = exhibits.first { $0.moduleID == winner }?.anchor
+            focusedAnchor = anchor
+            // Move the card to the new exhibit rather than building one
+            // per exhibit: only ever one is readable at a time.
+            // The card does NOT chase the focused exhibit. A panel that
+            // jumps between nine positions is something you have to hunt
+            // for every time; a fixed reading shelf under the gallery is
+            // somewhere your eyes learn once. It fades in and out
+            // instead, and the accent rim says which exhibit it is for.
+            detailCard?.isEnabled = anchor != nil
+        }
+
+        let rate = Float(min(dt * 7, 1))
+        for index in exhibits.indices {
+            let target: Float = exhibits[index].moduleID == winner ? 1 : 0
+            exhibits[index].focus += (target - exhibits[index].focus) * rate
+        }
     }
 
     /// Maps a tapped entity (target or any child) back to its module.
@@ -718,5 +966,64 @@ final class HubScene {
             duration: 0.14,
             timingFunction: .easeOut
         )
+    }
+}
+
+/// The card that appears under whichever exhibit you turn toward.
+///
+/// A menu of nine physics simulations cannot say what any of them ARE
+/// while all nine are on screen — there is no room, and nine blurbs at
+/// once is a wall of text nobody reads. Focus buys the room: one card,
+/// for the one you are looking at, with its name, what it is, and how
+/// far through its experiments you are, so choosing is informed instead
+/// of a guess from a small floating object and a coloured word.
+struct HubDetailCard: View {
+    let module: ModuleDescriptor
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        let entries = ExperimentCatalog.experiments(for: module.id, appModel: appModel)
+        let done = entries.filter {
+            appModel.experiments.completed.contains($0.experiment.id)
+        }.count
+
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 9) {
+                Image(systemName: module.icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(module.accent)
+                    .frame(width: 30, height: 30)
+                    .background(module.accent.opacity(0.18),
+                                in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                Text(module.title)
+                    .font(.title3.bold())
+                Spacer(minLength: 0)
+            }
+
+            Text(module.blurb)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(4)
+
+            HStack(spacing: 8) {
+                if !entries.isEmpty {
+                    ProgressView(value: Double(done), total: Double(entries.count))
+                        .tint(done == entries.count ? .green : module.accent)
+                        .frame(width: 96)
+                    Text("\(done)/\(entries.count) experiments")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Label("Pinch to enter", systemImage: "hand.pinch")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(module.accent)
+            }
+        }
+        .padding(16)
+        .frame(width: 380, alignment: .leading)
+        .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .transition(.opacity)
     }
 }

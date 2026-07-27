@@ -19,12 +19,14 @@ struct HubView: View {
         VStack(spacing: 16) {
             Spacer(minLength: 12)
 
-            // The name floats in 3-D as bubble letters above the exhibit
-            // ring (HubSpaceView); this window keeps only the hint and
-            // the button so it never crowds the title.
-            Text("Look at any exhibit in the ring and pinch to step inside.")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.8))
+            // The name floats in 3-D above the arcs (HubSpaceView), and
+            // the detail card under whichever exhibit you are facing now
+            // says what it is and how to enter it. So this window keeps
+            // only what neither of those covers — and stays small, since
+            // it sits in the gap the lower arc leaves dead ahead.
+            Text("Turn toward an exhibit to read it. Pinch to step inside.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
 
