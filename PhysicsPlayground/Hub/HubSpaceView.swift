@@ -191,12 +191,12 @@ final class HubScene {
     /// Degrees between neighbours inside a domain, and the widened gap
     /// where one domain hands over to the next — the pause that makes
     /// the grouping legible without a single dividing line.
-    /// ±50° total: wide enough that the grouping breathes, narrow
-    /// enough that a seated user can sweep the whole shelf without
-    /// turning their shoulders. The first cut spanned ±58° and both edge
-    /// domains fell off the sides of the view.
-    private static let intraGap: Float = 11
-    private static let domainGap: Float = 15
+    /// Six exhibits in three domains span ±37° — the whole shelf sits
+    /// inside a comfortable head turn, with room between neighbours for
+    /// a focused exhibit to grow without crowding. (Nine modules needed
+    /// 11°/15° and still ran to ±50.)
+    private static let intraGap: Float = 13
+    private static let domainGap: Float = 18
 
     /// Azimuth (degrees) for every module in HubDomain.arcOrder, centred
     /// on zero.
@@ -273,6 +273,7 @@ final class HubScene {
         let azimuths = Self.arcAzimuths()
         var index = 0
         for domain in HubDomain.allCases {
+            guard !domain.moduleIDs.isEmpty else { continue }
             let groupAzimuths = azimuths[index ..< index + domain.moduleIDs.count]
             buildDomainHeader(domain, azimuth: groupAzimuths.reduce(0, +)
                                         / Float(groupAzimuths.count))

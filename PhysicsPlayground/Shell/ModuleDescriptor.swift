@@ -83,16 +83,19 @@ enum ModuleCatalog {
         // benches makes the comparison the point instead of hiding it —
         // and leaves every remaining entry with a reason to exist that
         // no other entry already covers.
+        // SIX modules for now. Waves, Elastic Field, and Optics are
+        // BENCHED, not deleted — their code is intact and each returns
+        // with one line here (plus its HubDomains entry). Everything
+        // else (hub arc, search, progress totals, the challenge) derives
+        // from this list, so removing the line removes the module
+        // everywhere at once.
         [
             FieldsModule.descriptor(appModel: appModel),
             KinematicsModule.descriptor(appModel: appModel),
             GravityLabModule.descriptor(appModel: appModel),
-            WavesModule.descriptor(appModel: appModel),
             WindTunnelModule.descriptor(appModel: appModel),
             CircuitsModule.descriptor(appModel: appModel),
             OscillatorsModule.descriptor(appModel: appModel),
-            ElasticFieldModule.descriptor(appModel: appModel),
-            OpticsModule.descriptor(appModel: appModel),
         ]
     }
 }

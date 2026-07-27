@@ -16,7 +16,6 @@ import SwiftUI
 /// A physics domain: a named, coloured group of modules on the hub arc.
 enum HubDomain: String, CaseIterable, Identifiable {
     case mechanics
-    case wavesOptics
     case electricity
     case fluidsGravity
 
@@ -25,7 +24,6 @@ enum HubDomain: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .mechanics: "Mechanics"
-        case .wavesOptics: "Waves & Optics"
         case .electricity: "Electricity & Magnetism"
         case .fluidsGravity: "Fluids & Gravity"
         }
@@ -34,7 +32,6 @@ enum HubDomain: String, CaseIterable, Identifiable {
     var color: Color {
         switch self {
         case .mechanics: Color(red: 1.00, green: 0.62, blue: 0.04)   // #FF9F0A
-        case .wavesOptics: Color(red: 0.39, green: 0.82, blue: 1.00) // #64D2FF
         case .electricity: Color(red: 0.19, green: 0.82, blue: 0.35) // #30D158
         case .fluidsGravity: Color(red: 0.75, green: 0.35, blue: 0.95) // #BF5AF2
         }
@@ -43,8 +40,7 @@ enum HubDomain: String, CaseIterable, Identifiable {
     /// The modules in this domain, in their display order on the arc.
     var moduleIDs: [String] {
         switch self {
-        case .mechanics: ["kinematics", "pendulums", "elasticfield"]
-        case .wavesOptics: ["waves", "optics"]
+        case .mechanics: ["kinematics", "pendulums"]
         case .electricity: ["electrostatics", "circuits"]
         case .fluidsGravity: ["windtunnel", "gravitylab"]
         }
@@ -65,9 +61,6 @@ enum HubDomain: String, CaseIterable, Identifiable {
         switch moduleID {
         case "kinematics": "Fire projectiles and bend their arcs with gravity and drag"
         case "pendulums": "Race pendulums against springs to find what sets the beat"
-        case "elasticfield": "Drum a soft membrane and shake it into its resonant modes"
-        case "waves": "Two ripple sources, one room of interference you can walk through"
-        case "optics": "Bend light through lenses until the thin-lens equation draws itself"
         case "electrostatics": "Place charges and magnets, then walk through the field they make"
         case "circuits": "Wire real parts and watch the electrons do the work"
         case "windtunnel": "Raise a wind indoors and watch the flow find its way around"

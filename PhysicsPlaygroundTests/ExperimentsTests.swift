@@ -66,6 +66,9 @@ final class ExperimentsTests: XCTestCase {
             XCTAssertFalse(entries.isEmpty,
                            "\(module.id) should offer at least one experiment")
         }
-        XCTAssertGreaterThanOrEqual(ExperimentCatalog.total(appModel: appModel), 20)
+        // The floor tracks the BENCHED catalog: six modules offer 18
+        // experiments (Waves, Elastic Field, and Optics are out of the
+        // catalog for now; restoring them raises this back past 20).
+        XCTAssertGreaterThanOrEqual(ExperimentCatalog.total(appModel: appModel), 15)
     }
 }
