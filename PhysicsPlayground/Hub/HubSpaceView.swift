@@ -82,9 +82,13 @@ final class HubScene {
         let namePivot: Entity   // billboarded name plate
         let halo: Entity        // accent glow, focused only
         let basePosition: SIMD3<Float>
-        /// Per-frame life beyond the shared bob and turn: the exhibit's
-        /// own physics, running.
-        var animate: ((Entity, Double) -> Void)?
+        /// The animation the miniature was built with — captured
+        /// alongside its own geometry, so a model and its motion cannot
+        /// drift apart. They did: the old table matched children by
+        /// NAME, and those names only existed in the procedural
+        /// fallbacks, so every module that loaded an asset instead
+        /// silently never animated at all.
+        let animate: (Double) -> Void
         /// 0 = resting in the ring, 1 = the one you are facing. Eased.
         var focus: Float = 0
     }
@@ -379,8 +383,9 @@ final class HubScene {
         rim.components.set(OpacityComponent(opacity: 0))
         pulser.addChild(card)
 
-        // The living miniature — big enough to read from across the room.
-        let vignette = Self.vignette(for: module)
+        // The living miniature, and the motion it was authored with.
+        let built = HubVignettes.make(for: module.id)
+        let vignette = built.entity
         vignette.scale = SIMD3(repeating: Self.vignetteScale)
         // Standing proud of the card, so it reads as an object in front
         // of a frame rather than as a picture printed on one.
@@ -403,8 +408,47 @@ final class HubScene {
         exhibits.append(Exhibit(
             moduleID: module.id, anchor: anchor, pulser: pulser,
             vignette: vignette, namePivot: namePivot, halo: rim,
-            basePosition: basePosition,
-            animate: Self.liveAnimation(for: module.id)))
+            basePosition: basePosition, animate: built.animate))
+    }
+
+    /// The card face: the module's accent at the top, guttering to near
+    /// black at the bottom. Baked once per accent into a tall thin
+    /// texture — no shader graph, and no per-frame work.
+    private static var gradientCache: [String: TextureResource] = [:]
+
+    private static func cardGradient(accent: UIColor) -> TextureResource? {
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        accent.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        let key = String(format: "%.3f-%.3f-%.3f", red, green, blue)
+        if let cached = gradientCache[key] { return cached }
+
+        let height = 128, width = 4
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        for row in 0..<height {
+            // v = 0 at the card's TOP in image space.
+            let v = Double(row) / Double(height - 1)
+            let fade = pow(1 - v, 1.7)
+            let tint = 0.10 + 0.45 * fade
+            for column in 0..<width {
+                let index = (row * width + column) * 4
+                bytes[index + 0] = UInt8(max(0, min(255, (0.035 + Double(red) * tint) * 255)))
+                bytes[index + 1] = UInt8(max(0, min(255, (0.035 + Double(green) * tint) * 255)))
+                bytes[index + 2] = UInt8(max(0, min(255, (0.045 + Double(blue) * tint) * 255)))
+                bytes[index + 3] = 255
+            }
+        }
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData),
+              let image = CGImage(
+                width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+                bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: true,
+                intent: .defaultIntent),
+              let texture = try? TextureResource(
+                image: image, options: .init(semantic: .color, mipmapsMode: .none))
+        else { return nil }
+        gradientCache[key] = texture
+        return texture
     }
 
     /// The card an exhibit stands on.
@@ -426,35 +470,53 @@ final class HubScene {
     private static func exhibitCard(accent: UIColor) -> (card: Entity, rim: Entity) {
         let card = Entity()
 
-        // A whisper of the module's colour mixed into near-black, so the
-        // nine cards read as a family with nine identities rather than
-        // as nine identical grey slabs.
-        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
-        accent.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        let mix: CGFloat = 0.16
-        var glass = PhysicallyBasedMaterial()
-        glass.baseColor = .init(tint: UIColor(red: 0.05 + red * mix,
-                                              green: 0.05 + green * mix,
-                                              blue: 0.06 + blue * mix, alpha: 1))
-        glass.roughness = 0.28
-        glass.metallic = 0.0
-        glass.clearcoat = .init(floatLiteral: 0.7)
-        glass.blending = .transparent(opacity: .init(floatLiteral: 0.46))
+        // The face is a GRADIENT, not a flat pane: the module's own
+        // colour pooled behind the miniature at the top, guttering to
+        // near black at the foot where the name has to be read. A flat
+        // tint gave nine near-identical slabs; a graded one gives each
+        // card a light source and somewhere dark to put type.
+        var face = UnlitMaterial(color: UIColor(white: 0.06, alpha: 1))
+        if let texture = cardGradient(accent: accent) {
+            face.color = .init(tint: .white, texture: .init(texture))
+        }
+        face.blending = .transparent(opacity: 0.66)
         let plate = ModelEntity(
-            mesh: .generateBox(size: [cardSize.x, cardSize.y, 0.008],
-                               cornerRadius: 0.032),
-            materials: [glass])
+            mesh: .generateBox(size: [cardSize.x, cardSize.y, 0.006],
+                               cornerRadius: 0.038),
+            materials: [face])
         plate.position.z = -0.10
         card.addChild(plate)
 
+        // A lit hairline along the TOP edge only — the one detail that
+        // makes a slab read as a piece of glass catching a light instead
+        // of a rectangle of paint.
+        var edgeLight = UnlitMaterial(color: accent)
+        edgeLight.blending = .transparent(opacity: 0.6)
+        let topEdge = ModelEntity(
+            mesh: .generateBox(size: [cardSize.x * 0.80, 0.0022, 0.004],
+                               cornerRadius: 0.0011),
+            materials: [edgeLight])
+        topEdge.position = [0, cardSize.y / 2 - 0.011, -0.096]
+        card.addChild(topEdge)
+
+        // A hairline rule above the name, so the caption reads as a
+        // caption rather than as text floating on a panel.
+        var ruleMaterial = UnlitMaterial(color: accent)
+        ruleMaterial.blending = .transparent(opacity: 0.3)
+        let rule = ModelEntity(
+            mesh: .generateBox(size: [cardSize.x * 0.60, 0.0012, 0.003]),
+            materials: [ruleMaterial])
+        rule.position = [0, -cardSize.y / 2 + 0.072, -0.096]
+        card.addChild(rule)
+
         // The accent edge, built as four BARS rather than as a bigger
-        // plate behind. A plate shows straight through the smoked glass
-        // and floods the whole card with colour — which is what it did.
-        // A frame can only ever be a frame.
+        // plate behind. A plate shows straight through the glass and
+        // floods the whole card with colour — which is what it did. A
+        // frame can only ever be a frame.
         var edgeMaterial = UnlitMaterial(color: accent)
         edgeMaterial.blending = .transparent(opacity: 0.95)
         let rim = Entity()
-        let thickness: Float = 0.007
+        let thickness: Float = 0.0055
         let halfX = cardSize.x / 2 + thickness / 2
         let halfY = cardSize.y / 2 + thickness / 2
         for (size, offset) in [
@@ -477,362 +539,6 @@ final class HubScene {
         // Faces the user wherever they stand.
         card.components.set(BillboardComponent())
         return (card, rim)
-    }
-
-    // MARK: Vignettes (miniatures of each experience)
-
-    /// Blender-authored exhibit models. Each is auto-normalized from its
-    /// real bounds — centered on its middle and sized to a shared
-    /// footprint — so every exhibit sits dead-center on its ring slot.
-    private static let vignetteAssets: [String: String] = [
-        "electrostatics": "HubElectric",
-        "kinematics": "HubProjectile",
-        "gravitylab": "HubGravity",
-        "waves": "HubWaves",
-        "windtunnel": "HubWind",
-        "circuits": "HubCircuit",
-        "pendulums": "HubPendulums",
-        "springs": "HubSprings",
-        "optics": "HubOptics",
-    ]
-    /// Apparent exhibit size before the shared vignette scale.
-    private static let vignetteTargetSize: Float = 0.13
-
-    private static func vignette(for module: ModuleDescriptor) -> Entity {
-        let vignette = Entity()
-        // A detailed model when one exists; procedural sketches as the
-        // always-working fallback.
-        if let asset = vignetteAssets[module.id],
-           let loaded = try? Entity.load(named: asset) {
-            let bounds = loaded.visualBounds(relativeTo: nil)
-            let extents = bounds.extents
-            let largest = max(extents.x, max(extents.y, extents.z), 1e-4)
-            let scale = Self.vignetteTargetSize / largest
-            loaded.scale = SIMD3(repeating: scale)
-            loaded.position = -bounds.center * scale
-            vignette.addChild(loaded)
-            return vignette
-        }
-        switch module.id {
-        case "electrostatics": buildFieldVignette(in: vignette)
-        case "kinematics": buildProjectileVignette(in: vignette)
-        case "gravitylab": buildOrbitVignette(in: vignette)
-        case "waves": buildWavesVignette(in: vignette)
-        case "windtunnel": buildWindTunnelVignette(in: vignette)
-        case "circuits": buildCircuitsVignette(in: vignette)
-        case "elasticfield": buildElasticVignette(in: vignette)
-        case "magnetism": buildMagnetismVignette(in: vignette)
-        default:
-            // A new module gets a simple accent sphere until it has art.
-            vignette.addChild(ModelEntity(
-                mesh: .generateSphere(radius: 0.035),
-                materials: [SimpleMaterial(color: UIColor(module.accent),
-                                           roughness: 0.4, isMetallic: false)]))
-        }
-        return vignette
-    }
-
-    /// A dipole: red and blue charges joined by two arcing field lines.
-    private static func buildFieldVignette(in parent: Entity) {
-        let positive = ModelEntity(
-            mesh: .generateSphere(radius: 0.026),
-            materials: [SimpleMaterial(color: DesignTokens.Palette.positiveUI,
-                                       roughness: 0.35, isMetallic: false)])
-        positive.name = "positive"
-        positive.position = [-0.045, 0, 0]
-        let negative = ModelEntity(
-            mesh: .generateSphere(radius: 0.026),
-            materials: [SimpleMaterial(color: DesignTokens.Palette.negativeUI,
-                                       roughness: 0.35, isMetallic: false)])
-        negative.name = "negative"
-        negative.position = [0.045, 0, 0]
-        parent.addChild(positive)
-        parent.addChild(negative)
-
-        var lineMaterial = UnlitMaterial(color: DesignTokens.Palette.fieldLineUI)
-        lineMaterial.blending = .transparent(opacity: 0.85)
-        for flip: Float in [1, -1] {
-            let arc: [SIMD3<Float>] = (0...20).map { step in
-                let theta = Float(step) / 20 * .pi
-                return SIMD3(-0.045 * cos(theta), flip * 0.042 * sin(theta), 0)
-            }
-            if let mesh = TubeMesh.tube(lines: [arc], radius: 0.0022) {
-                parent.addChild(ModelEntity(mesh: mesh, materials: [lineMaterial]))
-            }
-        }
-    }
-
-    /// A ball frozen mid-flight over its strobe-dot parabola.
-    private static func buildProjectileVignette(in parent: Entity) {
-        let ball = ModelEntity(
-            mesh: .generateSphere(radius: 0.02),
-            materials: [SimpleMaterial(color: DesignTokens.Palette.projectileUI,
-                                       roughness: 0.5, isMetallic: false)])
-        ball.position = [0.014, 0.037, 0]
-        parent.addChild(ball)
-
-        var dotMaterial = UnlitMaterial(color: DesignTokens.Palette.projectileUI)
-        dotMaterial.blending = .transparent(opacity: 0.75)
-        let dotMesh = MeshResource.generateSphere(radius: 0.0045)
-        for step in 0...7 {
-            let t = Float(step) / 7
-            let x = -0.055 + t * 0.11
-            // A parabola through the ball's position, peak just left of it.
-            let y = 0.04 - 0.16 * (x - 0.01) * (x - 0.01)
-            let dot = ModelEntity(mesh: dotMesh, materials: [dotMaterial])
-            dot.position = [x, y - 0.01, 0]
-            parent.addChild(dot)
-        }
-    }
-
-    /// A tiny lit loop: battery, wire, glowing bulb.
-    private static func buildCircuitsVignette(in parent: Entity) {
-        let battery = ModelEntity(
-            mesh: .generateCylinder(height: 0.036, radius: 0.009),
-            materials: [SimpleMaterial(color: UIColor(red: 0.35, green: 0.45, blue: 0.35, alpha: 1),
-                                       roughness: 0.3, isMetallic: true)])
-        battery.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-        battery.position = [-0.035, 0, 0]
-        parent.addChild(battery)
-
-        var glow = UnlitMaterial(color: UIColor(red: 1, green: 0.85, blue: 0.4, alpha: 1))
-        glow.blending = .transparent(opacity: 0.85)
-        let bulb = ModelEntity(mesh: .generateSphere(radius: 0.014), materials: [glow])
-        bulb.name = "bulb"
-        bulb.position = [0.035, 0, 0]
-        parent.addChild(bulb)
-
-        let wireMaterial = UnlitMaterial(color: DesignTokens.Palette.copperUI)
-        for flip: Float in [1, -1] {
-            let arc: [SIMD3<Float>] = (0...20).map { step in
-                let theta = Float(step) / 20 * .pi
-                return SIMD3(-0.035 * cos(theta), flip * 0.03 * sin(theta), 0)
-            }
-            if let mesh = TubeMesh.tube(lines: [arc], radius: 0.0018) {
-                parent.addChild(ModelEntity(mesh: mesh, materials: [wireMaterial]))
-            }
-        }
-    }
-
-    /// A cylinder with streamlines parting around it.
-    private static func buildWindTunnelVignette(in parent: Entity) {
-        let cylinder = ModelEntity(
-            mesh: .generateCylinder(height: 0.05, radius: 0.016),
-            materials: [SimpleMaterial(color: DesignTokens.Palette.launcherUI,
-                                       roughness: 0.35, isMetallic: true)])
-        parent.addChild(cylinder)
-
-        var lineMaterial = UnlitMaterial(color: DesignTokens.Palette.streamlineUI)
-        lineMaterial.blending = .transparent(opacity: 0.7)
-        for offset: Float in [-0.034, -0.012, 0.012, 0.034] {
-            let line: [SIMD3<Float>] = (0...24).map { step in
-                let x = -0.055 + 0.11 * Float(step) / 24
-                // Bend away from the cylinder, strongest near x = 0.
-                let bulge = 0.014 * exp(-x * x / 0.0012) * (offset > 0 ? 1 : -1)
-                    / max(abs(offset) / 0.02, 1)
-                return SIMD3(x, 0, offset + bulge)
-            }
-            if let mesh = TubeMesh.tube(lines: [line], radius: 0.0013) {
-                parent.addChild(ModelEntity(mesh: mesh, materials: [lineMaterial]))
-            }
-        }
-    }
-
-    /// Two source pucks with interleaving ripple rings.
-    /// A little rippled membrane: a grid of tiles at a (2,1) standing-
-    /// mode height, tinted warm on the crest and cool in the trough.
-    private static func buildElasticVignette(in parent: Entity) {
-        let side = 9
-        let span: Float = 0.11
-        let step = span / Float(side - 1)
-        let tile = MeshResource.generateBox(size: [step * 0.92, 0.006, step * 0.92])
-        for j in 0..<side {
-            for i in 0..<side {
-                let u = Float(i) / Float(side - 1)
-                let v = Float(j) / Float(side - 1)
-                let h = 0.03 * sin(2 * .pi * u) * sin(.pi * v)   // (2,1) mode
-                let warmth = (h / 0.03 + 1) / 2                   // 0 trough … 1 crest
-                let color = UIColor(
-                    red: CGFloat(0.15 + 0.85 * warmth),
-                    green: CGFloat(0.75 - 0.35 * abs(warmth - 0.5) * 2),
-                    blue: CGFloat(0.9 - 0.6 * warmth), alpha: 1)
-                var material = UnlitMaterial(color: color)
-                material.blending = .transparent(opacity: 0.92)
-                let cell = ModelEntity(mesh: tile, materials: [material])
-                cell.name = "cell\(h)"
-                cell.position = SIMD3(-span / 2 + Float(i) * step, h,
-                                      -span / 2 + Float(j) * step)
-                parent.addChild(cell)
-            }
-        }
-    }
-
-    private static func buildWavesVignette(in parent: Entity) {
-        var ringMaterial = UnlitMaterial(color: DesignTokens.Palette.waveSourceUI)
-        ringMaterial.blending = .transparent(opacity: 0.55)
-
-        for (center, radii): (SIMD3<Float>, [Float]) in [
-            (SIMD3(-0.035, -0.01, 0), [0.02, 0.038]),
-            (SIMD3(0.035, -0.01, 0), [0.02, 0.038]),
-        ] {
-            let puck = ModelEntity(
-                mesh: .generateCylinder(height: 0.008, radius: 0.011),
-                materials: [UnlitMaterial(color: DesignTokens.Palette.waveSourceUI)])
-            puck.position = center
-            parent.addChild(puck)
-
-            for radius in radii {
-                let circle: [SIMD3<Float>] = (0...28).map { step in
-                    let theta = 2 * Float.pi * Float(step) / 28
-                    return center + SIMD3(radius * cos(theta), 0, radius * sin(theta))
-                }
-                if let mesh = TubeMesh.tube(lines: [circle], radius: 0.0014) {
-                    parent.addChild(ModelEntity(mesh: mesh, materials: [ringMaterial]))
-                }
-            }
-        }
-    }
-
-    /// A little bar magnet (red N over blue S) with two field-line loops
-    /// arcing from pole to pole.
-    private static func buildMagnetismVignette(in parent: Entity) {
-        let half: Float = 0.032
-        let w: Float = 0.02
-        let north = ModelEntity(
-            mesh: .generateBox(size: [w, half, w], cornerRadius: 0.004),
-            materials: [SimpleMaterial(color: DesignTokens.Palette.positiveUI,
-                                       roughness: 0.35, isMetallic: false)])
-        north.position = [0, half / 2, 0]
-        let south = ModelEntity(
-            mesh: .generateBox(size: [w, half, w], cornerRadius: 0.004),
-            materials: [SimpleMaterial(color: DesignTokens.Palette.negativeUI,
-                                       roughness: 0.35, isMetallic: false)])
-        south.position = [0, -half / 2, 0]
-        parent.addChild(north)
-        parent.addChild(south)
-
-        var lineMaterial = UnlitMaterial(color: MagnetismRenderer.lineColor)
-        lineMaterial.blending = .transparent(opacity: 0.85)
-        for flip: Float in [1, -1] {
-            let arc: [SIMD3<Float>] = (0...24).map { step in
-                let theta = Float(step) / 24 * .pi
-                return SIMD3(flip * 0.058 * sin(theta), half * cos(theta), 0)
-            }
-            if let mesh = TubeMesh.tube(lines: [arc], radius: 0.0016) {
-                parent.addChild(ModelEntity(mesh: mesh, materials: [lineMaterial]))
-            }
-        }
-    }
-
-    /// A tiny sun, an orbit ring, and a planet parked on it.
-    private static func buildOrbitVignette(in parent: Entity) {
-        let sun = ModelEntity(
-            mesh: .generateSphere(radius: 0.028),
-            materials: [UnlitMaterial(color: DesignTokens.Palette.celestialUI("Sun"))])
-        parent.addChild(sun)
-
-        var ringMaterial = UnlitMaterial(color: .white)
-        ringMaterial.blending = .transparent(opacity: 0.4)
-        let ring: [SIMD3<Float>] = (0...36).map { step in
-            let theta = Float(step) / 36 * 2 * .pi
-            return SIMD3(0.062 * cos(theta), 0, 0.062 * sin(theta))
-        }
-        if let mesh = TubeMesh.tube(lines: [ring], radius: 0.0016) {
-            let orbit = ModelEntity(mesh: mesh, materials: [ringMaterial])
-            orbit.name = "orbit"
-            orbit.orientation = simd_quatf(angle: 0.35, axis: [1, 0, 0])
-            parent.addChild(orbit)
-
-            let planet = ModelEntity(
-                mesh: .generateSphere(radius: 0.011),
-                materials: [SimpleMaterial(color: DesignTokens.Palette.celestialUI("Earth"),
-                                           roughness: 0.5, isMetallic: false)])
-            planet.position = SIMD3(0.062, 0, 0)
-            orbit.addChild(planet)
-        }
-    }
-
-    // MARK: Live exhibits
-    //
-    // A menu of nine physics simulations should not be nine statues that
-    // bob. Each exhibit RUNS: the pendulum swings, the ripples ripple,
-    // the orrery orbits, the fan turns. It costs a handful of transform
-    // writes per frame — the vignettes are a few dozen entities in total
-    // — and it turns the hub from a poster into the thing the app is
-    // actually about, before the user has entered anything.
-    //
-    // These are cosmetic loops, deliberately: the hub is a menu, and
-    // running nine real integrators to decorate it would be silly. Each
-    // is the honest SHAPE of its module's motion.
-
-    private static func liveAnimation(for moduleID: String) -> ((Entity, Double) -> Void)? {
-        switch moduleID {
-        case "pendulums":
-            // Two bobs swinging at different rates, drifting in and out
-            // of step — the beat the module opens on.
-            return { vignette, t in
-                for (index, child) in vignette.children.enumerated()
-                where child.name.hasPrefix("swing") {
-                    let rate = 1.6 + Double(index) * 0.22
-                    child.orientation = simd_quatf(
-                        angle: Float(0.5 * sin(t * rate)), axis: [0, 0, 1])
-                }
-            }
-        case "gravitylab":
-            // The planet goes round.
-            return { vignette, t in
-                for child in vignette.children where child.name == "orbit" {
-                    child.orientation = simd_quatf(angle: 0.35, axis: [1, 0, 0])
-                        * simd_quatf(angle: Float(t * 0.9), axis: [0, 1, 0])
-                }
-            }
-        case "waves":
-            // The rings expand and fade, over and over.
-            return { vignette, t in
-                for child in vignette.children where child.name.hasPrefix("ripple") {
-                    let phase = Double(child.name.dropFirst(6)) ?? 0
-                    let grow = Float((t * 0.6 + phase).truncatingRemainder(dividingBy: 1))
-                    child.scale = SIMD3(repeating: 0.25 + grow * 1.4)
-                    child.components.set(OpacityComponent(opacity: 1 - grow))
-                }
-            }
-        case "windtunnel":
-            return { vignette, t in
-                for child in vignette.children where child.name == "blades" {
-                    child.orientation = simd_quatf(angle: Float(t * 5), axis: [0, 0, 1])
-                }
-            }
-        case "elasticfield":
-            // The membrane breathes through its standing mode.
-            return { vignette, t in
-                let swing = Float(sin(t * 2.2))
-                for child in vignette.children where child.name.hasPrefix("cell") {
-                    let amplitude = Float(Double(child.name.dropFirst(4)) ?? 0)
-                    child.position.y = amplitude * swing
-                }
-            }
-        case "circuits":
-            // The bulb pulses as if the current were being switched.
-            return { vignette, t in
-                for child in vignette.children where child.name == "bulb" {
-                    let glow = 0.55 + 0.45 * Float(sin(t * 1.7))
-                    child.scale = SIMD3(repeating: 0.9 + glow * 0.25)
-                    child.components.set(OpacityComponent(opacity: 0.35 + glow * 0.6))
-                }
-            }
-        case "electrostatics":
-            // The dipole's field breathes — the charges ease apart and
-            // back, so the arcs visibly reorganise.
-            return { vignette, t in
-                let breath = Float(0.008 * sin(t * 1.1))
-                for child in vignette.children {
-                    if child.name == "positive" { child.position.x = -0.045 - breath }
-                    if child.name == "negative" { child.position.x = 0.045 + breath }
-                }
-            }
-        default:
-            return nil
-        }
     }
 
     // MARK: Idle animation & interaction
@@ -864,10 +570,18 @@ final class HubScene {
             let nameOpacity = hasLookRay ? (0.58 + 0.42 * focus) : 1
             exhibit.namePivot.components.set(OpacityComponent(opacity: nameOpacity))
 
+            // A gentle SWAY rather than a full turn. Spinning a
+            // miniature all the way round shows it is a 3-D object, and
+            // also swings the flat ones — the drumhead, the lens —
+            // edge-on for half of every rotation, where they vanish.
+            // Swaying through about fifty degrees shows the same depth
+            // and never hides anything. It eases to a stop on the
+            // exhibit being read, so a focused one holds still.
+            let sway = 0.44 * Float(sin(time * 0.4 + Double(index) * 1.3))
             exhibit.vignette.orientation = simd_quatf(
-                angle: Float(time * 0.3 + Double(index)), axis: [0, 1, 0])
+                angle: sway * (1 - focus * 0.75), axis: [0, 1, 0])
             // …and whatever this particular exhibit does for a living.
-            exhibit.animate?(exhibit.vignette, time)
+            exhibit.animate(time)
         }
         // The title floats and breathes, like a balloon on a string.
         let bob = 0.02 * Float(sin(time * 0.6))
