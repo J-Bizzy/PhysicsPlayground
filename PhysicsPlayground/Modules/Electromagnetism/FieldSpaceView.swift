@@ -55,6 +55,15 @@ struct FieldSpaceView: View {
                     renderer?.tick(model, room: appModel.room.bounds)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
+                    // The lab's placement in the user's room — a pure
+                    // display offset, safe because every grab in this app
+                    // moves a body by hand DISPLACEMENT, which a constant
+                    // translation leaves untouched.
+                    renderer?.root.position = appModel.labPlacement.offset
+                    // …but the control pods do NOT go with it: the user
+                    // parked them where they wanted them, and moving the
+                    // apparatus is not a request to move the controls.
+                    podsRoot.position = -appModel.labPlacement.offset
                 }
             )
 

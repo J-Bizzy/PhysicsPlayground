@@ -300,7 +300,37 @@ final class CircuitsRenderer {
     private var benchScale: Float = 1
     private static let benchPivot = SIMD3<Float>(0, 1.25, -0.85)
 
+    // MARK: The bench's hum
+
+    /// A mains hum whose loudness rides the total current the bench is
+    /// carrying, and whose pitch rises with the power it dissipates.
+    ///
+    /// A live circuit is not silent, and a circuit that has just gone
+    /// dead should not sound the same as one delivering two amps. This
+    /// is the module's one continuous voice: close the switch and the
+    /// bench comes audibly alive, short it and the hum climbs, open it
+    /// and the room goes quiet — all without looking at a readout.
+    private var hum: ToneVoice?
+
+    private func tickHum(_ model: CircuitsModel) {
+        if hum == nil { hum = ToneVoice(on: audioEmitter, range: (-58)...(-26)) }
+        guard hum?.start() == true else { return }
+        guard !model.isPaused else { hum?.mute(); return }
+
+        let current = model.components
+            .compactMap { model.readouts[$0.id]?.amps }
+            .map(abs).max() ?? 0
+        let power = model.components
+            .compactMap { model.readouts[$0.id]?.watts }
+            .map(abs).reduce(0, +)
+        // 50 Hz-ish fundamental, climbing a little as the bench works
+        // harder, so a short circuit is audibly frantic.
+        hum?.update(pitchHz: 52 + min(power, 12) * 7,
+                    loudness: Sonification.loudness(current, full: 1.5, knee: 0.55))
+    }
+
     func tick(dt: Double, model: CircuitsModel) {
+        tickHum(model)
         pendingPulsePhase += dt * 6
         let targetScale: Float = model.electronView ? 4.0 : 1.0
         if abs(benchScale - targetScale) > 1e-3 {

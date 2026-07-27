@@ -37,9 +37,25 @@ struct MagnetismSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.step(dt: event.deltaTime)
+                    // The cross-module link: whatever current the
+                    // CIRCUIT bench's inductor is carrying right now is
+                    // the current in this coil. Build a loop over there,
+                    // open its switch, and the electromagnet here dies.
+                    if model.electromagnetOn {
+                        model.setCoilCurrent(appModel.circuitsModel.inductorCurrent)
+                    }
                     renderer?.tick(model, viewer: appModel.room.headPosition)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
+                    // The lab's placement in the user's room — a pure
+                    // display offset, safe because every grab in this app
+                    // moves a body by hand DISPLACEMENT, which a constant
+                    // translation leaves untouched.
+                    renderer?.root.position = appModel.labPlacement.offset
+                    // …but the control pods do NOT go with it: the user
+                    // parked them where they wanted them, and moving the
+                    // apparatus is not a request to move the controls.
+                    podsRoot.position = -appModel.labPlacement.offset
                 }
             )
             renderer.tick(model, viewer: appModel.room.headPosition)
@@ -62,7 +78,9 @@ struct MagnetismSpaceView: View {
                         value.location3D, from: .local, to: .scene)))
                     if drag == nil { drag = beginDrag(entity: value.entity, hand: hand) }
                     guard let drag else { return }
-                    if drag.name == MagnetismRenderer.handCompassName {
+                    if drag.name == MagnetismRenderer.electromagnetName {
+                        model.moveElectromagnet(to: drag.position(forHand: hand))
+                    } else if drag.name == MagnetismRenderer.handCompassName {
                         model.moveCompass(to: drag.position(forHand: hand))
                     } else if let id = UUID(uuidString: drag.name) {
                         model.move(id: id, to: drag.position(forHand: hand))
@@ -71,6 +89,7 @@ struct MagnetismSpaceView: View {
                 .onEnded { _ in
                     model.release()
                     renderer?.isCarryingCompass = false
+                    renderer?.isCarryingCoil = false
                     drag = nil
                 }
         )
@@ -79,6 +98,11 @@ struct MagnetismSpaceView: View {
     private func beginDrag(entity: Entity, hand: SIMD3<Double>) -> RelativeDrag? {
         var current: Entity? = entity
         while let candidate = current {
+            if candidate.name == MagnetismRenderer.electromagnetName {
+                renderer?.isCarryingCoil = true
+                return RelativeDrag(name: candidate.name,
+                                    target: model.electromagnetPosition, hand: hand)
+            }
             if candidate.name == MagnetismRenderer.handCompassName {
                 renderer?.isCarryingCompass = true
                 return RelativeDrag(name: candidate.name,

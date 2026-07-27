@@ -23,6 +23,15 @@ struct Experiment: Identifiable {
     let id: String
     let title: String
     let detail: String
+    /// One concrete instruction — what to actually DO next.
+    ///
+    /// The experiments were a checklist in a side pod: a list of
+    /// outcomes with no order and no next step, so they read as
+    /// achievements to stumble into rather than as a path through the
+    /// module. A `step` turns each into a thing you can be told to do,
+    /// and the pod shows exactly one of them at a time — the first
+    /// unfinished one — as the module's current task.
+    var step: String = ""
 }
 
 /// Completed-experiment bookkeeping, persisted across launches.
@@ -76,7 +85,8 @@ enum ExperimentCatalog {
     -> [(experiment: Experiment, isMet: () -> Bool)] {
         [
             (Experiment(id: "magnetism.snap", title: "The snap",
-                        detail: "Let two magnets pull together until they touch."),
+                        detail: "Let two magnets pull together until they touch.",
+                            step: "Pinch a magnet and carry it toward another until they jump together."),
              { let magnets = model.magnets
                for i in 0..<magnets.count {
                    for j in (i + 1)..<magnets.count
@@ -87,7 +97,8 @@ enum ExperimentCatalog {
                }
                return false }),
             (Experiment(id: "magnetism.bench", title: "Full bench",
-                        detail: "Get all four bar magnets into the field at once."),
+                        detail: "Get all four bar magnets into the field at once.",
+                            step: "Tap Add magnet in the Magnets pod until four are floating."),
              { model.magnets.count >= 4 }),
         ]
     }
@@ -98,11 +109,13 @@ enum ExperimentCatalog {
     -> [(experiment: Experiment, isMet: () -> Bool)] {
         [
             (Experiment(id: "springs.limit", title: "To the stops",
-                        detail: "Pull the block to its maximum extension."),
+                        detail: "Pull the block to its maximum extension.",
+                            step: "Switch to the Spring bench, grab the block and pull it as far along the rail as it goes."),
              { model.mode == .single
                  && abs(model.state.displacement) >= model.maxExtension * 0.97 }),
             (Experiment(id: "springs.transfer", title: "Energy heist",
-                        detail: "In Coupled ×2, get 85% of the energy onto the second block."),
+                        detail: "In Coupled ×2, get 85% of the energy onto the second block.",
+                            step: "On the Spring bench, choose Coupled ×2, pull one block, and wait for the slosh."),
              { guard model.mode == .coupled else { return false }
                let pair = model.coupled.massEnergies(
                    stiffness: model.stiffness, coupling: model.coupling,
@@ -124,50 +137,60 @@ enum ExperimentCatalog {
             let magnets = appModel.magnetismModel
             return magnetismExperiments(magnets) + [
                 (Experiment(id: "field.dipole", title: "Opposites attract",
-                            detail: "Build a dipole — one positive and one negative charge sharing the field."),
+                            detail: "Build a dipole — one positive and one negative charge sharing the field.",
+                            step: "The dipole is already here — if you cleared it, tap Add + and Add −."),
                  { model.charges.contains(where: \.isPositive)
                      && model.charges.contains(where: { !$0.isPositive }) }),
                 (Experiment(id: "field.crowd", title: "Crowd control",
-                            detail: "Shape the field with six or more charges at once."),
+                            detail: "Shape the field with six or more charges at once.",
+                            step: "Tap Add + and Add − until six charges share the room, then drag them into a shape."),
                  { model.charges.count >= 6 }),
             ]
         case "kinematics":
             let model = appModel.kinematicsModel
             return [
                 (Experiment(id: "kinematics.swish", title: "Swish",
-                            detail: "Put a projectile through a hoop."),
+                            detail: "Put a projectile through a hoop.",
+                            step: "Grab a staged ball and throw it through a hoop, or aim the launcher and Fire."),
                  { model.rings.reduce(0) { $0 + $1.score } >= 1 }),
                 (Experiment(id: "kinematics.streak", title: "Sharpshooter",
-                            detail: "Score five — moving hoops count double for style."),
+                            detail: "Score five — moving hoops count double for style.",
+                            step: "Score four more. Turn on orbiting hoops in the Launcher pod for a moving target."),
                  { model.rings.reduce(0) { $0 + $1.score } >= 5 }),
             ]
         case "waves":
             let model = appModel.wavesModel
             return [
                 (Experiment(id: "waves.duet", title: "Duet",
-                            detail: "Run two sources at once and watch their ripples interfere."),
+                            detail: "Run two sources at once and watch their ripples interfere.",
+                            step: "Two sources are already running — if you removed one, tap Add source."),
                  { model.sources.count >= 2 }),
                 (Experiment(id: "waves.doppler", title: "Doppler run",
-                            detail: "Send a source flying and see its wavefronts bunch ahead of it."),
+                            detail: "Send a source flying and see its wavefronts bunch ahead of it.",
+                            step: "Select a source and switch on Doppler flyby, then watch its rings bunch ahead of it."),
                  { model.selectedIsFlying }),
             ]
         case "circuits":
             let model = appModel.circuitsModel
             return [
                 (Experiment(id: "circuits.twoBulbs", title: "Double glow",
-                            detail: "Light two bulbs at once."),
+                            detail: "Light two bulbs at once.",
+                            step: "Drag a second bulb off the tray and wire it across the battery beside the first."),
                  { model.components.filter { $0.kind == .bulb }
                      .filter { abs(model.readouts[$0.id]?.watts ?? 0) > 0.5 }.count >= 2 }),
                 (Experiment(id: "circuits.bright", title: "Overdrive",
-                            detail: "Push one bulb past 2 W — series batteries help."),
+                            detail: "Push one bulb past 2 W — series batteries help.",
+                            step: "Add a second battery in series with the first, then watch the bulb's watts climb."),
                  { model.components.contains {
                      $0.kind == .bulb && abs(model.readouts[$0.id]?.watts ?? 0) > 2 } }),
                 (Experiment(id: "circuits.charged", title: "Full tank",
-                            detail: "Charge a capacitor past 8 V."),
+                            detail: "Charge a capacitor past 8 V.",
+                            step: "Wire a capacitor across the battery and give it a few seconds to fill."),
                  { model.components.contains {
                      $0.kind == .capacitor && abs($0.capacitorVoltage) > 8 } }),
                 (Experiment(id: "circuits.firstLight", title: "First light",
-                            detail: "Light an LED in its safe range — series resistance is your friend."),
+                            detail: "Light an LED in its safe range — series resistance is your friend.",
+                            step: "Put an LED in series with a resistor of a few hundred ohms, then close the switch."),
                  { model.components.contains { component in
                      component.kind == .led && !component.failed
                          && abs(model.readouts[component.id]?.amps ?? 0) > 0.005
@@ -179,54 +202,64 @@ enum ExperimentCatalog {
             let springs = appModel.springsModel
             return springExperiments(springs) + [
                 (Experiment(id: "pendulums.orbit", title: "Around the world",
-                            detail: "Throw a bob into a true 3D orbit — sideways, hard."),
+                            detail: "Throw a bob into a true 3D orbit — sideways, hard.",
+                            step: "Grab a bob and throw it sideways, across the swing plane rather than along it."),
                  { model.pendulums.contains {
                      abs($0.state.position.z) > 0.15 && simd_length($0.state.velocity) > 0.5 } }),
                 (Experiment(id: "pendulums.high", title: "Over the top",
-                            detail: "Get a bob swinging above its pivot."),
+                            detail: "Get a bob swinging above its pivot.",
+                            step: "Grab a bob and throw it hard upward — enough to carry it above its own pivot."),
                  { model.pendulums.contains { $0.state.position.y > 0 } }),
             ]
         case "elasticfield":
             let model = appModel.waveMediumModel
             return [
                 (Experiment(id: "elastic.pluck", title: "Make a splash",
-                            detail: "Pull a point on the drumhead well off the flat."),
+                            detail: "Pull a point on the drumhead well off the flat.",
+                            step: "Reach into the drumhead and pull a point well out of the plane, then let go."),
                  { model.sheet.heightRange.max > 0.17
                      || model.sheet.heightRange.min < -0.17 }),
                 (Experiment(id: "elastic.resonance", title: "Ring it true",
-                            detail: "Drive the drum to 90% resonance — park the sweep right on a mode."),
+                            detail: "Drive the drum to 90% resonance — park the sweep right on a mode.",
+                            step: "Sweep the Drive slider slowly until the resonance meter peaks, then stop there."),
                  { model.driveOn && model.resonance > 0.9 }),
             ]
         case "optics":
             let model = appModel.opticsModel
             return [
                 (Experiment(id: "optics.virtual", title: "Through the looking glass",
-                            detail: "Make a virtual image (negative dᵢ) with the point source."),
+                            detail: "Make a virtual image (negative dᵢ) with the point source.",
+                            step: "Switch the source to Point, then slide the lens closer to the source than its focal length."),
                  { (model.imagePrediction?.imageDistance ?? 0) < 0 }),
                 (Experiment(id: "optics.throw", title: "Long throw",
-                            detail: "Form a real image more than 60 cm past the lens."),
+                            detail: "Form a real image more than 60 cm past the lens.",
+                            step: "Switch to Point and move the lens until the object distance is just over the focal length."),
                  { (model.imagePrediction?.imageDistance ?? 0) > 0.6 }),
             ]
         case "gravitylab":
             let model = appModel.gravityLabModel
             return [
                 (Experiment(id: "gravity.unbound", title: "Escape velocity",
-                            detail: "Throw a planet hard enough to unbind it from the Sun."),
+                            detail: "Throw a planet hard enough to unbind it from the Sun.",
+                            step: "Grab a planet and throw it hard, away from the Sun — watch the readout say unbound."),
                  { model.bodies.contains {
                      !$0.body.name.hasPrefix("Sun")
                          && model.readout(for: $0)?.isBound == false } }),
                 (Experiment(id: "gravity.binary", title: "Twin suns",
-                            detail: "Split the Sun into a binary pair."),
+                            detail: "Split the Sun into a binary pair.",
+                            step: "Open the Bodies pod and tap Twin suns."),
                  { model.bodies.filter { $0.body.name.hasPrefix("Sun") }.count >= 2 }),
             ]
         case "windtunnel":
             let model = appModel.windTunnelModel
             return [
                 (Experiment(id: "wind.lift", title: "Magnus liftoff",
-                            detail: "Spin the cylinder into more than 2 N/m of lift."),
+                            detail: "Spin the cylinder into more than 2 N/m of lift.",
+                            step: "Choose the Cylinder body, then run the Spin slider up until the lift arrow grows."),
                  { model.testBody == .cylinder && abs(model.liftPerSpan) > 2 }),
                 (Experiment(id: "wind.slippery", title: "Slippery shape",
-                            detail: "Find the body that slips through with under a tenth the cube's drag."),
+                            detail: "Find the body that slips through with under a tenth the cube's drag.",
+                            step: "Work through the Test body pod and read the Cd printed on each button."),
                  { model.testBody.dragCoefficient < 0.105 }),
             ]
         default:

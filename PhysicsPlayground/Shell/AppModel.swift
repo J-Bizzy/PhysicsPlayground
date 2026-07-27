@@ -53,6 +53,7 @@ final class AppModel {
 
     private func adoptModuleAtmosphere() {
         roomDimming = activeModule?.preferredDimming ?? 0
+        if let id = activeModuleID { labPlacement.adopt(moduleID: id) }
     }
 
     private func refreshImmersionStyle() {
@@ -66,6 +67,10 @@ final class AppModel {
 
     /// The lab notebook: captured moments with their parameters.
     let notebook = LabNotebook()
+
+    /// Where the active module's apparatus sits in the user's room.
+    /// A pure display offset, remembered per module.
+    let labPlacement = LabPlacement()
     var isImmersiveSpaceOpen = false
     /// Driven by the active module's descriptor; bound to the shared
     /// immersive space's style selection.

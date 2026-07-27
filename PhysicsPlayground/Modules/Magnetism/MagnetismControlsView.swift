@@ -91,6 +91,7 @@ private struct MagnetViewControls: View {
             Toggle("Compass needles", isOn: $model.showCompasses)
                 .font(DesignTokens.TypeScale.control)
                 .accessibilityHint("A grid of needles filling the room, each pointing along the local field")
+            ElectromagnetControls()
             Toggle("Hand compass", isOn: $model.compassOn)
                 .font(DesignTokens.TypeScale.control)
                 .accessibilityHint("A brass compass you carry; the needle swings to the field wherever you take it")
@@ -164,6 +165,44 @@ struct MagnetViewPod: View {
         ControlPod(title: "View", icon: "eye.fill",
                    tint: DesignTokens.Palette.magnetismAccent) {
             MagnetViewControls()
+        }
+    }
+}
+
+/// The cross-module link, surfaced.
+///
+/// Nine modules that never speak to each other are nine demos. A coil
+/// carrying a current is a magnet, so the Circuit Workshop's inductor
+/// current can drive an electromagnet on this bench — real current,
+/// real m = N·I·A, real forces on the other magnets and a real
+/// deflection of the carried compass. Open the switch over there and it
+/// goes out.
+struct ElectromagnetControls: View {
+    @Environment(MagnetismModel.self) private var model
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        @Bindable var model = model
+        Toggle("Electromagnet", isOn: $model.electromagnetOn)
+            .font(DesignTokens.TypeScale.control)
+            .accessibilityHint("A coil powered by the current in your Circuit Workshop bench")
+        if model.electromagnetOn {
+            let current = appModel.circuitsModel.inductorCurrent
+            VStack(alignment: .leading, spacing: 3) {
+                Text(String(format: "I = %.4f A through %d turns",
+                            current, MagnetismModel.coilTurns))
+                Text(String(format: "m = N·I·A = %.3f A·m²", model.electromagnetMoment))
+            }
+            .font(DesignTokens.TypeScale.footnote.monospaced())
+            if abs(current) < 1e-6 {
+                Text("No current yet. Go to Circuit Workshop, wire an inductor into a live loop, and come back — the coil here carries exactly what your circuit delivers.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Live from your circuit. Open its switch and this magnet dies; reverse the battery and its poles swap.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

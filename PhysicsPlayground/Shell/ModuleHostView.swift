@@ -72,6 +72,15 @@ struct ModuleHostView: View {
                 // four-bead cluster at the user's feet — the frequent-use
                 // controls stay on the buttons built for frequent use.)
                 Button {
+                    appModel.labPlacement.isPlacing.toggle()
+                } label: {
+                    Image(systemName: appModel.labPlacement.isPlacing
+                          ? "scope" : "arrow.up.left.and.down.right.and.arrow.up.right.and.down.left")
+                }
+                .accessibilityLabel("Place the lab")
+                .accessibilityHint("Shows an anchor you can drag to move the whole experiment to where you have room")
+
+                Button {
                     appModel.studioMode.toggle()
                 } label: {
                     Image(systemName: appModel.studioMode ? "moon.stars.fill" : "moon.stars")
@@ -88,6 +97,19 @@ struct ModuleHostView: View {
                 .accessibilityHint("Returns this simulation to its starting state")
             }
             .buttonBorderShape(.circle)
+
+            if appModel.labPlacement.isPlacing {
+                HStack(spacing: 10) {
+                    Text("Drag the cross-hair to move the whole experiment.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 6)
+                    Button("Recentre") { appModel.labPlacement.recentre() }
+                        .buttonStyle(.podQuiet)
+                    Button("Done") { appModel.labPlacement.isPlacing = false }
+                        .buttonStyle(.podProminent(module.accent))
+                }
+            }
 
             if !appModel.isImmersiveSpaceOpen {
                 Button {

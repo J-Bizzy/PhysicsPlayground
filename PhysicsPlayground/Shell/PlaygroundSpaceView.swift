@@ -39,6 +39,10 @@ struct PlaygroundSpaceView: View {
                     // is on screen (device-only; inert in the simulator).
                     RoomOcclusionView()
                         .id("occlusion")
+                    // The lab anchor: drag it to put the apparatus where
+                    // you actually have room. Hidden until asked for.
+                    LabAnchorView(module: module)
+                        .id("lab-anchor-\(module.id)")
                     // The four-bead navigation cluster — kept as the
                     // ZStack's second child, the slot where RealityView
                     // content provably renders.

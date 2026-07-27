@@ -80,6 +80,8 @@ final class SpringsRenderer {
     private let graphMarker: ModelEntity
     private static let graphWidth: Float = 0.7
     private static let graphHeight: Float = 0.34
+    /// How far the time axis runs into the room.
+    private static let graphDepth: Float = 0.85
 
     private static func helixMesh() -> MeshResource? {
         // 9 coils, unit length along Y.
@@ -398,6 +400,15 @@ final class SpringsRenderer {
         case .acceleration: scale = 16
         case .energy: scale = max(history.max() ?? 1, 0.01) * 1.2
         }
+        // The trace RECEDES: time runs away from the viewer in depth.
+        //
+        // A position-versus-time plot painted on a vertical plane is a
+        // wall chart, and a wall chart is not worth wearing a headset
+        // for. Extruding the time axis into the room turns it into a
+        // ribbon you can lean around: the block's motion is happening
+        // at the near end, and its whole history trails off behind, so
+        // "the past" is somewhere you can physically look. The values
+        // are identical — only the axis moved out of the plane.
         for (index, slot) in graphPool.slots.enumerated() {
             guard index < count else {
                 slot.entity.isEnabled = false
@@ -407,17 +418,26 @@ final class SpringsRenderer {
             let fraction = Float(index) / Float(SpringsModel.historyCapacity - 1)
             let value = history[index]
             let y = Float(min(max(value / scale, -1), 1)) * Self.graphHeight / 2
-            slot.entity.position = SIMD3(
-                -Self.graphWidth / 2 + fraction * Self.graphWidth, y, 0)
+            slot.entity.position = Self.graphPoint(fraction: fraction, y: y)
+            // Older samples sit further away and shrink with distance,
+            // so the ribbon reads as depth rather than as a scatter.
+            slot.entity.scale = SIMD3(repeating: 0.45 + 0.55 * fraction)
         }
         if count > 0 {
             graphMarker.isEnabled = true
             let fraction = Float(count - 1) / Float(SpringsModel.historyCapacity - 1)
             let y = Float(min(max(history[count - 1] / scale, -1), 1)) * Self.graphHeight / 2
-            graphMarker.position = SIMD3(
-                -Self.graphWidth / 2 + fraction * Self.graphWidth, y, 0)
+            graphMarker.position = Self.graphPoint(fraction: fraction, y: y)
         } else {
             graphMarker.isEnabled = false
         }
+    }
+
+    /// Where a sample sits on the receding time ribbon. `fraction` 0 is
+    /// the oldest sample (furthest away), 1 the newest (nearest).
+    private static func graphPoint(fraction: Float, y: Float) -> SIMD3<Float> {
+        SIMD3(-graphWidth / 2 + fraction * graphWidth * 0.35,
+              y,
+              -graphDepth * (1 - fraction))
     }
 }

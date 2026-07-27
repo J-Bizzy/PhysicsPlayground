@@ -1046,6 +1046,25 @@ final class CircuitsModel {
         step(dt: 1.0 / 90.0)
     }
 
+    // MARK: The bridge to the field bench
+
+    /// The current through the bench's inductor, in amps.
+    ///
+    /// A coil carrying a current is a magnet (m = N·I·A), so this one
+    /// number is the whole link between Circuit Workshop and the
+    /// magnetic bench in Fields: wire an inductor into a live loop and
+    /// its current becomes an electromagnet over there, with the poles
+    /// your battery's polarity implies. Open the switch and it dies.
+    ///
+    /// Sums every inductor on the bench, so two coils in series read as
+    /// the current they share and a second parallel branch adds to it.
+    var inductorCurrent: Double {
+        components
+            .filter { $0.kind == .inductor }
+            .compactMap { readouts[$0.id]?.amps }
+            .reduce(0, +)
+    }
+
     // MARK: Reset
 
     /// Empties the bench completely — the blank-slate path behind the

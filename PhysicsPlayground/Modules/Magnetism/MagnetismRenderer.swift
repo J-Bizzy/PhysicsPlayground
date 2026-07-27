@@ -68,10 +68,82 @@ final class MagnetismRenderer {
     // MARK: Per-frame
 
     func tick(_ model: MagnetismModel, viewer: SIMD3<Double>? = nil) {
+        syncElectromagnet(model)
         syncMagnets(model)
         syncFieldLines(model)
         syncCompasses(model, viewer: viewer.map(SIMD3<Float>.init))
         syncHandCompass(model)
+    }
+
+    // MARK: The electromagnet the circuit bench powers
+
+    static let electromagnetName = "electromagnet"
+    private let coilRoot = Entity()
+    private var coilBuilt = false
+    private var coilCallout: Callout?
+    /// Set while a hand owns the coil.
+    var isCarryingCoil = false
+
+    private func buildElectromagnet() {
+        coilBuilt = true
+        coilRoot.name = Self.electromagnetName
+
+        // An iron core with copper windings — a solenoid anyone would
+        // recognise, sized to the coil radius the physics uses.
+        let radius = Float(MagnetismModel.coilRadius)
+        let core = ModelEntity(
+            mesh: .generateCylinder(height: radius * 2.4, radius: radius * 0.52),
+            materials: [Materials.energized(UIColor(white: 0.42, alpha: 1),
+                                            roughness: 0.35, metallic: 1.0, glow: 0.0)])
+        core.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+        coilRoot.addChild(core)
+
+        // The winding, as a real helix swept along the axis.
+        let turnsShown = 14
+        let stepsPerTurn = 16
+        var helix: [SIMD3<Float>] = []
+        for step in 0...(turnsShown * stepsPerTurn) {
+            let t = Float(step) / Float(turnsShown * stepsPerTurn)
+            let angle = t * Float(turnsShown) * 2 * .pi
+            helix.append(SIMD3((t - 0.5) * radius * 2.2,
+                               cos(angle) * radius * 0.78,
+                               sin(angle) * radius * 0.78))
+        }
+        if let mesh = TubeMesh.tube(lines: [helix], radius: 0.0045, sides: 5) {
+            coilRoot.addChild(ModelEntity(
+                mesh: mesh,
+                materials: [Materials.energized(DesignTokens.Palette.copperUI,
+                                                roughness: 0.28, metallic: 1.0, glow: 0.12)]))
+        }
+
+        let callout = Callout(color: DesignTokens.Palette.copperUI,
+                              textSize: 0.024, offset: SIMD3(0, 0.12, 0))
+        coilCallout = callout
+        coilRoot.addChild(callout.root)
+
+        Grabbable.configureTouchTarget(coilRoot, collisionRadius: radius * 1.6)
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = "Electromagnet. Its strength is the current your circuit bench is delivering."
+        coilRoot.components.set(accessibility)
+        root.addChild(coilRoot)
+    }
+
+    private func syncElectromagnet(_ model: MagnetismModel) {
+        if !coilBuilt { buildElectromagnet() }
+        coilRoot.isEnabled = model.electromagnetOn
+        guard model.electromagnetOn else { return }
+        if !isCarryingCoil {
+            coilRoot.position = SIMD3<Float>(model.electromagnetPosition)
+        }
+        coilRoot.orientation = simd_quatf(
+            from: [1, 0, 0], to: SIMD3<Float>(simd_normalize(model.electromagnetAxis)))
+        // The coil says what the circuit is giving it: no current, no
+        // magnet — which is exactly what opening the switch does.
+        coilCallout?.setText(String(
+            format: "%.3f A   m = %.2f A·m²",
+            model.coilCurrent, model.electromagnetMoment))
+        coilCallout?.anchor(at: SIMD3(0, Float(MagnetismModel.coilRadius) * 1.2, 0))
     }
 
     // MARK: The compass you carry
@@ -296,9 +368,10 @@ final class MagnetismRenderer {
         linesEntity.isEnabled = model.showFieldLines
         lineGlowEntity.isEnabled = model.showFieldLines
         guard model.showFieldLines else { return }
-        guard model.magnets != lastLineInputs else { return }
-        lastLineInputs = model.magnets
-        linesPipeline?.submit(LinesJob(magnets: model.magnets))
+        let sources = model.allSources
+        guard sources != lastLineInputs else { return }
+        lastLineInputs = sources
+        linesPipeline?.submit(LinesJob(magnets: sources))
     }
 
     // MARK: Compass needle grid
@@ -357,7 +430,7 @@ final class MagnetismRenderer {
         // Hide needles too close to a magnet (inside the singular near
         // field), where the field is too weak to read, or right in the
         // viewer's face.
-        let magnets = model.magnets
+        let magnets = model.allSources
         let eye = viewer ?? SIMD3<Float>(0, 1.5, 0)
         for (index, needle) in needles.enumerated() {
             let gridPoint = Self.gridPoints[index]
