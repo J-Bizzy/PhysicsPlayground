@@ -486,11 +486,18 @@ enum HubVignettes {
                                             metallic: 0.6, glow: 0.1)])
         block.position.y = -0.062
         root.addChild(block)
-        // A real helix, scaled along its axis by the block's motion.
+        // A real helix, stretched along its axis by the block's motion.
+        //
+        // Authored at its RESTING length, not at unit length. A model
+        // that is a metre long at build time and scaled down at runtime
+        // reports metre-sized bounds to anything that measures it — and
+        // the card fit does measure it, so this one shrank its whole
+        // exhibit to a speck.
+        let coilRest: Float = 0.036
         let coilPoints = (0...60).map { step -> SIMD3<Float> in
             let t = Float(step) / 60
             let angle = t * 7 * 2 * .pi
-            return SIMD3(t, cos(angle) * 0.007, sin(angle) * 0.007)
+            return SIMD3(t * coilRest, cos(angle) * 0.007, sin(angle) * 0.007)
         }
         let coil = line(coilPoints, radius: 0.0011, UIColor(white: 0.78, alpha: 1))
         coil.map { entity in
@@ -506,7 +513,7 @@ enum HubVignettes {
             let x = Float(0.018 * sin(time * 2.3))
             block.position.x = x
             // The coil stretches to exactly reach the block.
-            coil?.scale.x = (x + 0.044 - 0.008) / 1
+            coil?.scale.x = (x + 0.044 - 0.008) / coilRest
         }
     }
 

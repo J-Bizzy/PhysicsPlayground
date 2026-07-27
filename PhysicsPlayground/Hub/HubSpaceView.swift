@@ -27,7 +27,18 @@ struct HubSpaceView: View {
 
     var body: some View {
         RealityView { content, attachments in
-            scene.build(modules: ModuleCatalog.all(appModel: appModel))
+            let modules = ModuleCatalog.all(appModel: appModel)
+            var progress: [String: (done: Int, total: Int)] = [:]
+            for module in modules {
+                let entries = ExperimentCatalog.experiments(for: module.id,
+                                                            appModel: appModel)
+                progress[module.id] = (
+                    entries.filter {
+                        appModel.experiments.completed.contains($0.experiment.id)
+                    }.count,
+                    entries.count)
+            }
+            scene.build(modules: modules, progress: progress)
             content.add(scene.root)
 
             if let card = attachments.entity(for: "detail") {
@@ -185,12 +196,14 @@ final class HubScene {
 
     // MARK: Build
 
-    func build(modules: [ModuleDescriptor]) {
-        // The 3-D bubble title sits at the centre; the exhibits ring it
-        // like a clock face, starting at twelve and going clockwise.
+    func build(modules: [ModuleDescriptor],
+               progress: [String: (done: Int, total: Int)] = [:]) {
+        // The name crowns the gallery; the exhibits fill two arcs below
+        // it, reading left to right, top row then bottom.
         buildBubbleTitle()
         for (index, module) in modules.enumerated() {
-            buildExhibit(for: module, at: Self.arcPosition(index))
+            buildExhibit(for: module, at: Self.arcPosition(index),
+                         progress: progress[module.id] ?? (0, 0))
         }
     }
 
@@ -358,14 +371,18 @@ final class HubScene {
         return base
     }
 
-    private func buildExhibit(for module: ModuleDescriptor, at basePosition: SIMD3<Float>) {
+    private func buildExhibit(for module: ModuleDescriptor,
+                              at basePosition: SIMD3<Float>,
+                              progress: (done: Int, total: Int)) {
         let anchor = Entity()
         anchor.name = module.id
         anchor.position = basePosition
         // Invisible gaze/pinch target wrapping the whole miniature; the
         // hover highlight lights the miniature itself — no shell.
         anchor.components.set(InputTargetComponent())
-        anchor.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.24)]))
+        anchor.components.set(CollisionComponent(shapes: [
+            .generateBox(width: Self.cardSize.x, height: Self.cardSize.y, depth: 0.14)
+        ]))
         anchor.components.set(HoverEffectComponent())
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
@@ -386,7 +403,19 @@ final class HubScene {
         // The living miniature, and the motion it was authored with.
         let built = HubVignettes.make(for: module.id)
         let vignette = built.entity
+        // MEASURED, then fitted. Authoring nine models to a nominal size
+        // is not the same as nine models being the same size — the
+        // drumhead and the ray fan both spilled over their card edges —
+        // and a card whose contents escape it is not a card. The fit is
+        // computed from the real bounds, so a future model cannot break
+        // the layout however it is drawn.
         vignette.scale = SIMD3(repeating: Self.vignetteScale)
+        let bounds = vignette.visualBounds(relativeTo: nil).extents
+        let widthLimit = Self.cardSize.x * 0.80
+        let heightLimit = Self.cardSize.y * 0.58
+        let fit = min(widthLimit / max(bounds.x, 1e-4),
+                      heightLimit / max(bounds.y, 1e-4), 1)
+        vignette.scale = SIMD3(repeating: Self.vignetteScale * fit)
         // Standing proud of the card, so it reads as an object in front
         // of a frame rather than as a picture printed on one.
         vignette.position = [0, 0.028, 0.02]
@@ -404,6 +433,31 @@ final class HubScene {
         namePivot.components.set(BillboardComponent())
         namePivot.addChild(name)
         pulser.addChild(namePivot)
+
+        // Progress pips: one per experiment, filled for the ones done.
+        // The gallery shows how far through each module you are without
+        // your having to face it — a thing a list of nine names cannot
+        // do, and the reason to look at the whole wall at once.
+        if progress.total > 0 {
+            let pips = Entity()
+            let spacing: Float = 0.017
+            let width = spacing * Float(progress.total - 1)
+            for index in 0..<progress.total {
+                let done = index < progress.done
+                var material = UnlitMaterial(color: done
+                    ? UIColor(module.accent)
+                    : UIColor(white: 0.85, alpha: 1))
+                material.blending = .transparent(
+                    opacity: .init(floatLiteral: done ? 0.95 : 0.28))
+                let pip = ModelEntity(
+                    mesh: .generateSphere(radius: done ? 0.0032 : 0.0026),
+                    materials: [material])
+                pip.position = [-width / 2 + Float(index) * spacing, 0, 0]
+                pips.addChild(pip)
+            }
+            pips.position = [0, -Self.cardSize.y / 2 + 0.021, -0.092]
+            pulser.addChild(pips)
+        }
 
         exhibits.append(Exhibit(
             moduleID: module.id, anchor: anchor, pulser: pulser,
@@ -467,6 +521,66 @@ final class HubScene {
     /// edge lights only for the exhibit you are facing.
     private static let cardSize = SIMD2<Float>(0.30, 0.38)
 
+    /// Corner radius of the card, and how finely each corner is arced.
+    private static let cardCorner: Float = 0.052
+    private static let cornerSegments = 8
+
+    /// The card's outline, as a closed rounded rectangle in its own
+    /// plane. Everything about the card is derived from this one curve:
+    /// the face is a fan filled from it, the frame is swept along it,
+    /// and the top highlight is a slice of it.
+    private static func cardOutline(inset: Float = 0) -> [SIMD3<Float>] {
+        let halfWidth = cardSize.x / 2 + inset
+        let halfHeight = cardSize.y / 2 + inset
+        let radius = min(cardCorner + inset, min(halfWidth, halfHeight) - 0.001)
+        let centres: [(SIMD2<Float>, Float)] = [
+            (SIMD2(halfWidth - radius, halfHeight - radius), 0),          // top right
+            (SIMD2(-(halfWidth - radius), halfHeight - radius), .pi / 2), // top left
+            (SIMD2(-(halfWidth - radius), -(halfHeight - radius)), .pi),  // bottom left
+            (SIMD2(halfWidth - radius, -(halfHeight - radius)), 3 * .pi / 2),
+        ]
+        var points: [SIMD3<Float>] = []
+        for (centre, start) in centres {
+            for step in 0...cornerSegments {
+                let angle = start + Float(step) / Float(cornerSegments) * (.pi / 2)
+                points.append(SIMD3(centre.x + cos(angle) * radius,
+                                    centre.y + sin(angle) * radius, 0))
+            }
+        }
+        points.append(points[0])   // close the loop
+        return points
+    }
+
+    /// A filled rounded rectangle, as a triangle fan from its centre,
+    /// UV-mapped top-to-bottom so the gradient runs down the card.
+    ///
+    /// A box with a corner radius cannot do this: RealityKit clamps the
+    /// radius to half the SMALLEST dimension, and on a six-millimetre
+    /// plate that is three millimetres — so the "rounded" card was a
+    /// sharp rectangle with very slightly bevelled edges. A real curve
+    /// has to come from a real outline.
+    private static func cardFaceMesh() -> MeshResource? {
+        let outline = cardOutline()
+        var positions: [SIMD3<Float>] = [.zero]
+        var uvs: [SIMD2<Float>] = [SIMD2(0.5, 0.5)]
+        var normals: [SIMD3<Float>] = [SIMD3(0, 0, 1)]
+        for point in outline {
+            positions.append(point)
+            uvs.append(SIMD2(0.5, (cardSize.y / 2 - point.y) / cardSize.y))
+            normals.append(SIMD3(0, 0, 1))
+        }
+        var indices: [UInt32] = []
+        for index in 1..<UInt32(positions.count - 1) {
+            indices += [0, index, index + 1]
+        }
+        var descriptor = MeshDescriptor(name: "hub-card")
+        descriptor.positions = MeshBuffer(positions)
+        descriptor.textureCoordinates = MeshBuffer(uvs)
+        descriptor.normals = MeshBuffer(normals)
+        descriptor.primitives = .triangles(indices)
+        return try? MeshResource.generate(from: [descriptor])
+    }
+
     private static func exhibitCard(accent: UIColor) -> (card: Entity, rim: Entity) {
         let card = Entity()
 
@@ -480,58 +594,59 @@ final class HubScene {
             face.color = .init(tint: .white, texture: .init(texture))
         }
         face.blending = .transparent(opacity: 0.66)
-        let plate = ModelEntity(
-            mesh: .generateBox(size: [cardSize.x, cardSize.y, 0.006],
-                               cornerRadius: 0.038),
-            materials: [face])
-        plate.position.z = -0.10
-        card.addChild(plate)
+        face.faceCulling = .none
+        if let mesh = cardFaceMesh() {
+            // A soft dark plate a little larger and a little further
+            // back: not a hard drop shadow, just enough separation that
+            // the card lifts off whatever wall is behind it instead of
+            // lying flat against the wallpaper.
+            var shade = UnlitMaterial(color: UIColor(white: 0.02, alpha: 1))
+            shade.blending = .transparent(opacity: 0.30)
+            shade.faceCulling = .none
+            let shadow = ModelEntity(mesh: mesh, materials: [shade])
+            shadow.scale = SIMD3(repeating: 1.06)
+            shadow.position.z = -0.115
+            card.addChild(shadow)
 
-        // A lit hairline along the TOP edge only — the one detail that
-        // makes a slab read as a piece of glass catching a light instead
-        // of a rectangle of paint.
+            let plate = ModelEntity(mesh: mesh, materials: [face])
+            plate.position.z = -0.10
+            card.addChild(plate)
+        }
+
+        // A lit hairline along the TOP of the outline — following the
+        // curve round both upper corners, which is what says "this shape
+        // is rounded" far more than the fill does.
+        let outline = cardOutline(inset: 0.001)
+        let topRun = Array(outline[cornerSegments...(cornerSegments * 2 + 1)])
         var edgeLight = UnlitMaterial(color: accent)
-        edgeLight.blending = .transparent(opacity: 0.6)
-        let topEdge = ModelEntity(
-            mesh: .generateBox(size: [cardSize.x * 0.80, 0.0022, 0.004],
-                               cornerRadius: 0.0011),
-            materials: [edgeLight])
-        topEdge.position = [0, cardSize.y / 2 - 0.011, -0.096]
-        card.addChild(topEdge)
+        edgeLight.blending = .transparent(opacity: 0.65)
+        if let highlight = TubeMesh.tube(lines: [topRun], radius: 0.0016, sides: 4) {
+            let edge = ModelEntity(mesh: highlight, materials: [edgeLight])
+            edge.position.z = -0.097
+            card.addChild(edge)
+        }
 
         // A hairline rule above the name, so the caption reads as a
         // caption rather than as text floating on a panel.
         var ruleMaterial = UnlitMaterial(color: accent)
         ruleMaterial.blending = .transparent(opacity: 0.3)
         let rule = ModelEntity(
-            mesh: .generateBox(size: [cardSize.x * 0.60, 0.0012, 0.003]),
+            mesh: .generateBox(size: [cardSize.x * 0.56, 0.0012, 0.003]),
             materials: [ruleMaterial])
         rule.position = [0, -cardSize.y / 2 + 0.072, -0.096]
         card.addChild(rule)
 
-        // The accent edge, built as four BARS rather than as a bigger
-        // plate behind. A plate shows straight through the glass and
-        // floods the whole card with colour — which is what it did. A
-        // frame can only ever be a frame.
+        // The accent frame: the SAME outline, swept as a tube. Sweeping
+        // the curve guarantees the frame and the fill agree about where
+        // the corners are — four straight bars could not, which is why
+        // the card still read as sharp.
         var edgeMaterial = UnlitMaterial(color: accent)
         edgeMaterial.blending = .transparent(opacity: 0.95)
         let rim = Entity()
-        let thickness: Float = 0.0055
-        let halfX = cardSize.x / 2 + thickness / 2
-        let halfY = cardSize.y / 2 + thickness / 2
-        for (size, offset) in [
-            (SIMD3<Float>(cardSize.x + thickness * 2, thickness, 0.006),
-             SIMD3<Float>(0, halfY, 0)),
-            (SIMD3<Float>(cardSize.x + thickness * 2, thickness, 0.006),
-             SIMD3<Float>(0, -halfY, 0)),
-            (SIMD3<Float>(thickness, cardSize.y, 0.006), SIMD3<Float>(halfX, 0, 0)),
-            (SIMD3<Float>(thickness, cardSize.y, 0.006), SIMD3<Float>(-halfX, 0, 0)),
-        ] {
-            let bar = ModelEntity(
-                mesh: .generateBox(size: size, cornerRadius: thickness / 2),
-                materials: [edgeMaterial])
-            bar.position = offset
-            rim.addChild(bar)
+        if let frame = TubeMesh.tube(lines: [cardOutline(inset: 0.004)],
+                                     radius: 0.0028, sides: 6) {
+            let bars = ModelEntity(mesh: frame, materials: [edgeMaterial])
+            rim.addChild(bars)
         }
         rim.position.z = -0.099
         card.addChild(rim)
