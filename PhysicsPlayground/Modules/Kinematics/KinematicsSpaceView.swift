@@ -17,7 +17,6 @@ struct KinematicsSpaceView: View {
     @Environment(KinematicsModel.self) private var model
     @State private var renderer: KinematicsRenderer?
     @State private var drag: RelativeDrag?
-    @State private var sensing = KinematicsSensing()
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -41,8 +40,12 @@ struct KinematicsSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // On device, detected walls flow into the physics.
-                    if sensing.isRunning {
-                        model.roomWalls = sensing.walls
+                    // The walls come from the SHARED room session — this
+                    // module used to run a second plane-detection session
+                    // of its own, for the same planes the shell was
+                    // already tracking.
+                    if appModel.room.hasScannedRoom {
+                        model.roomWalls = appModel.room.walls
                     }
                     model.step(dt: event.deltaTime)
                     // A ball that reaches an open hand is caught: the
@@ -87,7 +90,6 @@ struct KinematicsSpaceView: View {
         }
         .task {
             // Plane detection: device-only, quietly absent in the sim.
-            await sensing.start()
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)

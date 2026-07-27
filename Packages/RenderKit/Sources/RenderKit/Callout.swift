@@ -18,6 +18,7 @@
 //  readouts every frame.
 //
 
+import QuartzCore
 import RealityKit
 import UIKit
 import simd
@@ -38,6 +39,7 @@ public final class Callout {
     private let textSize: CGFloat
     private var offset: SIMD3<Float>
     private var lastText: String?
+    private var lastTextTime: Double = -1
 
     /// - Parameters:
     ///   - color: accent for the dot, leader, and type. Saturated module
@@ -80,10 +82,27 @@ public final class Callout {
         rebuildLeader()
     }
 
-    /// Updates the text. Cheap when unchanged — the common case, since
-    /// most readouts only change a digit every few frames.
+    /// How often a changing readout may regenerate its glyphs.
+    ///
+    /// `MeshResource.generateText` builds a whole mesh, on the main
+    /// thread. "Skip when unchanged" is no protection at all for a
+    /// LIVE number — 12.3 µT becomes 12.4 µT becomes 12.2 µT, so the
+    /// text differs every single frame and every single frame paid for
+    /// a new mesh. At 90 Hz that is ninety text meshes a second, per
+    /// callout, and it is the kind of cost that shows up as the whole
+    /// app hitching rather than as one slow thing.
+    ///
+    /// Eight updates a second is faster than anyone can read a changing
+    /// number and a tenth of the work.
+    private static let minimumInterval: Double = 1.0 / 8
+
+    /// Updates the text. Free when unchanged, and rate-limited when it
+    /// changes, because generating glyphs is not free.
     public func setText(_ text: String) {
         guard text != lastText else { return }
+        let now = CACurrentMediaTime()
+        guard now - lastTextTime >= Self.minimumInterval else { return }
+        lastTextTime = now
         lastText = text
         labelEntity?.removeFromParent()
         guard !text.isEmpty else {

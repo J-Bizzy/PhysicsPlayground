@@ -51,8 +51,15 @@ struct HubSpaceView: View {
                 scene.detailCard = card
             }
 
-            scene.subscription = content.subscribe(to: SceneEvents.Update.self) { event in
-                scene.animate(dt: event.deltaTime, lookRay: appModel.room.lookRay)
+            // `[weak scene]` matters here, and every module already knew
+            // it. The subscription is stored ON the scene, so a strong
+            // capture makes scene → subscription → closure → scene: a
+            // cycle that no amount of leaving the hub can break. Each
+            // return to the hub built another one, and every one of them
+            // went on animating its own orphaned copy of the gallery,
+            // forever, while you were somewhere else entirely.
+            scene.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak scene] event in
+                scene?.animate(dt: event.deltaTime, lookRay: appModel.room.lookRay)
             }
         } attachments: {
             Attachment(id: "detail") {
@@ -61,6 +68,15 @@ struct HubSpaceView: View {
                     HubDetailCard(module: module)
                 }
             }
+        }
+        // Entering a module replaces this view, and an EventSubscription
+        // is not tied to the view that made it — left alone it keeps
+        // calling `animate` on a hub that is no longer on screen, for
+        // the whole time you are inside a module, holding the entire
+        // exhibit graph alive behind it.
+        .onDisappear {
+            scene.subscription?.cancel()
+            scene.subscription = nil
         }
         .gesture(
             TapGesture()
@@ -164,7 +180,10 @@ final class HubScene {
     }
 
     /// The miniatures, unbottled and enlarged. They were trinkets.
-    private static let vignetteScale: Float = 1.78
+    /// How large every miniature reads, whatever it is made of. Each is
+    /// measured after it is built and normalised to this, so the gallery
+    /// has one rhythm however the nine models happen to be drawn.
+    private static let exhibitSize: Float = 0.27
 
     // MARK: Focus
     //
@@ -380,9 +399,8 @@ final class HubScene {
         // Invisible gaze/pinch target wrapping the whole miniature; the
         // hover highlight lights the miniature itself — no shell.
         anchor.components.set(InputTargetComponent())
-        anchor.components.set(CollisionComponent(shapes: [
-            .generateBox(width: Self.cardSize.x, height: Self.cardSize.y, depth: 0.14)
-        ]))
+        anchor.components.set(CollisionComponent(
+            shapes: [.generateSphere(radius: 0.19)]))
         anchor.components.set(HoverEffectComponent())
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
@@ -394,267 +412,108 @@ final class HubScene {
         let pulser = Entity()
         anchor.addChild(pulser)
 
-        // The card the exhibit stands on, and the accent rim that lights
-        // when it is the one you are facing.
-        let (card, rim) = Self.exhibitCard(accent: UIColor(module.accent))
-        rim.components.set(OpacityComponent(opacity: 0))
-        pulser.addChild(card)
+        // The pool of light that marks the one you are facing.
+        let glow = Self.focusGlow(accent: UIColor(module.accent))
+        glow.components.set(OpacityComponent(opacity: 0))
+        pulser.addChild(glow)
 
         // The living miniature, and the motion it was authored with.
         let built = HubVignettes.make(for: module.id)
         let vignette = built.entity
-        // MEASURED, then fitted. Authoring nine models to a nominal size
-        // is not the same as nine models being the same size — the
-        // drumhead and the ray fan both spilled over their card edges —
-        // and a card whose contents escape it is not a card. The fit is
-        // computed from the real bounds, so a future model cannot break
-        // the layout however it is drawn.
-        vignette.scale = SIMD3(repeating: Self.vignetteScale)
+        // MEASURED, then fitted to a common apparent size. Authoring
+        // nine models to a nominal size is not the same as nine models
+        // being the same size, and a gallery whose exhibits are wildly
+        // different scales reads as an accident. Normalising from the
+        // real bounds means a future model cannot break the rhythm
+        // however it happens to be drawn.
         let bounds = vignette.visualBounds(relativeTo: nil).extents
-        let widthLimit = Self.cardSize.x * 0.80
-        let heightLimit = Self.cardSize.y * 0.58
-        let fit = min(widthLimit / max(bounds.x, 1e-4),
-                      heightLimit / max(bounds.y, 1e-4), 1)
-        vignette.scale = SIMD3(repeating: Self.vignetteScale * fit)
-        // Standing proud of the card, so it reads as an object in front
-        // of a frame rather than as a picture printed on one.
-        vignette.position = [0, 0.028, 0.02]
+        let largest = max(bounds.x, max(bounds.y, 1e-4))
+        vignette.scale = SIMD3(repeating: Self.exhibitSize / largest)
+        vignette.position = .zero
         pulser.addChild(vignette)
 
         // The floating name beneath, always facing the user — the same
         // 3-D bubble type as the title, tinted in the module's accent.
-        let name = Self.bubbleText(
-            module.title, size: 0.028, color: UIColor(module.accent),
-            emissive: 0.7)
+        let name = Self.namePlate(module.title, accent: UIColor(module.accent))
         let namePivot = Entity()
-        // On the card's own face, at its foot — not floating over the
-        // wallpaper, which is where nine labels used to end up.
-        namePivot.position = [0, -Self.cardSize.y / 2 + 0.045, -0.088]
+        namePivot.position = [0, -0.145, 0]
         namePivot.components.set(BillboardComponent())
         namePivot.addChild(name)
         pulser.addChild(namePivot)
 
-        // Progress pips: one per experiment, filled for the ones done.
-        // The gallery shows how far through each module you are without
-        // your having to face it — a thing a list of nine names cannot
-        // do, and the reason to look at the whole wall at once.
-        if progress.total > 0 {
-            let pips = Entity()
-            let spacing: Float = 0.017
-            let width = spacing * Float(progress.total - 1)
-            for index in 0..<progress.total {
-                let done = index < progress.done
-                var material = UnlitMaterial(color: done
-                    ? UIColor(module.accent)
-                    : UIColor(white: 0.85, alpha: 1))
-                material.blending = .transparent(
-                    opacity: .init(floatLiteral: done ? 0.95 : 0.28))
-                let pip = ModelEntity(
-                    mesh: .generateSphere(radius: done ? 0.0032 : 0.0026),
-                    materials: [material])
-                pip.position = [-width / 2 + Float(index) * spacing, 0, 0]
-                pips.addChild(pip)
-            }
-            pips.position = [0, -Self.cardSize.y / 2 + 0.021, -0.092]
-            pulser.addChild(pips)
-        }
-
         exhibits.append(Exhibit(
             moduleID: module.id, anchor: anchor, pulser: pulser,
-            vignette: vignette, namePivot: namePivot, halo: rim,
+            vignette: vignette, namePivot: namePivot, halo: glow,
             basePosition: basePosition, animate: built.animate))
     }
 
-    /// The card face: the module's accent at the top, guttering to near
-    /// black at the bottom. Baked once per accent into a tall thin
-    /// texture — no shader graph, and no per-frame work.
-    private static var gradientCache: [String: TextureResource] = [:]
-
-    private static func cardGradient(accent: UIColor) -> TextureResource? {
-        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
-        accent.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        let key = String(format: "%.3f-%.3f-%.3f", red, green, blue)
-        if let cached = gradientCache[key] { return cached }
-
-        let height = 128, width = 4
-        var bytes = [UInt8](repeating: 0, count: width * height * 4)
-        for row in 0..<height {
-            // v = 0 at the card's TOP in image space.
-            let v = Double(row) / Double(height - 1)
-            let fade = pow(1 - v, 1.7)
-            let tint = 0.10 + 0.45 * fade
-            for column in 0..<width {
-                let index = (row * width + column) * 4
-                bytes[index + 0] = UInt8(max(0, min(255, (0.035 + Double(red) * tint) * 255)))
-                bytes[index + 1] = UInt8(max(0, min(255, (0.035 + Double(green) * tint) * 255)))
-                bytes[index + 2] = UInt8(max(0, min(255, (0.045 + Double(blue) * tint) * 255)))
-                bytes[index + 3] = 255
-            }
-        }
-        guard let provider = CGDataProvider(data: Data(bytes) as CFData),
-              let image = CGImage(
-                width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
-                bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
-                provider: provider, decode: nil, shouldInterpolate: true,
-                intent: .defaultIntent),
-              let texture = try? TextureResource(
-                image: image, options: .init(semantic: .color, mipmapsMode: .none))
-        else { return nil }
-        gradientCache[key] = texture
-        return texture
-    }
-
-    /// The card an exhibit stands on.
+    /// An exhibit's name, built to survive the room behind it.
     ///
-    /// Nine bare miniatures scattered across a living room read as
-    /// trinkets sprinkled over the furniture: no edges, no grouping,
-    /// labels landing on picture frames and lampshades. A card gives
-    /// each one a frame to be seen against, puts its name on a surface
-    /// instead of on the wallpaper behind it, and makes nine of them
-    /// read as one gallery.
+    /// Saturated accent glyphs alone were legible while each exhibit sat
+    /// on a dark card. With the cards gone the wall shows through, and a
+    /// bright room under a mid-tone accent is the worst case for reading
+    /// type: cyan on white, red on white, green on white.
     ///
-    /// This is NOT the glass shell each exhibit used to wear — that
-    /// wrapped the miniature in chrome and was rightly cut. The card
-    /// sits BEHIND: smoked glass, a thin accent edge, and the miniature
-    /// floating proud of it. At rest it is nearly invisible; the accent
-    /// edge lights only for the exhibit you are facing.
-    private static let cardSize = SIMD2<Float>(0.30, 0.38)
+    /// The title's trick — a slightly larger dark copy of the same text
+    /// behind the glyphs — does not survive being shrunk to name size.
+    /// Scaling a whole string moves every glyph outward from the centre,
+    /// so at 36 mm the casing letters land between their own neighbours
+    /// and the name reads as if it were printed twice, badly. What works
+    /// at this size is an actual backing: one small dark plate, sized to
+    /// the words it carries. Crisp accent type, guaranteed contrast, and
+    /// nothing around the MODEL — which is the part that has to stay
+    /// unframed.
+    private static func namePlate(_ text: String, accent: UIColor) -> Entity {
+        let plate = Entity()
+        let size: CGFloat = 0.036
 
-    /// Corner radius of the card, and how finely each corner is arced.
-    private static let cardCorner: Float = 0.052
-    private static let cornerSegments = 8
+        let extents = textExtents(text, size: size)
+        let padX: Float = 0.026
+        let padY: Float = 0.016
+        let width = extents.x + padX * 2
+        let height = extents.y + padY * 2
 
-    /// The card's outline, as a closed rounded rectangle in its own
-    /// plane. Everything about the card is derived from this one curve:
-    /// the face is a fan filled from it, the frame is swept along it,
-    /// and the top highlight is a slice of it.
-    private static func cardOutline(inset: Float = 0) -> [SIMD3<Float>] {
-        let halfWidth = cardSize.x / 2 + inset
-        let halfHeight = cardSize.y / 2 + inset
-        let radius = min(cardCorner + inset, min(halfWidth, halfHeight) - 0.001)
-        let centres: [(SIMD2<Float>, Float)] = [
-            (SIMD2(halfWidth - radius, halfHeight - radius), 0),          // top right
-            (SIMD2(-(halfWidth - radius), halfHeight - radius), .pi / 2), // top left
-            (SIMD2(-(halfWidth - radius), -(halfHeight - radius)), .pi),  // bottom left
-            (SIMD2(halfWidth - radius, -(halfHeight - radius)), 3 * .pi / 2),
-        ]
-        var points: [SIMD3<Float>] = []
-        for (centre, start) in centres {
-            for step in 0...cornerSegments {
-                let angle = start + Float(step) / Float(cornerSegments) * (.pi / 2)
-                points.append(SIMD3(centre.x + cos(angle) * radius,
-                                    centre.y + sin(angle) * radius, 0))
-            }
-        }
-        points.append(points[0])   // close the loop
-        return points
+        var backing = UnlitMaterial(color: UIColor(white: 0.02, alpha: 1))
+        backing.blending = .transparent(opacity: 0.58)
+        let card = ModelEntity(
+            mesh: .generatePlane(width: width, height: height,
+                                 cornerRadius: height / 2),
+            materials: [backing])
+        card.position.z = -0.006
+        plate.addChild(card)
+
+        plate.addChild(bubbleText(text, size: size, color: accent, emissive: 0.6))
+        return plate
     }
 
-    /// A filled rounded rectangle, as a triangle fan from its centre,
-    /// UV-mapped top-to-bottom so the gradient runs down the card.
+    /// The focus glow: a soft pool of the module's own colour behind the
+    /// miniature, lit only for the exhibit you are facing.
     ///
-    /// A box with a corner radius cannot do this: RealityKit clamps the
-    /// radius to half the SMALLEST dimension, and on a six-millimetre
-    /// plate that is three millimetres — so the "rounded" card was a
-    /// sharp rectangle with very slightly bevelled edges. A real curve
-    /// has to come from a real outline.
-    private static func cardFaceMesh() -> MeshResource? {
-        let outline = cardOutline()
-        var positions: [SIMD3<Float>] = [.zero]
-        var uvs: [SIMD2<Float>] = [SIMD2(0.5, 0.5)]
-        var normals: [SIMD3<Float>] = [SIMD3(0, 0, 1)]
-        for point in outline {
-            positions.append(point)
-            uvs.append(SIMD2(0.5, (cardSize.y / 2 - point.y) / cardSize.y))
-            normals.append(SIMD3(0, 0, 1))
+    /// The exhibits wore CARDS for a while — a gradient face, a frame, a
+    /// rule, a shadow. It made a tidy gallery and it buried the physics:
+    /// nine little machines, each behind a pane. The models are the
+    /// point, and they read better with nothing around them. So the
+    /// furniture is gone and focus is expressed the only way that does
+    /// not add any: the thing you are facing gets bigger, comes toward
+    /// you, and sits in a pool of its own light.
+    private static func focusGlow(accent: UIColor) -> Entity {
+        let glow = Entity()
+        for (radius, opacity) in [(Float(0.085), Float(0.30)),
+                                  (Float(0.135), Float(0.15)),
+                                  (Float(0.200), Float(0.06))] {
+            var material = UnlitMaterial(color: accent)
+            material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+            let disc = ModelEntity(
+                mesh: .generateCylinder(height: 0.001, radius: radius),
+                materials: [material])
+            disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+            disc.position.z = -0.13
+            glow.addChild(disc)
         }
-        var indices: [UInt32] = []
-        for index in 1..<UInt32(positions.count - 1) {
-            indices += [0, index, index + 1]
-        }
-        var descriptor = MeshDescriptor(name: "hub-card")
-        descriptor.positions = MeshBuffer(positions)
-        descriptor.textureCoordinates = MeshBuffer(uvs)
-        descriptor.normals = MeshBuffer(normals)
-        descriptor.primitives = .triangles(indices)
-        return try? MeshResource.generate(from: [descriptor])
+        glow.components.set(BillboardComponent())
+        return glow
     }
 
-    private static func exhibitCard(accent: UIColor) -> (card: Entity, rim: Entity) {
-        let card = Entity()
-
-        // The face is a GRADIENT, not a flat pane: the module's own
-        // colour pooled behind the miniature at the top, guttering to
-        // near black at the foot where the name has to be read. A flat
-        // tint gave nine near-identical slabs; a graded one gives each
-        // card a light source and somewhere dark to put type.
-        var face = UnlitMaterial(color: UIColor(white: 0.06, alpha: 1))
-        if let texture = cardGradient(accent: accent) {
-            face.color = .init(tint: .white, texture: .init(texture))
-        }
-        face.blending = .transparent(opacity: 0.66)
-        face.faceCulling = .none
-        if let mesh = cardFaceMesh() {
-            // A soft dark plate a little larger and a little further
-            // back: not a hard drop shadow, just enough separation that
-            // the card lifts off whatever wall is behind it instead of
-            // lying flat against the wallpaper.
-            var shade = UnlitMaterial(color: UIColor(white: 0.02, alpha: 1))
-            shade.blending = .transparent(opacity: 0.30)
-            shade.faceCulling = .none
-            let shadow = ModelEntity(mesh: mesh, materials: [shade])
-            shadow.scale = SIMD3(repeating: 1.06)
-            shadow.position.z = -0.115
-            card.addChild(shadow)
-
-            let plate = ModelEntity(mesh: mesh, materials: [face])
-            plate.position.z = -0.10
-            card.addChild(plate)
-        }
-
-        // A lit hairline along the TOP of the outline — following the
-        // curve round both upper corners, which is what says "this shape
-        // is rounded" far more than the fill does.
-        let outline = cardOutline(inset: 0.001)
-        let topRun = Array(outline[cornerSegments...(cornerSegments * 2 + 1)])
-        var edgeLight = UnlitMaterial(color: accent)
-        edgeLight.blending = .transparent(opacity: 0.65)
-        if let highlight = TubeMesh.tube(lines: [topRun], radius: 0.0016, sides: 4) {
-            let edge = ModelEntity(mesh: highlight, materials: [edgeLight])
-            edge.position.z = -0.097
-            card.addChild(edge)
-        }
-
-        // A hairline rule above the name, so the caption reads as a
-        // caption rather than as text floating on a panel.
-        var ruleMaterial = UnlitMaterial(color: accent)
-        ruleMaterial.blending = .transparent(opacity: 0.3)
-        let rule = ModelEntity(
-            mesh: .generateBox(size: [cardSize.x * 0.56, 0.0012, 0.003]),
-            materials: [ruleMaterial])
-        rule.position = [0, -cardSize.y / 2 + 0.072, -0.096]
-        card.addChild(rule)
-
-        // The accent frame: the SAME outline, swept as a tube. Sweeping
-        // the curve guarantees the frame and the fill agree about where
-        // the corners are — four straight bars could not, which is why
-        // the card still read as sharp.
-        var edgeMaterial = UnlitMaterial(color: accent)
-        edgeMaterial.blending = .transparent(opacity: 0.95)
-        let rim = Entity()
-        if let frame = TubeMesh.tube(lines: [cardOutline(inset: 0.004)],
-                                     radius: 0.0028, sides: 6) {
-            let bars = ModelEntity(mesh: frame, materials: [edgeMaterial])
-            rim.addChild(bars)
-        }
-        rim.position.z = -0.099
-        card.addChild(rim)
-
-        // Faces the user wherever they stand.
-        card.components.set(BillboardComponent())
-        return (card, rim)
-    }
 
     // MARK: Idle animation & interaction
 

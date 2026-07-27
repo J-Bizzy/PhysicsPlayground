@@ -616,8 +616,21 @@ final class WindTunnelRenderer {
     private var pressureSkinMaterial: UnlitMaterial?
     private var lastSkinVersion = -1
     /// Latitude/longitude resolution of each silhouette sphere.
-    private static let skinRings = 12
-    private static let skinSegments = 20
+    ///
+    /// Halved from 12x20. The skin is rebuilt on the MAIN THREAD, and at
+    /// the old resolution a nine-sphere body meant ~2,500 vertices each
+    /// walking the grid for a pressure sample, plus a MeshResource
+    /// generate, every time a solve landed — a dozen times a second. It
+    /// is a label on a shape, not the shape itself; this reads the same
+    /// and costs a quarter as much.
+    private static let skinRings = 8
+    private static let skinSegments = 14
+    /// The skin never rebuilds faster than this, however often the flow
+    /// solve lands. Pressure on a body changes slowly compared to the
+    /// smoke; three times a second is plenty and it stops the solver's
+    /// arrival rate from driving main-thread mesh work.
+    private static let skinMinimumInterval = 1.0 / 3
+    private var lastSkinBuild: Double = -1
 
     private func syncPressureSkin(_ model: WindTunnelModel) {
         pressureSkin.isEnabled = model.showPressureSkin
@@ -631,6 +644,9 @@ final class WindTunnelRenderer {
             &+ Int(model.cylinderRadius * 1e4)
             &+ Int(model.cylinderCenter.x * 1e4)
         guard version != lastSkinVersion else { return }
+        let now = CACurrentMediaTime()
+        guard now - lastSkinBuild >= Self.skinMinimumInterval else { return }
+        lastSkinBuild = now
         lastSkinVersion = version
 
         if pressureSkinMaterial == nil {

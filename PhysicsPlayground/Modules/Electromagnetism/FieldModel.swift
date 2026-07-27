@@ -136,18 +136,51 @@ final class FieldModel {
         gaussSurfaceCenter = clamped
     }
 
+    /// Everything the flux integral depends on. If none of it moved,
+    /// neither did the answer.
+    private struct GaussInputs: Equatable {
+        var kind: GaussSurfaceKind
+        var center: SIMD3<Double>
+        var normal: SIMD3<Double>
+        var radius: Double
+        var charges: [PointCharge]
+    }
+
+    /// Deliberately outside observation: this is a memo of a value that
+    /// is already derived from observed state, and registering writes to
+    /// it during a read would invalidate views that only read the flux.
+    @ObservationIgnored private var gaussCache: (inputs: GaussInputs, flux: Double)?
+
     /// Live flux through the surface, N·m²/C.
+    ///
+    /// The closed bubble integrates over 900 sample points, against every
+    /// charge — and this is read once by the renderer and again by two
+    /// labels in the controls pod, EVERY FRAME, whether or not anything
+    /// moved. Memoising on the inputs makes a still surface free and
+    /// leaves a moving one costing exactly what it did before. The
+    /// physics is untouched: same integral, same sample count, same
+    /// answer, just not recomputed for a scene that did not change.
     var gaussFlux: Double {
+        let inputs = GaussInputs(kind: gaussSurfaceKind,
+                                 center: gaussSurfaceCenter,
+                                 normal: gaussSurfaceNormal,
+                                 radius: gaussSurfaceRadius,
+                                 charges: charges)
+        if let cache = gaussCache, cache.inputs == inputs { return cache.flux }
+
+        let flux: Double
         switch gaussSurfaceKind {
         case .disc:
-            GaussSurface.flux(
+            flux = GaussSurface.flux(
                 throughDiscAt: gaussSurfaceCenter, normal: gaussSurfaceNormal,
                 radius: gaussSurfaceRadius, charges: charges)
         case .bubble:
-            GaussSurface.flux(
+            flux = GaussSurface.flux(
                 throughSphereAt: gaussSurfaceCenter, radius: gaussSurfaceRadius,
                 charges: charges, samples: 900)
         }
+        gaussCache = (inputs, flux)
+        return flux
     }
 
     /// Charge strictly inside the bubble (nil for the open disc, where

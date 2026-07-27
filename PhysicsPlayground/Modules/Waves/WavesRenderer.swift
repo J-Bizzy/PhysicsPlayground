@@ -331,8 +331,12 @@ final class WavesRenderer {
     /// How many horizontal slices the nodal set is cut into, and how
     /// finely each is marched. Enough to show the nesting; few enough
     /// that the whole extraction still fits comfortably in a worker.
-    private nonisolated static let silenceSliceCount = 9
-    private nonisolated static let silenceResolution = 56
+    /// Enough to show the nesting, few enough that the extraction fits
+    /// comfortably in a worker. 9 slices at 56x56 was 28,000 field
+    /// evaluations per submit, and a submit happens on every change —
+    /// which during a drag means every frame.
+    private nonisolated static let silenceSliceCount = 7
+    private nonisolated static let silenceResolution = 40
 
     /// The silence surfaces, drawn as CONTOUR RINGS rather than a solid
     /// sheet.

@@ -61,11 +61,14 @@ final class RoomModel {
 
     // MARK: Session
 
-    private let session = ARKitSession()
-    private let planes = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
-    private let hands = HandTrackingProvider()
-    private let sceneMesh = SceneReconstructionProvider()
-    private let worldTracking = WorldTrackingProvider()
+    // ALL of these are rebuilt on every start, and that is the whole
+    // point — see `retain()`. A stopped ARKit data provider is DEAD; it
+    // can never run again.
+    private var session = ARKitSession()
+    private var planes = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
+    private var hands = HandTrackingProvider()
+    private var sceneMesh = SceneReconstructionProvider()
+    private var worldTracking = WorldTrackingProvider()
 
     /// Where the user's head is, right now, in immersive-space
     /// coordinates — the one piece of state that lets a module respond
@@ -104,20 +107,80 @@ final class RoomModel {
 
     private var clients = 0
     private var isRunning = false
+    /// Set BEFORE the first await in `retain()`, not after. See below.
+    private var isStarting = false
     private var tasks: [Task<Void, Never>] = []
+    private var shutdown: Task<Void, Never>?
+
+    /// How long the session stays up after the last client leaves.
+    ///
+    /// Switching modules tears the old scene down and builds the new one,
+    /// and SwiftUI does not promise which happens first. Without a grace
+    /// period, every single module switch stopped the session and started
+    /// a fresh one a frame later — sensor churn, a re-scan of the room,
+    /// and the plane/mesh anchors the user had already accumulated thrown
+    /// away each time. Two seconds spans any switch and still releases the
+    /// sensors promptly when you actually go back to the hub and stay.
+    private static let lingerSeconds: Double = 2
+
+    /// Test seam: the linger window, and whether anything still holds
+    /// the room. RoomSessionTests drives the retain/release sequence
+    /// that used to abort the process.
+    static var testLingerSeconds: Double { lingerSeconds }
+    var hasClients: Bool { clients > 0 }
+    var clientCount: Int { clients }
 
     /// Reference-counted start: the first module in brings the session
     /// up, the last one out takes it down. Modules call `retain()` in
     /// their scene's task and `release()` on disappear.
     func retain() async {
         clients += 1
-        guard !isRunning else { return }
+        // Cancel a pending shutdown — this is the module-switch case, and
+        // the session that is already running is exactly the one we want.
+        shutdown?.cancel()
+        shutdown = nil
+
+        // `isRunning` is only true AFTER the await below returns, so
+        // checking it alone let two overlapping retains both reach
+        // `session.run`. Several views retain at once (the module scene,
+        // the occlusion view, the lab anchor), so overlapping is the
+        // normal case, not a rare race — and a double run is one of the
+        // ways ARKit aborts the process.
+        guard !isRunning, !isStarting else { return }
+        isStarting = true
+        defer { isStarting = false }
+
+        // A STOPPED PROVIDER CANNOT BE RE-RUN.
+        //
+        // This crashed the app, and it crashed it in the exact shape the
+        // bug report described: the first module you open is fine, and
+        // opening another one kills the process. `session.stop()` retires
+        // its providers permanently; handing those same objects back to
+        // `run` makes ARKit raise an Objective-C exception. Which is why
+        // the `catch` below never helped — an NSException is not a Swift
+        // error, it unwinds straight past `catch` into abort(). The only
+        // fix is to never re-run a used provider: build a fresh session
+        // and fresh providers for every start.
+        session = ARKitSession()
+        planes = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
+        hands = HandTrackingProvider()
+        sceneMesh = SceneReconstructionProvider()
+        worldTracking = WorldTrackingProvider()
+
         var providers: [any DataProvider] = []
         if PlaneDetectionProvider.isSupported { providers.append(planes) }
         if HandTrackingProvider.isSupported { providers.append(hands) }
         if SceneReconstructionProvider.isSupported { providers.append(sceneMesh) }
         if WorldTrackingProvider.isSupported { providers.append(worldTracking) }
         guard !providers.isEmpty else { return }   // simulator: nothing to run
+
+        // Authorization is asked for explicitly rather than implicitly by
+        // running: a denied provider is another way `run` throws, and
+        // asking first turns that into an ordinary early return.
+        let authorization = await session.requestAuthorization(
+            for: providers.flatMap { type(of: $0).requiredAuthorizations })
+        guard authorization.values.allSatisfy({ $0 == .allowed }) else { return }
+
         do {
             try await session.run(providers)
         } catch {
@@ -138,10 +201,22 @@ final class RoomModel {
     func release() {
         clients = max(0, clients - 1)
         guard clients == 0, isRunning else { return }
+        shutdown?.cancel()
+        shutdown = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.lingerSeconds))
+            guard !Task.isCancelled else { return }
+            await self?.stopNow()
+        }
+    }
+
+    /// Actually takes the sensors down. Only the linger task calls this.
+    private func stopNow() {
+        guard clients == 0, isRunning else { return }
         tasks.forEach { $0.cancel() }
         tasks = []
         session.stop()
         isRunning = false
+        shutdown = nil
     }
 
     // MARK: Planes → bounds + walls

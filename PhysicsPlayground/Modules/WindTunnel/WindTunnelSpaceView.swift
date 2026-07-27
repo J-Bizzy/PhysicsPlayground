@@ -17,7 +17,6 @@ struct WindTunnelSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @State private var renderer: WindTunnelRenderer?
     @State private var fanDrag: RelativeDrag?
-    @State private var sensing = WindTunnelSensing()
     /// Two gauges standing at the mouth of the section: the wind you are
     /// running and the spin you are putting on the cylinder. Both were
     /// sliders on a card; both are the kind of number a tunnel operator
@@ -65,9 +64,11 @@ struct WindTunnelSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     dials?.sync()
-                    // On device, the room and hands flow into the field.
-                    if sensing.isRunning {
-                        model.obstacles = sensing.field
+                    // On device, the room and hands flow into the field,
+                    // from the SHARED room session rather than a private
+                    // one this module used to run in parallel with it.
+                    if appModel.room.hasScannedRoom {
+                        model.obstacles = appModel.room.obstacles
                     }
                     renderer?.tick(dt: event.deltaTime, model: model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
@@ -132,7 +133,6 @@ struct WindTunnelSpaceView: View {
         .task {
             // Hand tracking + scene reconstruction: device-only, quietly
             // absent in the simulator.
-            await sensing.start()
         }
     }
 

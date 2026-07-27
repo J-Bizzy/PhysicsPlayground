@@ -349,8 +349,13 @@ final class WaveMediumRenderer {
     /// The height levels contour lines are drawn at, as a fraction of
     /// the colormap's span. Symmetric about the rest plane so crest and
     /// trough read alike.
+    /// Four levels, not six. The surface job runs EVERY FRAME (the
+    /// membrane is always moving), so each level is a full marching pass
+    /// on the worker sixty times a second — six passes at 54x54 was
+    /// 17,000 samples a frame just for the contour lines.
     private nonisolated static let contourLevels: [Float] =
-        [-0.72, -0.48, -0.24, 0.24, 0.48, 0.72]
+        [-0.62, -0.28, 0.28, 0.62]
+    private nonisolated static let contourResolution = 36
 
     private nonisolated static func computeSurface(_ job: SurfaceJob) -> SurfaceResult {
         let n = job.n
@@ -444,7 +449,7 @@ final class WaveMediumRenderer {
                 },
                 center: .zero,
                 extents: SIMD2(Double(half * 2), Double(half * 2)),
-                resolution: 54)
+                resolution: contourResolution)
             for polyline in MarchingSquares.chain(segments, tolerance: 1e-7)
             where polyline.count > 3 {
                 // Lift each contour a hair off the surface so it never

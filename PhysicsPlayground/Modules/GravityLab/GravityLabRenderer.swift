@@ -312,19 +312,52 @@ final class GravityLabRenderer {
     private var chordVoices: [UUID: ToneVoice] = [:]
     private var chordEmitters: [UUID: Entity] = [:]
 
+    /// The note each body is currently singing, so the per-frame work is
+    /// "keep singing it from over there" rather than "work out what a
+    /// year is here". See `tickOrbitalChord`.
+    private var chordNotes: [UUID: (pitch: Double, loudness: Double)] = [:]
+
+    /// How often orbital periods are re-derived. An orbit's period is a
+    /// property of the whole orbit, not of this instant — it changes when
+    /// you add mass or drag a planet, not between one frame and the next.
+    private static let chordAnalysisInterval = 12
+
     private func tickOrbitalChord(_ model: GravityLabModel) {
         guard model.playOrbitalChord else {
             chordVoices.values.forEach { $0.mute() }
+            chordNotes.removeAll()
             return
         }
-        var live = Set<UUID>()
-        // Earth's year is the anchor, so the reference note is fixed and
-        // the chord doesn't transpose as bodies come and go.
-        let referencePeriod = 365.25
 
+        // `model.readout(for:)` solves the two-body elements AND sums the
+        // potential energy over every other body — so calling it for each
+        // body was quadratic work, every frame, to produce a pitch that
+        // is audibly constant over that span. Re-derived a few times a
+        // second, tracked continuously in position and smoothed in pitch,
+        // it sounds identical.
+        if chordNotes.isEmpty || frameCounter % Self.chordAnalysisInterval == 0 {
+            // Earth's year is the anchor, so the reference note is fixed
+            // and the chord doesn't transpose as bodies come and go.
+            let referencePeriod = 365.25
+            var fresh: [UUID: (pitch: Double, loudness: Double)] = [:]
+            for orbiting in model.bodies {
+                guard let readout = model.readout(for: orbiting),
+                      let periodDays = readout.periodDays, readout.isBound else { continue }
+                // Heavier bodies sing louder — the chord is dominated by
+                // the planets that dominate the system.
+                let loudness = Sonification.loudness(
+                    log10(max(orbiting.body.mass, 1)) - 20, full: 8, knee: 1.0)
+                fresh[orbiting.id] = (
+                    Sonification.pitch(forPeriodSeconds: periodDays,
+                                       referencePeriod: referencePeriod),
+                    max(loudness, 0.12))
+            }
+            chordNotes = fresh
+        }
+
+        var live = Set<UUID>()
         for orbiting in model.bodies {
-            guard let readout = model.readout(for: orbiting),
-                  let periodDays = readout.periodDays, readout.isBound else { continue }
+            guard let note = chordNotes[orbiting.id] else { continue }
             live.insert(orbiting.id)
 
             let emitter: Entity
@@ -337,19 +370,15 @@ final class GravityLabRenderer {
                 chordVoices[orbiting.id] = ToneVoice(on: emitter, range: (-64)...(-30))
             }
             // Sounds from where the body IS, so the chord moves around
-            // the room the way the planets do.
+            // the room the way the planets do. Every frame — this part
+            // is a vector assignment, and it is what makes the chord
+            // feel attached to the objects.
             emitter.position = SIMD3<Float>(orbiting.body.position * model.simToDisplay)
             guard chordVoices[orbiting.id]?.start() == true else { continue }
 
-            // Heavier bodies sing louder — the chord is dominated by the
-            // planets that dominate the system.
-            let loudness = Sonification.loudness(
-                log10(max(orbiting.body.mass, 1)) - 20, full: 8, knee: 1.0)
-            chordVoices[orbiting.id]?.update(
-                pitchHz: Sonification.pitch(forPeriodSeconds: periodDays,
-                                            referencePeriod: referencePeriod),
-                loudness: max(loudness, 0.12),
-                smoothing: 0.08)
+            chordVoices[orbiting.id]?.update(pitchHz: note.pitch,
+                                             loudness: note.loudness,
+                                             smoothing: 0.08)
         }
         // A body that merged, escaped, or was deleted goes silent.
         for (id, voice) in chordVoices where !live.contains(id) {
