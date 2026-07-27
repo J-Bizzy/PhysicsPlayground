@@ -2,19 +2,25 @@
 //  ModuleOrbControls.swift
 //  Physics Playground — Shell
 //
-//  The four floating orb controls every module inherits, hovering
-//  low in front of the user: a BACK orb (chevron) that returns to
-//  the exhibit ring, a PAUSE orb (bars/triangle) that freezes the
-//  module's physics in time, a PODS orb (tiles) that clears the
-//  floating control pods away, and a RESET orb (ring-arrow) that
-//  needs two pinches — the first arms it red for three seconds, the
-//  second restores the module's opening scene, so a stray gaze-pinch
-//  can never wipe a build. Glass spheres with 3D icons
-//  billboarded toward the user; the system hover effect lights them
-//  on gaze, pinch activates.
+//  The control rail: the things you reach for WHILE YOUR HANDS ARE IN
+//  THE SCENE, floating low in front of you — pause the physics, dim the
+//  room, note a measurement, clear the pods away.
+//
+//  It used to carry six beads including Back and Reset, both of which
+//  the module's title bar already has. Duplicating navigation into an
+//  in-space rail made the rail longer, made it unclear which control
+//  lived where, and put a destructive action (reset) within reach of a
+//  stray gaze-pinch — which is why reset needed a two-pinch arming
+//  dance to be safe at all. Navigation and destruction belong on the
+//  window; the rail is for working.
+//
+//  Every bead carries a one-word caption. Six identical glass spheres
+//  with tiny chrome glyphs inside them was a guessing game: nobody
+//  works out from a crescent that it dims the room. VoiceOver had the
+//  answer and sighted users had nothing.
 //
 //  The pause icon tracks the model every frame (pause can also be
-//  toggled from panels), so orb and panels never disagree.
+//  toggled from panels), so rail and panels never disagree.
 //
 
 import SwiftUI
@@ -27,7 +33,6 @@ struct ModuleOrbControlsView: View {
     @Environment(AppModel.self) private var appModel
     @State private var scene = OrbScene()
     @State private var showPodTip = !UserDefaults.standard.bool(forKey: "hint.pods.dismissed")
-    @State private var resetArmedUntil = Date.distantPast
     /// A brief confirmation over the rail after a notebook capture.
     @State private var captureFlash: String?
 
@@ -48,7 +53,6 @@ struct ModuleOrbControlsView: View {
             scene.subscription = content.subscribe(to: SceneEvents.Update.self) { _ in
                 scene.showPausedState(module.isPaused())
                 scene.showPodsState(appModel.controlPodsVisible)
-                scene.showResetArmed(Date() < resetArmedUntil)
                 scene.showDimming(appModel.roomDimming)
             }
         } attachments: {
@@ -97,16 +101,6 @@ struct ModuleOrbControlsView: View {
                         appModel.controlPodsVisible.toggle()
                         SoundPalette.play(.pop, on: scene.podsOrb, volume: 0.5)
                         scene.pulse(scene.podsOrb)
-                    case .reset:
-                        if Date() < resetArmedUntil {
-                            resetArmedUntil = .distantPast
-                            module.reset()
-                            SoundPalette.play(.chime, on: scene.resetOrb, volume: 0.6)
-                        } else {
-                            resetArmedUntil = Date().addingTimeInterval(3)
-                            SoundPalette.play(.pop, on: scene.resetOrb, volume: 0.5)
-                        }
-                        scene.pulse(scene.resetOrb)
                     case .dim:
                         appModel.cycleDimming()
                         SoundPalette.play(.pop, on: scene.dimOrb, volume: 0.4)
@@ -123,13 +117,6 @@ struct ModuleOrbControlsView: View {
                             try? await Task.sleep(for: .seconds(2.4))
                             captureFlash = nil
                         }
-                    case .back:
-                        SoundPalette.play(.pop, on: scene.backOrb, volume: 0.5)
-                        scene.pulse(scene.backOrb)
-                        Task {
-                            try? await Task.sleep(for: .milliseconds(140))
-                            appModel.activeModuleID = nil
-                        }
                     case nil:
                         break
                     }
@@ -142,18 +129,15 @@ struct ModuleOrbControlsView: View {
 @MainActor
 @Observable
 final class OrbScene {
-    enum Action { case pause, back, pods, reset, dim, capture }
+    enum Action { case pause, pods, dim, capture }
 
     let root = Entity()
     var subscription: EventSubscription?
 
     private var accent: UIColor = .white
-    private var resetBand: ModelEntity?
 
     private(set) var pauseOrb = ModelEntity()
-    private(set) var backOrb = ModelEntity()
     private(set) var podsOrb = ModelEntity()
-    private(set) var resetOrb = ModelEntity()
     private(set) var dimOrb = ModelEntity()
     private(set) var captureOrb = ModelEntity()
     private var dimCrescent = Entity()
@@ -163,15 +147,14 @@ final class OrbScene {
     private var podTileSolo = Entity()
     private var showingPaused = false
     private var showingPods = true
-    private var showingResetArmed = false
     private var showingDimming = -1.0
 
     private static let orbRadius: Float = 0.048
 
     // The cluster: six bubbles centred and strung on a shallow glass rail
     // that bows gently toward the user, like beads on a wire.
-    private static let orbCount = 6
-    private static let orbY: Float = 0.85
+    private static let orbCount = 4
+    private static let orbY: Float = 0.92
     private static let orbZ: Float = -0.72
     private static let orbSpacing: Float = 0.15
     private static func orbPosition(_ index: Int) -> SIMD3<Float> {
@@ -186,35 +169,25 @@ final class OrbScene {
 
     func build(accent: UIColor) {
         self.accent = accent
-        backOrb = makeOrb(
-            name: "orb-back",
-            at: Self.orbPosition(0),
-            accessibilityLabel: "Back to the exhibit menu"
-        )
         pauseOrb = makeOrb(
-            name: "orb-pause",
-            at: Self.orbPosition(1),
+            name: "orb-pause", label: "Pause",
+            at: Self.orbPosition(0),
             accessibilityLabel: "Pause or resume the physics"
         )
         dimOrb = makeOrb(
-            name: "orb-dim",
-            at: Self.orbPosition(2),
+            name: "orb-dim", label: "Dim",
+            at: Self.orbPosition(1),
             accessibilityLabel: "Dim the room. Pinch to cycle off, half, and full."
         )
         captureOrb = makeOrb(
-            name: "orb-capture",
-            at: Self.orbPosition(3),
+            name: "orb-capture", label: "Note",
+            at: Self.orbPosition(2),
             accessibilityLabel: "Write this moment into the lab notebook"
         )
         podsOrb = makeOrb(
-            name: "orb-pods",
-            at: Self.orbPosition(4),
+            name: "orb-pods", label: "Pods",
+            at: Self.orbPosition(3),
             accessibilityLabel: "Show or hide the floating control pods"
-        )
-        resetOrb = makeOrb(
-            name: "orb-reset",
-            at: Self.orbPosition(5),
-            accessibilityLabel: "Reset the module. Pinch once to arm, again to reset."
         )
 
         // Dim: a crescent — a filled disc with a smaller one cut in front
@@ -226,8 +199,7 @@ final class OrbScene {
         // Icons are small, smooth, chrome-like models that catch the room
         // light and read against any background — not flat glyphs that wash
         // out inside the clear glass, and not jagged box assemblies.
-        attachIcon(chevronIcon(), to: backOrb)
-
+        //
         // Pause bars vs a play triangle, toggled by state.
         pauseBars = pauseBarsIcon()
         playTriangle = playTriangleIcon()
@@ -245,9 +217,6 @@ final class OrbScene {
         podsIcon.addChild(podTiles)
         podsIcon.addChild(podTileSolo)
         attachIcon(podsIcon, to: podsOrb)
-
-        // Reset: a smooth counter-clockwise ring-arrow.
-        attachIcon(resetRingIcon(), to: resetOrb)
 
     }
 
@@ -282,22 +251,6 @@ final class OrbScene {
         d.normals = MeshBuffers.Normals([[0, 0, 1], [0, 0, 1], [0, 0, 1]])
         d.primitives = .triangles([0, 1, 2, 0, 2, 1])
         return (try? MeshResource.generate(from: [d])) ?? .generateBox(size: 0.01)
-    }
-
-    /// A "‹" chevron: two rounded bars meeting at a left-hand vertex.
-    private func chevronIcon() -> Entity {
-        let icon = Entity()
-        let bar = MeshResource.generateBox(size: [0.021, 0.007, 0.007], cornerRadius: 0.0035)
-        let vertexX: Float = -0.013
-        let half: Float = 0.0105
-        for sign: Float in [1, -1] {
-            let arm = ModelEntity(mesh: bar, materials: [Self.iconMetal()])
-            let angle = sign * (.pi * 0.28)   // ~50° open
-            arm.orientation = simd_quatf(angle: angle, axis: [0, 0, 1])
-            arm.position = [vertexX + half * cos(angle), half * sin(angle), 0]
-            icon.addChild(arm)
-        }
-        return icon
     }
 
     private func pauseBarsIcon() -> Entity {
@@ -342,31 +295,6 @@ final class OrbScene {
         return icon
     }
 
-    /// A smooth ~290° ring swept as a tube, capped by a tangent arrowhead —
-    /// the universal "start over" glyph, with no faceted segments.
-    private func resetRingIcon() -> Entity {
-        let icon = Entity()
-        let radius: Float = 0.016
-        let start: Float = .pi * 0.35
-        let sweep: Float = .pi * 1.62
-        let steps = 44
-        let points: [SIMD3<Float>] = (0...steps).map { i in
-            let a = start + sweep * Float(i) / Float(steps)
-            return [cos(a) * radius, sin(a) * radius, 0]
-        }
-        if let mesh = TubeMesh.tube(lines: [points], radius: 0.0034, sides: 8) {
-            icon.addChild(ModelEntity(mesh: mesh, materials: [Self.iconMetal()]))
-        }
-        // Arrowhead at the swept end, aimed along the counter-clockwise tangent.
-        let endAngle = start + sweep
-        let head = ModelEntity(mesh: Self.triangleMesh(width: 0.013, height: 0.013),
-                               materials: [Self.iconMetal()])
-        head.position = [cos(endAngle) * radius, sin(endAngle) * radius, 0]
-        head.orientation = simd_quatf(angle: endAngle + .pi / 2, axis: [0, 0, 1])
-        icon.addChild(head)
-        return icon
-    }
-
     /// A crafted lit-glass bead: clear-coated for a crisp highlight and
     /// faintly self-lit so it reads as a present instrument, not a ghost.
     static func orbGlass(tint: UIColor = .white, opacity: Float = 0.34,
@@ -383,20 +311,6 @@ final class OrbScene {
         return glass
     }
 
-    /// Armed: the orb warms to red until the confirming pinch (or the
-    /// three-second window closes).
-    func showResetArmed(_ armed: Bool) {
-        guard armed != showingResetArmed else { return }
-        showingResetArmed = armed
-        let warning = UIColor(red: 1, green: 0.32, blue: 0.28, alpha: 1)
-        resetOrb.model?.materials = [armed
-            ? Self.orbGlass(tint: warning, opacity: 0.5, emissive: 0.4)
-            : Self.orbGlass(opacity: 0.26)]
-        var bandMaterial = UnlitMaterial(color: armed ? warning : accent)
-        bandMaterial.blending = .transparent(opacity: armed ? 0.95 : 0.75)
-        resetBand?.model?.materials = [bandMaterial]
-    }
-
     /// A frosted core that gives the button a solid, pressable body —
     /// the icon floats just above it, inside the clear outer shell.
     private static func frostedCore() -> PhysicallyBasedMaterial {
@@ -410,7 +324,43 @@ final class OrbScene {
         return core
     }
 
-    private func makeOrb(name: String, at position: SIMD3<Float>,
+    /// A small caption under a bead.
+    ///
+    /// Six identical glass spheres with tiny chrome glyphs inside them
+    /// is not a control bar, it is a guessing game — nobody is going to
+    /// work out from a crescent that it dims the room, or from a little
+    /// book that it writes a measurement into a notebook. VoiceOver had
+    /// the answer all along and sighted users had nothing. One word each
+    /// costs almost nothing and removes the guessing.
+    private func makeOrbLabel(_ text: String) -> Entity {
+        let pivot = Entity()
+        pivot.components.set(BillboardComponent())
+        let mesh = MeshResource.generateText(
+            text, extrusionDepth: 0.0004,
+            font: .systemFont(ofSize: 0.016, weight: .semibold),
+            alignment: .center)
+        let bounds = mesh.bounds
+        let centre = SIMD3<Float>(-(bounds.min.x + bounds.max.x) / 2,
+                                  -(bounds.min.y + bounds.max.y) / 2, 0)
+        // Dark casing behind pale type, the same trick the field lines
+        // and the hub title use — captions on glass sit over whatever
+        // the room happens to be.
+        var shadowMaterial = UnlitMaterial(color: UIColor(white: 0.02, alpha: 1))
+        shadowMaterial.blending = .transparent(opacity: 0.75)
+        let shadow = ModelEntity(mesh: mesh, materials: [shadowMaterial])
+        shadow.position = centre + SIMD3(0, 0, -0.002)
+        shadow.scale = SIMD3(repeating: 1.14)
+        pivot.addChild(shadow)
+
+        var textMaterial = UnlitMaterial(color: UIColor(white: 0.94, alpha: 1))
+        textMaterial.blending = .transparent(opacity: 0.92)
+        let letters = ModelEntity(mesh: mesh, materials: [textMaterial])
+        letters.position = centre
+        pivot.addChild(letters)
+        return pivot
+    }
+
+    private func makeOrb(name: String, label: String, at position: SIMD3<Float>,
                          accessibilityLabel: String) -> ModelEntity {
         let orb = ModelEntity(
             mesh: .generateSphere(radius: Self.orbRadius),
@@ -436,7 +386,6 @@ final class OrbScene {
             bandMaterial.blending = .transparent(opacity: 0.75)
             let band = ModelEntity(mesh: bandMesh, materials: [bandMaterial])
             orb.addChild(band)
-            if name == "orb-reset" { resetBand = band }
         }
 
         orb.name = name
@@ -450,6 +399,10 @@ final class OrbScene {
         accessibility.label = LocalizedStringResource(stringLiteral: accessibilityLabel)
         orb.components.set(accessibility)
         root.addChild(orb)
+
+        let caption = makeOrbLabel(label)
+        caption.position = position + SIMD3(0, -Self.orbRadius - 0.028, 0)
+        root.addChild(caption)
         return orb
     }
 
@@ -538,9 +491,7 @@ final class OrbScene {
         var current: Entity? = entity
         while let candidate = current {
             if candidate.name == "orb-pause" { return .pause }
-            if candidate.name == "orb-back" { return .back }
             if candidate.name == "orb-pods" { return .pods }
-            if candidate.name == "orb-reset" { return .reset }
             if candidate.name == "orb-dim" { return .dim }
             if candidate.name == "orb-capture" { return .capture }
             current = candidate.parent

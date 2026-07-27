@@ -20,6 +20,7 @@ struct ModuleHostView: View {
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @State private var confirmingReset = false
 
     var body: some View {
         VStack(spacing: 14) {
@@ -88,13 +89,30 @@ struct ModuleHostView: View {
                 .accessibilityLabel("Studio Mode")
                 .accessibilityHint("Replaces your room with a dark studio")
 
+                // Reset ASKS FIRST.
+                //
+                // It used to live on the in-space rail, where a stray
+                // gaze-pinch could fire it, so it carried a two-pinch
+                // arming dance to be safe. Moving it to the window
+                // removed the stray-pinch risk but also removed the
+                // guard — and in Circuit Workshop a reset wipes a bench
+                // that persists across launches. A confirmation is the
+                // platform's own answer and a clearer one than arming.
                 Button {
-                    module.reset()
+                    confirmingReset = true
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
                 }
                 .accessibilityLabel("Reset")
                 .accessibilityHint("Returns this simulation to its starting state")
+                .confirmationDialog("Reset \(module.title)?",
+                                    isPresented: $confirmingReset,
+                                    titleVisibility: .visible) {
+                    Button("Reset", role: .destructive) { module.reset() }
+                    Button("Cancel", role: .cancel) { }
+                } message: {
+                    Text("Everything you have set up here goes back to how the module opened. Recorded notebook entries are kept.")
+                }
             }
             .buttonBorderShape(.circle)
 

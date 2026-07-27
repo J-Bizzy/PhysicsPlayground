@@ -68,6 +68,24 @@ enum ExperimentCatalog {
             .reduce(0, +)
     }
 
+    /// The next thing to do, anywhere in the app.
+    ///
+    /// A tally that says "4 of 24 complete" tells you where you are and
+    /// nothing about where to go — so the hub could only ever be a
+    /// launcher. One concrete next step, with the module it belongs to,
+    /// turns it into somewhere you come back TO.
+    static func nextStep(appModel: AppModel)
+    -> (module: ModuleDescriptor, experiment: Experiment)? {
+        let done = appModel.experiments.completed
+        for module in ModuleCatalog.all(appModel: appModel) {
+            for entry in experiments(for: module.id, appModel: appModel)
+            where !done.contains(entry.experiment.id) {
+                return (module, entry.experiment)
+            }
+        }
+        return nil
+    }
+
     /// How many of the catalog's experiments are done (ignores any
     /// orphaned ids left in storage by retired experiments).
     static func completedCount(appModel: AppModel) -> Int {
@@ -86,7 +104,7 @@ enum ExperimentCatalog {
         [
             (Experiment(id: "magnetism.snap", title: "The snap",
                         detail: "Let two magnets pull together until they touch.",
-                            step: "Pinch a magnet and carry it toward another until they jump together."),
+                            step: "Switch the Fields pod to the Magnetic bench, then carry one magnet toward another until they jump together."),
              { let magnets = model.magnets
                for i in 0..<magnets.count {
                    for j in (i + 1)..<magnets.count
@@ -98,7 +116,7 @@ enum ExperimentCatalog {
                return false }),
             (Experiment(id: "magnetism.bench", title: "Full bench",
                         detail: "Get all four bar magnets into the field at once.",
-                            step: "Tap Add magnet in the Magnets pod until four are floating."),
+                            step: "On the Magnetic bench, tap Add magnet until four are floating."),
              { model.magnets.count >= 4 }),
         ]
     }
@@ -138,7 +156,7 @@ enum ExperimentCatalog {
             return magnetismExperiments(magnets) + [
                 (Experiment(id: "field.dipole", title: "Opposites attract",
                             detail: "Build a dipole — one positive and one negative charge sharing the field.",
-                            step: "The dipole is already here — if you cleared it, tap Add + and Add −."),
+                            step: "On the Electric bench the dipole is already here — if you cleared it, tap Add + and Add −."),
                  { model.charges.contains(where: \.isPositive)
                      && model.charges.contains(where: { !$0.isPositive }) }),
                 (Experiment(id: "field.crowd", title: "Crowd control",
@@ -203,12 +221,12 @@ enum ExperimentCatalog {
             return springExperiments(springs) + [
                 (Experiment(id: "pendulums.orbit", title: "Around the world",
                             detail: "Throw a bob into a true 3D orbit — sideways, hard.",
-                            step: "Grab a bob and throw it sideways, across the swing plane rather than along it."),
+                            step: "On the Pendulum bench, grab a bob and throw it sideways — across the swing plane, not along it."),
                  { model.pendulums.contains {
                      abs($0.state.position.z) > 0.15 && simd_length($0.state.velocity) > 0.5 } }),
                 (Experiment(id: "pendulums.high", title: "Over the top",
                             detail: "Get a bob swinging above its pivot.",
-                            step: "Grab a bob and throw it hard upward — enough to carry it above its own pivot."),
+                            step: "On the Pendulum bench, throw a bob hard enough upward to carry it above its own pivot."),
                  { model.pendulums.contains { $0.state.position.y > 0 } }),
             ]
         case "elasticfield":

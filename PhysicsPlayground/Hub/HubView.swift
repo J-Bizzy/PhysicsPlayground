@@ -43,19 +43,22 @@ struct HubView: View {
             .fixedSize()
             .accessibilityHint("Replaces your room with a dark studio so every exhibit glows at full contrast")
 
-            // The lab notebook's spine: overall experiment progress.
-            let totalExperiments = ExperimentCatalog.total(appModel: appModel)
-            let doneExperiments = ExperimentCatalog.completedCount(appModel: appModel)
-            if totalExperiments > 0 {
-                Label("\(doneExperiments) of \(totalExperiments) experiments complete",
-                      systemImage: doneExperiments == totalExperiments
-                          ? "flask.fill" : "flask")
-                    .font(.footnote)
-                    .foregroundStyle(doneExperiments == totalExperiments
-                        ? AnyShapeStyle(.green) : AnyShapeStyle(.white.opacity(0.75)))
-                    .accessibilityLabel(
-                        "\(doneExperiments) of \(totalExperiments) experiments complete")
-            }
+            // WHERE TO GO NEXT, not just how far you have come.
+            //
+            // "4 of 24 complete" is a score, and a score is only useful
+            // once you already know what to do. The single next unfinished
+            // experiment — named, explained, and one pinch from the module
+            // it lives in — is what makes home somewhere you return TO
+            // rather than a launcher you pass through.
+            HubNextStep()
+
+            // The notebook, reachable from HOME.
+            //
+            // Captured measurements only existed inside a per-module pod,
+            // which is the one place you are NOT when you want to look
+            // back over what you found. A notebook you cannot open at
+            // home is a notebook you never read.
+            HubNotebookButton()
 
             if !appModel.isImmersiveSpaceOpen {
                 Button {
@@ -143,5 +146,209 @@ struct HubCatalogList: View {
             }
         }
         .frame(maxWidth: 500)
+    }
+}
+
+/// The one thing to do next, anywhere in the app — and a way straight to
+/// it. Home stops being a launcher and starts being a place you return to.
+struct HubNextStep: View {
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        let total = ExperimentCatalog.total(appModel: appModel)
+        let done = ExperimentCatalog.completedCount(appModel: appModel)
+
+        VStack(spacing: 7) {
+            if let next = ExperimentCatalog.nextStep(appModel: appModel) {
+                Button {
+                    appModel.activeModuleID = next.module.id
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: next.module.icon)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(next.module.accent)
+                            .frame(width: 28, height: 28)
+                            .background(next.module.accent.opacity(0.18),
+                                        in: RoundedRectangle(cornerRadius: 8,
+                                                             style: .continuous))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(next.experiment.title)
+                                .font(.callout.weight(.semibold))
+                                .lineLimit(1)
+                            Text(next.experiment.step.isEmpty
+                                 ? next.experiment.detail : next.experiment.step)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background(.regularMaterial,
+                            in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .hoverEffect()
+                .accessibilityLabel("Next: \(next.experiment.title) in \(next.module.title)")
+                .accessibilityHint(next.experiment.step)
+            }
+
+            if total > 0 {
+                HStack(spacing: 8) {
+                    ProgressView(value: Double(done), total: Double(total))
+                        .tint(done == total ? .green : .accentColor)
+                        .frame(width: 120)
+                    Text("\(done) of \(total) experiments")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(done) of \(total) experiments complete")
+            }
+        }
+        .frame(maxWidth: 420)
+    }
+}
+
+/// Opens the whole lab notebook from home.
+struct HubNotebookButton: View {
+    @Environment(AppModel.self) private var appModel
+    @State private var showing = false
+
+    var body: some View {
+        let count = appModel.notebook.entries.count
+        Button {
+            showing = true
+        } label: {
+            Label(count == 0 ? "Lab notebook" : "Lab notebook · \(count)",
+                  systemImage: "book.closed")
+                .font(.subheadline)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+        }
+        .buttonStyle(.podQuiet)
+        .fixedSize()
+        .accessibilityHint("Everything you have recorded, across every module")
+        .sheet(isPresented: $showing) {
+            HubNotebookView()
+                .environment(appModel)
+        }
+    }
+}
+
+/// Every recorded observation, newest first, with export.
+struct HubNotebookView: View {
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var exporting: (title: String, text: String)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Lab notebook", systemImage: "book.closed")
+                    .font(.title2.bold())
+                Spacer()
+                if !appModel.notebook.entries.isEmpty {
+                    Button("CSV") {
+                        exporting = ("Notebook — CSV", appModel.notebook.csv)
+                    }
+                    .buttonStyle(.podQuiet)
+                    Button("Markdown") {
+                        exporting = ("Notebook — Markdown", appModel.notebook.markdown)
+                    }
+                    .buttonStyle(.podQuiet)
+                }
+                Button("Done") { dismiss() }
+                    .buttonStyle(.podProminent)
+            }
+
+            if appModel.notebook.entries.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Nothing recorded yet.")
+                        .font(.headline)
+                    Text("Inside any module, pinch the Note bead on the control rail to write down every live reading at that instant — the numbers saved are exactly what the physics said.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 24)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(appModel.notebook.entries) { entry in
+                            NotebookEntryRow(entry: entry)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(22)
+        .frame(minWidth: 560, minHeight: 460)
+        .sheet(item: Binding(
+            get: { exporting.map { NotebookExport(title: $0.title, text: $0.text) } },
+            set: { _ in exporting = nil })) { export in
+            NotebookExportView(title: export.title, text: export.text)
+        }
+    }
+}
+
+/// A wrapper so the export sheet can be presented by item.
+struct NotebookExport: Identifiable {
+    let id = UUID()
+    let title: String
+    let text: String
+}
+
+private struct NotebookEntryRow: View {
+    let entry: NotebookEntry
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(entry.moduleTitle)
+                    .font(.callout.weight(.semibold))
+                Text(entry.date, format: .dateTime.month().day().hour().minute())
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 6)
+                Button(role: .destructive) {
+                    appModel.notebook.remove(entry.id)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Delete this entry")
+            }
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 3) {
+                ForEach(entry.readings.indices, id: \.self) { index in
+                    let reading = entry.readings[index]
+                    GridRow {
+                        Text(reading.name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(reading.value)
+                            .font(.caption.monospacedDigit())
+                            .gridColumnAlignment(.trailing)
+                        Text(reading.unit)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial,
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
