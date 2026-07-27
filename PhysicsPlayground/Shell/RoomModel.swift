@@ -75,11 +75,31 @@ final class RoomModel {
     /// nil until world tracking is running (always, in the simulator),
     /// so every caller has to have a sensible answer without it.
     var headPosition: SIMD3<Double>? {
+        lookRay?.origin
+    }
+
+    /// Where the user is LOOKING, as a ray from between their eyes.
+    ///
+    /// visionOS deliberately does not hand an app raw eye gaze — the
+    /// system uses it for highlighting and never reports it, which is
+    /// the right privacy call. What IS available is the device pose, so
+    /// this is head direction: turn your head toward something and it
+    /// points at it. It is not eye tracking, and nothing in the app
+    /// claims it is; it is enough to let you MEASURE by looking, which
+    /// is the interaction that was missing.
+    var lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)? {
         guard worldTracking.state == .running,
               let anchor = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime())
         else { return nil }
-        let c = anchor.originFromAnchorTransform.columns.3
-        return SIMD3(Double(c.x), Double(c.y), Double(c.z))
+        let m = anchor.originFromAnchorTransform
+        let origin = SIMD3(Double(m.columns.3.x), Double(m.columns.3.y),
+                           Double(m.columns.3.z))
+        // The device looks along its own −Z, as cameras do.
+        let forward = -SIMD3(Double(m.columns.2.x), Double(m.columns.2.y),
+                             Double(m.columns.2.z))
+        let length = simd_length(forward)
+        guard length > 1e-9 else { return nil }
+        return (origin, forward / length)
     }
 
     private var clients = 0

@@ -69,6 +69,10 @@ enum WindTunnelModule {
             text: "Cylinder — grab and drag it; it visibly spins at the rate its circulation implies"
         ),
         LegendItem(
+            swatch: .fill(Color(red: 0.92, green: 0.13, blue: 0.10)),
+            text: "The body's PRESSURE SKIN — Cp read off the solved flow just outside the surface. Red is air piling up and pushing back (that is where drag comes from); blue is air accelerated past, at lower pressure (that is where lift comes from). Grey means free-stream: nothing happening"
+        ),
+        LegendItem(
             swatch: .line(Color(red: 0.85, green: 0.24, blue: 0.10)),
             text: "Red filament — air piled up and slowed. Because the flow is incompressible, Cp = 1 − (v/U)², so slow means HIGH PRESSURE: the red band across a nose is the pressure that becomes drag"
         ),

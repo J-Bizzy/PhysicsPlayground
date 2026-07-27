@@ -231,6 +231,20 @@ struct GaussSurfaceControls: View {
             .pickerStyle(.segmented)
             .labelsHidden()
 
+            Toggle("Move it where I look", isOn: $model.lookToPlace)
+                .accessibilityHint("The surface follows the direction your head is facing")
+            if model.lookToPlace {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Reach: \(model.lookReach, specifier: "%.2f") m")
+                        .font(DesignTokens.TypeScale.control.monospacedDigit())
+                    Slider(value: $model.lookReach, in: FieldModel.lookReachRange)
+                        .accessibilityLabel("How far along your look direction the surface sits")
+                    Text("Head direction, not eye tracking — visionOS never gives an app your gaze.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             VStack(alignment: .leading, spacing: 4) {
                 Text("Radius: \(model.gaussSurfaceRadius * 100, specifier: "%.0f") cm")
                     .font(DesignTokens.TypeScale.control)

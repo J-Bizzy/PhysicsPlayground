@@ -44,10 +44,9 @@ struct WaveMediumSpaceView: View {
                     // moves a body by hand DISPLACEMENT, which a constant
                     // translation leaves untouched.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // …but the control pods do NOT go with it: the user
-                    // parked them where they wanted them, and moving the
-                    // apparatus is not a request to move the controls.
-                    podsRoot.position = -appModel.labPlacement.offset
+                    // (No counter-translation here: this module's pods
+                    // hang off the scene content rather than the renderer
+                    // root, so they never inherited the offset.)
                 }
             )
             self.renderer = renderer

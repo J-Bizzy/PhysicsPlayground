@@ -18,11 +18,34 @@ struct WavesSpaceView: View {
     @State private var renderer: WavesRenderer?
     @State private var drag: RelativeDrag?
     @Environment(AppModel.self) private var appModel
+    /// Two gauges you TWIST rather than two sliders on a card: the
+    /// driver frequency and the medium's wave speed, standing at the
+    /// edge of the field where the physics is.
+    @State private var dials: DialConsole?
 
     var body: some View {
         RealityView { content, attachments in
             let renderer = WavesRenderer()
             content.add(renderer.root)
+
+            let console = DialConsole([
+                .init(name: "dial-frequency", title: "Frequency",
+                      center: SIMD3(-0.74, 1.20, -0.62),
+                      range: WavesModel.frequencyRange,
+                      accent: DesignTokens.Palette.wavesAccentUI,
+                      read: { model.frequency },
+                      write: { model.frequency = $0 },
+                      format: { String(format: "%.2f Hz", $0) }),
+                .init(name: "dial-speed", title: "Wave speed",
+                      center: SIMD3(0.74, 1.20, -0.62),
+                      range: WavesModel.speedRange,
+                      accent: DesignTokens.Palette.wavesAccentUI,
+                      read: { model.waveSpeed },
+                      write: { model.waveSpeed = $0 },
+                      format: { String(format: "%.2f m/s", $0) }),
+            ])
+            renderer.root.addChild(console.root)
+            dials = console
 
             let podsRoot = PodMount.makeRoot(module: "waves")
             renderer.root.addChild(podsRoot)
@@ -38,6 +61,18 @@ struct WavesSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.step(dt: event.deltaTime)
+                    dials?.sync()
+                    // Look-to-measure: with the probe following the head
+                    // ray, turning to face a part of the field reads it
+                    // out there. Head direction, not eye gaze — visionOS
+                    // never hands an app the eyes, and nothing here
+                    // pretends otherwise.
+                    if model.lookProbe, let ray = appModel.room.lookRay,
+                       let point = WavesModel.region.point(
+                        onRay: ray.origin, direction: ray.direction,
+                        reach: model.lookReach) {
+                        model.moveProbe(to: point)
+                    }
                     renderer?.tick(model, listener: appModel.room.headPosition)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
@@ -77,7 +112,9 @@ struct WavesSpaceView: View {
                 .onChanged { value in
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
+                    if dials?.advanceTwist(hand: hand) == true { return }
                     if drag == nil {
+                        if dials?.beginTwist(on: value.entity, hand: hand) == true { return }
                         var current: Entity? = value.entity
                         while let candidate = current {
                             if candidate.name == WavesRenderer.probeName {
@@ -103,7 +140,10 @@ struct WavesSpaceView: View {
                         model.moveSource(id: id, to: position)
                     }
                 }
-                .onEnded { _ in drag = nil }
+                .onEnded { _ in
+                    drag = nil
+                    dials?.endTwist()
+                }
         )
     }
 
@@ -129,6 +169,20 @@ struct WavesPod: View {
             Toggle("Hear the field", isOn: $model.listenToField)
                 .font(DesignTokens.TypeScale.control)
                 .accessibilityHint("Sounds the wave amplitude at your own head — walk into a silence sheet and it goes quiet")
+            Toggle("Measure where I look", isOn: $model.lookProbe)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("The probe follows the direction your head is facing, so turning to look at part of the field reads it out there")
+            if model.lookProbe {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Reach: \(model.lookReach, specifier: "%.2f") m")
+                        .font(DesignTokens.TypeScale.control.monospacedDigit())
+                    Slider(value: $model.lookReach, in: WavesModel.lookReachRange)
+                        .accessibilityLabel("How far along your look direction the probe sits")
+                    Text("Head direction, not eye tracking — visionOS never gives an app your gaze.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Text("Walk into a silence sheet and the tone drops away — the amplitude at your ears, not at a probe.")
                 .font(DesignTokens.TypeScale.footnote)
                 .foregroundStyle(.secondary)

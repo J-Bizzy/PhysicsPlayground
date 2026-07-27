@@ -331,7 +331,7 @@ final class WavesRenderer {
     /// How many horizontal slices the nodal set is cut into, and how
     /// finely each is marched. Enough to show the nesting; few enough
     /// that the whole extraction still fits comfortably in a worker.
-    private nonisolated static let silenceSliceCount = 7
+    private nonisolated static let silenceSliceCount = 9
     private nonisolated static let silenceResolution = 56
 
     /// The silence surfaces, drawn as CONTOUR RINGS rather than a solid
@@ -358,44 +358,61 @@ final class WavesRenderer {
         let meanAmplitude = job.sources.map(\.amplitude).reduce(0, +) / Double(job.sources.count)
         let level = 0.12 * meanAmplitude * (WaveField.falloffRadius / 0.3)
 
-        // Slice only the band the SOURCES actually occupy, not the whole
-        // region. Far from every source the field is weak and the level
-        // set degenerates into noise — slicing out there produced dense
-        // scribbles of meaningless contour at the ceiling, which is worse
-        // than the fog it replaced. The interference pattern lives
-        // between and around the sources; that is where it gets drawn.
+        // Slice PERPENDICULAR TO THE SOURCE AXIS, not horizontally.
+        //
+        // For two sources the nodal set is a family of hyperboloids of
+        // revolution about the line joining them. Cut those with
+        // horizontal planes and you get hyperbola branches that leave
+        // the region almost immediately — short disconnected slivers
+        // that read as debris. Cut them PERPENDICULAR to that axis and
+        // you get circles: closed, nested, obviously concentric, and
+        // obviously the cross-section of a sheet. The surface is the
+        // same surface; only the knife changed.
         var low = job.sources[0].position, high = job.sources[0].position
         for source in job.sources.dropFirst() {
             low = simd_min(low, source.position)
             high = simd_max(high, source.position)
         }
-        let span = max(simd_distance(low, high), 0.3)
-        let margin = min(span * 0.7, 0.75)
-        let sliceLow = low.y - margin, sliceHigh = high.y + margin
-        let center = SIMD2((low.x + high.x) / 2, (low.z + high.z) / 2)
-        let extents = SIMD2(high.x - low.x + 2 * margin, high.z - low.z + 2 * margin)
+        let axisVector = job.sources.count >= 2
+            ? job.sources[1].position - job.sources[0].position
+            : SIMD3<Double>(1, 0, 0)
+        let axisLength = simd_length(axisVector)
+        let u = axisLength > 1e-6 ? axisVector / axisLength : SIMD3(1, 0, 0)
+        // Any two vectors completing u into a frame.
+        let helper: SIMD3<Double> = abs(u.y) < 0.9 ? SIMD3(0, 1, 0) : SIMD3(1, 0, 0)
+        let v = simd_normalize(simd_cross(helper, u))
+        let w = simd_cross(u, v)
+        let midpoint = (low + high) / 2
+        let span = max(axisLength, 0.3)
+        // Slice across the pair and a little beyond each end, where the
+        // sheets flare out and the nesting is clearest.
+        let half = span * 0.85
+        let radius = min(span * 1.3, WavesModel.regionHalfExtent)
 
         var lines: [[SIMD3<Float>]] = []
         for step in 0..<Self.silenceSliceCount {
             let t = (Double(step) + 0.5) / Double(Self.silenceSliceCount)
-            let y = sliceLow + (sliceHigh - sliceLow) * t
+            let along = -half + 2 * half * t
+            let origin = midpoint + u * along
             let segments = MarchingSquares.contour(
                 level: level,
                 scalar: { plane in
                     WaveField.steadyAmplitude(
-                        at: SIMD3(plane.x, y, plane.y),
+                        at: origin + v * plane.x + w * plane.y,
                         sources: job.sources,
                         frequency: job.frequency, speed: job.speed)
                 },
-                center: center, extents: extents,
+                center: .zero,
+                extents: SIMD2(2 * radius, 2 * radius),
                 resolution: Self.silenceResolution)
-            // Drop the shortest pieces: a contour that survives only a
-            // few cells is numerical lint, not a nodal sheet.
             for polyline in MarchingSquares.chain(segments, tolerance: 1e-7) {
                 let length = zip(polyline, polyline.dropFirst())
                     .reduce(0.0) { $0 + simd_distance($1.0, $1.1) }
-                guard polyline.count > 3, length > 0.12 else { continue }
-                lines.append(polyline.map { SIMD3<Float>(Float($0.x), Float(y), Float($0.y)) })
+                // Drop numerical lint, keep anything that reads as a ring.
+                guard polyline.count > 4, length > 0.10 else { continue }
+                lines.append(polyline.map {
+                    SIMD3<Float>(origin + v * $0.x + w * $0.y)
+                })
             }
         }
 

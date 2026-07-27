@@ -110,4 +110,43 @@ final class RoomBoxTests: XCTestCase {
         XCTAssertEqual(box.inset(by: 0.25).halfExtents.x, 0.75, accuracy: 1e-12)
         XCTAssertEqual(box.inset(by: 99).halfExtents.x, 0.001, accuracy: 1e-12)
     }
+    // MARK: Look-ray placement
+
+    /// A reach inside the box is honoured exactly.
+    func testPointOnRayUsesTheRequestedReachWhenItFits() {
+        let point = box.point(onRay: SIMD3(0, 0, -3), direction: SIMD3(0, 0, 1), reach: 3.5)
+        XCTAssertNotNil(point)
+        XCTAssertEqual(point!.z, 0.5, accuracy: 1e-12)
+    }
+
+    /// Reaching past the far wall stops AT the far wall — you cannot
+    /// measure a field outside the region that holds it.
+    func testPointOnRayIsPulledBackToTheFarWall() {
+        let point = box.point(onRay: SIMD3(0, 0, -3), direction: SIMD3(0, 0, 1), reach: 99)
+        XCTAssertNotNil(point)
+        XCTAssertEqual(point!.z, 1, accuracy: 1e-12)
+    }
+
+    /// Too short a reach is pushed forward to where the ray enters, so
+    /// the probe never sits behind the experiment.
+    func testPointOnRayIsPushedForwardToTheNearWall() {
+        let point = box.point(onRay: SIMD3(0, 0, -3), direction: SIMD3(0, 0, 1), reach: 0.5)
+        XCTAssertNotNil(point)
+        XCTAssertEqual(point!.z, -1, accuracy: 1e-12)
+    }
+
+    /// Looking away from the experiment measures nothing rather than
+    /// reporting a number about empty air.
+    func testPointOnRayIsNilWhenTheRayMissesTheBox() {
+        XCTAssertNil(box.point(onRay: SIMD3(0, 5, -3), direction: SIMD3(0, 0, 1), reach: 3))
+    }
+
+    /// And nothing BEHIND the viewer counts, even if the box is there.
+    func testPointOnRayIgnoresWhatIsBehindTheViewer() {
+        XCTAssertNil(box.point(onRay: SIMD3(0, 0, -3), direction: SIMD3(0, 0, -1), reach: 3))
+    }
+
+    func testPointOnRayNeedsARealDirection() {
+        XCTAssertNil(box.point(onRay: .zero, direction: .zero, reach: 1))
+    }
 }

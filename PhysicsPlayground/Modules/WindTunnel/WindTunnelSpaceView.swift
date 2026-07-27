@@ -18,6 +18,11 @@ struct WindTunnelSpaceView: View {
     @State private var renderer: WindTunnelRenderer?
     @State private var fanDrag: RelativeDrag?
     @State private var sensing = WindTunnelSensing()
+    /// Two gauges standing at the mouth of the section: the wind you are
+    /// running and the spin you are putting on the cylinder. Both were
+    /// sliders on a card; both are the kind of number a tunnel operator
+    /// reaches out and turns.
+    @State private var dials: DialConsole?
 
     var body: some View {
         RealityView { content, attachments in
@@ -27,6 +32,26 @@ struct WindTunnelSpaceView: View {
             // Control pods: the wind card floats beside the fan, the
             // test-body card hangs low under the section.
             let podsRoot = PodMount.makeRoot(module: "windtunnel")
+            let console = DialConsole([
+                .init(name: "dial-wind", title: "Wind",
+                      center: SIMD3(-0.86, 1.16, -0.78),
+                      range: WindTunnelModel.windSpeedRange,
+                      accent: DesignTokens.Palette.windAccentUI,
+                      read: { model.windSpeed },
+                      write: { model.windSpeed = $0 },
+                      format: { String(format: "%.2f m/s", $0) }),
+                .init(name: "dial-spin", title: "Spin",
+                      center: SIMD3(0.86, 1.16, -0.78),
+                      range: WindTunnelModel.circulationRange,
+                      accent: DesignTokens.Palette.windAccentUI,
+                      read: { model.circulation },
+                      write: { model.circulation = $0 },
+                      format: { String(format: "%.0f rpm", $0 / (2 * .pi
+                          * model.cylinderRadius * model.cylinderRadius) * 60 / (2 * .pi)) }),
+            ])
+            renderer.root.addChild(console.root)
+            dials = console
+
             renderer.root.addChild(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-wind"), name: "Wind",
                            at: [-1.35, 1.95, -1.15], in: podsRoot)
@@ -39,6 +64,7 @@ struct WindTunnelSpaceView: View {
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
+                    dials?.sync()
                     // On device, the room and hands flow into the field.
                     if sensing.isRunning {
                         model.obstacles = sensing.field
@@ -85,7 +111,9 @@ struct WindTunnelSpaceView: View {
                     guard let renderer else { return }
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
+                    if dials?.advanceTwist(hand: hand) == true { return }
                     if fanDrag == nil {
+                        if dials?.beginTwist(on: value.entity, hand: hand) == true { return }
                         fanDrag = beginDrag(entity: value.entity, hand: hand, renderer: renderer)
                     }
                     guard let fanDrag else { return }
@@ -98,6 +126,7 @@ struct WindTunnelSpaceView: View {
                         apply(drag: fanDrag, hand: hand, renderer: renderer)
                     }
                     fanDrag = nil
+                    dials?.endTwist()
                 }
         )
         .task {

@@ -44,6 +44,11 @@ final class WindTunnelModel {
     /// Γ, counterclockwise-positive seen from above.
     var circulation = 0.0
 
+    /// Paint the body with the solved surface pressure: red where the
+    /// air is piling up and pushing, blue where it has accelerated past
+    /// and the pressure has dropped. Cp = 1 − (v/U)², read off the same
+    /// field the smoke is riding.
+    var showPressureSkin = true
     var showStreamlines = true
     var showParticles = true
     var isPaused = false
@@ -189,6 +194,7 @@ final class WindTunnelModel {
         cylinderRadius = 0.06
         cylinderCenter = SIMD2(-0.3, 0)
         circulation = 0.0
+        showPressureSkin = true
         showStreamlines = true
         showParticles = true
         isPaused = false

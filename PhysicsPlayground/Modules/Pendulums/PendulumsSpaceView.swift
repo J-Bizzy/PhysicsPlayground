@@ -21,6 +21,11 @@ struct PendulumsSpaceView: View {
     @State private var renderer: PendulumsRenderer?
     @State private var drag: RelativeDrag?
     @State private var handSamples: [(time: Double, position: SIMD3<Double>)] = []
+    /// A gravity gauge under the beam. "What if this were the Moon" is
+    /// the question this bench exists to answer, and it was a slider in
+    /// a card — now it is a dial you turn while watching the swing
+    /// stretch out in front of you.
+    @State private var dials: DialConsole?
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -29,6 +34,18 @@ struct PendulumsSpaceView: View {
             content.add(renderer.root)
 
             let podsRoot = PodMount.makeRoot(module: "pendulums")
+            let console = DialConsole([
+                .init(name: "dial-gravity", title: "Gravity",
+                      center: SIMD3(-0.82, 1.28, -0.74),
+                      range: PendulumsModel.gravityRange,
+                      accent: UIColor(DesignTokens.Palette.pendulumsAccent),
+                      read: { model.gravity },
+                      write: { model.gravity = $0 },
+                      format: { String(format: "%.2f m/s²", $0) }),
+            ])
+            renderer.root.addChild(console.root)
+            dials = console
+
             renderer.root.addChild(podsRoot)
             PodMount.mount(attachments.entity(for: "pod-bench"), name: "Bench",
                            at: [-1.1, 1.75, -0.9], in: podsRoot)
@@ -45,6 +62,7 @@ struct PendulumsSpaceView: View {
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
+                    dials?.sync()
                     renderer?.tick(dt: event.deltaTime, model: model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
@@ -90,7 +108,9 @@ struct PendulumsSpaceView: View {
                 .onChanged { value in
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
+                    if dials?.advanceTwist(hand: hand) == true { return }
                     if drag == nil {
+                        if dials?.beginTwist(on: value.entity, hand: hand) == true { return }
                         var current: Entity? = value.entity
                         while let candidate = current {
                             if let id = UUID(uuidString: candidate.name),
@@ -120,6 +140,7 @@ struct PendulumsSpaceView: View {
                         renderer?.grabbedID = nil
                         drag = nil
                         handSamples = []
+                        dials?.endTwist()
                     }
                     guard let drag, let id = UUID(uuidString: drag.name) else { return }
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(

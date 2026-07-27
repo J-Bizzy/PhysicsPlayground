@@ -77,6 +77,21 @@ final class WavesModel {
     /// and it was previously only readable as a number on a probe card.
     var listenToField = true
 
+    /// Measure by LOOKING: the probe rides the head ray, so turning to
+    /// face a part of the field reads it out there. This is head
+    /// direction rather than eye gaze — visionOS never hands an app the
+    /// eyes, and the UI says so.
+    var lookProbe = false
+    /// How far along the look ray the probe sits, metres.
+    var lookReach = 1.1
+    nonisolated static let lookReachRange = 0.5...2.2
+
+    /// The field's volume as a clip box, for the look ray to land in.
+    nonisolated static var region: RoomBox {
+        RoomBox(center: regionCenter,
+                halfExtents: SIMD3(repeating: regionHalfExtent))
+    }
+
     // MARK: Time
 
     var isPaused = false
@@ -312,6 +327,8 @@ final class WavesModel {
         showSilenceSurfaces = true
         showWavefronts = true
         listenToField = true
+        lookProbe = false
+        lookReach = 1.1
         isPaused = false
         timeScale = 1.0
         time = 0

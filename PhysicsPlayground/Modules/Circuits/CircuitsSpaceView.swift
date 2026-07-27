@@ -22,6 +22,12 @@ struct CircuitsSpaceView: View {
     @State private var trayDragID: UUID?
     @State private var gripDrag: (grip: CircuitsModel.Terminal, pivot: SIMD3<Double>)?
     @Environment(AppModel.self) private var appModel
+    /// Two-handed zoom on the bench. Electron View is now a FLOOR under
+    /// this same number rather than a competing 1x/4x flip, so "get in
+    /// among the electrons" and "pull the bench open with both hands"
+    /// are one continuous control.
+    @State private var scaleRig = SpatialScaleRig(
+        pivot: CircuitsRenderer.benchPivot, range: 0.6...8.0, allowsTurn: false)
 
     var body: some View {
         RealityView { content, attachments in
@@ -58,15 +64,15 @@ struct CircuitsSpaceView: View {
                     // moves a body by hand DISPLACEMENT, which a constant
                     // translation leaves untouched.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // …but the control pods do NOT go with it: the user
-                    // parked them where they wanted them, and moving the
-                    // apparatus is not a request to move the controls.
-                    podsRoot.position = -appModel.labPlacement.offset
+                    // (No counter-translation here: this module's pods
+                    // hang off the scene content rather than the renderer
+                    // root, so they never inherited the offset.)
                     model.step(dt: event.deltaTime)
                     // Rendered here every frame (not via the observation
                     // loop): a steady DC circuit mutates nothing that
                     // observation reliably re-fires on, but its electrons
                     // must keep drifting.
+                    renderer?.handZoom = scaleRig.liveScale
                     renderer?.tick(dt: event.deltaTime, model: model)
                 }
             )
@@ -117,8 +123,16 @@ struct CircuitsSpaceView: View {
                 .targetedToAnyEntity()
                 .onChanged { value in
                     guard let renderer else { return }
-                    let handF = SIMD3<Float>(value.convert(
-                        value.location3D, from: .local, to: .scene))
+                    // Into the BENCH's own frame, not the room's. The
+                    // bench can be zoomed (Electron View, two hands) and
+                    // moved (lab placement); converting through viewRoot
+                    // inverts both exactly, so a part follows the hand
+                    // 1:1 on screen at any zoom instead of flying four
+                    // times as far.
+                    let handF = renderer.viewRoot.convert(
+                        position: SIMD3<Float>(value.convert(
+                            value.location3D, from: .local, to: .scene)),
+                        from: nil)
                     let hand = SIMD3<Double>(handF)
                     if wireDragFrom == nil, partDrag == nil {
                         beginCircuitDrag(entity: value.entity, hand: hand, renderer: renderer)
@@ -146,8 +160,16 @@ struct CircuitsSpaceView: View {
                         model.endCarry()
                     }
                     guard let renderer else { return }
-                    let handF = SIMD3<Float>(value.convert(
-                        value.location3D, from: .local, to: .scene))
+                    // Into the BENCH's own frame, not the room's. The
+                    // bench can be zoomed (Electron View, two hands) and
+                    // moved (lab placement); converting through viewRoot
+                    // inverts both exactly, so a part follows the hand
+                    // 1:1 on screen at any zoom instead of flying four
+                    // times as far.
+                    let handF = renderer.viewRoot.convert(
+                        position: SIMD3<Float>(value.convert(
+                            value.location3D, from: .local, to: .scene)),
+                        from: nil)
                     let hand = SIMD3<Double>(handF)
                     if let source = wireDragFrom {
                         if let target = nearestTerminal(to: handF, excluding: source) {
@@ -167,6 +189,7 @@ struct CircuitsSpaceView: View {
                     }
                 }
         )
+        .spatialScale(scaleRig)
     }
 
     /// Resolves what the pinch landed on and opens the right session:
@@ -198,7 +221,7 @@ struct CircuitsSpaceView: View {
             if name.hasPrefix("tray-") {
                 guard let kind = CircuitsModel.ComponentKind(
                         rawValue: String(name.dropFirst(5))) else { return }
-                let templateWorld = SIMD3<Double>(candidate.position(relativeTo: nil))
+                let templateWorld = SIMD3<Double>(candidate.position(relativeTo: renderer.viewRoot))
                 guard let id = model.add(kind, at: templateWorld) else { return }
                 trayDragID = id
                 partDrag = RelativeDrag(name: name, target: templateWorld, hand: hand)
@@ -405,12 +428,12 @@ struct CircuitBenchPod: View {
                 .accessibilityHint("Cyan dots drifting minus to plus along every live wire")
             Toggle("Electron View", isOn: $model.electronView)
                 .font(DesignTokens.TypeScale.control)
-                .accessibilityHint("The bench swells around you until wires are tunnels — walk inside your circuit")
-            if model.electronView {
-                Text("Wires are tunnels now. Electrons drift slowly — millimeters per second — but the field pushes all of them at once, everywhere.")
-                    .font(DesignTokens.TypeScale.footnote)
-                    .foregroundStyle(.secondary)
-            }
+                .accessibilityHint("Swells the bench to four times size; pinch with both hands to go further, or anywhere in between")
+            Text(model.electronView
+                 ? "Wires are tunnels now. Electrons drift slowly — millimetres per second — but the field pushes all of them at once, everywhere. Pinch with both hands and pull apart to go further in."
+                 : "Pinch with both hands and pull apart to zoom the bench — Electron View is just a shortcut to 4×.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
             Toggle("Voltage heights", isOn: $model.showVoltageHeights)
                 .font(DesignTokens.TypeScale.control)
                 .accessibilityHint("Raises a glowing tower over every node to a height equal to its voltage — potential as terrain")

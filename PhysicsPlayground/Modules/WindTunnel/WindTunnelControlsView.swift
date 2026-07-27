@@ -24,6 +24,8 @@ struct WindTunnelControlsView: View {
                     range: WindTunnelModel.radiusRange, format: "%.0f cm",
                     scale: 100
                 )
+                Toggle("Pressure skin", isOn: $model.showPressureSkin)
+                    .accessibilityHint("Paints the body with the solved surface pressure: red where the air piles up, blue where it accelerates past")
                 Toggle("Streamlines", isOn: $model.showStreamlines)
                     .accessibilityHint("Lines the air actually follows")
                 Toggle("Air particles", isOn: $model.showParticles)

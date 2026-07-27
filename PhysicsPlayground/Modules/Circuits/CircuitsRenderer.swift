@@ -98,7 +98,19 @@ final class CircuitsRenderer {
     private var glowMaterials: [UnlitMaterial] = []
 
 
+    /// The bench's VIEW transform.
+    ///
+    /// `root` belongs to the lab placement — where in your room the
+    /// workshop sits. `viewRoot` belongs to the ZOOM, and the two used
+    /// to fight: Electron View wrote root.position and root.scale every
+    /// frame while the lab offset wrote root.position too, so whichever
+    /// ran last won and moving the lab did nothing here. Splitting them
+    /// gives each one transform of its own, which is also what lets the
+    /// two-handed gesture in.
+    let viewRoot = Entity()
+
     init() {
+        root.addChild(viewRoot)
         root.addChild(Lighting.keyLight())
         // Bulb glow brightness buckets (materials made once).
         glowMaterials = (0..<6).map { step in
@@ -120,16 +132,16 @@ final class CircuitsRenderer {
             core.addChild(ModelEntity(mesh: haloMesh, materials: [haloMaterial]))
             container.addChild(core)
         }
-        root.addChild(electronPool.root)
+        viewRoot.addChild(electronPool.root)
 
         selectedAnchor.components.set(BillboardComponent())
-        root.addChild(selectedAnchor)
+        viewRoot.addChild(selectedAnchor)
 
         skylineRoot.isEnabled = false
-        root.addChild(skylineRoot)
+        viewRoot.addChild(skylineRoot)
 
         audioEmitter.components.set(SpatialAudioComponent())
-        root.addChild(audioEmitter)
+        viewRoot.addChild(audioEmitter)
 
         buildTray()
     }
@@ -152,7 +164,7 @@ final class CircuitsRenderer {
         // Coffee-table height just below the build volume, close enough
         // to reach without leaning.
         tray.position = [0, 1.02, -0.85]
-        root.addChild(tray)
+        viewRoot.addChild(tray)
 
         let kinds = CircuitsModel.ComponentKind.allCases
         // Two balanced rows, however many parts there are.
@@ -235,7 +247,7 @@ final class CircuitsRenderer {
             mesh: .generateCylinder(height: 1, radius: 0.0045),
             materials: [Self.previewMaterial])
         band.isEnabled = false
-        root.addChild(band)
+        viewRoot.addChild(band)
         return band
     }()
     private static let previewMaterial: UnlitMaterial = {
@@ -283,7 +295,7 @@ final class CircuitsRenderer {
                 mesh: .generateCylinder(height: 1, radius: 0.0045),
                 materials: [Self.previewMaterial])
             ghost.isEnabled = false
-            root.addChild(ghost)
+            viewRoot.addChild(ghost)
             previewWireEntities.append(ghost)
         }
         for (index, ghost) in previewWireEntities.enumerated() {
@@ -295,10 +307,28 @@ final class CircuitsRenderer {
         }
     }
 
-    /// Electron View: the whole bench scales up smoothly about its own
-    /// center until wires read as tunnels and electrons as characters.
+    /// The zoom, as ONE number.
+    ///
+    /// Electron View used to be a discrete 1× / 4× flip. It is now just
+    /// a floor under the same continuous zoom the two hands drive, so
+    /// "get closer to the electrons" and "pull the bench open with your
+    /// hands" are the same gesture rather than two competing systems —
+    /// and the user can stop anywhere between.
     private var benchScale: Float = 1
-    private static let benchPivot = SIMD3<Float>(0, 1.25, -0.85)
+    static let benchPivot = SIMD3<Float>(0, 1.25, -0.85)
+    /// Set by the space view from the two-handed scale rig.
+    var handZoom: Float = 1
+    static let electronViewZoom: Float = 4.0
+
+    /// Where the zoom is heading: the larger of the hands' zoom and the
+    /// Electron View floor, so switching Electron View on while already
+    /// zoomed in never yanks the bench smaller.
+    private func targetZoom(_ model: CircuitsModel) -> Float {
+        max(handZoom, model.electronView ? Self.electronViewZoom : 1)
+    }
+
+    /// The zoom the bench is actually showing, for the readout.
+    var currentZoom: Float { benchScale }
 
     // MARK: The bench's hum
 
@@ -332,11 +362,14 @@ final class CircuitsRenderer {
     func tick(dt: Double, model: CircuitsModel) {
         tickHum(model)
         pendingPulsePhase += dt * 6
-        let targetScale: Float = model.electronView ? 4.0 : 1.0
-        if abs(benchScale - targetScale) > 1e-3 {
-            benchScale += (targetScale - benchScale) * Float(min(dt * 3, 1))
-            root.scale = SIMD3(repeating: benchScale)
-            root.position = Self.benchPivot * (1 - benchScale)
+        let target = targetZoom(model)
+        if abs(benchScale - target) > 1e-3 {
+            // Eased toward the target so a flick of Electron View glides
+            // rather than snaps; a live hand gesture is already smooth,
+            // and the same easing keeps it from lagging perceptibly.
+            benchScale += (target - benchScale) * Float(min(dt * 8, 1))
+            viewRoot.scale = SIMD3(repeating: benchScale)
+            viewRoot.position = Self.benchPivot * (1 - benchScale)
         }
         render(model, dt: dt)
     }
@@ -682,7 +715,7 @@ final class CircuitsRenderer {
         accessibility.label = LocalizedStringResource(
             stringLiteral: "\(component.kind.displayName). Drag to move; pinch its terminals to wire.")
         holder.components.set(accessibility)
-        root.addChild(holder)
+        viewRoot.addChild(holder)
 
         // The visible body, shaped per kind.
         let body = makeBody(for: component)
@@ -1072,7 +1105,7 @@ final class CircuitsRenderer {
                 accessibility.isAccessibilityElement = true
                 accessibility.label = "Wire. Pinch to remove it."
                 entity.components.set(accessibility)
-                root.addChild(entity)
+                viewRoot.addChild(entity)
                 wireEntities[wire.id] = entity
                 wirePhases[wire.id] = 0
             }
@@ -1113,7 +1146,7 @@ final class CircuitsRenderer {
         if terminal.componentID == manipulatingComponentID,
            let visual = visuals[terminal.componentID],
            visual.terminals.count == 2 {
-            return visual.terminals[terminal.end].position(relativeTo: root)
+            return visual.terminals[terminal.end].position(relativeTo: viewRoot)
         }
         return SIMD3<Float>(component.terminalPosition(terminal.end))
     }

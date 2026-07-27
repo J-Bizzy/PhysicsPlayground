@@ -115,6 +115,21 @@ final class FieldModel {
     var gaussSurfaceRadius = 0.22
     nonisolated static let gaussRadiusRange = 0.08...0.6
 
+    /// Measure by LOOKING: the Gauss surface rides the head ray, so
+    /// turning to face part of the field carries the flux meter there
+    /// without reaching for it. Head direction, not eye gaze — visionOS
+    /// never hands an app the eyes, and the UI says as much.
+    var lookToPlace = false
+    var lookReach = 1.0
+    nonisolated static let lookReachRange = 0.4...2.0
+
+    /// The charge region as a clip box, so a look ray that misses the
+    /// experiment moves nothing rather than parking the meter in a wall.
+    var lookRegion: RoomBox {
+        let region = samplingRegion
+        return RoomBox(center: region.center, halfExtents: region.extents / 2)
+    }
+
     func moveGaussSurface(to point: SIMD3<Double>) {
         var clamped = point
         clamped.y = max(clamped.y, Self.regionFloor)
@@ -398,6 +413,8 @@ final class FieldModel {
         electronMode = false
         electronFieldTesla = 1e-4
         gaussSurfaceOn = false
+        lookToPlace = false
+        lookReach = 1.0
         gaussSurfaceKind = .bubble
         gaussSurfaceCenter = SIMD3(0, 1.35, -0.55)
         gaussSurfaceNormal = SIMD3(0, 0, 1)

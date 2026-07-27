@@ -52,6 +52,17 @@ struct FieldSpaceView: View {
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.stepProbe(dt: event.deltaTime)
                     model.stepFreeCharges(dt: event.deltaTime)
+                    // Look-to-measure: with this on, the Gauss surface
+                    // follows the direction the head is facing, so you
+                    // carry the flux meter with your gaze rather than
+                    // your hand.
+                    if model.gaussSurfaceOn, model.lookToPlace,
+                       let ray = appModel.room.lookRay,
+                       let point = model.lookRegion.point(
+                        onRay: ray.origin, direction: ray.direction,
+                        reach: model.lookReach) {
+                        model.moveGaussSurface(to: point)
+                    }
                     renderer?.tick(model, room: appModel.room.bounds)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)

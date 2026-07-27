@@ -94,6 +94,8 @@ enum DesignTokens {
         static let kinematicsAccent = Color.orange
         static let gravityAccent = Color.indigo
         static let wavesAccent = Color.cyan
+        static let wavesAccentUI = UIColor(Color.cyan)
+        static let windAccentUI = UIColor(Color.mint)
         static let windAccent = Color.mint
         static let circuitsAccent = Color.green
         static let pendulumsAccent = Color.purple

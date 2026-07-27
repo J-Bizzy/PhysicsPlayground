@@ -91,6 +91,29 @@ public struct RoomBox: Equatable, Sendable {
         return a + (direction / length) * t
     }
 
+    /// A point at `reach` along a ray, pulled back to stay inside the
+    /// box — the "look at it to measure it" placement.
+    ///
+    /// Where a user is looking is a ray, but a measurement needs a
+    /// POINT, and the honest choice of point is "as far along the ray as
+    /// they asked for, or the far wall of the experiment, whichever
+    /// comes first". If the ray misses the region entirely there is
+    /// nothing sensible to measure, so this returns nil rather than a
+    /// number about empty air.
+    public func point(onRay origin: SIMD3<Double>,
+                      direction: SIMD3<Double>,
+                      reach: Double) -> SIMD3<Double>? {
+        let length = simd_length(direction)
+        guard length > 1e-12 else { return nil }
+        let unit = direction / length
+        guard let interval = rayInterval(origin: origin, direction: unit) else { return nil }
+        // Only what is in front of the viewer counts.
+        let enter = max(interval.enter, 0)
+        guard interval.exit > enter else { return nil }
+        let t = min(max(reach, enter), interval.exit)
+        return origin + unit * t
+    }
+
     // MARK: Polyline clipping
 
     /// Clips a polyline to the box, returning the pieces that lie inside.

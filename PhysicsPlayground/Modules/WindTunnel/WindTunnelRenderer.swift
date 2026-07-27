@@ -265,6 +265,7 @@ final class WindTunnelRenderer {
         // carried fan so the beam sticks to the duct while the
         // background re-trace catches up (the EM warp pattern).
         sectionRoot.addChild(beamRoot)
+        sectionRoot.addChild(pressureSkin)
 
         // The fan at the tunnel mouth: grab it and park it anywhere;
         // its blades spin with the wind.
@@ -592,7 +593,157 @@ final class WindTunnelRenderer {
         return SIMD2(Double(local.x), Double(local.z))
     }
 
+    // MARK: The pressure skin
+    //
+    // Pressure ON the body, not just in the smoke.
+    //
+    // The smoke already encodes it — Cp = 1 − (v/U)² for incompressible
+    // flow, so slow smoke is high pressure — but it encodes it in the
+    // AIR, centimetres off the surface, where you have to be told what
+    // to look at. The thing people want to see is the object: a red band
+    // across the nose that is being pushed back, blue over the shoulders
+    // where the flow has accelerated and the pressure has dropped, which
+    // over a wing is exactly where lift comes from.
+    //
+    // The skin is built on the body's OWN aerodynamic silhouette — the
+    // same overlapping spheres the CFD voxelises into its solid mask —
+    // so what is painted is what the solver actually sees. Each vertex
+    // samples the solved field along its outward normal and carries a
+    // UV into a Cp ramp texture, so the colour is per-pixel smooth and
+    // the mesh uploads as one draw.
+
+    private let pressureSkin = ModelEntity()
+    private var pressureSkinMaterial: UnlitMaterial?
+    private var lastSkinVersion = -1
+    /// Latitude/longitude resolution of each silhouette sphere.
+    private static let skinRings = 12
+    private static let skinSegments = 20
+
+    private func syncPressureSkin(_ model: WindTunnelModel) {
+        pressureSkin.isEnabled = model.showPressureSkin
+        guard model.showPressureSkin, let field = blendedField ?? currentField else {
+            return
+        }
+        // Rebuilt only when a fresh solve lands or the body/size changes —
+        // never per frame.
+        let version = fieldVersion &* 31
+            &+ model.testBody.hashValue
+            &+ Int(model.cylinderRadius * 1e4)
+            &+ Int(model.cylinderCenter.x * 1e4)
+        guard version != lastSkinVersion else { return }
+        lastSkinVersion = version
+
+        if pressureSkinMaterial == nil {
+            var material = UnlitMaterial(color: .white)
+            if let texture = Self.pressureRampTexture() {
+                material.color = .init(tint: .white, texture: .init(texture))
+            }
+            // Translucent enough to read as pressure PAINTED ON the body
+            // rather than as a set of blobs replacing it — the shape has
+            // to stay recognisable, because the shape is the lesson.
+            material.blending = .transparent(opacity: 0.58)
+            pressureSkinMaterial = material
+        }
+
+        var positions: [SIMD3<Float>] = []
+        var uvs: [SIMD2<Float>] = []
+        var indices: [UInt32] = []
+
+        for sphere in skinSpheres(model) {
+            let base = UInt32(positions.count)
+            for ring in 0...Self.skinRings {
+                let phi = Double(ring) / Double(Self.skinRings) * .pi
+                for segment in 0...Self.skinSegments {
+                    let theta = Double(segment) / Double(Self.skinSegments) * 2 * .pi
+                    let normal = SIMD3(sin(phi) * cos(theta), cos(phi), sin(phi) * sin(theta))
+                    let point = sphere.center + normal * sphere.radius
+                    // Slightly proud of the model so the skin never
+                    // z-fights the body it is describing.
+                    positions.append(SIMD3<Float>(point + normal * 0.004))
+                    let cp = SurfacePressure.coefficient(
+                        at: point, normal: normal, in: field,
+                        freestream: max(model.windSpeed, 1e-6))
+                    uvs.append(SIMD2(Float(SurfacePressure.rampPosition(cp ?? 0)), 0.5))
+                }
+            }
+            let stride = UInt32(Self.skinSegments + 1)
+            for ring in 0..<UInt32(Self.skinRings) {
+                for segment in 0..<UInt32(Self.skinSegments) {
+                    let a = base + ring * stride + segment
+                    let b = a + 1, c = a + stride, d = c + 1
+                    indices += [a, c, d, a, d, b]
+                }
+            }
+        }
+
+        guard positions.count >= 3, let material = pressureSkinMaterial else {
+            pressureSkin.model = nil
+            return
+        }
+        var descriptor = MeshDescriptor(name: "pressure-skin")
+        descriptor.positions = MeshBuffer(positions)
+        descriptor.textureCoordinates = MeshBuffer(uvs)
+        descriptor.primitives = .triangles(indices)
+        if let mesh = try? MeshResource.generate(from: [descriptor]) {
+            pressureSkin.model = ModelComponent(mesh: mesh, materials: [material])
+        }
+    }
+
+    /// The spheres the skin is drawn on — the very same silhouette the
+    /// solver marks solid, in section-local coordinates.
+    private func skinSpheres(_ model: WindTunnelModel)
+    -> [(center: SIMD3<Double>, radius: Double)] {
+        if model.testBody == .cylinder {
+            let radius = model.cylinderRadius
+            let halfSpan = min(Double(Self.halfHeight), WindTunnelModel.cylinderSpan / 2)
+            var spheres: [(SIMD3<Double>, Double)] = []
+            var y = -halfSpan
+            while y <= halfSpan {
+                spheres.append((SIMD3(model.cylinderCenter.x, y, model.cylinderCenter.y),
+                                radius))
+                y += radius * 0.75
+            }
+            return spheres
+        }
+        return model.bodyObstacles.spheres.map { ($0.center, $0.radius) }
+    }
+
+    /// Cp → colour: deep blue at strong suction, neutral at free stream,
+    /// hot red at stagnation. The neutral point is pinned at Cp = 0 by
+    /// SurfacePressure.rampPosition, so mid-grey always means "nothing
+    /// happening here".
+    private static func pressureRampTexture() -> TextureResource? {
+        let stops: [(Float, Float, Float)] = [
+            (0.10, 0.35, 0.95),   // Cp = −span: strong suction
+            (0.25, 0.65, 0.95),
+            (0.72, 0.74, 0.78),   // Cp = 0: free stream
+            (0.97, 0.55, 0.25),
+            (0.92, 0.13, 0.10),   // Cp = +1: stagnation
+        ]
+        let width = 256
+        var bytes = [UInt8](repeating: 0, count: width * 4)
+        for x in 0..<width {
+            let t = Float(x) / Float(width - 1) * Float(stops.count - 1)
+            let i = min(Int(t), stops.count - 2)
+            let f = t - Float(i)
+            let a = stops[i], b = stops[i + 1]
+            bytes[x * 4 + 0] = UInt8(max(0, min(255, (a.0 + (b.0 - a.0) * f) * 255)))
+            bytes[x * 4 + 1] = UInt8(max(0, min(255, (a.1 + (b.1 - a.1) * f) * 255)))
+            bytes[x * 4 + 2] = UInt8(max(0, min(255, (a.2 + (b.2 - a.2) * f) * 255)))
+            bytes[x * 4 + 3] = 255
+        }
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData),
+              let image = CGImage(
+                width: width, height: 1, bitsPerComponent: 8, bitsPerPixel: 32,
+                bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: true,
+                intent: .defaultIntent) else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
+
     private func render(_ model: WindTunnelModel) {
+        syncPressureSkin(model)
         if let fanEntity {
             let p = fanEntity.position
             fanMouth = SIMD3(Double(p.x) + 0.14, Double(p.y), Double(p.z))
