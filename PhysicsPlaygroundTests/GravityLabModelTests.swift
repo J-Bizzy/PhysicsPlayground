@@ -17,6 +17,35 @@ import simd
 @MainActor
 final class GravityLabModelTests: XCTestCase {
 
+    /// `readout(for:)` is memoised — several callers ask for the same
+    /// body every frame. A memo that outlived the state it described
+    /// would report a planet's old distance and energy forever, which
+    /// would look exactly like broken physics.
+    func testReadoutsFollowTheSystemForward() {
+        let model = GravityLabModel()
+        guard let earth = model.bodies.first(where: { $0.body.name == "Earth" }) else {
+            return XCTFail("Earth should be in the opening scene")
+        }
+
+        guard let first = model.readout(for: earth) else {
+            return XCTFail("Earth orbits the Sun, so it has a readout")
+        }
+        // Same state, asked twice: the memo must not change the answer.
+        XCTAssertEqual(model.readout(for: earth)?.distanceAU, first.distanceAU)
+
+        // Advance far enough that Earth has measurably moved.
+        model.timeScale = 40
+        for _ in 0..<120 { model.step(dt: 1.0 / 60) }
+
+        guard let moved = model.bodies.first(where: { $0.body.name == "Earth" }),
+              let second = model.readout(for: moved) else {
+            return XCTFail("Earth should still be present and bound")
+        }
+        XCTAssertNotEqual(second.distanceAU, first.distanceAU, accuracy: 0,
+                          "A cached readout outlived the step that moved the planet")
+        XCTAssertGreaterThan(abs(second.speedKmPerS - first.speedKmPerS), 0)
+    }
+
     func testOpeningSceneIsSunAndEarthOnRealOrbit() {
         let model = GravityLabModel()
         // The whole solar system opens live: Sun + 8 planets + a comet.

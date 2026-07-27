@@ -101,7 +101,20 @@ final class AppModel {
         // gaze-pinched from the command line.
         #if DEBUG
         if let id = UserDefaults.standard.string(forKey: "openModule") {
-            activeModuleID = id
+            // Validate it. An id that matches nothing used to be applied
+            // anyway, and `activeModule` then found no descriptor for it,
+            // so the app quietly showed the HUB — indistinguishable from
+            // a module that opened and rendered nothing. Chasing that
+            // through a profiler is a bad afternoon; say so instead.
+            let known = ModuleCatalog.all(appModel: self).map(\.id)
+            if known.contains(id) {
+                activeModuleID = id
+            } else {
+                print("""
+                      -openModule \(id): no such module. Staying on the hub.
+                      Known ids: \(known.joined(separator: ", "))
+                      """)
+            }
         }
         if UserDefaults.standard.bool(forKey: "studioMode") {
             studioMode = true

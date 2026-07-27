@@ -96,7 +96,13 @@ final class GravityLabModel {
         var lastTrailPosition: SIMD3<Double>?
     }
 
-    private(set) var bodies: [OrbitingBody] = []
+    private(set) var bodies: [OrbitingBody] = [] {
+        // Any change to the system — a step, a drag, a merge, a new
+        // planet — retires every cached readout. Hanging this off the
+        // property rather than off `step` means a new way to move a body
+        // cannot forget to invalidate.
+        didSet { readoutGeneration &+= 1 }
+    }
     private(set) var selectedID: UUID?
 
     var selectedBody: OrbitingBody? {
@@ -588,7 +594,32 @@ final class GravityLabModel {
         var forceNewtons: Double
     }
 
+    /// Readouts already computed for the current state of the system.
+    ///
+    /// Outside observation on purpose: this is a memo of values derived
+    /// from state that IS observed, and registering writes to it during
+    /// a read would invalidate the very views asking for it.
+    @ObservationIgnored private var readoutCache: [UUID: Readout] = [:]
+    @ObservationIgnored private var readoutGeneration: UInt64 = 0
+    @ObservationIgnored private var cachedGeneration: UInt64 = .max
+
+    /// Everything worth knowing about one body's orbit, right now.
+    ///
+    /// This is not cheap — it sums the potential energy against every
+    /// other body, and copies the whole system to do it — and it has
+    /// several callers per frame: the data panel, the orbital chord, and
+    /// the labels. They all ask about the same unchanged system, so the
+    /// first one pays and the rest read the answer. Cleared the moment
+    /// `step` advances the bodies, so a cached readout can never
+    /// describe a state that has already moved on.
     func readout(for orbiting: OrbitingBody) -> Readout? {
+        if cachedGeneration != readoutGeneration {
+            cachedGeneration = readoutGeneration
+            readoutCache.removeAll(keepingCapacity: true)
+        } else if let cached = readoutCache[orbiting.id] {
+            return cached
+        }
+
         guard let primary = primaryBody, primary.id != orbiting.id else { return nil }
         let all = bodies.map(\.body)
         guard let index = bodies.firstIndex(where: { $0.id == orbiting.id }) else { return nil }
@@ -603,7 +634,7 @@ final class GravityLabModel {
             distance: distance, speed: relativeSpeed,
             centralMass: primary.body.mass, gravitationalConstant: effectiveG)
 
-        return Readout(
+        let result = Readout(
             distanceAU: distance / CelestialBody.astronomicalUnit,
             speedKmPerS: relativeSpeed / 1000,
             accelerationMS2: effectiveG * primary.body.mass / (distance * distance),
@@ -622,6 +653,8 @@ final class GravityLabModel {
             isBound: semiMajor != nil,
             forceNewtons: effectiveG * primary.body.mass * body.mass / (distance * distance)
         )
+        readoutCache[orbiting.id] = result
+        return result
     }
 
     // MARK: Reset

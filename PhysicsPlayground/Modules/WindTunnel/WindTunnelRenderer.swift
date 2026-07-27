@@ -1040,31 +1040,71 @@ final class DynamicMesh {
         clear()
     }
 
+    /// The triangle list as it was last written to the GPU.
+    private var lastIndices: [UInt32] = []
+    private var lastPartIndexCount = -1
+
     /// Rewrites the drawn geometry: 5 floats per vertex, triangle indices.
+    ///
+    /// Opening each buffer is NOT free, and the profiler is unambiguous
+    /// about it: a sample of the wind tunnel put the entire main thread
+    /// inside this function, under `recreatePayloadIfNecessary` — every
+    /// `withUnsafeMutableBytes` makes RealityKit swap the mesh payload,
+    /// with the malloc, free, and asset-map teardown that implies. The
+    /// buffers here are small (4,600 vertices); it is the per-OPENING
+    /// cost that hurts, and this used to pay it twice a frame.
+    ///
+    /// Half of that was for nothing. Smoke is a fixed quad list — the
+    /// same 3,120 indices, rebuilt identically 90 times a second — and
+    /// the streamline topology only changes when a filament starts or
+    /// stops. Comparing the arrays first costs a memcmp over 18 KB and
+    /// skips a payload swap whenever the answer is "the same as before",
+    /// which for the triangles is nearly always.
     func update(vertexFloats: [Float], indices: [UInt32]) {
         let vertexCount = min(vertexFloats.count / 5, vertexCapacity)
         let indexCount = min(indices.count, indexCapacity)
         guard vertexCount > 0, indexCount > 0 else { clear(); return }
+
+        // Positions genuinely change every frame; this one always runs.
         mesh.withUnsafeMutableBytes(bufferIndex: 0) { raw in
             vertexFloats.withUnsafeBytes { src in
                 raw.copyMemory(from: UnsafeRawBufferPointer(
                     start: src.baseAddress, count: vertexCount * Self.stride))
             }
         }
-        mesh.withUnsafeMutableIndices { raw in
-            indices.withUnsafeBytes { src in
-                raw.copyMemory(from: UnsafeRawBufferPointer(
-                    start: src.baseAddress, count: indexCount * MemoryLayout<UInt32>.stride))
+
+        if lastIndices.count != indexCount
+            || !lastIndices.withUnsafeBytes({ old in
+                indices.withUnsafeBytes { new in
+                    memcmp(old.baseAddress, new.baseAddress,
+                           indexCount * MemoryLayout<UInt32>.stride) == 0
+                }
+            }) {
+            mesh.withUnsafeMutableIndices { raw in
+                indices.withUnsafeBytes { src in
+                    raw.copyMemory(from: UnsafeRawBufferPointer(
+                        start: src.baseAddress,
+                        count: indexCount * MemoryLayout<UInt32>.stride))
+                }
             }
+            lastIndices = Array(indices.prefix(indexCount))
         }
-        mesh.parts.replaceAll([
-            LowLevelMesh.Part(indexCount: indexCount, topology: .triangle,
-                              bounds: bounds)
-        ])
+
+        // The part describes how much of the buffer to draw. Re-stating
+        // an unchanged one still churns the asset tracker.
+        if lastPartIndexCount != indexCount {
+            lastPartIndexCount = indexCount
+            mesh.parts.replaceAll([
+                LowLevelMesh.Part(indexCount: indexCount, topology: .triangle,
+                                  bounds: bounds)
+            ])
+        }
     }
 
     /// Draw nothing (kept allocated; showing again is just an update).
     func clear() {
+        guard lastPartIndexCount != 0 else { return }
+        lastPartIndexCount = 0
         mesh.parts.replaceAll([])
     }
 }
