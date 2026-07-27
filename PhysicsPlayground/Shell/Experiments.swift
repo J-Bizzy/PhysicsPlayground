@@ -141,7 +141,7 @@ enum ExperimentCatalog {
         [
             (Experiment(id: "magnetism.snap", title: "The snap",
                         detail: "Let two magnets pull together until they touch.",
-                            step: "Switch the Fields pod to the Magnetic bench, then carry one magnet toward another until they jump together."),
+                            step: "Carry one magnet toward another until they jump together."),
              { let magnets = model.magnets
                for i in 0..<magnets.count {
                    for j in (i + 1)..<magnets.count
@@ -153,7 +153,7 @@ enum ExperimentCatalog {
                return false }),
             (Experiment(id: "magnetism.bench", title: "Full bench",
                         detail: "Get all four bar magnets into the field at once.",
-                            step: "On the Magnetic bench, tap Add magnet until four are floating."),
+                            step: "Tap Add magnet until four are floating."),
              { model.magnets.count >= 4 }),
         ]
     }
@@ -165,12 +165,12 @@ enum ExperimentCatalog {
         [
             (Experiment(id: "springs.limit", title: "To the stops",
                         detail: "Pull the block to its maximum extension.",
-                            step: "Switch to the Spring bench, grab the block and pull it as far along the rail as it goes."),
+                            step: "Grab the block and pull it as far along the rail as it goes."),
              { model.mode == .single
                  && abs(model.state.displacement) >= model.maxExtension * 0.97 }),
             (Experiment(id: "springs.transfer", title: "Energy heist",
                         detail: "In Coupled ×2, get 85% of the energy onto the second block.",
-                            step: "On the Spring bench, choose Coupled ×2, pull one block, and wait for the slosh."),
+                            step: "Choose Coupled ×2, pull one block, and wait for the slosh."),
              { guard model.mode == .coupled else { return false }
                let pair = model.coupled.massEnergies(
                    stiffness: model.stiffness, coupling: model.coupling,
@@ -184,16 +184,11 @@ enum ExperimentCatalog {
     -> [(experiment: Experiment, isMet: () -> Bool)] {
         switch moduleID {
         case "electrostatics":
-            // The merged Fields module: the electric bench's experiments
-            // and the magnetic bench's, in one list — they are one module
-            // now, and a user who only ever opens one bench should still
-            // see that the other half exists.
             let model = appModel.electromagnetismModel
-            let magnets = appModel.magnetismModel
-            return magnetismExperiments(magnets) + [
+            return [
                 (Experiment(id: "field.dipole", title: "Opposites attract",
                             detail: "Build a dipole — one positive and one negative charge sharing the field.",
-                            step: "On the Electric bench the dipole is already here — if you cleared it, tap Add + and Add −."),
+                            step: "The dipole is already here — if you cleared it, tap Add + and Add −."),
                  { model.charges.contains(where: \.isPositive)
                      && model.charges.contains(where: { !$0.isPositive }) }),
                 (Experiment(id: "field.crowd", title: "Crowd control",
@@ -251,19 +246,21 @@ enum ExperimentCatalog {
                          && abs(model.readouts[component.id]?.amps ?? 0) > 0.005
                          && abs(model.readouts[component.id]?.amps ?? 0) < 0.03 } }),
             ]
+        case "magnetism":
+            return magnetismExperiments(appModel.magnetismModel)
+        case "springs":
+            return springExperiments(appModel.springsModel)
         case "pendulums":
-            // The merged Oscillators module: both benches' experiments.
             let model = appModel.pendulumsModel
-            let springs = appModel.springsModel
-            return springExperiments(springs) + [
+            return [
                 (Experiment(id: "pendulums.orbit", title: "Around the world",
                             detail: "Throw a bob into a true 3D orbit — sideways, hard.",
-                            step: "On the Pendulum bench, grab a bob and throw it sideways — across the swing plane, not along it."),
+                            step: "Grab a bob and throw it sideways — across the swing plane, not along it."),
                  { model.pendulums.contains {
                      abs($0.state.position.z) > 0.15 && simd_length($0.state.velocity) > 0.5 } }),
                 (Experiment(id: "pendulums.high", title: "Over the top",
                             detail: "Get a bob swinging above its pivot.",
-                            step: "On the Pendulum bench, throw a bob hard enough upward to carry it above its own pivot."),
+                            step: "Throw a bob hard enough upward to carry it above its own pivot."),
                  { model.pendulums.contains { $0.state.position.y > 0 } }),
             ]
         case "elasticfield":

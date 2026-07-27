@@ -191,12 +191,10 @@ final class HubScene {
     /// Degrees between neighbours inside a domain, and the widened gap
     /// where one domain hands over to the next — the pause that makes
     /// the grouping legible without a single dividing line.
-    /// Six exhibits in three domains span ±37° — the whole shelf sits
-    /// inside a comfortable head turn, with room between neighbours for
-    /// a focused exhibit to grow without crowding. (Nine modules needed
-    /// 11°/15° and still ran to ±50.)
-    private static let intraGap: Float = 13
-    private static let domainGap: Float = 18
+    /// Eight exhibits in three domains span ±44° — inside a head turn,
+    /// with room between neighbours for a focused exhibit to grow.
+    private static let intraGap: Float = 11.5
+    private static let domainGap: Float = 15
 
     /// Azimuth (degrees) for every module in HubDomain.arcOrder, centred
     /// on zero.

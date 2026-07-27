@@ -83,19 +83,27 @@ enum ModuleCatalog {
         // benches makes the comparison the point instead of hiding it —
         // and leaves every remaining entry with a reason to exist that
         // no other entry already covers.
-        // SIX modules for now. Waves, Elastic Field, and Optics are
-        // BENCHED, not deleted — their code is intact and each returns
-        // with one line here (plus its HubDomains entry). Everything
-        // else (hub arc, search, progress totals, the challenge) derives
-        // from this list, so removing the line removes the module
-        // everywhere at once.
+        // EIGHT modules. Waves, Elastic Field, and Optics are BENCHED,
+        // not deleted — each returns with one line here plus its
+        // HubDomains entry. Everything else (hub arc, search, progress
+        // totals, the challenge) derives from this list.
+        //
+        // The Fields and Oscillators MERGERS are undone. Each merged
+        // module hid its second half behind a bench picker that lived
+        // only in the window's control panel — and the app's controls
+        // moved into spatial pods long ago, so Magnetism and Springs
+        // were effectively unreachable. A module you cannot find is not
+        // a module; four standalone entries put all four back on the
+        // shelf where they can be seen.
         [
-            FieldsModule.descriptor(appModel: appModel),
+            ElectromagnetismModule.descriptor(appModel: appModel),
+            MagnetismModule.descriptor(appModel: appModel),
             KinematicsModule.descriptor(appModel: appModel),
             GravityLabModule.descriptor(appModel: appModel),
             WindTunnelModule.descriptor(appModel: appModel),
             CircuitsModule.descriptor(appModel: appModel),
-            OscillatorsModule.descriptor(appModel: appModel),
+            PendulumsModule.descriptor(appModel: appModel),
+            SpringsModule.descriptor(appModel: appModel),
         ]
     }
 }

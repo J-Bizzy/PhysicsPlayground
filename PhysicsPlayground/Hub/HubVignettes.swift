@@ -51,7 +51,9 @@ enum HubVignettes {
         case "waves": waves()
         case "windtunnel": windTunnel()
         case "circuits": circuits()
-        case "pendulums": oscillators()
+        case "pendulums": pendulums()
+        case "springs": springs()
+        case "magnetism": magnetism()
         case "elasticfield": elasticField()
         case "optics": optics()
         default: fallback()
@@ -445,7 +447,7 @@ enum HubVignettes {
 
     // MARK: Oscillators — pendulums beating, and a spring
 
-    private static func oscillators() -> Built {
+    private static func pendulums() -> Built {
         let root = Entity()
 
         let beam = ModelEntity(
@@ -475,45 +477,133 @@ enum HubVignettes {
             swings.append(Swing(pivot: pivot, period: Double(length.squareRoot()) * 6.2))
         }
 
-        // …and the spring bench beneath, because this module is both.
-        let rail = rod(length: 0.088, radius: 0.0016, UIColor(white: 0.55, alpha: 1))
-        rail.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-        rail.position.y = -0.062
-        root.addChild(rail)
-        let block = ModelEntity(
-            mesh: .generateBox(size: [0.016, 0.016, 0.016], cornerRadius: 0.003),
-            materials: [Materials.energized(DesignTokens.Palette.springsAccentUI,
-                                            metallic: 0.6, glow: 0.1)])
-        block.position.y = -0.062
-        root.addChild(block)
-        // A real helix, stretched along its axis by the block's motion.
-        //
-        // Authored at its RESTING length, not at unit length. A model
-        // that is a metre long at build time and scaled down at runtime
-        // reports metre-sized bounds to anything that measures it — and
-        // the card fit does measure it, so this one shrank its whole
-        // exhibit to a speck.
-        let coilRest: Float = 0.036
-        let coilPoints = (0...60).map { step -> SIMD3<Float> in
-            let t = Float(step) / 60
-            let angle = t * 7 * 2 * .pi
-            return SIMD3(t * coilRest, cos(angle) * 0.007, sin(angle) * 0.007)
-        }
-        let coil = line(coilPoints, radius: 0.0011, UIColor(white: 0.78, alpha: 1))
-        coil.map { entity in
-            entity.position = [-0.044, -0.062, 0]
-            root.addChild(entity)
-        }
-
         return Built(entity: root) { time in
             for swing in swings {
                 let angle = 0.42 * sin(2 * .pi * time / swing.period)
                 swing.pivot.orientation = simd_quatf(angle: Float(angle), axis: [0, 0, 1])
             }
-            let x = Float(0.018 * sin(time * 2.3))
-            block.position.x = x
-            // The coil stretches to exactly reach the block.
-            coil?.scale.x = (x + 0.044 - 0.008) / coilRest
+        }
+    }
+
+    // MARK: Springs — a block on a rail, its coil breathing
+
+    private static func springs() -> Built {
+        let root = Entity()
+
+        // Anchor post, rail, block — the single-spring bench in essence.
+        let post = ModelEntity(
+            mesh: .generateBox(size: [0.008, 0.052, 0.02], cornerRadius: 0.003),
+            materials: [Materials.energized(UIColor(white: 0.5, alpha: 1),
+                                            metallic: 1, glow: 0)])
+        post.position.x = -0.058
+        root.addChild(post)
+
+        let rail = rod(length: 0.116, radius: 0.0016, UIColor(white: 0.55, alpha: 1))
+        rail.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+        rail.position.y = -0.012
+        root.addChild(rail)
+
+        let block = ModelEntity(
+            mesh: .generateBox(size: [0.020, 0.020, 0.020], cornerRadius: 0.004),
+            materials: [Materials.energized(DesignTokens.Palette.springsAccentUI,
+                                            metallic: 0.6, glow: 0.15)])
+        root.addChild(block)
+
+        // A real helix, stretched along its axis by the block's motion.
+        //
+        // Authored at its RESTING length, not at unit length: a model
+        // built a metre long and scaled down at runtime reports
+        // metre-sized bounds to anything that measures it, and the
+        // exhibit fit does measure it.
+        let coilRest: Float = 0.044
+        let coilPoints = (0...60).map { step -> SIMD3<Float> in
+            let t = Float(step) / 60
+            let angle = t * 7 * 2 * .pi
+            return SIMD3(t * coilRest, cos(angle) * 0.008, sin(angle) * 0.008)
+        }
+        let coil = line(coilPoints, radius: 0.0012, UIColor(white: 0.78, alpha: 1))
+        coil.map { entity in
+            entity.position = [-0.054, 0, 0]
+            root.addChild(entity)
+        }
+
+        return Built(entity: root) { time in
+            // Simple harmonic motion, read straight off the clock.
+            let x = Float(0.026 * sin(time * 2.3))
+            block.position.x = 0.002 + x
+            // The coil stretches to exactly reach the block's near face.
+            coil?.scale.x = (block.position.x + 0.054 - 0.010) / coilRest
+        }
+    }
+
+    // MARK: Magnetism — two bar magnets, forever almost snapping
+
+    private static func magnetism() -> Built {
+        let root = Entity()
+
+        /// A bar magnet: red north half, blue south half, end to end.
+        func magnet() -> Entity {
+            let bar = Entity()
+            let half = MeshResource.generateBox(size: [0.026, 0.014, 0.014],
+                                                cornerRadius: 0.002)
+            let north = ModelEntity(mesh: half, materials: [
+                Materials.energized(UIColor(red: 0.92, green: 0.26, blue: 0.21, alpha: 1),
+                                    glow: 0.25)])
+            north.position.x = -0.013
+            let south = ModelEntity(mesh: half, materials: [
+                Materials.energized(UIColor(red: 0.25, green: 0.47, blue: 0.95, alpha: 1),
+                                    glow: 0.25)])
+            south.position.x = 0.013
+            bar.addChild(north)
+            bar.addChild(south)
+            return bar
+        }
+
+        let left = magnet()
+        let right = magnet()
+        // Authored at the WIDEST pose, for the same reason the spring
+        // coil is authored at its resting length: the exhibit fit
+        // measures bounds at build time, before any animation has run.
+        // Left at the origin, these two measured as ONE magnet wide, the
+        // fit scaled the vignette up 5×, and the swinging magnets
+        // trespassed into the neighbouring exhibit.
+        left.position.x = -0.055
+        right.position.x = 0.055
+        root.addChild(left)
+        root.addChild(right)
+
+        // Field loops threading the gap between the facing poles —
+        // brightening as the magnets close, the pull made visible.
+        var loops: [ModelEntity] = []
+        for (radius, tilt) in [(Float(0.020), Float(0)),
+                               (0.034, .pi / 5), (0.034, -.pi / 5)] {
+            let points = (0...30).map { step -> SIMD3<Float> in
+                let angle = Float(step) / 30 * 2 * .pi
+                return SIMD3(sin(tilt) * radius * sin(angle),
+                             radius * cos(angle),
+                             cos(tilt) * radius * sin(angle))
+            }
+            if let loop = line(points, radius: 0.0018,
+                               DesignTokens.Palette.fieldLineUI, opacity: 0.8) {
+                root.addChild(loop)
+                loops.append(loop)
+            }
+        }
+
+        return Built(entity: root) { time in
+            // The approach, the almost-snap, the ease apart — the pull
+            // between opposite poles as a loop of motion. The gap never
+            // quite closes: a snap that lands would need a jolt, and a
+            // jolt on a loop reads as a glitch.
+            let breath = Float((1 + sin(time * 1.1)) / 2)   // 0…1
+            let gap = 0.020 + 0.038 * (1 - breath)
+            left.position.x = -0.026 - gap / 2
+            right.position.x = 0.026 + gap / 2
+            for (index, loop) in loops.enumerated() {
+                loop.components.set(OpacityComponent(
+                    opacity: 0.25 + 0.6 * breath - Float(index) * 0.08))
+                loop.scale = SIMD3(repeating: 1 + gap * 3)
+            }
         }
     }
 

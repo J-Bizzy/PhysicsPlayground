@@ -40,8 +40,8 @@ enum HubDomain: String, CaseIterable, Identifiable {
     /// The modules in this domain, in their display order on the arc.
     var moduleIDs: [String] {
         switch self {
-        case .mechanics: ["kinematics", "pendulums"]
-        case .electricity: ["electrostatics", "circuits"]
+        case .mechanics: ["kinematics", "pendulums", "springs"]
+        case .electricity: ["electrostatics", "magnetism", "circuits"]
         case .fluidsGravity: ["windtunnel", "gravitylab"]
         }
     }
@@ -60,8 +60,10 @@ enum HubDomain: String, CaseIterable, Identifiable {
     static func promise(for moduleID: String) -> String {
         switch moduleID {
         case "kinematics": "Fire projectiles and bend their arcs with gravity and drag"
-        case "pendulums": "Race pendulums against springs to find what sets the beat"
-        case "electrostatics": "Place charges and magnets, then walk through the field they make"
+        case "pendulums": "Throw a pendulum into a true 3-D orbit above your floor"
+        case "springs": "Pull a block and watch two springs trade all their energy"
+        case "electrostatics": "Place charges and walk through the field they make"
+        case "magnetism": "Carry bar magnets until they snap head-to-tail into line"
         case "circuits": "Wire real parts and watch the electrons do the work"
         case "windtunnel": "Raise a wind indoors and watch the flow find its way around"
         case "gravitylab": "Grow a solar system and hear its orbits as a chord"
