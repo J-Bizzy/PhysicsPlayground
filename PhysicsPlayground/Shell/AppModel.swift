@@ -17,7 +17,32 @@ final class AppModel {
         didSet {
             refreshImmersionStyle()
             adoptModuleAtmosphere()
+            recordVisit()
         }
+    }
+
+    /// Every user preference, persisted. Lives on the app model so the
+    /// hub, the modules, and the settings window all read the same one.
+    let settings = AppSettings()
+
+    // MARK: Visit history — powers "New" badges and "last played".
+
+    private(set) var visitedModuleIDs: Set<String> =
+        Set(UserDefaults.standard.stringArray(forKey: "visited.modules") ?? [])
+
+    func lastPlayed(_ moduleID: String) -> Date? {
+        UserDefaults.standard.object(forKey: "lastPlayed.\(moduleID)") as? Date
+    }
+
+    private func recordVisit() {
+        guard let id = activeModuleID else { return }
+        UserDefaults.standard.set(Date(), forKey: "lastPlayed.\(id)")
+        if !visitedModuleIDs.contains(id) {
+            visitedModuleIDs.insert(id)
+            UserDefaults.standard.set(visitedModuleIDs.sorted(), forKey: "visited.modules")
+        }
+        // Entering any module completes the "pinch to step inside" coaching.
+        settings.advanceCoach(past: 1)
     }
 
     /// Studio Mode: full immersion that shuts the room out and stages the

@@ -19,46 +19,10 @@ struct HubView: View {
         VStack(spacing: 16) {
             Spacer(minLength: 12)
 
-            // The name floats in 3-D above the arcs (HubSpaceView), and
-            // the detail card under whichever exhibit you are facing now
-            // says what it is and how to enter it. So this window keeps
-            // only what neither of those covers — and stays small, since
-            // it sits in the gap the lower arc leaves dead ahead.
-            Text("Turn toward an exhibit to read it. Pinch to step inside.")
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.75))
-                .multilineTextAlignment(.center)
-                .accessibilityAddTraits(.isHeader)
-
-            Button {
-                appModel.studioMode.toggle()
-            } label: {
-                Label(appModel.studioMode ? "Leave the studio" : "Studio Mode",
-                      systemImage: appModel.studioMode ? "moon.stars.fill" : "moon.stars")
-                    .font(.subheadline)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-            }
-            .buttonStyle(.podQuiet)
-            .fixedSize()
-            .accessibilityHint("Replaces your room with a dark studio so every exhibit glows at full contrast")
-
-            // WHERE TO GO NEXT, not just how far you have come.
-            //
-            // "4 of 24 complete" is a score, and a score is only useful
-            // once you already know what to do. The single next unfinished
-            // experiment — named, explained, and one pinch from the module
-            // it lives in — is what makes home somewhere you return TO
-            // rather than a launcher you pass through.
-            HubNextStep()
-
-            // The notebook, reachable from HOME.
-            //
-            // Captured measurements only existed inside a per-module pod,
-            // which is the one place you are NOT when you want to look
-            // back over what you found. A notebook you cannot open at
-            // home is a notebook you never read.
-            HubNotebookButton()
+            // Coaching, one mark at a time, each dismissed by DOING the
+            // thing it teaches — look, enter, open the notebook. A user
+            // who has done all three never sees any of this again.
+            HubCoachMark()
 
             if !appModel.isImmersiveSpaceOpen {
                 Button {
@@ -72,36 +36,59 @@ struct HubView: View {
                         .padding(.vertical, 6)
                 }
                 .buttonStyle(.podProminent)
-                .accessibilityHint("Places the exhibit ring in your room")
-            }
+                .accessibilityHint("Places the exhibit arc in your room")
 
-            // The catalog list is NOT shown beside the ring.
-            //
-            // It used to be: a two-column grid of every module, floating
-            // in the middle of the exhibit ring that already showed every
-            // module. Two menus for one catalog, the flat one landing
-            // right on top of the spatial one, and the ring — the whole
-            // reason this app is worth wearing — reduced to decoration
-            // around a list. The ring is the menu. The list survives only
-            // as the fallback for when the space is closed, and as the
-            // accessible path, which the in-space exhibits also provide
-            // as VoiceOver elements.
-            if !appModel.isImmersiveSpaceOpen {
+                // The fallback catalog, only while the spatial menu is
+                // not in the room. In space, the arc IS the menu.
                 HubCatalogList()
             }
 
             Spacer(minLength: 12)
         }
         .padding(DesignTokens.Panel.outerPadding)
-        .frame(minWidth: 440, maxWidth: .infinity, minHeight: 280, maxHeight: .infinity)
+        .frame(minWidth: 440, maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
         // Bare type over passthrough needs its own separation from the room.
         .shadow(color: .black.opacity(0.45), radius: 8, y: 2)
+        // The dock: the app's system surface, always in the same place.
+        // Notebook, progress, challenge, search, studio, settings — the
+        // six things that used to be scattered across the window, a
+        // toast over the TV, and nowhere.
+        .ornament(attachmentAnchor: .scene(.bottom)) {
+            HubDock()
+                .environment(appModel)
+        }
         .task {
             SoundPalette.warmUp()
-            // The spatial ring is the menu — bring it up on arrival.
+            SoundPalette.masterVolume = appModel.settings.masterVolume
+            // The spatial arc is the menu — bring it up on arrival.
             if !appModel.isImmersiveSpaceOpen {
                 _ = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
             }
+        }
+    }
+}
+
+/// The current onboarding tip, or nothing once the sequence is done.
+struct HubCoachMark: View {
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        let stage = appModel.settings.coachStage
+        if stage < 3 {
+            let (icon, text): (String, String) = switch stage {
+            case 0: ("eye", "Turn toward a module to preview it")
+            case 1: ("hand.pinch", "Pinch to step inside — or use its Enter button")
+            default: ("book.closed", "Everything you measure lands in your Lab Notebook, below")
+            }
+            Label(text, systemImage: icon)
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.85))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .glassBackgroundEffect(in: Capsule())
+                .transition(.opacity)
+                .id(stage)
+                .accessibilityAddTraits(.isHeader)
         }
     }
 }
@@ -146,99 +133,6 @@ struct HubCatalogList: View {
             }
         }
         .frame(maxWidth: 500)
-    }
-}
-
-/// The one thing to do next, anywhere in the app — and a way straight to
-/// it. Home stops being a launcher and starts being a place you return to.
-struct HubNextStep: View {
-    @Environment(AppModel.self) private var appModel
-
-    var body: some View {
-        let total = ExperimentCatalog.total(appModel: appModel)
-        let done = ExperimentCatalog.completedCount(appModel: appModel)
-
-        VStack(spacing: 7) {
-            if let next = ExperimentCatalog.nextStep(appModel: appModel) {
-                Button {
-                    appModel.activeModuleID = next.module.id
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: next.module.icon)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(next.module.accent)
-                            .frame(width: 28, height: 28)
-                            .background(next.module.accent.opacity(0.18),
-                                        in: RoundedRectangle(cornerRadius: 8,
-                                                             style: .continuous))
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(next.experiment.title)
-                                .font(.callout.weight(.semibold))
-                                .lineLimit(1)
-                            Text(next.experiment.step.isEmpty
-                                 ? next.experiment.detail : next.experiment.step)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                        }
-                        Spacer(minLength: 4)
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .background(.regularMaterial,
-                            in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .hoverEffect()
-                .accessibilityLabel("Next: \(next.experiment.title) in \(next.module.title)")
-                .accessibilityHint(next.experiment.step)
-            }
-
-            if total > 0 {
-                HStack(spacing: 8) {
-                    ProgressView(value: Double(done), total: Double(total))
-                        .tint(done == total ? .green : .accentColor)
-                        .frame(width: 120)
-                    Text("\(done) of \(total) experiments")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.75))
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(done) of \(total) experiments complete")
-            }
-        }
-        .frame(maxWidth: 420)
-    }
-}
-
-/// Opens the whole lab notebook from home.
-struct HubNotebookButton: View {
-    @Environment(AppModel.self) private var appModel
-    @State private var showing = false
-
-    var body: some View {
-        let count = appModel.notebook.entries.count
-        Button {
-            showing = true
-        } label: {
-            Label(count == 0 ? "Lab notebook" : "Lab notebook · \(count)",
-                  systemImage: "book.closed")
-                .font(.subheadline)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-        }
-        .buttonStyle(.podQuiet)
-        .fixedSize()
-        .accessibilityHint("Everything you have recorded, across every module")
-        .sheet(isPresented: $showing) {
-            HubNotebookView()
-                .environment(appModel)
-        }
     }
 }
 

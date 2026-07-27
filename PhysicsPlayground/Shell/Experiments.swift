@@ -52,7 +52,44 @@ final class ExperimentProgress {
         guard !completed.contains(id) else { return false }
         completed.insert(id)
         UserDefaults.standard.set(completed.sorted(), forKey: Self.key)
+        recordStreakDay()
         return true
+    }
+
+    // MARK: Streak — consecutive days with at least one completion.
+
+    private(set) var streak: Int =
+        UserDefaults.standard.integer(forKey: "streak.count")
+
+    /// Whether today already counts toward the streak.
+    var completedToday: Bool {
+        guard let last = UserDefaults.standard.object(forKey: "streak.lastDay") as? Date
+        else { return false }
+        return Calendar.current.isDateInToday(last)
+    }
+
+    private func recordStreakDay() {
+        let defaults = UserDefaults.standard
+        let today = Calendar.current.startOfDay(for: Date())
+        if let last = defaults.object(forKey: "streak.lastDay") as? Date {
+            if Calendar.current.isDate(last, inSameDayAs: today) { return }
+            let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
+            streak = Calendar.current.isDate(last, inSameDayAs: yesterday) ? streak + 1 : 1
+        } else {
+            streak = 1
+        }
+        defaults.set(streak, forKey: "streak.count")
+        defaults.set(today, forKey: "streak.lastDay")
+    }
+
+    /// Wipes every completion and the streak. The settings window's
+    /// destructive reset; confirmed there before it reaches here.
+    func resetAll() {
+        completed = []
+        streak = 0
+        UserDefaults.standard.removeObject(forKey: Self.key)
+        UserDefaults.standard.removeObject(forKey: "streak.count")
+        UserDefaults.standard.removeObject(forKey: "streak.lastDay")
     }
 }
 

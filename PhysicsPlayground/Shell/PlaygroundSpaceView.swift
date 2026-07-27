@@ -73,27 +73,40 @@ struct PlaygroundSpaceView: View {
 
 /// An invisible emitter looping the synthesized laboratory ambience.
 private struct AmbientLabAudioView: View {
+    @Environment(AppModel.self) private var appModel
     @State private var controller: AudioPlaybackController?
+    @State private var emitter = Entity()
 
     var body: some View {
         RealityView { content in
-            let emitter = Entity()
             emitter.position = [0, 1.7, -1.0]
             content.add(emitter)
-            Task { @MainActor in
-                // warmUp synthesizes off-launch; retry briefly until ready.
-                for _ in 0..<40 where controller == nil {
-                    if let started = SoundPalette.startAmbient(on: emitter) {
-                        controller = started
-                        return
-                    }
-                    try? await Task.sleep(for: .milliseconds(250))
+            if appModel.settings.ambientAudio { start() }
+        }
+        .onChange(of: appModel.settings.ambientAudio) {
+            // The settings toggle applies immediately, not next visit.
+            if appModel.settings.ambientAudio { start() } else { stop() }
+        }
+        .onDisappear { stop() }
+    }
+
+    private func start() {
+        guard controller == nil else { return }
+        Task { @MainActor in
+            // warmUp synthesizes off-launch; retry briefly until ready.
+            for _ in 0..<40 where controller == nil {
+                guard appModel.settings.ambientAudio else { return }
+                if let started = SoundPalette.startAmbient(on: emitter) {
+                    controller = started
+                    return
                 }
+                try? await Task.sleep(for: .milliseconds(250))
             }
         }
-        .onDisappear {
-            controller?.stop()
-            controller = nil
-        }
+    }
+
+    private func stop() {
+        controller?.stop()
+        controller = nil
     }
 }

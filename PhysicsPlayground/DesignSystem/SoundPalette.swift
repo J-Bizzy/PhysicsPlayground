@@ -241,9 +241,15 @@ enum SoundPalette {
 
     /// Plays `sound` spatially from `entity` (which should already sit at
     /// the source position). volume 0…1 → −28…0 dB.
+    /// Settings' master volume, 0…1. Applied to every one-shot; the
+    /// settings window writes it here so callers never have to know.
+    static var masterVolume: Double = 1
+
     static func play(_ sound: Sound, on entity: Entity, volume: Double = 1) {
         guard let resource = resources[sound] else { return }
-        let decibels = -28.0 * (1 - min(max(volume, 0), 1))
+        let effective = min(max(volume * masterVolume, 0), 1)
+        guard effective > 0.001 else { return }
+        let decibels = -28.0 * (1 - effective)
         entity.components.set(SpatialAudioComponent(gain: Audio.Decibel(decibels)))
         entity.playAudio(resource)
     }

@@ -23,6 +23,7 @@ import RenderKit
 
 struct HubSpaceView: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @State private var scene = HubScene()
 
     var body: some View {
@@ -38,13 +39,17 @@ struct HubSpaceView: View {
                     }.count,
                     entries.count)
             }
-            scene.build(modules: modules, progress: progress)
+            scene.build(modules: modules, progress: progress,
+                        distance: Float(appModel.settings.arcDistance),
+                        height: Float(appModel.settings.arcHeight),
+                        yaw: appModel.settings.hubYaw)
+            scene.stillness = appModel.settings.reduceMotion || systemReduceMotion
             content.add(scene.root)
 
             if let card = attachments.entity(for: "detail") {
-                // The reading shelf: a fixed spot under the gallery,
-                // billboarded so it always faces the reader.
-                card.position = HubScene.detailCardPosition
+                // The focus panel: it rides BEHIND whichever exhibit you
+                // face — the diorama in front, its story behind it —
+                // repositioned by applyFocus whenever focus moves.
                 card.components.set(BillboardComponent())
                 card.isEnabled = false
                 scene.root.addChild(card)
@@ -61,14 +66,20 @@ struct HubSpaceView: View {
             scene.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak scene] event in
                 scene?.animate(dt: event.deltaTime, lookRay: appModel.room.lookRay)
             }
+        } update: { _, _ in
+            scene.stillness = appModel.settings.reduceMotion || systemReduceMotion
         } attachments: {
             Attachment(id: "detail") {
                 if let module = ModuleCatalog.all(appModel: appModel)
                     .first(where: { $0.id == scene.focusedModuleID }) {
-                    HubDetailCard(module: module)
+                    HubFocusPanel(module: module) { enter(module.id) }
                 }
             }
         }
+        // The arc's geometry (distance, height, recenter yaw) lives in
+        // settings; bumping layoutVersion gives this view a new identity,
+        // which tears the old scene down and builds the arc fresh.
+        .id(appModel.settings.layoutVersion)
         // Entering a module replaces this view, and an EventSubscription
         // is not tied to the view that made it — left alone it keeps
         // calling `animate` on a hub that is no longer on screen, for
@@ -78,19 +89,32 @@ struct HubSpaceView: View {
             scene.subscription?.cancel()
             scene.subscription = nil
         }
+        .onChange(of: scene.focusedModuleID) {
+            // First focus completes the "look at a module" coaching.
+            if scene.focusedModuleID != nil {
+                appModel.settings.advanceCoach(past: 0)
+            }
+        }
         .gesture(
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
                     guard let id = scene.moduleID(for: value.entity) else { return }
-                    scene.pulseExhibit(id: id)
-                    Task {
-                        // Let the pulse land before the scene switches.
-                        try? await Task.sleep(for: .milliseconds(160))
-                        appModel.activeModuleID = id
-                    }
+                    enter(id)
                 }
         )
+    }
+
+    /// One enter path for both the pinch and the panel's button: the
+    /// chosen exhibit swells toward you while the rest of the hub holds,
+    /// and the module takes over as the swell peaks — an arrival, not a
+    /// hard cut.
+    private func enter(_ id: String) {
+        scene.beginEnterTransition(id: id)
+        Task {
+            try? await Task.sleep(for: .milliseconds(420))
+            appModel.activeModuleID = id
+        }
     }
 }
 
@@ -118,7 +142,19 @@ final class HubScene {
         let animate: (Double) -> Void
         /// 0 = resting in the ring, 1 = the one you are facing. Eased.
         var focus: Float = 0
+        /// This exhibit's own animation clock. Runs a little fast while
+        /// focused — the "come alive" answer to being looked at — and
+        /// pauses entirely while the exhibit is outside the field of
+        /// view, where animating it is work nobody can see.
+        var animTime: Double = 0
+        /// Set by updateFocus: whether the exhibit is near enough to the
+        /// look direction to be worth animating.
+        var inView: Bool = true
     }
+
+    /// True stills all idle motion — the bob, the sway, the running
+    /// miniatures. Set from Reduce Motion (system or in-app setting).
+    var stillness = false
 
     /// Which exhibit the user is facing, published only when it CHANGES
     /// so the detail card can re-render without SwiftUI seeing sixty
@@ -128,55 +164,59 @@ final class HubScene {
     private(set) var focusedAnchor: Entity?
     /// The SwiftUI reading shelf, shown while something has focus.
     var detailCard: Entity?
-    /// Under the lower arc, clear of the hub window above it.
-    static let detailCardPosition = SIMD3<Float>(0, 0.94, -1.42)
     private var exhibits: [Exhibit] = []
     private var time = 0.0
     /// The 3-D bubble title the exhibits ring, bobbing at the centre.
     private let titleAnchor = Entity()
 
-    /// The ring encircles the title: a vertical circle in the frontal
-    /// plane, a step beyond it in depth.
-    // MARK: Layout — two staggered arcs, not a ring
+    // MARK: Layout — one arc, grouped by domain
     //
-    // The ring was a clock face of nine miniatures, and it had two
-    // problems that no amount of polish fixed. It was effectively
-    // PAINTED ON THE FAR WALL — every exhibit at one depth, so the whole
-    // menu read as a poster rather than as objects in a room. And a ring
-    // wide enough to space nine things put its left and right extremes
-    // past 50 degrees of azimuth, out at the edge of vision where you
-    // cannot see them without turning your whole head.
+    // Two staggered rows spaced nine modules comfortably, but the rows
+    // were ORDERED BY THE CATALOG, which is to say not ordered at all:
+    // Circuits floated over the armchair, Waves over the window, and
+    // nothing about where a thing sat said what kind of physics it was.
+    // One arc, read left to right like a shelf, grouped into the four
+    // domains a course would group them into — Mechanics, Waves &
+    // Optics, Electricity & Magnetism, Fluids & Gravity — with a small
+    // header floating over each group. Position now MEANS something.
     //
-    // Two shallow arcs wrapped around the user fix both. Everything sits
-    // on a cylinder at arm's-length-and-a-bit, so each exhibit genuinely
-    // faces you and the ones to the side are nearer than the ones ahead
-    // — real parallax as you move. Five above, four below, staggered so
-    // no exhibit hides another and so a gap falls dead ahead at the
-    // bottom, where the hub window lives.
+    // Geometry comes from settings (distance and height sliders,
+    // recenter yaw), with the defaults at 2.0 m and 1.4 m — close
+    // enough to read, low enough to feel on your shelf rather than on
+    // the ceiling.
 
-    /// Distance from the user to every exhibit.
-    private static let arcRadius: Float = 2.35
-    /// The two rows, as (height, azimuths in degrees). The bottom row is
-    /// offset half a step so the two rows interleave rather than
-    /// stacking into columns.
-    private static let arcRows: [(y: Float, azimuths: [Float])] = [
-        (1.86, [-30, -15, 0, 15, 30]),
-        (1.16, [-22.5, -7.5, 7.5, 22.5]),
-    ]
+    private var arcRadius: Float = 2.0
+    private var arcHeight: Float = 1.4
 
-    /// Where an exhibit sits, by its index in the catalog.
-    private static func arcPosition(_ index: Int) -> SIMD3<Float> {
-        var remaining = index
-        for row in arcRows {
-            if remaining < row.azimuths.count {
-                let azimuth = row.azimuths[remaining] * .pi / 180
-                return SIMD3(arcRadius * sin(azimuth), row.y,
-                             -arcRadius * cos(azimuth))
+    /// Degrees between neighbours inside a domain, and the widened gap
+    /// where one domain hands over to the next — the pause that makes
+    /// the grouping legible without a single dividing line.
+    /// ±50° total: wide enough that the grouping breathes, narrow
+    /// enough that a seated user can sweep the whole shelf without
+    /// turning their shoulders. The first cut spanned ±58° and both edge
+    /// domains fell off the sides of the view.
+    private static let intraGap: Float = 11
+    private static let domainGap: Float = 15
+
+    /// Azimuth (degrees) for every module in HubDomain.arcOrder, centred
+    /// on zero.
+    private static func arcAzimuths() -> [Float] {
+        var azimuths: [Float] = []
+        var cursor: Float = 0
+        for (index, domain) in HubDomain.allCases.enumerated() {
+            if index > 0 { cursor += domainGap - intraGap }
+            for _ in domain.moduleIDs {
+                azimuths.append(cursor)
+                cursor += intraGap
             }
-            remaining -= row.azimuths.count
         }
-        // More modules than slots: tuck extras behind the middle.
-        return SIMD3(0, arcRows[0].y, -arcRadius - 0.6)
+        let span = azimuths.last ?? 0
+        return azimuths.map { $0 - span / 2 }
+    }
+
+    private func arcPoint(azimuthDegrees: Float, y: Float) -> SIMD3<Float> {
+        let azimuth = azimuthDegrees * .pi / 180
+        return SIMD3(arcRadius * sin(azimuth), y, -arcRadius * cos(azimuth))
     }
 
     /// The miniatures, unbottled and enlarged. They were trinkets.
@@ -216,21 +256,65 @@ final class HubScene {
     // MARK: Build
 
     func build(modules: [ModuleDescriptor],
-               progress: [String: (done: Int, total: Int)] = [:]) {
-        // The name crowns the gallery; the exhibits fill two arcs below
-        // it, reading left to right, top row then bottom.
+               progress: [String: (done: Int, total: Int)] = [:],
+               distance: Float = 2.0, height: Float = 1.4, yaw: Float = 0) {
+        arcRadius = distance
+        arcHeight = height
+        // Recenter: the whole gallery swings about the user, so "face
+        // this way and recenter" brings the arc to you.
+        root.orientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
+
+        titlePosition = SIMD3(0, arcHeight + 0.80, -(arcRadius + 0.05))
         buildBubbleTitle()
-        for (index, module) in modules.enumerated() {
-            buildExhibit(for: module, at: Self.arcPosition(index),
+
+        // Left to right by DOMAIN, not by catalog order — with a header
+        // floating over each group.
+        let byID = Dictionary(uniqueKeysWithValues: modules.map { ($0.id, $0) })
+        let azimuths = Self.arcAzimuths()
+        var index = 0
+        for domain in HubDomain.allCases {
+            let groupAzimuths = azimuths[index ..< index + domain.moduleIDs.count]
+            buildDomainHeader(domain, azimuth: groupAzimuths.reduce(0, +)
+                                        / Float(groupAzimuths.count))
+            for moduleID in domain.moduleIDs {
+                guard let module = byID[moduleID] else { index += 1; continue }
+                buildExhibit(for: module,
+                             at: arcPoint(azimuthDegrees: azimuths[index], y: arcHeight),
+                             domain: domain,
+                             progress: progress[module.id] ?? (0, 0))
+                index += 1
+            }
+        }
+        // A module the domain map has never heard of still gets a slot —
+        // tucked past the right end rather than silently missing.
+        for module in modules where !HubDomain.arcOrder.contains(module.id) {
+            let azimuth = (azimuths.last ?? 0) + Self.domainGap
+            buildExhibit(for: module,
+                         at: arcPoint(azimuthDegrees: azimuth, y: arcHeight),
+                         domain: HubDomain.domain(for: module.id),
                          progress: progress[module.id] ?? (0, 0))
         }
     }
 
+    /// The small floating name over a domain's stretch of the arc.
+    private func buildDomainHeader(_ domain: HubDomain, azimuth: Float) {
+        let header = Entity()
+        header.position = arcPoint(azimuthDegrees: azimuth, y: arcHeight + 0.52)
+        header.components.set(BillboardComponent())
+        header.addChild(Self.namePlate(domain.title, accent: UIColor(domain.color),
+                                       size: 0.026))
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = LocalizedStringResource(stringLiteral: domain.title)
+        header.components.set(accessibility)
+        root.addChild(header)
+    }
+
     // MARK: The 3-D bubble title
 
-    /// The title crowns the arcs rather than being ringed by them —
-    /// there is no longer a middle for it to sit in.
-    private static let titlePosition = SIMD3<Float>(0, 2.32, -2.05)
+    /// Just above the arc's centre — part of the gallery, not painted on
+    /// the ceiling. Set from the arc geometry in build().
+    private var titlePosition = SIMD3<Float>(0, 1.98, -2.05)
 
     /// Warm ivory, opaque, self-lit enough to hold its own against
     /// daylight. (It was a frosted grey at 80% opacity, which over a
@@ -242,7 +326,7 @@ final class HubScene {
     private static let titleRimColor = UIColor(red: 1.0, green: 0.88, blue: 0.70, alpha: 1)
     /// The lockup's overall width, metres. Both lines are scaled to
     /// exactly this, which is what makes it read as a designed mark.
-    private static let titleWidth: Float = 0.72
+    private static let titleWidth: Float = 0.44
     /// Gap between the two lines, as a fraction of a line's cap height.
     private static let titleLeading: Float = 0.30
 
@@ -262,7 +346,7 @@ final class HubScene {
     /// block is centred on its anchor — the flush-both-sides two-line
     /// lockup that every good wordmark uses.
     private func buildBubbleTitle() {
-        titleAnchor.position = Self.titlePosition
+        titleAnchor.position = titlePosition
 
         let lines = ["Physics", "Playground"]
         // Build at a reference size, then scale each to the common width.
@@ -392,6 +476,7 @@ final class HubScene {
 
     private func buildExhibit(for module: ModuleDescriptor,
                               at basePosition: SIMD3<Float>,
+                              domain: HubDomain,
                               progress: (done: Int, total: Int)) {
         let anchor = Entity()
         anchor.name = module.id
@@ -441,10 +526,60 @@ final class HubScene {
         namePivot.addChild(name)
         pulser.addChild(namePivot)
 
+        // The module's own progress, worn as a ring around the exhibit:
+        // a faint track, the domain-coloured arc of what is done, and a
+        // gold band once everything is — the reward lives on the home
+        // screen itself.
+        if progress.total > 0 {
+            let ring = Self.progressRing(
+                done: progress.done, total: progress.total,
+                accent: UIColor(domain.color))
+            ring.components.set(BillboardComponent())
+            pulser.addChild(ring)
+        }
+
         exhibits.append(Exhibit(
             moduleID: module.id, anchor: anchor, pulser: pulser,
             vignette: vignette, namePivot: namePivot, halo: glow,
             basePosition: basePosition, animate: built.animate))
+    }
+
+    /// A thin circular track with the completed fraction drawn over it.
+    /// Billboarded behind the miniature, so it reads as a dial without
+    /// ever framing the model.
+    private static func progressRing(done: Int, total: Int,
+                                     accent: UIColor) -> Entity {
+        let ring = Entity()
+        let radius: Float = 0.165
+        let z: Float = -0.115
+        let gold = UIColor(red: 1.0, green: 0.84, blue: 0.25, alpha: 1)
+        let complete = done == total
+
+        func circlePoints(fraction: Float, z: Float) -> [SIMD3<Float>] {
+            let segments = max(Int(48 * fraction), 2)
+            // Start at 12 o'clock, sweep clockwise as seen by the user.
+            return (0...segments).map { step in
+                let angle = .pi / 2 - 2 * .pi * fraction * Float(step) / Float(segments)
+                return SIMD3(radius * cos(angle), radius * sin(angle), z)
+            }
+        }
+
+        if let track = TubeMesh.tube(lines: [circlePoints(fraction: 1, z: z)],
+                                     radius: 0.0016, sides: 4) {
+            var faint = UnlitMaterial(color: UIColor(white: 0.9, alpha: 1))
+            faint.blending = .transparent(opacity: 0.16)
+            ring.addChild(ModelEntity(mesh: track, materials: [faint]))
+        }
+        let fraction = Float(done) / Float(total)
+        if fraction > 0.01,
+           let arc = TubeMesh.tube(lines: [circlePoints(fraction: fraction,
+                                                        z: z + 0.002)],
+                                   radius: 0.0024, sides: 4) {
+            var lit = UnlitMaterial(color: complete ? gold : accent)
+            lit.blending = .transparent(opacity: complete ? 0.6 : 0.5)
+            ring.addChild(ModelEntity(mesh: arc, materials: [lit]))
+        }
+        return ring
     }
 
     /// An exhibit's name, built to survive the room behind it.
@@ -463,9 +598,9 @@ final class HubScene {
     /// the words it carries. Crisp accent type, guaranteed contrast, and
     /// nothing around the MODEL — which is the part that has to stay
     /// unframed.
-    private static func namePlate(_ text: String, accent: UIColor) -> Entity {
+    private static func namePlate(_ text: String, accent: UIColor,
+                                  size: CGFloat = 0.036) -> Entity {
         let plate = Entity()
-        let size: CGFloat = 0.036
 
         let extents = textExtents(text, size: size)
         let padX: Float = 0.026
@@ -524,13 +659,18 @@ final class HubScene {
         time += dt
         updateFocus(lookRay: lookRay, dt: dt)
 
-        for (index, exhibit) in exhibits.enumerated() {
-            let bob = 0.012 * Float(sin(time * 0.8 + Double(index) * 2.1))
-            let focus = exhibit.focus
+        for index in exhibits.indices {
+            let focus = exhibits[index].focus
+            // Reduce Motion: the gallery holds still. Focus scaling
+            // stays — it answers the user's own head, which is exactly
+            // the motion Reduce Motion is not about.
+            let bob = stillness ? 0
+                : 0.012 * Float(sin(time * 0.8 + Double(index) * 2.1))
             // The focused exhibit steps toward the user as it grows —
             // the parallax is what sells it as an object rather than a
             // picture that got bigger.
             let approach = Self.focusedApproach * focus
+            let exhibit = exhibits[index]
             exhibit.anchor.position = exhibit.basePosition
                 + SIMD3(0, bob, approach)
 
@@ -544,23 +684,29 @@ final class HubScene {
             let nameOpacity = hasLookRay ? (0.58 + 0.42 * focus) : 1
             exhibit.namePivot.components.set(OpacityComponent(opacity: nameOpacity))
 
+            if stillness { continue }
+
             // A gentle SWAY rather than a full turn. Spinning a
             // miniature all the way round shows it is a 3-D object, and
             // also swings the flat ones — the drumhead, the lens —
             // edge-on for half of every rotation, where they vanish.
-            // Swaying through about fifty degrees shows the same depth
-            // and never hides anything. It eases to a stop on the
-            // exhibit being read, so a focused one holds still.
+            // It eases to a stop on the exhibit being read.
             let sway = 0.44 * Float(sin(time * 0.4 + Double(index) * 1.3))
             exhibit.vignette.orientation = simd_quatf(
                 angle: sway * (1 - focus * 0.75), axis: [0, 1, 0])
-            // …and whatever this particular exhibit does for a living.
-            exhibit.animate(time)
+
+            // Each exhibit runs on its own clock: paused outside the
+            // field of view (work nobody can see), and a touch fast
+            // while focused, so the one you turn to visibly comes alive.
+            if exhibit.inView || focus > 0.01 || !hasLookRay {
+                exhibits[index].animTime += dt * Double(1 + 0.6 * focus)
+                exhibit.animate(exhibits[index].animTime)
+            }
         }
         // The title floats and breathes, like a balloon on a string.
-        let bob = 0.02 * Float(sin(time * 0.6))
-        titleAnchor.position = Self.titlePosition + SIMD3(0, bob, 0)
-        let breathe = 1 + 0.015 * Float(sin(time * 0.9))
+        let bob = stillness ? 0 : 0.02 * Float(sin(time * 0.6))
+        titleAnchor.position = titlePosition + SIMD3(0, bob, 0)
+        let breathe = stillness ? 1 : 1 + 0.015 * Float(sin(time * 0.9))
         titleAnchor.scale = SIMD3(repeating: breathe)
     }
 
@@ -584,15 +730,23 @@ final class HubScene {
         #endif
         if let lookRay {
             hasLookRay = true
-            let origin = SIMD3<Float>(lookRay.origin)
-            let forward = simd_normalize(SIMD3<Float>(lookRay.direction))
+            // The whole scene may be yawed by Recenter; bring the ray
+            // into the scene's own frame so the base positions the math
+            // uses stay honest.
+            let inverse = root.orientation.inverse
+            let origin = inverse.act(SIMD3<Float>(lookRay.origin))
+            let forward = simd_normalize(inverse.act(SIMD3<Float>(lookRay.direction)))
             var best = Self.focusCone
-            for exhibit in exhibits {
+            for index in exhibits.indices {
+                let exhibit = exhibits[index]
                 let toExhibit = exhibit.basePosition - origin
                 let distance = simd_length(toExhibit)
                 guard distance > 1e-4 else { continue }
                 let cosine = simd_dot(toExhibit / distance, forward)
                 let angle = acos(min(max(cosine, -1), 1))
+                // Anything within ~60° is worth animating; the rest is
+                // outside the headset's view and pauses.
+                exhibits[index].inView = angle < 1.05
                 // Hysteresis: the exhibit already in focus keeps it
                 // unless another is clearly closer to where you look.
                 let bias: Float = exhibit.moduleID == focusedModuleID
@@ -613,16 +767,22 @@ final class HubScene {
         // Publish only on change — SwiftUI must not see this per frame.
         if winner != focusedModuleID {
             focusedModuleID = winner
-            let anchor = exhibits.first { $0.moduleID == winner }?.anchor
-            focusedAnchor = anchor
-            // Move the card to the new exhibit rather than building one
-            // per exhibit: only ever one is readable at a time.
-            // The card does NOT chase the focused exhibit. A panel that
-            // jumps between nine positions is something you have to hunt
-            // for every time; a fixed reading shelf under the gallery is
-            // somewhere your eyes learn once. It fades in and out
-            // instead, and the accent rim says which exhibit it is for.
-            detailCard?.isEnabled = anchor != nil
+            let exhibit = exhibits.first { $0.moduleID == winner }
+            focusedAnchor = exhibit?.anchor
+            // The panel floats ABOVE the focused exhibit, a step behind
+            // it. Straight behind was the first attempt — the diorama is
+            // angularly larger than the panel from where the user
+            // stands, so "behind" meant "hidden". Below was the second —
+            // and the app's own window and dock live dead ahead below
+            // the arc, so the centre modules' panels drowned in UI.
+            // Above is the one direction that is always clear: the
+            // diorama keeps the stage, its story hangs over it like a
+            // gallery caption. One panel, moved, not nine built.
+            if let base = exhibit?.basePosition {
+                let outward = simd_normalize(SIMD3<Float>(base.x, 0, base.z))
+                detailCard?.position = base + outward * 0.24 + SIMD3(0, 0.38, 0)
+            }
+            detailCard?.isEnabled = exhibit != nil
         }
 
         let rate = Float(min(dt * 7, 1))
@@ -644,73 +804,103 @@ final class HubScene {
         return nil
     }
 
-    /// A quick swell as the chosen exhibit accepts the pinch.
-    func pulseExhibit(id: String) {
+    /// The chosen exhibit swells toward the user over the ~0.4 s before
+    /// the module takes the stage — entering reads as an arrival rather
+    /// than a hard cut. (A true cross-dissolve into the module scene
+    /// would need both scenes alive at once; the swell carries the
+    /// continuity on its own.)
+    func beginEnterTransition(id: String) {
         guard let exhibit = exhibits.first(where: { $0.moduleID == id }) else { return }
         SoundPalette.play(.pop, on: exhibit.anchor, volume: 0.7)
+        detailCard?.isEnabled = false
         exhibit.pulser.move(
-            to: Transform(scale: SIMD3(repeating: 1.15)),
+            to: Transform(scale: SIMD3(repeating: 1.6),
+                          translation: SIMD3(0, 0, 0.22)),
             relativeTo: exhibit.anchor,
-            duration: 0.14,
-            timingFunction: .easeOut
+            duration: 0.42,
+            timingFunction: .easeIn
         )
     }
 }
 
-/// The card that appears under whichever exhibit you turn toward.
+/// The panel that appears behind whichever exhibit you turn toward:
+/// domain chip, the one-line promise, live progress, and a real Enter
+/// button beside the pinch you can already do.
 ///
 /// A menu of nine physics simulations cannot say what any of them ARE
-/// while all nine are on screen — there is no room, and nine blurbs at
-/// once is a wall of text nobody reads. Focus buys the room: one card,
-/// for the one you are looking at, with its name, what it is, and how
-/// far through its experiments you are, so choosing is informed instead
-/// of a guess from a small floating object and a coloured word.
-struct HubDetailCard: View {
+/// while all nine are on screen — focus buys the room to say it.
+struct HubFocusPanel: View {
     let module: ModuleDescriptor
+    let enter: () -> Void
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
+        let domain = HubDomain.domain(for: module.id)
         let entries = ExperimentCatalog.experiments(for: module.id, appModel: appModel)
         let done = entries.filter {
             appModel.experiments.completed.contains($0.experiment.id)
         }.count
+        let visited = appModel.visitedModuleIDs.contains(module.id)
 
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 9) {
-                Image(systemName: module.icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(module.accent)
-                    .frame(width: 30, height: 30)
-                    .background(module.accent.opacity(0.18),
-                                in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                Text(module.title)
-                    .font(.title3.bold())
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 8) {
+                Text(domain.title)
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(domain.color.opacity(0.22), in: Capsule())
+                    .foregroundStyle(domain.color)
                 Spacer(minLength: 0)
+                if !visited {
+                    Text("New")
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(module.accent.opacity(0.9), in: Capsule())
+                        .foregroundStyle(.white)
+                } else if let last = appModel.lastPlayed(module.id) {
+                    Text(last, format: .relative(presentation: .named))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
 
-            Text(module.blurb)
+            Text(module.title)
+                .font(.title3.bold())
+
+            Text(HubDomain.promise(for: module.id))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-                .lineLimit(4)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 if !entries.isEmpty {
-                    ProgressView(value: Double(done), total: Double(entries.count))
-                        .tint(done == entries.count ? .green : module.accent)
-                        .frame(width: 96)
-                    Text("\(done)/\(entries.count) experiments")
+                    ZStack {
+                        Circle().stroke(.tertiary, lineWidth: 3)
+                        Circle()
+                            .trim(from: 0, to: CGFloat(done) / CGFloat(entries.count))
+                            .stroke(done == entries.count ? .yellow : domain.color,
+                                    style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                    }
+                    .frame(width: 26, height: 26)
+                    Text("\(done) of \(entries.count) experiments")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-                Label("Pinch to enter", systemImage: "hand.pinch")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(module.accent)
+                Button(action: enter) {
+                    Label("Enter", systemImage: "arrow.forward")
+                        .font(.callout.weight(.semibold))
+                        .padding(.horizontal, 4)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(module.accent)
+                .accessibilityHint("Opens \(module.title)")
             }
         }
         .padding(16)
-        .frame(width: 380, alignment: .leading)
+        .frame(width: 340, alignment: .leading)
         .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .transition(.opacity)
     }
