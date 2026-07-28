@@ -158,8 +158,43 @@ final class MagnetismModel {
     /// charges.
     var dynamicsOn = true
 
+    // MARK: Faraday induction — the coil notices moving magnets
+
+    /// EMF induced in the electromagnet's coil by the BAR magnets'
+    /// motion, volts, lightly smoothed. ε = −N dΦ/dt with the flux
+    /// integrated numerically over the coil disc from the same dipole
+    /// field every other number in this module comes from. Wave a
+    /// magnet through the coil and this is what the wave is worth.
+    private(set) var inducedEMF = 0.0
+    @ObservationIgnored private var lastCoilFlux: Double?
+
+    private func updateInduction(dt: Double) {
+        guard electromagnetOn, dt > 1e-6 else {
+            lastCoilFlux = nil
+            if inducedEMF != 0 { inducedEMF = 0 }
+            return
+        }
+        let flux = Induction.flux(
+            throughDiscAt: electromagnetPosition, normal: electromagnetAxis,
+            radius: Self.coilRadius, magnets: magnets)
+        if let last = lastCoilFlux {
+            let raw = Induction.emf(turns: Self.coilTurns,
+                                    fluxNow: flux, fluxBefore: last, dt: dt)
+            // ~80 ms smoothing: the raw finite difference carries the
+            // simulation's frame jitter; the physical signal doesn't.
+            inducedEMF += (raw - inducedEMF) * min(dt * 12, 1)
+        }
+        lastCoilFlux = flux
+    }
+
     func step(dt: Double) {
         guard !isPaused else { return }
+        // BEFORE the dynamics gate: Faraday's law does not care WHY the
+        // flux changed. A magnet carried by hand across a frozen bench
+        // induces exactly as one gliding under its own forces — the
+        // first draft ran this after the gate, and a hand-waved magnet
+        // on a frozen bench lit nothing, which is wrong physics.
+        updateInduction(dt: dt)
         guard dynamicsOn else {
             // Frozen: no forces, but contact separation still holds so a
             // dragged magnet can't be parked inside another.

@@ -32,6 +32,16 @@ final class MagnetismRenderer {
     /// is a pure view change — the model keeps its own coordinates, and
     /// every hand position converts through this root on its way in.
     let viewRoot = Entity()
+    /// Look reveals: turn toward a magnet and its moment materialises.
+    private let lookReveal = LookReveal()
+    private var lookCallout: Callout?
+
+    // MARK: Induction — the coil's filament answers a waved magnet
+    private let inductionGlow = ModelEntity(
+        mesh: .generateSphere(radius: 0.016),
+        materials: [UnlitMaterial(color: .white)])
+    private var inductionCallout: Callout?
+    private static let fullGlowVolts = 0.04
     var subscriptions: [EventSubscription] = []
 
     static let northColor = DesignTokens.Palette.positiveUI
@@ -79,11 +89,80 @@ final class MagnetismRenderer {
 
     /// World → model coordinates, through however the view is scaled
     /// and turned. Every hand and head position enters the model here.
+    /// Faraday's law with a face: a filament in the coil's bore that
+    /// glows with the induced EMF, and a millivolt readout when it is
+    /// worth reading. Wave a magnet through the coil — the harder you
+    /// pump, the brighter it burns. The coil needs no battery for
+    /// this; that is the entire point.
+    private func syncInduction(_ model: MagnetismModel) {
+        guard model.electromagnetOn else {
+            inductionGlow.isEnabled = false
+            inductionCallout?.isEnabled = false
+            return
+        }
+        if inductionGlow.parent == nil { viewRoot.addChild(inductionGlow) }
+        let level = Float(min(abs(model.inducedEMF) / Self.fullGlowVolts, 1))
+        inductionGlow.position = SIMD3<Float>(model.electromagnetPosition)
+        inductionGlow.isEnabled = level > 0.03
+        if inductionGlow.isEnabled {
+            var filament = UnlitMaterial(
+                color: UIColor(red: 1.0, green: 0.85, blue: 0.55, alpha: 1))
+            filament.blending = .transparent(opacity: .init(floatLiteral: 0.25 + 0.75 * level))
+            inductionGlow.model?.materials = [filament]
+            inductionGlow.scale = SIMD3(repeating: 0.7 + 0.9 * level)
+        }
+        if inductionCallout == nil {
+            let callout = Callout(color: UIColor(red: 1.0, green: 0.85, blue: 0.55, alpha: 1),
+                                  textSize: 0.018, offset: SIMD3(0, 0.10, 0))
+            viewRoot.addChild(callout.root)
+            inductionCallout = callout
+        }
+        let showText = level > 0.08
+        inductionCallout?.isEnabled = showText
+        if showText {
+            inductionCallout?.anchor(at: SIMD3<Float>(model.electromagnetPosition))
+            inductionCallout?.setText(String(format: "ε %.0f mV", model.inducedEMF * 1000))
+        }
+    }
+
+    private func tickLookReveal(_ model: MagnetismModel,
+                                lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?) {
+        let candidates = model.magnets.map {
+            (id: $0.id.uuidString, position: SIMD3<Float>($0.position))
+        }
+        var localRay: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
+        if let lookRay {
+            localRay = (
+                viewRoot.convert(position: SIMD3<Float>(lookRay.origin), from: nil),
+                viewRoot.convert(direction: SIMD3<Float>(lookRay.direction), from: nil))
+        }
+        lookReveal.update(dt: 1.0 / 90, ray: localRay, candidates: candidates)
+        guard let winner = lookReveal.focusedID,
+              let magnet = model.magnets.first(where: { $0.id.uuidString == winner })
+        else {
+            lookCallout?.isEnabled = false
+            return
+        }
+        if lookCallout == nil {
+            let callout = Callout(color: UIColor(DesignTokens.Palette.magnetismAccent),
+                                  textSize: 0.02, offset: SIMD3(0, 0.09, 0))
+            viewRoot.addChild(callout.root)
+            lookCallout = callout
+        }
+        let reveal = lookReveal.reveal(winner)
+        lookCallout?.isEnabled = reveal > 0.02
+        lookCallout?.root.components.set(OpacityComponent(opacity: reveal))
+        lookCallout?.anchor(at: SIMD3<Float>(magnet.position))
+        lookCallout?.setText(String(format: "%.1f A·m²", magnet.strength))
+    }
+
     func displayPoint(fromWorld world: SIMD3<Float>) -> SIMD3<Double> {
         SIMD3<Double>(viewRoot.convert(position: world, from: nil))
     }
 
-    func tick(_ model: MagnetismModel, viewer: SIMD3<Double>? = nil) {
+    func tick(_ model: MagnetismModel, viewer: SIMD3<Double>? = nil,
+              lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)? = nil) {
+        tickLookReveal(model, lookRay: lookRay)
         syncElectromagnet(model)
         syncMagnets(model)
         syncFieldLines(model)
@@ -148,6 +227,7 @@ final class MagnetismRenderer {
     private func syncElectromagnet(_ model: MagnetismModel) {
         if !coilBuilt { buildElectromagnet() }
         coilRoot.isEnabled = model.electromagnetOn
+        syncInduction(model)
         guard model.electromagnetOn else { return }
         if !isCarryingCoil {
             coilRoot.position = SIMD3<Float>(model.electromagnetPosition)

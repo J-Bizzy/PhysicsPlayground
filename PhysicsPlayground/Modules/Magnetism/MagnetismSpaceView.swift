@@ -78,7 +78,7 @@ struct MagnetismSpaceView: View {
                     }
                     renderer?.tick(model, viewer: appModel.room.headPosition.map {
                         renderer?.displayPoint(fromWorld: SIMD3<Float>($0)) ?? $0
-                    })
+                    }, lookRay: appModel.room.lookRay)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                     // The lab's placement in the user's room — a pure
