@@ -85,8 +85,8 @@ enum ModuleCatalog {
         // SIX labs. Springs, Elastic Field, and Optics are cut: a block
         // on a rail is a ONE-dimensional oscillator, a membrane is
         // two-dimensional, and an optical bench is a line of elements in
-        // a row — none of them earn a headset. Waves is cut pending a
-        // rebuild as an interference VOLUME you stand inside. Their code
+        // a row — none of them earn a headset. Waves is BACK, rebuilt: its
+        // silence is a set of 3-D surfaces you walk between. Their code
         // and physics stay on disk; each returns with one line here.
         //
         // not deleted — each returns with one line here plus its
@@ -108,6 +108,7 @@ enum ModuleCatalog {
             WindTunnelModule.descriptor(appModel: appModel),
             CircuitsModule.descriptor(appModel: appModel),
             PendulumsModule.descriptor(appModel: appModel),
+            WavesModule.descriptor(appModel: appModel),
         ]
     }
 }

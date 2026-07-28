@@ -21,9 +21,22 @@ import simd
 final class PendulumsModel {
     // MARK: Layout
 
-    /// The beam the pivots ride, floating overhead.
-    nonisolated static let beamCenter = SIMD3<Double>(0, 2.1, -1.1)
-    nonisolated static let beamHalfLength = 0.9
+    // RIGGING, not a bench.
+    //
+    // The pivots used to ride a single beam overhead, evenly spaced —
+    // which made five pendulums a ROW, and a row of planar swings is a
+    // one-dimensional phenomenon drawn along a line. You could have
+    // watched it on paper.
+    //
+    // A pivot is now a point you place anywhere in the room. Hang one
+    // from over the sofa and another by the window; throw a bob
+    // sideways and it orbits in a true cone rather than a plane. The
+    // room is the rig.
+
+    /// Where a pendulum lands when you have not said otherwise.
+    nonisolated static let defaultPivot = SIMD3<Double>(0, 2.0, -1.1)
+    /// A pivot may not be hung lower than this, or the bob is in the floor.
+    nonisolated static let minimumPivotHeight = 0.85
 
     nonisolated static let lengthRange = 0.25...1.6      // m
     nonisolated static let massRange = 0.1...5.0         // kg
@@ -44,15 +57,13 @@ final class PendulumsModel {
         var cableThickness: Double
         /// Physics state: bob position/velocity relative to the pivot.
         var state: SphericalPendulum
-        /// Pivot offset along the beam (world x from beam center).
-        var beamOffset: Double
+        /// Where this pendulum hangs from — anywhere in the room.
+        var pivotPoint: SIMD3<Double>
         /// While a hand holds the bob, physics freezes and the bob
         /// tracks the hand exactly.
         var isGrabbed = false
 
-        var pivot: SIMD3<Double> {
-            PendulumsModel.beamCenter + SIMD3(beamOffset, 0, 0)
-        }
+        var pivot: SIMD3<Double> { pivotPoint }
         var bobWorld: SIMD3<Double> { pivot + state.position }
 
         func period(gravity: Double) -> Double {
@@ -113,16 +124,15 @@ final class PendulumsModel {
 
     @discardableResult
     func addPendulum(length: Double = 0.8, angle: Double = 0.45,
-                     mass: Double = 1.0) -> UUID? {
+                     mass: Double = 1.0, at: SIMD3<Double>? = nil) -> UUID? {
         guard pendulums.count < Self.pendulumBudget else { return nil }
         let pendulum = Pendulum(
             id: UUID(), length: length, mass: mass, damping: 0.02,
             bobRadius: 0.035, cableThickness: 0.002,
             state: SphericalPendulum(length: length, angle: angle),
-            beamOffset: 0)
+            pivotPoint: at ?? Self.defaultPivot)
         pendulums.append(pendulum)
         selectedID = pendulum.id
-        relayoutBeam()
         emitSound(.pop, at: pendulum.bobWorld, volume: 0.5)
         return pendulum.id
     }
@@ -138,30 +148,33 @@ final class PendulumsModel {
                 id: UUID(), length: length, mass: 1.0, damping: 0,
                 bobRadius: 0.032, cableThickness: 0.002,
                 state: SphericalPendulum(length: length, angle: 0.5),
-                beamOffset: 0)
+                pivotPoint: Self.defaultPivot
+                    + SIMD3(Double(index - 2) * 0.30, 0,
+                            -abs(Double(index - 2)) * 0.10))
             pendulums.append(pendulum)
         }
         selectedID = pendulums.first?.id
-        relayoutBeam()
         insightText = "Five lengths, 4% apart: they leave together, drift out of step, then re-align — the beat period is set by the difference of their frequencies."
     }
 
-    /// Spread pivots evenly along the beam.
-    private func relayoutBeam() {
-        let count = pendulums.count
-        guard count > 0 else { return }
-        for index in pendulums.indices {
-            let fraction = count == 1 ? 0.5 : Double(index) / Double(count - 1)
-            pendulums[index].beamOffset =
-                (fraction - 0.5) * 2 * Self.beamHalfLength * 0.85
-        }
+    /// Moves a pendulum's pivot. Clamped so a bob can never end up
+    /// below the floor.
+    func movePivot(id: UUID, to point: SIMD3<Double>) {
+        guard let index = pendulums.firstIndex(where: { $0.id == id }) else { return }
+        var clamped = point
+        clamped.y = max(clamped.y, Self.minimumPivotHeight + pendulums[index].length)
+        pendulums[index].pivotPoint = clamped
+    }
+
+    func removePendulum(id: UUID) {
+        pendulums.removeAll { $0.id == id }
+        if selectedID == id { selectedID = pendulums.last?.id }
     }
 
     func removeSelected() {
         guard let selectedID else { return }
         pendulums.removeAll { $0.id == selectedID }
         self.selectedID = pendulums.last?.id
-        relayoutBeam()
     }
 
     // MARK: Live parameter edits (no reset — the swing carries on)

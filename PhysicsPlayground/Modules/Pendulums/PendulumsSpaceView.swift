@@ -20,6 +20,9 @@ struct PendulumsSpaceView: View {
     @Environment(PendulumsModel.self) private var model
     @State private var renderer: PendulumsRenderer?
     @State private var drag: RelativeDrag?
+    @State private var bloom = Bloom()
+    @State private var look = LookReveal(coneDegrees: 14)
+    @State private var wells: Well?
     @State private var handSamples: [(time: Double, position: SIMD3<Double>)] = []
     /// A gravity gauge under the beam. "What if this were the Moon" is
     /// the question this bench exists to answer, and it was a slider in
@@ -31,10 +34,28 @@ struct PendulumsSpaceView: View {
         RealityView { content in
             let renderer = PendulumsRenderer()
             content.add(renderer.root)
+            renderer.root.addChild(bloom.root)
+
+            // Pull a pendulum out and hang it wherever you let go. The
+            // pivot lands at your fingertips, so rigging one and moving
+            // one are the same gesture.
+            let sources = Well([
+                .init(name: "Pendulum",
+                      tint: UIColor(DesignTokens.Palette.pendulumsAccent),
+                      glyph: "+",
+                      position: SIMD3(-0.85, 1.30, -0.95),
+                      spawn: { point in
+                          model.addPendulum(at: point)
+                      }),
+            ])
+            renderer.root.addChild(sources.root)
+            wells = sources
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     renderer?.tick(dt: event.deltaTime, model: model)
+                    wells?.update(dt: event.deltaTime)
+                    syncBloom(dt: event.deltaTime)
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
                     // moves a body by hand DISPLACEMENT, which a constant
@@ -53,7 +74,15 @@ struct PendulumsSpaceView: View {
                 .onChanged { value in
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
+                    if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
                     if drag == nil {
+                        if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
+                        if let id = wells?.pull(value.entity, at: hand) {
+                            drag = RelativeDrag(name: "pivot-\(id.uuidString)",
+                                                target: hand, hand: hand)
+                            return
+                        }
+
                         var current: Entity? = value.entity
                         while let candidate = current {
                             if let id = UUID(uuidString: candidate.name),
@@ -70,6 +99,12 @@ struct PendulumsSpaceView: View {
                             }
                             current = candidate.parent
                         }
+                    }
+                    // A pivot drag re-hangs the rig; a bob drag swings it.
+                    if drag?.name.hasPrefix("pivot-") == true, let drag,
+                       let id = UUID(uuidString: String(drag.name.dropFirst(6))) {
+                        model.movePivot(id: id, to: drag.position(forHand: hand))
+                        return
                     }
                     guard let drag, let id = UUID(uuidString: drag.name) else { return }
                     let world = drag.position(forHand: hand)
@@ -113,6 +148,48 @@ struct PendulumsSpaceView: View {
         )
     }
 
+
+    /// A bob's own controls. LENGTH is the grip, and its extent is the
+    /// cable: pull the bead and the cable pays out, the bob falls with
+    /// it, and the period tag over the pivot climbs as the square root
+    /// of length while your hand is still moving.
+    private func syncBloom(dt: Double) {
+        let candidates = model.pendulums.map {
+            (id: $0.id.uuidString, position: SIMD3<Float>($0.bobWorld))
+        }
+        var ray: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
+        if let lookRay = appModel.room.lookRay {
+            ray = (SIMD3<Float>(lookRay.origin), SIMD3<Float>(lookRay.direction))
+        }
+        look.update(dt: dt, ray: ray, candidates: candidates)
+
+        guard let winner = look.focusedID, let uuid = UUID(uuidString: winner),
+              let pendulum = model.pendulums.first(where: { $0.id == uuid }) else {
+            bloom.update(anchor: .zero, viewer: nil, revealTarget: 0, dt: dt)
+            bloom.clearTarget()
+            return
+        }
+
+        bloom.retarget(
+            uuid,
+            petals: [
+                .init(name: "Delete", symbol: "trash",
+                      tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
+                    model.removePendulum(id: uuid)
+                },
+            ],
+            grip: .init(
+                name: "Length",
+                range: PendulumsModel.lengthRange,
+                read: { model.pendulums.first(where: { $0.id == uuid })?.length ?? 0.8 },
+                write: { model.setLength(id: uuid, $0) },
+                format: { String(format: "%.2f m", $0) },
+                radius: { Float(pendulum.bobRadius) + 0.03 }))
+
+        let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
+        bloom.update(anchor: SIMD3<Float>(pendulum.bobWorld),
+                     viewer: viewer, revealTarget: 1, dt: dt)
+    }
 }
 
 /// The card floating above the selected bob: the numbers behind the swing.

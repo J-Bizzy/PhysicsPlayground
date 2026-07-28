@@ -161,13 +161,10 @@ final class PendulumsRenderer {
 
     init() {
         root.addChild(Lighting.keyLight())
-        // The machined beam overhead.
-        beam = ModelEntity(
-            mesh: .generateBox(
-                size: [Float(2 * PendulumsModel.beamHalfLength + 0.25), 0.045, 0.07],
-                cornerRadius: 0.008),
-            materials: [aluminumMaterial])
-        beam.position = SIMD3<Float>(PendulumsModel.beamCenter)
+        // No beam. Each pendulum carries its own anchor now, wherever
+        // it was hung — the rig is the room, not a bar overhead.
+        beam = ModelEntity()
+        beam.isEnabled = false
         root.addChild(beam)
 
         // Glowing glossy columns — they read as energy, not plastic bars.
@@ -345,6 +342,10 @@ final class PendulumsRenderer {
         let pivot = ModelEntity(
             mesh: .generateCylinder(height: 0.03, radius: 0.014),
             materials: [steelMaterial])
+        // The collar is grabbable: a rig you cannot re-hang is
+        // furniture, not rigging.
+        pivot.name = "pivot-\(pendulum.id.uuidString)"
+        Grabbable.configureTouchTarget(pivot, collisionRadius: 0.05)
         root.addChild(pivot)
 
         let cable = ModelEntity(

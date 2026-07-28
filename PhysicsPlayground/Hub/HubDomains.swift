@@ -17,6 +17,7 @@ import SwiftUI
 enum HubDomain: String, CaseIterable, Identifiable {
     case mechanics
     case electricity
+    case waves
     case fluidsGravity
 
     var id: String { rawValue }
@@ -25,6 +26,7 @@ enum HubDomain: String, CaseIterable, Identifiable {
         switch self {
         case .mechanics: "Mechanics"
         case .electricity: "Electricity & Magnetism"
+        case .waves: "Waves"
         case .fluidsGravity: "Fluids & Gravity"
         }
     }
@@ -33,6 +35,7 @@ enum HubDomain: String, CaseIterable, Identifiable {
         switch self {
         case .mechanics: Color(red: 1.00, green: 0.62, blue: 0.04)   // #FF9F0A
         case .electricity: Color(red: 0.19, green: 0.82, blue: 0.35) // #30D158
+        case .waves: Color(red: 0.39, green: 0.82, blue: 1.00)       // #64D2FF
         case .fluidsGravity: Color(red: 0.75, green: 0.35, blue: 0.95) // #BF5AF2
         }
     }
@@ -42,6 +45,7 @@ enum HubDomain: String, CaseIterable, Identifiable {
         switch self {
         case .mechanics: ["kinematics", "pendulums"]
         case .electricity: ["electrostatics", "magnetism", "circuits"]
+        case .waves: ["waves"]
         case .fluidsGravity: ["windtunnel", "gravitylab"]
         }
     }
@@ -64,6 +68,7 @@ enum HubDomain: String, CaseIterable, Identifiable {
         case "electrostatics": "Place charges and walk through the field they make"
         case "magnetism": "Carry bar magnets until they snap head-to-tail into line"
         case "circuits": "Wire real parts and watch the electrons do the work"
+        case "waves": "Stand between the silent surfaces two sources carve out of the air"
         case "windtunnel": "Raise a wind indoors and watch the flow find its way around"
         case "gravitylab": "Grow a solar system and hear its orbits as a chord"
         default: ""

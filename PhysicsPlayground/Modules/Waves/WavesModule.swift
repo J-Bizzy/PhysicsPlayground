@@ -25,12 +25,6 @@ enum WavesModule {
             legend: legend,
             isPaused: { appModel.wavesModel.isPaused },
             togglePause: { appModel.wavesModel.isPaused.toggle() },
-            makeControls: {
-                AnyView(
-                    WavesControlsView()
-                        .environment(appModel.wavesModel)
-                )
-            },
             makeScene: {
                 AnyView(
                     WavesSpaceView()

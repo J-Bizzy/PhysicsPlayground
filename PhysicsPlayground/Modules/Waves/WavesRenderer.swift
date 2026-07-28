@@ -164,10 +164,16 @@ final class WavesRenderer {
         // Silence contours: a bright ring over a dark casing. Nearly
         // opaque — an outline can afford to be solid where a sheet
         // could not.
-        let silencePair = Materials.contrastLine(
-            DesignTokens.Palette.forceVectorUI, coreOpacity: 0.95, casingOpacity: 0.5)
-        silenceMaterial = silencePair.core
-        silenceCasingMaterial = silencePair.casing
+// Sheets, not hairlines: low-opacity glass so the surfaces
+        // behind stay visible through the one in front. That layering
+        // IS the nesting — the thing the old rings could only imply.
+        var sheet = UnlitMaterial(color: UIColor(
+            red: 0.55, green: 0.86, blue: 1.0, alpha: 1))
+        // Low enough that four nested sheets still add up to
+        // something you can see the room through.
+        sheet.blending = .transparent(opacity: 0.085)
+        silenceMaterial = sheet
+        silenceCasingMaterial = sheet
         root.addChild(silenceCasingEntity)
         root.addChild(silenceEntity)
 
@@ -321,124 +327,104 @@ final class WavesRenderer {
     }
 
     private nonisolated struct SilenceResult: Sendable {
-        var contours = TubeBuffers()
-        /// Dark casing under the bright contour, so a nodal ring reads
-        /// against a sunlit wall as clearly as against the dark shell.
-        var casing = TubeBuffers()
+        /// Flat triangle list of the nodal SURFACES themselves.
+        var triangles: [SIMD3<Float>] = []
         var isEmpty = true
     }
 
-    /// How many horizontal slices the nodal set is cut into, and how
-    /// finely each is marched. Enough to show the nesting; few enough
-    /// that the whole extraction still fits comfortably in a worker.
-    /// Enough to show the nesting, few enough that the extraction fits
-    /// comfortably in a worker. 9 slices at 56x56 was 28,000 field
-    /// evaluations per submit, and a submit happens on every change —
-    /// which during a drag means every frame.
-    private nonisolated static let silenceSliceCount = 7
-    private nonisolated static let silenceResolution = 40
+    /// Resolution of the marching-tetrahedra lattice the nodal
+    /// surfaces are pulled out of. 28³ is ~22,000 field evaluations per
+    /// submit — the same order as the seven slices it replaces, spent
+    /// on a surface instead of on rings.
+    private nonisolated static let silenceResolution = 28
 
-    /// The silence surfaces, drawn as CONTOUR RINGS rather than a solid
-    /// sheet.
+    /// THE SILENCE, AS SURFACES.
     ///
-    /// The nodal set is a stack of hyperboloid sheets that wrap the whole
-    /// region — and the user is standing inside it. Extracted as a solid
-    /// translucent surface (which is what this used to do) every wall in
-    /// the room ends up behind several layers of the same alpha, and the
-    /// passthrough scene turns into red fog: the furniture disappears,
-    /// the pods tint, and the sheets occlude each other so you cannot
-    /// tell how many there are.
+    /// For two sources the quiet set is a family of hyperboloid SHEETS
+    /// nested about the line joining them — and the user is standing
+    /// among them. The old version cut those sheets into rings, seven
+    /// slices perpendicular to the source axis, because rings are cheap
+    /// and read as nested. But a ring is a cross-section: it tells you
+    /// a surface is there without ever being one. You cannot walk
+    /// through it, lean past it, or watch it curve away over your
+    /// shoulder.
     ///
-    /// Slicing the same scalar field with a stack of horizontal planes
-    /// and drawing where it crosses them gives the identical information
-    /// with a hundredth of the overdraw. Outlines never hide what is
-    /// behind them, the nesting is countable, and the shape reads from
-    /// any angle — which is exactly how contour maps have always worked.
+    /// Marching tetrahedra on the steady-state amplitude gives the
+    /// sheets themselves. Held at low opacity so you can see the ones
+    /// behind, and drawn double-sided so a sheet you have walked
+    /// through is still there when you turn around.
     private nonisolated static func extractSilenceSurfaces(_ job: SilenceJob) -> SilenceResult {
         guard job.sources.count > 1 else { return SilenceResult() }
-        // Threshold: a small fraction of a typical mid-field arrival, so
-        // the contour hugs the true zero set without chasing quiet
+        // A small fraction of a typical mid-field arrival, so the
+        // surface hugs the true zero set without chasing quiet
         // far-field corners.
         let meanAmplitude = job.sources.map(\.amplitude).reduce(0, +) / Double(job.sources.count)
         let level = 0.12 * meanAmplitude * (WaveField.falloffRadius / 0.3)
 
-        // Slice PERPENDICULAR TO THE SOURCE AXIS, not horizontally.
-        //
-        // For two sources the nodal set is a family of hyperboloids of
-        // revolution about the line joining them. Cut those with
-        // horizontal planes and you get hyperbola branches that leave
-        // the region almost immediately — short disconnected slivers
-        // that read as debris. Cut them PERPENDICULAR to that axis and
-        // you get circles: closed, nested, obviously concentric, and
-        // obviously the cross-section of a sheet. The surface is the
-        // same surface; only the knife changed.
         var low = job.sources[0].position, high = job.sources[0].position
         for source in job.sources.dropFirst() {
             low = simd_min(low, source.position)
             high = simd_max(high, source.position)
         }
-        let axisVector = job.sources.count >= 2
-            ? job.sources[1].position - job.sources[0].position
-            : SIMD3<Double>(1, 0, 0)
-        let axisLength = simd_length(axisVector)
-        let u = axisLength > 1e-6 ? axisVector / axisLength : SIMD3(1, 0, 0)
-        // Any two vectors completing u into a frame.
-        let helper: SIMD3<Double> = abs(u.y) < 0.9 ? SIMD3(0, 1, 0) : SIMD3(1, 0, 0)
-        let v = simd_normalize(simd_cross(helper, u))
-        let w = simd_cross(u, v)
         let midpoint = (low + high) / 2
-        let span = max(axisLength, 0.3)
-        // Slice across the pair and a little beyond each end, where the
-        // sheets flare out and the nesting is clearest.
-        let half = span * 0.85
-        let radius = min(span * 1.3, WavesModel.regionHalfExtent)
+        let separation = simd_length(high - low)
+        // Bounded to the region that actually reads as nesting;
+        // the sheets flare without limit and engulf the room.
+        let reach = min(max(separation * 1.35, 0.40),
+                        WavesModel.regionHalfExtent * 0.8)
 
-        var lines: [[SIMD3<Float>]] = []
-        for step in 0..<Self.silenceSliceCount {
-            let t = (Double(step) + 0.5) / Double(Self.silenceSliceCount)
-            let along = -half + 2 * half * t
-            let origin = midpoint + u * along
-            let segments = MarchingSquares.contour(
-                level: level,
-                scalar: { plane in
-                    WaveField.steadyAmplitude(
-                        at: origin + v * plane.x + w * plane.y,
-                        sources: job.sources,
-                        frequency: job.frequency, speed: job.speed)
-                },
-                center: .zero,
-                extents: SIMD2(2 * radius, 2 * radius),
-                resolution: Self.silenceResolution)
-            for polyline in MarchingSquares.chain(segments, tolerance: 1e-7) {
-                let length = zip(polyline, polyline.dropFirst())
-                    .reduce(0.0) { $0 + simd_distance($1.0, $1.1) }
-                // Drop numerical lint, keep anything that reads as a ring.
-                guard polyline.count > 4, length > 0.10 else { continue }
-                lines.append(polyline.map {
-                    SIMD3<Float>(origin + v * $0.x + w * $0.y)
-                })
-            }
+        let amplitude: @Sendable (SIMD3<Double>) -> Double = { point in
+            WaveField.steadyAmplitude(at: point, sources: job.sources,
+                                      frequency: job.frequency, speed: job.speed)
         }
+        let points = Isosurface.triangles(
+            level: level,
+            scalar: amplitude,
+            // The quiet side is INSIDE the sheet, so the outward
+            // direction is up the amplitude gradient.
+            outwardDirection: { point in
+                let h = 0.01
+                return SIMD3(
+                    amplitude(point + SIMD3(h, 0, 0)) - amplitude(point - SIMD3(h, 0, 0)),
+                    amplitude(point + SIMD3(0, h, 0)) - amplitude(point - SIMD3(0, h, 0)),
+                    amplitude(point + SIMD3(0, 0, h)) - amplitude(point - SIMD3(0, 0, h)))
+            },
+            center: midpoint,
+            extents: SIMD3(repeating: 2 * reach),
+            resolution: Self.silenceResolution)
 
         var result = SilenceResult()
-        result.contours = TubeMesh.buffers(lines: lines, radius: 0.0022)
-        result.casing = TubeMesh.buffers(
-            lines: lines, radius: Materials.casingRadius(forCore: 0.0022))
-        result.isEmpty = lines.isEmpty
+        result.triangles = points.map { SIMD3<Float>($0) }
+        result.isEmpty = points.count < 3
         return result
     }
 
     private func applySilenceSurfaces(_ result: SilenceResult) {
-        guard !result.isEmpty, let mesh = TubeMesh.mesh(from: result.contours) else {
+        guard !result.isEmpty else {
             silenceEntity.model = nil
             silenceCasingEntity.model = nil
             return
         }
-        silenceEntity.model = ModelComponent(mesh: mesh, materials: [silenceMaterial])
-        if let casing = TubeMesh.mesh(from: result.casing) {
-            silenceCasingEntity.model = ModelComponent(
-                mesh: casing, materials: [silenceCasingMaterial])
+        // Both windings, so a sheet you have walked through is still
+        // there when you turn round to look at it.
+        var positions = result.triangles
+        var indices: [UInt32] = []
+        indices.reserveCapacity(positions.count * 2)
+        for base in stride(from: 0, to: positions.count, by: 3) {
+            let i = UInt32(base)
+            indices.append(contentsOf: [i, i + 1, i + 2])
+            indices.append(contentsOf: [i, i + 2, i + 1])
         }
+        var descriptor = MeshDescriptor(name: "silence")
+        descriptor.positions = MeshBuffer(positions)
+        descriptor.primitives = .triangles(indices)
+        guard let mesh = try? MeshResource.generate(from: [descriptor]) else {
+            silenceEntity.model = nil
+            return
+        }
+        silenceEntity.model = ModelComponent(mesh: mesh, materials: [silenceMaterial])
+        silenceCasingEntity.model = nil
+        positions.removeAll()
     }
 
     // MARK: Per-frame tick (from SceneEvents.Update)
