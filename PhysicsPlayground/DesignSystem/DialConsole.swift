@@ -123,4 +123,11 @@ final class DialConsole {
     }
 
     func setVisible(_ visible: Bool) { root.isEnabled = visible }
+
+    /// Moves one dial. This is what lets a dial live ON the apparatus:
+    /// the strength gauge rides beneath the magnet you selected, and
+    /// follows it when you carry the magnet somewhere else.
+    func place(_ name: String, at position: SIMD3<Float>) {
+        dials[name]?.root.position = position
+    }
 }

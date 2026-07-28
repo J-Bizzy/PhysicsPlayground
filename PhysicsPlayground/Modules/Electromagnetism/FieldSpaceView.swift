@@ -22,6 +22,7 @@ struct FieldSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @State private var renderer: FieldRenderer?
     @State private var drag: RelativeDrag?
+    @State private var dials: DialConsole?
     /// Two-hand scale: grow the dipole field until its lines arc over
     /// your head. Turn stays OFF here — the field lines clip against
     /// the real room's box, and an axis-aligned box cannot survive a
@@ -33,6 +34,23 @@ struct FieldSpaceView: View {
         RealityView { content, attachments in
             let renderer = FieldRenderer()
             content.add(renderer.root)
+
+            // The charge's strength gauge lives ON the charge: select
+            // one and the dial materialises beneath it, in microcoulombs
+            // you twist. The pod keeps its slider as the fallback; the
+            // dial is the spatial way.
+            let console = DialConsole([
+                .init(name: "dial-charge", title: "Charge",
+                      center: SIMD3(0, 1.35, -0.55),
+                      range: 0.1...5.0,
+                      accent: UIColor(DesignTokens.Palette.positive),
+                      read: { model.selectedMagnitudeMicroCoulombs },
+                      write: { model.selectedMagnitudeMicroCoulombs = $0 },
+                      format: { String(format: "%.1f µC", $0) }),
+            ])
+            console.setVisible(false)
+            renderer.viewRoot.addChild(console.root)
+            dials = console
 
             // The control constellation: five single-purpose pods in an
             // arc around the field region, plus the numbers card. Each
@@ -63,6 +81,14 @@ struct FieldSpaceView: View {
                     // carry the flux meter with your gaze rather than
                     // your hand.
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
+                    if let charge = model.selectedCharge {
+                        dials?.setVisible(true)
+                        dials?.place("dial-charge",
+                                     at: SIMD3<Float>(charge.position) + SIMD3(0, -0.17, 0))
+                        dials?.sync()
+                    } else {
+                        dials?.setVisible(false)
+                    }
                     if model.gaussSurfaceOn, model.lookToPlace,
                        let ray = appModel.room.lookRay,
                        let renderer {
@@ -135,7 +161,9 @@ struct FieldSpaceView: View {
                     guard let renderer else { return }
                     let hand = renderer.displayPoint(fromWorld: SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
+                    if dials?.advanceTwist(hand: hand) == true { return }
                     if drag == nil {
+                        if dials?.beginTwist(on: value.entity, hand: hand) == true { return }
                         drag = beginDrag(entity: value.entity, hand: hand)
                     }
                     guard let drag else { return }
@@ -151,6 +179,7 @@ struct FieldSpaceView: View {
                             model.releaseProbe()
                         }
                     }
+                    dials?.endTwist()
                     drag = nil
                     model.heldChargeID = nil
                 }

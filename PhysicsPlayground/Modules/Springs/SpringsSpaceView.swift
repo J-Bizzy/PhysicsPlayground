@@ -19,6 +19,7 @@ struct SpringsSpaceView: View {
     @Environment(SpringsModel.self) private var model
     @State private var renderer: SpringsRenderer?
     @State private var drag: RelativeDrag?
+    @State private var dials: DialConsole?
     @State private var handSamples: [(time: Double, position: SIMD3<Double>)] = []
     @Environment(AppModel.self) private var appModel
 
@@ -26,6 +27,33 @@ struct SpringsSpaceView: View {
         RealityView { content, attachments in
             let renderer = SpringsRenderer()
             content.add(renderer.root)
+
+            // The two numbers that ARE simple harmonic motion, as brass
+            // you twist on the bench itself: T = 2π√(m/k), with k and m
+            // mounted beside the anchor post their spring hangs from.
+            // Twist either and hear the period answer.
+            let console = DialConsole([
+                .init(name: "dial-k", title: "Stiffness",
+                      center: SIMD3(Float(SpringsModel.center.x - SpringsModel.railHalfLength) - 0.16,
+                                    Float(SpringsModel.center.y) + 0.34,
+                                    Float(SpringsModel.center.z)),
+                      range: SpringsModel.stiffnessRange,
+                      accent: UIColor(DesignTokens.Palette.springsAccent),
+                      read: { model.stiffness },
+                      write: { model.stiffness = $0 },
+                      format: { String(format: "%.0f N/m", $0) }),
+                .init(name: "dial-mass", title: "Mass",
+                      center: SIMD3(Float(SpringsModel.center.x - SpringsModel.railHalfLength) - 0.16,
+                                    Float(SpringsModel.center.y) + 0.18,
+                                    Float(SpringsModel.center.z)),
+                      range: SpringsModel.massRange,
+                      accent: UIColor(DesignTokens.Palette.springsAccent),
+                      read: { model.mass },
+                      write: { model.mass = $0 },
+                      format: { String(format: "%.1f kg", $0) }),
+            ])
+            renderer.root.addChild(console.root)
+            dials = console
 
             let podsRoot = PodMount.makeRoot(module: "springs")
             renderer.root.addChild(podsRoot)
@@ -44,6 +72,7 @@ struct SpringsSpaceView: View {
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
+                    dials?.sync()
                     renderer?.tick(dt: event.deltaTime, model: model)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
@@ -89,7 +118,9 @@ struct SpringsSpaceView: View {
                 .onChanged { value in
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
+                    if dials?.advanceTwist(hand: hand) == true { return }
                     if drag == nil {
+                        if dials?.beginTwist(on: value.entity, hand: hand) == true { return }
                         var current: Entity? = value.entity
                         while let candidate = current {
                             if let index = blockIndex(from: candidate.name) {
@@ -114,6 +145,7 @@ struct SpringsSpaceView: View {
                 }
                 .onEnded { value in
                     defer {
+                        dials?.endTwist()
                         renderer?.grabbedBlock = nil
                         drag = nil
                         handSamples = []

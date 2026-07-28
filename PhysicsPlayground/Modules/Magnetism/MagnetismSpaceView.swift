@@ -19,6 +19,7 @@ struct MagnetismSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @State private var renderer: MagnetismRenderer?
     @State private var drag: RelativeDrag?
+    @State private var dials: DialConsole?
     /// Two-hand scale and turn: grow the dipole field from a desk demo
     /// to loops you stand inside, or turn the whole field to see it
     /// side-on. A pure view transform — the tesla stay honest.
@@ -29,6 +30,23 @@ struct MagnetismSpaceView: View {
         RealityView { content, attachments in
             let renderer = MagnetismRenderer()
             content.add(renderer.root)
+
+            // The strength gauge lives ON the magnet: select one and the
+            // dial materialises beneath it, follows it as you carry it,
+            // and twisting it re-magnetises that magnet. Under viewRoot,
+            // so it scales with the apparatus it annotates.
+            let console = DialConsole([
+                .init(name: "dial-strength", title: "Strength",
+                      center: SIMD3<Float>(MagnetismModel.regionCenter),
+                      range: MagnetismModel.strengthRange,
+                      accent: UIColor(DesignTokens.Palette.magnetismAccent),
+                      read: { model.selectedStrength },
+                      write: { model.selectedStrength = $0 },
+                      format: { String(format: "%.1f A·m²", $0) }),
+            ])
+            console.setVisible(false)
+            renderer.viewRoot.addChild(console.root)
+            dials = console
 
             let podsRoot = PodMount.makeRoot(module: "magnetism")
             renderer.root.addChild(podsRoot)
@@ -42,6 +60,14 @@ struct MagnetismSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
+                    if let magnet = model.selectedMagnet {
+                        dials?.setVisible(true)
+                        dials?.place("dial-strength",
+                                     at: SIMD3<Float>(magnet.position) + SIMD3(0, -0.17, 0))
+                        dials?.sync()
+                    } else {
+                        dials?.setVisible(false)
+                    }
                     model.step(dt: event.deltaTime)
                     // The cross-module link: whatever current the
                     // CIRCUIT bench's inductor is carrying right now is
@@ -101,7 +127,11 @@ struct MagnetismSpaceView: View {
                     // hold stays under your fingers at every scale.
                     let hand = renderer.displayPoint(fromWorld: SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
-                    if drag == nil { drag = beginDrag(entity: value.entity, hand: hand) }
+                    if dials?.advanceTwist(hand: hand) == true { return }
+                    if drag == nil {
+                        if dials?.beginTwist(on: value.entity, hand: hand) == true { return }
+                        drag = beginDrag(entity: value.entity, hand: hand)
+                    }
                     guard let drag else { return }
                     if drag.name == MagnetismRenderer.electromagnetName {
                         model.moveElectromagnet(to: drag.position(forHand: hand))
@@ -112,6 +142,7 @@ struct MagnetismSpaceView: View {
                     }
                 }
                 .onEnded { _ in
+                    dials?.endTwist()
                     model.release()
                     renderer?.isCarryingCompass = false
                     renderer?.isCarryingCoil = false
