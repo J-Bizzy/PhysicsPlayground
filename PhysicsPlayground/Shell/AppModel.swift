@@ -144,6 +144,11 @@ final class AppModel {
         if UserDefaults.standard.bool(forKey: "studioMode") {
             studioMode = true
         }
+        // `-startPaused` opens the module frozen, so the frozen-vector
+        // treatment can be screenshot-verified from the CLI.
+        if UserDefaults.standard.bool(forKey: "startPaused") {
+            activeModule?.togglePause()
+        }
         #endif
     }
 

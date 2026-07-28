@@ -35,6 +35,9 @@ import simd
 final class KinematicsRenderer {
     /// Root of everything we render, added to RealityView content at identity.
     let root = Entity()
+    /// Freeze sculpts: a paused flight grows its velocity and force
+    /// arrows — the frozen arc becomes a diagram you walk around.
+    private let frozenVectors = FrozenVectors(budget: 24)
     var subscriptions: [EventSubscription] = []
 
     static let launcherName = "launcher"
@@ -169,6 +172,7 @@ final class KinematicsRenderer {
         }
         ballMaterialKeys = Array(repeating: "", count: ballPool.budget)
         root.addChild(ballPool.root)
+        root.addChild(frozenVectors.root)
 
         // Strobe dots — the module's best idea, finally at a size that
         // shows it.
@@ -416,6 +420,39 @@ final class KinematicsRenderer {
     }
 
     func tick(_ model: KinematicsModel) {
+        frozenVectors.update(frozen: model.isPaused, dt: 1.0 / 90) {
+            var samples: [FrozenVectors.Sample] = []
+            for flight in model.flights
+            where flight.status == .flying || flight.status == .rolling {
+                let position = SIMD3<Float>(flight.state.position)
+                let velocity = flight.state.velocity
+                let speed = simd_length(velocity)
+                if speed > 0.01 {
+                    samples.append(.init(
+                        position: position,
+                        direction: SIMD3<Float>(velocity / speed),
+                        magnitude01: Float(min(speed / 12, 1)),
+                        kind: .velocity))
+                }
+                // The honest net force: the same acceleration law the
+                // integrator flies the ball with, gravity plus drag.
+                let drag = model.airResistance
+                    ? ProjectileMotion.Drag(projectile: flight.projectile,
+                                            wind: model.wind)
+                    : nil
+                let acceleration = ProjectileMotion.acceleration(
+                    velocity: velocity, gravity: model.gravity, drag: drag)
+                let a = simd_length(acceleration)
+                if a > 0.01 {
+                    samples.append(.init(
+                        position: position,
+                        direction: SIMD3<Float>(acceleration / a),
+                        magnitude01: Float(min(a / (2 * 9.81), 1)),
+                        kind: .force))
+                }
+            }
+            return samples
+        }
         syncCatch(model)
         // Fresh procedural textures arrived: reapply ball materials.
         if appliedTextureVersion != BallTextures.version {

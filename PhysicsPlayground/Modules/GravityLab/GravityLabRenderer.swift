@@ -41,6 +41,9 @@ final class GravityLabRenderer {
     let selectedAnchor = Entity()
 
     private let systemRoot = Entity()
+    /// Freeze sculpts: pausing materialises velocity and net-force
+    /// arrows on every body, in the app-wide frozen-vector language.
+    private let frozenVectors = FrozenVectors(budget: GravityLabModel.bodyBudget * 2)
     /// A pure VIEW transform between the scene root and the system: the
     /// two-handed scale/turn rig drives this and nothing else, so the
     /// simulation keeps running in true SI units at its own scale while
@@ -167,6 +170,7 @@ final class GravityLabRenderer {
         bodyMaterialKeys = Array(repeating: "", count: bodyPool.budget)
         bodyNames = Array(repeating: "", count: bodyPool.budget)
         systemRoot.addChild(bodyPool.root)
+        systemRoot.addChild(frozenVectors.root)
 
         // The Sun's light: warm, following the heaviest body — plus a
         // soft corona shell so it reads as incandescent, not painted.
@@ -322,6 +326,53 @@ final class GravityLabRenderer {
     /// you add mass or drag a planet, not between one frame and the next.
     private static let chordAnalysisInterval = 12
 
+    /// The frozen readout: every body's velocity, and the net
+    /// gravitational pull on it summed over every other body — the same
+    /// law the integrator uses, evaluated at the frozen instant. The
+    /// pairwise sum is O(n²) and runs ONLY while the arrows are shown.
+    private static func frozenSamples(model: GravityLabModel) -> [FrozenVectors.Sample] {
+        let bodies = model.bodies.map(\.body)
+        guard bodies.count > 1 else { return [] }
+        let toDisplay = Float(model.simToDisplay)
+        let g = model.effectiveG
+
+        var forces: [SIMD3<Double>] = Array(repeating: .zero, count: bodies.count)
+        for i in bodies.indices {
+            for j in bodies.indices where j != i {
+                let offset = bodies[j].position - bodies[i].position
+                let distance = max(simd_length(offset), 1e6)
+                forces[i] += offset / distance
+                    * (g * bodies[i].mass * bodies[j].mass / (distance * distance))
+            }
+        }
+        let maxSpeed = bodies.map { simd_length($0.velocity) }.max() ?? 1
+        let maxForce = forces.map(simd_length).max() ?? 1
+
+        var samples: [FrozenVectors.Sample] = []
+        for (index, body) in bodies.enumerated() {
+            let position = SIMD3<Float>(body.position) * toDisplay
+            let speed = simd_length(body.velocity)
+            if speed > 1e-9, maxSpeed > 0 {
+                samples.append(.init(
+                    position: position,
+                    direction: SIMD3<Float>(body.velocity / speed),
+                    // sqrt spreads the slow outer planets off the floor
+                    // of the scale instead of vanishing next to Mercury.
+                    magnitude01: Float((speed / maxSpeed).squareRoot()),
+                    kind: .velocity))
+            }
+            let force = simd_length(forces[index])
+            if force > 0, maxForce > 0 {
+                samples.append(.init(
+                    position: position,
+                    direction: SIMD3<Float>(forces[index] / force),
+                    magnitude01: Float((force / maxForce).squareRoot()),
+                    kind: .force))
+            }
+        }
+        return samples
+    }
+
     private func tickOrbitalChord(_ model: GravityLabModel) {
         guard model.playOrbitalChord else {
             chordVoices.values.forEach { $0.mute() }
@@ -389,6 +440,10 @@ final class GravityLabRenderer {
     func tick(_ model: GravityLabModel) {
         frameCounter &+= 1
         tickOrbitalChord(model)
+        // This tick has no dt of its own; the fade only needs a clock.
+        frozenVectors.update(frozen: model.isPaused, dt: 1.0 / 90) {
+            Self.frozenSamples(model: model)
+        }
         scale = Float(model.simToDisplay)
 
         // Fresh procedural textures arrived: reapply body materials.

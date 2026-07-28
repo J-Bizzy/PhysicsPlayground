@@ -22,6 +22,9 @@ import simd
 @MainActor
 final class PendulumsRenderer {
     let root = Entity()
+    /// Freeze sculpts: paused bobs grow velocity and net-force arrows.
+    /// Walk under a frozen swing and read why it turns.
+    private let frozenVectors = FrozenVectors(budget: 16)
     var subscriptions: [EventSubscription] = []
 
     /// The pendulum whose bob a hand is holding (system-dragged).
@@ -206,6 +209,43 @@ final class PendulumsRenderer {
     // MARK: Per-frame tick
 
     func tick(dt: Double, model: PendulumsModel) {
+        if frozenVectors.root.parent == nil { root.addChild(frozenVectors.root) }
+        frozenVectors.update(frozen: model.isPaused, dt: dt) {
+            var samples: [FrozenVectors.Sample] = []
+            for pendulum in model.pendulums {
+                let bobWorld = SIMD3<Float>(pendulum.pivot + pendulum.state.position)
+                let velocity = pendulum.state.velocity
+                let speed = simd_length(velocity)
+                let length = max(pendulum.length, 1e-3)
+                if speed > 0.01 {
+                    samples.append(.init(
+                        position: bobWorld,
+                        direction: SIMD3<Float>(velocity / speed),
+                        // Scaled against the speed a bob released
+                        // horizontally would carry through the bottom.
+                        magnitude01: Float(min(
+                            speed / (2 * (model.gravity * length).squareRoot()), 1)),
+                        kind: .velocity))
+                }
+                // Net force = gravity + cable tension. Tension points at
+                // the pivot with magnitude m(g·cosθ + v²/L) — the same
+                // constraint the simulation enforces, shown, not told.
+                let radial = pendulum.state.position / length
+                let cosTheta = max(-radial.y, 0)
+                let tension = model.gravity * cosTheta + speed * speed / length
+                let acceleration = SIMD3<Double>(0, -model.gravity, 0)
+                    - radial * tension
+                let a = simd_length(acceleration)
+                if a > 0.01 {
+                    samples.append(.init(
+                        position: bobWorld,
+                        direction: SIMD3<Float>(acceleration / a),
+                        magnitude01: Float(min(a / (2 * model.gravity), 1)),
+                        kind: .force))
+                }
+            }
+            return samples
+        }
         model.step(dt: dt)
         trailClock += dt
 

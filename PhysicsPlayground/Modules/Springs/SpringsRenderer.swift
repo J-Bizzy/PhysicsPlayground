@@ -23,6 +23,10 @@ import simd
 @MainActor
 final class SpringsRenderer {
     let root = Entity()
+    /// Freeze sculpts: paused blocks grow velocity and spring-force
+    /// arrows — at the turning points the velocity arrow vanishes and
+    /// the force arrow peaks, which IS simple harmonic motion.
+    private let frozenVectors = FrozenVectors(budget: 8)
     var subscriptions: [EventSubscription] = []
 
     /// Block index a hand is holding (system-dragged entity).
@@ -218,6 +222,61 @@ final class SpringsRenderer {
     // MARK: Per-frame tick
 
     func tick(dt: Double, model: SpringsModel) {
+        if frozenVectors.root.parent == nil { root.addChild(frozenVectors.root) }
+        frozenVectors.update(frozen: model.isPaused, dt: dt) {
+            var samples: [FrozenVectors.Sample] = []
+            let axis = model.axisDirection
+            // Acceleration when a spring is at full stretch — the
+            // honest ceiling for the force arrows.
+            let aScale = max(model.stiffness * model.maxExtension / model.mass, 1e-6)
+            let vScale = max(model.maxExtension
+                             * (model.stiffness / model.mass).squareRoot(), 1e-6)
+
+            // Lifted a hand above the rail: the motion is along the
+            // rail, so arrows drawn AT the blocks lie exactly along the
+            // springs and thread through the coils — only their heads
+            // peeked out of the loop gaps. Riding above, they read like
+            // annotations over the apparatus.
+            let lift = SIMD3<Float>(0, 0.09, 0)
+            func add(position: SIMD3<Float>, velocity: Double, accel: Double) {
+                let position = position + lift
+                if abs(velocity) > 0.005 {
+                    samples.append(.init(
+                        position: position,
+                        direction: SIMD3<Float>(axis * (velocity < 0 ? -1 : 1)),
+                        magnitude01: Float(min(abs(velocity) / vScale, 1)),
+                        kind: .velocity))
+                }
+                if abs(accel) > 0.01 {
+                    samples.append(.init(
+                        position: position,
+                        direction: SIMD3<Float>(axis * (accel < 0 ? -1 : 1)),
+                        magnitude01: Float(min(abs(accel) / aScale, 1)),
+                        kind: .force))
+                }
+            }
+
+            switch model.mode {
+            case .single:
+                add(position: self.blocks[0].position,
+                    velocity: model.state.velocity,
+                    accel: model.acceleration)
+            case .coupled:
+                // F₁ = −kx₁ + k_c(x₂−x₁), and its mirror — the coupling
+                // term is what carries the energy across.
+                let x = model.coupled.displacements
+                let v = model.coupled.velocities
+                let forces = SIMD2(
+                    -model.stiffness * x.x + model.coupling * (x.y - x.x),
+                    -model.stiffness * x.y + model.coupling * (x.x - x.y))
+                for index in 0..<2 {
+                    add(position: self.blocks[index].position,
+                        velocity: v[index],
+                        accel: forces[index] / model.mass)
+                }
+            }
+            return samples
+        }
         model.step(dt: dt)
         syncApparatus(model)
         syncPeriodLabel(model)
