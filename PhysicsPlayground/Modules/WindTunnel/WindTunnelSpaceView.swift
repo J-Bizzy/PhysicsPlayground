@@ -16,6 +16,7 @@ struct WindTunnelSpaceView: View {
     @Environment(WindTunnelModel.self) private var model
     @Environment(AppModel.self) private var appModel
     @State private var renderer: WindTunnelRenderer?
+    @State private var bloom = Bloom()
     @State private var fanDrag: RelativeDrag?
     /// Two gauges standing at the mouth of the section: the wind you are
     /// running and the spin you are putting on the cylinder. Both were
@@ -26,6 +27,7 @@ struct WindTunnelSpaceView: View {
         RealityView { content in
             let renderer = WindTunnelRenderer()
             content.add(renderer.root)
+            renderer.sectionRoot.addChild(bloom.root)
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
@@ -36,6 +38,9 @@ struct WindTunnelSpaceView: View {
                         model.obstacles = appModel.room.obstacles
                     }
                     renderer?.tick(dt: event.deltaTime, model: model)
+                    if let renderer {
+                        syncBloom(renderer: renderer, dt: event.deltaTime)
+                    }
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
                     // moves a body by hand DISPLACEMENT, which a constant
@@ -52,6 +57,11 @@ struct WindTunnelSpaceView: View {
         // The fan moves by the hand's displacement — no system
         // manipulation, no lurch toward the hand; its beam and hum ride
         // along in the same frame.
+        .simultaneousGesture(
+            TapGesture()
+                .targetedToAnyEntity()
+                .onEnded { value in _ = bloom.handleTap(value.entity) }
+        )
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
@@ -125,7 +135,38 @@ struct WindTunnelSpaceView: View {
             break
         }
     }
-}
+
+    /// The test body's own controls. SIZE is the grip, because size is
+    /// what drag is made of — F = ½ρv²C_dA, so pulling the body wider
+    /// grows its frontal area and the drag readout climbs as you pull.
+    /// Shape is the petal, because a sphere is not a big teardrop.
+    private func syncBloom(renderer: WindTunnelRenderer, dt: Double) {
+        let anchor = SIMD3<Float>(Float(model.cylinderCenter.x), 0,
+                                  Float(model.cylinderCenter.y))
+        bloom.retarget(
+            "test-body",
+            petals: [
+                .init(name: "Next shape", symbol: "shippingbox",
+                      tint: UIColor(white: 0.45, alpha: 1)) {
+                    let all = DragBody.allCases
+                    if let i = all.firstIndex(of: model.testBody) {
+                        model.testBody = all[(i + 1) % all.count]
+                    }
+                },
+            ],
+            grip: .init(
+                name: "Size",
+                range: 0.03...0.14,
+                read: { model.cylinderRadius },
+                write: { model.cylinderRadius = $0 },
+                format: { String(format: "%.0f cm across", $0 * 200) },
+                radius: { Float(model.cylinderRadius * model.testBody.sizeMultiplier) + 0.03 }))
+
+        let viewer = appModel.room.headPosition.map {
+            renderer.sectionRoot.convert(position: SIMD3<Float>($0), from: nil)
+        }
+        bloom.update(anchor: anchor, viewer: viewer, revealTarget: 1, dt: dt)
+    }}
 
 /// The little card floating above the probe.
 struct WindTunnelProbeReadout: View {

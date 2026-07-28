@@ -53,7 +53,9 @@ final class WindTunnelRenderer {
 
     private static let baseCylinderRadius: Float = 0.05
 
-    private let sectionRoot = Entity()
+    /// The test-section frame every body position is expressed in;
+    /// blooms convert through it.
+    let sectionRoot = Entity()
     /// Freeze sculpts: pausing the tunnel stops the smoke and grows
     /// velocity arrows through the whole test section — the flow field
     /// as a lattice you walk into and read, which is the one thing a

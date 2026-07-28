@@ -298,6 +298,41 @@ final class MagnetismModel {
         selectedID = magnet.id
     }
 
+    // MARK: Per-magnet edits — what the Bloom calls
+
+    @discardableResult
+    func addMagnet(at position: SIMD3<Double>) -> UUID? {
+        guard magnets.count < Self.magnetBudget else { return nil }
+        let magnet = BarMagnet(position: clamp(position),
+                               moment: SIMD3(Self.defaultStrength, 0, 0))
+        magnets.append(magnet)
+        selectedID = magnet.id
+        return magnet.id
+    }
+
+    func removeMagnet(id: UUID) {
+        guard magnets.count > 1 else { return }
+        magnets.removeAll { $0.id == id }
+        if heldID == id { heldID = nil }
+        if selectedID == id { selectedID = magnets.last?.id }
+    }
+
+    func flipMagnet(id: UUID) {
+        guard let index = magnets.firstIndex(where: { $0.id == id }) else { return }
+        magnets[index].moment = -magnets[index].moment
+    }
+
+    func strength(id: UUID) -> Double {
+        magnets.first(where: { $0.id == id })?.strength ?? Self.defaultStrength
+    }
+
+    func setStrength(id: UUID, _ value: Double) {
+        guard let index = magnets.firstIndex(where: { $0.id == id }) else { return }
+        let axis = magnets[index].axis
+        magnets[index].moment = axis * min(max(value, Self.strengthRange.lowerBound),
+                                           Self.strengthRange.upperBound)
+    }
+
     func removeSelected() {
         guard let selectedID, magnets.count > 1 else { return }
         magnets.removeAll { $0.id == selectedID }

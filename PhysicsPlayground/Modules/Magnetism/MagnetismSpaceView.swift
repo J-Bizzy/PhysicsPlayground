@@ -19,6 +19,9 @@ struct MagnetismSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @State private var renderer: MagnetismRenderer?
     @State private var drag: RelativeDrag?
+    @State private var bloom = Bloom()
+    @State private var look = LookReveal(coneDegrees: 15)
+    @State private var wells: Well?
     /// Two-hand scale and turn: grow the dipole field from a desk demo
     /// to loops you stand inside, or turn the whole field to see it
     /// side-on. A pure view transform — the tesla stay honest.
@@ -30,9 +33,25 @@ struct MagnetismSpaceView: View {
             let renderer = MagnetismRenderer()
             content.add(renderer.root)
 
+            let sources = Well([
+                .init(name: "Magnet",
+                      tint: UIColor(DesignTokens.Palette.magnetismAccent),
+                      glyph: "N",
+                      position: SIMD3<Float>(MagnetismModel.regionCenter)
+                          + SIMD3(-0.72, -0.20, 0.34),
+                      spawn: { point in model.addMagnet(at: point) }),
+            ])
+            renderer.viewRoot.addChild(sources.root)
+            renderer.viewRoot.addChild(bloom.root)
+            wells = sources
+
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
+                    wells?.update(dt: event.deltaTime)
+                    if let renderer {
+                        syncBloom(renderer: renderer, dt: event.deltaTime)
+                    }
                     model.step(dt: event.deltaTime)
                     // The cross-module link: whatever current the
                     // CIRCUIT bench's inductor is carrying right now is
@@ -71,6 +90,11 @@ struct MagnetismSpaceView: View {
         }
         .spatialScale(scaleRig)
         .simultaneousGesture(
+            TapGesture()
+                .targetedToAnyEntity()
+                .onEnded { value in _ = bloom.handleTap(value.entity) }
+        )
+        .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
                 .onChanged { value in
@@ -80,7 +104,14 @@ struct MagnetismSpaceView: View {
                     // hold stays under your fingers at every scale.
                     let hand = renderer.displayPoint(fromWorld: SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
+                    if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
                     if drag == nil {
+                        if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
+                        if let id = wells?.pull(value.entity, at: hand) {
+                            drag = RelativeDrag(name: id.uuidString,
+                                                target: hand, hand: hand)
+                            return
+                        }
                         drag = beginDrag(entity: value.entity, hand: hand)
                     }
                     guard let drag else { return }
@@ -93,12 +124,62 @@ struct MagnetismSpaceView: View {
                     }
                 }
                 .onEnded { _ in
+                    bloom.endGrip()
                     model.release()
                     renderer?.isCarryingCompass = false
                     renderer?.isCarryingCoil = false
                     drag = nil
                 }
         )
+    }
+
+    /// Look at a magnet and it offers exactly what a magnet offers:
+    /// reverse its poles, remove it, or pull its strength up — and the
+    /// field loops thicken and reach further as you pull, which is the
+    /// only readout that matters.
+    private func syncBloom(renderer: MagnetismRenderer, dt: Double) {
+        let candidates = model.magnets.map {
+            (id: $0.id.uuidString, position: SIMD3<Float>($0.position))
+        }
+        var ray: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
+        if let look = appModel.room.lookRay {
+            ray = (renderer.viewRoot.convert(position: SIMD3<Float>(look.origin), from: nil),
+                   renderer.viewRoot.convert(direction: SIMD3<Float>(look.direction), from: nil))
+        }
+        look.update(dt: dt, ray: ray, candidates: candidates)
+
+        guard let winner = look.focusedID, let uuid = UUID(uuidString: winner),
+              let magnet = model.magnets.first(where: { $0.id == uuid }) else {
+            bloom.update(anchor: .zero, viewer: nil, revealTarget: 0, dt: dt)
+            bloom.clearTarget()
+            return
+        }
+
+        bloom.retarget(
+            uuid,
+            petals: [
+                .init(name: "Flip poles", symbol: "arrow.triangle.2.circlepath",
+                      tint: UIColor(white: 0.45, alpha: 1)) {
+                    model.flipMagnet(id: uuid)
+                },
+                .init(name: "Delete", symbol: "trash",
+                      tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
+                    model.removeMagnet(id: uuid)
+                },
+            ],
+            grip: .init(
+                name: "Strength",
+                range: MagnetismModel.strengthRange,
+                read: { model.strength(id: uuid) },
+                write: { model.setStrength(id: uuid, $0) },
+                format: { String(format: "%.1f A\u{00B7}m\u{00B2}", $0) },
+                radius: { Float(MagnetismModel.magnetLength) * 0.6 }))
+
+        let viewer = appModel.room.headPosition.map {
+            renderer.viewRoot.convert(position: SIMD3<Float>($0), from: nil)
+        }
+        bloom.update(anchor: SIMD3<Float>(magnet.position),
+                     viewer: viewer, revealTarget: 1, dt: dt)
     }
 
     private func beginDrag(entity: Entity, hand: SIMD3<Double>) -> RelativeDrag? {
