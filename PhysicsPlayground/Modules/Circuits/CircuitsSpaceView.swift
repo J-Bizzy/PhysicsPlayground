@@ -76,6 +76,13 @@ struct CircuitsSpaceView: View {
                     renderer?.tick(dt: event.deltaTime, model: model)
                 }
             )
+            #if DEBUG
+            let forcedScale = UserDefaults.standard.double(forKey: "viewScale")
+            if forcedScale > 0 {
+                scaleRig.updateMagnification(Float(forcedScale))
+                scaleRig.endGesture()
+            }
+            #endif
 
             self.renderer = renderer
         } attachments: {

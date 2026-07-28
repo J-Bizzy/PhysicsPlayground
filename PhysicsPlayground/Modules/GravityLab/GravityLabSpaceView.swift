@@ -21,8 +21,13 @@ struct GravityLabSpaceView: View {
     /// Two-handed scale and turn for the whole system: pull your hands
     /// apart to grow the solar system around you, twist to look at the
     /// comet's inclined orbit from the side.
+    /// Up to 9x: Earth's orbit displays at half a metre, so 4x let you
+    /// stand inside Earth's orbit but never between Mercury and Venus.
+    /// At 9x Mercury's orbit is 1.75 m across — the inner solar system
+    /// becomes a room you walk through, planets streaming past your
+    /// knees and the Kepler sectors sweeping underfoot like floor tiles.
     @State private var scaleRig = SpatialScaleRig(
-        pivot: GravityLabRenderer.systemPosition, range: 0.4...4.0)
+        pivot: GravityLabRenderer.systemPosition, range: 0.4...9.0)
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -66,6 +71,12 @@ struct GravityLabSpaceView: View {
             )
 
             #if DEBUG
+            // `-viewScale 7` bakes in a committed scale for CLI shots.
+            let forcedScale = UserDefaults.standard.double(forKey: "viewScale")
+            if forcedScale > 0 {
+                scaleRig.updateMagnification(Float(forcedScale))
+                scaleRig.endGesture()
+            }
             // `-selectBody Earth` pins the selection for CLI shots.
             if let name = UserDefaults.standard.string(forKey: "selectBody"),
                let body = model.bodies.first(where: { $0.body.name == name }) {
