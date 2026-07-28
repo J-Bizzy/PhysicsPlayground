@@ -48,6 +48,13 @@ final class GravityLabRenderer {
     /// name, speed, distance — then falls quiet when you look away.
     private let lookReveal = LookReveal()
     private var lookCallout: Callout?
+
+    // MARK: Kepler sweep — two gold sectors and their areas
+    private let sweepCurrentEntity = ModelEntity()
+    private let sweepHeldEntity = ModelEntity()
+    private var sweepCurrentLabel: Callout?
+    private var sweepHeldLabel: Callout?
+    private static let sweepGold = UIColor(red: 1.0, green: 0.80, blue: 0.30, alpha: 1)
     /// A pure VIEW transform between the scene root and the system: the
     /// two-handed scale/turn rig drives this and nothing else, so the
     /// simulation keeps running in true SI units at its own scale while
@@ -175,6 +182,10 @@ final class GravityLabRenderer {
         bodyNames = Array(repeating: "", count: bodyPool.budget)
         systemRoot.addChild(bodyPool.root)
         systemRoot.addChild(frozenVectors.root)
+        for sector in [sweepCurrentEntity, sweepHeldEntity] {
+            sector.isEnabled = false
+            systemRoot.addChild(sector)
+        }
 
         // The Sun's light: warm, following the heaviest body — plus a
         // soft corona shell so it reads as incandescent, not painted.
@@ -377,6 +388,82 @@ final class GravityLabRenderer {
         return samples
     }
 
+    /// Kepler's second law, painted: the sector the radius vector is
+    /// sweeping NOW in bright gold, the last completed window held in
+    /// dim gold beside it, each engraved with its area. Near perihelion
+    /// the sector is short and fat; near aphelion long and thin; the
+    /// numbers match. Nothing here is drawn from theory — both sectors
+    /// come from the integrated samples, and PhysicsCore's tests hold
+    /// their equality to the law.
+    private func syncKeplerSweep(_ model: GravityLabModel) {
+        guard model.keplerSweepOn, let primary = model.primaryBody else {
+            sweepCurrentEntity.isEnabled = false
+            sweepHeldEntity.isEnabled = false
+            sweepCurrentLabel?.isEnabled = false
+            sweepHeldLabel?.isEnabled = false
+            return
+        }
+        let toDisplay = Float(model.simToDisplay)
+        let apex = SIMD3<Float>(primary.body.position) * toDisplay
+        let au = CelestialBody.astronomicalUnit
+
+        func show(_ entity: ModelEntity, label: inout Callout?,
+                  arc: [SIMD3<Double>], area: Double, opacity: Float) {
+            guard arc.count >= 2,
+                  let mesh = Self.sectorMesh(
+                    apex: apex,
+                    arc: arc.map { apex + SIMD3<Float>($0) * toDisplay }) else {
+                entity.isEnabled = false
+                label?.isEnabled = false
+                return
+            }
+            var material = UnlitMaterial(color: Self.sweepGold)
+            material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+            entity.model = ModelComponent(mesh: mesh, materials: [material])
+            entity.isEnabled = true
+
+            if label == nil {
+                let callout = Callout(color: Self.sweepGold,
+                                      textSize: 0.018, offset: SIMD3(0, 0.06, 0))
+                systemRoot.addChild(callout.root)
+                label = callout
+            }
+            let mid = arc[arc.count / 2]
+            label?.isEnabled = true
+            label?.anchor(at: apex + SIMD3<Float>(mid) * toDisplay * 0.6)
+            label?.setText(String(format: "%.2f AU²", area / (au * au)))
+        }
+
+        if let current = model.sweepCurrentGeometry() {
+            show(sweepCurrentEntity, label: &sweepCurrentLabel,
+                 arc: current.arc, area: current.area, opacity: 0.30)
+        } else {
+            sweepCurrentEntity.isEnabled = false
+            sweepCurrentLabel?.isEnabled = false
+        }
+        show(sweepHeldEntity, label: &sweepHeldLabel,
+             arc: model.sweepHeldArc, area: model.sweepHeldArea, opacity: 0.14)
+    }
+
+    /// A triangle fan from the apex through the arc, both windings, so
+    /// the sector reads from either side of the orbital plane without
+    /// leaning on any face-culling API.
+    private static func sectorMesh(apex: SIMD3<Float>,
+                                   arc: [SIMD3<Float>]) -> MeshResource? {
+        guard arc.count >= 2 else { return nil }
+        var positions: [SIMD3<Float>] = [apex]
+        positions.append(contentsOf: arc)
+        var indices: [UInt32] = []
+        for index in 1..<UInt32(arc.count) {
+            indices.append(contentsOf: [0, index, index + 1])
+            indices.append(contentsOf: [0, index + 1, index])
+        }
+        var descriptor = MeshDescriptor(name: "kepler-sector")
+        descriptor.positions = MeshBuffer(positions)
+        descriptor.primitives = .triangles(indices)
+        return try? MeshResource.generate(from: [descriptor])
+    }
+
     private func tickLookReveal(_ model: GravityLabModel,
                                 lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?) {
         let toDisplay = Float(model.simToDisplay)
@@ -488,6 +575,7 @@ final class GravityLabRenderer {
         frameCounter &+= 1
         tickOrbitalChord(model)
         tickLookReveal(model, lookRay: lookRay)
+        if frameCounter % 12 == 0 { syncKeplerSweep(model) }
         // This tick has no dt of its own; the fade only needs a clock.
         frozenVectors.update(frozen: model.isPaused, dt: 1.0 / 90) {
             Self.frozenSamples(model: model)

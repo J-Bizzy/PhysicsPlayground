@@ -65,6 +65,13 @@ struct GravityLabSpaceView: View {
                 }
             )
 
+            #if DEBUG
+            // `-selectBody Earth` pins the selection for CLI shots.
+            if let name = UserDefaults.standard.string(forKey: "selectBody"),
+               let body = model.bodies.first(where: { $0.body.name == name }) {
+                model.select(id: body.id)
+            }
+            #endif
             renderer.tick(model, lookRay: appModel.room.lookRay)
             self.renderer = renderer
         } attachments: {
@@ -252,6 +259,7 @@ struct GravityViewPod: View {
                 .font(DesignTokens.TypeScale.control)
                 .accessibilityHint("Particles drifting along the true local field")
             Toggle("Spacetime grid", isOn: $model.showSpacetimeGrid)
+            Toggle("Kepler sweep", isOn: $model.keplerSweepOn)
                 .font(DesignTokens.TypeScale.control)
                 .accessibilityHint("The rubber-sheet picture — an analogy, not the simulation")
         }

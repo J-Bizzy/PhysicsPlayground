@@ -96,6 +96,68 @@ final class GravityLabModel {
         var lastTrailPosition: SIMD3<Double>?
     }
 
+    // MARK: Kepler sweep — the second law, recorded live
+
+    /// Paints the area the selected body's radius vector sweeps: the
+    /// accruing sector, and the last completed one held for comparison.
+    /// Equal windows, equal areas, wildly different shapes.
+    var keplerSweepOn = true
+
+    @ObservationIgnored private var sweep = KeplerSweep(horizon: 60 * 86_400)
+    @ObservationIgnored private var sweepWindowStart: Double?
+    @ObservationIgnored private var sweepBodyID: UUID?
+    /// The last COMPLETED window's sector, relative to the primary, sim
+    /// metres — and its area. Held on screen while the next accrues.
+    private(set) var sweepHeldArc: [SIMD3<Double>] = []
+    private(set) var sweepHeldArea = 0.0
+    /// One sweep window, days: a twelfth of the selected orbit.
+    private(set) var sweepWindowDays = 30.0
+
+    /// The accruing sector, computed on demand at the renderer's cadence.
+    func sweepCurrentGeometry() -> (arc: [SIMD3<Double>], area: Double)? {
+        guard keplerSweepOn, let start = sweepWindowStart,
+              let last = sweep.samples.last, last.time > start else { return nil }
+        return (sweep.arc(from: start, to: last.time),
+                sweep.area(from: start, to: last.time))
+    }
+
+    private func recordSweep() {
+        guard keplerSweepOn,
+              let primary = primaryBody,
+              let selected = selectedBody,
+              selected.id != primary.id else {
+            if sweepBodyID != nil {
+                sweep.reset(); sweepBodyID = nil
+                sweepWindowStart = nil; sweepHeldArc = []
+            }
+            return
+        }
+        if sweepBodyID != selected.id {
+            // A different body: its history is not this body's history.
+            sweep.reset()
+            sweepBodyID = selected.id
+            sweepWindowStart = nil
+            sweepHeldArc = []
+        }
+        let window = readout(for: selected)?.periodDays
+            .map { min(max($0 / 12, 2), 500) } ?? 30
+        sweepWindowDays = window
+        sweep.horizon = window * 86_400 * 2.2
+
+        let now = simulatedDays * 86_400
+        sweep.record(time: now, position: selected.body.position - primary.body.position)
+        guard let start = sweepWindowStart else {
+            sweepWindowStart = now
+            return
+        }
+        if now - start >= window * 86_400 {
+            // Freeze the finished sector; the next begins where it ended.
+            sweepHeldArc = sweep.arc(from: start, to: now)
+            sweepHeldArea = sweep.area(from: start, to: now)
+            sweepWindowStart = now
+        }
+    }
+
     private(set) var bodies: [OrbitingBody] = [] {
         // Any change to the system — a step, a drag, a merge, a new
         // planet — retires every cached readout. Hanging this off the
@@ -523,6 +585,7 @@ final class GravityLabModel {
             bodies[index].body = system[index]
         }
         simulatedDays += simDt / 86_400
+        recordSweep()
 
         appendTrailPoints()
         resolveCollisions()
@@ -661,6 +724,10 @@ final class GravityLabModel {
 
     /// Sun + Earth on its real orbit — the module's opening scene.
     func reset() {
+        sweep.reset()
+        sweepBodyID = nil
+        sweepWindowStart = nil
+        sweepHeldArc = []
         mode = .solarSystem
         displayToSim = CelestialBody.astronomicalUnit / Self.metersPerAU
         capturedPointName = nil
