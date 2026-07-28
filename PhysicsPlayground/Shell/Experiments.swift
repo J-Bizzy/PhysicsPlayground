@@ -297,6 +297,10 @@ enum ExperimentCatalog {
                  { model.bodies.contains {
                      !$0.body.name.hasPrefix("Sun")
                          && model.readout(for: $0)?.isBound == false } }),
+                (Experiment(id: "gravity.prophet", title: "Prophet",
+                            detail: "Predict where a planet will be — and miss by less than a tenth of an AU.",
+                            step: "Select a planet, tap Predict in the View pod, drag the ghost along the orbit to your guess, and let time run."),
+                 { (model.bestPredictionMissAU ?? 1) < 0.1 }),
                 (Experiment(id: "gravity.binary", title: "Twin suns",
                             detail: "Split the Sun into a binary pair.",
                             step: "Open the Bodies pod and tap Twin suns."),

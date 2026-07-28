@@ -96,6 +96,74 @@ final class GravityLabModel {
         var lastTrailPosition: SIMD3<Double>?
     }
 
+    // MARK: Predict, then run — the ghost marker
+
+    /// The predict-then-run mechanic: place a ghost where you think the
+    /// selected body will be one sweep window from now, let time run,
+    /// and the gap between your guess and the sky is the lesson. No
+    /// text explains an ellipse like being wrong about one by hand.
+    struct Prediction: Equatable {
+        var bodyID: UUID
+        /// The guess, sim metres. The user drags this.
+        var position: SIMD3<Double>
+        /// When the guess was placed and when it resolves, sim days.
+        var placedAt: Double
+        var resolvesAt: Double
+    }
+
+    struct PredictionVerdict: Equatable {
+        let bodyPosition: SIMD3<Double>
+        let guess: SIMD3<Double>
+        let missAU: Double
+        /// Display until (wall-ish sim time); the renderer fades it out.
+        let shownAt: Double
+    }
+
+    private(set) var prediction: Prediction?
+    private(set) var predictionVerdict: PredictionVerdict?
+    /// The best (smallest) resolved miss this session, AU — the number
+    /// the Prophet experiment watches.
+    private(set) var bestPredictionMissAU: Double?
+
+    /// Arms a prediction on the selected body: the ghost appears AT the
+    /// body, one sweep window on the clock. Dragging refines the guess.
+    func armPrediction() {
+        guard let selected = selectedBody, selected.id != primaryBody?.id else { return }
+        prediction = Prediction(
+            bodyID: selected.id,
+            position: selected.body.position,
+            placedAt: simulatedDays,
+            resolvesAt: simulatedDays + sweepWindowDays)
+        predictionVerdict = nil
+    }
+
+    func movePrediction(to simPoint: SIMD3<Double>) {
+        prediction?.position = simPoint
+    }
+
+    func cancelPrediction() {
+        prediction = nil
+    }
+
+    private func resolvePredictionIfDue() {
+        guard let prediction, simulatedDays >= prediction.resolvesAt else { return }
+        guard let body = bodies.first(where: { $0.id == prediction.bodyID }) else {
+            self.prediction = nil
+            return
+        }
+        let miss = simd_distance(body.body.position, prediction.position)
+            / CelestialBody.astronomicalUnit
+        predictionVerdict = PredictionVerdict(
+            bodyPosition: body.body.position,
+            guess: prediction.position,
+            missAU: miss,
+            shownAt: simulatedDays)
+        bestPredictionMissAU = min(bestPredictionMissAU ?? .infinity, miss)
+        self.prediction = nil
+        emitSound(miss < 0.1 ? .chime : .pop,
+                  at: body.body.position, volume: 0.8)
+    }
+
     // MARK: Kepler sweep — the second law, recorded live
 
     /// Paints the area the selected body's radius vector sweeps: the
@@ -586,6 +654,7 @@ final class GravityLabModel {
         }
         simulatedDays += simDt / 86_400
         recordSweep()
+        resolvePredictionIfDue()
 
         appendTrailPoints()
         resolveCollisions()

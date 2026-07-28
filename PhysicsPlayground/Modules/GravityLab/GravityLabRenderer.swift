@@ -49,6 +49,86 @@ final class GravityLabRenderer {
     private let lookReveal = LookReveal()
     private var lookCallout: Callout?
 
+    // MARK: Predict-then-run — the ghost, its countdown, the verdict
+    private let ghostEntity: ModelEntity = {
+        var material = UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))
+        material.blending = .transparent(opacity: 0.32)
+        let ghost = ModelEntity(mesh: .generateSphere(radius: 0.035),
+                                materials: [material])
+        ghost.name = "prediction-ghost"
+        ghost.components.set(InputTargetComponent())
+        ghost.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.055)]))
+        ghost.components.set(HoverEffectComponent())
+        ghost.isEnabled = false
+        return ghost
+    }()
+    private var ghostCallout: Callout?
+    private var verdictLine = Entity()
+    private var verdictCallout: Callout?
+    private var verdictShownWall: Double?
+    private var lastVerdict: GravityLabModel.PredictionVerdict?
+
+    /// The ghost while the clock runs; the guess-to-truth line when it
+    /// stops. Being wrong is drawn, measured, and then allowed to fade
+    /// — the point is the gap, not the grade. (Distinct from
+    /// syncPrediction, the held-body trajectory preview.)
+    private func syncPredictionGhost(_ model: GravityLabModel) {
+        let toDisplay = Float(model.simToDisplay)
+        if let prediction = model.prediction {
+            if ghostEntity.parent == nil { systemRoot.addChild(ghostEntity) }
+            ghostEntity.isEnabled = true
+            ghostEntity.position = SIMD3<Float>(prediction.position) * toDisplay
+            if ghostCallout == nil {
+                let callout = Callout(color: UIColor(white: 0.95, alpha: 1),
+                                      textSize: 0.02, offset: SIMD3(0, 0.08, 0))
+                systemRoot.addChild(callout.root)
+                ghostCallout = callout
+            }
+            ghostCallout?.isEnabled = true
+            ghostCallout?.anchor(at: ghostEntity.position)
+            let daysLeft = max(prediction.resolvesAt - model.simulatedDays, 0)
+            ghostCallout?.setText(String(format: "your guess · %.0f d", daysLeft))
+        } else {
+            ghostEntity.isEnabled = false
+            ghostCallout?.isEnabled = false
+        }
+
+        if let verdict = model.predictionVerdict {
+            if verdict != lastVerdict {
+                lastVerdict = verdict
+                verdictShownWall = CACurrentMediaTime()
+                if verdictLine.parent == nil { systemRoot.addChild(verdictLine) }
+                verdictLine.children.forEach { $0.removeFromParent() }
+                let guess = SIMD3<Float>(verdict.guess) * toDisplay
+                let actual = SIMD3<Float>(verdict.bodyPosition) * toDisplay
+                if let tube = TubeMesh.tube(
+                    lines: [[guess, actual]], radius: 0.0022, sides: 4) {
+                    var material = UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))
+                    material.blending = .transparent(opacity: 0.7)
+                    verdictLine.addChild(ModelEntity(mesh: tube, materials: [material]))
+                }
+                if verdictCallout == nil {
+                    let callout = Callout(color: UIColor(white: 0.95, alpha: 1),
+                                          textSize: 0.022, offset: SIMD3(0, 0.09, 0))
+                    systemRoot.addChild(callout.root)
+                    verdictCallout = callout
+                }
+                verdictCallout?.anchor(at: (guess + actual) / 2)
+                verdictCallout?.setText(String(format: verdict.missAU < 0.1
+                    ? "off by %.2f AU — called it" : "off by %.2f AU",
+                    verdict.missAU))
+            }
+            // Eight seconds of reading time, then the verdict retires.
+            let shown = verdictShownWall.map { CACurrentMediaTime() - $0 } ?? 0
+            let visible = shown < 8
+            verdictLine.isEnabled = visible
+            verdictCallout?.isEnabled = visible
+        } else {
+            verdictLine.isEnabled = false
+            verdictCallout?.isEnabled = false
+        }
+    }
+
     // MARK: Kepler sweep — two gold sectors and their areas
     private let sweepCurrentEntity = ModelEntity()
     private let sweepHeldEntity = ModelEntity()
@@ -576,6 +656,7 @@ final class GravityLabRenderer {
         tickOrbitalChord(model)
         tickLookReveal(model, lookRay: lookRay)
         if frameCounter % 12 == 0 { syncKeplerSweep(model) }
+        syncPredictionGhost(model)
         // This tick has no dt of its own; the fade only needs a clock.
         frozenVectors.update(frozen: model.isPaused, dt: 1.0 / 90) {
             Self.frozenSamples(model: model)

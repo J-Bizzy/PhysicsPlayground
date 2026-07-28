@@ -82,6 +82,11 @@ struct GravityLabSpaceView: View {
                let body = model.bodies.first(where: { $0.body.name == name }) {
                 model.select(id: body.id)
             }
+            // `-predict 1` arms a prediction at the body's current spot,
+            // so the verdict flow can be screenshot-verified.
+            if UserDefaults.standard.double(forKey: "predict") > 0 {
+                model.armPrediction()
+            }
             #endif
             renderer.tick(model, lookRay: appModel.room.lookRay)
             self.renderer = renderer
@@ -119,6 +124,16 @@ struct GravityLabSpaceView: View {
                     if drag == nil {
                         var current: Entity? = value.entity
                         while let candidate = current {
+                            // The prediction ghost is draggable like a
+                            // body, but it moves the GUESS, not physics.
+                            if candidate.name == "prediction-ghost",
+                               let prediction = model.prediction {
+                                drag = RelativeDrag(
+                                    name: candidate.name,
+                                    target: prediction.position * model.simToDisplay,
+                                    hand: hand)
+                                break
+                            }
                             if let id = UUID(uuidString: candidate.name),
                                let body = model.bodies.first(where: { $0.id == id }) {
                                 let target = body.body.position * model.simToDisplay
@@ -130,12 +145,19 @@ struct GravityLabSpaceView: View {
                             current = candidate.parent
                         }
                     }
-                    guard let drag, let id = UUID(uuidString: drag.name) else { return }
+                    guard let drag else { return }
+                    if drag.name == "prediction-ghost" {
+                        model.movePrediction(
+                            to: drag.position(forHand: hand) * model.displayToSim)
+                        return
+                    }
+                    guard let id = UUID(uuidString: drag.name) else { return }
                     model.hold(id: id, at: drag.position(forHand: hand))
                 }
                 .onEnded { value in
                     defer { drag = nil }
                     guard let renderer, let drag,
+                          drag.name != "prediction-ghost",
                           let id = UUID(uuidString: drag.name) else { return }
                     let hand = renderer.displayPoint(fromWorld: SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
@@ -270,9 +292,31 @@ struct GravityViewPod: View {
                 .font(DesignTokens.TypeScale.control)
                 .accessibilityHint("Particles drifting along the true local field")
             Toggle("Spacetime grid", isOn: $model.showSpacetimeGrid)
-            Toggle("Kepler sweep", isOn: $model.keplerSweepOn)
                 .font(DesignTokens.TypeScale.control)
                 .accessibilityHint("The rubber-sheet picture — an analogy, not the simulation")
+            Toggle("Kepler sweep", isOn: $model.keplerSweepOn)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("Paints the area the selected body sweeps — equal areas in equal times")
+
+            // Predict, then run: guess before the sky answers. The ghost
+            // appears at the selected body; drag it along the orbit to
+            // where you think the body will be one sweep window out.
+            if model.prediction == nil {
+                Button {
+                    model.armPrediction()
+                } label: {
+                    Label(String(format: "Predict %.0f days ahead", model.sweepWindowDays),
+                          systemImage: "sparkle.magnifyingglass")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.podQuiet)
+                .disabled(model.selectedBody == nil
+                          || model.selectedBody?.id == model.primaryBody?.id)
+                .accessibilityHint("Places a ghost marker you drag to your guess; when the clock runs out, the gap between guess and planet is measured")
+            } else {
+                Button("Cancel prediction") { model.cancelPrediction() }
+                    .buttonStyle(.podQuiet)
+            }
         }
     }
 }
