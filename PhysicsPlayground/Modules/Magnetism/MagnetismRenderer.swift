@@ -27,6 +27,11 @@ import simd
 @MainActor
 final class MagnetismRenderer {
     let root = Entity()
+    /// Everything the two-hand scale gesture grows lives under here;
+    /// pods and lighting stay on `root`, unscaled. The rig's transform
+    /// is a pure view change — the model keeps its own coordinates, and
+    /// every hand position converts through this root on its way in.
+    let viewRoot = Entity()
     var subscriptions: [EventSubscription] = []
 
     static let northColor = DesignTokens.Palette.positiveUI
@@ -54,9 +59,14 @@ final class MagnetismRenderer {
 
     init() {
         root.addChild(Lighting.keyLight())
-        root.addChild(lineGlowEntity)
-        root.addChild(linesEntity)
-        root.addChild(compassRoot)
+        root.addChild(viewRoot)
+        // The invisible plate both hands can pinch when they are not on
+        // a magnet, so the scale gesture works anywhere in the field.
+        viewRoot.addChild(SpatialScaleHandle.make(
+            center: SIMD3<Float>(MagnetismModel.regionCenter), radius: 1.0))
+        viewRoot.addChild(lineGlowEntity)
+        viewRoot.addChild(linesEntity)
+        viewRoot.addChild(compassRoot)
         buildCompassGrid()
 
         linesPipeline = GeometryPipeline(
@@ -66,6 +76,12 @@ final class MagnetismRenderer {
     }
 
     // MARK: Per-frame
+
+    /// World → model coordinates, through however the view is scaled
+    /// and turned. Every hand and head position enters the model here.
+    func displayPoint(fromWorld world: SIMD3<Float>) -> SIMD3<Double> {
+        SIMD3<Double>(viewRoot.convert(position: world, from: nil))
+    }
 
     func tick(_ model: MagnetismModel, viewer: SIMD3<Double>? = nil) {
         syncElectromagnet(model)
@@ -126,7 +142,7 @@ final class MagnetismRenderer {
         accessibility.isAccessibilityElement = true
         accessibility.label = "Electromagnet. Its strength is the current your circuit bench is delivering."
         coilRoot.components.set(accessibility)
-        root.addChild(coilRoot)
+        viewRoot.addChild(coilRoot)
     }
 
     private func syncElectromagnet(_ model: MagnetismModel) {
@@ -201,7 +217,7 @@ final class MagnetismRenderer {
         accessibility.isAccessibilityElement = true
         accessibility.label = "Compass. Carry it around the magnets and watch the needle swing to the field."
         handCompass.components.set(accessibility)
-        root.addChild(handCompass)
+        viewRoot.addChild(handCompass)
     }
 
     private func syncHandCompass(_ model: MagnetismModel) {
@@ -325,7 +341,7 @@ final class MagnetismRenderer {
         container.components.set(accessibility)
 
         container.position = SIMD3<Float>(magnet.position)
-        root.addChild(container)
+        viewRoot.addChild(container)
         magnetEntities[magnet.id] = container
         return container
     }

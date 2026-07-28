@@ -19,6 +19,11 @@ struct MagnetismSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @State private var renderer: MagnetismRenderer?
     @State private var drag: RelativeDrag?
+    /// Two-hand scale and turn: grow the dipole field from a desk demo
+    /// to loops you stand inside, or turn the whole field to see it
+    /// side-on. A pure view transform — the tesla stay honest.
+    @State private var scaleRig = SpatialScaleRig(
+        pivot: SIMD3<Float>(MagnetismModel.regionCenter), range: 0.5...4.0)
 
     var body: some View {
         RealityView { content, attachments in
@@ -36,6 +41,7 @@ struct MagnetismSpaceView: View {
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
+                    if let renderer { scaleRig.apply(to: renderer.viewRoot) }
                     model.step(dt: event.deltaTime)
                     // The cross-module link: whatever current the
                     // CIRCUIT bench's inductor is carrying right now is
@@ -44,7 +50,9 @@ struct MagnetismSpaceView: View {
                     if model.electromagnetOn {
                         model.setCoilCurrent(appModel.circuitsModel.inductorCurrent)
                     }
-                    renderer?.tick(model, viewer: appModel.room.headPosition)
+                    renderer?.tick(model, viewer: appModel.room.headPosition.map {
+                        renderer?.displayPoint(fromWorld: SIMD3<Float>($0)) ?? $0
+                    })
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                     // The lab's placement in the user's room — a pure
@@ -58,6 +66,18 @@ struct MagnetismSpaceView: View {
                     podsRoot.position = -appModel.labPlacement.offset
                 }
             )
+            #if DEBUG
+            // `-viewScale 2.5` bakes a committed scale in at launch, so
+            // the scaled view can be screenshot-verified from the CLI —
+            // the simulator has no second hand to pinch with.
+            // double(forKey:) coerces the string the launch-argument
+            // domain actually stores; `object as? Double` does not.
+            let forced = UserDefaults.standard.double(forKey: "viewScale")
+            if forced > 0 {
+                scaleRig.updateMagnification(Float(forced))
+                scaleRig.endGesture()
+            }
+            #endif
             renderer.tick(model, viewer: appModel.room.headPosition)
             self.renderer = renderer
         } attachments: {
@@ -70,11 +90,16 @@ struct MagnetismSpaceView: View {
                 }
             }
         }
+        .spatialScale(scaleRig)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
                 .onChanged { value in
-                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                    guard let renderer else { return }
+                    // Through the scaled root: at 3× a hand moving a
+                    // metre moves a magnet a third of one, so what you
+                    // hold stays under your fingers at every scale.
+                    let hand = renderer.displayPoint(fromWorld: SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
                     if drag == nil { drag = beginDrag(entity: value.entity, hand: hand) }
                     guard let drag else { return }

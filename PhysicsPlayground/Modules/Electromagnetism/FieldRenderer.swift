@@ -26,6 +26,9 @@ final class FieldRenderer {
     /// Root of everything we render; added to RealityView content at identity,
     /// so this entity's coordinate space == immersive space coordinates.
     let root = Entity()
+    /// The two-hand-scalable display root: physics only. Pods and
+    /// lighting stay on `root`, unscaled; hands convert through here.
+    let viewRoot = Entity()
 
     /// Event subscriptions, owned here so they live as long as the scene.
     var subscriptions: [EventSubscription] = []
@@ -116,7 +119,12 @@ final class FieldRenderer {
         // rigidly with it (exact for one charge — the field just moves),
         // so the lines stick to the hand while the re-trace catches up.
         root.addChild(Lighting.keyLight())
-        root.addChild(fieldFlowRoot)
+        root.addChild(viewRoot)
+        // The invisible plate both hands can pinch when they are not on
+        // a charge, so the scale gesture works anywhere in the field.
+        viewRoot.addChild(SpatialScaleHandle.make(
+            center: SIMD3<Float>(0, 1.35, -0.55), radius: 1.0))
+        viewRoot.addChild(fieldFlowRoot)
         // The glow halo sits under the arrowheads and the bright core so
         // the crisp line and heads read over the soft bloom.
         fieldFlowRoot.addChild(lineGlowEntity)
@@ -149,6 +157,11 @@ final class FieldRenderer {
     /// loop starves during system manipulation, so EM ticks directly
     /// like every continuously-animating module. All expensive paths
     /// inside render() are change-gated, so the per-frame cost is tiny.
+    /// World → model coordinates, through the scaled view.
+    func displayPoint(fromWorld world: SIMD3<Float>) -> SIMD3<Double> {
+        SIMD3<Double>(viewRoot.convert(position: world, from: nil))
+    }
+
     func tick(_ model: FieldModel, room: RoomBox = .unscanned) {
         self.model = model
         syncGaussSurface(model)
@@ -210,7 +223,7 @@ final class FieldRenderer {
         accessibility.isAccessibilityElement = true
         accessibility.label = "Gauss surface. Carry it through the field to read the flux through it."
         gaussRoot.components.set(accessibility)
-        root.addChild(gaussRoot)
+        viewRoot.addChild(gaussRoot)
     }
 
     private func syncGaussSurface(_ model: FieldModel) {
@@ -408,7 +421,7 @@ final class FieldRenderer {
                     }
                 }
             }
-            root.addChild(bFieldRoot)
+            viewRoot.addChild(bFieldRoot)
         }
         bFieldRoot.isEnabled = on
     }
@@ -455,7 +468,7 @@ final class FieldRenderer {
                 plate.components.set(accessibility)
                 plate.isEnabled = false
                 plateEntities.append(plate)
-                root.addChild(plate)
+                viewRoot.addChild(plate)
             }
         }
         let mid = SIMD3<Float>(center)
@@ -679,7 +692,7 @@ final class FieldRenderer {
         signPivot.addChild(vertical)
         sphere.addChild(signPivot)
 
-        root.addChild(sphere)
+        viewRoot.addChild(sphere)
         chargeEntities[charge.id] = sphere
         chargeHalos[charge.id] = halo
         chargeSignVerticals[charge.id] = vertical
@@ -763,7 +776,7 @@ final class FieldRenderer {
         sphere.addChild(signPivot)
         probeSignVertical = vertical
 
-        root.addChild(sphere)
+        viewRoot.addChild(sphere)
         probeEntity = sphere
         return sphere
     }

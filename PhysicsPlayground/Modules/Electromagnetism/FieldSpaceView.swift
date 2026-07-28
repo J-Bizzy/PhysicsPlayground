@@ -22,6 +22,12 @@ struct FieldSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @State private var renderer: FieldRenderer?
     @State private var drag: RelativeDrag?
+    /// Two-hand scale: grow the dipole field until its lines arc over
+    /// your head. Turn stays OFF here — the field lines clip against
+    /// the real room's box, and an axis-aligned box cannot survive a
+    /// yawed view without lying about where the walls are.
+    @State private var scaleRig = SpatialScaleRig(
+        pivot: SIMD3<Float>(0, 1.35, -0.55), range: 0.5...3.5, allowsTurn: false)
 
     var body: some View {
         RealityView { content, attachments in
@@ -56,14 +62,30 @@ struct FieldSpaceView: View {
                     // follows the direction the head is facing, so you
                     // carry the flux meter with your gaze rather than
                     // your hand.
+                    if let renderer { scaleRig.apply(to: renderer.viewRoot) }
                     if model.gaussSurfaceOn, model.lookToPlace,
                        let ray = appModel.room.lookRay,
-                       let point = model.lookRegion.point(
-                        onRay: ray.origin, direction: ray.direction,
-                        reach: model.lookReach) {
-                        model.moveGaussSurface(to: point)
+                       let renderer {
+                        // The gaze ray lives in the room; the Gauss
+                        // surface lives in the model. Under a scaled
+                        // view they differ — convert the ray, and give
+                        // the arm's reach in model metres too.
+                        let origin = renderer.displayPoint(fromWorld: SIMD3<Float>(ray.origin))
+                        let scale = Double(max(scaleRig.liveScale, 0.01))
+                        if let point = model.lookRegion.point(
+                            onRay: origin, direction: ray.direction,
+                            reach: model.lookReach / scale) {
+                            model.moveGaussSurface(to: point)
+                        }
                     }
-                    renderer?.tick(model, room: appModel.room.bounds)
+                    // The room's clip box, pulled into model space: at
+                    // 2x the walls are HALF as far away in model metres.
+                    let scale = Double(max(scaleRig.liveScale, 0.01))
+                    let pivot = SIMD3<Double>(0, 1.35, -0.55)
+                    let bounds = appModel.room.bounds
+                    renderer?.tick(model, room: RoomBox(
+                        center: pivot + (bounds.center - pivot) / scale,
+                        halfExtents: bounds.halfExtents / scale))
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                     // The lab's placement in the user's room — a pure
@@ -78,6 +100,15 @@ struct FieldSpaceView: View {
                 }
             )
 
+            #if DEBUG
+            // double(forKey:) coerces the string the launch-argument
+            // domain actually stores; `object as? Double` does not.
+            let forced = UserDefaults.standard.double(forKey: "viewScale")
+            if forced > 0 {
+                scaleRig.updateMagnification(Float(forced))
+                scaleRig.endGesture()
+            }
+            #endif
             renderer.tick(model)
             self.renderer = renderer
         } attachments: {
@@ -96,11 +127,13 @@ struct FieldSpaceView: View {
         // probe, or plate) moves by exactly the hand's displacement —
         // it never lurches toward the hand, and the per-frame tick
         // moves its field with it in the same frame.
+        .spatialScale(scaleRig)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
                 .onChanged { value in
-                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                    guard let renderer else { return }
+                    let hand = renderer.displayPoint(fromWorld: SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
                     if drag == nil {
                         drag = beginDrag(entity: value.entity, hand: hand)
@@ -109,7 +142,8 @@ struct FieldSpaceView: View {
                     apply(drag: drag, hand: hand)
                 }
                 .onEnded { value in
-                    let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
+                    guard let renderer else { return }
+                    let hand = renderer.displayPoint(fromWorld: SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
                     if let drag {
                         apply(drag: drag, hand: hand)
