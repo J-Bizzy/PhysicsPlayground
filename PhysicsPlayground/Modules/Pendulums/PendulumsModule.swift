@@ -69,7 +69,7 @@ enum PendulumsModule {
     }
 
     static let legendItems: [LegendItem] = [
-        LegendItem(swatch: .fill(Color(red: 0.25, green: 0.5, blue: 1)),
+        LegendItem(swatch: .fill(DesignTokens.Palette.velocityVector),
                    text: "Blue bar & arrow — kinetic energy and velocity; trail runs blue (slow) to orange (fast)"),
         LegendItem(swatch: .fill(Color(red: 0.2, green: 0.8, blue: 0.35)),
                    text: "Green bar — potential energy; watch the two bars trade while their sum holds"),

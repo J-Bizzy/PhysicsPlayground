@@ -61,11 +61,16 @@ final class SpringsRenderer {
     private let periodMaterial = UnlitMaterial(color: UIColor(
         red: 0.0, green: 0.55, blue: 0.52, alpha: 1))
     private let velocityArrow = PendulumsRenderer.Arrow(
-        color: UIColor(red: 0.25, green: 0.55, blue: 1, alpha: 1))
+        color: VectorPalette.velocity)
     private let accelerationArrow = PendulumsRenderer.Arrow(
-        color: UIColor(red: 1, green: 0.55, blue: 0.1, alpha: 1))
+        color: VectorPalette.acceleration)
+    // Force was GREEN here for years — rhyming with the green potential-
+    // energy bar, since F = −kx and PE = ½kx² share their x. A nice
+    // local rhyme, but it made this the one lab where the force arrow
+    // wasn't red, and an arrow language you relearn per lab is not a
+    // language. The bar keeps the green; the arrow joins the canon.
     private let forceArrow = PendulumsRenderer.Arrow(
-        color: UIColor(red: 0.2, green: 0.8, blue: 0.35, alpha: 1))
+        color: VectorPalette.force)
 
     // Energy bars: KE blue, PE green, total white.
     private let kineticBar: ModelEntity

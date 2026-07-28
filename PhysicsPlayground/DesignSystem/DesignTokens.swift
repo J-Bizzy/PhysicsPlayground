@@ -14,6 +14,7 @@
 //    orange/indigo = ± equipotential shells, white halo = selection.
 //
 
+import RenderKit
 import SwiftUI
 
 enum DesignTokens {
@@ -50,9 +51,11 @@ enum DesignTokens {
         static let arrowStrong = Color.yellow
 
         // Gravity Lab
-        static let velocityVectorUI: UIColor = .systemBlue
-        static let accelerationVectorUI: UIColor = .systemOrange
-        static let forceVectorUI: UIColor = .systemRed
+        // Aliases of RenderKit's VectorPalette — the one canon for the
+        // vector trio, shared with the frozen-time arrows.
+        static let velocityVectorUI: UIColor = VectorPalette.velocity
+        static let accelerationVectorUI: UIColor = VectorPalette.acceleration
+        static let forceVectorUI: UIColor = VectorPalette.force
         static let velocityVector = Color(uiColor: velocityVectorUI)
         static let accelerationVector = Color(uiColor: accelerationVectorUI)
         static let forceVector = Color(uiColor: forceVectorUI)

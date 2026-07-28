@@ -11,9 +11,8 @@
 //  every moving body grows its vectors — velocity and force as arrows
 //  you read by walking up to them — eased in like frost forming, eased
 //  out the moment time restarts. One primitive, one colour language,
-//  every lab: velocity is always ice-blue, force is always ember-orange,
-//  so a user who learned the arrows in one lab can read them in all of
-//  them.
+//  every lab, in the VectorPalette canon — velocity blue, force red —
+//  so an arrow learned frozen reads identically live, and vice versa.
 //
 //  Callers pass a unit direction plus a 0…1 magnitude they normalise
 //  themselves — each module knows its own dynamic range, and pretending
@@ -35,8 +34,8 @@ public final class FrozenVectors {
 
         var color: UIColor {
             switch self {
-            case .velocity: UIColor(red: 0.48, green: 0.83, blue: 1.0, alpha: 1)
-            case .force: UIColor(red: 1.0, green: 0.58, blue: 0.28, alpha: 1)
+            case .velocity: VectorPalette.velocity
+            case .force: VectorPalette.force
             }
         }
     }

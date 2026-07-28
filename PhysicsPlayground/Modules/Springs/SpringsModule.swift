@@ -77,9 +77,11 @@ enum SpringsModule {
     }
 
     static let legendItems: [LegendItem] = [
+        LegendItem(swatch: .fill(DesignTokens.Palette.forceVector),
+                   text: "Red arrow — spring force F = −kx, always pulling toward rest"),
         LegendItem(swatch: .fill(Color(red: 0.2, green: 0.8, blue: 0.35)),
-                   text: "Green arrow & bar — spring force F = −kx and potential energy ½kx²"),
-        LegendItem(swatch: .fill(Color(red: 0.25, green: 0.5, blue: 1)),
+                   text: "Green bar — potential energy ½kx²"),
+        LegendItem(swatch: .fill(DesignTokens.Palette.velocityVector),
                    text: "Blue arrow & bar — velocity and kinetic energy; the white bar is their constant total"),
         LegendItem(swatch: .fill(Color(red: 0.4, green: 0.85, blue: 1)),
                    text: "The floating graph scrolls the motion — walk around it, pause time, inspect any moment"),

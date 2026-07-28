@@ -365,11 +365,11 @@ final class PendulumsRenderer {
 
         let visual = PendulumVisual(
             pivot: pivot, cable: cable, bob: bob,
-            velocityArrow: Arrow(color: UIColor(red: 0.25, green: 0.55, blue: 1, alpha: 1)),
-            accelerationArrow: Arrow(color: UIColor(red: 1, green: 0.55, blue: 0.1, alpha: 1)),
+            velocityArrow: Arrow(color: VectorPalette.velocity),
+            accelerationArrow: Arrow(color: VectorPalette.acceleration),
             gravityArrow: Arrow(color: UIColor(red: 0.55, green: 0.35, blue: 0.95, alpha: 1)),
             tensionArrow: Arrow(color: UIColor(red: 0.95, green: 0.85, blue: 0.2, alpha: 1)),
-            netArrow: Arrow(color: UIColor(red: 0.95, green: 0.2, blue: 0.25, alpha: 1)))
+            netArrow: Arrow(color: VectorPalette.force))
         [visual.velocityArrow, visual.accelerationArrow, visual.gravityArrow,
          visual.tensionArrow, visual.netArrow].forEach { root.addChild($0.holder) }
         visuals[pendulum.id] = visual
