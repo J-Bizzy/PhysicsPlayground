@@ -44,6 +44,10 @@ final class GravityLabRenderer {
     /// Freeze sculpts: pausing materialises velocity and net-force
     /// arrows on every body, in the app-wide frozen-vector language.
     private let frozenVectors = FrozenVectors(budget: GravityLabModel.bodyBudget * 2)
+    /// Look reveals: turn toward a planet and it introduces itself —
+    /// name, speed, distance — then falls quiet when you look away.
+    private let lookReveal = LookReveal()
+    private var lookCallout: Callout?
     /// A pure VIEW transform between the scene root and the system: the
     /// two-handed scale/turn rig drives this and nothing else, so the
     /// simulation keeps running in true SI units at its own scale while
@@ -373,6 +377,48 @@ final class GravityLabRenderer {
         return samples
     }
 
+    private func tickLookReveal(_ model: GravityLabModel,
+                                lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?) {
+        let toDisplay = Float(model.simToDisplay)
+        let candidates = model.bodies.map {
+            (id: $0.body.name, position: SIMD3<Float>($0.body.position) * toDisplay)
+        }
+        // The ray arrives in world space; the candidates live under a
+        // root that lab placement moves and two hands scale. Convert.
+        var localRay: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
+        if let lookRay {
+            localRay = (
+                systemRoot.convert(position: SIMD3<Float>(lookRay.origin), from: nil),
+                systemRoot.convert(direction: SIMD3<Float>(lookRay.direction), from: nil))
+        }
+        lookReveal.update(dt: 1.0 / 90, ray: localRay, candidates: candidates)
+
+        guard let winner = lookReveal.focusedID,
+              let orbiting = model.bodies.first(where: { $0.body.name == winner })
+        else {
+            lookCallout?.isEnabled = false
+            return
+        }
+        if lookCallout == nil {
+            let callout = Callout(color: UIColor(white: 0.95, alpha: 1),
+                                  textSize: 0.024, offset: SIMD3(0, 0.12, 0))
+            systemRoot.addChild(callout.root)
+            lookCallout = callout
+        }
+        let reveal = lookReveal.reveal(winner)
+        lookCallout?.isEnabled = reveal > 0.02
+        lookCallout?.root.components.set(OpacityComponent(opacity: reveal))
+        lookCallout?.anchor(at: SIMD3<Float>(orbiting.body.position) * toDisplay)
+        if let readout = model.readout(for: orbiting) {
+            lookCallout?.setText(String(
+                format: "%@\n%.1f km/s · %.2f AU",
+                orbiting.body.name, readout.speedKmPerS, readout.distanceAU))
+        } else {
+            // The primary has no orbit to report; it reports itself.
+            lookCallout?.setText(orbiting.body.name)
+        }
+    }
+
     private func tickOrbitalChord(_ model: GravityLabModel) {
         guard model.playOrbitalChord else {
             chordVoices.values.forEach { $0.mute() }
@@ -437,9 +483,11 @@ final class GravityLabRenderer {
         }
     }
 
-    func tick(_ model: GravityLabModel) {
+    func tick(_ model: GravityLabModel,
+              lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)? = nil) {
         frameCounter &+= 1
         tickOrbitalChord(model)
+        tickLookReveal(model, lookRay: lookRay)
         // This tick has no dt of its own; the fade only needs a clock.
         frozenVectors.update(frozen: model.isPaused, dt: 1.0 / 90) {
             Self.frozenSamples(model: model)

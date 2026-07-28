@@ -38,6 +38,10 @@ final class KinematicsRenderer {
     /// Freeze sculpts: a paused flight grows its velocity and force
     /// arrows — the frozen arc becomes a diagram you walk around.
     private let frozenVectors = FrozenVectors(budget: 24)
+    /// Look reveals: glance at a ball mid-flight and its speed and
+    /// height materialise beside it.
+    private let lookReveal = LookReveal()
+    private var lookCallout: Callout?
     var subscriptions: [EventSubscription] = []
 
     static let launcherName = "launcher"
@@ -419,7 +423,9 @@ final class KinematicsRenderer {
         catchCallout?.isEnabled = CACurrentMediaTime() - catchShownAt < 4.5
     }
 
-    func tick(_ model: KinematicsModel) {
+    func tick(_ model: KinematicsModel,
+              lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)? = nil) {
+        tickLookReveal(model, lookRay: lookRay)
         frozenVectors.update(frozen: model.isPaused, dt: 1.0 / 90) {
             var samples: [FrozenVectors.Sample] = []
             for flight in model.flights
@@ -500,6 +506,40 @@ final class KinematicsRenderer {
     }
 
     // MARK: Balls, dots, shadows
+
+    private func tickLookReveal(_ model: KinematicsModel,
+                                lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?) {
+        let candidates = model.flights
+            .filter { $0.status == .flying || $0.status == .rolling }
+            .map { (id: $0.id.uuidString, position: SIMD3<Float>($0.state.position)) }
+        var localRay: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
+        if let lookRay {
+            localRay = (
+                root.convert(position: SIMD3<Float>(lookRay.origin), from: nil),
+                root.convert(direction: SIMD3<Float>(lookRay.direction), from: nil))
+        }
+        lookReveal.update(dt: 1.0 / 90, ray: localRay, candidates: candidates)
+
+        guard let winner = lookReveal.focusedID,
+              let flight = model.flights.first(where: { $0.id.uuidString == winner })
+        else {
+            lookCallout?.isEnabled = false
+            return
+        }
+        if lookCallout == nil {
+            let callout = Callout(color: UIColor(DesignTokens.Palette.kinematicsAccent),
+                                  textSize: 0.022, offset: SIMD3(0, 0.10, 0))
+            root.addChild(callout.root)
+            lookCallout = callout
+        }
+        let reveal = lookReveal.reveal(winner)
+        lookCallout?.isEnabled = reveal > 0.02
+        lookCallout?.root.components.set(OpacityComponent(opacity: reveal))
+        lookCallout?.anchor(at: SIMD3<Float>(flight.state.position))
+        lookCallout?.setText(String(
+            format: "%.1f m/s · %.1f m up",
+            simd_length(flight.state.velocity), max(flight.state.position.y, 0)))
+    }
 
     private func syncFlights(_ flights: [KinematicsModel.Flight]) {
         for (index, slot) in ballPool.slots.enumerated() {

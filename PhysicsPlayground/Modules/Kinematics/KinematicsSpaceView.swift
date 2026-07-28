@@ -54,7 +54,7 @@ struct KinematicsSpaceView: View {
                     // reports no fingertips, so this is simply inert
                     // there.
                     model.catchBalls(atFingertips: appModel.room.fingertips)
-                    renderer?.tick(model)
+                    renderer?.tick(model, lookRay: appModel.room.lookRay)
                     podsRoot.isEnabled = appModel.controlPodsVisible
                     PodMount.persistIfMoved(podsRoot)
                     // The lab's placement in the user's room — a pure
