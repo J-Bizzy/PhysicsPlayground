@@ -27,6 +27,14 @@ final class MagnetismModel {
 
     nonisolated static let regionCenter = SIMD3<Double>(0, 1.35, -0.7)
     nonisolated static let regionHalfExtent = 0.85
+    /// Per-axis bounds for the CLAMP. Width and height match the old
+    /// cube, but depth stops 15 cm in FRONT of the user instead of
+    /// 15 cm behind their head: the cube ran to z = +0.15, so a free
+    /// cluster that glided forward ended up floating at the user's ear,
+    /// looming over the control pods at enormous parallax. Magnets
+    /// wander — that is the module working — but they wander in the
+    /// room, not in your face.
+    nonisolated static let regionHalfExtents = SIMD3<Double>(0.85, 0.85, 0.55)
     nonisolated static let regionFloor = 0.35
     /// Visual length of a bar magnet (m); also the touching distance.
     nonisolated static let magnetLength = 0.16
@@ -216,8 +224,8 @@ final class MagnetismModel {
 
     private func clamp(_ p: SIMD3<Double>) -> SIMD3<Double> {
         var c = simd_clamp(p,
-                           Self.regionCenter - SIMD3(repeating: Self.regionHalfExtent),
-                           Self.regionCenter + SIMD3(repeating: Self.regionHalfExtent))
+                           Self.regionCenter - Self.regionHalfExtents,
+                           Self.regionCenter + Self.regionHalfExtents)
         c.y = max(c.y, Self.regionFloor)
         return c
     }

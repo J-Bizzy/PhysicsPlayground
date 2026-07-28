@@ -36,6 +36,8 @@ private struct MagnetEditControls: View {
                     model.addMagnet()
                 } label: {
                     Label("Add magnet", systemImage: "plus.circle.fill")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.podProminent)
@@ -44,7 +46,10 @@ private struct MagnetEditControls: View {
                 Button(role: .destructive) {
                     model.removeSelected()
                 } label: {
-                    Label("Remove", systemImage: "trash").frame(maxWidth: .infinity)
+                    Label("Remove", systemImage: "trash")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.podQuiet)
                 .disabled(model.magnets.count <= 1)
@@ -58,11 +63,17 @@ private struct MagnetEditControls: View {
             }
             .buttonStyle(.podQuiet)
             .disabled(model.selectedMagnet == nil)
-
-            Toggle("Magnets respond to forces", isOn: $model.dynamicsOn)
-                .font(DesignTokens.TypeScale.control)
-                .accessibilityHint("Off, magnets hold exactly where you park them — study a frozen arrangement's field. On, they attract, repel, and swing to align.")
             .accessibilityHint("Reverses the selected magnet — turns attraction into repulsion")
+
+            // Short label, physics in the hint — and ONE hint. A second
+            // .accessibilityHint had drifted here from the Flip button,
+            // so VoiceOver described this toggle as "reverses the
+            // selected magnet", which flips nothing and misleads anyone
+            // relying on it.
+            Toggle("Free to move", isOn: $model.dynamicsOn)
+                .font(DesignTokens.TypeScale.control)
+                .lineLimit(1)
+                .accessibilityHint("Off, magnets hold exactly where you park them — study a frozen arrangement's field. On, they attract, repel, and swing to align.")
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Strength: \(model.selectedStrength, specifier: "%.1f") A\u{00B7}m\u{00B2}")
@@ -151,8 +162,11 @@ struct MagnetsPod: View {
     @Environment(MagnetismModel.self) private var model
 
     var body: some View {
+        // Wide enough that "Add magnet" is one word on one line. At the
+        // default width it hyphenated to "Add mag-net" and the Remove
+        // button beside it collapsed to an unreadable smear.
         ControlPod(title: "Magnets", icon: "cylinder.fill",
-                   tint: DesignTokens.Palette.magnetismAccent) {
+                   tint: DesignTokens.Palette.magnetismAccent, width: 300) {
             MagnetEditControls()
         }
     }
