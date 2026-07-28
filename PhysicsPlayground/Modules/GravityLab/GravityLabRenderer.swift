@@ -40,7 +40,9 @@ final class GravityLabRenderer {
     /// attaches the SwiftUI attachment here; we move it each render).
     let selectedAnchor = Entity()
 
-    private let systemRoot = Entity()
+    /// The scaled, placed root the bodies live under — blooms and
+    /// wells convert through it like every hand does.
+    let systemRoot = Entity()
     /// Freeze sculpts: pausing materialises velocity and net-force
     /// arrows on every body, in the app-wide frozen-vector language.
     private let frozenVectors = FrozenVectors(budget: GravityLabModel.bodyBudget * 2)

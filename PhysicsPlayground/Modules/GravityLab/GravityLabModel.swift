@@ -408,6 +408,61 @@ final class GravityLabModel {
         }
     }
 
+    // MARK: Per-body edits — what the Bloom calls
+
+    /// Mass, in Earth masses, as a quantity you can SEE: the body's
+    /// drawn radius tracks the cube root of its mass, the way a real
+    /// sphere's radius tracks its volume. Pulling the grip therefore
+    /// inflates the planet AND deepens the well it sits in, which is
+    /// exactly the connection the lab exists to teach.
+    nonisolated static let earthMass = 5.972e24
+    nonisolated static let massRangeEarths = 0.02...400.0
+
+    func massInEarths(id: UUID) -> Double {
+        guard let body = bodies.first(where: { $0.id == id }) else { return 1 }
+        return body.body.mass / Self.earthMass
+    }
+
+    func setMass(id: UUID, earths: Double) {
+        guard let index = bodies.firstIndex(where: { $0.id == id }) else { return }
+        let clamped = min(max(earths, Self.massRangeEarths.lowerBound),
+                          Self.massRangeEarths.upperBound)
+        let old = bodies[index].body.mass
+        bodies[index].body.mass = clamped * Self.earthMass
+        // r ∝ m^(1/3): a planet a thousand times heavier is ten times
+        // wider, not a thousand times.
+        if old > 0 {
+            bodies[index].displayRadius *= pow(bodies[index].body.mass / old, 1.0 / 3.0)
+            bodies[index].displayRadius = min(max(bodies[index].displayRadius, 0.008), 0.22)
+        }
+    }
+
+    func displayRadius(id: UUID) -> Double {
+        bodies.first(where: { $0.id == id })?.displayRadius ?? 0.02
+    }
+
+    func removeBody(id: UUID) {
+        bodies.removeAll { $0.id == id }
+        if selectedID == id { selectedID = bodies.first?.id }
+    }
+
+    /// Spawns a body where you pull it out of the well, at rest
+    /// relative to the primary — so it immediately starts to fall, and
+    /// you watch a capture or a plunge depending on where you let go.
+    @discardableResult
+    func addBody(at displayPoint: SIMD3<Double>, earths: Double = 1) -> UUID? {
+        let simPosition = displayPoint * displayToSim
+        let body = CelestialBody(
+            name: "New world", mass: earths * Self.earthMass,
+            radius: 6.37e6,
+            position: simPosition,
+            velocity: primaryBody?.body.velocity ?? .zero)
+        let orbiting = OrbitingBody(id: UUID(), body: body, displayRadius: 0.03)
+        bodies.append(orbiting)
+        selectedID = orbiting.id
+        return orbiting.id
+    }
+
     func removeSelected() {
         guard let selectedID, bodies.count > 1,
               selectedID != primaryBody?.id else { return }
