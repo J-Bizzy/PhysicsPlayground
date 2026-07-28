@@ -228,6 +228,10 @@ enum ExperimentCatalog {
                             step: "Drag a second bulb off the tray and wire it across the battery beside the first."),
                  { model.components.filter { $0.kind == .bulb }
                      .filter { abs(model.readouts[$0.id]?.watts ?? 0) > 0.5 }.count >= 2 }),
+                (Experiment(id: "circuits.slowpoke", title: "Slowpoke",
+                            detail: "Get an electron's lap time under twelve hours — drift speed rises with current.",
+                            step: "Turn on True speed in the Bench pod, then push more current: add a battery in series, or lower the resistance."),
+                 { model.driftLapTime < 12 * 3600 }),
                 (Experiment(id: "circuits.bright", title: "Overdrive",
                             detail: "Push one bulb past 2 W — series batteries help.",
                             step: "Add a second battery in series with the first, then watch the bulb's watts climb."),

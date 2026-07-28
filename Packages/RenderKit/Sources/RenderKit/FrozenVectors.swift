@@ -88,12 +88,20 @@ public final class FrozenVectors {
     private var reveal: Float = 0
 
     /// Arrow length for magnitude01 = 0 and 1. Sized to be read from a
-    /// step away, not to be geometrically proportional to the scene.
-    private static let minLength: Float = 0.05
-    private static let maxLength: Float = 0.24
+    /// step away, not to be geometrically proportional to the scene —
+    /// and per-instance, because a handful of arrows on orbiting bodies
+    /// wants length while a dense field lattice wants restraint. The
+    /// wind tunnel's first lattice used the default and became a wall
+    /// of blue: arrows 24 cm long on a 32 cm grid touch each other.
+    private let minLength: Float
+    private let maxLength: Float
 
-    public init(budget: Int) {
+    public init(budget: Int,
+                minLength: Float = 0.05,
+                maxLength: Float = 0.24) {
         self.budget = budget
+        self.minLength = minLength
+        self.maxLength = maxLength
         root.isEnabled = false
 
         for _ in 0..<budget {
@@ -145,8 +153,7 @@ public final class FrozenVectors {
             let clamped = min(max(sample.magnitude01, 0), 1)
             // The reveal doubles as a growth animation: arrows extend
             // out of the body as they fade in.
-            let length = (Self.minLength
-                          + (Self.maxLength - Self.minLength) * clamped) * reveal
+            let length = (minLength + (maxLength - minLength) * clamped) * reveal
 
             arrow.container.position = sample.position
             arrow.container.orientation = simd_quatf(

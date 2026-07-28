@@ -144,10 +144,21 @@ final class AppModel {
         if UserDefaults.standard.bool(forKey: "studioMode") {
             studioMode = true
         }
-        // `-startPaused` opens the module frozen, so the frozen-vector
+        // `-startPaused 1` opens the module frozen, so the frozen-vector
         // treatment can be screenshot-verified from the CLI.
         if UserDefaults.standard.bool(forKey: "startPaused") {
             activeModule?.togglePause()
+        }
+        // `-pauseAfter 12` lets the simulation RUN for a while and then
+        // freezes it. Some labs have nothing to freeze at t=0 — the wind
+        // tunnel has no flow field until its first solve lands — so
+        // freezing from launch shows an empty room and proves nothing.
+        let pauseAfter = UserDefaults.standard.double(forKey: "pauseAfter")
+        if pauseAfter > 0 {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(pauseAfter))
+                self?.activeModule?.togglePause()
+            }
         }
         #endif
     }

@@ -32,6 +32,13 @@ final class WindTunnelRenderer {
     static let cylinderName = "cylinder"
     static let probeName = "probe"
     static let sectionCenter = SIMD3<Float>(0, 1.3, -1.2)
+    /// The half-extents of the region worth sampling when the flow is
+    /// frozen — the working volume the smoke actually occupies, not the
+    /// whole grid, so no arrows are spent on dead corners. The solver's
+    /// coordinates ARE these section-local coordinates (the smoke's
+    /// inlet points live in this same frame), so a sample needs no
+    /// conversion on its way into the field.
+    static let sectionHalfExtents = SIMD3<Float>(0.95, 0.34, 0.42)
     /// Half-height of the airflow volume (cylinder spans it fully).
     static let halfHeight: Float = 0.45
 
@@ -47,6 +54,15 @@ final class WindTunnelRenderer {
     private static let baseCylinderRadius: Float = 0.05
 
     private let sectionRoot = Entity()
+    /// Freeze sculpts: pausing the tunnel stops the smoke and grows
+    /// velocity arrows through the whole test section — the flow field
+    /// as a lattice you walk into and read, which is the one thing a
+    /// wind tunnel behind glass can never let you do.
+    /// Short arrows on a coarse lattice: the field should read as a
+    /// field you can walk into, not a thicket you cannot see the car
+    /// through.
+    private let frozenVectors = FrozenVectors(budget: 100,
+                                              minLength: 0.03, maxLength: 0.10)
     private let cylinder: ModelEntity
     private let spinMarker: ModelEntity
     /// The speed palette, re-pitched for a BRIGHT room.
@@ -238,6 +254,7 @@ final class WindTunnelRenderer {
         root.addChild(Lighting.keyLight())
         sectionRoot.position = Self.sectionCenter
         root.addChild(sectionRoot)
+        sectionRoot.addChild(frozenVectors.root)
 
         // The cylinder — a tall column spanning the airflow volume,
         // grabbable, visibly spinning at its true rate.
@@ -375,6 +392,49 @@ final class WindTunnelRenderer {
         // an idle scene — the circuits lesson) so streamline rebuilds
         // and slider edits always land.
         render(model)
+
+        // The frozen lattice: sampled from the SAME blended field the
+        // smoke is advected on, so the arrows and the smoke can never
+        // disagree. Only built while frozen — the closure is not even
+        // called otherwise.
+        frozenVectors.update(frozen: model.isPaused, dt: dt) { [weak self] in
+            guard let self, let field = self.blendedField else { return [] }
+            var samples: [FrozenVectors.Sample] = []
+            let span = Self.sectionHalfExtents
+            let steps = SIMD3<Int>(5, 4, 5)
+            let reference = Float(max(model.windSpeed, 0.1))
+            for ix in 0..<steps.x {
+                for iy in 0..<steps.y {
+                    for iz in 0..<steps.z {
+                        // Split out: the one-expression version of this
+                        // defeated the type checker.
+                        let fx: Float = (Float(ix) + 0.5) / Float(steps.x)
+                        let fy: Float = (Float(iy) + 0.5) / Float(steps.y)
+                        let fz: Float = (Float(iz) + 0.5) / Float(steps.z)
+                        let unit = SIMD3<Float>(fx * 2 - 1, fy * 2 - 1, fz * 2 - 1)
+                        let local: SIMD3<Float> = unit * span
+                        // FlowField answers in Float; the free-stream
+                        // reference arrives as Double. Mixing them in
+                        // one expression is what stalled the type
+                        // checker, so every step names its type.
+                        let velocity: SIMD3<Float> = field.velocity(at: SIMD3<Double>(local))
+                        let speed: Float = simd_length(velocity)
+                        guard speed > 1e-4 else { continue }
+                        let direction: SIMD3<Float> = velocity / speed
+                        // Against free-stream: 1 means "moving as fast
+                        // as the wind you dialled in".
+                        let ratio: Float = speed / reference
+                        let magnitude: Float = min(ratio, 1.4) / 1.4
+                        samples.append(FrozenVectors.Sample(
+                            position: local,
+                            direction: direction,
+                            magnitude01: magnitude,
+                            kind: .velocity))
+                    }
+                }
+            }
+            return samples
+        }
 
         guard !model.isPaused else { return }
         let scaledDt = dt * model.timeScale
