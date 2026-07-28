@@ -185,6 +185,56 @@ final class CircuitsModel {
     // MARK: Display & time
 
     var showElectronFlow = true
+
+    // MARK: True speed — the thirteen orders of magnitude
+
+    /// Shows the drift at its REAL relative rate: electrons frozen,
+    /// the field front racing. Every circuit animation ever drawn —
+    /// including this app's default — marches the dots along at a
+    /// speed chosen to look good, which teaches the exact opposite of
+    /// the truth. This mode tells it.
+    var trueSpeedMode = false
+
+    /// A conventional hookup wire: 1 mm radius copper.
+    nonisolated static let wireRadius = 1e-3
+
+    /// Largest current anywhere in the circuit, amps — what the drift
+    /// readout describes.
+    var peakCurrent: Double {
+        let wireMax = wireFlows.values.map(abs).max() ?? 0
+        let partMax = readouts.values.map { abs($0.amps) }.max() ?? 0
+        return max(wireMax, partMax)
+    }
+
+    /// Drift speed of the electrons at that current, m/s.
+    var driftSpeed: Double {
+        ChargeTransport.driftSpeed(current: peakCurrent, wireRadius: Self.wireRadius)
+    }
+
+    /// The loop an electron would have to walk, metres — the summed
+    /// length of every carrying wire, in the bench's own display
+    /// metres, which is what the user is actually looking at.
+    var conductingPathLength: Double {
+        var total = 0.0
+        for wire in wires where abs(wireFlows[wire.id] ?? 0) > 5e-4 {
+            guard let a = terminalWorldPosition(wire.from),
+                  let b = terminalWorldPosition(wire.to) else { continue }
+            total += simd_distance(a, b)
+        }
+        return total
+    }
+
+    /// How long one electron takes to go round, seconds, and how long
+    /// the field takes over the same path. The two numbers whose
+    /// ratio is the whole lesson.
+    var driftLapTime: Double {
+        ChargeTransport.traversalTime(length: conductingPathLength, speed: driftSpeed)
+    }
+
+    var signalLapTime: Double {
+        ChargeTransport.traversalTime(length: conductingPathLength,
+                                      speed: ChargeTransport.signalSpeed())
+    }
     var isPaused = false
     /// The contextual one-liner shown after loading a premade circuit.
     private(set) var insightText = ""

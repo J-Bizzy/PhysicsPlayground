@@ -1166,7 +1166,94 @@ final class CircuitsRenderer {
 
     // MARK: Electron flow (drift is − to +: opposite conventional current)
 
+    /// ONE factor, applied to both true-speed visuals, so the ratio the
+    /// eye sees is the ratio physics reports: display metres per second
+    /// per real metre per second. Set so the signal — 2×10⁸ m/s — shows
+    /// as 1 m/s, a front you can follow with your eyes. The electrons,
+    /// multiplied by the very same number, come out at 10⁻¹³ m/s and
+    /// stop dead. That is the lesson, not a bug.
+    private static let trueSpeedGain = 1.0 / ChargeTransport.speedOfLight / 0.66
+
+    private let fieldFront = ModelEntity(
+        mesh: .generateSphere(radius: 0.012),
+        materials: [UnlitMaterial(color: UIColor(
+            red: 1.0, green: 0.95, blue: 0.6, alpha: 1))])
+    private var fieldFrontPhase = 0.0
+    private var trueSpeedCallout: Callout?
+
+    /// The race, made watchable: a bright front sprinting the loop at
+    /// the signal's scaled speed while the electron dots hold still at
+    /// theirs, and a readout naming both real times. The bulb lights
+    /// because of the sprinter, not the crawlers.
+    private func syncTrueSpeed(_ model: CircuitsModel, dt: Double) {
+        guard model.trueSpeedMode, model.showElectronFlow,
+              model.conductingPathLength > 1e-4, model.peakCurrent > 5e-4 else {
+            fieldFront.isEnabled = false
+            trueSpeedCallout?.isEnabled = false
+            return
+        }
+        if fieldFront.parent == nil { viewRoot.addChild(fieldFront) }
+
+        // Walk the carrying wires as one path and place the front on it.
+        var runs: [(a: SIMD3<Float>, b: SIMD3<Float>, length: Float)] = []
+        for wire in model.wires where abs(model.wireFlows[wire.id] ?? 0) > 5e-4 {
+            guard let a = terminalWorld(wire.from, model),
+                  let b = terminalWorld(wire.to, model) else { continue }
+            runs.append((a, b, simd_distance(a, b)))
+        }
+        let total = runs.reduce(0) { $0 + $1.length }
+        guard total > 1e-4, !runs.isEmpty else {
+            fieldFront.isEnabled = false
+            return
+        }
+        if !model.isPaused {
+            // Same gain the electrons get — the front just happens to be
+            // carrying a speed thirteen orders of magnitude larger.
+            let displaySpeed = ChargeTransport.signalSpeed() * Self.trueSpeedGain
+            fieldFrontPhase = (fieldFrontPhase + displaySpeed / Double(total) * dt)
+                .truncatingRemainder(dividingBy: 1)
+        }
+        var walk = Float(fieldFrontPhase) * total
+        var placed = false
+        for run in runs {
+            if walk <= run.length {
+                fieldFront.position = run.a + (run.b - run.a) * (walk / max(run.length, 1e-5))
+                placed = true
+                break
+            }
+            walk -= run.length
+        }
+        fieldFront.isEnabled = placed
+
+        if trueSpeedCallout == nil {
+            let callout = Callout(color: UIColor(red: 1.0, green: 0.95, blue: 0.6, alpha: 1),
+                                  textSize: 0.02, offset: SIMD3(0, 0.11, 0))
+            viewRoot.addChild(callout.root)
+            trueSpeedCallout = callout
+        }
+        trueSpeedCallout?.isEnabled = true
+        trueSpeedCallout?.anchor(at: fieldFront.position)
+        trueSpeedCallout?.setText(
+            "electron: \(Self.humanTime(model.driftLapTime)) per lap\n"
+            + "field: \(Self.humanTime(model.signalLapTime))")
+    }
+
+    /// Nanoseconds to years, in whatever unit makes the number speak.
+    private static func humanTime(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds > 0 else { return "—" }
+        switch seconds {
+        case ..<1e-6: return String(format: "%.1f ns", seconds * 1e9)
+        case ..<1e-3: return String(format: "%.1f µs", seconds * 1e6)
+        case ..<1: return String(format: "%.1f ms", seconds * 1e3)
+        case ..<60: return String(format: "%.1f s", seconds)
+        case ..<3600: return String(format: "%.1f min", seconds / 60)
+        case ..<86_400: return String(format: "%.1f h", seconds / 3600)
+        default: return String(format: "%.1f days", seconds / 86_400)
+        }
+    }
+
     private func syncElectrons(_ model: CircuitsModel, dt: Double) {
+        syncTrueSpeed(model, dt: dt)
         guard model.showElectronFlow else {
             if electronsVisible {
                 electronPool.hideAll()
@@ -1212,7 +1299,19 @@ final class CircuitsRenderer {
         let length = Double(simd_distance(a, b))
         let dots = min(max(Int(length / 0.045), 2), 9)
         // Electrons drift against conventional current.
-        let speed = min(0.03 + 0.5 * abs(current), 0.35) * (current > 0 ? -1 : 1)
+        //
+        // TWO SPEEDS, and only one of them is true. The default is the
+        // usual pretty lie every circuit animation tells: a rate picked
+        // to look like flow. True-speed mode replaces it with the real
+        // drift scaled by the SAME factor the field front is scaled by,
+        // so the ratio you see is the ratio that exists — which means
+        // the electrons stop dead. That is the lesson, not a bug.
+        let speed: Double
+        if model.trueSpeedMode {
+            speed = model.driftSpeed * Self.trueSpeedGain * (current > 0 ? -1 : 1)
+        } else {
+            speed = min(0.03 + 0.5 * abs(current), 0.35) * (current > 0 ? -1 : 1)
+        }
         if !model.isPaused {
             wirePhases[key] = ((wirePhases[key] ?? 0)
                 + speed / max(length, 0.05) * dt).truncatingRemainder(dividingBy: 1)

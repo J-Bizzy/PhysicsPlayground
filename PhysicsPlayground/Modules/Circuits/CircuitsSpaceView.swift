@@ -77,6 +77,9 @@ struct CircuitsSpaceView: View {
                 }
             )
             #if DEBUG
+            if UserDefaults.standard.double(forKey: "trueSpeed") > 0 {
+                model.trueSpeedMode = true
+            }
             let forcedScale = UserDefaults.standard.double(forKey: "viewScale")
             if forcedScale > 0 {
                 scaleRig.updateMagnification(Float(forcedScale))
@@ -433,6 +436,9 @@ struct CircuitBenchPod: View {
             Toggle("Electron flow", isOn: $model.showElectronFlow)
                 .font(DesignTokens.TypeScale.control)
                 .accessibilityHint("Cyan dots drifting minus to plus along every live wire")
+            Toggle("True speed", isOn: $model.trueSpeedMode)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("Shows the drift at its real rate against the field's: the electrons stop dead and a bright front laps the circuit. The bulb lights because of the front.")
             Toggle("Electron View", isOn: $model.electronView)
                 .font(DesignTokens.TypeScale.control)
                 .accessibilityHint("Swells the bench to four times size; pinch with both hands to go further, or anywhere in between")
