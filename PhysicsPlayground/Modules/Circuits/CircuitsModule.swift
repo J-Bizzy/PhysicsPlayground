@@ -23,12 +23,6 @@ enum CircuitsModule {
             legend: legend,
             isPaused: { appModel.circuitsModel.isPaused },
             togglePause: { appModel.circuitsModel.isPaused.toggle() },
-            makeControls: {
-                AnyView(
-                    CircuitsControlsView()
-                        .environment(appModel.circuitsModel)
-                )
-            },
             makeScene: {
                 AnyView(
                     CircuitsSpaceView()

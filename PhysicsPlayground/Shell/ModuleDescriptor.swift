@@ -44,7 +44,6 @@ struct ModuleDescriptor: Identifiable {
     /// Freeze-everything state, driving the shared in-space pause orb.
     let isPaused: () -> Bool
     let togglePause: () -> Void
-    let makeControls: () -> AnyView
     let makeScene: () -> AnyView
     /// The readings the notebook writes down when the user captures a
     /// moment in this module. Read live from the module's model, so a
@@ -83,7 +82,13 @@ enum ModuleCatalog {
         // benches makes the comparison the point instead of hiding it —
         // and leaves every remaining entry with a reason to exist that
         // no other entry already covers.
-        // EIGHT modules. Waves, Elastic Field, and Optics are BENCHED,
+        // SIX labs. Springs, Elastic Field, and Optics are cut: a block
+        // on a rail is a ONE-dimensional oscillator, a membrane is
+        // two-dimensional, and an optical bench is a line of elements in
+        // a row — none of them earn a headset. Waves is cut pending a
+        // rebuild as an interference VOLUME you stand inside. Their code
+        // and physics stay on disk; each returns with one line here.
+        //
         // not deleted — each returns with one line here plus its
         // HubDomains entry. Everything else (hub arc, search, progress
         // totals, the challenge) derives from this list.
@@ -103,7 +108,6 @@ enum ModuleCatalog {
             WindTunnelModule.descriptor(appModel: appModel),
             CircuitsModule.descriptor(appModel: appModel),
             PendulumsModule.descriptor(appModel: appModel),
-            SpringsModule.descriptor(appModel: appModel),
         ]
     }
 }

@@ -29,12 +29,6 @@ enum ElectromagnetismModule {
             legend: legendItems,
             isPaused: { appModel.electromagnetismModel.isPaused },
             togglePause: { appModel.electromagnetismModel.isPaused.toggle() },
-            makeControls: {
-                AnyView(
-                    ElectrostaticsControlsView()
-                        .environment(appModel.electromagnetismModel)
-                )
-            },
             makeScene: {
                 AnyView(
                     FieldSpaceView()

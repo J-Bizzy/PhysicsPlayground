@@ -29,9 +29,6 @@ enum MagnetismModule {
             legend: legendItems,
             isPaused: { appModel.magnetismModel.isPaused },
             togglePause: { appModel.magnetismModel.isPaused.toggle() },
-            makeControls: {
-                AnyView(MagnetismControlsView().environment(appModel.magnetismModel))
-            },
             makeScene: {
                 AnyView(MagnetismSpaceView().environment(appModel.magnetismModel))
             },

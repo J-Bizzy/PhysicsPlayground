@@ -26,12 +26,6 @@ enum GravityLabModule {
             legend: legend,
             isPaused: { appModel.gravityLabModel.isPaused },
             togglePause: { appModel.gravityLabModel.isPaused.toggle() },
-            makeControls: {
-                AnyView(
-                    GravityLabControlsView()
-                        .environment(appModel.gravityLabModel)
-                )
-            },
             makeScene: {
                 AnyView(
                     GravityLabSpaceView()

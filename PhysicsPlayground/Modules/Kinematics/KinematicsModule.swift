@@ -23,12 +23,6 @@ enum KinematicsModule {
             legend: legend,
             isPaused: { appModel.kinematicsModel.isPaused },
             togglePause: { appModel.kinematicsModel.isPaused.toggle() },
-            makeControls: {
-                AnyView(
-                    KinematicsControlsView()
-                        .environment(appModel.kinematicsModel)
-                )
-            },
             makeScene: {
                 AnyView(
                     KinematicsSpaceView()

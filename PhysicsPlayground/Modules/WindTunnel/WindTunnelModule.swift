@@ -25,12 +25,6 @@ enum WindTunnelModule {
             legend: legend,
             isPaused: { appModel.windTunnelModel.isPaused },
             togglePause: { appModel.windTunnelModel.isPaused.toggle() },
-            makeControls: {
-                AnyView(
-                    WindTunnelControlsView()
-                        .environment(appModel.windTunnelModel)
-                )
-            },
             makeScene: {
                 AnyView(
                     WindTunnelSpaceView()

@@ -108,12 +108,6 @@ final class AppModel {
     /// the physics; the 2D window remains the full fallback.
     var controlPodsVisible = true
 
-    /// Which bench the merged Fields module is showing (electric or
-    /// magnetic), and which the merged Oscillators module is showing.
-    /// They live here rather than in either physics model because they
-    /// choose BETWEEN models.
-    var fieldsBench: FieldsBench = .electric
-    var oscillatorBench: OscillatorBench = .pendulum
 
     var activeModule: ModuleDescriptor? {
         guard let activeModuleID else { return nil }
@@ -193,14 +187,7 @@ final class AppModel {
         return model
     }
 
-    private var waves: WavesModel?
 
-    var wavesModel: WavesModel {
-        if let waves { return waves }
-        let model = WavesModel()
-        waves = model
-        return model
-    }
 
     private var windTunnel: WindTunnelModel?
 
@@ -229,32 +216,11 @@ final class AppModel {
         return model
     }
 
-    private var optics: OpticsModel?
 
-    var opticsModel: OpticsModel {
-        if let optics { return optics }
-        let model = OpticsModel()
-        optics = model
-        return model
-    }
 
-    private var springs: SpringsModel?
 
-    var springsModel: SpringsModel {
-        if let springs { return springs }
-        let model = SpringsModel()
-        springs = model
-        return model
-    }
 
-    private var waveMedium: WaveMediumModel?
 
-    var waveMediumModel: WaveMediumModel {
-        if let waveMedium { return waveMedium }
-        let model = WaveMediumModel()
-        waveMedium = model
-        return model
-    }
 
     private var magnetism: MagnetismModel?
 

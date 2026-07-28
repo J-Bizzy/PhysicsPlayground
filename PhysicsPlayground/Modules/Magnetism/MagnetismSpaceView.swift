@@ -19,7 +19,6 @@ struct MagnetismSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @State private var renderer: MagnetismRenderer?
     @State private var drag: RelativeDrag?
-    @State private var dials: DialConsole?
     /// Two-hand scale and turn: grow the dipole field from a desk demo
     /// to loops you stand inside, or turn the whole field to see it
     /// side-on. A pure view transform — the tesla stay honest.
@@ -27,47 +26,13 @@ struct MagnetismSpaceView: View {
         pivot: SIMD3<Float>(MagnetismModel.regionCenter), range: 0.5...4.0)
 
     var body: some View {
-        RealityView { content, attachments in
+        RealityView { content in
             let renderer = MagnetismRenderer()
             content.add(renderer.root)
-
-            // The strength gauge lives ON the magnet: select one and the
-            // dial materialises beneath it, follows it as you carry it,
-            // and twisting it re-magnetises that magnet. Under viewRoot,
-            // so it scales with the apparatus it annotates.
-            let console = DialConsole([
-                .init(name: "dial-strength", title: "Strength",
-                      center: SIMD3<Float>(MagnetismModel.regionCenter),
-                      range: MagnetismModel.strengthRange,
-                      accent: UIColor(DesignTokens.Palette.magnetismAccent),
-                      read: { model.selectedStrength },
-                      write: { model.selectedStrength = $0 },
-                      format: { String(format: "%.1f A·m²", $0) }),
-            ])
-            console.setVisible(false)
-            renderer.viewRoot.addChild(console.root)
-            dials = console
-
-            let podsRoot = PodMount.makeRoot(module: "magnetism")
-            renderer.root.addChild(podsRoot)
-            PodMount.mount(attachments.entity(for: "pod-magnets"), name: "Magnets",
-                           at: [-1.05, 1.7, -0.85], in: podsRoot)
-            PodMount.mount(attachments.entity(for: "pod-view"), name: "View",
-                           at: [1.05, 1.7, -0.85], in: podsRoot)
-            PodMount.mount(attachments.entity(for: "pod-numbers"), name: "Numbers",
-                           at: [0.62, 0.78, -0.75], in: podsRoot)
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
-                    if let magnet = model.selectedMagnet {
-                        dials?.setVisible(true)
-                        dials?.place("dial-strength",
-                                     at: SIMD3<Float>(magnet.position) + SIMD3(0, -0.17, 0))
-                        dials?.sync()
-                    } else {
-                        dials?.setVisible(false)
-                    }
                     model.step(dt: event.deltaTime)
                     // The cross-module link: whatever current the
                     // CIRCUIT bench's inductor is carrying right now is
@@ -79,8 +44,6 @@ struct MagnetismSpaceView: View {
                     renderer?.tick(model, viewer: appModel.room.headPosition.map {
                         renderer?.displayPoint(fromWorld: SIMD3<Float>($0)) ?? $0
                     }, lookRay: appModel.room.lookRay)
-                    podsRoot.isEnabled = appModel.controlPodsVisible
-                    PodMount.persistIfMoved(podsRoot)
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
                     // moves a body by hand DISPLACEMENT, which a constant
@@ -89,7 +52,6 @@ struct MagnetismSpaceView: View {
                     // …but the control pods do NOT go with it: the user
                     // parked them where they wanted them, and moving the
                     // apparatus is not a request to move the controls.
-                    podsRoot.position = -appModel.labPlacement.offset
                 }
             )
             #if DEBUG
@@ -106,15 +68,6 @@ struct MagnetismSpaceView: View {
             #endif
             renderer.tick(model, viewer: appModel.room.headPosition)
             self.renderer = renderer
-        } attachments: {
-            Attachment(id: "pod-magnets") { MagnetsPod() }
-            Attachment(id: "pod-view") { MagnetViewPod() }
-            Attachment(id: "pod-numbers") {
-                ControlPod(title: "Numbers", icon: "number",
-                           tint: DesignTokens.Palette.magnetismAccent, width: 300) {
-                    MagnetismStatsView()
-                }
-            }
         }
         .spatialScale(scaleRig)
         .simultaneousGesture(
@@ -127,9 +80,7 @@ struct MagnetismSpaceView: View {
                     // hold stays under your fingers at every scale.
                     let hand = renderer.displayPoint(fromWorld: SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
-                    if dials?.advanceTwist(hand: hand) == true { return }
                     if drag == nil {
-                        if dials?.beginTwist(on: value.entity, hand: hand) == true { return }
                         drag = beginDrag(entity: value.entity, hand: hand)
                     }
                     guard let drag else { return }
@@ -142,7 +93,6 @@ struct MagnetismSpaceView: View {
                     }
                 }
                 .onEnded { _ in
-                    dials?.endTwist()
                     model.release()
                     renderer?.isCarryingCompass = false
                     renderer?.isCarryingCoil = false

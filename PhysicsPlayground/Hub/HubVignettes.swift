@@ -48,14 +48,10 @@ enum HubVignettes {
         case "electrostatics": fields()
         case "kinematics": projectile()
         case "gravitylab": gravity()
-        case "waves": waves()
         case "windtunnel": windTunnel()
         case "circuits": circuits()
         case "pendulums": pendulums()
-        case "springs": springs()
         case "magnetism": magnetism()
-        case "elasticfield": elasticField()
-        case "optics": optics()
         default: fallback()
         }
     }

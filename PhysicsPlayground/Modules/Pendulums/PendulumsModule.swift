@@ -24,12 +24,6 @@ enum PendulumsModule {
             legend: legendItems,
             isPaused: { appModel.pendulumsModel.isPaused },
             togglePause: { appModel.pendulumsModel.isPaused.toggle() },
-            makeControls: {
-                AnyView(
-                    PendulumsControlsView()
-                        .environment(appModel.pendulumsModel)
-                )
-            },
             makeScene: {
                 AnyView(
                     PendulumsSpaceView()

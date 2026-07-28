@@ -160,25 +160,6 @@ enum ExperimentCatalog {
 
     /// The spring bench's experiments, folded into the merged
     /// Oscillators module's list.
-    private static func springExperiments(_ model: SpringsModel)
-    -> [(experiment: Experiment, isMet: () -> Bool)] {
-        [
-            (Experiment(id: "springs.limit", title: "To the stops",
-                        detail: "Pull the block to its maximum extension.",
-                            step: "Grab the block and pull it as far along the rail as it goes."),
-             { model.mode == .single
-                 && abs(model.state.displacement) >= model.maxExtension * 0.97 }),
-            (Experiment(id: "springs.transfer", title: "Energy heist",
-                        detail: "In Coupled ×2, get 85% of the energy onto the second block.",
-                            step: "Choose Coupled ×2, pull one block, and wait for the slosh."),
-             { guard model.mode == .coupled else { return false }
-               let pair = model.coupled.massEnergies(
-                   stiffness: model.stiffness, coupling: model.coupling,
-                   masses: SIMD2(model.mass, model.mass))
-               let total = pair.x + pair.y
-               return total > 0.005 && pair.y / total > 0.85 }),
-        ]
-    }
 
     static func experiments(for moduleID: String, appModel: AppModel)
     -> [(experiment: Experiment, isMet: () -> Bool)] {
@@ -207,18 +188,6 @@ enum ExperimentCatalog {
                             detail: "Score five — moving hoops count double for style.",
                             step: "Score four more. Turn on orbiting hoops in the Launcher pod for a moving target."),
                  { model.rings.reduce(0) { $0 + $1.score } >= 5 }),
-            ]
-        case "waves":
-            let model = appModel.wavesModel
-            return [
-                (Experiment(id: "waves.duet", title: "Duet",
-                            detail: "Run two sources at once and watch their ripples interfere.",
-                            step: "Two sources are already running — if you removed one, tap Add source."),
-                 { model.sources.count >= 2 }),
-                (Experiment(id: "waves.doppler", title: "Doppler run",
-                            detail: "Send a source flying and see its wavefronts bunch ahead of it.",
-                            step: "Select a source and switch on Doppler flyby, then watch its rings bunch ahead of it."),
-                 { model.selectedIsFlying }),
             ]
         case "circuits":
             let model = appModel.circuitsModel
@@ -252,8 +221,6 @@ enum ExperimentCatalog {
             ]
         case "magnetism":
             return magnetismExperiments(appModel.magnetismModel)
-        case "springs":
-            return springExperiments(appModel.springsModel)
         case "pendulums":
             let model = appModel.pendulumsModel
             return [
@@ -266,31 +233,6 @@ enum ExperimentCatalog {
                             detail: "Get a bob swinging above its pivot.",
                             step: "Throw a bob hard enough upward to carry it above its own pivot."),
                  { model.pendulums.contains { $0.state.position.y > 0 } }),
-            ]
-        case "elasticfield":
-            let model = appModel.waveMediumModel
-            return [
-                (Experiment(id: "elastic.pluck", title: "Make a splash",
-                            detail: "Pull a point on the drumhead well off the flat.",
-                            step: "Reach into the drumhead and pull a point well out of the plane, then let go."),
-                 { model.sheet.heightRange.max > 0.17
-                     || model.sheet.heightRange.min < -0.17 }),
-                (Experiment(id: "elastic.resonance", title: "Ring it true",
-                            detail: "Drive the drum to 90% resonance — park the sweep right on a mode.",
-                            step: "Sweep the Drive slider slowly until the resonance meter peaks, then stop there."),
-                 { model.driveOn && model.resonance > 0.9 }),
-            ]
-        case "optics":
-            let model = appModel.opticsModel
-            return [
-                (Experiment(id: "optics.virtual", title: "Through the looking glass",
-                            detail: "Make a virtual image (negative dᵢ) with the point source.",
-                            step: "Switch the source to Point, then slide the lens closer to the source than its focal length."),
-                 { (model.imagePrediction?.imageDistance ?? 0) < 0 }),
-                (Experiment(id: "optics.throw", title: "Long throw",
-                            detail: "Form a real image more than 60 cm past the lens.",
-                            step: "Switch to Point and move the lens until the object distance is just over the focal length."),
-                 { (model.imagePrediction?.imageDistance ?? 0) > 0.6 }),
             ]
         case "gravitylab":
             let model = appModel.gravityLabModel

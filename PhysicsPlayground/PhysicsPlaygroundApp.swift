@@ -30,13 +30,6 @@ struct PhysicsPlaygroundApp: App {
         // hub nameplate centers itself in whatever height it gets.
         .defaultSize(width: 560, height: 720)
 
-        // Settings as a real window rather than a sheet: it can sit
-        // beside the hub while the sliders move the arc live.
-        WindowGroup(id: SettingsView.windowID) {
-            SettingsView()
-                .environment(appModel)
-        }
-        .defaultSize(width: 460, height: 560)
 
         ImmersiveSpace(id: PlaygroundSpaceView.spaceID) {
             PlaygroundSpaceView()
