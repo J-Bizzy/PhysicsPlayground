@@ -17,6 +17,8 @@ import RenderKit
 struct CircuitsSpaceView: View {
     @Environment(CircuitsModel.self) private var model
     @State private var renderer: CircuitsRenderer?
+    @State private var bloom = Bloom()
+    @State private var look = LookReveal(coneDegrees: 13)
     @State private var wireDragFrom: CircuitsModel.Terminal?
     @State private var partDrag: RelativeDrag?
     @State private var trayDragID: UUID?
@@ -33,6 +35,7 @@ struct CircuitsSpaceView: View {
         RealityView { content in
             let renderer = CircuitsRenderer()
             content.add(renderer.root)
+            renderer.viewRoot.addChild(bloom.root)
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
@@ -51,6 +54,9 @@ struct CircuitsSpaceView: View {
                     // must keep drifting.
                     renderer?.handZoom = scaleRig.liveScale
                     renderer?.tick(dt: event.deltaTime, model: model)
+                    if let renderer {
+                        syncBloom(renderer: renderer, dt: event.deltaTime)
+                    }
                 }
             )
             #if DEBUG
@@ -94,7 +100,9 @@ struct CircuitsSpaceView: View {
                             value.location3D, from: .local, to: .scene)),
                         from: nil)
                     let hand = SIMD3<Double>(handF)
+                    if bloom.updateGrip(hand: handF) { return }
                     if wireDragFrom == nil, partDrag == nil {
+                        if bloom.beginGrip(value.entity, hand: handF) { return }
                         beginCircuitDrag(entity: value.entity, hand: hand, renderer: renderer)
                     }
                     if let source = wireDragFrom,
@@ -110,6 +118,7 @@ struct CircuitsSpaceView: View {
                     }
                 }
                 .onEnded { value in
+                    bloom.endGrip()
                     defer {
                         renderer?.hideRubberBand()
                         renderer?.previewComponentID = nil
@@ -150,10 +159,71 @@ struct CircuitsSpaceView: View {
                 }
         )
         .spatialScale(scaleRig)
+        .simultaneousGesture(
+            TapGesture()
+                .targetedToAnyEntity()
+                .onEnded { value in _ = bloom.handleTap(value.entity) }
+        )
     }
 
     /// Resolves what the pinch landed on and opens the right session:
     /// wire (terminal), aim/stretch (grip), spawn (tray), carry (body).
+
+    /// A part's own controls. Its value has no size of its own, so the
+    /// grip's honesty is the CONSEQUENCE — pull a bulb's resistance up
+    /// and it visibly dims, pull the battery's volts and the electron
+    /// drift quickens while your hand is still moving. Switches get a
+    /// petal instead, because open and closed is not a continuum.
+    private func syncBloom(renderer: CircuitsRenderer, dt: Double) {
+        let candidates = model.components.map {
+            (id: $0.id.uuidString, position: SIMD3<Float>($0.position))
+        }
+        var ray: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
+        if let look = appModel.room.lookRay {
+            ray = (renderer.viewRoot.convert(position: SIMD3<Float>(look.origin), from: nil),
+                   renderer.viewRoot.convert(direction: SIMD3<Float>(look.direction), from: nil))
+        }
+        look.update(dt: dt, ray: ray, candidates: candidates)
+
+        guard let winner = look.focusedID, let uuid = UUID(uuidString: winner),
+              let part = model.components.first(where: { $0.id == uuid }) else {
+            bloom.update(anchor: .zero, viewer: nil, revealTarget: 0, dt: dt)
+            bloom.clearTarget()
+            return
+        }
+
+        var petals: [Bloom.Petal] = []
+        if part.kind == .switcher {
+            petals.append(.init(name: "Open or close", symbol: "power",
+                                tint: UIColor(white: 0.45, alpha: 1)) {
+                model.toggleSwitch(id: uuid)
+            })
+        }
+        petals.append(.init(name: "Delete", symbol: "trash",
+                            tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
+            model.removeComponent(id: uuid)
+        })
+
+        let range = CircuitsModel.valueRange(for: part.kind)
+        bloom.retarget(
+            uuid,
+            petals: petals,
+            grip: range.upperBound > range.lowerBound
+                ? .init(name: "Value",
+                        range: range,
+                        read: { model.componentValue(id: uuid) },
+                        write: { model.setComponentValue(id: uuid, $0) },
+                        format: { CircuitsModel.formatValue($0, for: part.kind) },
+                        radius: { 0.05 })
+                : nil)
+
+        let viewer = appModel.room.headPosition.map {
+            renderer.viewRoot.convert(position: SIMD3<Float>($0), from: nil)
+        }
+        bloom.update(anchor: SIMD3<Float>(part.position),
+                     viewer: viewer, revealTarget: 1, dt: dt)
+    }
+
     private func beginCircuitDrag(
         entity: Entity, hand: SIMD3<Double>, renderer: CircuitsRenderer
     ) {

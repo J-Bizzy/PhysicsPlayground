@@ -17,12 +17,14 @@ struct KinematicsSpaceView: View {
     @Environment(KinematicsModel.self) private var model
     @State private var renderer: KinematicsRenderer?
     @State private var drag: RelativeDrag?
+    @State private var bloom = Bloom()
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
         RealityView { content in
             let renderer = KinematicsRenderer()
             content.add(renderer.root)
+            renderer.root.addChild(bloom.root)
 
             renderer.subscriptions = []
 
@@ -46,6 +48,7 @@ struct KinematicsSpaceView: View {
                     // there.
                     model.catchBalls(atFingertips: appModel.room.fingertips)
                     renderer?.tick(model, lookRay: appModel.room.lookRay)
+                    syncBloom(dt: event.deltaTime)
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
                     // moves a body by hand DISPLACEMENT, which a constant
@@ -64,18 +67,26 @@ struct KinematicsSpaceView: View {
             // Plane detection: device-only, quietly absent in the sim.
         }
         .simultaneousGesture(
+            TapGesture()
+                .targetedToAnyEntity()
+                .onEnded { value in _ = bloom.handleTap(value.entity) }
+        )
+        .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
                 .onChanged { value in
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
+                    if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
                     if drag == nil {
+                        if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
                         drag = beginDrag(entity: value.entity, hand: hand)
                     }
                     guard let drag else { return }
                     apply(drag: drag, hand: hand)
                 }
                 .onEnded { value in
+                    bloom.endGrip()
                     defer { drag = nil }
                     guard let drag else { return }
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
@@ -91,6 +102,32 @@ struct KinematicsSpaceView: View {
 
     /// Resolves a pinch: launcher body, aim bead, a flying/resting
     /// ball, or a hoop.
+
+    /// The launcher's own control. Launch SPEED has no size of its own
+    /// — but its consequence does: the predicted arc, already drawn,
+    /// stretches across the room as you pull. You are aiming a throw by
+    /// changing the shape of where it lands.
+    private func syncBloom(dt: Double) {
+        let anchor = SIMD3<Float>(model.launcherPosition) + SIMD3(0, 0.12, 0)
+        bloom.retarget(
+            "launcher",
+            petals: [
+                .init(name: "Fire", symbol: "paperplane.fill",
+                      tint: UIColor(DesignTokens.Palette.kinematicsAccent)) {
+                    model.fire()
+                },
+            ],
+            grip: .init(
+                name: "Launch speed",
+                range: KinematicsModel.speedRange,
+                read: { model.launchSpeed },
+                write: { model.launchSpeed = $0 },
+                format: { String(format: "%.1f m/s", $0) },
+                radius: { 0.10 }))
+        let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
+        bloom.update(anchor: anchor, viewer: viewer, revealTarget: 1, dt: dt)
+    }
+
     private func beginDrag(entity: Entity, hand: SIMD3<Double>) -> RelativeDrag? {
         var current: Entity? = entity
         while let candidate = current {

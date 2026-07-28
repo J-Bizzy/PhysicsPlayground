@@ -542,6 +542,60 @@ final class CircuitsModel {
         }
     }
 
+    // MARK: Per-component edits — what the Bloom calls
+
+    /// The range a part's value may be pulled across, and the unit it
+    /// reads in. A component's value has no size of its own, so the
+    /// grip's honesty comes from the CONSEQUENCE: pull a bulb's
+    /// resistance up and it visibly dims, pull a battery's volts up and
+    /// the electron drift quickens. You watch the circuit answer.
+    static func valueRange(for kind: ComponentKind) -> ClosedRange<Double> {
+        switch kind {
+        case .battery, .acSource: 1.0...24.0        // V
+        case .resistor: 10.0...4700.0               // Ω
+        case .capacitor: 1e-4...1e-2                // F
+        case .inductor: 0.05...5.0                  // H
+        case .bulb: 4.0...240.0                     // Ω
+        case .motor: 1.0...60.0                     // Ω
+        case .fuse: 0.05...5.0                      // A
+        case .wire: 0.08...0.9                      // m
+        case .led, .switcher: 0...0
+        }
+    }
+
+    static func formatValue(_ value: Double, for kind: ComponentKind) -> String {
+        switch kind {
+        case .battery, .acSource: String(format: "%.1f V", value)
+        case .resistor, .bulb, .motor: value >= 1000
+            ? String(format: "%.1f k\u{03A9}", value / 1000)
+            : String(format: "%.0f \u{03A9}", value)
+        case .capacitor: String(format: "%.0f mF", value * 1000)
+        case .inductor: String(format: "%.2f H", value)
+        case .fuse: String(format: "%.2f A", value)
+        case .wire: String(format: "%.0f cm", value * 100)
+        case .led, .switcher: ""
+        }
+    }
+
+    func componentValue(id: UUID) -> Double {
+        components.first(where: { $0.id == id })?.value ?? 0
+    }
+
+    func setComponentValue(id: UUID, _ value: Double) {
+        guard let index = components.firstIndex(where: { $0.id == id }) else { return }
+        let range = Self.valueRange(for: components[index].kind)
+        guard range.upperBound > range.lowerBound else { return }
+        components[index].value = min(max(value, range.lowerBound), range.upperBound)
+        persistSoon()
+    }
+
+    func removeComponent(id: UUID) {
+        components.removeAll { $0.id == id }
+        wires.removeAll { $0.from.componentID == id || $0.to.componentID == id }
+        if selectedID == id { selectedID = components.last?.id }
+        persistSoon()
+    }
+
     // MARK: Selected-component value editing
 
     var selectedValue: Double {
