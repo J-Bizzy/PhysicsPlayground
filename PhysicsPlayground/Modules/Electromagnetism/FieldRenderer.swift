@@ -54,6 +54,14 @@ final class FieldRenderer {
     static let positiveShellColor = DesignTokens.Palette.positiveShellUI
     static let negativeShellColor = DesignTokens.Palette.negativeShellUI
     static let chargeRadius: Float = 0.03
+
+    /// How big a charge is actually drawn right now — the Bloom's grip
+    /// rides this so the handle sits on the sphere's own surface and
+    /// travels outward as the charge grows.
+    func displayRadius(forChargeID id: UUID) -> Float {
+        guard let entity = chargeEntities[id] else { return Self.chargeRadius }
+        return Self.chargeRadius * entity.scale.x
+    }
     static let probeRadius: Float = 0.018
     /// Arrowheads are hidden inside this distance of a charge, where the
     /// 1/r² field diverges and a finite arrow is meaningless.

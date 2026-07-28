@@ -530,6 +530,52 @@ final class FieldModel {
         placementIndex += 1
     }
 
+    // MARK: Per-charge edits — what the Bloom calls
+    //
+    // The old pods all worked through "the selected charge", because a
+    // pod floats somewhere else and has to be told what it is pointing
+    // at. A Bloom IS on the object, so it says which one.
+
+    /// Spawns a charge at a given point — the Well pulls one out here.
+    @discardableResult
+    func addCharge(positive: Bool, at position: SIMD3<Double>) -> UUID {
+        var clamped = position
+        clamped.y = max(clamped.y, Self.floorClearance)
+        let charge = PointCharge(
+            position: clamped,
+            charge: (positive ? 1 : -1) * Self.defaultMagnitude)
+        charges.append(charge)
+        selectedChargeID = charge.id
+        return charge.id
+    }
+
+    func removeCharge(id: UUID) {
+        charges.removeAll { $0.id == id }
+        if selectedChargeID == id { selectedChargeID = charges.last?.id }
+    }
+
+    /// Turns a positive charge negative and vice versa, magnitude kept.
+    func flipCharge(id: UUID) {
+        guard let index = charges.firstIndex(where: { $0.id == id }) else { return }
+        charges[index].charge = -charges[index].charge
+    }
+
+    /// Sets one charge's magnitude in microcoulombs, sign preserved.
+    func setMagnitude(id: UUID, microCoulombs: Double) {
+        guard let index = charges.firstIndex(where: { $0.id == id }) else { return }
+        let clamped = min(max(microCoulombs, Self.magnitudeRange.lowerBound),
+                          Self.magnitudeRange.upperBound)
+        let sign: Double = charges[index].charge < 0 ? -1 : 1
+        charges[index].charge = sign * clamped * 1e-6
+    }
+
+    func magnitudeMicroCoulombs(id: UUID) -> Double {
+        guard let charge = charges.first(where: { $0.id == id }) else { return 1 }
+        return abs(charge.charge) * 1e6
+    }
+
+    nonisolated static let magnitudeRange = 0.2...6.0
+
     func removeSelectedCharge() {
         guard let id = selectedChargeID else { return }
         charges.removeAll { $0.id == id }
