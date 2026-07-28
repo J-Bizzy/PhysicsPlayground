@@ -43,11 +43,10 @@ struct PlaygroundSpaceView: View {
                     // you actually have room. Hidden until asked for.
                     LabAnchorView(module: module)
                         .id("lab-anchor-\(module.id)")
-                    // The four-bead navigation cluster — kept as the
-                    // ZStack's second child, the slot where RealityView
-                    // content provably renders.
-                    ModuleOrbControlsView(module: module)
-                        .id("orbs-\(module.id)")
+                    // ONE bead, in the slot where RealityView content
+                    // provably renders. Pinch it and the labs unfold.
+                    PaletteView(module: module)
+                        .id("palette-\(module.id)")
                     // The experiments watcher: notices when the physics
                     // reaches a goal and chimes exactly once.
                     ExperimentCheckerView(moduleID: module.id)

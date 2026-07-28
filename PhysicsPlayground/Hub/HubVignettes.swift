@@ -94,11 +94,21 @@ enum HubVignettes {
     // MARK: Fields — a dipole breathing
 
     private static func fields() -> Built {
+        // An inner frame the breathing scale writes to.
+        //
+        // The animation used to scale the ROOT — which is the very
+        // entity every caller fits to its slot, so the fit was silently
+        // overwritten sixty times a second and this exhibit came out a
+        // different size from all the others. A vignette must never
+        // touch its own root transform; that belongs to whoever placed
+        // it.
         let root = Entity()
+        let frame = Entity()
+        root.addChild(frame)
         let positive = ball(0.020, DesignTokens.Palette.positiveUI, glow: 0.6)
         let negative = ball(0.020, DesignTokens.Palette.negativeUI, glow: 0.6)
-        root.addChild(positive)
-        root.addChild(negative)
+        frame.addChild(positive)
+        frame.addChild(negative)
 
         // The signs, so a glance says "dipole" and not "two dots".
         let barMesh = MeshResource.generateBox(size: [0.017, 0.004, 0.004],
@@ -130,7 +140,7 @@ enum HubVignettes {
             }
             if let arc = line(points, radius: 0.0022,
                               DesignTokens.Palette.fieldLineUI, opacity: 0.9) {
-                root.addChild(arc)
+                frame.addChild(arc)
                 arcs.append(arc)
             }
         }
@@ -142,7 +152,7 @@ enum HubVignettes {
             let gap = separation * (1 + 0.16 * breath)
             positive.position.x = -gap
             negative.position.x = gap
-            root.scale = SIMD3(repeating: separation / max(gap, 1e-4))
+            frame.scale = SIMD3(repeating: separation / max(gap, 1e-4))
             for (index, arc) in arcs.enumerated() {
                 let phase = Float(sin(time * 1.6 + Double(index) * 0.7))
                 arc.components.set(OpacityComponent(opacity: 0.55 + 0.45 * phase * phase))

@@ -188,40 +188,44 @@ final class HubScene {
     private var arcRadius: Float = 2.0
     private var arcHeight: Float = 1.4
 
-    /// Degrees between neighbours inside a domain, and the widened gap
-    /// where one domain hands over to the next — the pause that makes
-    /// the grouping legible without a single dividing line.
-    /// Eight exhibits in three domains span ±44° — inside a head turn,
-    /// with room between neighbours for a focused exhibit to grow.
-    private static let intraGap: Float = 11.5
-    private static let domainGap: Float = 15
+    // MARK: Layout — a constellation, not an arc
+    //
+    // The arc put every lab at ONE radius and ONE height, which is a
+    // poster with a curve in it: your eyes sweep left to right and the
+    // room contributes nothing. A headset's whole advantage is that
+    // things can be at different DISTANCES — near ones large and
+    // detailed, far ones small and quiet, everything moving against
+    // everything else as you lean. So the labs hang at genuinely
+    // different depths and heights, and the exhibits keep a constant
+    // WORLD size rather than a constant apparent one, so distance is
+    // something you read instead of something you are told.
+    //
+    // Positions are authored, not generated: a scatter that reads as
+    // designed needs someone to have decided where things go.
+    private static let constellation: [(azimuth: Float, height: Float, depth: Float)] = [
+        (-38, 1.46, 1.95),
+        ( -14, 1.08, 1.62),
+        (  12, 1.72, 2.30),
+        (  40, 1.22, 1.88),
+        ( -30, 1.94, 2.70),
+        (  30, 0.96, 2.35),
+        (  -3, 1.32, 3.05),
+    ]
 
-    /// Azimuth (degrees) for every module in HubDomain.arcOrder, centred
-    /// on zero.
-    private static func arcAzimuths() -> [Float] {
-        var azimuths: [Float] = []
-        var cursor: Float = 0
-        for (index, domain) in HubDomain.allCases.enumerated() {
-            if index > 0 { cursor += domainGap - intraGap }
-            for _ in domain.moduleIDs {
-                azimuths.append(cursor)
-                cursor += intraGap
-            }
-        }
-        let span = azimuths.last ?? 0
-        return azimuths.map { $0 - span / 2 }
-    }
-
-    private func arcPoint(azimuthDegrees: Float, y: Float) -> SIMD3<Float> {
-        let azimuth = azimuthDegrees * .pi / 180
-        return SIMD3(arcRadius * sin(azimuth), y, -arcRadius * cos(azimuth))
-    }
-
-    /// The miniatures, unbottled and enlarged. They were trinkets.
-    /// How large every miniature reads, whatever it is made of. Each is
-    /// measured after it is built and normalised to this, so the gallery
-    /// has one rhythm however the nine models happen to be drawn.
+    /// Every miniature is normalised to this WORLD size, so a lab
+    /// further away genuinely looks further away. Constant apparent
+    /// size would have thrown the depth away again.
     private static let exhibitSize: Float = 0.27
+
+    /// Where the nth lab hangs. Distance and height settings scale the
+    /// whole constellation rather than flattening it.
+    private func constellationPoint(_ index: Int) -> SIMD3<Float> {
+        let slot = Self.constellation[index % Self.constellation.count]
+        let azimuth = slot.azimuth * .pi / 180
+        let depth = slot.depth * (arcRadius / 2.0)
+        let height = slot.height * (arcHeight / 1.4)
+        return SIMD3(depth * sin(azimuth), height, -depth * cos(azimuth))
+    }
 
     // MARK: Focus
     //
@@ -258,55 +262,34 @@ final class HubScene {
                distance: Float = 2.0, height: Float = 1.4, yaw: Float = 0) {
         arcRadius = distance
         arcHeight = height
-        // Recenter: the whole gallery swings about the user, so "face
-        // this way and recenter" brings the arc to you.
+        // Recenter: the whole constellation swings about the user.
         root.orientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
 
-        titlePosition = SIMD3(0, arcHeight + 0.80, -(arcRadius + 0.05))
+        titlePosition = SIMD3(0, arcHeight + 0.86, -(arcRadius + 0.15))
         buildBubbleTitle()
 
-        // Left to right by DOMAIN, not by catalog order — with a header
-        // floating over each group.
+        // Domain order still decides WHICH slot a lab gets, so related
+        // labs stay near each other — but the floating domain headers
+        // are gone. Three text labels hanging in a room to explain a
+        // grouping the colours already carry is exactly the kind of
+        // caption this remaster exists to delete.
         let byID = Dictionary(uniqueKeysWithValues: modules.map { ($0.id, $0) })
-        let azimuths = Self.arcAzimuths()
-        var index = 0
+        var ordered: [(ModuleDescriptor, HubDomain)] = []
         for domain in HubDomain.allCases {
-            guard !domain.moduleIDs.isEmpty else { continue }
-            let groupAzimuths = azimuths[index ..< index + domain.moduleIDs.count]
-            buildDomainHeader(domain, azimuth: groupAzimuths.reduce(0, +)
-                                        / Float(groupAzimuths.count))
-            for moduleID in domain.moduleIDs {
-                guard let module = byID[moduleID] else { index += 1; continue }
-                buildExhibit(for: module,
-                             at: arcPoint(azimuthDegrees: azimuths[index], y: arcHeight),
-                             domain: domain,
-                             progress: progress[module.id] ?? (0, 0))
-                index += 1
+            for id in domain.moduleIDs {
+                if let module = byID[id] { ordered.append((module, domain)) }
             }
         }
-        // A module the domain map has never heard of still gets a slot —
-        // tucked past the right end rather than silently missing.
         for module in modules where !HubDomain.arcOrder.contains(module.id) {
-            let azimuth = (azimuths.last ?? 0) + Self.domainGap
-            buildExhibit(for: module,
-                         at: arcPoint(azimuthDegrees: azimuth, y: arcHeight),
-                         domain: HubDomain.domain(for: module.id),
-                         progress: progress[module.id] ?? (0, 0))
+            ordered.append((module, HubDomain.domain(for: module.id)))
         }
-    }
 
-    /// The small floating name over a domain's stretch of the arc.
-    private func buildDomainHeader(_ domain: HubDomain, azimuth: Float) {
-        let header = Entity()
-        header.position = arcPoint(azimuthDegrees: azimuth, y: arcHeight + 0.52)
-        header.components.set(BillboardComponent())
-        header.addChild(Self.namePlate(domain.title, accent: UIColor(domain.color),
-                                       size: 0.026))
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(stringLiteral: domain.title)
-        header.components.set(accessibility)
-        root.addChild(header)
+        for (index, entry) in ordered.enumerated() {
+            buildExhibit(for: entry.0,
+                         at: constellationPoint(index),
+                         domain: entry.1,
+                         progress: progress[entry.0.id] ?? (0, 0))
+        }
     }
 
     // MARK: The 3-D bubble title
@@ -345,6 +328,14 @@ final class HubScene {
     /// block is centred on its anchor — the flush-both-sides two-line
     /// lockup that every good wordmark uses.
     private func buildBubbleTitle() {
+        // Once. An app that reintroduces itself every time you come
+        // home is an app that thinks you might have forgotten what you
+        // opened. After the first launch the constellation speaks for
+        // itself and the wordmark stays out of the room.
+        let key = "hasSeenWordmark"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+
         titleAnchor.position = titlePosition
 
         let lines = ["Physics", "Playground"]
@@ -678,9 +669,12 @@ final class HubScene {
             exhibit.pulser.scale = SIMD3(repeating: scale)
 
             exhibit.halo.components.set(OpacityComponent(opacity: focus))
-            // Unfocused names drop to a whisper so the ring stops being
-            // nine labels competing over the furniture.
-            let nameOpacity = hasLookRay ? (0.58 + 0.42 * focus) : 1
+            // Names appear only for the lab you are FACING. Seven
+            // permanent captions floating in a room is a menu; one that
+            // materialises where you look is the same doctrine the labs
+            // themselves now follow. Without a look ray (the simulator)
+            // they all stay legible so nothing is unreachable.
+            let nameOpacity = hasLookRay ? (focus * focus) : 1
             exhibit.namePivot.components.set(OpacityComponent(opacity: nameOpacity))
 
             if stillness { continue }

@@ -368,7 +368,7 @@ final class Bloom {
     /// SF Symbols as textures — the system's own icon language, so a
     /// petal reads the way every other Apple control does.
     private static var symbolCache: [String: TextureResource] = [:]
-    private static func symbolTexture(_ name: String) -> TextureResource? {
+    static func symbolTexture(_ name: String) -> TextureResource? {
         if let cached = symbolCache[name] { return cached }
         let config = UIImage.SymbolConfiguration(pointSize: 96, weight: .semibold)
         guard let image = UIImage(systemName: name, withConfiguration: config)?
