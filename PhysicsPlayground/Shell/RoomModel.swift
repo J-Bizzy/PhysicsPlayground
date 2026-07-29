@@ -238,7 +238,49 @@ final class RoomModel {
             }
             walls = Array(wallsByAnchor.values)
             recomputeBounds()
+            recomputeCollisionWalls()
         }
+    }
+
+    /// Detected walls PLUS a synthesized boundary box — four vertical
+    /// rects and a ceiling from the scanned bounds. Plane detection
+    /// only yields walls the user has looked at, so on its own the
+    /// bounce feature let balls sail through half the room; the box
+    /// guarantees every ball meets the room's edge. The bounds sit
+    /// 5 cm beyond the detected planes, so where a real wall exists it
+    /// always strikes first.
+    private(set) var collisionWalls: [RoomWalls.Wall] = []
+
+    private func recomputeCollisionWalls() {
+        var result = Array(wallsByAnchor.values)
+        if hasScannedRoom {
+            let c = bounds.center
+            let h = bounds.halfExtents
+            result.append(contentsOf: [
+                RoomWalls.Wall(center: SIMD3(c.x + h.x, c.y, c.z),
+                               normal: SIMD3(-1, 0, 0),
+                               uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0),
+                               halfU: h.z, halfV: h.y),
+                RoomWalls.Wall(center: SIMD3(c.x - h.x, c.y, c.z),
+                               normal: SIMD3(1, 0, 0),
+                               uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0),
+                               halfU: h.z, halfV: h.y),
+                RoomWalls.Wall(center: SIMD3(c.x, c.y, c.z + h.z),
+                               normal: SIMD3(0, 0, -1),
+                               uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 1, 0),
+                               halfU: h.x, halfV: h.y),
+                RoomWalls.Wall(center: SIMD3(c.x, c.y, c.z - h.z),
+                               normal: SIMD3(0, 0, 1),
+                               uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 1, 0),
+                               halfU: h.x, halfV: h.y),
+                // The ceiling: throw hard enough and it comes back.
+                RoomWalls.Wall(center: SIMD3(c.x, c.y + h.y, c.z),
+                               normal: SIMD3(0, -1, 0),
+                               uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 0, 1),
+                               halfU: h.x, halfV: h.z),
+            ])
+        }
+        collisionWalls = result
     }
 
     private func recomputeBounds() {

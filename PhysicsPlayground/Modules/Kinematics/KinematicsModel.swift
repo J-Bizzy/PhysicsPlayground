@@ -109,13 +109,21 @@ final class KinematicsModel {
     var roomWalls: [RoomWalls.Wall] = []
 
     init() {
+        // The welcome scene lives in reset() — and reset() only ran
+        // from the reset button, so the module opened BARE: no hoops,
+        // no staged balls, no opening shot. Open the way reset leaves
+        // things.
+        reset()
+
         // Debug hook: `simctl launch … -kinWalls 1` seeds a synthetic
         // wall across the room and fires a ball at it, so the bounce is
         // verifiable in the simulator (real walls are device-only).
+        // Close enough (1.4 m) that the welcome shot actually reaches
+        // it before landing.
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "kinWalls") {
             roomWalls = [RoomWalls.Wall(
-                center: SIMD3(2.0, 1.5, -0.9), normal: SIMD3(1, 0, 0),
+                center: SIMD3(1.4, 1.5, -0.9), normal: SIMD3(1, 0, 0),
                 uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0),
                 halfU: 2.5, halfV: 1.5)]
             fire()

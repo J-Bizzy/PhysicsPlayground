@@ -38,7 +38,11 @@ struct KinematicsSpaceView: View {
                     // of its own, for the same planes the shell was
                     // already tracking.
                     if appModel.room.hasScannedRoom {
-                        model.roomWalls = appModel.room.walls
+                        // Detected walls backed by the room's boundary
+                        // box, so a ball ALWAYS bounces at the room's
+                        // edge — including walls never looked at, and
+                        // the ceiling.
+                        model.roomWalls = appModel.room.collisionWalls
                     }
                     model.step(dt: event.deltaTime)
                     // A ball that reaches an open hand is caught: the

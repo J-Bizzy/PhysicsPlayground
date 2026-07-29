@@ -16,8 +16,18 @@ import simd
 @MainActor
 final class KinematicsModelTests: XCTestCase {
 
-    func testFireLaunchesFromMuzzleWithAimAndSpeed() {
+    /// A model with the welcome scene swept away: the module now opens
+    /// alive (hoops, staged balls, one shot in flight), but these tests
+    /// reason about exact counts from a bare bench.
+    private func bareModel() -> KinematicsModel {
         let model = KinematicsModel()
+        model.clearFlights()
+        while !model.rings.isEmpty { model.removeLastRing() }
+        return model
+    }
+
+    func testFireLaunchesFromMuzzleWithAimAndSpeed() {
+        let model = bareModel()
         model.launchSpeed = 5
         model.setAim(elevationDegrees: 30, azimuthDegrees: 0)
         model.fire()
@@ -34,7 +44,7 @@ final class KinematicsModelTests: XCTestCase {
     /// Feeding the hold pipeline a synthetic straight-line hand motion
     /// must release the ball with exactly that hand velocity.
     func testThrowVelocityEstimatedFromHandMotion() {
-        let model = KinematicsModel()
+        let model = bareModel()
         model.spawnBall()
         let id = model.flights[0].id
         model.grabBall(id: id)
@@ -58,7 +68,7 @@ final class KinematicsModelTests: XCTestCase {
 
     /// The throw boost multiplies the estimated hand velocity.
     func testThrowBoostAmplifiesRelease() {
-        let model = KinematicsModel()
+        let model = bareModel()
         model.throwBoost = 2.0
         model.spawnBall()
         let id = model.flights[0].id
@@ -75,7 +85,7 @@ final class KinematicsModelTests: XCTestCase {
     /// A grabbed-and-stationary release leaves the ball hovering (staged),
     /// not falling — no meaningful hand motion means no throw.
     func testStillReleaseLeavesBallHovering() {
-        let model = KinematicsModel()
+        let model = bareModel()
         model.spawnBall()
         let id = model.flights[0].id
         model.grabBall(id: id)
@@ -86,7 +96,7 @@ final class KinematicsModelTests: XCTestCase {
 
     /// A fired basketball must land, bounce (e = 0.82), and eventually rest.
     func testFlightBouncesThenComesToRest() {
-        let model = KinematicsModel()
+        let model = bareModel()
         model.launchSpeed = 4
         model.setAim(elevationDegrees: 45, azimuthDegrees: 0)
         model.fire()
@@ -107,7 +117,7 @@ final class KinematicsModelTests: XCTestCase {
     /// A ball fired down through a hoop scores exactly once; one that
     /// misses the rim scores nothing.
     func testBallThroughHoopScoresOnceAndMissesDoNot() {
-        let model = KinematicsModel()
+        let model = bareModel()
         model.addRing()
         let ringPosition = SIMD3<Double>(0.5, 1.0, -1.0)
         model.moveRing(id: model.rings[0].id, to: ringPosition)
@@ -137,7 +147,7 @@ final class KinematicsModelTests: XCTestCase {
     /// a 0.5× flight has advanced half as far.
     func testTimeScaleScalesSimulatedTime() {
         func elapsedAfterSteps(timeScale: Double) -> Double {
-            let model = KinematicsModel()
+            let model = bareModel()
             model.gravity = 0  // no landing mid-test
             model.launchSpeed = 2
             model.timeScale = timeScale
@@ -152,7 +162,7 @@ final class KinematicsModelTests: XCTestCase {
     }
 
     func testPauseFreezesFlights() {
-        let model = KinematicsModel()
+        let model = bareModel()
         model.fire()
         model.isPaused = true
         let before = model.flights[0].state
@@ -163,7 +173,7 @@ final class KinematicsModelTests: XCTestCase {
     }
 
     func testFlightBudgetEvictsSettledFirst() {
-        let model = KinematicsModel()
+        let model = bareModel()
         for _ in 0..<(KinematicsModel.flightBudget + 4) {
             model.fire()
         }
@@ -173,7 +183,7 @@ final class KinematicsModelTests: XCTestCase {
     /// Moving hoops circle their anchors at the set radius, and snap back
     /// when the mode turns off.
     func testHoopsOrbitMovesRingsAroundAnchors() {
-        let model = KinematicsModel()
+        let model = bareModel()
         model.addRing()
         let anchor = model.rings[0].anchor
 
@@ -196,7 +206,7 @@ final class KinematicsModelTests: XCTestCase {
     /// hoops up resets it.
     func testStreakGrowsOnScoresAndDiesOnMisses() {
         UserDefaults.standard.removeObject(forKey: "kinematics.bestStreak")
-        let model = KinematicsModel()
+        let model = bareModel()
         model.addRing()
         let ringPosition = SIMD3<Double>(0.5, 1.0, -1.0)
         model.moveRing(id: model.rings[0].id, to: ringPosition)
@@ -224,16 +234,19 @@ final class KinematicsModelTests: XCTestCase {
 
     /// The model publishes spatial sound events for launches.
     func testFirePublishesSoundEvent() {
-        let model = KinematicsModel()
-        XCTAssertNil(model.soundEvent)
+        // The welcome scene fires once in init, so an event may already
+        // exist — what matters is that OUR fire publishes a fresh one.
+        let model = bareModel()
+        let before = model.soundEvent?.id
         model.fire()
         let event = try! XCTUnwrap(model.soundEvent)
+        XCTAssertNotEqual(event.id, before)
         XCTAssertEqual(event.kind, .pop)
         XCTAssertEqual(simd_distance(event.position, model.muzzlePoint), 0, accuracy: 1e-9)
     }
 
     func testResetRestoresFreshlyEnteredState() {
-        let model = KinematicsModel()
+        let model = bareModel()
         model.launchSpeed = 3
         model.gravity = 1.62
         model.airResistance = true
