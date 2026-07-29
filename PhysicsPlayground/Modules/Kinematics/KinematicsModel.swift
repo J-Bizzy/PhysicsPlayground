@@ -104,9 +104,12 @@ final class KinematicsModel {
     /// Whether flights bounce off the room's real walls (from ARKit
     /// plane detection on device) or sail straight through them.
     var respectRoomWalls = true
-    /// The current wall rectangles, fed by KinematicsSensing — always
-    /// empty in the simulator unless the debug room is seeded.
+    /// The current wall rectangles, fed from the shared room model —
+    /// always empty in the simulator unless the debug room is seeded.
     var roomWalls: [RoomWalls.Wall] = []
+    /// The scanned room's box, for the containment clamp — the
+    /// guarantee that no ball ever ends a frame outside the room.
+    var roomBounds: RoomBox?
 
     init() {
         // The welcome scene lives in reset() — and reset() only ran
@@ -606,6 +609,7 @@ final class KinematicsModel {
             flight.state = ParticleDynamics.State(
                 position: hit.position, velocity: hit.velocity)
         }
+        contain(&flight)
 
         // Floor contact (ball center at its radius above y = 0).
         let floor = flight.projectile.diameter / 2
@@ -669,14 +673,65 @@ final class KinematicsModel {
         let decay = exp(-1.5 * dt)
         var velocity = flight.state.velocity * decay
         velocity.y = 0
-        var position = flight.state.position + dt * velocity
+        let previous = flight.state.position
+        var position = previous + dt * velocity
         position.y = flight.projectile.diameter / 2
+
+        // Rolling balls respect walls too. They didn't — a ball that
+        // had settled into a roll passed straight through the same
+        // wall it had just bounced off, which read as the feature
+        // simply giving up.
+        if respectRoomWalls, !roomWalls.isEmpty,
+           let hit = RoomWalls.strike(
+               previous: previous, current: position,
+               velocity: velocity,
+               radius: flight.projectile.diameter / 2,
+               restitution: flight.projectile.restitution * 0.5,
+               walls: roomWalls) {
+            position = hit.position
+            position.y = flight.projectile.diameter / 2
+            velocity = SIMD3(hit.velocity.x, 0, hit.velocity.z)
+        }
+
         flight.state = ParticleDynamics.State(position: position, velocity: velocity)
+        contain(&flight)
         if simd_length(velocity) < 0.05 {
             flight.state.velocity = .zero
             flight.status = .rested
         }
         flights[index] = flight
+    }
+
+    /// The invariant the segment test cannot promise on its own: a ball
+    /// NEVER ends a frame outside the room. Whatever slips past the
+    /// strike test — anchor churn replacing walls mid-flight, a spawn
+    /// beyond a plane, numeric residue — is clamped back inside the
+    /// scanned bounds with its velocity reflected. Belt and braces:
+    /// the strike gives the honest bounce, this guarantees containment.
+    private func contain(_ flight: inout Flight) {
+        guard respectRoomWalls, let box = roomBounds else { return }
+        let r = flight.projectile.diameter / 2
+        var position = flight.state.position
+        var velocity = flight.state.velocity
+        var corrected = false
+        for axis in 0..<3 {
+            let center = box.center[axis]
+            let reach = box.halfExtents[axis] - r
+            guard reach > 0 else { continue }
+            if position[axis] > center + reach {
+                position[axis] = center + reach
+                if velocity[axis] > 0 { velocity[axis] = -velocity[axis] * flight.projectile.restitution }
+                corrected = true
+            } else if position[axis] < center - reach, axis != 1 {
+                // (The floor handles the low side of y itself.)
+                position[axis] = center - reach
+                if velocity[axis] < 0 { velocity[axis] = -velocity[axis] * flight.projectile.restitution }
+                corrected = true
+            }
+        }
+        if corrected {
+            flight.state = ParticleDynamics.State(position: position, velocity: velocity)
+        }
     }
 
     // MARK: Reset

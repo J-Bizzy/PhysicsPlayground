@@ -233,6 +233,61 @@ final class KinematicsModelTests: XCTestCase {
     }
 
     /// The model publishes spatial sound events for launches.
+    /// The containment invariant: with room bounds set, no ball ever
+    /// ends a frame outside the room — flying, bouncing, or ROLLING —
+    /// whatever the wall list is doing. This is the guarantee behind
+    /// "bounce off my walls": the segment test gives the honest
+    /// bounce, this promises no escape.
+    func testBallNeverEndsAFrameOutsideTheRoom() {
+        let model = bareModel()
+        let box = RoomBox(center: SIMD3(0, 1.5, -1), halfExtents: SIMD3(2, 1.5, 2))
+        model.roomBounds = box
+        // No wall rects at all — the WORST case for the old code, and
+        // exactly what anchor churn can produce mid-flight.
+        model.roomWalls = []
+        model.launchSpeed = 15
+        model.setAim(elevationDegrees: 15, azimuthDegrees: 0)
+        model.fire()
+        model.spawnBall()
+
+        for _ in 0..<1800 {
+            model.step(dt: 1.0 / 90.0)
+            for flight in model.flights {
+                let position = flight.state.position
+                let slack = 1e-6
+                XCTAssertLessThanOrEqual(abs(position.x - box.center.x),
+                                         box.halfExtents.x + slack)
+                XCTAssertLessThanOrEqual(position.y - box.center.y,
+                                         box.halfExtents.y + slack)
+                XCTAssertLessThanOrEqual(abs(position.z - box.center.z),
+                                         box.halfExtents.z + slack)
+            }
+        }
+    }
+
+    /// A rolling ball meets a wall and stays inside — it used to roll
+    /// straight through.
+    func testRollingBallRespectsWalls() {
+        let model = bareModel()
+        model.roomWalls = [RoomWalls.Wall(
+            center: SIMD3(1.0, 1.0, -1.0), normal: SIMD3(1, 0, 0),
+            uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0),
+            halfU: 3, halfV: 1.5)]
+        model.roomBounds = RoomBox(center: SIMD3(0, 1.5, -1),
+                                   halfExtents: SIMD3(1.0, 1.5, 3))
+        model.launchSpeed = 6
+        model.setAim(elevationDegrees: 5, azimuthDegrees: 0)
+        model.fire()
+
+        for _ in 0..<2700 {
+            model.step(dt: 1.0 / 90.0)
+            for flight in model.flights {
+                XCTAssertLessThanOrEqual(flight.state.position.x, 1.0 + 1e-6,
+                                         "no phase of the flight passes the wall")
+            }
+        }
+    }
+
     func testFirePublishesSoundEvent() {
         // The welcome scene fires once in init, so an event may already
         // exist — what matters is that OUR fire publishes a fresh one.

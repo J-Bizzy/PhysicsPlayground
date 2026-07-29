@@ -2,10 +2,13 @@
 //  KinematicsControlsPanel.swift
 //  Physics Playground — Kinematics module
 //
-//  The module's one-glance panel. The always-open card fires, spawns,
-//  and hangs hoops; the world (gravity, air, wind, walls), the
-//  projectile, and time wait behind collapsed sections. The launcher's
-//  own ring carries aim-and-speed; balls are thrown by hand.
+//  The module's one-glance panel, kept deliberately SHORT: fire and
+//  play up top, then just two sections — the world and the hoops.
+//  A first pass shipped five sections (projectile picker with a custom
+//  ball, throw boost, wind direction, a separate Time card); the owner
+//  called it what it was — submenus populating the background. What
+//  remains is what a person actually reaches for: throw things, change
+//  the world, hang targets, slow time.
 //
 
 import SwiftUI
@@ -77,44 +80,28 @@ struct KinematicsControlsPanel: View {
                     .font(DesignTokens.TypeScale.control)
                 if self.model.airResistance {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Wind: \(self.model.windSpeed, specifier: "%.1f") m/s at \(self.model.windDirectionDegrees, specifier: "%.0f")°")
+                        Text("Wind: \(self.model.windSpeed, specifier: "%.1f") m/s")
                             .font(DesignTokens.TypeScale.control.monospacedDigit())
                         Slider(value: $model.windSpeed, in: KinematicsModel.windSpeedRange)
                             .accessibilityLabel("Wind speed")
-                        Slider(value: $model.windDirectionDegrees, in: 0...360)
-                            .accessibilityLabel("Wind direction")
                     }
+                    Picker("Ball", selection: $model.kind) {
+                        ForEach(KinematicsModel.ProjectileKind.allCases.filter { $0 != .custom }) { kind in
+                            Text(kind.displayName).tag(kind)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityLabel("Projectile kind")
+                    .accessibilityHint("Drag treats a golf ball and a table-tennis ball very differently")
                 }
                 Toggle("Bounce off my walls", isOn: $model.respectRoomWalls)
                     .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("Balls strike the room's real walls — device only")
-            }
-
-            CollapsedSection("Projectile") {
-                Picker("Ball", selection: $model.kind) {
-                    ForEach(KinematicsModel.ProjectileKind.allCases) { kind in
-                        Text(kind.displayName).tag(kind)
-                    }
-                }
-                .pickerStyle(.menu)
-                .accessibilityLabel("Projectile kind")
-                if self.model.kind == .custom {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Mass: \(self.model.customMass * 1000, specifier: "%.0f") g")
-                            .font(DesignTokens.TypeScale.control.monospacedDigit())
-                        Slider(value: $model.customMass, in: KinematicsModel.customMassRange)
-                            .accessibilityLabel("Custom mass")
-                        Text("Diameter: \(self.model.customDiameter * 100, specifier: "%.0f") cm")
-                            .font(DesignTokens.TypeScale.control.monospacedDigit())
-                        Slider(value: $model.customDiameter, in: KinematicsModel.customDiameterRange)
-                            .accessibilityLabel("Custom diameter")
-                    }
-                }
+                    .accessibilityHint("Balls strike the room's real walls and ceiling — device only")
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Throw boost: \(self.model.throwBoost, specifier: "%.1f")×")
+                    Text("Time: \(self.model.timeScale, specifier: "%.1f")×")
                         .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.throwBoost, in: KinematicsModel.throwBoostRange)
-                        .accessibilityLabel("Throw boost")
+                    Slider(value: $model.timeScale, in: KinematicsModel.timeScaleRange)
+                        .accessibilityLabel("Time scale")
                 }
             }
 
@@ -141,18 +128,6 @@ struct KinematicsControlsPanel: View {
                 Toggle("Hoops orbit", isOn: $model.hoopsOrbit)
                     .font(DesignTokens.TypeScale.control)
                     .accessibilityHint("The hoops drift on slow loops — lead your shots")
-            }
-
-            CollapsedSection("Time") {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Time: \(self.model.timeScale, specifier: "%.1f")×")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.timeScale, in: KinematicsModel.timeScaleRange)
-                        .accessibilityLabel("Time scale")
-                }
-                Text("Slow motion shows the strobe dots bunch at the top of the arc — equal time steps, unequal spacing.")
-                    .font(DesignTokens.TypeScale.footnote)
-                    .foregroundStyle(.secondary)
             }
         }
     }

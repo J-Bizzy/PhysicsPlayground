@@ -41,8 +41,10 @@ struct KinematicsSpaceView: View {
                         // Detected walls backed by the room's boundary
                         // box, so a ball ALWAYS bounces at the room's
                         // edge — including walls never looked at, and
-                        // the ceiling.
+                        // the ceiling. The bounds also feed the
+                        // containment clamp: no escape, ever.
                         model.roomWalls = appModel.room.collisionWalls
+                        model.roomBounds = appModel.room.bounds
                     }
                     model.step(dt: event.deltaTime)
                     // A ball that reaches an open hand is caught: the

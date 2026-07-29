@@ -17,6 +17,9 @@ struct WindTunnelSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @State private var renderer: WindTunnelRenderer?
     @State private var bloom = Bloom()
+    /// The shape submenu: a labelled fan of every test body, opened by
+    /// the ring's Shapes petal.
+    @State private var fan = ShapeFan()
     @State private var fanDrag: RelativeDrag?
     /// Two gauges standing at the mouth of the section: the wind you are
     /// running and the spin you are putting on the cylinder. Both were
@@ -28,6 +31,15 @@ struct WindTunnelSpaceView: View {
             let renderer = WindTunnelRenderer()
             content.add(renderer.root)
             renderer.sectionRoot.addChild(bloom.root)
+            renderer.sectionRoot.addChild(fan.root)
+            fan.onSelect = { model.testBody = $0 }
+            #if DEBUG
+            // `-windShapes 1` opens the shape fan at launch, for CLI
+            // screenshots.
+            if UserDefaults.standard.bool(forKey: "windShapes") {
+                fan.toggle()
+            }
+            #endif
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
@@ -60,7 +72,10 @@ struct WindTunnelSpaceView: View {
         .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
-                .onEnded { value in _ = bloom.handleTap(value.entity) }
+                .onEnded { value in
+                    if fan.handleTap(value.entity) { return }
+                    _ = bloom.handleTap(value.entity)
+                }
         )
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
@@ -146,12 +161,12 @@ struct WindTunnelSpaceView: View {
         bloom.retarget(
             "test-body",
             petals: [
-                .init(name: "Next shape", symbol: "shippingbox",
-                      tint: UIColor(white: 0.45, alpha: 1)) {
-                    let all = DragBody.allCases
-                    if let i = all.firstIndex(of: model.testBody) {
-                        model.testBody = all[(i + 1) % all.count]
-                    }
+                .init(name: "Shapes", symbol: "square.grid.2x2",
+                      tint: UIColor(white: 0.45, alpha: 1)) { [fan] in
+                    // A fan of every body, labelled — not a blind
+                    // cycle through the flat disc and the spinning
+                    // cylinder.
+                    fan.toggle()
                 },
             ],
             grip: .init(
@@ -166,7 +181,9 @@ struct WindTunnelSpaceView: View {
             renderer.sectionRoot.convert(position: SIMD3<Float>($0), from: nil)
         }
         bloom.update(anchor: anchor, viewer: viewer, revealTarget: 1, dt: dt)
-    }}
+        fan.update(anchor: anchor + SIMD3(0, 0.05, 0), viewer: viewer, dt: dt)
+    }
+}
 
 /// The little card floating above the probe.
 struct WindTunnelProbeReadout: View {
