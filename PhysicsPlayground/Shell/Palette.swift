@@ -136,9 +136,43 @@ final class Palette {
         petals.forEach { root.addChild($0) }
     }
 
-    /// Where the bead lives, in the host's coordinates.
+    /// Where the bead lives, in the host's coordinates. A saved spot —
+    /// the user carried it somewhere — wins over the default.
     func place(at position: SIMD3<Float>) {
-        root.position = position
+        if let saved = UserDefaults.standard.array(forKey: "palette.position")
+            as? [Double], saved.count == 3 {
+            root.position = SIMD3(Float(saved[0]), Float(saved[1]), Float(saved[2]))
+        } else {
+            root.position = position
+        }
+    }
+
+    // MARK: Carrying the bead
+
+    private var carryOffset: SIMD3<Float>?
+
+    /// Routes a drag. True while the palette owns it (the drag began
+    /// on the bead); the whole assembly rides the hand.
+    func handleDrag(entity: Entity, world: SIMD3<Float>) -> Bool {
+        if carryOffset == nil {
+            guard Self.ownName(of: entity, under: root) == bead.name else {
+                return false
+            }
+            carryOffset = root.position - world
+        }
+        guard let carryOffset else { return false }
+        root.position = world + carryOffset
+        return true
+    }
+
+    func endDrag() {
+        guard carryOffset != nil else { return }
+        carryOffset = nil
+        // The new spot is where hands will now learn it: keep it,
+        // across labs and across launches.
+        UserDefaults.standard.set(
+            [Double(root.position.x), Double(root.position.y), Double(root.position.z)],
+            forKey: "palette.position")
     }
 
     func update(dt: Double, viewer: SIMD3<Float>?) {
@@ -390,6 +424,19 @@ struct PaletteView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in _ = palette?.handleTap(value.entity) }
+        )
+        // Carry the bead: a real drag (not a pinch-tap) on the bead
+        // moves the whole palette, and the spot sticks. The minimum
+        // distance keeps taps and carries from fighting.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0.02)
+                .targetedToAnyEntity()
+                .onChanged { value in
+                    let world = SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene))
+                    _ = palette?.handleDrag(entity: value.entity, world: world)
+                }
+                .onEnded { _ in palette?.endDrag() }
         )
     }
 }

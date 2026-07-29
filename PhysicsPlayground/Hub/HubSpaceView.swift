@@ -638,8 +638,12 @@ final class HubScene {
         let plate = Entity()
 
         let extents = textExtents(text, size: size)
-        let padX: Float = 0.026
-        let padY: Float = 0.016
+        // Padding scales WITH the type: fixed values authored for the
+        // gallery's 36 mm plates made a 10 mm palette label wear a
+        // plate three text-heights wide — neighbouring labels collided
+        // into one smear of backing.
+        let padX = Float(size) * 0.72
+        let padY = Float(size) * 0.44
         let width = extents.x + padX * 2
         let height = extents.y + padY * 2
 
