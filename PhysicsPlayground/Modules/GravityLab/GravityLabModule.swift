@@ -16,6 +16,7 @@ enum GravityLabModule {
         ModuleDescriptor(
             id: id,
             title: "Gravity Lab",
+            shortTitle: "Gravity",
             blurb: "A real solar system in your room — grab planets, throw them into new orbits, and watch Newton's laws answer instantly.",
             icon: "sun.max.fill",
             accent: DesignTokens.Palette.gravityAccent,

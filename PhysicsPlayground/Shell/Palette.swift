@@ -31,6 +31,9 @@ final class Palette {
     let root = Entity()
 
     private let bead = ModelEntity()
+    /// The "Labs" nameplate under the closed bead; fades as the ring
+    /// opens and the slots' own labels take over.
+    private var beadLabel: Entity?
     var beadEntity: Entity { bead }
     private var slots: [(id: String, holder: Entity, animate: (Double) -> Void)] = []
     private var petals: [ModelEntity] = []
@@ -47,10 +50,12 @@ final class Palette {
     // with one comfortable arm movement.
     // Seven slots across 150 degrees need room: at a 0.26 m radius the
     // arc gives 11 cm between centres while the discs were 13 cm wide,
-    // so the ring overlapped itself into a smear. 0.36 m and smaller
-    // slots leave clear air between neighbours.
-    private static let ringRadius: Float = 0.36
-    private static let slotSize: Float = 0.060
+    // so the ring overlapped itself into a smear. 0.40 m keeps the same
+    // clear air with the 20%-bigger slots the labels asked for — at the
+    // old 0.06 m the miniatures read as specks and their thin lines
+    // shimmered.
+    private static let ringRadius: Float = 0.40
+    private static let slotSize: Float = 0.072
     private static let beadRadius: Float = 0.026
 
     var onSelect: ((String) -> Void)?
@@ -59,29 +64,50 @@ final class Palette {
     var onSettings: (() -> Void)?
     var onCapture: (() -> Void)?
 
-    init(moduleIDs: [String], accents: [String: UIColor]) {
-        buildBead()
-        for id in moduleIDs {
-            let holder = Entity()
-            holder.name = "palette-\(id)"
+    /// One ring slot's identity: the module, its short label, its color.
+    struct Slot {
+        let id: String
+        let title: String
+        let accent: UIColor
+    }
 
-            // The lab's OWN miniature, running. A switcher that shows
-            // the physics is a switcher you can read without labels.
-            let built = HubVignettes.make(for: id)
+    init(slots slotSpecs: [Slot]) {
+        buildBead()
+        for spec in slotSpecs {
+            let holder = Entity()
+            holder.name = "palette-\(spec.id)"
+
+            // The lab's OWN miniature, running. The name beneath makes
+            // it a labelled button; the miniature makes it a promise.
+            let built = HubVignettes.make(for: spec.id)
             let bounds = built.entity.visualBounds(relativeTo: nil).extents
             let largest = max(bounds.x, max(bounds.y, 1e-4))
             built.entity.scale = SIMD3(repeating: Self.slotSize / largest)
             holder.addChild(built.entity)
 
-            // A faint accent disc behind it, so a slot reads as a target.
-            var backing = UnlitMaterial(color: accents[id] ?? .white)
-            backing.blending = .transparent(opacity: 0.11)
+            // The slot's puck: an accent disc with a lit rim, so each
+            // lab reads as a designed button rather than a floating
+            // speck. (The old 0.11-opacity disc barely registered.)
+            var backing = UnlitMaterial(color: spec.accent)
+            backing.blending = .transparent(opacity: 0.18)
             let disc = ModelEntity(
                 mesh: .generateCylinder(height: 0.002, radius: Self.slotSize * 0.78),
                 materials: [backing])
             disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
             disc.position.z = -Self.slotSize * 0.55
             holder.addChild(disc)
+            if let rim = Self.rimRing(radius: Self.slotSize * 0.78,
+                                      color: spec.accent) {
+                rim.position.z = -Self.slotSize * 0.55
+                holder.addChild(rim)
+            }
+
+            // The label: the house nameplate, small, in the lab's own
+            // accent — the same treatment the gallery exhibits wear.
+            let label = HubScene.namePlate(spec.title, accent: spec.accent,
+                                           size: 0.014)
+            label.position = [0, -Self.slotSize * 0.92, 0.01]
+            holder.addChild(label)
 
             holder.components.set(InputTargetComponent())
             holder.components.set(CollisionComponent(
@@ -89,11 +115,12 @@ final class Palette {
             holder.components.set(HoverEffectComponent())
             var accessibility = AccessibilityComponent()
             accessibility.isAccessibilityElement = true
-            accessibility.label = LocalizedStringResource(stringLiteral: "Open \(id)")
+            accessibility.label = LocalizedStringResource(
+                stringLiteral: "Open \(spec.title)")
             holder.components.set(accessibility)
             holder.isEnabled = false
             root.addChild(holder)
-            slots.append((id, holder, built.animate))
+            slots.append((spec.id, holder, built.animate))
         }
 
         // Pause and reset keep the outer spots hands have already
@@ -124,9 +151,10 @@ final class Palette {
         if abs(openness - target) < 0.004 { openness = target }
 
         // The bead breathes when closed and recedes when open — it has
-        // handed its job to the ring.
+        // handed its job to the ring, and its nameplate goes with it.
         let breath = 1 + 0.05 * Float(sin(time * 1.6))
         bead.scale = SIMD3(repeating: breath * (1 - 0.45 * openness))
+        beadLabel?.components.set(OpacityComponent(opacity: 1 - openness))
 
         if let viewer {
             let flat = SIMD3<Float>(viewer.x - root.position.x, 0,
@@ -234,7 +262,42 @@ final class Palette {
         accessibility.isAccessibilityElement = true
         accessibility.label = "Labs. Pinch to open."
         bead.components.set(accessibility)
+
+        // The bead says what it IS: the module-switcher glyph floating
+        // in the glass, the house nameplate beneath — an anonymous
+        // sphere asked to be pinched on faith, and wasn't.
+        if let texture = Bloom.symbolTexture("square.grid.3x3") {
+            var iconMaterial = UnlitMaterial()
+            iconMaterial.color = .init(tint: UIColor(white: 1, alpha: 0.92),
+                                       texture: .init(texture))
+            iconMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
+            let icon = ModelEntity(
+                mesh: .generatePlane(width: 0.021, height: 0.021),
+                materials: [iconMaterial])
+            icon.position = [0, 0, 0.009]
+            bead.addChild(icon)
+        }
+        let label = HubScene.namePlate("Labs", accent: UIColor(white: 0.95, alpha: 1),
+                                       size: 0.012)
+        label.position = [0, -(Self.beadRadius + 0.026), 0]
+        beadLabel = label
+        root.addChild(label)
+
         root.addChild(bead)
+    }
+
+    /// A thin lit circle marking a slot's edge — the rim that turns a
+    /// faint disc into a button.
+    private static func rimRing(radius: Float, color: UIColor) -> ModelEntity? {
+        let points = (0...48).map { step -> SIMD3<Float> in
+            let angle = Float(step) / 48 * 2 * .pi
+            return SIMD3(cos(angle) * radius, sin(angle) * radius, 0)
+        }
+        guard let mesh = TubeMesh.tube(lines: [points], radius: 0.0012, sides: 4)
+        else { return nil }
+        var material = UnlitMaterial(color: color)
+        material.blending = .transparent(opacity: 0.55)
+        return ModelEntity(mesh: mesh, materials: [material])
     }
 
     private static func makePetal(name: String, symbol: String) -> ModelEntity {
@@ -259,6 +322,17 @@ final class Palette {
             icon.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
             disc.addChild(icon)
         }
+        // The petal's name, in the small house nameplate beneath it —
+        // four icon-only discs asked to be memorised; labels don't.
+        // (The disc is rotated π/2 about X, so "below, facing the
+        // viewer" is local +Z with the icon's counter-rotation.)
+        let plate = HubScene.namePlate(name.capitalized,
+                                       accent: UIColor(white: 0.95, alpha: 1),
+                                       size: 0.010)
+        plate.position = [0, 0.005, 0.047]
+        plate.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
+        disc.addChild(plate)
+
         disc.components.set(InputTargetComponent())
         disc.components.set(CollisionComponent(
             shapes: [.generateSphere(radius: 0.034)]))
@@ -281,10 +355,10 @@ struct PaletteView: View {
 
     var body: some View {
         RealityView { content in
-            let modules = ModuleCatalog.all(appModel: appModel)
-            var accents: [String: UIColor] = [:]
-            for entry in modules { accents[entry.id] = UIColor(entry.accent) }
-            let made = Palette(moduleIDs: modules.map(\.id), accents: accents)
+            let made = Palette(slots: ModuleCatalog.all(appModel: appModel).map {
+                .init(id: $0.id, title: $0.shortTitle ?? $0.title,
+                      accent: UIColor($0.accent))
+            })
             // Low and to the RIGHT, at about fifteen degrees below the
             // eye line: in reach, clear of where every lab puts its
             // physics (which is centred), and in the same place in every

@@ -16,6 +16,7 @@ enum CircuitsModule {
         ModuleDescriptor(
             id: id,
             title: "Circuit Workshop",
+            shortTitle: "Circuits",
             blurb: "A live electronics workbench: build anything from a flashlight to an RLC network, and watch voltage, current, and charge become visible.",
             icon: "powerplug.fill",
             accent: DesignTokens.Palette.circuitsAccent,

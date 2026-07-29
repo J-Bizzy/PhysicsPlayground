@@ -631,8 +631,10 @@ final class HubScene {
     /// the words it carries. Crisp accent type, guaranteed contrast, and
     /// nothing around the MODEL — which is the part that has to stay
     /// unframed.
-    private static func namePlate(_ text: String, accent: UIColor,
-                                  size: CGFloat = 0.036) -> Entity {
+    /// Internal, not private: the palette ring borrows this exact
+    /// treatment for its slot labels, so the app has ONE nameplate.
+    static func namePlate(_ text: String, accent: UIColor,
+                          size: CGFloat = 0.036) -> Entity {
         let plate = Entity()
 
         let extents = textExtents(text, size: size)

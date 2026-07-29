@@ -17,6 +17,9 @@ import SwiftUI
 struct ModuleDescriptor: Identifiable {
     let id: String
     let title: String
+    /// A one-word name for tight spaces — the palette ring's labels.
+    /// Nil falls back to the full title.
+    var shortTitle: String? = nil
     /// One-line hook shown on the catalog card.
     let blurb: String
     /// SF Symbol for the card.

@@ -16,6 +16,7 @@ enum KinematicsModule {
         ModuleDescriptor(
             id: id,
             title: "Projectile Motion",
+            shortTitle: "Projectiles",
             blurb: "Throw real balls across your room — slow time, hang hoops in mid-air, and try every gravity from zero-g to Jupiter.",
             icon: "paperplane.fill",
             accent: DesignTokens.Palette.kinematicsAccent,

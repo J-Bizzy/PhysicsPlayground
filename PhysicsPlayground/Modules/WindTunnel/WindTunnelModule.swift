@@ -16,6 +16,7 @@ enum WindTunnelModule {
         ModuleDescriptor(
             id: id,
             title: "Wind Tunnel",
+            shortTitle: "Wind",
             blurb: "A real wind tunnel: a live incompressible flow solve routes the air around whatever you put in the stream, wraps it over the shoulders, and sheds a wake behind — and on device it does the same around your own hands and the furniture in your room.",
             icon: "wind",
             accent: DesignTokens.Palette.windAccent,

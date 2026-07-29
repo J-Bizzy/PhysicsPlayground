@@ -20,6 +20,7 @@ enum ElectromagnetismModule {
         ModuleDescriptor(
             id: id,
             title: "Electric Fields",
+            shortTitle: "Fields",
             blurb: "Place charges, trace the field lines they make, and ride a test charge through Coulomb's law.",
             icon: "bolt.fill",
             accent: DesignTokens.Palette.electromagnetismAccent,

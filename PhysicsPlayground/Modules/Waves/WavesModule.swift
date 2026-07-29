@@ -16,6 +16,7 @@ enum WavesModule {
         ModuleDescriptor(
             id: id,
             title: "Wave Interference",
+            shortTitle: "Waves",
             blurb: "A wave field filling the space around you — float sources anywhere, flip one out of phase, and walk through the surfaces of silence.",
             icon: "water.waves",
             accent: DesignTokens.Palette.wavesAccent,
