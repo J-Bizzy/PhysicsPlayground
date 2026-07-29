@@ -213,10 +213,6 @@ final class GravityLabRenderer {
         systemRoot.position = Self.systemPosition
         viewRoot.addChild(systemRoot)
         root.addChild(viewRoot)
-        // The invisible plate two hands can grab when they are not on a
-        // planet, so the gesture works anywhere in the system's volume.
-        viewRoot.addChild(SpatialScaleHandle.make(
-            center: Self.systemPosition, radius: 1.4))
 
         // The floating platform under the system — a quiet glass disc.
         // Hidden while the spacetime grid takes over as the floor.

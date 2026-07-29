@@ -70,10 +70,6 @@ final class MagnetismRenderer {
     init() {
         root.addChild(Lighting.keyLight())
         root.addChild(viewRoot)
-        // The invisible plate both hands can pinch when they are not on
-        // a magnet, so the scale gesture works anywhere in the field.
-        viewRoot.addChild(SpatialScaleHandle.make(
-            center: SIMD3<Float>(MagnetismModel.regionCenter), radius: 1.0))
         viewRoot.addChild(lineGlowEntity)
         viewRoot.addChild(linesEntity)
         viewRoot.addChild(compassRoot)

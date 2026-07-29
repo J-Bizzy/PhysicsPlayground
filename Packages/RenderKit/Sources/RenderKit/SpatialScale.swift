@@ -120,9 +120,12 @@ public extension View {
     /// Attaches two-handed scale (and optional turn) to a module scene.
     /// Target it at the whole scene: MagnifyGesture and RotateGesture3D
     /// both need an entity with an InputTargetComponent under the hands,
-    /// which every module's grabbable objects already provide, so the
-    /// gesture works when the user pinches any two physics objects — or
-    /// the invisible scale plate a module can add via `scaleHandle`.
+    /// which every module's grabbable objects already provide — the
+    /// gesture works when the user pinches any two physics objects.
+    /// (There is deliberately NO region-covering invisible input plate:
+    /// hit-testing uses colliders, not visible geometry, so a plate
+    /// shields every object inside it from every pinch. One shipped;
+    /// it silently killed all interaction in two modules.)
     func spatialScale(_ rig: SpatialScaleRig) -> some View {
         self
             .simultaneousGesture(
@@ -149,20 +152,3 @@ public extension View {
     }
 }
 
-public enum SpatialScaleHandle {
-    /// An invisible plate the two-handed gesture can grab when the user
-    /// isn't touching a physics object. Sized to the module's region and
-    /// placed at its centre; it never blocks a real object because it
-    /// carries no visible geometry and sits behind everything.
-    @MainActor
-    public static func make(center: SIMD3<Float>, radius: Float) -> Entity {
-        let handle = Entity()
-        handle.name = "scale-handle"
-        handle.position = center
-        handle.components.set(InputTargetComponent())
-        handle.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: radius)],
-            mode: .trigger))
-        return handle
-    }
-}

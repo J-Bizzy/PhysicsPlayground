@@ -536,7 +536,7 @@ final class FieldModel {
     // pod floats somewhere else and has to be told what it is pointing
     // at. A Bloom IS on the object, so it says which one.
 
-    /// Spawns a charge at a given point — the Well pulls one out here.
+    /// Spawns a charge at a given point.
     @discardableResult
     func addCharge(positive: Bool, at position: SIMD3<Double>) -> UUID {
         var clamped = position

@@ -2,14 +2,11 @@
 //  FieldControlsPanel.swift
 //  Physics Playground — Electromagnetism module
 //
-//  The module's flat control panel, back in the window. The rebuild
-//  moved every control into spatial affordances — wells you pull new
-//  charges from, a bloom that unfurls on the charge you look at — and
-//  they are lovely in a headset, but they are revealed by gaze: in the
-//  simulator they barely exist, and nothing about them can be
-//  discovered by reading. This panel is the discoverable, labelled,
-//  accessibility-friendly path to the same model. The spatial
-//  affordances remain; the two paths edit the one FieldModel.
+//  The module's flat control panel: THE way to add, tune, and remove
+//  things in this module. The rebuild once moved every control into
+//  gaze-revealed spatial affordances; they were undiscoverable and are
+//  gone — the scene keeps exactly two verbs (drag to move, tap to
+//  select) and everything else is a labelled control here.
 //
 //  The sliders always edit the *selected* charge — the one most
 //  recently added, tapped, or grabbed, marked with a white halo.

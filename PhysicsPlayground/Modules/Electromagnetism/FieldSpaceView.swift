@@ -6,10 +6,14 @@
 //  RealityView's make closure installs the entity tree; from then on
 //  FieldRenderer is ticked every frame from SceneEvents.Update.
 //
-//  Manipulation events arrive through Core's ManipulationRouter: charges
-//  are keyed by UUID name, the probe by its fixed name. The probe
-//  simulation pauses while held and resumes from rest at the drop point.
-//  The probe's clock is RealityKit's per-frame SceneEvents.Update.
+//  DELIBERATELY SIMPLE. This scene once carried gaze-revealed wells to
+//  pull charges from, a bloom of petals on the charge you looked at,
+//  and a two-hand scale rig with an invisible metre-wide input plate.
+//  The plate shielded the whole field from every pinch (hit-testing
+//  uses colliders, not visible geometry), the gaze-gated controls were
+//  undiscoverable, and the module read as broken. Now there are exactly
+//  two verbs: DRAG a thing to move it, TAP a thing to select it. Adding
+//  and editing live on the window panel (FieldControlsPanel).
 //
 
 import PhysicsCore
@@ -22,125 +26,48 @@ struct FieldSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @State private var renderer: FieldRenderer?
     @State private var drag: RelativeDrag?
-    /// The object-anchored control. One instance, moved to whichever
-    /// charge you are looking at — there is only ever one open.
-    @State private var bloom = Bloom()
-    /// Look-reveal drives the bloom: turn toward a charge, it unfolds.
-    @State private var look = LookReveal(coneDegrees: 15)
-    @State private var wells: Well?
-    /// Two-hand scale: grow the dipole field until its lines arc over
-    /// your head. Turn stays OFF here — the field lines clip against
-    /// the real room's box, and an axis-aligned box cannot survive a
-    /// yawed view without lying about where the walls are.
-    @State private var scaleRig = SpatialScaleRig(
-        pivot: SIMD3<Float>(0, 1.35, -0.55), range: 0.5...3.5, allowsTurn: false)
 
     var body: some View {
-        RealityView { content, attachments in
+        RealityView { content in
             let renderer = FieldRenderer()
             content.add(renderer.root)
 
-            // Creation, as a physical act: two sources you reach into
-            // and pull a charge out of. The new charge is born at your
-            // fingertips and follows the same drag that made it, so
-            // placing and moving are one gesture.
-            //
-            // They FLANK the field at its own height. The first pass put
-            // them low and close, where a seated user has to drop their
-            // chin 30 degrees to find them — comfortable to reach, but
-            // out of sight is out of mind for something whose whole job
-            // is to invite you to make things.
-            let sources = Well([
-                .init(name: "Positive",
-                      tint: UIColor(DesignTokens.Palette.positive),
-                      glyph: "+",
-                      position: SIMD3(-0.72, 1.30, -1.00),
-                      spawn: { point in model.addCharge(positive: true, at: point) }),
-                .init(name: "Negative",
-                      tint: UIColor(DesignTokens.Palette.negative),
-                      glyph: "\u{2212}",
-                      position: SIMD3(0.72, 1.30, -1.00),
-                      spawn: { point in model.addCharge(positive: false, at: point) }),
-            ])
-            renderer.viewRoot.addChild(sources.root)
-            wells = sources
-
-            renderer.viewRoot.addChild(bloom.root)
-
-
-            // Simulation clock: step the probe every rendered frame, then
-            // move its entity in the same tick — buttery motion that never
-            // waits for the observation round-trip.
+            // Simulation clock: step the physics every rendered frame,
+            // then move entities in the same tick.
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.stepProbe(dt: event.deltaTime)
                     model.stepFreeCharges(dt: event.deltaTime)
-                    // Look-to-measure: with this on, the Gauss surface
-                    // follows the direction the head is facing, so you
-                    // carry the flux meter with your gaze rather than
-                    // your hand.
-                    if let renderer { scaleRig.apply(to: renderer.viewRoot) }
-                    wells?.update(dt: event.deltaTime)
-                    if let renderer {
-                        syncBloom(renderer: renderer, dt: event.deltaTime)
-                    }
+                    // Look-to-measure: the Gauss surface follows the
+                    // direction the head is facing (panel toggle;
+                    // device-only, the simulator has no look ray).
                     if model.gaussSurfaceOn, model.lookToPlace,
                        let ray = appModel.room.lookRay,
                        let renderer {
-                        // The gaze ray lives in the room; the Gauss
-                        // surface lives in the model. Under a scaled
-                        // view they differ — convert the ray, and give
-                        // the arm's reach in model metres too.
-                        let origin = renderer.displayPoint(fromWorld: SIMD3<Float>(ray.origin))
-                        let scale = Double(max(scaleRig.liveScale, 0.01))
+                        let origin = renderer.displayPoint(
+                            fromWorld: SIMD3<Float>(ray.origin))
                         if let point = model.lookRegion.point(
                             onRay: origin, direction: ray.direction,
-                            reach: model.lookReach / scale) {
+                            reach: model.lookReach) {
                             model.moveGaussSurface(to: point)
                         }
                     }
-                    // The room's clip box, pulled into model space: at
-                    // 2x the walls are HALF as far away in model metres.
-                    let scale = Double(max(scaleRig.liveScale, 0.01))
-                    let pivot = SIMD3<Double>(0, 1.35, -0.55)
-                    let bounds = appModel.room.bounds
-                    renderer?.tick(model, room: RoomBox(
-                        center: pivot + (bounds.center - pivot) / scale,
-                        halfExtents: bounds.halfExtents / scale))
+                    renderer?.tick(model, room: appModel.room.bounds)
                     // The lab's placement in the user's room — a pure
-                    // display offset, safe because every grab in this app
-                    // moves a body by hand DISPLACEMENT, which a constant
+                    // display offset, safe because every grab moves a
+                    // body by hand DISPLACEMENT, which a constant
                     // translation leaves untouched.
                     renderer?.root.position = appModel.labPlacement.offset
                 }
             )
-
-            #if DEBUG
-            // double(forKey:) coerces the string the launch-argument
-            // domain actually stores; `object as? Double` does not.
-            let forced = UserDefaults.standard.double(forKey: "viewScale")
-            if forced > 0 {
-                scaleRig.updateMagnification(Float(forced))
-                scaleRig.endGesture()
-            }
-            #endif
-            renderer.tick(model)
             self.renderer = renderer
-        } attachments: {
         }
-        // Relative dragging, no system manipulation: the charge (or
-        // probe, or plate) moves by exactly the hand's displacement —
-        // it never lurches toward the hand, and the per-frame tick
-        // moves its field with it in the same frame.
-        .spatialScale(scaleRig)
         .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
-                    if bloom.handleTap(value.entity) { return }
-                    // A tap on a charge selects it — the click path in
-                    // the simulator, and it aims the window panel's
-                    // sliders at what you touched.
+                    // A tap on a charge selects it — it wears the halo
+                    // and the panel's sliders edit it.
                     for name in Self.ancestorNames(of: value.entity) {
                         if let id = UUID(uuidString: name),
                            model.charges.contains(where: { $0.id == id }) {
@@ -150,6 +77,10 @@ struct FieldSpaceView: View {
                     }
                 }
         )
+        // Relative dragging, no system manipulation: the charge (or
+        // probe, or plate) moves by exactly the hand's displacement —
+        // it never lurches toward the hand, and the per-frame tick
+        // moves its field with it in the same frame.
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
@@ -157,19 +88,7 @@ struct FieldSpaceView: View {
                     guard let renderer else { return }
                     let hand = renderer.displayPoint(fromWorld: SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
-                    // Pulling the bloom's grip beats everything: it is
-                    // the only gesture that is already in flight.
-                    if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
                     if drag == nil {
-                        if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
-                        // A pull on a well is a birth followed by a drag
-                        // — the charge arrives already in your hand.
-                        if let id = wells?.pull(value.entity, at: hand) {
-                            drag = RelativeDrag(name: id.uuidString,
-                                                target: hand, hand: hand)
-                            model.heldChargeID = id
-                            return
-                        }
                         drag = beginDrag(entity: value.entity, hand: hand)
                     }
                     guard let drag else { return }
@@ -185,65 +104,10 @@ struct FieldSpaceView: View {
                             model.releaseProbe()
                         }
                     }
-                    bloom.endGrip()
                     drag = nil
                     model.heldChargeID = nil
                 }
         )
-    }
-
-    /// Points the one bloom at whichever charge you are looking at (or
-    /// holding), and rebuilds its controls when the target changes.
-    private func syncBloom(renderer: FieldRenderer, dt: Double) {
-        let candidates = model.charges.map {
-            (id: $0.id.uuidString, position: SIMD3<Float>($0.position))
-        }
-        var ray: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
-        if let look = appModel.room.lookRay {
-            ray = (renderer.viewRoot.convert(position: SIMD3<Float>(look.origin), from: nil),
-                   renderer.viewRoot.convert(direction: SIMD3<Float>(look.direction), from: nil))
-        }
-        look.update(dt: dt, ray: ray, candidates: candidates)
-
-        // A charge in your hand keeps the bloom, whatever you look at.
-        let heldID = model.heldChargeID?.uuidString
-        let winnerID = heldID ?? look.focusedID
-        guard let winnerID, let uuid = UUID(uuidString: winnerID),
-              let charge = model.charges.first(where: { $0.id == uuid }) else {
-            bloom.update(anchor: .zero, viewer: nil, revealTarget: 0, dt: dt)
-            bloom.clearTarget()
-            return
-        }
-
-        bloom.retarget(
-            uuid,
-            petals: [
-                    .init(name: "Flip polarity", symbol: "plusminus",
-                          tint: UIColor(white: 0.45, alpha: 1)) {
-                        model.flipCharge(id: uuid)
-                    },
-                    .init(name: "Delete", symbol: "trash",
-                          tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
-                        model.removeCharge(id: uuid)
-                    },
-            ],
-            grip: .init(
-                    name: "Magnitude",
-                    range: FieldModel.magnitudeRange,
-                    read: { model.magnitudeMicroCoulombs(id: uuid) },
-                    write: { model.setMagnitude(id: uuid, microCoulombs: $0) },
-                    format: { String(format: "%.1f \u{00B5}C", $0) },
-                    // The grip rides the charge's own surface, so the
-                    // handle moves outward as the charge grows.
-                    radius: { renderer.displayRadius(forChargeID: uuid) + 0.02 }))
-
-        let viewer = appModel.room.headPosition.map {
-            renderer.viewRoot.convert(position: SIMD3<Float>($0), from: nil)
-        }
-        bloom.update(anchor: SIMD3<Float>(charge.position),
-                     viewer: viewer,
-                     revealTarget: 1,
-                     dt: dt)
     }
 
     /// Resolves what was pinched and anchors a relative-drag session.
@@ -277,6 +141,20 @@ struct FieldSpaceView: View {
         return nil
     }
 
+    private func apply(drag: RelativeDrag, hand: SIMD3<Double>) {
+        let position = drag.position(forHand: hand)
+        if drag.name == "plate-0" || drag.name == "plate-1" {
+            model.movePlate(drag.name == "plate-0" ? 0 : 1, toWorld: position)
+        } else if drag.name == "gauss-surface" {
+            model.moveGaussSurface(to: position)
+        } else if drag.name == FieldRenderer.probeEntityName {
+            model.holdProbe(at: position)
+        } else if let id = UUID(uuidString: drag.name) {
+            model.heldChargeID = id
+            model.moveCharge(id: id, to: position)
+        }
+    }
+
     /// Names of the entity and its ancestors, nearest first.
     private static func ancestorNames(of entity: Entity) -> [String] {
         var names: [String] = []
@@ -290,11 +168,8 @@ struct FieldSpaceView: View {
 
     /// Resolves a pinch to a charge. An ancestor named with a charge's
     /// UUID wins outright; failing that, the nearest charge within
-    /// `fallbackRadius` of the hand. The fallback exists because the
-    /// invisible two-hand scale plate spans the whole field region — a
-    /// pinch that lands on it names no charge, but the user's hand is
-    /// ON the charge they mean to grab, and a pinch that does nothing
-    /// reads as "I can't move them."
+    /// `fallbackRadius` of the hand — so a near-miss pinch on a charge
+    /// still grabs it instead of silently doing nothing.
     static func resolveCharge(names: [String], hand: SIMD3<Double>,
                               charges: [(id: UUID, position: SIMD3<Double>)],
                               fallbackRadius: Double = 0.12) -> UUID? {
@@ -310,20 +185,4 @@ struct FieldSpaceView: View {
             .min { $0.1 < $1.1 }?
             .0
     }
-
-    private func apply(drag: RelativeDrag, hand: SIMD3<Double>) {
-        let position = drag.position(forHand: hand)
-        if drag.name == "plate-0" || drag.name == "plate-1" {
-            model.movePlate(drag.name == "plate-0" ? 0 : 1, toWorld: position)
-        } else if drag.name == "gauss-surface" {
-            model.moveGaussSurface(to: position)
-        } else if drag.name == FieldRenderer.probeEntityName {
-            model.holdProbe(at: position)
-        } else if let id = UUID(uuidString: drag.name) {
-            model.heldChargeID = id
-            model.moveCharge(id: id, to: position)
-        }
-    }
-
-
 }

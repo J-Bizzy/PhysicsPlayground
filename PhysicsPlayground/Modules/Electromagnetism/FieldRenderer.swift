@@ -128,10 +128,6 @@ final class FieldRenderer {
         // so the lines stick to the hand while the re-trace catches up.
         root.addChild(Lighting.keyLight())
         root.addChild(viewRoot)
-        // The invisible plate both hands can pinch when they are not on
-        // a charge, so the scale gesture works anywhere in the field.
-        viewRoot.addChild(SpatialScaleHandle.make(
-            center: SIMD3<Float>(0, 1.35, -0.55), radius: 1.0))
         viewRoot.addChild(fieldFlowRoot)
         // The glow halo sits under the arrowheads and the bright core so
         // the crisp line and heads read over the soft bloom.

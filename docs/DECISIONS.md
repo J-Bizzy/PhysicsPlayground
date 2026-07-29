@@ -14,6 +14,14 @@ A running log of consequential decisions — architectural, physical, or product
 **Consequences:** What this commits us to, and what it rules out.
 ```
 
+## 2026-07-29 — Electric Fields stripped to two verbs; the invisible scale plate is banned
+
+**Decision:** Electric Fields' scene keeps exactly two interactions — drag to move, tap to select — with everything else on the window panel. The gaze-revealed Wells and Bloom are removed from this module. `SpatialScaleHandle` (the invisible region-covering input plate) is deleted from RenderKit and removed from every module that mounted one (Fields, Gravity Lab, Magnetism); two-hand scale still works by pinching the physics objects themselves.
+
+**Context:** The plate carried an `InputTargetComponent` and a metre-plus collision sphere over the whole region. Hit-testing uses colliders, not visible geometry, so every pinch ray struck the plate's near surface before reaching anything inside — charges, wells, bloom, even the palette bead sat inside its radius. Whole modules were silently non-interactive; the user reported "I can't even move them" twice, and asked for the module to be stripped simple.
+
+**Consequences:** Rule: an input-targetable collider must be no larger than the thing it represents — never a region. Rule: a module's interaction set must be describable in one sentence. Wells/Bloom/LookReveal remain available to other modules (Circuits, Gravity, Kinematics still use Bloom) but each must satisfy: nothing gaze-revealed may be the only path to a capability, and nothing may sit between the pinch ray and the object it decorates.
+
 ## 2026-07-29 — The Gallery replaces the constellation
 
 **Decision:** The hub's constellation scatter is replaced by the Gallery: a crescent of four floating graphite terraces, one per physics domain, each carrying its domain's live miniatures on pedestal pucks, with the domain's colour as a lit hairline along its front edge. Geometry is pure, tested math (`GalleryLayout`). The distance/height settings scale the crescent's plan and terrace heights; recenter and the head-ray focus mechanic carry over unchanged.
