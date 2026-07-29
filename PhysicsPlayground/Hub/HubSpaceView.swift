@@ -953,6 +953,20 @@ struct HubFocusPanel: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
+            }
+
+            // Where to go next — the line that turns the tally from a
+            // score into a direction.
+            if let next = entries.first(where: {
+                !appModel.experiments.completed.contains($0.experiment.id)
+            }) {
+                Label(next.experiment.title, systemImage: "flask")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
                 Button(action: enter) {
                     Label("Enter", systemImage: "arrow.forward")
                         .font(.callout.weight(.semibold))

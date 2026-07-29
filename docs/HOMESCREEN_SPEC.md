@@ -60,6 +60,7 @@ Numbering from v3. Don't revisit a standing one without a `DECISIONS.md` entry.
 
 ## 3. Open work
 
-1. **Lab Notebook surface.** Unchanged from v3: the model is fully built (`Shell/LabNotebook.swift`) and every module supplies `captureReadings`, but nothing calls either. The trigger's home is a design decision against locked decision 4.
-2. **Coach-mark rendering.** The state machine exists (`AppSettings.coachStage`, advanced on first focus and first module entry — both triggers survive in the Gallery) but no view renders a tip. Script: ① "Look at a module to preview it" ② "Pinch to step inside" ③ "Track everything in your Lab Notebook". Anchors must target the Gallery layout.
+1. ~~Lab Notebook surface~~ — **shipped** (2026-07-29): capture petal on the bead (its fourth and final), book button in every module title bar, Notebook window with CSV/Markdown export.
+2. ~~Coach-mark rendering~~ — **deleted by decision** (2026-07-29): onboarding is each module's first-run hint, rendered by the shell until dismissed. See DECISIONS.md.
 3. **Ambient volume (continuous).** The settings window ships master volume + ambient on/off; a continuous ambient level awaits a gain path into the ambient loop.
+4. **Pre-public-repo sweep.** `Archive/` (retired modules) is tracked but uncompiled — remove before the repository goes public.

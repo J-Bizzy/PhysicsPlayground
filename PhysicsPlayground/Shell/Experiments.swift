@@ -186,7 +186,7 @@ enum ExperimentCatalog {
                  { model.rings.reduce(0) { $0 + $1.score } >= 1 }),
                 (Experiment(id: "kinematics.streak", title: "Sharpshooter",
                             detail: "Score five — moving hoops count double for style.",
-                            step: "Score four more. Turn on orbiting hoops in the Launcher pod for a moving target."),
+                            step: "Score four more. Turn on Hoops orbit in this window for a moving target."),
                  { model.rings.reduce(0) { $0 + $1.score } >= 5 }),
             ]
         case "waves":
@@ -194,7 +194,7 @@ enum ExperimentCatalog {
             return [
                 (Experiment(id: "waves.duet", title: "Duet",
                             detail: "Run two sources at once and watch their ripples interfere.",
-                            step: "Two sources are already running — if you removed one, pull another out of the well."),
+                            step: "Two sources are already running — if you removed one, tap Add source in this window."),
                  { model.sources.count >= 2 }),
                 (Experiment(id: "waves.silence", title: "Stand in the quiet",
                             detail: "Separate the sources by more than two wavelengths — the more sheets of silence, the more room to walk between them.",
@@ -214,7 +214,7 @@ enum ExperimentCatalog {
                      .filter { abs(model.readouts[$0.id]?.watts ?? 0) > 0.5 }.count >= 2 }),
                 (Experiment(id: "circuits.slowpoke", title: "Slowpoke",
                             detail: "Get an electron's lap time under twelve hours — drift speed rises with current.",
-                            step: "Turn on True speed in the Bench pod, then push more current: add a battery in series, or lower the resistance."),
+                            step: "Turn on True electron speed in this window's Flow section, then push more current: add a battery in series, or lower the resistance."),
                  { model.driftLapTime < 12 * 3600 }),
                 (Experiment(id: "circuits.bright", title: "Overdrive",
                             detail: "Push one bulb past 2 W — series batteries help.",
@@ -260,11 +260,11 @@ enum ExperimentCatalog {
                          && model.readout(for: $0)?.isBound == false } }),
                 (Experiment(id: "gravity.prophet", title: "Prophet",
                             detail: "Predict where a planet will be — and miss by less than a tenth of an AU.",
-                            step: "Select a planet, tap Predict in the View pod, drag the ghost along the orbit to your guess, and let time run."),
+                            step: "Tap a planet to select it, tap Predict an orbit in this window, drag the ghost to your guess, and let time run."),
                  { (model.bestPredictionMissAU ?? 1) < 0.1 }),
                 (Experiment(id: "gravity.binary", title: "Twin suns",
                             detail: "Split the Sun into a binary pair.",
-                            step: "Open the Bodies pod and tap Twin suns."),
+                            step: "Tap Twin suns in this window."),
                  { model.bodies.filter { $0.body.name.hasPrefix("Sun") }.count >= 2 }),
             ]
         case "windtunnel":
@@ -272,11 +272,11 @@ enum ExperimentCatalog {
             return [
                 (Experiment(id: "wind.lift", title: "Magnus liftoff",
                             detail: "Spin the cylinder into more than 2 N/m of lift.",
-                            step: "Choose the Cylinder body, then run the Spin slider up until the lift arrow grows."),
+                            step: "Choose the Cylinder body in this window, then run Spin up until the lift arrow grows."),
                  { model.testBody == .cylinder && abs(model.liftPerSpan) > 2 }),
                 (Experiment(id: "wind.slippery", title: "Slippery shape",
                             detail: "Find the body that slips through with under a tenth the cube's drag.",
-                            step: "Work through the Test body pod and read the Cd printed on each button."),
+                            step: "Work through the bodies in this window's Test body picker and compare how the smoke parts around each."),
                  { model.testBody.dragCoefficient < 0.105 }),
             ]
         default:

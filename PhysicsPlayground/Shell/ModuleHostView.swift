@@ -177,6 +177,36 @@ struct ModuleHostView: View {
                 .padding(.horizontal, 8)
             }
 
+            // The module's current task: the first unfinished
+            // experiment, with its step — the strings were authored
+            // for exactly this and never rendered until now. It
+            // advances on its own as experiments land.
+            if let next = ExperimentCatalog.experiments(for: module.id,
+                                                        appModel: appModel)
+                .first(where: {
+                    !appModel.experiments.completed.contains($0.experiment.id)
+                }) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "flask")
+                        .font(.footnote)
+                        .foregroundStyle(module.accent)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(next.experiment.title)
+                            .font(DesignTokens.TypeScale.footnote.weight(.semibold))
+                        if !next.experiment.step.isEmpty {
+                            Text(next.experiment.step)
+                                .font(DesignTokens.TypeScale.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 8)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Current experiment: \(next.experiment.title). \(next.experiment.step)")
+            }
+
             if module.makeControls != nil || !module.legend.isEmpty {
                 ScrollView {
                     VStack(spacing: DesignTokens.Panel.sectionSpacing) {

@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		996AEF562FFBFF7A00A8D7A5 /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = 996AEF552FFBFF7A00A8D7A5 /* RealityKitContent */; };
 		99B0C0A32FFC010000000003 /* PhysicsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 99B0C0A22FFC010000000002 /* PhysicsCore */; };
 		99B0C0B32FFC020000000013 /* RenderKit in Frameworks */ = {isa = PBXBuildFile; productRef = 99B0C0B22FFC020000000012 /* RenderKit */; };
 /* End PBXBuildFile section */
@@ -24,7 +23,6 @@
 
 /* Begin PBXFileReference section */
 		996AEF502FFBFF7A00A8D7A5 /* PhysicsPlayground.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PhysicsPlayground.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		996AEF542FFBFF7A00A8D7A5 /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
 		996AEF622FFBFF7B00A8D7A5 /* PhysicsPlaygroundTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PhysicsPlaygroundTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		99B0C0A12FFC010000000001 /* PhysicsCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = PhysicsCore; sourceTree = "<group>"; };
 		99B0C0B12FFC020000000011 /* RenderKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RenderKit; sourceTree = "<group>"; };
@@ -62,7 +60,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				99B0C0A32FFC010000000003 /* PhysicsCore in Frameworks */,
-				996AEF562FFBFF7A00A8D7A5 /* RealityKitContent in Frameworks */,
 				99B0C0B32FFC020000000013 /* RenderKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -100,7 +97,6 @@
 			isa = PBXGroup;
 			children = (
 				99B0C0A12FFC010000000001 /* PhysicsCore */,
-				996AEF542FFBFF7A00A8D7A5 /* RealityKitContent */,
 				99B0C0B12FFC020000000011 /* RenderKit */,
 			);
 			path = Packages;
@@ -127,7 +123,6 @@
 			name = PhysicsPlayground;
 			packageProductDependencies = (
 				99B0C0A22FFC010000000002 /* PhysicsCore */,
-				996AEF552FFBFF7A00A8D7A5 /* RealityKitContent */,
 				99B0C0B22FFC020000000012 /* RenderKit */,
 			);
 			productName = PhysicsPlayground;
@@ -506,10 +501,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		996AEF552FFBFF7A00A8D7A5 /* RealityKitContent */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RealityKitContent;
-		};
 		99B0C0A22FFC010000000002 /* PhysicsCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PhysicsCore;
