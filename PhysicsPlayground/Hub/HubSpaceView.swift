@@ -72,9 +72,11 @@ struct HubSpaceView: View {
                 // while an exhibit stands there.
                 load.components.set(BillboardComponent())
                 load.isEnabled = false
-                load.position = scene.podiumTop + SIMD3(0, 0.34, 0)
                 scene.root.addChild(load)
                 scene.loadButton = load
+                // After the assignment, not before — seating it reads
+                // `loadButton`, so the other order silently does nothing.
+                scene.seatLoadButton()
             }
             #if DEBUG
             // `-hubDock <module id>` seats an exhibit on the podium at
@@ -368,8 +370,45 @@ final class HubScene {
 
     // MARK: The podium — where a lab is brought to be opened
 
-    /// Where the docked exhibit floats, root space.
-    private(set) var podiumTop = SIMD3<Float>(0, 0.98, -1.05)
+    /// The plinth's own dimensions. Cap height is the terrace puck's, so
+    /// a docked exhibit sits on the cap at exactly the clearance it had
+    /// on its puck (`GalleryLayout.exhibitLift`) — the podium is a puck
+    /// on a column, not a second kind of pedestal.
+    ///
+    /// The column is tall (1.05 m, a museum plinth) and the plinth stands
+    /// well out from the user for one reason: how far DOWN a thing sits
+    /// in view is set by its height AND its distance, and the first pass
+    /// got the second half wrong. At 0.82 m tall and 1.05 m away it hung
+    /// ~26° below eye level while the terraces, no higher but twice as
+    /// far, sit at ~14° — so the pedestal and the lab standing on it fell
+    /// to the bottom of the view and its Load button floated up on its
+    /// own, attached to nothing.
+    private static let podiumColumnHeight: Float = 1.05
+    private static let podiumCapHeight: Float = GalleryLayout.puckHeight
+    private static let podiumRadius: Float = 0.105
+    /// Distance out from the user at the 2.0 m arc default; scales with it.
+    private static let podiumReach: Float = 1.35
+    /// How high the Load button hangs over the docked exhibit. Small on
+    /// purpose: it has to read as that exhibit's button. At 0.34 m it
+    /// floated up level with the user's eye, a good half-metre of empty
+    /// air above the lab it belonged to, looking like loose UI.
+    private static let podiumButtonLift: Float = 0.20
+    /// How near the cap counts as offering the exhibit to it. Shares no
+    /// constant with the button's lift — the two were the same number by
+    /// coincidence, in five places, which is how one of them silently
+    /// changes the other.
+    private static let podiumSnapRadius: Float = 0.34
+
+    /// Hangs the Load button over whatever stands on the podium.
+    func seatLoadButton() {
+        loadButton?.position = podiumTop + SIMD3(0, Self.podiumButtonLift, 0)
+    }
+
+    /// Where the docked exhibit centres, root space.
+    private(set) var podiumTop = SIMD3<Float>(
+        0,
+        podiumColumnHeight + podiumCapHeight + GalleryLayout.exhibitLift,
+        -podiumReach)
     private var podiumGlow: Entity?
     /// The exhibit standing on the podium, ready to load.
     private(set) var dockedModuleID: String?
@@ -388,7 +427,15 @@ final class HubScene {
     /// A floor-standing pedestal, front and centre: carry a lab here
     /// and it presents itself, with the Load button hanging above.
     private func buildPodium(distance: Float) {
-        podiumTop = SIMD3(0, 0.98, -1.05 * (distance / 2.0))
+        // Reach scales with the arc so the plinth keeps its place in
+        // front of the crescent at every distance setting; its HEIGHT
+        // does not — a plinth stands on the floor, and the floor does
+        // not move when the gallery is pushed back.
+        let columnHeight = Self.podiumColumnHeight
+        let capTop = columnHeight + Self.podiumCapHeight
+        podiumTop = SIMD3(0,
+                          capTop + GalleryLayout.exhibitLift,
+                          -Self.podiumReach * (distance / 2.0))
 
         var graphite = PhysicallyBasedMaterial()
         graphite.baseColor = .init(tint: Self.slabTint)
@@ -398,22 +445,22 @@ final class HubScene {
 
         let podium = Entity()
         podium.position = SIMD3(podiumTop.x, 0, podiumTop.z)
-        let columnHeight: Float = 0.82
         let column = ModelEntity(
             mesh: .generateCylinder(height: columnHeight, radius: 0.055),
             materials: [graphite])
         column.position.y = columnHeight / 2
         podium.addChild(column)
         let cap = ModelEntity(
-            mesh: .generateCylinder(height: 0.024, radius: 0.105),
+            mesh: .generateCylinder(height: Self.podiumCapHeight,
+                                    radius: Self.podiumRadius),
             materials: [graphite])
-        cap.position.y = columnHeight + 0.012
+        cap.position.y = columnHeight + Self.podiumCapHeight / 2
         podium.addChild(cap)
 
         // The champagne rim — the same jeweller's line the title wears.
         var rim = UnlitMaterial(color: Self.titleRimColor)
         rim.blending = .transparent(opacity: 0.7)
-        if let ring = Self.rimTube(radius: 0.105, y: columnHeight + 0.026) {
+        if let ring = Self.rimTube(radius: Self.podiumRadius, y: capTop + 0.002) {
             ring.model?.materials = [rim]
             podium.addChild(ring)
         }
@@ -424,9 +471,9 @@ final class HubScene {
         var glowMaterial = UnlitMaterial(color: Self.titleRimColor)
         glowMaterial.blending = .transparent(opacity: 0.22)
         let pool = ModelEntity(
-            mesh: .generateCylinder(height: 0.001, radius: 0.09),
+            mesh: .generateCylinder(height: 0.001, radius: Self.podiumRadius - 0.015),
             materials: [glowMaterial])
-        pool.position.y = columnHeight + 0.026
+        pool.position.y = capTop + 0.002
         glow.addChild(pool)
         glow.components.set(OpacityComponent(opacity: 0.35))
         podium.addChild(glow)
@@ -469,7 +516,7 @@ final class HubScene {
         let local = root.convert(position: world, from: nil)
         exhibit.anchor.position = local + dragOffset
         // The podium brightens as the offer approaches.
-        let near = simd_distance(exhibit.anchor.position, podiumTop) < 0.34
+        let near = simd_distance(exhibit.anchor.position, podiumTop) < Self.podiumSnapRadius
         podiumGlow?.components.set(OpacityComponent(opacity: near ? 1.0 : 0.35))
     }
 
@@ -482,7 +529,7 @@ final class HubScene {
         draggingID = nil
         dragOffset = nil
 
-        if simd_distance(exhibit.anchor.position, podiumTop) < 0.34 {
+        if simd_distance(exhibit.anchor.position, podiumTop) < Self.podiumSnapRadius {
             // Docked: the exhibit settles onto the pedestal and the
             // Load button appears above it.
             if let previous = dockedModuleID, previous != id,
@@ -497,7 +544,7 @@ final class HubScene {
                                 relativeTo: root, duration: 0.28,
                                 timingFunction: .easeOut)
             SoundPalette.play(.chime, on: exhibit.anchor, volume: 0.6)
-            loadButton?.position = podiumTop + SIMD3(0, 0.34, 0)
+            seatLoadButton()
             loadButton?.isEnabled = true
             podiumGlow?.components.set(OpacityComponent(opacity: 1.0))
         } else {
@@ -517,7 +564,7 @@ final class HubScene {
         guard let exhibit = exhibits.first(where: { $0.moduleID == id }) else { return }
         dockedModuleID = id
         exhibit.anchor.position = podiumTop
-        loadButton?.position = podiumTop + SIMD3(0, 0.34, 0)
+        seatLoadButton()
         loadButton?.isEnabled = true
         podiumGlow?.components.set(OpacityComponent(opacity: 1.0))
     }
