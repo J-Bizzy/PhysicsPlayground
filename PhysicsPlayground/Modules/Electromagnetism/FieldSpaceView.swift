@@ -30,16 +30,9 @@ struct FieldSpaceView: View {
     /// The per-charge control ring: flip, delete, and the strength
     /// grip you pull. One instance, opened by tapping a charge.
     @State private var bloom = Bloom()
-    /// Which charge's ring is open. A reference type on purpose: a
-    /// @State VALUE read from a RealityKit update closure is stale
-    /// (the trap documented in Bloom's header) — the render loop and
-    /// the tap gesture must share one live object.
+    /// Which charge's ring is open — shared by the tap gesture and the
+    /// render loop (see RingState's header for why it's a reference).
     @State private var ring = RingState()
-
-    @MainActor
-    final class RingState {
-        var openID: UUID?
-    }
 
     var body: some View {
         RealityView { content in

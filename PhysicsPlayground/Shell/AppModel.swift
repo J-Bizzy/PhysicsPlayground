@@ -41,8 +41,6 @@ final class AppModel {
             visitedModuleIDs.insert(id)
             UserDefaults.standard.set(visitedModuleIDs.sorted(), forKey: "visited.modules")
         }
-        // Entering any module completes the "pinch to step inside" coaching.
-        settings.advanceCoach(past: 1)
     }
 
     /// Studio Mode: full immersion that shuts the room out and stages the
@@ -145,6 +143,11 @@ final class AppModel {
         }
         if UserDefaults.standard.bool(forKey: "studioMode") {
             studioMode = true
+        }
+        // `-resetHints 1` clears the dismissed-hint set, so the
+        // first-run hint row can be screenshot from the CLI.
+        if UserDefaults.standard.bool(forKey: "resetHints") {
+            settings.resetOnboardingTips()
         }
         // `-startPaused 1` opens the module frozen, so the frozen-vector
         // treatment can be screenshot-verified from the CLI.

@@ -28,39 +28,19 @@ struct FieldControlsPanel: View {
             PanelSection("Charges") {
                 chargeControls(model: $model)
             }
-            collapsed("Test charge") {
+            CollapsedSection("Test charge") {
                 probeControls(model: $model)
             }
-            collapsed("Uniform fields") {
+            CollapsedSection("Uniform fields") {
                 uniformFieldControls(model: $model)
             }
-            collapsed("Display & Gauss's law") {
+            CollapsedSection("Display & Gauss's law") {
                 displayToggles(model: $model)
                 GaussSurfaceControls()
             }
-            collapsed("Numbers") {
+            CollapsedSection("Numbers") {
                 PhysicsStatsView()
             }
-        }
-    }
-
-    /// A card that shows only its header until opened — the panel
-    /// stays one glance tall, and depth is there when asked for.
-    private func collapsed(_ title: String,
-                           @ViewBuilder content: @escaping () -> some View) -> some View {
-        PanelSection {
-            DisclosureGroup {
-                VStack(alignment: .leading,
-                       spacing: DesignTokens.Panel.rowSpacing) {
-                    content()
-                }
-                .padding(.top, 10)
-            } label: {
-                Text(title)
-                    .font(DesignTokens.TypeScale.sectionHeader)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            .tint(.secondary)
         }
     }
 

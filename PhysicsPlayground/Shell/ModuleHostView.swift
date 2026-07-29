@@ -143,10 +143,49 @@ struct ModuleHostView: View {
                 .accessibilityHint("Places the simulation and its control pods in your room")
             }
 
-            if let makeControls = module.makeControls {
+            // The one-time hint: a sentence from the module, shown
+            // until the user closes it. Dismissal is the read receipt.
+            if !appModel.settings.hasSeenHint(module.id) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "hand.point.up.left")
+                        .font(.footnote)
+                        .foregroundStyle(module.accent)
+                    Text(module.firstRunHint)
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 6)
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            appModel.settings.markHintSeen(module.id)
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss hint")
+                }
+                .padding(.horizontal, 8)
+            }
+
+            if module.makeControls != nil || !module.legend.isEmpty {
                 ScrollView {
-                    makeControls()
-                        .padding(.top, 2)
+                    VStack(spacing: DesignTokens.Panel.sectionSpacing) {
+                        if let makeControls = module.makeControls {
+                            makeControls()
+                        }
+                        // The legend, appended by the SHELL — every
+                        // module gets the same key in the same place,
+                        // and none can restyle or forget it.
+                        if !module.legend.isEmpty {
+                            CollapsedSection("Legend") {
+                                LegendView(items: module.legend)
+                            }
+                        }
+                    }
+                    .padding(.top, 2)
                 }
                 .frame(maxHeight: 480)
             }

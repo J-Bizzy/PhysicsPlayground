@@ -67,27 +67,29 @@ final class AppSettings {
 
     // MARK: Onboarding
 
-    /// The coach-mark sequence, as a stage counter:
-    /// 0 — has never focused an exhibit ("look at a module")
-    /// 1 — has focused, never entered ("pinch to step inside")
-    /// 2 — has entered, never opened the notebook ("your lab notebook")
-    /// 3 — done; no more coaching, ever.
-    var coachStage: Int {
-        didSet { UserDefaults.standard.set(coachStage, forKey: "settings.coachStage") }
+    /// Module ids whose one-time first-run hint has been dismissed.
+    /// The hint is the whole of onboarding: one sentence per module,
+    /// shown in the module window until the user closes it.
+    private(set) var seenHints: Set<String> {
+        didSet {
+            UserDefaults.standard.set(seenHints.sorted(),
+                                      forKey: "settings.seenHints")
+        }
     }
 
-    /// Advances the coach sequence, never backwards — wandering back to
-    /// an earlier trigger must not resurrect a dismissed tip.
-    func advanceCoach(past stage: Int) {
-        if coachStage == stage { coachStage = stage + 1 }
+    func hasSeenHint(_ moduleID: String) -> Bool {
+        seenHints.contains(moduleID)
     }
 
-    /// Puts onboarding back to a first launch: the coach sequence
-    /// restarts. (This used to also resurrect the one-shot wordmark;
-    /// the wordmark is persistent now, so the coach counter is the
-    /// whole of onboarding state.)
+    /// Marked on DISMISS, not on display — a hint glanced past is a
+    /// hint not yet read.
+    func markHintSeen(_ moduleID: String) {
+        seenHints.insert(moduleID)
+    }
+
+    /// Every module's first-run hint appears once more.
     func resetOnboardingTips() {
-        coachStage = 0
+        seenHints = []
     }
 
     init() {
@@ -97,7 +99,7 @@ final class AppSettings {
         ambientAudio = defaults.object(forKey: "settings.ambientAudio") as? Bool ?? true
         arcDistance = defaults.object(forKey: "settings.arcDistance") as? Double ?? 2.0
         arcHeight = defaults.object(forKey: "settings.arcHeight") as? Double ?? 1.4
-        coachStage = defaults.integer(forKey: "settings.coachStage")
+        seenHints = Set(defaults.stringArray(forKey: "settings.seenHints") ?? [])
         // didSet does not fire during init, so hand the restored volume to
         // the sound engine here — otherwise a debug `-openModule` launch
         // (which skips the hub) would play at full volume regardless.

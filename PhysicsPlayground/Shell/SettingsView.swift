@@ -64,11 +64,11 @@ struct SettingsView: View {
                 }
 
                 section("Onboarding") {
-                    Button("Reset tips") {
+                    Button("Show hints again") {
                         settings.resetOnboardingTips()
                     }
                     .font(DesignTokens.TypeScale.control)
-                    caption("The coach tips play again from the start.")
+                    caption("Every module's first-run hint appears once more.")
                 }
 
                 section("Progress") {

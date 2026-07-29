@@ -17,8 +17,7 @@ final class AppSettingsTests: XCTestCase {
     private static let keys = [
         "settings.reduceMotion", "settings.masterVolume",
         "settings.ambientAudio", "settings.arcDistance",
-        "settings.arcHeight", "settings.coachStage",
-        "hasSeenWordmark",
+        "settings.arcHeight", "settings.seenHints",
     ]
 
     private func clearKeys() {
@@ -43,7 +42,7 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertTrue(settings.ambientAudio)
         XCTAssertEqual(settings.arcDistance, 2.0)
         XCTAssertEqual(settings.arcHeight, 1.4)
-        XCTAssertEqual(settings.coachStage, 0)
+        XCTAssertTrue(settings.seenHints.isEmpty)
     }
 
     func testEveryPreferenceSurvivesRelaunch() {
@@ -53,7 +52,8 @@ final class AppSettingsTests: XCTestCase {
         settings.ambientAudio = false
         settings.arcDistance = 2.6
         settings.arcHeight = 1.1
-        settings.coachStage = 2
+        settings.markHintSeen("circuits")
+        settings.markHintSeen("waves")
 
         // A second instance is a relaunch: nothing but UserDefaults
         // connects the two.
@@ -63,7 +63,9 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertFalse(relaunched.ambientAudio)
         XCTAssertEqual(relaunched.arcDistance, 2.6)
         XCTAssertEqual(relaunched.arcHeight, 1.1)
-        XCTAssertEqual(relaunched.coachStage, 2)
+        XCTAssertTrue(relaunched.hasSeenHint("circuits"))
+        XCTAssertTrue(relaunched.hasSeenHint("waves"))
+        XCTAssertFalse(relaunched.hasSeenHint("pendulums"))
     }
 
     func testMasterVolumeReachesTheSoundEngine() {
@@ -78,15 +80,15 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(SoundPalette.masterVolume, 0.3)
     }
 
-    func testResetOnboardingTipsRestartsTheSequence() {
+    func testResetOnboardingTipsShowsEveryHintAgain() {
         let settings = AppSettings()
-        settings.coachStage = 3
+        settings.markHintSeen("circuits")
 
         settings.resetOnboardingTips()
 
-        XCTAssertEqual(settings.coachStage, 0)
+        XCTAssertFalse(settings.hasSeenHint("circuits"))
         let relaunched = AppSettings()
-        XCTAssertEqual(relaunched.coachStage, 0, "the reset persists")
+        XCTAssertTrue(relaunched.seenHints.isEmpty, "the reset persists")
     }
 
     func testExperimentResetWipesProgressAndStreak() {

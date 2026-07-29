@@ -93,12 +93,6 @@ struct HubSpaceView: View {
             scene.subscription?.cancel()
             scene.subscription = nil
         }
-        .onChange(of: scene.focusedModuleID) {
-            // First focus completes the "look at a module" coaching.
-            if scene.focusedModuleID != nil {
-                appModel.settings.advanceCoach(past: 0)
-            }
-        }
         .gesture(
             TapGesture()
                 .targetedToAnyEntity()
