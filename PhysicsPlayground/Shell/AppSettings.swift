@@ -83,13 +83,11 @@ final class AppSettings {
     }
 
     /// Puts onboarding back to a first launch: the coach sequence
-    /// restarts and the wordmark plays once more. The wordmark's
-    /// one-shot flag lives outside this object (the hub owns the read),
-    /// so it is cleared by key here.
+    /// restarts. (This used to also resurrect the one-shot wordmark;
+    /// the wordmark is persistent now, so the coach counter is the
+    /// whole of onboarding state.)
     func resetOnboardingTips() {
         coachStage = 0
-        UserDefaults.standard.removeObject(forKey: "hasSeenWordmark")
-        layoutVersion += 1
     }
 
     init() {

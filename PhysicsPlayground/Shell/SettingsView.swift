@@ -45,21 +45,21 @@ struct SettingsView: View {
                         .font(DesignTokens.TypeScale.control)
                 }
 
-                section("Hub layout") {
-                    meterRow("Arc distance", value: settings.arcDistance) {
+                section("Gallery") {
+                    meterRow("Gallery distance", value: settings.arcDistance) {
                         Slider(value: $settings.arcDistance, in: 1.5...3.0) { editing in
                             if !editing { settings.layoutVersion += 1 }
                         }
                     }
-                    meterRow("Arc height", value: settings.arcHeight) {
+                    meterRow("Gallery height", value: settings.arcHeight) {
                         Slider(value: $settings.arcHeight, in: 1.0...1.8) { editing in
                             if !editing { settings.layoutVersion += 1 }
                         }
                     }
-                    Button("Recenter hub", action: recenter)
+                    Button("Recenter gallery", action: recenter)
                         .font(DesignTokens.TypeScale.control)
                         .disabled(appModel.room.lookRay == nil)
-                    caption("Swings the constellation round to face you. "
+                    caption("Swings the gallery round to face you. "
                             + "Needs headset tracking — unavailable in the simulator.")
                 }
 
@@ -68,8 +68,7 @@ struct SettingsView: View {
                         settings.resetOnboardingTips()
                     }
                     .font(DesignTokens.TypeScale.control)
-                    caption("The wordmark and the coach sequence play again, "
-                            + "as on first launch.")
+                    caption("The coach tips play again from the start.")
                 }
 
                 section("Progress") {

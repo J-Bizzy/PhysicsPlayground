@@ -2,19 +2,23 @@
 //  HubSpaceView.swift
 //  Physics Playground — Hub
 //
-//  The spatial menu: a clock face of exhibits. The large, shell-free
-//  3D miniatures form a vertical ring facing the user, encircling the
-//  title window at its center — one glance takes in every exhibit,
-//  names beneath each in their module accents. Look at one (the system
-//  hover effect lights it up) and pinch to enter.
+//  The spatial menu: the GALLERY. Four floating graphite terraces arc
+//  around the user in a crescent — one per physics domain, each with a
+//  domain-coloured hairline along its front edge — and every module
+//  stands on its own pedestal puck as a live, shell-free miniature,
+//  under a persistent "Physics / Playground" wordmark. Domains are
+//  physical structure: where a lab sits tells you what kind of physics
+//  it is, and one sweep of the head reads the whole room. Look toward
+//  an exhibit and it lifts off its puck; pinch to enter.
 //
-//  The only motion is idle life: exhibits bob out of phase and their
-//  miniatures slowly turn. A handful of entities; per-frame work is a
-//  few transform writes.
+//  The only motion is idle life: miniatures breathe out of phase and
+//  their physics runs. A handful of entities; per-frame work is a few
+//  transform writes.
 //
-//  Vignettes are keyed by module id with a generic fallback, so a new
-//  module joins the carousel for free and gets a bespoke miniature
-//  with one case.
+//  Geometry lives in GalleryLayout (pure, tested math). Vignettes are
+//  keyed by module id with a generic fallback, so a new module lands
+//  on its domain's terrace for free and gets a bespoke miniature with
+//  one case.
 //
 
 import SwiftUI
@@ -169,67 +173,28 @@ final class HubScene {
     /// The 3-D bubble title the exhibits ring, bobbing at the centre.
     private let titleAnchor = Entity()
 
-    // MARK: Layout — one arc, grouped by domain
+    // MARK: Layout — the Gallery
     //
-    // Two staggered rows spaced nine modules comfortably, but the rows
-    // were ORDERED BY THE CATALOG, which is to say not ordered at all:
-    // Circuits floated over the armchair, Waves over the window, and
-    // nothing about where a thing sat said what kind of physics it was.
-    // One arc, read left to right like a shelf, grouped into the four
-    // domains a course would group them into — Mechanics, Waves &
-    // Optics, Electricity & Magnetism, Fluids & Gravity — with a small
-    // header floating over each group. Position now MEANS something.
+    // A crescent of four domain terraces, authored and computed in
+    // GalleryLayout. The constellation scatter this replaces put every
+    // lab at its own azimuth/height/depth; position was designed but
+    // it EXPLAINED nothing — the room read as bubbles. The terraces
+    // make the grouping physical: architecture beneath the physics,
+    // never around it.
     //
     // Geometry comes from settings (distance and height sliders,
-    // recenter yaw), with the defaults at 2.0 m and 1.4 m — close
-    // enough to read, low enough to feel on your shelf rather than on
-    // the ceiling.
+    // recenter yaw), with the defaults at 2.0 m and 1.4 m.
 
     private var arcRadius: Float = 2.0
     private var arcHeight: Float = 1.4
 
-    // MARK: Layout — a constellation, not an arc
-    //
-    // The arc put every lab at ONE radius and ONE height, which is a
-    // poster with a curve in it: your eyes sweep left to right and the
-    // room contributes nothing. A headset's whole advantage is that
-    // things can be at different DISTANCES — near ones large and
-    // detailed, far ones small and quiet, everything moving against
-    // everything else as you lean. So the labs hang at genuinely
-    // different depths and heights, and the exhibits keep a constant
-    // WORLD size rather than a constant apparent one, so distance is
-    // something you read instead of something you are told.
-    //
-    // Positions are authored, not generated: a scatter that reads as
-    // designed needs someone to have decided where things go. One slot
-    // per module in ModuleCatalog.all — fewer, and constellationPoint's
-    // wrap parks two labs on the SAME spot (this shipped once: eight
-    // modules, seven slots, gravity lab inside kinematics).
-    private static let constellation: [(azimuth: Float, height: Float, depth: Float)] = [
-        (-38, 1.46, 1.95),
-        ( -14, 1.08, 1.62),
-        (  12, 1.72, 2.30),
-        (  40, 1.22, 1.88),
-        ( -30, 1.94, 2.70),
-        (  30, 0.96, 2.35),
-        (  -3, 1.32, 3.05),
-        (  14, 1.78, 3.10),
-    ]
-
-    /// Every miniature is normalised to this WORLD size, so a lab
+    /// Every miniature is normalised to this WORLD size, so a terrace
     /// further away genuinely looks further away. Constant apparent
-    /// size would have thrown the depth away again.
-    private static let exhibitSize: Float = 0.27
+    /// size would throw the depth away.
+    private static let exhibitSize: Float = 0.24
 
-    /// Where the nth lab hangs. Distance and height settings scale the
-    /// whole constellation rather than flattening it.
-    private func constellationPoint(_ index: Int) -> SIMD3<Float> {
-        let slot = Self.constellation[index % Self.constellation.count]
-        let azimuth = slot.azimuth * .pi / 180
-        let depth = slot.depth * (arcRadius / 2.0)
-        let height = slot.height * (arcHeight / 1.4)
-        return SIMD3(depth * sin(azimuth), height, -depth * cos(azimuth))
-    }
+    /// The graphite the terraces and pucks are cut from.
+    private static let slabTint = UIColor(white: 0.09, alpha: 1)
 
     // MARK: Focus
     //
@@ -255,9 +220,11 @@ final class HubScene {
     /// Resting scale of an unfocused exhibit once ANY exhibit is
     /// focused, and how much the focused one grows.
     private static let unfocusedScale: Float = 0.90
-    private static let focusedScale: Float = 1.34
-    /// How far the focused exhibit steps toward the user.
-    private static let focusedApproach: Float = 0.16
+    private static let focusedScale: Float = 1.22
+    /// How far the focused exhibit lifts off its puck. (It used to step
+    /// toward the user, but a step off a pedestal reads as falling;
+    /// lifting reads as the exhibit answering.)
+    private static let focusedLift: Float = 0.09
 
     // MARK: Build
 
@@ -266,34 +233,99 @@ final class HubScene {
                distance: Float = 2.0, height: Float = 1.4, yaw: Float = 0) {
         arcRadius = distance
         arcHeight = height
-        // Recenter: the whole constellation swings about the user.
+        // Recenter: the whole gallery swings about the user.
         root.orientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
 
-        titlePosition = SIMD3(0, arcHeight + 0.86, -(arcRadius + 0.15))
+        titlePosition = SIMD3(0, arcHeight + 0.70, -(arcRadius + 0.45))
         buildBubbleTitle()
+        buildFloorPool()
 
-        // Domain order still decides WHICH slot a lab gets, so related
-        // labs stay near each other — but the floating domain headers
-        // are gone. Three text labels hanging in a room to explain a
-        // grouping the colours already carry is exactly the kind of
-        // caption this remaster exists to delete.
+        // The terraces themselves ARE the domain grouping — no floating
+        // text headers; colour lives in each slab's hairline, the
+        // progress ring, and the focus panel's chip.
         let byID = Dictionary(uniqueKeysWithValues: modules.map { ($0.id, $0) })
-        var ordered: [(ModuleDescriptor, HubDomain)] = []
-        for domain in HubDomain.allCases {
-            for id in domain.moduleIDs {
-                if let module = byID[id] { ordered.append((module, domain)) }
+        for terrace in GalleryLayout.terraces(moduleIDs: modules.map(\.id),
+                                              distance: distance,
+                                              height: height) {
+            buildTerrace(terrace)
+            for (index, id) in terrace.moduleIDs.enumerated() {
+                guard let module = byID[id] else { continue }
+                buildExhibit(for: module,
+                             at: terrace.exhibitPositions[index],
+                             domain: terrace.domain,
+                             progress: progress[id] ?? (0, 0))
             }
         }
-        for module in modules where !HubDomain.arcOrder.contains(module.id) {
-            ordered.append((module, HubDomain.domain(for: module.id)))
-        }
+    }
 
-        for (index, entry) in ordered.enumerated() {
-            buildExhibit(for: entry.0,
-                         at: constellationPoint(index),
-                         domain: entry.1,
-                         progress: progress[entry.0.id] ?? (0, 0))
+    // MARK: Terraces
+
+    /// Each terrace's hairline, kept for the enter flare and shimmer.
+    private var terraceHairlines: [HubDomain: ModelEntity] = [:]
+
+    /// One domain's slab: a floating graphite shelf with a lit hairline
+    /// of the domain's colour along its front edge, and a pedestal puck
+    /// per module. Architecture BENEATH the physics, never around it —
+    /// the miniatures stay shell-free.
+    private func buildTerrace(_ terrace: GalleryLayout.Terrace) {
+        var graphite = PhysicallyBasedMaterial()
+        graphite.baseColor = .init(tint: Self.slabTint)
+        graphite.roughness = 0.3
+        graphite.metallic = 0.1
+        graphite.clearcoat = .init(floatLiteral: 0.6)
+        graphite.clearcoatRoughness = .init(floatLiteral: 0.25)
+
+        let slab = Entity()
+        slab.position = terrace.center
+        slab.orientation = simd_quatf(angle: terrace.yaw, axis: [0, 1, 0])
+        let box = ModelEntity(
+            mesh: .generateBox(width: terrace.width,
+                               height: GalleryLayout.slabThickness,
+                               depth: GalleryLayout.slabDepth,
+                               cornerRadius: 0.03),
+            materials: [graphite])
+        slab.addChild(box)
+
+        var lit = UnlitMaterial(color: UIColor(terrace.domain.color))
+        lit.blending = .transparent(opacity: 0.85)
+        let hairline = ModelEntity(
+            mesh: .generateBox(width: max(terrace.width - 0.05, 0.1),
+                               height: 0.004, depth: 0.004,
+                               cornerRadius: 0.002),
+            materials: [lit])
+        hairline.position = SIMD3(0, GalleryLayout.slabThickness / 2 + 0.002,
+                                  GalleryLayout.slabDepth / 2 - 0.006)
+        slab.addChild(hairline)
+        terraceHairlines[terrace.domain] = hairline
+        root.addChild(slab)
+
+        for top in terrace.puckTops {
+            let puck = ModelEntity(
+                mesh: .generateCylinder(height: GalleryLayout.puckHeight,
+                                        radius: GalleryLayout.puckRadius),
+                materials: [graphite])
+            puck.position = top - SIMD3(0, GalleryLayout.puckHeight / 2, 0)
+            root.addChild(puck)
         }
+    }
+
+    /// A soft warm pool on the real floor beneath the crescent's centre
+    /// — the one thing that ties the floating architecture to the room.
+    private func buildFloorPool() {
+        let pool = Entity()
+        pool.position = SIMD3(0, 0.006, -arcRadius * 0.75)
+        let warm = UIColor(red: 1.0, green: 0.95, blue: 0.85, alpha: 1)
+        for (radius, opacity) in [(Float(0.55), Float(0.10)),
+                                  (Float(0.85), Float(0.05)),
+                                  (Float(1.10), Float(0.025))] {
+            var material = UnlitMaterial(color: warm)
+            material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+            let disc = ModelEntity(
+                mesh: .generateCylinder(height: 0.001, radius: radius),
+                materials: [material])
+            pool.addChild(disc)
+        }
+        root.addChild(pool)
     }
 
     // MARK: The 3-D bubble title
@@ -312,7 +344,7 @@ final class HubScene {
     private static let titleRimColor = UIColor(red: 1.0, green: 0.88, blue: 0.70, alpha: 1)
     /// The lockup's overall width, metres. Both lines are scaled to
     /// exactly this, which is what makes it read as a designed mark.
-    private static let titleWidth: Float = 0.44
+    private static let titleWidth: Float = 0.60
     /// Gap between the two lines, as a fraction of a line's cap height.
     private static let titleLeading: Float = 0.30
 
@@ -332,14 +364,12 @@ final class HubScene {
     /// block is centred on its anchor — the flush-both-sides two-line
     /// lockup that every good wordmark uses.
     private func buildBubbleTitle() {
-        // Once. An app that reintroduces itself every time you come
-        // home is an app that thinks you might have forgotten what you
-        // opened. After the first launch the constellation speaks for
-        // itself and the wordmark stays out of the room.
-        let key = "hasSeenWordmark"
-        guard !UserDefaults.standard.bool(forKey: key) else { return }
-        UserDefaults.standard.set(true, forKey: key)
-
+        // Persistent. The wordmark was one-shot for a while (shown on
+        // first launch only, then never again), and the room lost its
+        // name: a gallery without a sign over the door reads as
+        // someone's shelf, not a place. High over the crescent's
+        // centre, it is the one piece of branding the room carries —
+        // see DECISIONS.md 2026-07-29.
         titleAnchor.position = titlePosition
 
         let lines = ["Physics", "Playground"]
@@ -365,6 +395,18 @@ final class HubScene {
             titleAnchor.addChild(item.entity)
             cursor -= height + gap
         }
+
+        // A thin champagne rule under the lockup — the jeweller's line
+        // that makes the mark read as set type rather than floating
+        // words.
+        var ruleMaterial = UnlitMaterial(color: Self.titleRimColor)
+        ruleMaterial.blending = .transparent(opacity: 0.65)
+        let rule = ModelEntity(
+            mesh: .generateBox(width: 0.5, height: 0.004, depth: 0.004,
+                               cornerRadius: 0.002),
+            materials: [ruleMaterial])
+        rule.position = SIMD3(0, -blockHeight / 2 - 0.09, 0)
+        titleAnchor.addChild(rule)
 
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
@@ -511,11 +553,14 @@ final class HubScene {
         vignette.position = .zero
         pulser.addChild(vignette)
 
-        // The floating name beneath, always facing the user — the same
-        // 3-D bubble type as the title, tinted in the module's accent.
-        let name = Self.namePlate(module.title, accent: UIColor(module.accent))
+        // The floating name, always facing the user — the same 3-D
+        // bubble type as the title, tinted in the module's accent. It
+        // hangs just in front of the puck's edge, below the miniature,
+        // so it captions the pedestal rather than the physics.
+        let name = Self.namePlate(module.title, accent: UIColor(module.accent),
+                                  size: 0.030)
         let namePivot = Entity()
-        namePivot.position = [0, -0.145, 0]
+        namePivot.position = [0, -0.105, 0.11]
         namePivot.components.set(BillboardComponent())
         namePivot.addChild(name)
         pulser.addChild(namePivot)
@@ -544,8 +589,8 @@ final class HubScene {
     private static func progressRing(done: Int, total: Int,
                                      accent: UIColor) -> Entity {
         let ring = Entity()
-        let radius: Float = 0.165
-        let z: Float = -0.115
+        let radius: Float = 0.15
+        let z: Float = -0.10
         let gold = UIColor(red: 1.0, green: 0.84, blue: 0.25, alpha: 1)
         let complete = done == total
 
@@ -626,6 +671,11 @@ final class HubScene {
     /// not add any: the thing you are facing gets bigger, comes toward
     /// you, and sits in a pool of its own light.
     private static func focusGlow(accent: UIColor) -> Entity {
+        // A pool of the module's colour ON the puck beneath the
+        // miniature — the slab relights under the exhibit you face.
+        // (It used to be a billboarded halo floating behind the model;
+        // with real furniture underneath, light falling on a surface
+        // reads as light.)
         let glow = Entity()
         for (radius, opacity) in [(Float(0.085), Float(0.30)),
                                   (Float(0.135), Float(0.15)),
@@ -635,11 +685,9 @@ final class HubScene {
             let disc = ModelEntity(
                 mesh: .generateCylinder(height: 0.001, radius: radius),
                 materials: [material])
-            disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-            disc.position.z = -0.13
             glow.addChild(disc)
         }
-        glow.components.set(BillboardComponent())
+        glow.position = SIMD3(0, -GalleryLayout.exhibitLift + 0.006, 0)
         return glow
     }
 
@@ -658,15 +706,16 @@ final class HubScene {
             // Reduce Motion: the gallery holds still. Focus scaling
             // stays — it answers the user's own head, which is exactly
             // the motion Reduce Motion is not about.
-            let bob = stillness ? 0
-                : 0.012 * Float(sin(time * 0.8 + Double(index) * 2.1))
-            // The focused exhibit steps toward the user as it grows —
-            // the parallax is what sells it as an object rather than a
-            // picture that got bigger.
-            let approach = Self.focusedApproach * focus
+            // Breathe, not bob: ±8 mm on a slow desynced period. The
+            // exhibits stand on pedestals now, and furniture that
+            // wanders off its pedestal reads as broken.
+            let breathe = stillness ? 0
+                : 0.008 * Float(sin(time * 1.05 + Double(index) * 2.1))
+            // The focused exhibit lifts off its puck as it grows.
+            let lift = Self.focusedLift * focus
             let exhibit = exhibits[index]
             exhibit.anchor.position = exhibit.basePosition
-                + SIMD3(0, bob, approach)
+                + SIMD3(0, breathe + lift, 0)
 
             let resting = hasLookRay ? Self.unfocusedScale : 1
             let scale = resting + (Self.focusedScale - resting) * focus
@@ -703,8 +752,18 @@ final class HubScene {
         // The title floats and breathes, like a balloon on a string.
         let bob = stillness ? 0 : 0.02 * Float(sin(time * 0.6))
         titleAnchor.position = titlePosition + SIMD3(0, bob, 0)
-        let breathe = stillness ? 1 : 1 + 0.015 * Float(sin(time * 0.9))
-        titleAnchor.scale = SIMD3(repeating: breathe)
+        let titleBreathe = stillness ? 1 : 1 + 0.015 * Float(sin(time * 0.9))
+        titleAnchor.scale = SIMD3(repeating: titleBreathe)
+
+        // The hairlines shimmer slowly, each on its own phase — the
+        // terraces are lit, not painted.
+        if !stillness {
+            for (index, domain) in HubDomain.allCases.enumerated() {
+                guard let hairline = terraceHairlines[domain] else { continue }
+                let shimmer = 0.72 + 0.16 * Float(sin(time * 0.5 + Double(index) * 1.7))
+                hairline.components.set(OpacityComponent(opacity: shimmer))
+            }
+        }
     }
 
     private var hasLookRay = false
@@ -810,13 +869,21 @@ final class HubScene {
         guard let exhibit = exhibits.first(where: { $0.moduleID == id }) else { return }
         SoundPalette.play(.pop, on: exhibit.anchor, volume: 0.7)
         detailCard?.isEnabled = false
+        // The exhibit swells and rises off its pedestal as the module
+        // takes the stage; its terrace's hairline flares with it.
         exhibit.pulser.move(
             to: Transform(scale: SIMD3(repeating: 1.6),
-                          translation: SIMD3(0, 0, 0.22)),
+                          translation: SIMD3(0, 0.14, 0)),
             relativeTo: exhibit.anchor,
             duration: 0.42,
             timingFunction: .easeIn
         )
+        if let hairline = terraceHairlines[HubDomain.domain(for: id)] {
+            var flare = hairline.transform
+            flare.scale = SIMD3(1, 3.2, 3.2)
+            hairline.move(to: flare, relativeTo: hairline.parent,
+                          duration: 0.2, timingFunction: .easeOut)
+        }
     }
 }
 

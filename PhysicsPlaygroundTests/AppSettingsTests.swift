@@ -79,18 +79,14 @@ final class AppSettingsTests: XCTestCase {
     }
 
     func testResetOnboardingTipsRestartsTheSequence() {
-        UserDefaults.standard.set(true, forKey: "hasSeenWordmark")
         let settings = AppSettings()
         settings.coachStage = 3
-        let versionBefore = settings.layoutVersion
 
         settings.resetOnboardingTips()
 
         XCTAssertEqual(settings.coachStage, 0)
-        XCTAssertNil(UserDefaults.standard.object(forKey: "hasSeenWordmark"),
-                     "the wordmark plays again, as on first launch")
-        XCTAssertEqual(settings.layoutVersion, versionBefore + 1,
-                       "the hub rebuilds so the reset is visible immediately")
+        let relaunched = AppSettings()
+        XCTAssertEqual(relaunched.coachStage, 0, "the reset persists")
     }
 
     func testExperimentResetWipesProgressAndStreak() {

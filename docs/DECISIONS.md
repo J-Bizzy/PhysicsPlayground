@@ -14,6 +14,22 @@ A running log of consequential decisions — architectural, physical, or product
 **Consequences:** What this commits us to, and what it rules out.
 ```
 
+## 2026-07-29 — The Gallery replaces the constellation
+
+**Decision:** The hub's constellation scatter is replaced by the Gallery: a crescent of four floating graphite terraces, one per physics domain, each carrying its domain's live miniatures on pedestal pucks, with the domain's colour as a lit hairline along its front edge. Geometry is pure, tested math (`GalleryLayout`). The distance/height settings scale the crescent's plan and terrace heights; recenter and the head-ray focus mechanic carry over unchanged.
+
+**Context:** User direction: the homescreen read as "modules in their own bubbles" and should look like a flagship app. The constellation's authored scatter was designed but explained nothing — position carried no meaning a visitor could read. This reverses locked decision 1 ("constellation, not arc") and amends 3 ("no floating domain headers"): domains become physical structure, but there are still no text headers — colour lives in the hairline, the progress ring, and the focus panel chip.
+
+**Consequences:** Domain grouping is now load-bearing geometry: a new module lands on its domain's terrace automatically, a module in no domain extends its fallback slab (the slot-wrap overlap bug is structurally impossible), and a benched domain's terrace simply doesn't build. Focus expresses as a lift off the puck plus a pool of accent light on the pedestal — architecture sits *beneath* the physics, never around it, so locked decision 2 (shell-free exhibits) stands.
+
+## 2026-07-29 — The wordmark becomes persistent
+
+**Decision:** The "Physics / Playground" bubble wordmark hangs permanently over the Gallery's centre, with a champagne rule beneath it. The `hasSeenWordmark` one-shot flag is dead; the settings "Reset tips" now resets only the coach sequence.
+
+**Context:** User direction: the homescreen needs a title. The one-shot rule (locked decision 7) optimised for a calm room, but a gallery without a sign over the door reads as someone's shelf, not a place — and the calm-room concern is answered by the mark living high above the crescent rather than in it.
+
+**Consequences:** Reverses locked decision 7. Branding budget for the room is spent: nothing else persistent gets added on its account.
+
 ## 2026-07-29 — Electric Fields regains a window control panel
 
 **Decision:** `ModuleDescriptor` regains an *optional* `makeControls`, rendered by the shell beneath the window title bar, and Electric Fields is the first module to use it: a full labelled panel (add ±, polarity, magnitude, position, test charge, uniform fields, Gauss surface, display toggles). The spatial affordances — wells, bloom — stay, but are gated so they can never intercept a grab: the magnitude bead is interactive only when the bloom is deliberately open, its collider shrank to its visual size, and an anonymous pinch (the invisible scale plate) now falls back to the nearest charge within 12 cm of the hand.
