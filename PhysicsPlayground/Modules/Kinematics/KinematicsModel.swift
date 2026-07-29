@@ -13,11 +13,12 @@
 //    · the free-floating launcher — grab its body to move it anywhere,
 //      pinch-drag the bead to aim, Fire for repeatable, precise launches.
 //
-//  Flights bounce on the floor with each ball's real restitution, then
-//  roll briefly to rest. Time can be slowed or paused: physics steps in
+//  Flights bounce on the floor, the room's walls, and the ceiling with
+//  each ball's real restitution — always; a ball that leaves the room
+//  is a bug, not a setting — then roll briefly to rest. Time steps in
 //  simulated time (strobe dots stay equal-Δt in *simulated* time, so
-//  slow motion never lies about speed). Floating hoops score any ball
-//  that passes down through them.
+//  slow motion never lies about speed). The hoop/scoring machinery is
+//  dormant: retired from the surface 2026-07-29, kept in the model.
 //
 
 import Foundation
@@ -79,7 +80,7 @@ final class KinematicsModel {
         }
     }
 
-    var kind: ProjectileKind = .basketball
+    var kind: ProjectileKind = .golfBall
     /// The custom ball, editable live (smooth-sphere Cd, mid restitution).
     var customMass = 0.25
     var customDiameter = 0.10
@@ -101,15 +102,16 @@ final class KinematicsModel {
     var gravity = 9.81
     var airResistance = false
 
-    /// Whether flights bounce off the room's real walls (from ARKit
-    /// plane detection on device) or sail straight through them.
-    var respectRoomWalls = true
-    /// The current wall rectangles, fed from the shared room model —
-    /// always empty in the simulator unless the debug room is seeded.
-    var roomWalls: [RoomWalls.Wall] = []
-    /// The scanned room's box, for the containment clamp — the
-    /// guarantee that no ball ever ends a frame outside the room.
-    var roomBounds: RoomBox?
+    /// Walls are ALWAYS on — a ball that leaves the room is a bug, not
+    /// a setting. Before the real room is scanned (and always in the
+    /// simulator) these default to the generous unscanned box, so the
+    /// bounce works from the first throw; on device the shared room
+    /// model replaces them with the detected walls plus the scanned
+    /// boundary.
+    var roomWalls: [RoomWalls.Wall] = RoomWalls.box(of: .unscanned)
+    /// The room's box, for the containment clamp — the guarantee that
+    /// no ball ever ends a frame outside the room.
+    var roomBounds: RoomBox = .unscanned
 
     init() {
         // The welcome scene lives in reset() — and reset() only ran
@@ -216,7 +218,7 @@ final class KinematicsModel {
             drag: drag(for: projectile),
             restitution: projectile.restitution,
             maxBounces: 4,
-            walls: respectRoomWalls ? roomWalls : [],
+            walls: roomWalls,
             maxDuration: 12
         )
     }
@@ -597,7 +599,7 @@ final class KinematicsModel {
         }
 
         // Wall contact: the real room pushes back (when enabled).
-        if respectRoomWalls, !roomWalls.isEmpty,
+        if !roomWalls.isEmpty,
            let hit = RoomWalls.strike(
                previous: previous.position, current: flight.state.position,
                velocity: flight.state.velocity,
@@ -681,7 +683,7 @@ final class KinematicsModel {
         // had settled into a roll passed straight through the same
         // wall it had just bounced off, which read as the feature
         // simply giving up.
-        if respectRoomWalls, !roomWalls.isEmpty,
+        if !roomWalls.isEmpty,
            let hit = RoomWalls.strike(
                previous: previous, current: position,
                velocity: velocity,
@@ -709,7 +711,7 @@ final class KinematicsModel {
     /// scanned bounds with its velocity reflected. Belt and braces:
     /// the strike gives the honest bounce, this guarantees containment.
     private func contain(_ flight: inout Flight) {
-        guard respectRoomWalls, let box = roomBounds else { return }
+        let box = roomBounds
         let r = flight.projectile.diameter / 2
         var position = flight.state.position
         var velocity = flight.state.velocity
@@ -759,20 +761,18 @@ final class KinematicsModel {
         timeScale = 1.0
         isPaused = false
         throwBoost = 1.0
-        kind = .basketball
+        kind = .golfBall
         customMass = 0.25
         customDiameter = 0.10
         lastCatch = nil
         catchingEnabled = true
         aimDirection = Self.direction(elevationDegrees: 45, azimuthDegrees: 0)
 
-        // The welcome scene: two hoops to aim at and two balls in reach.
-        addRing()
-        addRing()
-        spawnBall()
-        spawnBall()
-        // And one shot already in the air, so the module is alive the
-        // instant it appears rather than waiting to be started.
+        // The welcome scene: one shot already in the air, from the
+        // launcher's own muzzle — every ball in this module is born at
+        // the barrel tip, never conjured mid-air. (Floating staged
+        // basketballs and pre-hung hoops used to open here; they read
+        // as things spawning out of nowhere.)
         fire()
     }
 

@@ -180,14 +180,16 @@ enum ExperimentCatalog {
         case "kinematics":
             let model = appModel.kinematicsModel
             return [
-                (Experiment(id: "kinematics.swish", title: "Swish",
-                            detail: "Put a projectile through a hoop.",
-                            step: "Grab a staged ball and throw it through a hoop, or aim the launcher and Fire."),
-                 { model.rings.reduce(0) { $0 + $1.score } >= 1 }),
-                (Experiment(id: "kinematics.streak", title: "Sharpshooter",
-                            detail: "Score five — moving hoops count double for style.",
-                            step: "Score four more. Turn on Hoops orbit in this window for a moving target."),
-                 { model.rings.reduce(0) { $0 + $1.score } >= 5 }),
+                (Experiment(id: "kinematics.range", title: "Range finder",
+                            detail: "Land a shot more than three metres from the launcher.",
+                            step: "Aim near 45° with the orange bead, then Fire — the range reads out where it lands."),
+                 { (model.lastFlight?.range ?? 0) > 3.0 }),
+                (Experiment(id: "kinematics.moonshot", title: "Moon shot",
+                            detail: "Watch the same launch hang in lunar gravity.",
+                            step: "Tap Moon in this window's World section, then Fire — the arc stretches six times as far."),
+                 { model.gravity < 2.0 && model.flights.contains {
+                     $0.status == .flying && !$0.wasThrown
+                 } }),
             ]
         case "waves":
             let model = appModel.wavesModel

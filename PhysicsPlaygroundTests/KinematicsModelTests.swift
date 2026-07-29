@@ -23,6 +23,12 @@ final class KinematicsModelTests: XCTestCase {
         let model = KinematicsModel()
         model.clearFlights()
         while !model.rings.isEmpty { model.removeLastRing() }
+        // Neutralise the always-on room: these tests reason about pure
+        // floor physics and exact trajectories. Wall behaviour has its
+        // own tests, which set their own walls and bounds.
+        model.roomWalls = []
+        model.roomBounds = RoomBox(center: SIMD3(0, 50, 0),
+                                   halfExtents: SIMD3(100, 50, 100))
         return model
     }
 
@@ -316,12 +322,10 @@ final class KinematicsModelTests: XCTestCase {
 
         model.reset()
 
-        // The module opens as a playground: hoops hung, balls staged,
-        // and one shot already in the air.
-        XCTAssertFalse(model.rings.isEmpty, "hoops are part of the opening scene")
-        XCTAssertFalse(model.flights.isEmpty, "balls are staged and one is flying")
-        XCTAssertTrue(model.flights.contains { $0.status == .staged },
-                      "at least one ball is within reach to grab")
+        // The opening scene: no hoops, no staged mid-air balls — one
+        // shot already flying, born at the launcher's muzzle.
+        XCTAssertTrue(model.rings.isEmpty, "hoops are retired from the opening scene")
+        XCTAssertEqual(model.flights.count, 1)
         XCTAssertTrue(model.flights.contains { $0.status == .flying },
                       "the module is alive the instant it appears")
         XCTAssertEqual(model.totalScore, 0)
@@ -336,7 +340,7 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(model.timeScale, 1.0)
         XCTAssertFalse(model.isPaused)
         XCTAssertEqual(model.throwBoost, 1.0)
-        XCTAssertEqual(model.kind, .basketball)
+        XCTAssertEqual(model.kind, .golfBall)
         XCTAssertEqual(model.launcherPosition, KinematicsModel.launcherHome)
         XCTAssertEqual(model.elevationDegrees, 45, accuracy: 1e-9)
     }

@@ -179,7 +179,17 @@ final class RoomModel {
         // asking first turns that into an ordinary early return.
         let authorization = await session.requestAuthorization(
             for: providers.flatMap { type(of: $0).requiredAuthorizations })
-        guard authorization.values.allSatisfy({ $0 == .allowed }) else { return }
+        // Run with whatever was GRANTED. This used to be all-or-nothing:
+        // one denied permission killed the entire sensing layer — no
+        // walls, no look ray, no hands — silently, which read as every
+        // device feature being broken at once.
+        let denied = Set(authorization.filter { $0.value != .allowed }.map(\.key))
+        providers = providers.filter { provider in
+            type(of: provider).requiredAuthorizations.allSatisfy {
+                !denied.contains($0)
+            }
+        }
+        guard !providers.isEmpty else { return }
 
         do {
             try await session.run(providers)
@@ -254,31 +264,7 @@ final class RoomModel {
     private func recomputeCollisionWalls() {
         var result = Array(wallsByAnchor.values)
         if hasScannedRoom {
-            let c = bounds.center
-            let h = bounds.halfExtents
-            result.append(contentsOf: [
-                RoomWalls.Wall(center: SIMD3(c.x + h.x, c.y, c.z),
-                               normal: SIMD3(-1, 0, 0),
-                               uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0),
-                               halfU: h.z, halfV: h.y),
-                RoomWalls.Wall(center: SIMD3(c.x - h.x, c.y, c.z),
-                               normal: SIMD3(1, 0, 0),
-                               uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0),
-                               halfU: h.z, halfV: h.y),
-                RoomWalls.Wall(center: SIMD3(c.x, c.y, c.z + h.z),
-                               normal: SIMD3(0, 0, -1),
-                               uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 1, 0),
-                               halfU: h.x, halfV: h.y),
-                RoomWalls.Wall(center: SIMD3(c.x, c.y, c.z - h.z),
-                               normal: SIMD3(0, 0, 1),
-                               uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 1, 0),
-                               halfU: h.x, halfV: h.y),
-                // The ceiling: throw hard enough and it comes back.
-                RoomWalls.Wall(center: SIMD3(c.x, c.y + h.y, c.z),
-                               normal: SIMD3(0, -1, 0),
-                               uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 0, 1),
-                               halfU: h.x, halfV: h.z),
-            ])
+            result.append(contentsOf: RoomWalls.box(of: bounds))
         }
         collisionWalls = result
     }

@@ -47,6 +47,27 @@ public enum RoomWalls {
         public var impactSpeed: Double
     }
 
+    /// The four vertical rectangles and the ceiling of an axis-aligned
+    /// room box — the walls every ball can count on even before (or
+    /// without) plane detection finding the real ones. The floor is the
+    /// caller's own contact law.
+    public static func box(of bounds: RoomBox) -> [Wall] {
+        let c = bounds.center
+        let h = bounds.halfExtents
+        return [
+            Wall(center: SIMD3(c.x + h.x, c.y, c.z), normal: SIMD3(-1, 0, 0),
+                 uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0), halfU: h.z, halfV: h.y),
+            Wall(center: SIMD3(c.x - h.x, c.y, c.z), normal: SIMD3(1, 0, 0),
+                 uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0), halfU: h.z, halfV: h.y),
+            Wall(center: SIMD3(c.x, c.y, c.z + h.z), normal: SIMD3(0, 0, -1),
+                 uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 1, 0), halfU: h.x, halfV: h.y),
+            Wall(center: SIMD3(c.x, c.y, c.z - h.z), normal: SIMD3(0, 0, 1),
+                 uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 1, 0), halfU: h.x, halfV: h.y),
+            Wall(center: SIMD3(c.x, c.y + h.y, c.z), normal: SIMD3(0, -1, 0),
+                 uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 0, 1), halfU: h.x, halfV: h.z),
+        ]
+    }
+
     /// Checks the step segment `previous → current` against every wall
     /// and returns the earliest strike, or nil if the ball misses them
     /// all. `radius` inflates each wall so contact happens at the ball's

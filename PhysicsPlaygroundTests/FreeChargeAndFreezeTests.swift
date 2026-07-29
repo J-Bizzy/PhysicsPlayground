@@ -103,8 +103,11 @@ final class FreeChargeAndFreezeTests: XCTestCase {
                               "frozen magnet \(index) must not move")
         }
 
-        // Re-enable: the same arrangement starts moving again.
+        // Re-enable with a second magnet in play (the module now opens
+        // on ONE, which feels no net force from itself): the pair
+        // starts moving again.
         model.dynamicsOn = true
+        model.addMagnet()
         let live = model.magnets.map(\.position)
         for _ in 0..<180 { model.step(dt: 1.0 / 60.0) }
         let moved = zip(model.magnets, live)

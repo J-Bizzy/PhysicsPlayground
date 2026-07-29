@@ -50,6 +50,8 @@ final class MagnetismRenderer {
 
     private let linesEntity = ModelEntity()
     private let lineGlowEntity = ModelEntity()
+    /// Direction cones riding the field loops, N→S outside the magnet.
+    private let arrowHeads: EntityPool<ModelEntity>
     private let lineMaterial = UnlitMaterial(color: MagnetismRenderer.lineColor)
     private let lineGlowMaterial: UnlitMaterial = {
         var m = UnlitMaterial(color: MagnetismRenderer.lineColor)
@@ -65,10 +67,19 @@ final class MagnetismRenderer {
     private nonisolated static let compassColumns = (x: 7, y: 5, z: 7)
 
     init() {
+        let headMesh = MeshResource.generateCone(height: 0.02, radius: 0.0078)
+        let headMaterial = UnlitMaterial(color: MagnetismRenderer.lineColor)
+        arrowHeads = EntityPool(budget: 300) { container in
+            let head = ModelEntity(mesh: headMesh, materials: [headMaterial])
+            container.addChild(head)
+            return head
+        }
+
         root.addChild(Lighting.keyLight())
         root.addChild(viewRoot)
         viewRoot.addChild(lineGlowEntity)
         viewRoot.addChild(linesEntity)
+        viewRoot.addChild(arrowHeads.root)
         viewRoot.addChild(compassRoot)
         buildCompassGrid()
 
@@ -428,22 +439,54 @@ final class MagnetismRenderer {
     private nonisolated struct LinesResult: Sendable {
         var core = TubeBuffers()
         var glow = TubeBuffers()
+        /// Sample points along the loops where arrowheads ride, with
+        /// the local line direction — B points N→S outside the magnet,
+        /// and the arrows finally SAY so.
+        var arrowPoints: [SIMD3<Double>] = []
+        var arrowDirections: [SIMD3<Double>] = []
     }
+
+    /// Arc-length spacing of the direction arrowheads riding each loop.
+    private nonisolated static let arrowSpacing = 0.26
+    /// No arrowheads this close to a magnet, where loops bunch tightly.
+    private nonisolated static let arrowExclusion = 0.14
 
     private nonisolated static func computeLines(_ job: LinesJob) -> LinesResult {
         var config = MagneticFieldLineTracer.Config()
         config.boundsCenter = MagnetismModel.regionCenter
-        // Denser, longer, and let each loop run far enough to close — the
-        // full curvy dipole pattern, not a few short arcs.
+        // Let each loop run far enough to close — the full curvy dipole
+        // pattern, not a few short arcs. The half-millimetre step is
+        // what makes the loops read as drawn curves instead of chained
+        // segments.
         config.boundsRadius = MagnetismModel.regionHalfExtent * 1.9
         config.seedsPerMagnet = 24
-        config.maxSteps = 520
-        config.stepSize = 0.011
-        let lines = MagneticFieldLineTracer.trace(magnets: job.magnets, config: config)
-            .map { $0.map(SIMD3<Float>.init) }
+        config.maxSteps = 950
+        config.stepSize = 0.006
+        let traced = MagneticFieldLineTracer.trace(magnets: job.magnets, config: config)
+        let lines = traced.map { $0.map(SIMD3<Float>.init) }
         var result = LinesResult()
         result.core = TubeMesh.buffers(lines: lines, radius: 0.0016)
         result.glow = TubeMesh.buffers(lines: lines, radius: 0.0044)
+
+        for line in traced {
+            var walked = 0.0
+            var nextAt = arrowSpacing / 2
+            for index in 1..<line.count {
+                let step = simd_distance(line[index], line[index - 1])
+                walked += step
+                if walked >= nextAt {
+                    let point = line[index]
+                    let nearMagnet = job.magnets.contains {
+                        simd_distance($0.position, point) < arrowExclusion
+                    }
+                    if !nearMagnet {
+                        result.arrowPoints.append(point)
+                        result.arrowDirections.append(line[index] - line[index - 1])
+                    }
+                    nextAt += arrowSpacing
+                }
+            }
+        }
         return result
     }
 
@@ -454,11 +497,36 @@ final class MagnetismRenderer {
         lineGlowEntity.model = TubeMesh.mesh(from: result.glow).map {
             ModelComponent(mesh: $0, materials: [lineGlowMaterial])
         }
+        syncArrowHeads(points: result.arrowPoints,
+                       directions: result.arrowDirections)
+    }
+
+    /// Re-aims the arrowhead pool, each cone rotated from its rest +y
+    /// onto the loop's local direction there — the same treatment the
+    /// electric field lines wear.
+    private func syncArrowHeads(points: [SIMD3<Double>], directions: [SIMD3<Double>]) {
+        for (index, slot) in arrowHeads.slots.enumerated() {
+            guard index < points.count, index < directions.count else {
+                slot.entity.isEnabled = false
+                continue
+            }
+            let direction = directions[index]
+            let length = simd_length(direction)
+            guard length > 1e-12 else {
+                slot.entity.isEnabled = false
+                continue
+            }
+            slot.entity.isEnabled = true
+            slot.entity.position = SIMD3<Float>(points[index])
+            slot.entity.orientation = simd_quatf(
+                from: [0, 1, 0], to: SIMD3<Float>(direction / length))
+        }
     }
 
     private func syncFieldLines(_ model: MagnetismModel) {
         linesEntity.isEnabled = model.showFieldLines
         lineGlowEntity.isEnabled = model.showFieldLines
+        arrowHeads.root.isEnabled = model.showFieldLines
         guard model.showFieldLines else { return }
         let sources = model.allSources
         guard sources != lastLineInputs else { return }

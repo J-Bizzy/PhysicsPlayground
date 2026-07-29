@@ -2,13 +2,13 @@
 //  KinematicsControlsPanel.swift
 //  Physics Playground — Kinematics module
 //
-//  The module's one-glance panel, kept deliberately SHORT: fire and
-//  play up top, then just two sections — the world and the hoops.
-//  A first pass shipped five sections (projectile picker with a custom
-//  ball, throw boost, wind direction, a separate Time card); the owner
-//  called it what it was — submenus populating the background. What
-//  remains is what a person actually reaches for: throw things, change
-//  the world, hang targets, slow time.
+//  The module's one-glance panel, pared to what a person reaches for:
+//  fire, clear, and the world. Every ball is born at the launcher's
+//  muzzle — the staged mid-air basketballs, the hoops and scoring, the
+//  throw boost, the custom ball, the wall toggle, and the time slider
+//  are all gone from this surface (2026-07-29): they read as clutter
+//  that had to be explained, not controls that asked to be used. Walls
+//  always bounce; the hoop machinery sleeps in the model.
 //
 
 import SwiftUI
@@ -20,7 +20,7 @@ struct KinematicsControlsPanel: View {
         @Bindable var model = model
 
         VStack(spacing: DesignTokens.Panel.sectionSpacing) {
-            PanelSection("Launch & play") {
+            PanelSection("Launch") {
                 HStack(spacing: 12) {
                     Button {
                         self.model.fire()
@@ -29,14 +29,6 @@ struct KinematicsControlsPanel: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.podProminent)
-
-                    Button {
-                        self.model.spawnBall()
-                    } label: {
-                        Label("Ball", systemImage: "circle.fill")
-                    }
-                    .buttonStyle(.podQuiet)
-                    .accessibilityLabel("Spawn a ball to throw")
 
                     Button {
                         self.model.clearFlights()
@@ -48,13 +40,7 @@ struct KinematicsControlsPanel: View {
                     .accessibilityLabel("Clear every ball")
                 }
 
-                if !self.model.rings.isEmpty {
-                    Text("Score \(self.model.totalScore) · streak \(self.model.streak) · best \(self.model.bestStreak)")
-                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-
-                Text("Grab any ball and THROW it — release speed comes from your hand. The launcher's ring aims and fires the repeatable shot.")
+                Text("Every ball leaves the launcher's muzzle — pinch the orange bead to aim, grab a landed ball and throw it again. Balls bounce off your floor, walls, and ceiling.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -94,40 +80,6 @@ struct KinematicsControlsPanel: View {
                     .accessibilityLabel("Projectile kind")
                     .accessibilityHint("Drag treats a golf ball and a table-tennis ball very differently")
                 }
-                Toggle("Bounce off my walls", isOn: $model.respectRoomWalls)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("Balls strike the room's real walls and ceiling — device only")
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Time: \(self.model.timeScale, specifier: "%.1f")×")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.timeScale, in: KinematicsModel.timeScaleRange)
-                        .accessibilityLabel("Time scale")
-                }
-            }
-
-            CollapsedSection("Hoops") {
-                HStack(spacing: 12) {
-                    Button {
-                        self.model.addRing()
-                    } label: {
-                        Label("Add hoop", systemImage: "plus.circle.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.podQuiet)
-                    .disabled(self.model.rings.count >= KinematicsModel.ringBudget)
-
-                    Button {
-                        self.model.removeLastRing()
-                    } label: {
-                        Label("Remove", systemImage: "minus.circle")
-                    }
-                    .buttonStyle(.podQuiet)
-                    .disabled(self.model.rings.isEmpty)
-                    .accessibilityLabel("Remove the last hoop")
-                }
-                Toggle("Hoops orbit", isOn: $model.hoopsOrbit)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("The hoops drift on slow loops — lead your shots")
             }
         }
     }
