@@ -11,9 +11,11 @@
 //
 //  In its place: a single bead. Pinch it and it unfolds into a ring of
 //  the labs themselves — live miniatures, the same running physics the
-//  home constellation shows, not icons of them — with pause and reset
-//  as the only two petals, because those are the only two controls you
-//  reach for without breaking off what you are doing. Pinch a lab and
+//  home constellation shows, not icons of them — with pause, reset, and
+//  settings as the only petals: the two controls you reach for without
+//  breaking off what you are doing, plus the one door to the app's
+//  preferences (the bead is the only interface that exists in every
+//  lab, so the door has to live on it). Pinch a lab and
 //  the room changes. Pinch the bead again and everything folds away.
 //
 //  The bead is the app's only permanent piece of interface.
@@ -54,6 +56,7 @@ final class Palette {
     var onSelect: ((String) -> Void)?
     var onPause: (() -> Void)?
     var onReset: (() -> Void)?
+    var onSettings: (() -> Void)?
 
     init(moduleIDs: [String], accents: [String: UIColor]) {
         buildBead()
@@ -92,8 +95,12 @@ final class Palette {
             slots.append((id, holder, built.animate))
         }
 
+        // The gear sits in the middle so pause and reset keep the spots
+        // hands have already learned. (This petal amends the "exactly two
+        // petals" decision — see DECISIONS.md 2026-07-29.)
         petals = [
             Self.makePetal(name: "pause", symbol: "pause.fill"),
+            Self.makePetal(name: "settings", symbol: "gearshape.fill"),
             Self.makePetal(name: "reset", symbol: "arrow.counterclockwise"),
         ]
         petals.forEach { root.addChild($0) }
@@ -154,8 +161,10 @@ final class Palette {
         for (index, petal) in petals.enumerated() {
             let delay = 0.5 + Float(index) * 0.08
             let own = max(0, min((openness - delay) / max(1 - delay, 0.01), 1))
-            let side: Float = index == 0 ? -1 : 1
-            petal.position = SIMD3(side * 0.085 * own, -0.135 * own, 0)
+            // Petals fan across a constant 0.17 m span below the bead —
+            // ±0.085 for two, an extra one in the middle for three.
+            let x = (Float(index) / Float(max(petals.count - 1, 1)) - 0.5) * 0.17
+            petal.position = SIMD3(x * own, -0.135 * own, 0)
             petal.scale = SIMD3(repeating: max(own, 0.001))
             petal.isEnabled = own > 0.02
         }
@@ -171,6 +180,7 @@ final class Palette {
         }
         guard isOpen else { return false }
         if name == "palette-pause" { onPause?(); isOpen = false; return true }
+        if name == "palette-settings" { onSettings?(); isOpen = false; return true }
         if name == "palette-reset" { onReset?(); isOpen = false; return true }
         if let slot = slots.first(where: { $0.holder.name == name }) {
             SoundPalette.play(.chime, on: slot.holder, volume: 0.6)
@@ -254,6 +264,7 @@ final class Palette {
 struct PaletteView: View {
     let module: ModuleDescriptor
     @Environment(AppModel.self) private var appModel
+    @Environment(\.openWindow) private var openWindow
     @State private var palette: Palette?
 
     var body: some View {
@@ -272,6 +283,7 @@ struct PaletteView: View {
             made.onSelect = { id in appModel.activeModuleID = id }
             made.onPause = { module.togglePause() }
             made.onReset = { module.reset() }
+            made.onSettings = { openWindow(id: SettingsView.windowID) }
             content.add(made.root)
             palette = made
             #if DEBUG

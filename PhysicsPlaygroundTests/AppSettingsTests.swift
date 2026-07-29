@@ -1,0 +1,115 @@
+//
+//  AppSettingsTests.swift
+//  PhysicsPlaygroundTests
+//
+//  The settings model: every preference survives a relaunch (a fresh
+//  AppSettings reads back what the last one wrote), the master volume
+//  actually reaches the sound engine, and the two reset actions clear
+//  exactly what they claim to.
+//
+
+import XCTest
+@testable import PhysicsPlayground
+
+@MainActor
+final class AppSettingsTests: XCTestCase {
+
+    private static let keys = [
+        "settings.reduceMotion", "settings.masterVolume",
+        "settings.ambientAudio", "settings.arcDistance",
+        "settings.arcHeight", "settings.coachStage",
+        "hasSeenWordmark",
+    ]
+
+    private func clearKeys() {
+        for key in Self.keys { UserDefaults.standard.removeObject(forKey: key) }
+    }
+
+    override func setUp() {
+        super.setUp()
+        clearKeys()
+    }
+
+    override func tearDown() {
+        clearKeys()
+        SoundPalette.masterVolume = 1
+        super.tearDown()
+    }
+
+    func testDefaultsOnFirstLaunch() {
+        let settings = AppSettings()
+        XCTAssertFalse(settings.reduceMotion)
+        XCTAssertEqual(settings.masterVolume, 1.0)
+        XCTAssertTrue(settings.ambientAudio)
+        XCTAssertEqual(settings.arcDistance, 2.0)
+        XCTAssertEqual(settings.arcHeight, 1.4)
+        XCTAssertEqual(settings.coachStage, 0)
+    }
+
+    func testEveryPreferenceSurvivesRelaunch() {
+        let settings = AppSettings()
+        settings.reduceMotion = true
+        settings.masterVolume = 0.4
+        settings.ambientAudio = false
+        settings.arcDistance = 2.6
+        settings.arcHeight = 1.1
+        settings.coachStage = 2
+
+        // A second instance is a relaunch: nothing but UserDefaults
+        // connects the two.
+        let relaunched = AppSettings()
+        XCTAssertTrue(relaunched.reduceMotion)
+        XCTAssertEqual(relaunched.masterVolume, 0.4)
+        XCTAssertFalse(relaunched.ambientAudio)
+        XCTAssertEqual(relaunched.arcDistance, 2.6)
+        XCTAssertEqual(relaunched.arcHeight, 1.1)
+        XCTAssertEqual(relaunched.coachStage, 2)
+    }
+
+    func testMasterVolumeReachesTheSoundEngine() {
+        let settings = AppSettings()
+        settings.masterVolume = 0.3
+        XCTAssertEqual(SoundPalette.masterVolume, 0.3,
+                       "the slider must reach the engine live, not on next hub visit")
+
+        // And a relaunch restores it without any surface's help.
+        SoundPalette.masterVolume = 1
+        _ = AppSettings()
+        XCTAssertEqual(SoundPalette.masterVolume, 0.3)
+    }
+
+    func testResetOnboardingTipsRestartsTheSequence() {
+        UserDefaults.standard.set(true, forKey: "hasSeenWordmark")
+        let settings = AppSettings()
+        settings.coachStage = 3
+        let versionBefore = settings.layoutVersion
+
+        settings.resetOnboardingTips()
+
+        XCTAssertEqual(settings.coachStage, 0)
+        XCTAssertNil(UserDefaults.standard.object(forKey: "hasSeenWordmark"),
+                     "the wordmark plays again, as on first launch")
+        XCTAssertEqual(settings.layoutVersion, versionBefore + 1,
+                       "the hub rebuilds so the reset is visible immediately")
+    }
+
+    func testExperimentResetWipesProgressAndStreak() {
+        UserDefaults.standard.removeObject(forKey: ExperimentProgress.key)
+        UserDefaults.standard.removeObject(forKey: "streak.count")
+        UserDefaults.standard.removeObject(forKey: "streak.lastDay")
+
+        let progress = ExperimentProgress()
+        progress.complete("test.reset")
+        XCTAssertFalse(progress.completed.isEmpty)
+        XCTAssertEqual(progress.streak, 1)
+
+        progress.resetAll()
+        XCTAssertTrue(progress.completed.isEmpty)
+        XCTAssertEqual(progress.streak, 0)
+
+        // A relaunch starts truly clean.
+        let relaunched = ExperimentProgress()
+        XCTAssertTrue(relaunched.completed.isEmpty)
+        XCTAssertEqual(relaunched.streak, 0)
+    }
+}

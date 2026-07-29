@@ -13,6 +13,7 @@ import SwiftUI
 struct MainWindowView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         content
@@ -28,6 +29,11 @@ struct MainWindowView: View {
                    !appModel.isImmersiveSpaceOpen {
                     let result = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
                     print("openModule debug hook: openImmersiveSpace -> \(result)")
+                }
+                // `-settingsOpen 1` opens the settings window at launch for
+                // CLI screenshots (no immersive space or bead pinch needed).
+                if UserDefaults.standard.bool(forKey: "settingsOpen") {
+                    openWindow(id: SettingsView.windowID)
                 }
                 // `-seedCircuits 1` drops a few parts (one wire aimed off-axis)
                 // so component visuals can be screenshot-checked from the CLI.

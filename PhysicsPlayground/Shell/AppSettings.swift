@@ -29,7 +29,10 @@ final class AppSettings {
 
     /// Scales every one-shot effect the app plays. 0 is silence.
     var masterVolume: Double {
-        didSet { UserDefaults.standard.set(masterVolume, forKey: "settings.masterVolume") }
+        didSet {
+            UserDefaults.standard.set(masterVolume, forKey: "settings.masterVolume")
+            SoundPalette.masterVolume = masterVolume
+        }
     }
 
     /// The quiet lab room tone under every module.
@@ -79,6 +82,16 @@ final class AppSettings {
         if coachStage == stage { coachStage = stage + 1 }
     }
 
+    /// Puts onboarding back to a first launch: the coach sequence
+    /// restarts and the wordmark plays once more. The wordmark's
+    /// one-shot flag lives outside this object (the hub owns the read),
+    /// so it is cleared by key here.
+    func resetOnboardingTips() {
+        coachStage = 0
+        UserDefaults.standard.removeObject(forKey: "hasSeenWordmark")
+        layoutVersion += 1
+    }
+
     init() {
         let defaults = UserDefaults.standard
         reduceMotion = defaults.bool(forKey: "settings.reduceMotion")
@@ -87,5 +100,9 @@ final class AppSettings {
         arcDistance = defaults.object(forKey: "settings.arcDistance") as? Double ?? 2.0
         arcHeight = defaults.object(forKey: "settings.arcHeight") as? Double ?? 1.4
         coachStage = defaults.integer(forKey: "settings.coachStage")
+        // didSet does not fire during init, so hand the restored volume to
+        // the sound engine here — otherwise a debug `-openModule` launch
+        // (which skips the hub) would play at full volume regardless.
+        SoundPalette.masterVolume = masterVolume
     }
 }

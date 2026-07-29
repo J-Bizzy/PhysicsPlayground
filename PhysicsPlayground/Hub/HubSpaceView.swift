@@ -201,7 +201,10 @@ final class HubScene {
     // something you read instead of something you are told.
     //
     // Positions are authored, not generated: a scatter that reads as
-    // designed needs someone to have decided where things go.
+    // designed needs someone to have decided where things go. One slot
+    // per module in ModuleCatalog.all — fewer, and constellationPoint's
+    // wrap parks two labs on the SAME spot (this shipped once: eight
+    // modules, seven slots, gravity lab inside kinematics).
     private static let constellation: [(azimuth: Float, height: Float, depth: Float)] = [
         (-38, 1.46, 1.95),
         ( -14, 1.08, 1.62),
@@ -210,6 +213,7 @@ final class HubScene {
         ( -30, 1.94, 2.70),
         (  30, 0.96, 2.35),
         (  -3, 1.32, 3.05),
+        (  14, 1.78, 3.10),
     ]
 
     /// Every miniature is normalised to this WORLD size, so a lab
