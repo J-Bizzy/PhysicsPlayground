@@ -123,6 +123,7 @@ final class MagnetismRenderer {
     }
 
     func tick(_ model: MagnetismModel, viewer: SIMD3<Double>? = nil) {
+        tickSounds(model)
         syncElectromagnet(model)
         syncMagnets(model)
         syncFieldLines(model)
@@ -283,6 +284,41 @@ final class MagnetismRenderer {
     var isCarryingCompass = false
 
     // MARK: Magnets
+
+    // MARK: Sound — the module's first voice
+    //
+    // A pop as a magnet is born, a thud as two snap into contact —
+    // the only silent module finally answers the hand.
+
+    private var knownMagnetIDs: Set<UUID> = []
+    private var contactPairs: Set<String> = []
+
+    private func tickSounds(_ model: MagnetismModel) {
+        let ids = Set(model.magnets.map(\.id))
+        for id in ids.subtracting(knownMagnetIDs) {
+            // Skip the opening scene: three pops at once is a fanfare
+            // nobody asked for.
+            if !knownMagnetIDs.isEmpty, let entity = magnetEntities[id] {
+                SoundPalette.play(.pop, on: entity, volume: 0.5)
+            }
+        }
+        knownMagnetIDs = ids
+
+        let contact = MagnetismModel.magnetLength * 0.98
+        var current: Set<String> = []
+        for (index, a) in model.magnets.enumerated() {
+            for b in model.magnets.dropFirst(index + 1) {
+                let key = [a.id.uuidString, b.id.uuidString].sorted().joined(separator: "-")
+                if simd_distance(a.position, b.position) < contact {
+                    current.insert(key)
+                    if !contactPairs.contains(key), let entity = magnetEntities[a.id] {
+                        SoundPalette.play(.thud, on: entity, volume: 0.45)
+                    }
+                }
+            }
+        }
+        contactPairs = current
+    }
 
     private func syncMagnets(_ model: MagnetismModel) {
         let live = Set(model.magnets.map(\.id))

@@ -30,6 +30,12 @@ enum KinematicsModule {
                         .environment(appModel.kinematicsModel)
                 )
             },
+            makeControls: {
+                AnyView(
+                    KinematicsControlsPanel()
+                        .environment(appModel.kinematicsModel)
+                )
+            },
             captureReadings: {
                 let model = appModel.kinematicsModel
                 var rows: [NotebookEntry.Reading] = [

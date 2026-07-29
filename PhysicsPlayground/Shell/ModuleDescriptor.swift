@@ -30,10 +30,6 @@ struct ModuleDescriptor: Identifiable {
     /// the room (default); .progressive lets the crown open into a full
     /// environment the module renders (Gravity Lab's starfield).
     var immersionStyle: ImmersionStyle = .mixed
-    /// True when the module's own pods already carry every control, so
-    /// the shell should not mount a Controls pod at all — anything else
-    /// would be a second place to do the same thing.
-    var podsCoverControls: Bool = false
     /// One sentence, shown once per module until dismissed.
     let firstRunHint: String
     /// How far the dimming shell should be closed when this module

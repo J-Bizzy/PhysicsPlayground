@@ -534,12 +534,17 @@ final class CircuitsModel {
         persistSoon()
     }
 
+    /// True when the part has at least one wire on it.
+    func isWired(id: UUID) -> Bool {
+        wires.contains {
+            $0.from.componentID == id || $0.to.componentID == id
+        }
+    }
+
     /// True when the selected part has at least one wire on it.
     var selectedIsWired: Bool {
         guard let selectedID else { return false }
-        return wires.contains {
-            $0.from.componentID == selectedID || $0.to.componentID == selectedID
-        }
+        return isWired(id: selectedID)
     }
 
     // MARK: Per-component edits — what the Bloom calls

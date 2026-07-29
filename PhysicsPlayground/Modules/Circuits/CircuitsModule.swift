@@ -30,6 +30,12 @@ enum CircuitsModule {
                         .environment(appModel.circuitsModel)
                 )
             },
+            makeControls: {
+                AnyView(
+                    CircuitsControlsPanel()
+                        .environment(appModel.circuitsModel)
+                )
+            },
             captureReadings: {
                 let model = appModel.circuitsModel
                 var rows: [NotebookEntry.Reading] = [

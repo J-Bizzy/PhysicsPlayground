@@ -20,7 +20,7 @@ enum WavesModule {
             blurb: "A wave field filling the space around you — float sources anywhere, flip one out of phase, and walk through the surfaces of silence.",
             icon: "water.waves",
             accent: DesignTokens.Palette.wavesAccent,
-            firstRunHint: "Pinch a teal source and float it anywhere — the whole field reorganizes live. Flip 'Invert phase' and a silence sheet appears between the sources.",
+            firstRunHint: "Pinch a teal source and float it anywhere — the whole field reorganizes live. Tap a source and its controls unfold: invert its phase and a silence sheet appears between the sources. Add more from this window.",
             // Opens part-dimmed: the wavefront rings and silence sheets are translucent and wash out.
             preferredDimming: 0.45,
             legend: legend,
@@ -29,6 +29,12 @@ enum WavesModule {
             makeScene: {
                 AnyView(
                     WavesSpaceView()
+                        .environment(appModel.wavesModel)
+                )
+            },
+            makeControls: {
+                AnyView(
+                    WavesControlsPanel()
                         .environment(appModel.wavesModel)
                 )
             },

@@ -202,6 +202,18 @@ struct CircuitsSpaceView: View {
                 model.toggleSwitch(id: uuid)
             })
         }
+        if part.failed {
+            // A blown bulb's most-wanted action, finally reachable.
+            petals.append(.init(name: "Replace", symbol: "arrow.triangle.2.circlepath",
+                                tint: UIColor(red: 0.95, green: 0.60, blue: 0.15, alpha: 1)) {
+                model.replaceFailed(id: uuid)
+            })
+        } else if model.isWired(id: uuid) {
+            petals.append(.init(name: "Detach", symbol: "scissors",
+                                tint: UIColor(white: 0.45, alpha: 1)) {
+                model.detachComponent(id: uuid)
+            })
+        }
         petals.append(.init(name: "Delete", symbol: "trash",
                             tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
             model.removeComponent(id: uuid)

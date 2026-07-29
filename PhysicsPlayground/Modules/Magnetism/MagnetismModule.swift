@@ -22,8 +22,7 @@ enum MagnetismModule {
             blurb: "Carry bar magnets around the room; their looping field reorganises live and they attract, repel, and snap into alignment.",
             icon: "cylinder.fill",
             accent: DesignTokens.Palette.magnetismAccent,
-            podsCoverControls: true,
-            firstRunHint: "Look at a magnet and pinch to carry it. Bring two close and watch — they pull together head-to-tail, push apart N-to-N, and swing to align. Flip a magnet's poles to switch attraction for repulsion.",
+            firstRunHint: "Pinch a magnet and carry it. Bring two close and watch — they pull together head-to-tail, push apart N-to-N, and swing to align. Tap a magnet and its controls unfold: flip its poles to switch attraction for repulsion.",
             // Opens part-dimmed: same as the electric field: the looping lines are the module.
             preferredDimming: 0.35,
             legend: legendItems,
@@ -31,6 +30,9 @@ enum MagnetismModule {
             togglePause: { appModel.magnetismModel.isPaused.toggle() },
             makeScene: {
                 AnyView(MagnetismSpaceView().environment(appModel.magnetismModel))
+            },
+            makeControls: {
+                AnyView(MagnetismControlsPanel().environment(appModel.magnetismModel))
             },
             captureReadings: { readings(appModel: appModel) },
             reset: { appModel.magnetismModel.reset() }

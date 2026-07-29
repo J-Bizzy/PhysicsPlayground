@@ -189,6 +189,15 @@ struct PendulumsSpaceView: View {
         bloom.retarget(
             uuid,
             petals: [
+                .init(name: "Mass", symbol: "scalemass",
+                      tint: UIColor(white: 0.45, alpha: 1)) {
+                    // Cycle light → medium → heavy → light. The period
+                    // doesn't change — which is the lesson.
+                    let masses = [0.5, 1.5, 3.0]
+                    let current = model.pendulums.first(where: { $0.id == uuid })?.mass ?? 1
+                    let next = masses.first(where: { $0 > current + 0.01 }) ?? masses[0]
+                    model.setMass(id: uuid, next)
+                },
                 .init(name: "Delete", symbol: "trash",
                       tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
                     model.removePendulum(id: uuid)

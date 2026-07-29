@@ -32,6 +32,12 @@ enum WindTunnelModule {
                         .environment(appModel.windTunnelModel)
                 )
             },
+            makeControls: {
+                AnyView(
+                    WindTunnelControlsPanel()
+                        .environment(appModel.windTunnelModel)
+                )
+            },
             captureReadings: {
                 let model = appModel.windTunnelModel
                 let probe = model.probeReadout

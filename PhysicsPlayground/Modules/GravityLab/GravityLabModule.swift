@@ -33,6 +33,12 @@ enum GravityLabModule {
                         .environment(appModel.gravityLabModel)
                 )
             },
+            makeControls: {
+                AnyView(
+                    GravityLabControlsPanel()
+                        .environment(appModel.gravityLabModel)
+                )
+            },
             captureReadings: {
                 let model = appModel.gravityLabModel
                 var rows: [NotebookEntry.Reading] = [

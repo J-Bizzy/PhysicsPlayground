@@ -30,6 +30,12 @@ enum PendulumsModule {
                         .environment(appModel.pendulumsModel)
                 )
             },
+            makeControls: {
+                AnyView(
+                    PendulumsControlsPanel()
+                        .environment(appModel.pendulumsModel)
+                )
+            },
             captureReadings: { readings(appModel: appModel) },
             reset: {
                 appModel.pendulumsModel.reset()
