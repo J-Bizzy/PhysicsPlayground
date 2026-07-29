@@ -23,7 +23,7 @@ enum ElectromagnetismModule {
             blurb: "Place charges, trace field lines and equipotential shells, and ride a test charge through Coulomb's law.",
             icon: "bolt.fill",
             accent: DesignTokens.Palette.electromagnetismAccent,
-            firstRunHint: "Grab a charge by hand and drag it anywhere — the field follows. Add, flip, and tune charges with the panel in this window; the charge with the white halo is the one the sliders edit.",
+            firstRunHint: "Grab a charge and drag it anywhere — the field follows. Tap a charge and its own controls unfold around it: pull the bead to change strength, petals flip or delete. Add charges from this window.",
             // Opens part-dimmed: field lines are thin glowing filaments — they need something to glow against.
             preferredDimming: 0.35,
             legend: legendItems,

@@ -2,17 +2,13 @@
 //  FieldControlsPanel.swift
 //  Physics Playground — Electromagnetism module
 //
-//  The module's flat control panel: THE way to add, tune, and remove
-//  things in this module. The rebuild once moved every control into
-//  gaze-revealed spatial affordances; they were undiscoverable and are
-//  gone — the scene keeps exactly two verbs (drag to move, tap to
-//  select) and everything else is a labelled control here.
-//
-//  The sliders always edit the *selected* charge — the one most
-//  recently added, tapped, or grabbed, marked with a white halo.
-//
-//  Largely restored from the pre-rebuild ChargeControlsView / FieldPods
-//  (774a621), rewired against the current model surface.
+//  The module's flat control panel, kept ONE GLANCE TALL: the always-
+//  visible card carries only the global actions (add, free, clear),
+//  and everything deeper — test charge, imposed fields, Gauss, the
+//  numbers — waits behind collapsed sections. Editing ONE charge never
+//  happens here at all: tap the charge in the field and its own ring
+//  of controls unfolds around it (strength bead, flip, delete). The
+//  window states the rule once and points at the object.
 //
 
 import PhysicsCore
@@ -25,22 +21,45 @@ struct FieldControlsPanel: View {
         @Bindable var model = model
 
         VStack(spacing: DesignTokens.Panel.sectionSpacing) {
+            // The only always-open card: make things, free things.
+            // Everything about ONE charge — strength, polarity, delete —
+            // lives on the charge itself: tap it and its ring unfolds.
             PanelSection("Charges") {
                 chargeControls(model: $model)
             }
-            PanelSection("Test charge") {
+            collapsed("Test charge") {
                 probeControls(model: $model)
             }
-            PanelSection("Uniform fields") {
+            collapsed("Uniform fields") {
                 uniformFieldControls(model: $model)
             }
-            PanelSection("Display") {
+            collapsed("Display & Gauss's law") {
                 displayToggles(model: $model)
                 GaussSurfaceControls()
             }
-            PanelSection {
+            collapsed("Numbers") {
                 PhysicsStatsView()
             }
+        }
+    }
+
+    /// A card that shows only its header until opened — the panel
+    /// stays one glance tall, and depth is there when asked for.
+    private func collapsed(_ title: String,
+                           @ViewBuilder content: @escaping () -> some View) -> some View {
+        PanelSection {
+            DisclosureGroup {
+                VStack(alignment: .leading,
+                       spacing: DesignTokens.Panel.rowSpacing) {
+                    content()
+                }
+                .padding(.top, 10)
+            } label: {
+                Text(title)
+                    .font(DesignTokens.TypeScale.sectionHeader)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            .tint(.secondary)
         }
     }
 
@@ -48,8 +67,6 @@ struct FieldControlsPanel: View {
 
     @ViewBuilder
     private func chargeControls(model: Bindable<FieldModel>) -> some View {
-        let hasSelection = self.model.selectedChargeID != nil
-
         HStack(spacing: 12) {
             Button {
                 self.model.addCharge(positive: true)
@@ -68,59 +85,25 @@ struct FieldControlsPanel: View {
             }
             .buttonStyle(.podProminent(DesignTokens.Palette.negative))
             .accessibilityLabel("Add negative charge")
-        }
 
-        // Sign and magnitude together, because they are one quantity:
-        // the charge is q, and "+ 1.0 µC" is a single reading.
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 10) {
-                Text("Strength: \(self.model.selectedMagnitudeMicroCoulombs, specifier: "%.1f") µC")
-                    .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                Picker("Polarity", selection: model.selectedIsPositive) {
-                    Text("+").tag(true)
-                    Text("−").tag(false)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 96)
-                .disabled(!hasSelection)
-                .accessibilityLabel("Charge polarity")
+            Button(role: .destructive) {
+                self.model.removeAllCharges()
+            } label: {
+                Label("Clear", systemImage: "trash.slash")
             }
-            Slider(value: model.selectedMagnitudeMicroCoulombs,
-                   in: FieldModel.magnitudeRange, step: 0.1)
-                .disabled(!hasSelection)
-                .accessibilityLabel("Charge strength")
-                .accessibilityValue("\(self.model.selectedMagnitudeMicroCoulombs, specifier: "%.1f") microcoulombs")
+            .buttonStyle(.podQuiet)
+            .disabled(self.model.charges.isEmpty)
+            .accessibilityLabel("Remove all charges")
         }
 
         Toggle("Charges respond to forces", isOn: model.chargesRespond)
             .font(DesignTokens.TypeScale.control)
             .accessibilityHint("Free the charges: opposites drift together, likes push apart. Off, they stay exactly where you put them.")
 
-        HStack(spacing: 12) {
-            Button(role: .destructive) {
-                self.model.removeSelectedCharge()
-            } label: {
-                // Named, not just a glyph. "trash" and "trash.slash"
-                // side by side are indistinguishable at arm's length,
-                // and one of them clears the whole room.
-                Label("Remove", systemImage: "trash")
-                    .frame(maxWidth: .infinity)
-            }
-            .disabled(!hasSelection)
-            .accessibilityLabel("Remove selected charge")
-
-            Button(role: .destructive) {
-                self.model.removeAllCharges()
-            } label: {
-                Label("Clear all", systemImage: "trash.slash")
-                    .frame(maxWidth: .infinity)
-            }
-            .disabled(self.model.charges.isEmpty)
-            .accessibilityLabel("Remove all charges")
-        }
-        .buttonStyle(.podQuiet)
+        Text("Tap a charge in the field for its own controls — pull the bead to change strength, petals flip or delete it.")
+            .font(DesignTokens.TypeScale.footnote)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
 
         positionSliders(model: model)
 
@@ -133,7 +116,7 @@ struct FieldControlsPanel: View {
         let count = model.charges.count
         guard count > 0 else { return "No charges — add one to see a field." }
         let selected = model.selectedCharge.map {
-            "editing the \($0.isPositive ? "red" : "blue") one with the halo"
+            "the halo marks the \($0.isPositive ? "red" : "blue") one you tapped"
         }
         return "\(count) charge\(count == 1 ? "" : "s") in the field\(selected.map { " — \($0)" } ?? "")."
     }
