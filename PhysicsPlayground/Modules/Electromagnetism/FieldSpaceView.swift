@@ -86,15 +86,6 @@ struct FieldSpaceView: View {
                let id = model.selectedChargeID {
                 ring.openID = id
             }
-            // `-emFlip 1` flips the selected charge 3 s in, so the
-            // flip's visual aftermath can be screenshot from the CLI.
-            if UserDefaults.standard.bool(forKey: "emFlip"),
-               let id = model.selectedChargeID {
-                Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(3))
-                    model.flipCharge(id: id)
-                }
-            }
             #endif
             self.renderer = renderer
         }
@@ -102,7 +93,7 @@ struct FieldSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
-                    // Petals first — a tap on Flip or Delete is theirs.
+                    // Petals first — a tap on Delete is theirs.
                     if bloom.handleTap(value.entity) { return }
                     // A tap on a charge selects it and toggles its
                     // control ring open; a tap on anything else folds
@@ -179,10 +170,6 @@ struct FieldSpaceView: View {
         bloom.retarget(
             openID,
             petals: [
-                .init(name: "Flip polarity", symbol: "plusminus",
-                      tint: UIColor(white: 0.45, alpha: 1)) {
-                    model.flipCharge(id: openID)
-                },
                 .init(name: "Delete", symbol: "trash",
                       tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
                     model.removeCharge(id: openID)

@@ -7,8 +7,9 @@
 //  and everything deeper — test charge, imposed fields, Gauss, the
 //  numbers — waits behind collapsed sections. Editing ONE charge never
 //  happens here at all: tap the charge in the field and its own ring
-//  of controls unfolds around it (strength bead, flip, delete). The
-//  window states the rule once and points at the object.
+//  of controls unfolds around it (strength bead, delete). The window
+//  states the rule once and points at the object. A charge's polarity
+//  is fixed at birth — add the sign you want.
 //
 
 import PhysicsCore
@@ -100,7 +101,7 @@ struct FieldControlsPanel: View {
             .font(DesignTokens.TypeScale.control)
             .accessibilityHint("Free the charges: opposites drift together, likes push apart. Off, they stay exactly where you put them.")
 
-        Text("Tap a charge in the field for its own controls — pull the bead to change strength, petals flip or delete it.")
+        Text("Tap a charge in the field for its own controls — pull the bead to change strength, or the petal to delete it.")
             .font(DesignTokens.TypeScale.footnote)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)

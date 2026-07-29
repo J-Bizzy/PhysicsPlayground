@@ -547,12 +547,6 @@ final class FieldModel {
         if selectedChargeID == id { selectedChargeID = charges.last?.id }
     }
 
-    /// Turns a positive charge negative and vice versa, magnitude kept.
-    func flipCharge(id: UUID) {
-        guard let index = charges.firstIndex(where: { $0.id == id }) else { return }
-        charges[index].charge = -charges[index].charge
-    }
-
     /// Sets one charge's magnitude in microcoulombs, sign preserved.
     func setMagnitude(id: UUID, microCoulombs: Double) {
         guard let index = charges.firstIndex(where: { $0.id == id }) else { return }
@@ -699,14 +693,6 @@ final class FieldModel {
             // adjustable path does not.
             guard let id = selectedChargeID else { return }
             setMagnitude(id: id, microCoulombs: newValue)
-        }
-    }
-
-    var selectedIsPositive: Bool {
-        get { selectedCharge?.isPositive ?? true }
-        set {
-            guard let index = charges.firstIndex(where: { $0.id == selectedChargeID }) else { return }
-            charges[index].charge = (newValue ? 1 : -1) * abs(charges[index].charge)
         }
     }
 

@@ -69,16 +69,16 @@ final class FieldModelTests: XCTestCase {
     func testSelectedBindingsEditOnlyTheSelectedCharge() {
         let model = FieldModel()
         let firstID = model.charges[0].id
-        model.addCharge(positive: true)  // a new charge, now selected
+        model.addCharge(positive: false)  // a new charge, now selected
         let editedID = model.selectedChargeID
 
         model.selectedMagnitudeMicroCoulombs = 3.0
-        model.selectedIsPositive = false
 
         let first = model.charges.first { $0.id == firstID }!
         XCTAssertEqual(first.charge, FieldModel.defaultMagnitude, "unselected charge must be untouched")
         let edited = model.charges.first { $0.id == editedID }!
-        XCTAssertEqual(edited.charge, -3.0e-6, accuracy: 1e-12)
+        XCTAssertEqual(edited.charge, -3.0e-6, accuracy: 1e-12,
+                       "magnitude set, sign kept from birth")
     }
 
     func testMoveChargeClampsAboveFloor() {
