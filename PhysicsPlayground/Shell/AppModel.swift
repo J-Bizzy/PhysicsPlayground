@@ -43,6 +43,20 @@ final class AppModel {
         }
     }
 
+    /// Writes the active module's live readings into the notebook —
+    /// the moment's numbers, exactly as the physics reported them.
+    /// Returns false when no module is open or it has nothing to say.
+    @discardableResult
+    func captureNotebookEntry() -> Bool {
+        guard let module = activeModule else { return false }
+        let readings = module.captureReadings()
+        guard !readings.isEmpty else { return false }
+        let count = notebook.entries(forModule: module.id).count
+        notebook.record(moduleID: module.id, moduleTitle: module.title,
+                        title: "Observation \(count + 1)", readings: readings)
+        return true
+    }
+
     /// Studio Mode: full immersion that shuts the room out and stages the
     /// physics in a dark gallery (StudioEnvironmentView). Overrides every
     /// module's own immersion preference until switched off.

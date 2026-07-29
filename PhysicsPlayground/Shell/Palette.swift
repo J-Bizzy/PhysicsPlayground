@@ -57,6 +57,7 @@ final class Palette {
     var onPause: (() -> Void)?
     var onReset: (() -> Void)?
     var onSettings: (() -> Void)?
+    var onCapture: (() -> Void)?
 
     init(moduleIDs: [String], accents: [String: UIColor]) {
         buildBead()
@@ -95,11 +96,13 @@ final class Palette {
             slots.append((id, holder, built.animate))
         }
 
-        // The gear sits in the middle so pause and reset keep the spots
-        // hands have already learned. (This petal amends the "exactly two
-        // petals" decision — see DECISIONS.md 2026-07-29.)
+        // Pause and reset keep the outer spots hands have already
+        // learned; capture and settings sit between them. (Each petal
+        // past the original two amends the "exactly two petals"
+        // decision — see DECISIONS.md 2026-07-29.)
         petals = [
             Self.makePetal(name: "pause", symbol: "pause.fill"),
+            Self.makePetal(name: "capture", symbol: "square.and.pencil"),
             Self.makePetal(name: "settings", symbol: "gearshape.fill"),
             Self.makePetal(name: "reset", symbol: "arrow.counterclockwise"),
         ]
@@ -161,9 +164,10 @@ final class Palette {
         for (index, petal) in petals.enumerated() {
             let delay = 0.5 + Float(index) * 0.08
             let own = max(0, min((openness - delay) / max(1 - delay, 0.01), 1))
-            // Petals fan across a constant 0.17 m span below the bead —
-            // ±0.085 for two, an extra one in the middle for three.
-            let x = (Float(index) / Float(max(petals.count - 1, 1)) - 0.5) * 0.17
+            // Petals fan across a constant 0.22 m span below the bead —
+            // widened from 0.17 when the fourth petal arrived, keeping
+            // clear air between neighbouring discs.
+            let x = (Float(index) / Float(max(petals.count - 1, 1)) - 0.5) * 0.22
             petal.position = SIMD3(x * own, -0.135 * own, 0)
             petal.scale = SIMD3(repeating: max(own, 0.001))
             petal.isEnabled = own > 0.02
@@ -180,6 +184,14 @@ final class Palette {
         }
         guard isOpen else { return false }
         if name == "palette-pause" { onPause?(); isOpen = false; return true }
+        if name == "palette-capture" {
+            // Capture stays OPEN: writing down a run of moments is one
+            // errand, and refolding after each note would make three
+            // captures cost three unfoldings.
+            onCapture?()
+            SoundPalette.play(.chime, on: bead, volume: 0.5)
+            return true
+        }
         if name == "palette-settings" { onSettings?(); isOpen = false; return true }
         if name == "palette-reset" { onReset?(); isOpen = false; return true }
         if let slot = slots.first(where: { $0.holder.name == name }) {
@@ -284,6 +296,7 @@ struct PaletteView: View {
             made.onPause = { module.togglePause() }
             made.onReset = { module.reset() }
             made.onSettings = { openWindow(id: SettingsView.windowID) }
+            made.onCapture = { appModel.captureNotebookEntry() }
             content.add(made.root)
             palette = made
             #if DEBUG

@@ -44,6 +44,14 @@ struct PhysicsPlaygroundApp: App {
         .defaultSize(width: 460, height: 900)
         .windowResizability(.contentSize)
 
+        // The Lab Notebook: same single-instance pattern as Settings.
+        WindowGroup(id: NotebookView.windowID) {
+            NotebookView()
+                .environment(appModel)
+        }
+        .defaultSize(width: 480, height: 760)
+        .windowResizability(.contentSize)
+
         ImmersiveSpace(id: PlaygroundSpaceView.spaceID) {
             PlaygroundSpaceView()
                 .environment(appModel)

@@ -19,6 +19,7 @@ struct ModuleHostView: View {
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @Environment(\.openWindow) private var openWindow
     @State private var confirmingReset = false
 
     var body: some View {
@@ -68,9 +69,15 @@ struct ModuleHostView: View {
 
                 Spacer(minLength: 12)
 
-                // Right: modes. (Pause, pods and reset live on the
-                // four-bead cluster at the user's feet — the frequent-use
-                // controls stay on the buttons built for frequent use.)
+                // Right: modes.
+                Button {
+                    openWindow(id: NotebookView.windowID)
+                } label: {
+                    Image(systemName: "book.closed")
+                }
+                .accessibilityLabel("Lab Notebook")
+                .accessibilityHint("Your recorded observations — capture, read, export")
+
                 Button {
                     appModel.labPlacement.isPlacing.toggle()
                 } label: {
