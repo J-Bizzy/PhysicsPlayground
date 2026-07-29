@@ -270,6 +270,7 @@ final class FieldRenderer {
         room: RoomBox = .unscanned
     ) {
         // Cheap path — runs every render.
+        easeLineFade()
         syncChargeEntities(charges, selectedID: selectedID)
         syncProbeEntity(probe, isPositive: probeIsPositive)
         syncPlates(on: capacitorOn, center: capacitorCenter, separation: plateSeparation)
@@ -547,8 +548,28 @@ final class FieldRenderer {
         syncArrowHeads(points: result.arrowPoints, directions: result.arrowVectors)
         // Fresh geometry is anchored to its own charge layout; re-derive
         // the warp so there's no pop when it lands mid-drag.
+        // A polarity flip swaps the whole pattern in one frame — a
+        // dipole's closed loops become a like-charge starburst, which
+        // is correct physics but reads as a glitch when it SNAPS.
+        // Detect the sign change and let the new pattern fade in.
+        let signsChanged = result.sourceCharges.count == appliedCharges.count
+            && zip(result.sourceCharges, appliedCharges).contains {
+                ($0.charge >= 0) != ($1.charge >= 0)
+            }
+        if signsChanged { lineFade = 0.1 }
         appliedCharges = result.sourceCharges
         if let model { syncFieldFlowWarp(model.charges) }
+    }
+
+    /// 1 = fully shown. Dropped on a polarity flip, eased back every
+    /// frame — the re-traced field blooms in instead of snapping.
+    private var lineFade: Float = 1
+
+    private func easeLineFade() {
+        guard lineFade < 1 else { return }
+        lineFade += (1 - lineFade) * 0.10
+        if lineFade > 0.995 { lineFade = 1 }
+        fieldFlowRoot.components.set(OpacityComponent(opacity: lineFade))
     }
 
     // MARK: Charges

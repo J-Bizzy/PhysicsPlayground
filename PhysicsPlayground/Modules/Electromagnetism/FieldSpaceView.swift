@@ -86,6 +86,15 @@ struct FieldSpaceView: View {
                let id = model.selectedChargeID {
                 ring.openID = id
             }
+            // `-emFlip 1` flips the selected charge 3 s in, so the
+            // flip's visual aftermath can be screenshot from the CLI.
+            if UserDefaults.standard.bool(forKey: "emFlip"),
+               let id = model.selectedChargeID {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(3))
+                    model.flipCharge(id: id)
+                }
+            }
             #endif
             self.renderer = renderer
         }

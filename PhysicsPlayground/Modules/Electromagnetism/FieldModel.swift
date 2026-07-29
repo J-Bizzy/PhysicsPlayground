@@ -710,13 +710,4 @@ final class FieldModel {
         }
     }
 
-    /// Offset of the selected charge from the fixed home center, for the
-    /// fallback position sliders.
-    var selectedOffset: SIMD3<Double> {
-        get { (selectedCharge?.position ?? Self.regionCenter) - Self.regionCenter }
-        set {
-            guard let id = selectedChargeID else { return }
-            moveCharge(id: id, to: Self.regionCenter + newValue)
-        }
-    }
 }

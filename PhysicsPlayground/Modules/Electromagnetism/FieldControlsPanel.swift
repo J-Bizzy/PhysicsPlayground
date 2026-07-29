@@ -105,8 +105,6 @@ struct FieldControlsPanel: View {
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
-        positionSliders(model: model)
-
         Text(statusLine)
             .font(DesignTokens.TypeScale.footnote)
             .foregroundStyle(.secondary)
@@ -119,33 +117,6 @@ struct FieldControlsPanel: View {
             "the halo marks the \($0.isPositive ? "red" : "blue") one you tapped"
         }
         return "\(count) charge\(count == 1 ? "" : "s") in the field\(selected.map { " — \($0)" } ?? "")."
-    }
-
-    /// The precise path — also the accessibility path for moving a
-    /// charge without a hand-drag.
-    private func positionSliders(model: Bindable<FieldModel>) -> some View {
-        let half = FieldModel.regionExtent / 2
-        return DisclosureGroup("Position (or just drag the charge)") {
-            VStack(spacing: DesignTokens.Panel.rowSpacing) {
-                labeledSlider("Left / Right", value: model.selectedOffset.x, range: -half...half)
-                labeledSlider("Down / Up", value: model.selectedOffset.y, range: -half...half)
-                labeledSlider("Far / Near", value: model.selectedOffset.z, range: -half...half)
-            }
-            .padding(.top, 8)
-            .disabled(self.model.selectedChargeID == nil)
-        }
-        .font(DesignTokens.TypeScale.control)
-    }
-
-    private func labeledSlider(_ label: String, value: Binding<Double>,
-                               range: ClosedRange<Double>) -> some View {
-        HStack {
-            Text(label)
-                .frame(width: 110, alignment: .leading)
-                .font(DesignTokens.TypeScale.label)
-            Slider(value: value, in: range)
-                .accessibilityLabel(label)
-        }
     }
 
     // MARK: Test charge
