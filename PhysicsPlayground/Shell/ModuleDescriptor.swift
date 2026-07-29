@@ -45,6 +45,14 @@ struct ModuleDescriptor: Identifiable {
     let isPaused: () -> Bool
     let togglePause: () -> Void
     let makeScene: () -> AnyView
+    /// Optional flat control panel, rendered by the shell in the module
+    /// window beneath the title bar. Nil means the module's spatial
+    /// affordances carry every control on their own. A module supplies
+    /// this when some of its controls need to be *discoverable* — a
+    /// panel of labelled buttons and sliders is also the simulator and
+    /// accessibility path, where gaze-revealed spatial controls barely
+    /// exist.
+    var makeControls: (() -> AnyView)? = nil
     /// The readings the notebook writes down when the user captures a
     /// moment in this module. Read live from the module's model, so a
     /// captured row is exactly what the physics said at that instant.

@@ -23,7 +23,7 @@ enum ElectromagnetismModule {
             blurb: "Place charges, trace field lines and equipotential shells, and ride a test charge through Coulomb's law.",
             icon: "bolt.fill",
             accent: DesignTokens.Palette.electromagnetismAccent,
-            firstRunHint: "Look at a charge and pinch to grab it, then drag it anywhere — the field follows. The charge with the white halo is the one the sliders edit.",
+            firstRunHint: "Grab a charge by hand and drag it anywhere — the field follows. Add, flip, and tune charges with the panel in this window; the charge with the white halo is the one the sliders edit.",
             // Opens part-dimmed: field lines are thin glowing filaments — they need something to glow against.
             preferredDimming: 0.35,
             legend: legendItems,
@@ -32,6 +32,12 @@ enum ElectromagnetismModule {
             makeScene: {
                 AnyView(
                     FieldSpaceView()
+                        .environment(appModel.electromagnetismModel)
+                )
+            },
+            makeControls: {
+                AnyView(
+                    FieldControlsPanel()
                         .environment(appModel.electromagnetismModel)
                 )
             },

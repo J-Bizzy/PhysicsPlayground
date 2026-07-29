@@ -2,12 +2,11 @@
 //  ModuleHostView.swift
 //  Physics Playground — Shell
 //
-//  The module's window is no longer a control panel — it is a floating
-//  TITLE BAR: the module's name in the middle, navigation on the left
-//  (back to the catalog, jump to any module), modes on the right
-//  (Studio, Reset). Everything else — controls, experiments, legend —
-//  lives on the pods surrounding the user (ShellPodsView plus each
-//  module's own pods).
+//  The module's window is a floating TITLE BAR — the module's name in
+//  the middle, navigation on the left (back to the catalog, jump to any
+//  module), modes on the right (Studio, Reset) — plus an optional flat
+//  control panel beneath it for modules that opt in via makeControls.
+//  Modules whose spatial affordances carry everything show the bare bar.
 //
 //  When the immersive space is closed the pods don't exist, so the bar
 //  grows a "Show in room" button; the space is where the module lives.
@@ -142,6 +141,14 @@ struct ModuleHostView: View {
                 }
                 .buttonStyle(.podProminent(module.accent))
                 .accessibilityHint("Places the simulation and its control pods in your room")
+            }
+
+            if let makeControls = module.makeControls {
+                ScrollView {
+                    makeControls()
+                        .padding(.top, 2)
+                }
+                .frame(maxHeight: 480)
             }
         }
         .padding(.horizontal, 18)

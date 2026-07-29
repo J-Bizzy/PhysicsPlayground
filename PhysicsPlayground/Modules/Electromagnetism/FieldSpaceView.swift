@@ -137,7 +137,17 @@ struct FieldSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
-                    _ = bloom.handleTap(value.entity)
+                    if bloom.handleTap(value.entity) { return }
+                    // A tap on a charge selects it — the click path in
+                    // the simulator, and it aims the window panel's
+                    // sliders at what you touched.
+                    for name in Self.ancestorNames(of: value.entity) {
+                        if let id = UUID(uuidString: name),
+                           model.charges.contains(where: { $0.id == id }) {
+                            model.select(id: id)
+                            return
+                        }
+                    }
                 }
         )
         .simultaneousGesture(
@@ -238,9 +248,8 @@ struct FieldSpaceView: View {
 
     /// Resolves what was pinched and anchors a relative-drag session.
     private func beginDrag(entity: Entity, hand: SIMD3<Double>) -> RelativeDrag? {
-        var current: Entity? = entity
-        while let candidate = current {
-            let name = candidate.name
+        let names = Self.ancestorNames(of: entity)
+        for name in names {
             if name == "plate-0" || name == "plate-1" {
                 let index = name == "plate-0" ? 0 : 1
                 let offset = (index == 0 ? -1.0 : 1.0) * model.plateSeparation / 2
@@ -257,14 +266,49 @@ struct FieldSpaceView: View {
                 model.holdProbe(at: target)
                 return RelativeDrag(name: name, target: target, hand: hand)
             }
-            if let id = UUID(uuidString: name),
-               let charge = model.charges.first(where: { $0.id == id }) {
-                model.select(id: id)
-                return RelativeDrag(name: name, target: charge.position, hand: hand)
-            }
-            current = candidate.parent
+        }
+        if let id = Self.resolveCharge(
+                names: names, hand: hand,
+                charges: model.charges.map { ($0.id, $0.position) }),
+           let charge = model.charges.first(where: { $0.id == id }) {
+            model.select(id: id)
+            return RelativeDrag(name: id.uuidString, target: charge.position, hand: hand)
         }
         return nil
+    }
+
+    /// Names of the entity and its ancestors, nearest first.
+    private static func ancestorNames(of entity: Entity) -> [String] {
+        var names: [String] = []
+        var current: Entity? = entity
+        while let candidate = current {
+            names.append(candidate.name)
+            current = candidate.parent
+        }
+        return names
+    }
+
+    /// Resolves a pinch to a charge. An ancestor named with a charge's
+    /// UUID wins outright; failing that, the nearest charge within
+    /// `fallbackRadius` of the hand. The fallback exists because the
+    /// invisible two-hand scale plate spans the whole field region — a
+    /// pinch that lands on it names no charge, but the user's hand is
+    /// ON the charge they mean to grab, and a pinch that does nothing
+    /// reads as "I can't move them."
+    static func resolveCharge(names: [String], hand: SIMD3<Double>,
+                              charges: [(id: UUID, position: SIMD3<Double>)],
+                              fallbackRadius: Double = 0.12) -> UUID? {
+        for name in names {
+            if let id = UUID(uuidString: name),
+               charges.contains(where: { $0.id == id }) {
+                return id
+            }
+        }
+        return charges
+            .map { ($0.id, simd_distance($0.position, hand)) }
+            .filter { $0.1 <= fallbackRadius }
+            .min { $0.1 < $1.1 }?
+            .0
     }
 
     private func apply(drag: RelativeDrag, hand: SIMD3<Double>) {

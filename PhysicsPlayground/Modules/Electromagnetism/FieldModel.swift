@@ -700,9 +700,12 @@ final class FieldModel {
     var selectedMagnitudeMicroCoulombs: Double {
         get { selectedCharge?.magnitudeMicroCoulombs ?? 1 }
         set {
-            guard let index = charges.firstIndex(where: { $0.id == selectedChargeID }) else { return }
-            let sign: Double = charges[index].isPositive ? 1 : -1
-            charges[index].charge = sign * newValue * 1e-6
+            // Through setMagnitude, so this binding clamps to
+            // magnitudeRange exactly like the bloom's grip does — the
+            // slider enforces the range visually, but the accessibility
+            // adjustable path does not.
+            guard let id = selectedChargeID else { return }
+            setMagnitude(id: id, microCoulombs: newValue)
         }
     }
 

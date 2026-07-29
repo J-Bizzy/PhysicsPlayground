@@ -215,9 +215,14 @@ final class Bloom {
         // The grip rides the object's own surface, so growing the thing
         // pushes the handle outward with it.
         let surface = grip.radius() / max(scale, 0.001)
-        gripEntity.position = SIMD3(surface + 0.014 * reveal, 0, 0)
+        // Stand well clear of the object's own touch target: the grip
+        // once rode close enough that a pinch meant for the object
+        // landed on the bead and edited magnitude instead of moving it.
+        gripEntity.position = SIMD3(surface + 0.032 * reveal, 0, 0)
         gripEntity.scale = SIMD3(repeating: max(reveal, 0.001))
-        gripEntity.isEnabled = reveal > 0.02
+        // Interactive only once the bloom is essentially fully open —
+        // a half-revealed bead must never intercept a grab.
+        gripEntity.isEnabled = reveal > 0.85
 
         if gripDrag != nil {
             label?.isEnabled = true
@@ -248,7 +253,7 @@ final class Bloom {
     }
 
     func beginGrip(_ entity: Entity, hand: SIMD3<Float>) -> Bool {
-        guard root.isEnabled, let grip, let gripEntity else { return false }
+        guard root.isEnabled, reveal > 0.85, let grip, let gripEntity else { return false }
         guard Self.ownName(of: entity, under: root) == gripEntity.name else { return false }
         gripDrag = (hand, grip.read())
         return true
@@ -343,8 +348,11 @@ final class Bloom {
                                materials: [material])
         bead.name = "bloom-grip"
         bead.components.set(InputTargetComponent())
+        // Barely larger than the bead itself: this collider competes
+        // with the touch target of the object the bloom decorates, and
+        // a generous one stole grabs meant for the object.
         bead.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: 0.026)]))
+            shapes: [.generateSphere(radius: 0.016)]))
         bead.components.set(HoverEffectComponent())
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
