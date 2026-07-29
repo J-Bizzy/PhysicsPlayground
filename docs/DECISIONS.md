@@ -2,6 +2,30 @@
 
 A running log of consequential decisions — architectural, physical, or product — and why they were made. Newest first. One entry per decision.
 
+## 2026-07-29 — The submission gates are closed: privacy manifest, export compliance, visionOS 26.0
+
+**Decision:** The app carries a `PrivacyInfo.xcprivacy` declaring no tracking, no collected data, and one required-reason API — `NSPrivacyAccessedAPICategoryUserDefaults` with reason `CA92.1`. `ITSAppUsesNonExemptEncryption = false` goes in `Info.plist`. `XROS_DEPLOYMENT_TARGET` drops from 26.5 to **26.0**.
+
+**Context:** An App Store submission stops on all three. The manifest has been mandatory since 2024 for any app touching a required-reason API, and this one touches `UserDefaults` in twenty files (settings, notebook, completed experiments, every debug launch arg). Without the encryption key every upload stalls on the export-compliance interview. And 26.5 was the newest visionOS in existence — a portfolio app installable by almost nobody. Both packages already declared `.visionOS(.v26)`, so the app target was the lone holdout.
+
+**Consequences:** The claims in the manifest are load-bearing and must stay true: **the project has no networking code at all** — no `URLSession`, no analytics, no third-party SDK — and adding any means revisiting the manifest, not just the podfile. Room geometry and hand poses stay live-read from ARKit and are never persisted or transmitted. The floor is 26.0, so no API newer than that may be used without an availability guard; verified by a signed Release build for `generic/platform=visionOS`, which is the real gate, not the simulator.
+
+## 2026-07-29 — The room's walls become a toggle again; containment goes with them
+
+**Decision:** Kinematics regains a "Bounce off walls" toggle, default ON. When off, `trajectory` predicts with no walls, `strike` is skipped, **and the `contain` clamp returns early** — balls genuinely leave the room. This reverses the invariant set two commits earlier ("walls are ALWAYS on — a ball that leaves the room is a bug, not a setting").
+
+**Context:** The always-on rule was written against a real bug: balls tunnelling out of the room read as the wall feature giving up. But it also removed the ability to watch an unobstructed parabola, which is the actual physics the module teaches — a projectile in a room is a projectile in a box.
+
+**Consequences:** "A ball outside the room" is no longer per se a bug; it is only a bug when the toggle is on. Nothing unbounded escapes regardless: the 30 m `escapeRadius` cull is the backstop that makes the toggle safe, and it must survive any future refactor of the flight lifecycle. The toggle's hint states the consequence plainly ("Off, balls sail through the walls and ceiling") because the setting is destructive to an invariant a user may be relying on.
+
+## 2026-07-29 — The Gallery gains a podium; a tap no longer enters
+
+**Decision:** The hub grows a floor-standing pedestal front and centre. Drag an exhibit to it and the lab docks, turns on a slow turntable, and a "Load ⟨module⟩" button hangs above it. A **tap on an exhibit no longer enters** — it flashes the podium to teach the gesture.
+
+**Context:** Entering by tap made the whole gallery one large accidental-activation surface while merely looking around, and carrying a lab to a pedestal to open it is the more physical grammar the app is built on.
+
+**Consequences:** The focus panel's "Load Module" button is now the only guaranteed way in and is therefore **load-bearing** — it satisfies the standing rule (Electric Fields, 2026-07-29) that every capability stay reachable without gaze-or-gesture dexterity and operable in the simulator. The podium is the delightful path; the button is the reachable one, and neither may be deleted without the other changing. Anything aimed at an exhibit must ask where it *currently* is, not where its puck is: the gaze cone and the caption both consult `aimPosition(of:)`, which answers the podium while docked and the hand while carried.
+
 ## 2026-07-29 — The Lab Notebook goes live; the bead gains its fourth (and final) petal
 
 **Decision:** The notebook — model complete since the rebuild, never wired — becomes a real surface: a **capture petal** on the palette bead (pencil glyph; stays open after a capture, chimes) writes the active module's live readings as a timestamped observation; a book button in every module's title bar opens the **Notebook window** (entries as disclosure cards, per-entry delete, clear-with-confirm, CSV and Markdown ShareLinks); the window carries its own Capture button as the simulator/accessibility path. This amends locked decision 4 ("the bead, not a dock") a second time — and sets its ceiling: **four petals is the bead's maximum.** Pause, capture, settings, reset are the four things reached for from any lab; a fifth would be the rail this design replaced.
