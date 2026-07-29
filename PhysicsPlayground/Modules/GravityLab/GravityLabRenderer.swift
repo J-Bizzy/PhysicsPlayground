@@ -46,10 +46,10 @@ final class GravityLabRenderer {
     /// Freeze sculpts: pausing materialises velocity and net-force
     /// arrows on every body, in the app-wide frozen-vector language.
     private let frozenVectors = FrozenVectors(budget: GravityLabModel.bodyBudget * 2)
-    /// Look reveals: turn toward a planet and it introduces itself —
-    /// name, speed, distance — then falls quiet when you look away.
-    private let lookReveal = LookReveal()
+    /// The tapped body introduces itself — name, speed, distance —
+    /// beside its open control ring, and falls quiet when it folds.
     private var lookCallout: Callout?
+    private var calloutReveal: Float = 0
 
     // MARK: Predict-then-run — the ghost, its countdown, the verdict
     private let ghostEntity: ModelEntity = {
@@ -542,25 +542,14 @@ final class GravityLabRenderer {
         return try? MeshResource.generate(from: [descriptor])
     }
 
-    private func tickLookReveal(_ model: GravityLabModel,
-                                lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?) {
+    private func tickCallout(_ model: GravityLabModel, focusID: UUID?) {
         let toDisplay = Float(model.simToDisplay)
-        let candidates = model.bodies.map {
-            (id: $0.body.name, position: SIMD3<Float>($0.body.position) * toDisplay)
+        let orbiting = focusID.flatMap { id in
+            model.bodies.first { $0.id == id }
         }
-        // The ray arrives in world space; the candidates live under a
-        // root that lab placement moves and two hands scale. Convert.
-        var localRay: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
-        if let lookRay {
-            localRay = (
-                systemRoot.convert(position: SIMD3<Float>(lookRay.origin), from: nil),
-                systemRoot.convert(direction: SIMD3<Float>(lookRay.direction), from: nil))
-        }
-        lookReveal.update(dt: 1.0 / 90, ray: localRay, candidates: candidates)
-
-        guard let winner = lookReveal.focusedID,
-              let orbiting = model.bodies.first(where: { $0.body.name == winner })
-        else {
+        let target: Float = orbiting == nil ? 0 : 1
+        calloutReveal += (target - calloutReveal) * 0.12
+        guard let orbiting, calloutReveal > 0.02 else {
             lookCallout?.isEnabled = false
             return
         }
@@ -570,9 +559,8 @@ final class GravityLabRenderer {
             systemRoot.addChild(callout.root)
             lookCallout = callout
         }
-        let reveal = lookReveal.reveal(winner)
-        lookCallout?.isEnabled = reveal > 0.02
-        lookCallout?.root.components.set(OpacityComponent(opacity: reveal))
+        lookCallout?.isEnabled = true
+        lookCallout?.root.components.set(OpacityComponent(opacity: calloutReveal))
         lookCallout?.anchor(at: SIMD3<Float>(orbiting.body.position) * toDisplay)
         if let readout = model.readout(for: orbiting) {
             lookCallout?.setText(String(
@@ -648,11 +636,10 @@ final class GravityLabRenderer {
         }
     }
 
-    func tick(_ model: GravityLabModel,
-              lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)? = nil) {
+    func tick(_ model: GravityLabModel, calloutBodyID: UUID? = nil) {
         frameCounter &+= 1
         tickOrbitalChord(model)
-        tickLookReveal(model, lookRay: lookRay)
+        tickCallout(model, focusID: calloutBodyID)
         if frameCounter % 12 == 0 { syncKeplerSweep(model) }
         syncPredictionGhost(model)
         // This tick has no dt of its own; the fade only needs a clock.

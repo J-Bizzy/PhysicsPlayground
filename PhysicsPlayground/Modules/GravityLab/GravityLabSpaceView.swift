@@ -19,7 +19,9 @@ struct GravityLabSpaceView: View {
     @State private var renderer: GravityLabRenderer?
     @State private var drag: RelativeDrag?
     @State private var bloom = Bloom()
-    @State private var look = LookReveal(coneDegrees: 13)
+    /// Which body's ring is open — shared by the tap gesture and the
+    /// render loop (see RingState's header for why it's a reference).
+    @State private var ring = RingState()
     @State private var wells: Well?
     /// Two-handed scale and turn for the whole system: pull your hands
     /// apart to grow the solar system around you, twist to look at the
@@ -61,7 +63,7 @@ struct GravityLabSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.step(dt: event.deltaTime)
-                    renderer?.tick(model, lookRay: appModel.room.lookRay)
+                    renderer?.tick(model, calloutBodyID: ring.openID)
                     // Separate from the tick so the field keeps flowing
                     // even while the simulation is paused.
                     renderer?.tickFieldParticles(dt: event.deltaTime, model: model)
@@ -98,8 +100,14 @@ struct GravityLabSpaceView: View {
             if UserDefaults.standard.double(forKey: "predict") > 0 {
                 model.armPrediction()
             }
+            // `-gravRing 1` opens the first orbiting body's control
+            // ring at launch, for CLI screenshots.
+            if UserDefaults.standard.bool(forKey: "gravRing"),
+               let body = model.bodies.first(where: { $0.id != model.primaryBody?.id }) {
+                ring.openID = body.id
+            }
             #endif
-            renderer.tick(model, lookRay: appModel.room.lookRay)
+            renderer.tick(model)
             self.renderer = renderer
         }
         .simultaneousGesture(
@@ -165,39 +173,48 @@ struct GravityLabSpaceView: View {
         .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
-                .onEnded { value in _ = bloom.handleTap(value.entity) }
+                .onEnded { value in
+                    if bloom.handleTap(value.entity) { return }
+                    // A tap on a body toggles its control ring; the
+                    // primary keeps no ring (deleting the sun deletes
+                    // the system). A tap on anything else folds it.
+                    var current: Entity? = value.entity
+                    while let candidate = current {
+                        if let body = model.bodies.first(where: {
+                            $0.body.name == candidate.name
+                        }), body.id != model.primaryBody?.id {
+                            if ring.openID == body.id {
+                                ring.openID = nil
+                            } else {
+                                ring.openID = body.id
+                                SoundPalette.play(.pop, on: value.entity, volume: 0.35)
+                            }
+                            return
+                        }
+                        current = candidate.parent
+                    }
+                    ring.openID = nil
+                }
         )
     }
 
-    /// Points the one bloom at whichever body you are looking at.
+    /// Points the one bloom at whichever body you tapped.
     /// Mass IS the grip: pull and the planet inflates, because a
     /// sphere's radius goes as the cube root of its mass — and its
     /// pull on everything around it rises live as you do it.
     private func syncBloom(renderer: GravityLabRenderer, dt: Double) {
         let toDisplay = model.simToDisplay
-        // Keyed by NAME, matching the renderer's own look-reveal, so the
-        // two agree about what you are looking at (and one -lookReveal
-        // flag drives both).
-        let candidates = model.bodies.map {
-            (id: $0.body.name,
-             position: SIMD3<Float>($0.body.position * toDisplay))
+        if let openID = ring.openID,
+           !model.bodies.contains(where: { $0.id == openID }) {
+            ring.openID = nil     // consumed by a merge or deleted
         }
-        var ray: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
-        if let look = appModel.room.lookRay {
-            ray = (renderer.systemRoot.convert(position: SIMD3<Float>(look.origin), from: nil),
-                   renderer.systemRoot.convert(direction: SIMD3<Float>(look.direction), from: nil))
-        }
-        look.update(dt: dt, ray: ray, candidates: candidates)
-
-        guard let winner = look.focusedID,
-              let body = model.bodies.first(where: { $0.body.name == winner }),
+        guard let uuid = ring.openID,
+              let body = model.bodies.first(where: { $0.id == uuid }),
               body.id != model.primaryBody?.id else {
             bloom.update(anchor: .zero, viewer: nil, revealTarget: 0, dt: dt)
             bloom.clearTarget()
             return
         }
-
-        let uuid = body.id
         bloom.retarget(
             uuid,
             petals: [

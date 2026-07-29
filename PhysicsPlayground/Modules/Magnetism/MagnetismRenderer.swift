@@ -32,9 +32,6 @@ final class MagnetismRenderer {
     /// is a pure view change — the model keeps its own coordinates, and
     /// every hand position converts through this root on its way in.
     let viewRoot = Entity()
-    /// Look reveals: turn toward a magnet and its moment materialises.
-    private let lookReveal = LookReveal()
-    private var lookCallout: Callout?
 
     // MARK: Induction — the coil's filament answers a waved magnet
     private let inductionGlow = ModelEntity(
@@ -121,44 +118,11 @@ final class MagnetismRenderer {
         }
     }
 
-    private func tickLookReveal(_ model: MagnetismModel,
-                                lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?) {
-        let candidates = model.magnets.map {
-            (id: $0.id.uuidString, position: SIMD3<Float>($0.position))
-        }
-        var localRay: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
-        if let lookRay {
-            localRay = (
-                viewRoot.convert(position: SIMD3<Float>(lookRay.origin), from: nil),
-                viewRoot.convert(direction: SIMD3<Float>(lookRay.direction), from: nil))
-        }
-        lookReveal.update(dt: 1.0 / 90, ray: localRay, candidates: candidates)
-        guard let winner = lookReveal.focusedID,
-              let magnet = model.magnets.first(where: { $0.id.uuidString == winner })
-        else {
-            lookCallout?.isEnabled = false
-            return
-        }
-        if lookCallout == nil {
-            let callout = Callout(color: UIColor(DesignTokens.Palette.magnetismAccent),
-                                  textSize: 0.02, offset: SIMD3(0, 0.09, 0))
-            viewRoot.addChild(callout.root)
-            lookCallout = callout
-        }
-        let reveal = lookReveal.reveal(winner)
-        lookCallout?.isEnabled = reveal > 0.02
-        lookCallout?.root.components.set(OpacityComponent(opacity: reveal))
-        lookCallout?.anchor(at: SIMD3<Float>(magnet.position))
-        lookCallout?.setText(String(format: "%.1f A·m²", magnet.strength))
-    }
-
     func displayPoint(fromWorld world: SIMD3<Float>) -> SIMD3<Double> {
         SIMD3<Double>(viewRoot.convert(position: world, from: nil))
     }
 
-    func tick(_ model: MagnetismModel, viewer: SIMD3<Double>? = nil,
-              lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)? = nil) {
-        tickLookReveal(model, lookRay: lookRay)
+    func tick(_ model: MagnetismModel, viewer: SIMD3<Double>? = nil) {
         syncElectromagnet(model)
         syncMagnets(model)
         syncFieldLines(model)

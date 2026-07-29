@@ -38,9 +38,6 @@ final class KinematicsRenderer {
     /// Freeze sculpts: a paused flight grows its velocity and force
     /// arrows — the frozen arc becomes a diagram you walk around.
     private let frozenVectors = FrozenVectors(budget: 24)
-    /// Look reveals: glance at a ball mid-flight and its speed and
-    /// height materialise beside it.
-    private let lookReveal = LookReveal()
     private var lookCallout: Callout?
     var subscriptions: [EventSubscription] = []
 
@@ -228,7 +225,21 @@ final class KinematicsRenderer {
                 mesh: ringMesh ?? MeshResource.generateSphere(radius: 0.05),
                 materials: [capturedRingMaterial]
             )
-            Grabbable.configureTouchTarget(tube, collisionRadius: 0.2)
+            Grabbable.configureTouchTarget(tube, collisionRadius: 0.05)
+            // A ring is grabbed by its RIM. One fat sphere in the
+            // middle swallowed every pinch through the opening — the
+            // banned bigger-than-the-visual collider. Eight small
+            // colliders hug the torus instead.
+            let rim = (0..<8).map { index -> ShapeResource in
+                let angle = Float(index) / 8 * 2 * .pi
+                return ShapeResource.generateSphere(radius: 0.05)
+                    .offsetBy(translation: [
+                        cos(angle) * Float(KinematicsModel.ringRadius),
+                        0,
+                        sin(angle) * Float(KinematicsModel.ringRadius),
+                    ])
+            }
+            tube.components.set(CollisionComponent(shapes: rim))
             Self.setAccessibility(on: tube, label: "Hoop. Drag to place it; balls passing down through it score.")
             container.addChild(tube)
             return tube
@@ -423,9 +434,8 @@ final class KinematicsRenderer {
         catchCallout?.isEnabled = CACurrentMediaTime() - catchShownAt < 4.5
     }
 
-    func tick(_ model: KinematicsModel,
-              lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)? = nil) {
-        tickLookReveal(model, lookRay: lookRay)
+    func tick(_ model: KinematicsModel) {
+        tickFlightCallout(model)
         frozenVectors.update(frozen: model.isPaused, dt: 1.0 / 90) {
             var samples: [FrozenVectors.Sample] = []
             for flight in model.flights
@@ -507,22 +517,17 @@ final class KinematicsRenderer {
 
     // MARK: Balls, dots, shadows
 
-    private func tickLookReveal(_ model: KinematicsModel,
-                                lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?) {
-        let candidates = model.flights
-            .filter { $0.status == .flying || $0.status == .rolling }
-            .map { (id: $0.id.uuidString, position: SIMD3<Float>($0.state.position)) }
-        var localRay: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
-        if let lookRay {
-            localRay = (
-                root.convert(position: SIMD3<Float>(lookRay.origin), from: nil),
-                root.convert(direction: SIMD3<Float>(lookRay.direction), from: nil))
-        }
-        lookReveal.update(dt: 1.0 / 90, ray: localRay, candidates: candidates)
+    /// The live readout rides the NEWEST ball still in flight — every
+    /// throw gets its own speed and height following it, no gaze
+    /// required. (This replaced a gaze-revealed callout, which the
+    /// simulator could never show and a device user never found.)
+    private var flightCalloutReveal: Float = 0
 
-        guard let winner = lookReveal.focusedID,
-              let flight = model.flights.first(where: { $0.id.uuidString == winner })
-        else {
+    private func tickFlightCallout(_ model: KinematicsModel) {
+        let flight = model.flights.last { $0.status == .flying || $0.status == .rolling }
+        let target: Float = flight == nil ? 0 : 1
+        flightCalloutReveal += (target - flightCalloutReveal) * 0.12
+        guard let flight, flightCalloutReveal > 0.02 else {
             lookCallout?.isEnabled = false
             return
         }
@@ -532,9 +537,8 @@ final class KinematicsRenderer {
             root.addChild(callout.root)
             lookCallout = callout
         }
-        let reveal = lookReveal.reveal(winner)
-        lookCallout?.isEnabled = reveal > 0.02
-        lookCallout?.root.components.set(OpacityComponent(opacity: reveal))
+        lookCallout?.isEnabled = true
+        lookCallout?.root.components.set(OpacityComponent(opacity: flightCalloutReveal))
         lookCallout?.anchor(at: SIMD3<Float>(flight.state.position))
         lookCallout?.setText(String(
             format: "%.1f m/s · %.1f m up",

@@ -21,7 +21,9 @@ struct PendulumsSpaceView: View {
     @State private var renderer: PendulumsRenderer?
     @State private var drag: RelativeDrag?
     @State private var bloom = Bloom()
-    @State private var look = LookReveal(coneDegrees: 14)
+    /// Which bob's ring is open — shared by the tap gesture and the
+    /// render loop (see RingState's header for why it's a reference).
+    @State private var ring = RingState()
     @State private var wells: Well?
     @State private var handSamples: [(time: Double, position: SIMD3<Double>)] = []
     /// A gravity gauge under the beam. "What if this were the Moon" is
@@ -66,6 +68,14 @@ struct PendulumsSpaceView: View {
                     // apparatus is not a request to move the controls.
                 }
             )
+            #if DEBUG
+            // `-penRing 1` opens the first bob's control ring at
+            // launch, for CLI screenshots.
+            if UserDefaults.standard.bool(forKey: "penRing"),
+               let first = model.pendulums.first {
+                ring.openID = first.id
+            }
+            #endif
             self.renderer = renderer
         }
         .simultaneousGesture(
@@ -136,14 +146,25 @@ struct PendulumsSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
+                    if bloom.handleTap(value.entity) { return }
+                    // A tap on a bob selects it and toggles its control
+                    // ring; a tap on anything else folds the ring away.
                     var current: Entity? = value.entity
                     while let candidate = current {
-                        if let id = UUID(uuidString: candidate.name) {
+                        if let id = UUID(uuidString: candidate.name),
+                           model.pendulums.contains(where: { $0.id == id }) {
                             model.select(id: id)
+                            if ring.openID == id {
+                                ring.openID = nil
+                            } else {
+                                ring.openID = id
+                                SoundPalette.play(.pop, on: value.entity, volume: 0.35)
+                            }
                             return
                         }
                         current = candidate.parent
                     }
+                    ring.openID = nil
                 }
         )
     }
@@ -154,16 +175,11 @@ struct PendulumsSpaceView: View {
     /// it, and the period tag over the pivot climbs as the square root
     /// of length while your hand is still moving.
     private func syncBloom(dt: Double) {
-        let candidates = model.pendulums.map {
-            (id: $0.id.uuidString, position: SIMD3<Float>($0.bobWorld))
+        if let openID = ring.openID,
+           !model.pendulums.contains(where: { $0.id == openID }) {
+            ring.openID = nil     // deleted out from under the ring
         }
-        var ray: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
-        if let lookRay = appModel.room.lookRay {
-            ray = (SIMD3<Float>(lookRay.origin), SIMD3<Float>(lookRay.direction))
-        }
-        look.update(dt: dt, ray: ray, candidates: candidates)
-
-        guard let winner = look.focusedID, let uuid = UUID(uuidString: winner),
+        guard let uuid = ring.openID,
               let pendulum = model.pendulums.first(where: { $0.id == uuid }) else {
             bloom.update(anchor: .zero, viewer: nil, revealTarget: 0, dt: dt)
             bloom.clearTarget()

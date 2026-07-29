@@ -20,7 +20,9 @@ struct MagnetismSpaceView: View {
     @State private var renderer: MagnetismRenderer?
     @State private var drag: RelativeDrag?
     @State private var bloom = Bloom()
-    @State private var look = LookReveal(coneDegrees: 15)
+    /// Which magnet's ring is open — shared by the tap gesture and the
+    /// render loop (see RingState's header for why it's a reference).
+    @State private var ring = RingState()
     @State private var wells: Well?
     /// Two-hand scale and turn: grow the dipole field from a desk demo
     /// to loops you stand inside, or turn the whole field to see it
@@ -62,7 +64,7 @@ struct MagnetismSpaceView: View {
                     }
                     renderer?.tick(model, viewer: appModel.room.headPosition.map {
                         renderer?.displayPoint(fromWorld: SIMD3<Float>($0)) ?? $0
-                    }, lookRay: appModel.room.lookRay)
+                    })
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
                     // moves a body by hand DISPLACEMENT, which a constant
@@ -85,6 +87,14 @@ struct MagnetismSpaceView: View {
                 scaleRig.endGesture()
             }
             #endif
+            #if DEBUG
+            // `-magRing 1` opens the first magnet's control ring at
+            // launch, so the ring can be screenshot from the CLI.
+            if UserDefaults.standard.bool(forKey: "magRing"),
+               let first = model.magnets.first {
+                ring.openID = first.id
+            }
+            #endif
             renderer.tick(model, viewer: appModel.room.headPosition)
             self.renderer = renderer
         }
@@ -92,7 +102,26 @@ struct MagnetismSpaceView: View {
         .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
-                .onEnded { value in _ = bloom.handleTap(value.entity) }
+                .onEnded { value in
+                    if bloom.handleTap(value.entity) { return }
+                    // A tap on a magnet toggles its control ring; a tap
+                    // on anything else folds it away.
+                    var current: Entity? = value.entity
+                    while let candidate = current {
+                        if let id = UUID(uuidString: candidate.name),
+                           model.magnets.contains(where: { $0.id == id }) {
+                            if ring.openID == id {
+                                ring.openID = nil
+                            } else {
+                                ring.openID = id
+                                SoundPalette.play(.pop, on: value.entity, volume: 0.35)
+                            }
+                            return
+                        }
+                        current = candidate.parent
+                    }
+                    ring.openID = nil
+                }
         )
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
@@ -133,22 +162,16 @@ struct MagnetismSpaceView: View {
         )
     }
 
-    /// Look at a magnet and it offers exactly what a magnet offers:
+    /// Tap a magnet and it offers exactly what a magnet offers:
     /// reverse its poles, remove it, or pull its strength up — and the
     /// field loops thicken and reach further as you pull, which is the
     /// only readout that matters.
     private func syncBloom(renderer: MagnetismRenderer, dt: Double) {
-        let candidates = model.magnets.map {
-            (id: $0.id.uuidString, position: SIMD3<Float>($0.position))
+        if let openID = ring.openID,
+           !model.magnets.contains(where: { $0.id == openID }) {
+            ring.openID = nil     // deleted out from under the ring
         }
-        var ray: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
-        if let look = appModel.room.lookRay {
-            ray = (renderer.viewRoot.convert(position: SIMD3<Float>(look.origin), from: nil),
-                   renderer.viewRoot.convert(direction: SIMD3<Float>(look.direction), from: nil))
-        }
-        look.update(dt: dt, ray: ray, candidates: candidates)
-
-        guard let winner = look.focusedID, let uuid = UUID(uuidString: winner),
+        guard let uuid = ring.openID,
               let magnet = model.magnets.first(where: { $0.id == uuid }) else {
             bloom.update(anchor: .zero, viewer: nil, revealTarget: 0, dt: dt)
             bloom.clearTarget()

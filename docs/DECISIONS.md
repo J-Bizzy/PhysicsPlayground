@@ -2,6 +2,14 @@
 
 A running log of consequential decisions — architectural, physical, or product — and why they were made. Newest first. One entry per decision.
 
+## 2026-07-29 — Every control ring opens by tap; LookReveal is retired
+
+**Decision:** The gaze-revealed control gating (`LookReveal`) is deleted app-wide. Every module's per-object ring now opens the Electric Fields way — tap the object, ring unfolds; tap again, it folds — via the shared `RingState`. Gaze-driven callouts became tap-driven (Gravity's body readout follows the tapped body) or event-driven (Kinematics' speed/height readout rides the newest ball in flight); Magnetism's strength callout is deleted outright — the ring's rail already shows it. Two more oversized colliders fell to the collider-≤-visual rule: the Kinematics hoop (one 0.2 m sphere filling the opening → eight small colliders hugging the rim) and the Wind Tunnel fan (0.48 → 0.24 m).
+
+**Context:** Gaze-gated controls were unreachable in the simulator and undiscoverable on device — four modules' add/edit capabilities effectively did not exist. The Electric Fields rebuild proved the tap grammar; this extends it everywhere.
+
+**Consequences:** Every capability in every module is reachable with a mouse in the simulator and a pinch on device, and each module has a `-<x>Ring 1` debug arg to screenshot its ring from the CLI. Nothing in the app is revealed by gaze alone anymore.
+
 ## 2026-07-29 — Onboarding is the hint, not a coach sequence
 
 **Decision:** The three-step coach-mark state machine (`coachStage`/`advanceCoach`) is deleted — it was write-only from birth: stages advanced, nothing ever rendered a tip. Onboarding is now exactly one surface: each module's authored `firstRunHint` sentence, rendered by the shell in the module window until dismissed (`AppSettings.seenHints`; Settings offers "Show hints again"). The shell also finally renders every module's `legend` as a collapsed section appended after `makeControls` — `LegendView` in `ModulePanel.swift`, fulfilling that file's original header.

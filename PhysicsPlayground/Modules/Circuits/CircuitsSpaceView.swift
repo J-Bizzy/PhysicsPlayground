@@ -18,7 +18,9 @@ struct CircuitsSpaceView: View {
     @Environment(CircuitsModel.self) private var model
     @State private var renderer: CircuitsRenderer?
     @State private var bloom = Bloom()
-    @State private var look = LookReveal(coneDegrees: 13)
+    /// Which component's ring is open — shared by the tap gesture and
+    /// the render loop (see RingState's header).
+    @State private var ring = RingState()
     @State private var wireDragFrom: CircuitsModel.Terminal?
     @State private var partDrag: RelativeDrag?
     @State private var trayDragID: UUID?
@@ -70,12 +72,24 @@ struct CircuitsSpaceView: View {
             }
             #endif
 
+            #if DEBUG
+            // `-circRing 1` opens the first component's control ring
+            // at launch, for CLI screenshots.
+            if UserDefaults.standard.bool(forKey: "circRing"),
+               let first = model.components.first {
+                ring.openID = first.id
+            }
+            #endif
             self.renderer = renderer
         }
         .gesture(
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
+                    // Ring petals first; then the bench's own tap
+                    // grammar (terminals wire, wires delete, levers
+                    // flip, bodies toggle their control ring).
+                    if bloom.handleTap(value.entity) { return }
                     handleTap(on: value.entity)
                 }
         )
@@ -159,11 +173,6 @@ struct CircuitsSpaceView: View {
                 }
         )
         .spatialScale(scaleRig)
-        .simultaneousGesture(
-            TapGesture()
-                .targetedToAnyEntity()
-                .onEnded { value in _ = bloom.handleTap(value.entity) }
-        )
     }
 
     /// Resolves what the pinch landed on and opens the right session:
@@ -175,17 +184,11 @@ struct CircuitsSpaceView: View {
     /// drift quickens while your hand is still moving. Switches get a
     /// petal instead, because open and closed is not a continuum.
     private func syncBloom(renderer: CircuitsRenderer, dt: Double) {
-        let candidates = model.components.map {
-            (id: $0.id.uuidString, position: SIMD3<Float>($0.position))
+        if let openID = ring.openID,
+           !model.components.contains(where: { $0.id == openID }) {
+            ring.openID = nil     // deleted out from under the ring
         }
-        var ray: (origin: SIMD3<Float>, direction: SIMD3<Float>)?
-        if let look = appModel.room.lookRay {
-            ray = (renderer.viewRoot.convert(position: SIMD3<Float>(look.origin), from: nil),
-                   renderer.viewRoot.convert(direction: SIMD3<Float>(look.direction), from: nil))
-        }
-        look.update(dt: dt, ray: ray, candidates: candidates)
-
-        guard let winner = look.focusedID, let uuid = UUID(uuidString: winner),
+        guard let uuid = ring.openID,
               let part = model.components.first(where: { $0.id == uuid }) else {
             bloom.update(anchor: .zero, viewer: nil, revealTarget: 0, dt: dt)
             bloom.clearTarget()
@@ -345,8 +348,20 @@ struct CircuitsSpaceView: View {
                 model.toggleSwitch(id: id)
                 return
             }
+            // A tap on a component body toggles its control ring.
+            if let id = UUID(uuidString: name),
+               model.components.contains(where: { $0.id == id }) {
+                if ring.openID == id {
+                    ring.openID = nil
+                } else {
+                    ring.openID = id
+                    SoundPalette.play(.pop, on: entity, volume: 0.35)
+                }
+                return
+            }
             current = candidate.parent
         }
+        ring.openID = nil
     }
 
     /// The end-grip being pulled, parsed from "s0-"/"s1-" entity names.

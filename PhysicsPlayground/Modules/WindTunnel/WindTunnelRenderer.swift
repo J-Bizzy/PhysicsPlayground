@@ -291,7 +291,11 @@ final class WindTunnelRenderer {
         if let fan = try? Entity.load(named: "TunnelFan") {
             fan.name = "fan"
             fan.position = SIMD3(-Float(WindTunnelModel.halfLength) - 0.24, 0, 0)
-            Grabbable.configureTouchTarget(fan, collisionRadius: 0.48)
+            // Sized to the fan itself. At 0.48 the collider reached a
+            // quarter-metre INTO the working section and stole pinches
+            // meant for the test body — the banned bigger-than-the-
+            // visual collider, in miniature.
+            Grabbable.configureTouchTarget(fan, collisionRadius: 0.24)
             var fanAccessibility = AccessibilityComponent()
             fanAccessibility.isAccessibilityElement = true
             fanAccessibility.label = "Wind fan. Its blades spin with the wind speed; carry it anywhere."

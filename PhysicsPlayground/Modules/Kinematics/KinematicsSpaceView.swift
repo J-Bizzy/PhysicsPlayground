@@ -47,7 +47,7 @@ struct KinematicsSpaceView: View {
                     // reports no fingertips, so this is simply inert
                     // there.
                     model.catchBalls(atFingertips: appModel.room.fingertips)
-                    renderer?.tick(model, lookRay: appModel.room.lookRay)
+                    renderer?.tick(model)
                     syncBloom(dt: event.deltaTime)
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
