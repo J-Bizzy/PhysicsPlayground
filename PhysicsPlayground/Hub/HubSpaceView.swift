@@ -9,7 +9,15 @@
 //  under a persistent "Physics / Playground" wordmark. Domains are
 //  physical structure: where a lab sits tells you what kind of physics
 //  it is, and one sweep of the head reads the whole room. Look toward
-//  an exhibit and it lifts off its puck; pinch to enter.
+//  an exhibit and it lifts off its puck, naming itself and opening its
+//  focus panel.
+//
+//  Two ways in, and the panel's "Load Module" button is the one that
+//  always works — gaze plus a pinch, nothing to aim or carry. The other
+//  is the podium: drag an exhibit to the pedestal front and centre and
+//  it stands there and turns, with Load hanging over it. The podium is
+//  the delightful path; the button is the reachable one, so neither is
+//  load-bearing alone.
 //
 //  The only motion is idle life: miniatures breathe out of phase and
 //  their physics runs. A handful of entities; per-frame work is a few
@@ -59,6 +67,23 @@ struct HubSpaceView: View {
                 scene.root.addChild(card)
                 scene.detailCard = card
             }
+            if let load = attachments.entity(for: "load") {
+                // The Load button hangs over the podium, shown only
+                // while an exhibit stands there.
+                load.components.set(BillboardComponent())
+                load.isEnabled = false
+                load.position = scene.podiumTop + SIMD3(0, 0.34, 0)
+                scene.root.addChild(load)
+                scene.loadButton = load
+            }
+            #if DEBUG
+            // `-hubDock <module id>` seats an exhibit on the podium at
+            // launch, so the docked state and Load button can be
+            // screenshot from the CLI.
+            if let forced = UserDefaults.standard.string(forKey: "hubDock") {
+                scene.dockForDebug(id: forced)
+            }
+            #endif
 
             // `[weak scene]` matters here, and every module already knew
             // it. The subscription is stored ON the scene, so a strong
@@ -79,6 +104,23 @@ struct HubSpaceView: View {
                     HubFocusPanel(module: module) { enter(module.id) }
                 }
             }
+            Attachment(id: "load") {
+                if let module = ModuleCatalog.all(appModel: appModel)
+                    .first(where: { $0.id == scene.dockedModuleID }) {
+                    Button {
+                        enter(module.id)
+                    } label: {
+                        Label("Load \(module.title)", systemImage: "arrow.forward.circle.fill")
+                            .font(.callout.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(module.accent)
+                    .glassBackgroundEffect(in: Capsule())
+                    .accessibilityHint("Opens \(module.title)")
+                }
+            }
         }
         // The arc's geometry (distance, height, recenter yaw) lives in
         // settings; bumping layoutVersion gives this view a new identity,
@@ -97,9 +139,28 @@ struct HubSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
-                    guard let id = scene.moduleID(for: value.entity) else { return }
-                    enter(id)
+                    // A tap no longer enters — carrying a lab to the
+                    // podium does. The tap teaches the gesture: the
+                    // podium flashes to say "bring it here."
+                    guard scene.moduleID(for: value.entity) != nil else { return }
+                    scene.hintPodium()
                 }
+        )
+        // Carry a lab to the podium. The exhibit rides the hand, the
+        // podium brightens as it nears, and release either seats it
+        // (Load Module appears) or glides it home.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0.015)
+                .targetedToAnyEntity()
+                .onChanged { value in
+                    let world = SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene))
+                    if !scene.isCarrying {
+                        _ = scene.beginExhibitDrag(entity: value.entity, world: world)
+                    }
+                    scene.dragExhibit(world: world)
+                }
+                .onEnded { _ in scene.endExhibitDrag() }
         )
     }
 
@@ -234,6 +295,8 @@ final class HubScene {
         buildBubbleTitle()
         buildFloorPool()
 
+        buildPodium(distance: distance)
+
         // The terraces themselves ARE the domain grouping — no floating
         // text headers; colour lives in each slab's hairline, the
         // progress ring, and the focus panel's chip.
@@ -300,6 +363,173 @@ final class HubScene {
                 materials: [graphite])
             puck.position = top - SIMD3(0, GalleryLayout.puckHeight / 2, 0)
             root.addChild(puck)
+        }
+    }
+
+    // MARK: The podium — where a lab is brought to be opened
+
+    /// Where the docked exhibit floats, root space.
+    private(set) var podiumTop = SIMD3<Float>(0, 0.98, -1.05)
+    private var podiumGlow: Entity?
+    /// The exhibit standing on the podium, ready to load.
+    private(set) var dockedModuleID: String?
+    /// The SwiftUI "Load Module" button, shown while something is docked.
+    var loadButton: Entity?
+    /// The exhibit currently riding a hand.
+    private var draggingID: String?
+    var isCarrying: Bool { draggingID != nil }
+    private var dragOffset: SIMD3<Float>?
+    /// Exhibits mid-glide back to their pucks (id → clock time when the
+    /// idle loop may take their positions back). Without this grace the
+    /// per-frame breathe write would stomp the return animation on its
+    /// first frame and the exhibit would teleport home.
+    private var returningIDs: [String: Double] = [:]
+
+    /// A floor-standing pedestal, front and centre: carry a lab here
+    /// and it presents itself, with the Load button hanging above.
+    private func buildPodium(distance: Float) {
+        podiumTop = SIMD3(0, 0.98, -1.05 * (distance / 2.0))
+
+        var graphite = PhysicallyBasedMaterial()
+        graphite.baseColor = .init(tint: Self.slabTint)
+        graphite.roughness = 0.3
+        graphite.metallic = 0.1
+        graphite.clearcoat = .init(floatLiteral: 0.6)
+
+        let podium = Entity()
+        podium.position = SIMD3(podiumTop.x, 0, podiumTop.z)
+        let columnHeight: Float = 0.82
+        let column = ModelEntity(
+            mesh: .generateCylinder(height: columnHeight, radius: 0.055),
+            materials: [graphite])
+        column.position.y = columnHeight / 2
+        podium.addChild(column)
+        let cap = ModelEntity(
+            mesh: .generateCylinder(height: 0.024, radius: 0.105),
+            materials: [graphite])
+        cap.position.y = columnHeight + 0.012
+        podium.addChild(cap)
+
+        // The champagne rim — the same jeweller's line the title wears.
+        var rim = UnlitMaterial(color: Self.titleRimColor)
+        rim.blending = .transparent(opacity: 0.7)
+        if let ring = Self.rimTube(radius: 0.105, y: columnHeight + 0.026) {
+            ring.model?.materials = [rim]
+            podium.addChild(ring)
+        }
+
+        // A soft pool on the cap that brightens when an exhibit is
+        // near or docked — the podium answering the offer.
+        let glow = Entity()
+        var glowMaterial = UnlitMaterial(color: Self.titleRimColor)
+        glowMaterial.blending = .transparent(opacity: 0.22)
+        let pool = ModelEntity(
+            mesh: .generateCylinder(height: 0.001, radius: 0.09),
+            materials: [glowMaterial])
+        pool.position.y = columnHeight + 0.026
+        glow.addChild(pool)
+        glow.components.set(OpacityComponent(opacity: 0.35))
+        podium.addChild(glow)
+        podiumGlow = glow
+
+        root.addChild(podium)
+    }
+
+    private static func rimTube(radius: Float, y: Float) -> ModelEntity? {
+        let points = (0...48).map { step -> SIMD3<Float> in
+            let angle = Float(step) / 48 * 2 * .pi
+            return SIMD3(cos(angle) * radius, y, sin(angle) * radius)
+        }
+        guard let mesh = TubeMesh.tube(lines: [points], radius: 0.0014, sides: 4)
+        else { return nil }
+        return ModelEntity(mesh: mesh, materials: [UnlitMaterial(color: .white)])
+    }
+
+    // MARK: Carrying an exhibit to the podium
+
+    /// Starts a carry if the drag began on an exhibit. World → root
+    /// space happens here, so Recenter's yaw never lies to the hand.
+    func beginExhibitDrag(entity: Entity, world: SIMD3<Float>) -> Bool {
+        guard draggingID == nil, let id = moduleID(for: entity),
+              let exhibit = exhibits.first(where: { $0.moduleID == id }) else {
+            return false
+        }
+        if dockedModuleID == id { dockedModuleID = nil; loadButton?.isEnabled = false }
+        draggingID = id
+        let local = root.convert(position: world, from: nil)
+        dragOffset = exhibit.anchor.position - local
+        SoundPalette.play(.pop, on: exhibit.anchor, volume: 0.3)
+        return true
+    }
+
+    func dragExhibit(world: SIMD3<Float>) {
+        guard let draggingID, let dragOffset,
+              let exhibit = exhibits.first(where: { $0.moduleID == draggingID })
+        else { return }
+        let local = root.convert(position: world, from: nil)
+        exhibit.anchor.position = local + dragOffset
+        // The podium brightens as the offer approaches.
+        let near = simd_distance(exhibit.anchor.position, podiumTop) < 0.34
+        podiumGlow?.components.set(OpacityComponent(opacity: near ? 1.0 : 0.35))
+    }
+
+    func endExhibitDrag() {
+        guard let id = draggingID,
+              let exhibit = exhibits.first(where: { $0.moduleID == id }) else {
+            draggingID = nil
+            return
+        }
+        draggingID = nil
+        dragOffset = nil
+
+        if simd_distance(exhibit.anchor.position, podiumTop) < 0.34 {
+            // Docked: the exhibit settles onto the pedestal and the
+            // Load button appears above it.
+            if let previous = dockedModuleID, previous != id,
+               let old = exhibits.first(where: { $0.moduleID == previous }) {
+                returningIDs[previous] = time + 0.45
+                old.anchor.move(to: Transform(translation: old.basePosition),
+                                relativeTo: root, duration: 0.4,
+                                timingFunction: .easeInOut)
+            }
+            dockedModuleID = id
+            exhibit.anchor.move(to: Transform(translation: podiumTop),
+                                relativeTo: root, duration: 0.28,
+                                timingFunction: .easeOut)
+            SoundPalette.play(.chime, on: exhibit.anchor, volume: 0.6)
+            loadButton?.position = podiumTop + SIMD3(0, 0.34, 0)
+            loadButton?.isEnabled = true
+            podiumGlow?.components.set(OpacityComponent(opacity: 1.0))
+        } else {
+            // Not offered: it glides home.
+            returningIDs[id] = time + 0.5
+            exhibit.anchor.move(to: Transform(translation: exhibit.basePosition),
+                                relativeTo: root, duration: 0.45,
+                                timingFunction: .easeInOut)
+            podiumGlow?.components.set(OpacityComponent(opacity: 0.35))
+        }
+    }
+
+    #if DEBUG
+    /// Seats an exhibit on the podium immediately — CLI screenshots
+    /// have no hand to carry one with.
+    func dockForDebug(id: String) {
+        guard let exhibit = exhibits.first(where: { $0.moduleID == id }) else { return }
+        dockedModuleID = id
+        exhibit.anchor.position = podiumTop
+        loadButton?.position = podiumTop + SIMD3(0, 0.34, 0)
+        loadButton?.isEnabled = true
+        podiumGlow?.components.set(OpacityComponent(opacity: 1.0))
+    }
+    #endif
+
+    /// A tap on an exhibit teaches the gesture: the podium flashes.
+    func hintPodium() {
+        guard let podiumGlow else { return }
+        podiumGlow.components.set(OpacityComponent(opacity: 1.0))
+        Task { @MainActor [weak podiumGlow] in
+            try? await Task.sleep(for: .milliseconds(650))
+            podiumGlow?.components.set(OpacityComponent(opacity: 0.35))
         }
     }
 
@@ -703,6 +933,36 @@ final class HubScene {
 
         for index in exhibits.indices {
             let focus = exhibits[index].focus
+            let exhibit = exhibits[index]
+
+            // An exhibit riding a hand, gliding home, or standing on
+            // the podium owns its own position — the idle life must
+            // not fight the carry, stomp the glide, or yank it off
+            // the pedestal.
+            if exhibit.moduleID == draggingID { continue }
+            if let until = returningIDs[exhibit.moduleID] {
+                if time < until { continue }
+                returningIDs[exhibit.moduleID] = nil
+            }
+            if exhibit.moduleID == dockedModuleID {
+                if !stillness {
+                    // The showcase turntable: a docked lab presents
+                    // itself with a slow, full turn.
+                    exhibit.vignette.orientation = simd_quatf(
+                        angle: Float(time * 0.45), axis: [0, 1, 0])
+                }
+                exhibit.pulser.scale = SIMD3(repeating: 1.05)
+                // Standing centre stage, it says its own name — without
+                // this the label keeps whatever opacity it happened to
+                // have when it was carried off the arc, which for an
+                // unfocused exhibit is invisible.
+                exhibit.namePivot.components.set(OpacityComponent(opacity: 1))
+                exhibit.halo.components.set(OpacityComponent(opacity: focus))
+                exhibits[index].animTime += dt
+                exhibit.animate(exhibits[index].animTime)
+                continue
+            }
+
             // Reduce Motion: the gallery holds still. Focus scaling
             // stays — it answers the user's own head, which is exactly
             // the motion Reduce Motion is not about.
@@ -713,7 +973,6 @@ final class HubScene {
                 : 0.008 * Float(sin(time * 1.05 + Double(index) * 2.1))
             // The focused exhibit lifts off its puck as it grows.
             let lift = Self.focusedLift * focus
-            let exhibit = exhibits[index]
             exhibit.anchor.position = exhibit.basePosition
                 + SIMD3(0, breathe + lift, 0)
 
@@ -770,6 +1029,25 @@ final class HubScene {
 
     /// Picks the exhibit nearest the user's look direction and eases
     /// every exhibit's focus value toward its target.
+    /// Where to aim at an exhibit — for the gaze cone and the caption.
+    ///
+    /// Its puck on the arc, except while it stands on the podium, where
+    /// it is somewhere else entirely. Aiming at the base regardless is
+    /// what the first podium pass did, and it meant the exhibit centre
+    /// stage could not be looked at while its abandoned puck went on
+    /// catching the gaze — and the caption hung over the empty puck.
+    /// Deliberately NOT the live anchor position: that carries the
+    /// breathe and the focus lift, so focus would feed back into its
+    /// own aim.
+    private func aimPosition(of exhibit: Exhibit) -> SIMD3<Float> {
+        if exhibit.moduleID == dockedModuleID { return podiumTop }
+        // Riding a hand it is wherever the hand is. Reading the live
+        // anchor is safe for exactly these two cases: the idle loop
+        // skips them, so no breathe or lift is written into it.
+        if exhibit.moduleID == draggingID { return exhibit.anchor.position }
+        return exhibit.basePosition
+    }
+
     private func updateFocus(lookRay: (origin: SIMD3<Double>,
                                        direction: SIMD3<Double>)?, dt: Double) {
         var winner: String?
@@ -795,7 +1073,7 @@ final class HubScene {
             var best = Self.focusCone
             for index in exhibits.indices {
                 let exhibit = exhibits[index]
-                let toExhibit = exhibit.basePosition - origin
+                let toExhibit = aimPosition(of: exhibit) - origin
                 let distance = simd_length(toExhibit)
                 guard distance > 1e-4 else { continue }
                 let cosine = simd_dot(toExhibit / distance, forward)
@@ -820,25 +1098,37 @@ final class HubScene {
     }
 
     private func applyFocus(winner: String?, dt: Double) {
+        let focused = exhibits.first { $0.moduleID == winner }
+
         // Publish only on change — SwiftUI must not see this per frame.
         if winner != focusedModuleID {
             focusedModuleID = winner
-            let exhibit = exhibits.first { $0.moduleID == winner }
-            focusedAnchor = exhibit?.anchor
-            // The panel floats ABOVE the focused exhibit, a step behind
-            // it. Straight behind was the first attempt — the diorama is
-            // angularly larger than the panel from where the user
-            // stands, so "behind" meant "hidden". Below was the second —
-            // and the app's own window and dock live dead ahead below
-            // the arc, so the centre modules' panels drowned in UI.
-            // Above is the one direction that is always clear: the
-            // diorama keeps the stage, its story hangs over it like a
-            // gallery caption. One panel, moved, not nine built.
-            if let base = exhibit?.basePosition {
-                let outward = simd_normalize(SIMD3<Float>(base.x, 0, base.z))
-                detailCard?.position = base + outward * 0.24 + SIMD3(0, 0.38, 0)
-            }
-            detailCard?.isEnabled = exhibit != nil
+            focusedAnchor = focused?.anchor
+            detailCard?.isEnabled = focused != nil
+        }
+
+        // The panel floats ABOVE the focused exhibit, a step behind it.
+        // Straight behind was the first attempt — the diorama is
+        // angularly larger than the panel from where the user stands, so
+        // "behind" meant "hidden". Below was the second — and the app's
+        // own window and dock live dead ahead below the arc, so the
+        // centre modules' panels drowned in UI. Above is the one
+        // direction that is always clear: the diorama keeps the stage,
+        // its story hangs over it like a gallery caption. One panel,
+        // moved, not nine built.
+        //
+        // Its PLACE is a transform write, not an observable publish, so
+        // unlike the id above it is safe to redo every frame — and it
+        // has to be. Positioning only on change is what the first podium
+        // pass did, and an exhibit carried to the podium while it was
+        // already the focus left its caption hanging over the empty puck
+        // it had just been lifted off.
+        if let focused {
+            let aim = aimPosition(of: focused)
+            let flat = SIMD3<Float>(aim.x, 0, aim.z)
+            let outward = simd_length(flat) > 1e-4
+                ? simd_normalize(flat) : SIMD3<Float>(0, 0, -1)
+            detailCard?.position = aim + outward * 0.24 + SIMD3(0, 0.38, 0)
         }
 
         let rate = Float(min(dt * 7, 1))
@@ -888,8 +1178,8 @@ final class HubScene {
 }
 
 /// The panel that appears behind whichever exhibit you turn toward:
-/// domain chip, the one-line promise, live progress, and a real Enter
-/// button beside the pinch you can already do.
+/// domain chip, the one-line promise, live progress, and the Load
+/// Module button — the way in that needs no carrying.
 ///
 /// A menu of nine physics simulations cannot say what any of them ARE
 /// while all nine are on screen — focus buys the room to say it.
@@ -968,13 +1258,13 @@ struct HubFocusPanel: View {
             HStack(spacing: 10) {
                 Spacer(minLength: 0)
                 Button(action: enter) {
-                    Label("Enter", systemImage: "arrow.forward")
+                    Label("Load Module", systemImage: "arrow.forward")
                         .font(.callout.weight(.semibold))
                         .padding(.horizontal, 4)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(module.accent)
-                .accessibilityHint("Opens \(module.title)")
+                .accessibilityHint("Opens \(module.title) — or carry its exhibit to the podium")
             }
         }
         .padding(16)

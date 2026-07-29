@@ -102,12 +102,13 @@ final class KinematicsModel {
     var gravity = 9.81
     var airResistance = false
 
-    /// Walls are ALWAYS on — a ball that leaves the room is a bug, not
-    /// a setting. Before the real room is scanned (and always in the
-    /// simulator) these default to the generous unscanned box, so the
-    /// bounce works from the first throw; on device the shared room
-    /// model replaces them with the detected walls plus the scanned
-    /// boundary.
+    /// Whether flights bounce off the walls and ceiling, or sail
+    /// through. Defaults ON — and when on, it always works: before the
+    /// real room is scanned (and always in the simulator) the walls
+    /// default to the generous unscanned box; on device the shared
+    /// room model replaces them with the detected walls plus the
+    /// scanned boundary.
+    var respectRoomWalls = true
     var roomWalls: [RoomWalls.Wall] = RoomWalls.box(of: .unscanned)
     /// The room's box, for the containment clamp — the guarantee that
     /// no ball ever ends a frame outside the room.
@@ -218,7 +219,7 @@ final class KinematicsModel {
             drag: drag(for: projectile),
             restitution: projectile.restitution,
             maxBounces: 4,
-            walls: roomWalls,
+            walls: respectRoomWalls ? roomWalls : [],
             maxDuration: 12
         )
     }
@@ -599,7 +600,7 @@ final class KinematicsModel {
         }
 
         // Wall contact: the real room pushes back (when enabled).
-        if !roomWalls.isEmpty,
+        if respectRoomWalls, !roomWalls.isEmpty,
            let hit = RoomWalls.strike(
                previous: previous.position, current: flight.state.position,
                velocity: flight.state.velocity,
@@ -683,7 +684,7 @@ final class KinematicsModel {
         // had settled into a roll passed straight through the same
         // wall it had just bounced off, which read as the feature
         // simply giving up.
-        if !roomWalls.isEmpty,
+        if respectRoomWalls, !roomWalls.isEmpty,
            let hit = RoomWalls.strike(
                previous: previous, current: position,
                velocity: velocity,
@@ -711,6 +712,7 @@ final class KinematicsModel {
     /// scanned bounds with its velocity reflected. Belt and braces:
     /// the strike gives the honest bounce, this guarantees containment.
     private func contain(_ flight: inout Flight) {
+        guard respectRoomWalls else { return }
         let box = roomBounds
         let r = flight.projectile.diameter / 2
         var position = flight.state.position

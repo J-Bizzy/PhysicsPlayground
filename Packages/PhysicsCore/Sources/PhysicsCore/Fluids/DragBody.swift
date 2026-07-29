@@ -117,6 +117,13 @@ public enum DragBody: String, CaseIterable, Sendable, Identifiable {
     /// offsets and radii scale with the frontal half-width, matching
     /// each body's authored proportions. The cylinder returns none —
     /// it keeps its exact analytic solution.
+    ///
+    /// These must sit INSIDE the visible model, tightly: the smoke
+    /// wraps whatever is here, so an oversized sphere reads as an
+    /// invisible bulge jutting out of the bodywork — which is exactly
+    /// how the first coarse layouts (few spheres, radii proud of the
+    /// silhouette) looked. More, smaller spheres trace each shape so
+    /// the air curves hug the model.
     public func obstacleSpheres(center: SIMD3<Double>, halfWidth: Double) -> [ObstacleField.Sphere] {
         let layout: [(x: Double, y: Double, r: Double)]
         switch self {
@@ -125,25 +132,44 @@ public enum DragBody: String, CaseIterable, Sendable, Identifiable {
         case .sphere:
             layout = [(0, 0, 1.0)]
         case .teardrop:
-            layout = [(-0.5, 0, 0.95), (0.5, 0, 0.6), (1.3, 0, 0.32)]
+            // The profile itself: fattest just behind the nose, a
+            // smooth chain thinning to the tail.
+            layout = [(-0.8, 0, 0.62), (-0.35, 0, 0.8), (0.15, 0, 0.78),
+                      (0.7, 0, 0.6), (1.2, 0, 0.4), (1.6, 0, 0.22)]
         case .cube:
-            layout = [(0, 0, 1.25)]
+            // Inscribed, not circumscribed — a sphere poking through
+            // six flat faces is the bulge complaint incarnate. A core
+            // plus four corner spheres fill the profile from inside,
+            // all of them within the inscribed half-edge (0.883).
+            layout = [(0, 0, 0.80),
+                      (-0.52, -0.52, 0.34), (-0.52, 0.52, 0.34),
+                      (0.52, -0.52, 0.34), (0.52, 0.52, 0.34)]
         case .flatDisc:
-            layout = [(0, 0, 1.35)]
+            // Thin and face-on: a hub plus two rim spheres reaching
+            // exactly to the rim, not one deep ball.
+            layout = [(0, 0, 0.5),
+                      (0, 0.72, 0.28), (0, -0.72, 0.28)]
         case .cone:
-            layout = [(-0.8, 0, 0.45), (0.15, 0, 1.0)]
+            // Apex into the wind, widening to the base.
+            layout = [(-0.85, 0, 0.22), (-0.45, 0, 0.45),
+                      (0.0, 0, 0.7), (0.4, 0, 0.9)]
         case .car:
-            // Sedan silhouette: low nose, high cabin, tapering tail.
-            layout = [(-2.0, -0.25, 0.62), (-1.0, -0.15, 0.78), (0.1, 0.1, 0.95),
-                      (1.2, -0.05, 0.75), (2.05, -0.2, 0.55)]
+            // Sedan silhouette, hugged: low nose, glasshouse crown,
+            // tapering tail — nothing above the roofline.
+            layout = [(-2.1, -0.4, 0.34), (-1.5, -0.3, 0.46),
+                      (-0.8, -0.2, 0.56), (-0.1, 0.0, 0.64),
+                      (0.6, 0.0, 0.6), (1.3, -0.15, 0.5),
+                      (1.9, -0.3, 0.4), (2.3, -0.4, 0.3)]
         case .truck:
-            // Long tall box: near-constant girth nose to tail.
-            layout = [(-3.9, 0, 1.45), (-2.0, 0, 1.53), (0, 0, 1.53),
-                      (2.0, 0, 1.53), (3.9, 0, 1.45)]
+            // Long tall box: constant girth, radii inside the panels.
+            layout = [(-3.8, 0, 1.2), (-2.6, 0, 1.32), (-1.3, 0, 1.35),
+                      (0, 0, 1.35), (1.3, 0, 1.35), (2.6, 0, 1.32),
+                      (3.8, 0, 1.2)]
         case .plane:
             // Slender fuselage: the wind barely notices.
-            layout = [(-3.4, 0, 0.35), (-1.7, 0, 0.45), (0, 0, 0.45),
-                      (1.7, 0, 0.42), (3.2, 0, 0.3)]
+            layout = [(-3.3, 0, 0.28), (-2.2, 0, 0.36), (-1.1, 0, 0.4),
+                      (0, 0, 0.4), (1.1, 0, 0.38), (2.2, 0, 0.32),
+                      (3.1, 0, 0.24)]
         }
         return layout.map {
             ObstacleField.Sphere(

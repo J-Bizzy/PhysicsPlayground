@@ -1,0 +1,4 @@
+# Editor swap/backup files (vim leaves .CLAUDE.md.swp behind while editing)
+*.swp
+*.swo
+*~

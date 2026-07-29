@@ -62,6 +62,9 @@ struct KinematicsControlsPanel: View {
                     Slider(value: $model.gravity, in: KinematicsModel.gravityRange)
                         .accessibilityLabel("Gravity")
                 }
+                Toggle("Bounce off walls", isOn: $model.respectRoomWalls)
+                    .font(DesignTokens.TypeScale.control)
+                    .accessibilityHint("Off, balls sail through the walls and ceiling")
                 Toggle("Air resistance", isOn: $model.airResistance)
                     .font(DesignTokens.TypeScale.control)
                 if self.model.airResistance {

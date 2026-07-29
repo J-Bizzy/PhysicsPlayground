@@ -81,6 +81,61 @@ final class DragBodyTests: XCTestCase {
         XCTAssertEqual(doubled[0].radius, 2 * car[0].radius, accuracy: 1e-12)
     }
 
+    /// Each body's vertical half-extent in half-width units, read back
+    /// out of the frontal area it already claims — so the obstacle
+    /// profile and the drag area cannot drift apart silently.
+    private func verticalHalfExtent(of body: DragBody) -> Double {
+        let area = body.frontalArea(radius: 1)
+        switch body {
+        case .sphere, .teardrop, .flatDisc, .cone, .plane:
+            return (area / .pi).squareRoot()   // circular face: π(kr)²
+        case .cube:
+            return area.squareRoot() / 2       // square face: edge²
+        case .car, .truck:
+            return area / 4                    // 2r wide × h tall
+        case .cylinder:
+            return 1
+        }
+    }
+
+    /// No obstacle sphere may reach past the body's own silhouette.
+    ///
+    /// The smoke wraps the obstacle spheres, not the model, so a sphere
+    /// proud of the bodywork reads as an invisible bulge in mid-air —
+    /// air parting around nothing. This is the invariant the tuned
+    /// layouts exist to satisfy, and it is not obvious by eye: the first
+    /// pass at a "ring of small spheres" for the disc reached 1.1× its
+    /// own rim, and the cube's core sphere poked straight through all
+    /// six faces, which is precisely the bug the retune was meant to
+    /// remove. The sphere and the plane sit exactly ON their silhouettes
+    /// — deliberately, since for them the obstacle IS the body — so this
+    /// compares with a tolerance rather than a strict inequality.
+    func testObstacleSpheresStayInsideTheSilhouette() {
+        let halfWidth = 0.1
+        for body in DragBody.allCases {
+            let limit = verticalHalfExtent(of: body)
+            for sphere in body.obstacleSpheres(center: .zero, halfWidth: halfWidth) {
+                let reach = (abs(sphere.center.y) + sphere.radius) / halfWidth
+                XCTAssertLessThanOrEqual(
+                    reach, limit + 1e-9,
+                    "\(body.displayName): a sphere reaches \(reach)× the "
+                    + "half-width, past its \(limit)× silhouette")
+            }
+        }
+    }
+
+    /// The two bodies whose obstacle spheres ARE their geometry reach
+    /// their silhouette exactly — a profile that fell short would let
+    /// the smoke pass through the bodywork instead of around it.
+    func testSphereAndFuselageFillTheirSilhouettes() {
+        for body in [DragBody.sphere, .plane] {
+            let spheres = body.obstacleSpheres(center: .zero, halfWidth: 0.1)
+            let reach = spheres.map { (abs($0.center.y) + $0.radius) / 0.1 }.max()!
+            XCTAssertEqual(reach, verticalHalfExtent(of: body), accuracy: 1e-12,
+                           "\(body.displayName) should fill its silhouette")
+        }
+    }
+
     /// Drag grows with the square of speed — doubling wind quadruples force.
     func testQuadraticSpeedScaling() {
         func f(_ v: Double) -> Double {
