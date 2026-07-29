@@ -20,7 +20,7 @@ enum ElectromagnetismModule {
         ModuleDescriptor(
             id: id,
             title: "Electric Fields",
-            blurb: "Place charges, trace field lines and equipotential shells, and ride a test charge through Coulomb's law.",
+            blurb: "Place charges, trace the field lines they make, and ride a test charge through Coulomb's law.",
             icon: "bolt.fill",
             accent: DesignTokens.Palette.electromagnetismAccent,
             firstRunHint: "Grab a charge and drag it anywhere — the field follows. Tap a charge and its own controls unfold around it: pull the bead to change strength, petals flip or delete. Add charges from this window.",
@@ -103,10 +103,6 @@ enum ElectromagnetismModule {
         LegendItem(
             swatch: .line(DesignTokens.Palette.fieldLine),
             text: "Field lines run from positive to negative"
-        ),
-        LegendItem(
-            swatch: .translucent(DesignTokens.Palette.positiveShell),
-            text: "Translucent shells: equal potential (orange +, indigo −), always at right angles to field lines"
         ),
         LegendItem(
             swatch: .stroke(DesignTokens.Palette.selectionHalo),

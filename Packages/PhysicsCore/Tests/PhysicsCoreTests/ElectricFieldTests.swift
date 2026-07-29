@@ -142,7 +142,7 @@ final class ElectricFieldTests: XCTestCase {
         XCTAssertEqual(combined, summed, accuracy: abs(summed) * 1e-12)
     }
 
-    /// A dipole's perpendicular bisector is the V = 0 equipotential.
+    /// A dipole's perpendicular bisector is the V = 0 surface.
     func testPotentialIsZeroOnDipoleBisector() {
         let charges = [
             PointCharge(position: SIMD3(-0.3, 0, 0), charge: 1e-6),

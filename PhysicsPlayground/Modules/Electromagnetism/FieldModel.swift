@@ -83,9 +83,6 @@ final class FieldModel {
 
     // MARK: Display options
     var showLines = true
-    var showEquipotentials = false
-    /// How many equipotential casings wrap each polarity (1…6).
-    var equipotentialShells = 3
 
     // MARK: Gauss surface — the flux meter you carry
 
@@ -417,9 +414,7 @@ final class FieldModel {
     /// reading as a laser starburst rather than a field. A dipole is the
     /// picture everyone recognises (it is what the hub's own exhibit
     /// shows), it curves, it closes, and it fills the volume around the
-    /// user. Equipotential shells come up with it: the marching-tets
-    /// isosurfaces are the module's most beautiful asset and were hidden
-    /// behind an opt-in toggle.
+    /// user.
     func reset() {
         let separation = 0.26
         let positive = PointCharge(
@@ -434,8 +429,6 @@ final class FieldModel {
         probeStatus = .none
         probeIsPositive = true
         showLines = true
-        showEquipotentials = true
-        equipotentialShells = 3
         capacitorOn = false
         plateVoltage = 20_000
         capacitorCenter = samplingRegion.center

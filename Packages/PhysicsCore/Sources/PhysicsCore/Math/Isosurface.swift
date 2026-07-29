@@ -4,8 +4,8 @@
 //
 //  Domain-agnostic isosurface extraction: triangulates the set of points
 //  where any scalar field f(r) equals a chosen level, via marching
-//  tetrahedra. Equipotential shells, interference surfaces, and density
-//  contours are all isosurfaces — modules supply the scalar closure and an
+//  tetrahedra. Interference surfaces and density contours are both
+//  isosurfaces — modules supply the scalar closure and an
 //  outward-direction closure used to orient triangle winding.
 //
 //  Method: the region is divided into a uniform grid of cubes, each cube

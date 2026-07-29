@@ -8,8 +8,7 @@
 //    live field at its point (scale = |u|), tinted once per configuration
 //    by the standing envelope (bright where loud, dim where quiet);
 //  · the SILENCE SURFACES — 3D sheets where the envelope cancels —
-//    extracted by marching tetrahedra on the GeometryPipeline, exactly
-//    like the electromagnetism module's equipotential shells;
+//    extracted by marching tetrahedra on the GeometryPipeline;
 //  · floating grabbable sources (teal in phase, orange inverted) and the
 //    probe with its billboarded readout.
 //

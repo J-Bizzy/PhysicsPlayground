@@ -11,7 +11,7 @@
 //  Physics color conventions are project-locked:
 //    red = positive charge, blue = negative charge,
 //    green/purple = ± test charge, cyan = field lines,
-//    orange/indigo = ± equipotential shells, white halo = selection.
+//    white halo = selection.
 //
 
 import RenderKit
@@ -27,8 +27,6 @@ enum DesignTokens {
         static let probePositiveUI: UIColor = .systemGreen
         static let probeNegativeUI: UIColor = .systemPurple
         static let fieldLineUI = UIColor(red: 0.45, green: 0.85, blue: 1.0, alpha: 1)
-        static let positiveShellUI: UIColor = .systemOrange
-        static let negativeShellUI: UIColor = .systemIndigo
         static let selectionHaloUI: UIColor = .white
         static let projectileUI: UIColor = .systemOrange
         static let predictedArcUI: UIColor = .white
@@ -41,8 +39,6 @@ enum DesignTokens {
         static let probePositive = Color(uiColor: probePositiveUI)
         static let probeNegative = Color(uiColor: probeNegativeUI)
         static let fieldLine = Color(uiColor: fieldLineUI)
-        static let positiveShell = Color(uiColor: positiveShellUI)
-        static let negativeShell = Color(uiColor: negativeShellUI)
         static let selectionHalo = Color(uiColor: selectionHaloUI)
         static let projectile = Color(uiColor: projectileUI)
         static let predictedArc = Color(uiColor: predictedArcUI)

@@ -248,12 +248,6 @@ struct FieldControlsPanel: View {
     private func displayToggles(model: Bindable<FieldModel>) -> some View {
         Toggle("Field lines", isOn: model.showLines)
             .accessibilityHint("Continuous lines with arrowheads riding them, showing the field's direction")
-        Toggle("Equipotential shells", isOn: model.showEquipotentials)
-            .accessibilityHint("Translucent surfaces of constant potential, always perpendicular to the field lines")
-        if self.model.showEquipotentials {
-            Stepper("Casings: \(self.model.equipotentialShells)",
-                    value: model.equipotentialShells, in: 1...6)
-        }
     }
 }
 

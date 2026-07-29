@@ -283,19 +283,10 @@ final class FieldModelTests: XCTestCase {
         XCTAssertEqual(model.probeStatus, .none)
         XCTAssertTrue(model.probeIsPositive)
         XCTAssertTrue(model.showLines)
-        XCTAssertTrue(model.showEquipotentials,
-                      "the shells are the module's best asset — they open with it")
     }
 
-    /// The casing count is honored per polarity, and the capacitor
-    /// accelerates the probe at exactly a = qV/(d·m).
-    func testShellCountAndCapacitorDrift() {
-        // Shell levels: 5 casings around a positive-only system.
-        let charge = PointCharge(id: UUID(), position: SIMD3(0, 1.3, -1.0),
-                                 charge: 1e-6)
-        XCTAssertEqual(EquipotentialSurface.defaultLevels(for: [charge], shells: 5).count, 5)
-        XCTAssertEqual(EquipotentialSurface.defaultLevels(for: [charge], shells: 1).count, 1)
-
+    /// The capacitor accelerates the probe at exactly a = qV/(d·m).
+    func testCapacitorDrift() {
         // Capacitor: no point charges, plates on, probe at the center.
         let model = FieldModel()
         model.removeAllCharges()

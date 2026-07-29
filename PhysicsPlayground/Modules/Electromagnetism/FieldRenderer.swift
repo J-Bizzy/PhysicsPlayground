@@ -51,8 +51,6 @@ final class FieldRenderer {
     /// The Gauss surface's own colour — deliberately not the field's, so
     /// the measuring instrument never reads as part of the field.
     static let gaussColor = UIColor(red: 1.0, green: 0.84, blue: 0.35, alpha: 1)
-    static let positiveShellColor = DesignTokens.Palette.positiveShellUI
-    static let negativeShellColor = DesignTokens.Palette.negativeShellUI
     static let chargeRadius: Float = 0.03
 
     /// How big a charge is actually drawn right now — the Bloom's grip
@@ -87,8 +85,6 @@ final class FieldRenderer {
     private let linesEntity = ModelEntity()
     private let lineCasingEntity = ModelEntity()
     private let lineGlowEntity = ModelEntity()
-    private let positiveShellsEntity = ModelEntity()
-    private let negativeShellsEntity = ModelEntity()
     /// Core radius of a field line; the casing is swept from it.
     static let lineRadius: Float = 0.0016
     private let lineMaterial = UnlitMaterial(color: FieldRenderer.lineColor)
@@ -99,14 +95,10 @@ final class FieldRenderer {
         material.blending = .transparent(opacity: 0.2)
         return material
     }()
-    private let positiveShellMaterial = FieldRenderer.shellMaterial(color: FieldRenderer.positiveShellColor)
-    private let negativeShellMaterial = FieldRenderer.shellMaterial(color: FieldRenderer.negativeShellColor)
-
     // Change detection: the expensive paths only run when these differ.
     private var lastCharges: [PointCharge]?
     private var lastRegion: FieldModel.SamplingRegion?
     private var lastShowLines: Bool?
-    private var lastShowShells: Bool?
 
     private var geometryPipeline: GeometryPipeline<GeometryJob, GeometryResult>?
     private let fieldFlowRoot = Entity()
@@ -135,10 +127,8 @@ final class FieldRenderer {
         // Casing under the bright core: darkness first, light on top.
         fieldFlowRoot.addChild(lineCasingEntity)
         fieldFlowRoot.addChild(arrowHeads.root)
-        for entity in [linesEntity, positiveShellsEntity, negativeShellsEntity] {
-            entity.isEnabled = false
-            fieldFlowRoot.addChild(entity)
-        }
+        linesEntity.isEnabled = false
+        fieldFlowRoot.addChild(linesEntity)
         lineGlowEntity.isEnabled = false
         lineCasingEntity.isEnabled = false
 
@@ -146,13 +136,6 @@ final class FieldRenderer {
             compute: { Self.computeGeometry($0) },
             apply: { [weak self] in self?.applyGeometry($0) }
         )
-    }
-
-    private static func shellMaterial(color: UIColor) -> UnlitMaterial {
-        var material = UnlitMaterial(color: color)
-        material.blending = .transparent(opacity: 0.14)
-        material.faceCulling = .none  // shells stay visible from inside them
-        return material
     }
 
     // MARK: Render loop
@@ -176,8 +159,6 @@ final class FieldRenderer {
                 probe: model.probe,
                 probeIsPositive: model.probeIsPositive,
                 showLines: model.showLines,
-                showShells: model.showEquipotentials,
-                shells: model.equipotentialShells,
                 capacitorOn: model.capacitorOn,
                 capacitorCenter: model.capacitorCenter,
                 plateSeparation: model.plateSeparation,
@@ -282,8 +263,6 @@ final class FieldRenderer {
         probe: TestChargeDynamics.ProbeState?,
         probeIsPositive: Bool,
         showLines: Bool,
-        showShells: Bool,
-        shells: Int = 3,
         capacitorOn: Bool = false,
         capacitorCenter: SIMD3<Double> = .zero,
         plateSeparation: Double = 0.44,
@@ -299,7 +278,7 @@ final class FieldRenderer {
 
         let chargesChanged = charges != lastCharges || region != lastRegion
 
-        // Expensive path — lines (with their riding arrowheads) and shells
+        // Expensive path — lines (with their riding arrowheads)
         // rebuild on the geometry pipeline.
         linesEntity.isEnabled = showLines && !charges.isEmpty
         lineCasingEntity.isEnabled = showLines && !charges.isEmpty
@@ -307,39 +286,30 @@ final class FieldRenderer {
         if !showLines || charges.isEmpty {
             arrowHeads.hideAll()
         }
-        positiveShellsEntity.isEnabled = showShells && !charges.isEmpty
-        negativeShellsEntity.isEnabled = showShells && !charges.isEmpty
-        let visibilityChanged = showLines != lastShowLines || showShells != lastShowShells
-        let shellsChanged = shells != lastShells
+        let visibilityChanged = showLines != lastShowLines
         let roomChanged = room != lastRoom
-        if (showLines || showShells)
-            && (chargesChanged || visibilityChanged || shellsChanged || roomChanged)
+        if showLines
+            && (chargesChanged || visibilityChanged || roomChanged)
             && !charges.isEmpty {
             geometryPipeline?.submit(GeometryJob(
                 charges: charges,
                 region: region,
                 wantLines: showLines,
-                wantShells: showShells,
-                shells: shells,
                 room: room
             ))
         }
         lastRoom = room
-        lastShells = shells
         lastShowLines = showLines
-        lastShowShells = showShells
         lastCharges = charges
         lastRegion = region
     }
 
-    // MARK: Background field geometry (lines + equipotential shells)
+    // MARK: Background field geometry (the traced lines)
 
     private nonisolated struct GeometryJob: Sendable {
         var charges: [PointCharge]
         var region: FieldModel.SamplingRegion
         var wantLines: Bool
-        var wantShells: Bool
-        var shells: Int
         /// The user's real room. Lines are clipped to it, so the field
         /// stops at the wall instead of leaving the building — which is
         /// not a cheat: a wall is a conductor's boundary as far as this
@@ -348,7 +318,6 @@ final class FieldRenderer {
         var room: RoomBox
     }
 
-    private var lastShells = 3
     private var lastRoom: RoomBox?
 
     /// Re-aims the arrowhead pool at the given points, each cone rotated
@@ -486,11 +455,6 @@ final class FieldRenderer {
         for plate in plateEntities { plate.isEnabled = on }
     }
 
-    private nonisolated struct ShellMeshData: Sendable {
-        var positions: [SIMD3<Float>] = []
-        var normals: [SIMD3<Float>] = []
-    }
-
     private nonisolated struct GeometryResult: Sendable {
         var sourceCharges: [PointCharge] = []
         var tube = TubeBuffers()
@@ -508,8 +472,6 @@ final class FieldRenderer {
         /// log-brightness ramp).
         var arrowPoints: [SIMD3<Double>] = []
         var arrowVectors: [SIMD3<Double>] = []
-        var positiveShells = ShellMeshData()
-        var negativeShells = ShellMeshData()
     }
 
     private nonisolated static func computeGeometry(_ job: GeometryJob) -> GeometryResult {
@@ -562,27 +524,6 @@ final class FieldRenderer {
             }
         }
 
-        if job.wantShells {
-            for level in EquipotentialSurface.defaultLevels(for: job.charges, shells: job.shells) {
-                let triangles = EquipotentialSurface.triangles(
-                    level: level,
-                    charges: job.charges,
-                    center: job.region.center,
-                    extents: job.region.extents,
-                    resolution: 24
-                )
-                guard !triangles.isEmpty else { continue }
-                var data = level >= 0 ? result.positiveShells : result.negativeShells
-                data.positions.reserveCapacity(data.positions.count + triangles.count)
-                for vertex in triangles {
-                    data.positions.append(SIMD3<Float>(vertex))
-                    data.normals.append(SIMD3<Float>(
-                        EquipotentialSurface.outwardNormal(at: vertex, level: level, charges: job.charges)
-                    ))
-                }
-                if level >= 0 { result.positiveShells = data } else { result.negativeShells = data }
-            }
-        }
         return result
     }
 
@@ -608,22 +549,6 @@ final class FieldRenderer {
         // the warp so there's no pop when it lands mid-drag.
         appliedCharges = result.sourceCharges
         if let model { syncFieldFlowWarp(model.charges) }
-        applyShellMesh(result.positiveShells, to: positiveShellsEntity, material: positiveShellMaterial)
-        applyShellMesh(result.negativeShells, to: negativeShellsEntity, material: negativeShellMaterial)
-    }
-
-    private func applyShellMesh(_ data: ShellMeshData, to entity: ModelEntity, material: UnlitMaterial) {
-        guard !data.positions.isEmpty else {
-            entity.model = nil
-            return
-        }
-        var descriptor = MeshDescriptor(name: "equipotential")
-        descriptor.positions = MeshBuffer(data.positions)
-        descriptor.normals = MeshBuffer(data.normals)
-        descriptor.primitives = .triangles(Array(0..<UInt32(data.positions.count)))
-        if let mesh = try? MeshResource.generate(from: [descriptor]) {
-            entity.model = ModelComponent(mesh: mesh, materials: [material])
-        }
     }
 
     // MARK: Charges
