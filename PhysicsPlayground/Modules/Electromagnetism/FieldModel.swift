@@ -51,9 +51,9 @@ final class FieldModel {
     /// neighbour's apparatus, which is the exact silent failure
     /// co-presence exists to make impossible.
     ///
-    /// Kept in step with `EMStationLayout.halfExtents(.charges)` by
-    /// `EMStationLayoutTests`; the layout may not promise a footprint
-    /// the model does not enforce.
+    /// Containment is enforced by `FieldClampTests` — the widest
+    /// capacitor, the largest Gauss sphere, and a dragged charge all
+    /// stay inside, inset by their own half-size.
     nonisolated static let regionHalfExtents = SIMD3<Double>(0.62, 1.20, 0.62)
 
     /// Clamps a point into the station, keeping `inset` of clearance on

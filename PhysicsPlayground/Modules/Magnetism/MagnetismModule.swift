@@ -7,7 +7,7 @@
 //  room in 3D.
 //
 //  This is NOT a catalog entry any more. Magnetism is the right-hand
-//  station of the merged E&M world (EMWorldModule) rather than a module
+//  station of the since-undone merged E&M world rather than a module
 //  of its own — a coil carrying a current is a magnet, and keeping the
 //  coil in one room and the current in another made the app's single
 //  best demonstration impossible to see. The bench's model, renderer,

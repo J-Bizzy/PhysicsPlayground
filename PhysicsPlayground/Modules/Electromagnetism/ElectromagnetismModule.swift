@@ -2,20 +2,12 @@
 //  ElectromagnetismModule.swift
 //  Physics Playground — Electromagnetism module
 //
-//  The electrostatics bench — no longer a catalog entry of its own.
-//
-//  This was "Electric Fields", the app's original module and the last
-//  standalone half of E&M. It is now the CENTRE STATION of the `em`
-//  world (`Modules/EMWorld/EMChargeStation`), which is where it always
-//  belonged: a circuit bench makes a current, a current makes a magnet,
-//  and a charge is what both of them are made of. Keeping it a separate
-//  entry meant the app asserted that they were one subject and then
-//  made you leave the room to check.
-//
-//  What survives here is what the world composes: the readings the
-//  notebook writes down, and the full legend. `FieldModel`,
-//  `FieldRenderer` and `FieldControlsPanel` are untouched in this
-//  folder — the world folder holds only composition.
+//  Catalog registration for Electric Fields: descriptor, readings and
+//  legend. Briefly the centre station of a merged E&M world; the world
+//  was undone for geometry (DECISIONS.md, 2026-07-30) and this is a
+//  standalone experience again — but it keeps the lateral clamps that
+//  merger forced into existence, because a charge that could be
+//  dragged across the room was a bug with or without a neighbour.
 //
 
 import SwiftUI

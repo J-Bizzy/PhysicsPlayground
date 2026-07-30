@@ -6,7 +6,7 @@
 //  its notebook readings.
 //
 //  This is NOT a catalog entry any more. The workshop is the left-hand
-//  station of the merged E&M world (EMWorldModule) rather than a module
+//  station of the since-undone merged E&M world rather than a module
 //  of its own — its inductor current has always driven the magnet
 //  bench's electromagnet, and that link was unwatchable while the two
 //  benches were in different rooms. The bench's model, renderer, panel,

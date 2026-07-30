@@ -36,11 +36,13 @@ final class CircuitsModel {
     /// 1.33 m to the right and the charges straight ahead, so a 3 m
     /// reach means a resistor can be parked inside either of them. A box
     /// rather than a sphere because that is what the station layout
-    /// promises and what `EMStationLayoutTests` checks.
+    /// promises and what `CircuitsModelTests.assertOnTheBench` checks
+    /// — and, since the bench can summon the magnetic field beside it
+    /// (the coil annex), what keeps a dragged part out of that field's
+    /// volume (`CircuitsCoilAnnexTests`).
     ///
-    /// Kept just inside `EMStationLayout.halfExtents(.bench)`, which is
-    /// measured about the bench PIVOT (z = −0.85) while this is measured
-    /// about the build centre (z = −0.9) — hence the shallower z.
+    /// Sized about the build centre (z = −0.9), slightly shallower in
+    /// z than the bench's visual footprint about its pivot (z = −0.85).
     nonisolated static let buildHalfExtents = SIMD3<Double>(0.70, 0.48, 0.33)
     nonisolated static let floorMargin = 0.2
     nonisolated static let componentBudget = 16

@@ -31,7 +31,7 @@ final class MagnetismModel {
     /// when this bench became the right-hand station of the E&M world:
     /// the grid is laid out as a cube of this span, so at 0.85 the
     /// needles reached across the world's centre line and into the
-    /// circuit bench. See EMStationLayout.
+    /// circuit bench when it stands as Circuit Workshop's coil annex.
     nonisolated static let regionHalfExtent = 0.72
     /// Per-axis bounds for the CLAMP. Height matches the old cube, but
     /// depth stops 15 cm in FRONT of the user instead of 15 cm behind
@@ -44,7 +44,7 @@ final class MagnetismModel {
     /// Width is narrower than height for a second reason: this bench
     /// now shares the room with the circuit bench, and a magnet free to
     /// glide 0.85 m off centre could glide out of its own station and
-    /// into the other one. EMStationLayoutTests enforces the clearance.
+    /// into the other one. CircuitsCoilAnnexTests enforces the clearance.
     nonisolated static let regionHalfExtents = SIMD3<Double>(0.62, 0.85, 0.55)
     nonisolated static let regionFloor = 0.35
     /// Visual length of a bar magnet (m); also the touching distance.

@@ -1,19 +1,18 @@
 //
 //  EMFieldStation.swift
-//  Physics Playground — Electricity & Magnetism
+//  Physics Playground — Circuit Workshop's coil annex
 //
-//  The magnetic field volume, as one station of the E&M world.
+//  The magnetic field volume, as the second half of the app's one
+//  wired pair: Circuit Workshop summons it when the electromagnet is
+//  switched on, cabled to the bench's inductor.
 //
-//  MagnetismSpaceView's body, turned inside out for the same reason
-//  the bench was: one RealityView, one set of gestures, two apparatus
-//  that each have their own grab grammar.
-//
-//  The line this station used to reach across a module boundary for is
-//  now a wire in the same room. `setCoilCurrent` still takes whatever
-//  the bench's inductors carry, but the bench is thirteen hundred
-//  millimetres to the left rather than behind a hub, a card, and a
-//  loading screen — so "open the switch and the electromagnet dies" is
-//  something you can watch happen instead of something you're told.
+//  MagnetismSpaceView's body, turned inside out so a host scene can
+//  own the gestures. Born as a station of the merged E&M world; the
+//  world died of geometry (DECISIONS.md, 2026-07-30) but this survived
+//  it, because the cable is wiring rather than layout — `setCoilCurrent`
+//  takes whatever the bench's inductors carry, and "open the switch and
+//  the electromagnet dies" is something you watch happen in one room
+//  instead of something you are told about another.
 //
 
 import PhysicsCore
@@ -22,7 +21,7 @@ import RealityKit
 import RenderKit
 
 @MainActor
-final class EMFieldStation: Station {
+final class EMFieldStation {
     let model: MagnetismModel
     let renderer = MagnetismRenderer()
 
@@ -32,8 +31,8 @@ final class EMFieldStation: Station {
     private let rig = SpatialScaleRig(
         pivot: SIMD3<Float>(MagnetismModel.regionCenter), range: 0.5...4.0)
 
-    /// `Station`'s accessor. Optional in the protocol because an
-    /// apparatus may refuse to be scaled at all; the field has one.
+    /// Optional to keep Circuit Workshop's rig routing uniform — this
+    /// apparatus does have one.
     var scaleRig: SpatialScaleRig? { rig }
 
     private let bloom = Bloom()
@@ -71,9 +70,10 @@ final class EMFieldStation: Station {
             .init(name: "Magnet",
                   tint: UIColor(DesignTokens.Palette.magnetismAccent),
                   glyph: "N",
+                  // On the FAR flank (+x): the near side faces the
+                  // circuit bench this apparatus is cabled to.
                   position: SIMD3<Float>(MagnetismModel.regionCenter)
-                      + SIMD3(0.72 * Float(EMStationLayout.outboard(.field)),
-                              -0.20, 0.34),
+                      + SIMD3(0.72, -0.20, 0.34),
                   spawn: { [model] point in model.addMagnet(at: point) }),
         ])
         renderer.viewRoot.addChild(sources.root)
@@ -85,7 +85,7 @@ final class EMFieldStation: Station {
         // so the scaled view can be screenshot-verified from the CLI —
         // the simulator has no second hand to pinch with. Addressed,
         // because the bench station reads the same key (StationDebug).
-        if let forced = StationDebug.forcedScale(EMStation.field.rawValue) {
+        if let forced = StationDebug.forcedScale("field") {
             rig.updateMagnification(forced)
             rig.endGesture()
         }

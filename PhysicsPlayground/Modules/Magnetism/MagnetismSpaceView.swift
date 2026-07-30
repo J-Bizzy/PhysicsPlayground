@@ -47,6 +47,18 @@ struct MagnetismSpaceView: View {
             renderer.viewRoot.addChild(bloom.root)
             wells = sources
 
+            // Magnetism alone is MAGNETS alone. The electromagnet coil
+            // lives with Circuit Workshop now — the one wired pair —
+            // because its current is that bench's inductor current, and
+            // a coil driven by a circuit in another room is a rumour,
+            // not a demonstration. This scene once read
+            // `appModel.circuitsModel.inductorCurrent` across the
+            // module boundary every frame; that invisible link is what
+            // the pair made visible, so it does not come back here.
+            // Forced off on entry in case a Circuit Workshop session
+            // left it on: the switch belongs to that room.
+            model.electromagnetOn = false
+
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
@@ -55,13 +67,6 @@ struct MagnetismSpaceView: View {
                         syncBloom(renderer: renderer, dt: event.deltaTime)
                     }
                     model.step(dt: event.deltaTime)
-                    // The cross-module link: whatever current the
-                    // CIRCUIT bench's inductor is carrying right now is
-                    // the current in this coil. Build a loop over there,
-                    // open its switch, and the electromagnet here dies.
-                    if model.electromagnetOn {
-                        model.setCoilCurrent(appModel.circuitsModel.inductorCurrent)
-                    }
                     renderer?.tick(model, viewer: appModel.room.headPosition.map {
                         renderer?.displayPoint(fromWorld: SIMD3<Float>($0)) ?? $0
                     })

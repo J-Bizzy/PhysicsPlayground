@@ -179,17 +179,6 @@ final class AppModel {
         #endif
     }
 
-    // MARK: Per-world focus — which apparatus is being attended to.
-    //
-    // Held here, not as @State in the space view, because the window
-    // panel is a DIFFERENT view tree and has to follow the same focus:
-    // the panel expands the focused station's section, and tapping a
-    // section header focuses that station in the room. Two @State
-    // copies would drift apart the first time either was used.
-
-    let emFocus = StationFocus(initial: EMStation.bench)
-    let mechanicsFocus = StationFocus(initial: MechanicsStation.projectile)
-
     // MARK: Per-module models — created on first entry, retained so a
     // module's state survives leaving and re-entering it.
 

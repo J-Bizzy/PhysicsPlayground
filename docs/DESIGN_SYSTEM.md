@@ -16,10 +16,8 @@ Color is **semantic, not decorative**. Two systems coexist, deliberately:
 
 | Domain | Modules | Accent | Hex |
 |---|---|---|---|
-| Mechanics | mechanics | Orange | `#FF9F0A` |
-| Electricity & Magnetism | em | Green | `#30D158` |
-| Waves | *(benched — archived 2026-07-29)* | Cyan | `#64D2FF` |
-| Fluids & Gravity | gravitylab *(folding into mechanics)* | Violet | `#BF5AF2` |
+| Mechanics & Energy | kinematics, pendulums, gravitylab | Orange | `#FF9F0A` |
+| Electricity & Magnetism | electrostatics, circuits, magnetism | Green | `#30D158` |
 
 **Where domain accent appears — and nowhere else:**
 - The progress ring around each exhibit
