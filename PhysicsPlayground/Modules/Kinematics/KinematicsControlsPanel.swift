@@ -75,15 +75,22 @@ struct KinematicsControlsPanel: View {
                         Slider(value: $model.windSpeed, in: KinematicsModel.windSpeedRange)
                             .accessibilityLabel("Wind speed")
                     }
-                    Picker("Ball", selection: $model.kind) {
-                        ForEach(KinematicsModel.ProjectileKind.allCases.filter { $0 != .custom }) { kind in
-                            Text(kind.displayName).tag(kind)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .accessibilityLabel("Projectile kind")
-                    .accessibilityHint("Drag treats a golf ball and a table-tennis ball very differently")
                 }
+                // The ball menu is gone — it is a labelled fan on the
+                // launcher's Balls petal now (DECISIONS.md, 2026-07-29:
+                // a discrete choice gets an object in the room).
+                //
+                // It also fixes a real bug in passing. This picker was
+                // nested INSIDE `if airResistance`, so you could only
+                // choose your ball while drag was switched on — and mass
+                // and restitution decide the arc and the bounce whether
+                // there is air or not. A golf ball and a table-tennis
+                // ball are 17× apart in mass; that choice was hidden
+                // behind an unrelated toggle.
+                Text("Throwing: \(self.model.kind.displayName) — pinch the launcher's Balls petal to swap it.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

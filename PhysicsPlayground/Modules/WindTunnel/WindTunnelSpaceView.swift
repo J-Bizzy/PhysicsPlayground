@@ -19,7 +19,16 @@ struct WindTunnelSpaceView: View {
     @State private var bloom = Bloom()
     /// The shape submenu: a labelled fan of every test body, opened by
     /// the ring's Shapes petal.
-    @State private var fan = ShapeFan()
+    ///
+    /// Named `shapePicker`, not `fan`, because this module also has a
+    /// literal fan — the one blowing the air — and `case "fan"` in the
+    /// drag resolver below means that one.
+    @State private var shapePicker = SpatialPicker(
+        accessibilityNoun: "Test body",
+        choices: DragBody.allCases.map {
+            PickerChoice(id: $0.rawValue, label: $0.displayName,
+                         symbol: WindTunnelSpaceView.symbol(for: $0))
+        })
     @State private var fanDrag: RelativeDrag?
     /// Two gauges standing at the mouth of the section: the wind you are
     /// running and the spin you are putting on the cylinder. Both were
@@ -31,13 +40,16 @@ struct WindTunnelSpaceView: View {
             let renderer = WindTunnelRenderer()
             content.add(renderer.root)
             renderer.sectionRoot.addChild(bloom.root)
-            renderer.sectionRoot.addChild(fan.root)
-            fan.onSelect = { model.testBody = $0 }
+            renderer.sectionRoot.addChild(shapePicker.root)
+            shapePicker.onSelect = { id in
+                guard let body = DragBody(rawValue: id) else { return }
+                model.testBody = body
+            }
             #if DEBUG
             // `-windShapes 1` opens the shape fan at launch, for CLI
             // screenshots.
             if UserDefaults.standard.bool(forKey: "windShapes") {
-                fan.toggle()
+                shapePicker.toggle()
             }
             #endif
 
@@ -73,7 +85,7 @@ struct WindTunnelSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
-                    if fan.handleTap(value.entity) { return }
+                    if shapePicker.handleTap(value.entity) { return }
                     _ = bloom.handleTap(value.entity)
                 }
         )
@@ -162,11 +174,11 @@ struct WindTunnelSpaceView: View {
             "test-body",
             petals: [
                 .init(name: "Shapes", symbol: "square.grid.2x2",
-                      tint: UIColor(white: 0.45, alpha: 1)) { [fan] in
+                      tint: UIColor(white: 0.45, alpha: 1)) { [shapePicker] in
                     // A fan of every body, labelled — not a blind
                     // cycle through the flat disc and the spinning
                     // cylinder.
-                    fan.toggle()
+                    shapePicker.toggle()
                 },
             ],
             grip: .init(
@@ -181,7 +193,25 @@ struct WindTunnelSpaceView: View {
             renderer.sectionRoot.convert(position: SIMD3<Float>($0), from: nil)
         }
         bloom.update(anchor: anchor, viewer: viewer, revealTarget: 1, dt: dt)
-        fan.update(anchor: anchor + SIMD3(0, 0.05, 0), viewer: viewer, dt: dt)
+        shapePicker.update(anchor: anchor + SIMD3(0, 0.05, 0),
+                           viewer: viewer, dt: dt)
+    }
+
+    /// The glyph each body wears on its disc. Lives here rather than in
+    /// `SpatialPicker` because it is Wind Tunnel vocabulary — the picker
+    /// itself knows nothing about drag bodies.
+    private static func symbol(for body: DragBody) -> String? {
+        switch body {
+        case .cylinder: "capsule.portrait.fill"
+        case .sphere: "circle.fill"
+        case .teardrop: "drop.fill"
+        case .cube: "cube.fill"
+        case .flatDisc: "smallcircle.filled.circle"
+        case .cone: "cone.fill"
+        case .car: "car.fill"
+        case .truck: "box.truck.fill"
+        case .plane: "airplane"
+        }
     }
 }
 

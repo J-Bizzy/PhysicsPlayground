@@ -33,13 +33,16 @@ struct WindTunnelControlsPanel: View {
             }
 
             CollapsedSection("Test body") {
-                Picker("Body", selection: $model.testBody) {
-                    ForEach(DragBody.allCases) { body in
-                        Text(body.displayName).tag(body)
-                    }
-                }
-                .pickerStyle(.menu)
-                .accessibilityLabel("Test body")
+                // The body menu is gone. Shape was reachable two ways —
+                // this menu and the labelled fan on the body's own ring —
+                // and the interaction law says the choice belongs in the
+                // room (DECISIONS.md, 2026-07-29). The fan wins: it shows
+                // all nine bodies at once with their names and glyphs,
+                // where the menu showed one and hid eight.
+                Text("Body: \(self.model.testBody.displayName) — pinch the body's Shapes petal to swap it.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if self.model.testBody == .cylinder {
                     VStack(alignment: .leading, spacing: 4) {

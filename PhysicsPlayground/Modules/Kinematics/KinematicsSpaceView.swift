@@ -18,6 +18,19 @@ struct KinematicsSpaceView: View {
     @State private var renderer: KinematicsRenderer?
     @State private var drag: RelativeDrag?
     @State private var bloom = Bloom()
+    /// Which ball you are throwing, chosen in the room instead of from a
+    /// menu on a card. A golf ball and a table-tennis ball are 17× apart
+    /// in mass and behave nothing alike in air, so this is the module's
+    /// most consequential choice — and it was the one hidden behind a
+    /// collapsed section.
+    @State private var ballPicker = SpatialPicker(
+        accessibilityNoun: "Ball",
+        choices: KinematicsModel.ProjectileKind.allCases
+            .filter { $0 != .custom }
+            .map {
+                PickerChoice(id: $0.rawValue, label: $0.displayName,
+                             symbol: KinematicsSpaceView.symbol(for: $0))
+            })
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -25,6 +38,18 @@ struct KinematicsSpaceView: View {
             let renderer = KinematicsRenderer()
             content.add(renderer.root)
             renderer.root.addChild(bloom.root)
+            renderer.root.addChild(ballPicker.root)
+            ballPicker.onSelect = { id in
+                guard let kind = KinematicsModel.ProjectileKind(rawValue: id) else { return }
+                model.kind = kind
+            }
+            #if DEBUG
+            // `-kinBalls 1` opens the ball fan at launch, so the picker is
+            // screenshot-checkable from the CLI (no hand to pinch with).
+            if UserDefaults.standard.bool(forKey: "kinBalls") {
+                ballPicker.toggle()
+            }
+            #endif
 
             renderer.subscriptions = []
 
@@ -75,7 +100,12 @@ struct KinematicsSpaceView: View {
         .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
-                .onEnded { value in _ = bloom.handleTap(value.entity) }
+                .onEnded { value in
+                    // The fan first: its discs sit above the launcher and
+                    // would otherwise be read as a tap on the launcher.
+                    if ballPicker.handleTap(value.entity) { return }
+                    _ = bloom.handleTap(value.entity)
+                }
         )
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
@@ -122,6 +152,10 @@ struct KinematicsSpaceView: View {
                       tint: UIColor(DesignTokens.Palette.kinematicsAccent)) {
                     model.fire()
                 },
+                .init(name: "Balls", symbol: "circle.grid.2x2.fill",
+                      tint: UIColor(white: 0.45, alpha: 1)) { [ballPicker] in
+                    ballPicker.toggle()
+                },
             ],
             grip: .init(
                 name: "Launch speed",
@@ -132,6 +166,21 @@ struct KinematicsSpaceView: View {
                 radius: { 0.10 }))
         let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
         bloom.update(anchor: anchor, viewer: viewer, revealTarget: 1, dt: dt)
+        // Clear of the bloom's own petal arc, which reaches ~0.17 m up.
+        ballPicker.update(anchor: anchor + SIMD3(0, 0.20, 0),
+                          viewer: viewer, dt: dt)
+    }
+
+    /// The glyph each ball wears on its disc — Kinematics vocabulary, not
+    /// the picker's business.
+    private static func symbol(for kind: KinematicsModel.ProjectileKind) -> String? {
+        switch kind {
+        case .tableTennisBall: "circle"
+        case .basketball: "basketball.fill"
+        case .golfBall: "circle.dotted"
+        case .cannonball: "circle.fill"
+        case .custom: nil
+        }
     }
 
     private func beginDrag(entity: Entity, hand: SIMD3<Double>) -> RelativeDrag? {
