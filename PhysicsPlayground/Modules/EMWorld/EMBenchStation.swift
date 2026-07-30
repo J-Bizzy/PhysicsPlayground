@@ -24,7 +24,7 @@ import RealityKit
 import RenderKit
 
 @MainActor
-final class EMBenchStation {
+final class EMBenchStation: Station {
     let model: CircuitsModel
     let renderer = CircuitsRenderer()
 
@@ -32,8 +32,12 @@ final class EMBenchStation {
     /// this same number rather than a competing 1x/4x flip, so "get in
     /// among the electrons" and "pull the bench open with both hands"
     /// are one continuous control.
-    let scaleRig = SpatialScaleRig(
+    private let rig = SpatialScaleRig(
         pivot: CircuitsRenderer.benchPivot, range: 0.6...8.0, allowsTurn: false)
+
+    /// `Station`'s accessor. Optional in the protocol because an
+    /// apparatus may refuse to be scaled at all; the bench has one.
+    var scaleRig: SpatialScaleRig? { rig }
 
     private let bloom = Bloom()
     /// Which component's ring is open — shared by the tap gesture and
@@ -93,8 +97,8 @@ final class EMBenchStation {
         // the simulator has no second hand to pinch with. Addressed,
         // because the field station reads the same key (StationDebug).
         if let forcedScale = StationDebug.forcedScale(EMStation.bench.rawValue) {
-            scaleRig.updateMagnification(forcedScale)
-            scaleRig.endGesture()
+            rig.updateMagnification(forcedScale)
+            rig.endGesture()
         }
         // `-circRing 1` opens the first component's control ring at
         // launch, for CLI screenshots.
@@ -127,7 +131,7 @@ final class EMBenchStation {
         // Ticked here every frame (not via the observation loop): a
         // steady DC circuit mutates nothing that observation reliably
         // re-fires on, but its electrons must keep drifting.
-        renderer.handZoom = scaleRig.liveScale
+        renderer.handZoom = rig.liveScale
         renderer.tick(dt: dt, model: model)
         syncBloom(dt: dt, appModel: appModel)
     }

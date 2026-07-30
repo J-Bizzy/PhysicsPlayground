@@ -12,18 +12,22 @@ The dependency points one way only. **PhysicsCore never imports RealityKit or Sw
 
 ## Module contract
 
-Every lab is a `ModuleDescriptor`: a catalog card, `makeControls`/`makeScene`, and shared closures (`isPaused`/`togglePause`, `reset`, `captureReadings`). The shell renders all other chrome identically by construction — a module supplies only its physics and its scene. Four files per module (`<Name>Model`, `<Name>Module`, `<Name>Renderer`, `<Name>SpaceView`), registered with one line in `ModuleCatalog.all`.
+Every lab is a `ModuleDescriptor`: a catalog card, `makeControls`/`makeScene`, and shared closures (`isPaused`/`togglePause`, `reset`, `captureReadings`). The shell renders all other chrome identically by construction — a module supplies only its physics and its scene. One line in `ModuleCatalog.all` registers it.
+
+An **apparatus** is `<Name>Model`, `<Name>Renderer` and `<Name>ControlsPanel`, in its own folder. A **world** is a descriptor plus a layout, a station per apparatus, a space view and a panel — and each apparatus it hosts keeps its own folder untouched, so the world folder holds only composition. A single-apparatus module is just a world with one station and no layout; it owns its own `<Name>SpaceView`. Note that `Modules/Circuits` and `Modules/Magnetism` no longer have a `SpaceView` or a descriptor — they are stations of `em`, and their `<Name>Module.swift` survives only as a namespace for `readings`/`legend`.
 
 ### Multi-station modules
 
 One module may host more than one apparatus **standing in the room together** — `Modules/EMWorld` is the pattern. Each bench keeps its own model, renderer, and interior coordinates untouched; the world composes them:
 
 - **`EMStationLayout`** owns the geometry — a native anchor, a seat on the arc, and a bounding volume per station. Placement is a constant translation of each station's display root, which is safe because every grab in this app moves a body by hand *displacement*. Station volumes must stay disjoint, and each bench's clamps and grids must stay inside its own station; both are enforced by `EMStationLayoutTests`, not by inspection.
-- **A station type** (`EMBenchStation`, `EMFieldStation`) owns one apparatus's renderer, zoom rig, and drag state, and answers `handleTap`/`dragChanged`/`dragEnded`.
+- **A station type** conforms to `Station` (`EMBenchStation`, `EMFieldStation`): it owns one apparatus's renderer, zoom rig, and drag state, and answers `handleTap`/`dragChanged`/`dragEnded`. `tick` is deliberately **not** on the protocol — the signatures genuinely differ, and the order the solvers run in (and what one hands the next) belongs to the world, in one readable place. Across a module boundary that ordering was unknowable; a protocol'd `tick` would make it unknowable again.
 - **The world view** runs one `RealityView`, one `SceneEvents.Update` tick, and routes gestures by walking the hit entity up to its owning station root. Use `spatialScale(rigs:routing:)`, never `spatialScale(_:)` — the latter targets any entity, so two of them would zoom both stations at once.
+- **`StationFocus`** holds which apparatus is attended to and eases each one's emphasis. It lives on `AppModel`, not as `@State` in the space view, because the window panel is a different view tree and must follow the same focus. **Emphasis is opacity, light and sound — never geometry:** animating a station's root would slide a held body out from under the fingers, since every grab is a `RelativeDrag` that only a *constant* translation leaves untouched.
 - **Side furniture hangs outboard** (`EMStationLayout.outboard`): flanks that were free when a bench owned the room now face each other.
+- **Box math lives in `PhysicsCore.StationBox`**, so layout invariants run in `swift test` in seconds and every world asserts against the same functions. Two invariant families exist: benches standing side by side must be **disjoint** (`isSeparated`), while an apparatus larger than the room cannot be disjoint from anything, so the benches inside it are checked for **containment in its empty shell** instead (`distanceRange`).
 
-The bar for merging modules is in `DECISIONS.md` (2026-07-30) and is absolute: both halves must be simultaneously present. If the user has to pick which half exists, it is a picker, and this app has already undone two mergers that were.
+The bar for merging modules is in `DECISIONS.md` (2026-07-30) and is absolute: both halves must be simultaneously present, live and reachable. One station may be *emphasised* over the others; none may cease to exist. If the user has to pick which half exists, it is a picker, and this app has already undone two mergers that were — see "Focus is not a picker" for the four properties that keep the difference real.
 
 ## Conventions
 

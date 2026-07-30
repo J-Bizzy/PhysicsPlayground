@@ -22,15 +22,19 @@ import RealityKit
 import RenderKit
 
 @MainActor
-final class EMFieldStation {
+final class EMFieldStation: Station {
     let model: MagnetismModel
     let renderer = MagnetismRenderer()
 
     /// Two-hand scale and turn: grow the dipole field from a desk demo
     /// to loops you stand inside, or turn the whole field to see it
     /// side-on. A pure view transform — the tesla stay honest.
-    let scaleRig = SpatialScaleRig(
+    private let rig = SpatialScaleRig(
         pivot: SIMD3<Float>(MagnetismModel.regionCenter), range: 0.5...4.0)
+
+    /// `Station`'s accessor. Optional in the protocol because an
+    /// apparatus may refuse to be scaled at all; the field has one.
+    var scaleRig: SpatialScaleRig? { rig }
 
     private let bloom = Bloom()
     /// Which magnet's ring is open — shared by the tap gesture and the
@@ -74,8 +78,8 @@ final class EMFieldStation {
         // the simulator has no second hand to pinch with. Addressed,
         // because the bench station reads the same key (StationDebug).
         if let forced = StationDebug.forcedScale(EMStation.field.rawValue) {
-            scaleRig.updateMagnification(forced)
-            scaleRig.endGesture()
+            rig.updateMagnification(forced)
+            rig.endGesture()
         }
         // `-magRing 1` opens the first magnet's control ring at launch,
         // so the ring can be screenshot from the CLI.
@@ -91,7 +95,7 @@ final class EMFieldStation {
     // MARK: Per-frame
 
     func tick(dt: Double, appModel: AppModel, coilCurrent: Double) {
-        scaleRig.apply(to: renderer.viewRoot)
+        rig.apply(to: renderer.viewRoot)
         wells?.update(dt: dt)
         syncBloom(dt: dt, appModel: appModel)
         model.step(dt: dt)

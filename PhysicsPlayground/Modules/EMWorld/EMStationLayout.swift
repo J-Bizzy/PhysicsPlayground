@@ -25,6 +25,7 @@
 //  it off the arc until its station exists.
 //
 
+import PhysicsCore
 import simd
 
 /// One apparatus in the E&M world.
@@ -108,11 +109,19 @@ enum EMStationLayout {
         }
     }
 
+    /// A station's volume, as the box every invariant is asserted
+    /// against. The box math itself lives in PhysicsCore so the layout
+    /// tests run in `swift test` rather than booting a simulator, and so
+    /// the Mechanics world asserts against exactly the same functions.
+    static func box(_ station: EMStation) -> StationBox {
+        StationBox(center: center(station), halfExtents: halfExtents(station))
+    }
+
     /// The min/max corners of a station's volume, in world coordinates.
     static func bounds(_ station: EMStation)
     -> (min: SIMD3<Double>, max: SIMD3<Double>) {
-        let c = center(station), h = halfExtents(station)
-        return (c - h, c + h)
+        let b = box(station)
+        return (b.minimum, b.maximum)
     }
 
     /// Whether two stations' volumes keep at least `margin` between
@@ -121,12 +130,6 @@ enum EMStationLayout {
     static func areSeparated(
         _ a: EMStation, _ b: EMStation, margin: Double = 0
     ) -> Bool {
-        let (aMin, aMax) = bounds(a)
-        let (bMin, bMax) = bounds(b)
-        for axis in 0..<3 where aMin[axis] - bMax[axis] >= margin
-            || bMin[axis] - aMax[axis] >= margin {
-            return true
-        }
-        return false
+        box(a).isSeparated(from: box(b), margin: margin)
     }
 }

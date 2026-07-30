@@ -127,9 +127,14 @@ final class AppModel {
     }
 
     init() {
-        // Debug hook: `simctl launch <udid> <bundle> -openModule circuits`
+        // Debug hook: `simctl launch <udid> <bundle> -openModule em`
         // jumps straight into a module, since the simulator can't be
         // gaze-pinched from the command line.
+        //
+        // Worlds take a second argument to say WHICH apparatus inside
+        // them to attend to: `-openModule em -focusStation field`. The
+        // stations read that themselves, next to their own debug hooks,
+        // because the valid names differ per world.
         #if DEBUG
         if let id = UserDefaults.standard.string(forKey: "openModule") {
             // Validate it. An id that matches nothing used to be applied
@@ -173,6 +178,16 @@ final class AppModel {
         }
         #endif
     }
+
+    // MARK: Per-world focus — which apparatus is being attended to.
+    //
+    // Held here, not as @State in the space view, because the window
+    // panel is a DIFFERENT view tree and has to follow the same focus:
+    // the panel expands the focused station's section, and tapping a
+    // section header focuses that station in the room. Two @State
+    // copies would drift apart the first time either was used.
+
+    let emFocus = StationFocus(initial: EMStation.bench)
 
     // MARK: Per-module models — created on first entry, retained so a
     // module's state survives leaving and re-entering it.

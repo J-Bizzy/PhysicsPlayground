@@ -24,6 +24,8 @@ Two separate suites: pure-math tests go in `PhysicsCoreTests` (fast, no sim); mo
 
 The simulator can't be gaze-pinched, so debug launch args drive a module into a given state for CLI screenshots: `-openModule <id>`, `-studioMode 1`, `-startPaused 1`, `-pauseAfter <seconds>`, `-paletteOpen 1`, plus per-module ones. Full list in `AppModel.init`.
 
+A module that holds several apparatus (a *world*) takes `-focusStation <name>` to say which one to attend to — `-openModule em -focusStation field` — and `-stationDim <0…1>` to override how far the unattended ones stand back (`1` = no dimming, the control image). Zoom is addressed the same way: `-viewScale.bench 2.5`, never a bare `-viewScale`, which would zoom every station at once.
+
 ## Working agreement
 
 - Plan before any change touching more than one file.

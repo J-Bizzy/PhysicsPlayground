@@ -2,21 +2,32 @@
 //  EMWorldControlsPanel.swift
 //  Physics Playground — Electricity & Magnetism
 //
-//  The window panel for the merged world: the circuit bench's controls,
-//  then the link, then the magnetic bench's.
+//  The window panel for the merged world: one section per bench, plus
+//  the link that belongs to neither.
 //
-//  This is NOT a bench picker. The last two mergers in this app died of
-//  exactly that — a segmented control in the window that chose which
-//  half of the module existed, back when the controls had already moved
-//  into spatial pods and nobody found it. Both benches are always in
-//  the room and always live; this panel is the flat, labelled,
-//  simulator-and-accessibility path to the same controls, and it shows
-//  both sets at once because both sets are always in play.
+//  This is NOT a bench picker, and the distinction is load-bearing. The
+//  last two mergers in this app died of exactly that — a segmented
+//  control in the window that chose which half of the module EXISTED,
+//  back when the controls had already moved into spatial pods, so the
+//  other half became unreachable. Both benches here are always in the
+//  room, always live, always solving.
 //
-//  The Link section is the only genuinely new control surface here, and
-//  it earns its place: the electromagnet switch is what makes the cable
-//  appear, and it is the one thing in the world that belongs to neither
-//  bench.
+//  What the sections do is follow FOCUS. The attended bench's controls
+//  are open; the other's fold down to their single most important live
+//  number, still in the panel, still in the accessibility tree, still
+//  one tap from open. And that tap is not merely a disclosure — it
+//  attends to that bench in the room too, which makes this panel the
+//  second, always-reachable path to focus for a simulator or a user
+//  who never raises their hands. See StationFocus for the full
+//  contract; this file keeps property 3 of it.
+//
+//  Stacking both benches at full height was the alternative, and it was
+//  what shipped first. Two worked. Three — Electric Fields is coming to
+//  the same window — is a wall.
+//
+//  The Link section never folds: the electromagnet switch is what makes
+//  the cable appear, and it is the one thing in the world that belongs
+//  to neither bench, so it has no station to fold into.
 //
 
 import SwiftUI
@@ -24,12 +35,31 @@ import SwiftUI
 struct EMWorldControlsPanel: View {
     @Environment(CircuitsModel.self) private var circuits
     @Environment(MagnetismModel.self) private var magnetism
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         VStack(spacing: DesignTokens.Panel.sectionSpacing) {
-            CircuitsControlsPanel()
+            StationSection(
+                "Circuit bench",
+                readout: String(format: "%.3f W", circuits.totalSourcePower),
+                accent: DesignTokens.Palette.circuitsAccent,
+                isFocused: appModel.emFocus.focused == .bench,
+                focus: { appModel.emFocus.focus(.bench) }
+            ) {
+                CircuitsControlsPanel()
+            }
+
             EMLinkSection()
-            MagnetismControlsPanel()
+
+            StationSection(
+                "Magnetic field",
+                readout: String(format: "%.3f mT", magnetism.centerFieldMilliTesla),
+                accent: DesignTokens.Palette.magnetismAccent,
+                isFocused: appModel.emFocus.focused == .field,
+                focus: { appModel.emFocus.focus(.field) }
+            ) {
+                MagnetismControlsPanel()
+            }
         }
     }
 }
