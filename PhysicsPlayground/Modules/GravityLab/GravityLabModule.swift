@@ -20,7 +20,18 @@ enum GravityLabModule {
             blurb: "A real solar system in your room — grab planets, throw them into new orbits, and watch Newton's laws answer instantly.",
             icon: "sun.max.fill",
             accent: DesignTokens.Palette.gravityAccent,
-            immersionStyle: .mixed,
+            // `.progressive`, so the Digital Crown actually opens the room
+            // into space — the affordance `firstRunHint` below has been
+            // telling users about ("Turn the crown to dim your room into
+            // deep space") while the style was `.mixed`, where the crown
+            // does nothing at all. No module in the app had ever used
+            // anything but `.mixed`; this is the first.
+            //
+            // There is no starfield to open into, and that is the right
+            // answer rather than a gap: planets against blackness IS deep
+            // space. The 0.85 dimming shell still does the contrast work,
+            // since a pale Sun has none against a lit wall.
+            immersionStyle: .progressive,
             firstRunHint: "Pinch Earth and drag — the white line shows the orbit you're about to create. Release gently for an ellipse, throw hard to escape the Sun. Turn the crown to dim your room into deep space.",
             // Opens part-dimmed: a pale Sun and specks of planet have no contrast at all against a bright wall — this module is unreadable in daylight.
             preferredDimming: 0.85,

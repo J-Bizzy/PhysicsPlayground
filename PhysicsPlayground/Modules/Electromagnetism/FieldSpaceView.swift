@@ -33,6 +33,18 @@ struct FieldSpaceView: View {
     /// Which charge's ring is open — shared by the tap gesture and the
     /// render loop (see RingState's header for why it's a reference).
     @State private var ring = RingState()
+    /// Two-hand scale and turn: grow the field until its lines arch over
+    /// your head, or turn it to look down the dipole's axis.
+    ///
+    /// The renderer has had `viewRoot` plumbed for exactly this since it
+    /// was written — every piece of scene geometry hangs off it, and
+    /// `FieldRenderer` already converts world drags into its space — but
+    /// nothing ever attached the gesture. This module had the weakest
+    /// spatial claim in the app precisely because of that: a 1.3 m box of
+    /// field lines you look at from a chair, with no way in. A pure view
+    /// transform, so every volt and newton on the panel stays honest.
+    @State private var scaleRig = SpatialScaleRig(
+        pivot: SIMD3<Float>(FieldModel.regionCenter), range: 0.5...4.0)
 
     var body: some View {
         RealityView { content in
@@ -44,6 +56,7 @@ struct FieldSpaceView: View {
             // then move entities in the same tick.
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
+                    if let renderer { scaleRig.apply(to: renderer.viewRoot) }
                     model.stepProbe(dt: event.deltaTime)
                     model.stepFreeCharges(dt: event.deltaTime)
                     // Look-to-measure: the Gauss surface follows the
@@ -80,8 +93,22 @@ struct FieldSpaceView: View {
                 ring.openID = id
             }
             #endif
+            #if DEBUG
+            // `-viewScale 2.5` bakes a committed scale in at launch so the
+            // scaled field can be screenshot-verified from the CLI — the
+            // simulator has no second hand to pinch with. `double(forKey:)`
+            // coerces the string the launch-argument domain stores;
+            // `object as? Double` does not.
+            let forced = UserDefaults.standard.double(forKey: "viewScale")
+            if forced > 0 {
+                scaleRig.updateMagnification(Float(forced))
+                scaleRig.endGesture()
+            }
+            #endif
+
             self.renderer = renderer
         }
+        .spatialScale(scaleRig)
         .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
