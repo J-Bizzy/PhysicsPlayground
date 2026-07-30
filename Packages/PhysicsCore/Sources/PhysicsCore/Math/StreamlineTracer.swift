@@ -79,6 +79,82 @@ public enum StreamlineTracer {
         return points
     }
 
+    /// One source's contribution to a field-line picture: where it is,
+    /// and how many lines it earns.
+    public struct Seeded: Sendable {
+        public var position: SIMD3<Double>
+        public var seeds: Int
+        /// Which way lines run from this source: +1 out, −1 in. Ignored
+        /// by `loopedLines`, which traces both ways regardless.
+        public var sign: Double
+
+        public init(position: SIMD3<Double>, seeds: Int, sign: Double = 1) {
+            self.position = position
+            self.seeds = seeds
+            self.sign = sign
+        }
+    }
+
+    /// One line per seed, each traced a single direction.
+    ///
+    /// The electric case: lines begin on positive charges and end on
+    /// negative ones, so a charge's own sign says which way its bundle
+    /// runs. Tracing negatives backwards draws the same curves the
+    /// incoming lines follow, which is why every charge radiates lines
+    /// all the way around instead of showing them on one side only.
+    public static func directedLines(
+        from sources: [Seeded],
+        seedRadius: Double,
+        stopCenters: [SIMD3<Double>],
+        config: Config,
+        field: (SIMD3<Double>) -> SIMD3<Double>
+    ) -> [[SIMD3<Double>]] {
+        var config = config
+        config.stopCenters = stopCenters
+        var lines: [[SIMD3<Double>]] = []
+        for source in sources {
+            for direction in fibonacciSphere(count: source.seeds) {
+                let line = streamline(from: source.position + seedRadius * direction,
+                                      sign: source.sign, field: field, config: config)
+                if line.count > 1 { lines.append(line) }
+            }
+        }
+        return lines
+    }
+
+    /// Both halves from each seed, spliced through it into one curve.
+    ///
+    /// The magnetic case, and the reason it needs its own function: with
+    /// no monopoles there is nowhere for a line to start or stop, so a
+    /// line leaving a north pole has to be followed *backwards* as well
+    /// to close it. Tracing one direction only would draw half a loop
+    /// and imply magnetic charge.
+    public static func loopedLines(
+        from sources: [Seeded],
+        seedRadius: Double,
+        stopCenters: [SIMD3<Double>],
+        config: Config,
+        field: (SIMD3<Double>) -> SIMD3<Double>
+    ) -> [[SIMD3<Double>]] {
+        var config = config
+        config.stopCenters = stopCenters
+        var lines: [[SIMD3<Double>]] = []
+        for source in sources {
+            for direction in fibonacciSphere(count: source.seeds) {
+                let seed = source.position + seedRadius * direction
+                let forward = streamline(from: seed, sign: 1, field: field, config: config)
+                let backward = streamline(from: seed, sign: -1, field: field, config: config)
+                // Backward reversed, minus the seed it shares with
+                // forward, then forward — one continuous curve through
+                // the seed rather than two lines meeting at a kink.
+                var line = Array(backward.reversed().dropLast())
+                line.append(contentsOf: forward)
+                if line.count > 2 { lines.append(line) }
+            }
+        }
+        return lines
+    }
+
     /// `count` directions spread nearly uniformly over a unit sphere
     /// (Fibonacci lattice — the standard trick for even spherical coverage).
     /// The usual seeding pattern for streamlines radiating from a point.

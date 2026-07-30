@@ -39,29 +39,21 @@ public enum MagneticFieldLineTracer {
 
     /// Traces looping field lines for the given magnets. Each returned line
     /// is a polyline spaced ~stepSize apart.
+    /// The both-ways trace and the splice are
+    /// `StreamlineTracer.loopedLines`, shared with the electric tracer;
+    /// what stays here is the magnetism policy — every magnet seeds the
+    /// same number of lines, because a dipole moment has no equivalent of
+    /// the charge-density rule that scales the electric bundle.
     public static func trace(magnets: [BarMagnet], config: Config) -> [[SIMD3<Double>]] {
         guard !magnets.isEmpty else { return [] }
-        let field: @Sendable (SIMD3<Double>) -> SIMD3<Double> = {
-            MagneticField.vector(at: $0, dueTo: magnets)
-        }
-        var streamlineConfig = config.streamlineConfig
-        streamlineConfig.stopCenters = magnets.map(\.position)
-
-        var lines: [[SIMD3<Double>]] = []
-        for magnet in magnets {
-            for seedDir in StreamlineTracer.fibonacciSphere(count: config.seedsPerMagnet) {
-                let seed = magnet.position + config.seedRadius * seedDir
-                let forward = StreamlineTracer.streamline(
-                    from: seed, sign: 1, field: field, config: streamlineConfig)
-                let backward = StreamlineTracer.streamline(
-                    from: seed, sign: -1, field: field, config: streamlineConfig)
-                // Join backward (reversed, minus the shared seed) then forward
-                // → one continuous line through the seed.
-                var line = Array(backward.reversed().dropLast())
-                line.append(contentsOf: forward)
-                if line.count > 2 { lines.append(line) }
-            }
-        }
-        return lines
+        return StreamlineTracer.loopedLines(
+            from: magnets.map {
+                StreamlineTracer.Seeded(position: $0.position,
+                                        seeds: config.seedsPerMagnet)
+            },
+            seedRadius: config.seedRadius,
+            stopCenters: magnets.map(\.position),
+            config: config.streamlineConfig,
+            field: { MagneticField.vector(at: $0, dueTo: magnets) })
     }
 }

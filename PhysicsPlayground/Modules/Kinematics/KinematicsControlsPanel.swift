@@ -11,6 +11,7 @@
 //  always bounce; the hoop machinery sleeps in the model.
 //
 
+import PhysicsCore
 import SwiftUI
 
 struct KinematicsControlsPanel: View {
@@ -48,9 +49,9 @@ struct KinematicsControlsPanel: View {
 
             CollapsedSection("World") {
                 HStack(spacing: 8) {
-                    ForEach(KinematicsModel.gravityPresets, id: \.name) { preset in
+                    ForEach(KinematicsModel.gravityPresets) { preset in
                         Button(preset.name) {
-                            self.model.gravity = preset.value
+                            self.model.gravity = preset.gravity
                         }
                         .buttonStyle(.podQuiet)
                         .accessibilityLabel("Gravity of \(preset.name)")

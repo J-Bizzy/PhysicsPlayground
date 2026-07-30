@@ -73,18 +73,23 @@ public enum FieldLineTracer {
 
     /// Traces all field lines for the given charges. Each returned line is a
     /// polyline of points spaced ~stepSize apart.
+    ///
+    /// The seeding and integration are `StreamlineTracer.directedLines`,
+    /// shared with the magnetic tracer; what stays here is the only
+    /// genuinely electrostatic part — a charge's sign decides which way
+    /// its lines run, and its magnitude decides how many it gets.
     public static func trace(charges: [PointCharge], config: Config) -> [[SIMD3<Double>]] {
-        var lines: [[SIMD3<Double>]] = []
-        for charge in charges {
-            let direction: Double = charge.isPositive ? 1 : -1
-            let seeds = config.seedCount(forCharge: charge.charge)
-            for seedDir in fibonacciSphere(count: seeds) {
-                let seed = charge.position + config.seedRadius * seedDir
-                let line = traceLine(from: seed, sign: direction, charges: charges, config: config)
-                if line.count > 1 { lines.append(line) }
-            }
-        }
-        return lines
+        StreamlineTracer.directedLines(
+            from: charges.map {
+                StreamlineTracer.Seeded(
+                    position: $0.position,
+                    seeds: config.seedCount(forCharge: $0.charge),
+                    sign: $0.isPositive ? 1 : -1)
+            },
+            seedRadius: config.seedRadius,
+            stopCenters: charges.map(\.position),
+            config: config.streamlineConfig,
+            field: { ElectricField.vector(at: $0, dueTo: charges) })
     }
 
     /// Integrates a single line from `seed`, following sign·E/|E|.

@@ -35,9 +35,10 @@ final class KinematicsModel {
     nonisolated static let speedRange = 0.5...15.0            // m/s
     nonisolated static let elevationRangeDegrees = -85.0...85.0
     nonisolated static let gravityRange = 0.0...30.0          // m/s²
-    nonisolated static let gravityPresets: [(name: String, value: Double)] = [
-        ("Zero-g", 0), ("Moon", 1.62), ("Earth", 9.81), ("Jupiter", 24.79),
-    ]
+    /// `PhysicsCore.SurfaceGravity` — shared with Pendulums, which had
+    /// its own copy of these numbers. Zero-g included here: a projectile
+    /// with no gravity is a straight line, which is worth seeing.
+    nonisolated static let gravityPresets = SurfaceGravity.all
     nonisolated static let windSpeedRange = 0.0...15.0        // m/s
     nonisolated static let timeScaleRange = 0.1...2.0
     nonisolated static let throwBoostRange = 1.0...3.0

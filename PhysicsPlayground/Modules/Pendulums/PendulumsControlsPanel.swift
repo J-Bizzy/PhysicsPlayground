@@ -10,14 +10,16 @@
 //  on the bob itself: tap it and its ring unfolds.
 //
 
+import PhysicsCore
 import SwiftUI
 
 struct PendulumsControlsPanel: View {
     @Environment(PendulumsModel.self) private var model
 
-    private static let worlds: [(name: String, gravity: Double)] = [
-        ("Moon", 1.62), ("Earth", 9.81), ("Jupiter", 24.79),
-    ]
+    /// `PhysicsCore.SurfaceGravity` — shared with Projectiles, which had
+    /// its own copy of these numbers. Real bodies only: a pendulum in
+    /// zero-g does not swing, so there is no period to show.
+    private static let worlds = SurfaceGravity.bodies
 
     var body: some View {
         @Bindable var model = model
@@ -44,7 +46,7 @@ struct PendulumsControlsPanel: View {
                 // The worlds: one pinch and every swing stretches or
                 // snaps tight — T = 2π√(L/g), felt before it is read.
                 HStack(spacing: 10) {
-                    ForEach(Self.worlds, id: \.name) { world in
+                    ForEach(Self.worlds) { world in
                         Button {
                             self.model.gravity = world.gravity
                         } label: {
