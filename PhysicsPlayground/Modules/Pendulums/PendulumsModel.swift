@@ -171,11 +171,9 @@ final class PendulumsModel {
         if selectedID == id { selectedID = pendulums.last?.id }
     }
 
-    func removeSelected() {
-        guard let selectedID else { return }
-        pendulums.removeAll { $0.id == selectedID }
-        self.selectedID = pendulums.last?.id
-    }
+    // `removeSelected()` deleted 2026-07-29 with the six-slider window
+    // panel that was its only caller. Deletion is a Bloom petal, which
+    // already routes through `removePendulum(id:)` above.
 
     // MARK: Live parameter edits (no reset — the swing carries on)
 
@@ -204,23 +202,12 @@ final class PendulumsModel {
         insight(.damping)
     }
 
-    func setBobRadius(id: UUID, _ radius: Double) {
-        guard let index = pendulums.firstIndex(where: { $0.id == id }) else { return }
-        pendulums[index].bobRadius = min(max(radius, Self.bobRadiusRange.lowerBound),
-                                         Self.bobRadiusRange.upperBound)
-    }
-
-    func setCableThickness(id: UUID, _ thickness: Double) {
-        guard let index = pendulums.firstIndex(where: { $0.id == id }) else { return }
-        pendulums[index].cableThickness = min(max(thickness, Self.cableRange.lowerBound),
-                                              Self.cableRange.upperBound)
-    }
-
-    func setInitialAngle(id: UUID, _ angle: Double) {
-        guard let index = pendulums.firstIndex(where: { $0.id == id }) else { return }
-        pendulums[index].state = SphericalPendulum(
-            length: pendulums[index].length, angle: angle)
-    }
+    // `setBobRadius`, `setCableThickness` and `setInitialAngle` deleted
+    // 2026-07-29 with the same panel. The first two set cosmetics rather
+    // than physics; the third set an initial condition that grabbing the
+    // bob and letting go already sets, and sets more honestly — your hand
+    // supplies the angle AND the velocity, where the slider silently
+    // supplied a velocity of zero.
 
     // MARK: Grab & release
 

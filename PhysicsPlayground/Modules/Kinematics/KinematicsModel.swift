@@ -329,7 +329,9 @@ final class KinematicsModel {
     }
 
     /// Hand-motion samples for the ball currently being held.
-    private var holdSamples: [(time: Double, position: SIMD3<Double>)] = []
+    /// `PhysicsCore.ThrowSampler` — shared with Gravity Lab and
+    /// Pendulums, which each had their own copy of this buffer.
+    private var throwSampler = ThrowSampler()
     private var heldFlightID: UUID?
     /// Release-velocity multiplier — ×1 is a physically honest throw.
     var throwBoost = 1.0
@@ -379,7 +381,7 @@ final class KinematicsModel {
         flights.removeAll()
         lastFlight = nil
         heldFlightID = nil
-        holdSamples.removeAll()
+        throwSampler.reset()
     }
 
     // MARK: Throwing
@@ -387,7 +389,7 @@ final class KinematicsModel {
     func grabBall(id: UUID) {
         guard let index = flights.firstIndex(where: { $0.id == id }) else { return }
         heldFlightID = id
-        holdSamples.removeAll()
+        throwSampler.reset()
         flights[index].status = .held
         // A re-thrown ball starts a fresh flight record.
         flights[index].dots.removeAll()
@@ -402,10 +404,7 @@ final class KinematicsModel {
         guard let index = flights.firstIndex(where: { $0.id == id }) else { return }
         flights[index].state = ParticleDynamics.State(position: position)
         guard heldFlightID == id else { return }
-        holdSamples.append((timestamp, position))
-        if holdSamples.count > 16 {
-            holdSamples.removeFirst()
-        }
+        throwSampler.record(position, at: timestamp)
     }
 
     /// Releases the held ball with the hand's velocity over the final
@@ -414,20 +413,16 @@ final class KinematicsModel {
         guard let index = flights.firstIndex(where: { $0.id == id }) else { return }
         defer {
             heldFlightID = nil
-            holdSamples.removeAll()
+            throwSampler.reset()
         }
 
-        let now = timestamp
-        let window = holdSamples.filter { now - $0.time < 0.12 }
-        guard let first = window.first, let last = window.last,
-              last.time - first.time > 0.02
-        else {
+        guard let handVelocity = throwSampler.velocity(at: timestamp) else {
             // No meaningful motion: the ball just hovers where released.
             flights[index].status = .staged
             return
         }
 
-        let velocity = throwBoost * (last.position - first.position) / (last.time - first.time)
+        let velocity = throwBoost * handVelocity
         flights[index].state.velocity = velocity
         flights[index].status = .flying
         flights[index].maxHeight = flights[index].state.position.y

@@ -309,7 +309,9 @@ final class GravityLabModel {
     // MARK: Hold / throw
 
     private var heldID: UUID?
-    private var holdSamples: [(time: Double, position: SIMD3<Double>)] = []
+    /// `PhysicsCore.ThrowSampler` — shared with Projectiles and
+    /// Pendulums, which each had their own copy of this buffer.
+    private var throwSampler = ThrowSampler()
 
     init() {
         reset()
@@ -520,7 +522,7 @@ final class GravityLabModel {
         heldID = id
         selectedID = id
         capturedPointName = nil
-        holdSamples.removeAll()
+        throwSampler.reset()
         hold(id: id, at: displayPoint, timestamp: timestamp)
     }
 
@@ -530,23 +532,20 @@ final class GravityLabModel {
         bodies[index].body.position = displayPoint * displayToSim
         bodies[index].body.velocity = .zero
         guard heldID == id else { return }
-        holdSamples.append((timestamp, displayPoint))
-        if holdSamples.count > 16 { holdSamples.removeFirst() }
+        throwSampler.record(displayPoint, at: timestamp)
     }
 
     /// The sim velocity the body would get if released now.
     func currentHandVelocity(timestamp: Double = CACurrentMediaTime()) -> SIMD3<Double> {
-        let window = holdSamples.filter { timestamp - $0.time < 0.12 }
-        guard let first = window.first, let last = window.last,
-              last.time - first.time > 0.02 else { return .zero }
-        return throwVelocityScale * (last.position - first.position) / (last.time - first.time)
+        guard let handVelocity = throwSampler.velocity(at: timestamp) else { return .zero }
+        return throwVelocityScale * handVelocity
     }
 
     func release(id: UUID, timestamp: Double = CACurrentMediaTime()) {
         guard let index = bodies.firstIndex(where: { $0.id == id }) else { return }
         defer {
             heldID = nil
-            holdSamples.removeAll()
+            throwSampler.reset()
         }
         guard heldID == id else { return }
         bodies[index].body.velocity = currentHandVelocity(timestamp: timestamp)
@@ -659,7 +658,7 @@ final class GravityLabModel {
         displayToSim = Self.earthMoonSeparation / Self.metersPerEarthMoon
         bodies.removeAll()
         heldID = nil
-        holdSamples.removeAll()
+        throwSampler.reset()
         capturedPointName = nil
         simulatedDays = 0
         timeScale = 1
@@ -857,7 +856,7 @@ final class GravityLabModel {
         capturedPointName = nil
         bodies.removeAll()
         heldID = nil
-        holdSamples.removeAll()
+        throwSampler.reset()
         sunMassMultiplier = 1.0
         gMultiplier = 1.0
         timeScale = 1.0

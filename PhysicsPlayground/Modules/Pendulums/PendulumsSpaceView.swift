@@ -25,7 +25,16 @@ struct PendulumsSpaceView: View {
     /// render loop (see RingState's header for why it's a reference).
     @State private var ring = RingState()
     @State private var wells: Well?
-    @State private var handSamples: [(time: Double, position: SIMD3<Double>)] = []
+    /// `PhysicsCore.ThrowSampler` — shared with Projectiles and Gravity
+    /// Lab, which each kept their own copy of this buffer.
+    ///
+    /// The 0.14 s window is inherited from the hand-rolled version this
+    /// replaced; the other two used 0.12. Nothing in the old code said
+    /// why, and it looks like drift rather than intent — but a bob is
+    /// released out of a swing rather than flicked, so it is plausible
+    /// enough to keep until someone compares the two on device. Stated
+    /// here rather than diverging silently in a third file.
+    @State private var handSampler = ThrowSampler(window: 0.14)
     /// A gravity gauge under the beam. "What if this were the Moon" is
     /// the question this bench exists to answer, and it was a slider in
     /// a card — now it is a dial you turn while watching the swing
@@ -103,8 +112,9 @@ struct PendulumsSpaceView: View {
                                 drag = RelativeDrag(
                                     name: candidate.name,
                                     target: pendulum.bobWorld, hand: hand)
-                                handSamples = [(Date.timeIntervalSinceReferenceDate,
-                                                pendulum.bobWorld)]
+                                handSampler.reset()
+                                handSampler.record(pendulum.bobWorld,
+                                                   at: Date.timeIntervalSinceReferenceDate)
                                 break
                             }
                             current = candidate.parent
@@ -119,27 +129,25 @@ struct PendulumsSpaceView: View {
                     guard let drag, let id = UUID(uuidString: drag.name) else { return }
                     let world = drag.position(forHand: hand)
                     model.moveGrabbed(id: id, toWorld: world)
-                    let now = Date.timeIntervalSinceReferenceDate
-                    handSamples.append((now, world))
-                    handSamples.removeAll { now - $0.time > 0.14 }
+                    handSampler.record(world, at: Date.timeIntervalSinceReferenceDate)
                 }
                 .onEnded { value in
                     defer {
                         renderer?.grabbedID = nil
                         drag = nil
-                        handSamples = []
+                        handSampler.reset()
                     }
                     guard let drag, let id = UUID(uuidString: drag.name) else { return }
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
                     let world = drag.position(forHand: hand)
                     model.moveGrabbed(id: id, toWorld: world)
-                    var velocity = SIMD3<Double>.zero
+                    // The release point is part of the throw, so it goes
+                    // into the sampler before the velocity is read.
                     let now = Date.timeIntervalSinceReferenceDate
-                    if let oldest = handSamples.first, now - oldest.time > 0.02 {
-                        velocity = (world - oldest.position) / (now - oldest.time)
-                    }
-                    model.release(id: id, handVelocity: velocity)
+                    handSampler.record(world, at: now)
+                    model.release(id: id,
+                                  handVelocity: handSampler.velocity(at: now) ?? .zero)
                 }
         )
         .gesture(

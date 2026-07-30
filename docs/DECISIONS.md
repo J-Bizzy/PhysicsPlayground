@@ -2,6 +2,22 @@
 
 A running log of consequential decisions — architectural, physical, or product — and why they were made. Newest first. One entry per decision.
 
+## 2026-07-29 — The interaction law, and the standard that has to replace a slider
+
+**Decision:** One law governs every control in the app, promoted from `Bloom.swift`'s component rule to the app's constitution: **a quantity with physical extent is changed by changing that extent; a quantity without extent is a discrete choice and gets a labelled object in the room; anything that is neither does not get to exist.** `ModuleDescriptor.makeControls` and all eight window panels are to be deleted — removed, not deprecated, so they cannot return a ninth time. `ShapeFan` (Wind Tunnel's labelled in-room fan) is promoted to the app's only N-way picker.
+
+**Context:** The panels-vs-spatial argument has been re-litigated across 212 commits and the app currently sits on the wrong side of it: `Phase 0 — demolition: the glass comes out` → `the object is the interface` → `dials live on the apparatus now` → … → `the controls come back` → `Every module gets its one-glance panel`. `makeControls` shipped as an explicit single-module exception and all 8/8 modules took it — 19 sliders, 35 toggles, 7 pickers, and every module has at least one knob reachable *only* as a slider. Meanwhile the primitives that make this a headset app went unadopted: `SpatialScale` 3/8, `Well` 3/8, continuous sonification 3/8, `SpatialDial` 0/8. The mundane is universal and the extraordinary is optional, which is exactly why the product reads as simulations-with-UI.
+
+**Consequences:** The panels won for a real reason and the replacement has to beat it on that reason, not on taste. Spatial controls had been built *gaze-revealed*, which is invisible in the simulator and undiscoverable on device — the user's words were "I can't even move them." So the standard is now explicit: **an instrument must be visible without being looked for, operable without being discovered, and reachable in the simulator. Nothing may be revealed by gaze alone, and nothing may be the only path to a capability.** A slider clears that bar, which is why it kept winning; a machined dial on the apparatus clears it too; a gaze-revealed ring does not. Any future `makeControls`-shaped surface needs a new entry here saying which part of the law it breaks and why.
+
+## 2026-07-29 — `SpatialDial` is kept and promoted, not deleted; Circuits' dark features get doors, not graves
+
+**Decision:** Two amendments to the three-worlds plan's Phase 0, both made after reading the code the plan proposed to delete. **`SpatialDial` survives** — it is the instrument that replaces sliders, not dead weight. **Circuits' unreachable features are to be activated, not removed:** the oscilloscope buffer, the five written teaching circuits, the eight save slots, and the `electronView` flag.
+
+**Context:** Phase 0 was written as "mostly deletion" against ~600 lines of unreachable code, on the finding that all of it was the panel half. That holds for most of it, but two items were misfiled. `SpatialDial` is 207 lines with zero callers *because* it was built for Optics, which was cut — and Optics returns in World I, the flagship; its `DialDrag` is pure, wrap-safe, unit-testable twist math, which is precisely the shape the law above demands. And `electronView` gates **Electron View**, which the same plan names the single most quotable moment in the app: electrons crawling at true drift speed while the field front laps the loop at 0.66c. Deleting the flag would delete the door to the demo reel's centrepiece.
+
+**Consequences:** "Dead code" is not one category. Code with no caller because *the surface that should call it was never built* is a missing door, and the fix is a door. Code with no caller because *we decided against the surface* is a grave, and `PendulumsControlsView` — a six-slider window panel, the exact thing the law forbids — is the clear example. Every future deletion in this sweep has to say which of the two it is. `DialDrag` needs unit tests before anything is built on it.
+
 ## 2026-07-29 — The submission gates are closed: privacy manifest, export compliance, visionOS 26.0
 
 **Decision:** The app carries a `PrivacyInfo.xcprivacy` declaring no tracking, no collected data, and one required-reason API — `NSPrivacyAccessedAPICategoryUserDefaults` with reason `CA92.1`. `ITSAppUsesNonExemptEncryption = false` goes in `Info.plist`. `XROS_DEPLOYMENT_TARGET` drops from 26.5 to **26.0**.

@@ -81,63 +81,21 @@ enum PendulumsModule {
 
 }
 
-/// Window panel: per-pendulum parameter sliders.
-struct PendulumsControlsView: View {
-    @Environment(PendulumsModel.self) private var model
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Panel.sectionSpacing) {
-            if let pendulum = model.selected {
-                PanelSection("Selected pendulum") {
-                    slider("Length", value: pendulum.length,
-                           range: PendulumsModel.lengthRange, format: "%.2f m") {
-                        model.setLength(id: pendulum.id, $0)
-                    }
-                    slider("Mass", value: pendulum.mass,
-                           range: PendulumsModel.massRange, format: "%.1f kg") {
-                        model.setMass(id: pendulum.id, $0)
-                    }
-                    slider("Damping", value: pendulum.damping,
-                           range: PendulumsModel.dampingRange, format: "%.2f N·s/m") {
-                        model.setDamping(id: pendulum.id, $0)
-                    }
-                    slider("Bob size", value: pendulum.bobRadius,
-                           range: PendulumsModel.bobRadiusRange, format: "%.3f m") {
-                        model.setBobRadius(id: pendulum.id, $0)
-                    }
-                    slider("Cable", value: pendulum.cableThickness,
-                           range: PendulumsModel.cableRange, format: "%.3f m") {
-                        model.setCableThickness(id: pendulum.id, $0)
-                    }
-                    slider("Start angle", value: pendulum.state.angle(length: pendulum.length),
-                           range: 0.05...1.4, format: "%.2f rad") {
-                        model.setInitialAngle(id: pendulum.id, $0)
-                    }
-                    Button(role: .destructive) {
-                        model.removeSelected()
-                    } label: {
-                        Label("Remove pendulum", systemImage: "trash")
-                    }
-                    .disabled(model.pendulums.count <= 1)
-                }
-            }
-
-            if !model.insightText.isEmpty {
-                Text(model.insightText)
-                    .font(DesignTokens.TypeScale.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private func slider(_ label: String, value: Double, range: ClosedRange<Double>,
-                        format: String, onChange: @escaping (Double) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("\(label): \(String(format: format, value))")
-                .font(DesignTokens.TypeScale.control.monospacedDigit())
-            Slider(value: Binding(get: { value }, set: onChange), in: range)
-                .accessibilityLabel(label)
-        }
-    }
-}
+// `PendulumsControlsView` was deleted here (2026-07-29): a window panel
+// of six per-pendulum sliders — length, mass, damping, bob size, cable
+// thickness, start angle — plus a Remove button, never instantiated by
+// anything since it was written.
+//
+// It is the clearest specimen in the app of what the interaction law now
+// forbids (DECISIONS.md, 2026-07-29): every quantity in it has physical
+// extent and three of them are already manipulated BY that extent on the
+// object itself — the bob's Bloom carries a Length grip you pull to pay
+// out cable, a Mass petal, and a Delete petal. The panel was a second,
+// worse way to do what the pendulum already does.
+//
+// A grave, not a missing door: `setBobRadius`, `setCableThickness`,
+// `setInitialAngle` and `removeSelected` went with it. Bob size and cable
+// thickness are cosmetics, not physics; a start angle is what grabbing
+// the bob and letting go already sets, more honestly; and deletion is a
+// petal. `setLength`, `setMass` and `setDamping` stay — the Bloom and the
+// module panel use those.
