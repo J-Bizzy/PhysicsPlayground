@@ -22,12 +22,56 @@ struct WavesSpaceView: View {
     /// the amplitude bead. Tap a source to open it.
     @State private var bloom = Bloom()
     @State private var ring = RingState()
+    /// The medium's two defining numbers, as gauges you turn: frequency
+    /// and wave speed. Between them they set the wavelength, which is the
+    /// length the whole pattern is built from — λ = c/f, and the silence
+    /// surfaces move when either moves.
+    ///
+    /// Placed low and in front, outside the interference volume worth
+    /// walking through rather than inside it, and at ~16° below eye so
+    /// they read at the same glance as the field (see the Wind Tunnel
+    /// gauges for what happens when that angle is not checked).
+    ///
+    /// This module gets gauges but NOT a scale rig — see DECISIONS.md,
+    /// 2026-07-29: a display-only scale would move the visible nodal
+    /// sheets while the audible node stayed put, which is the one thing
+    /// the Silence Walk cannot survive.
+    @State private var frequencyDial: SpatialDialControl?
+    @State private var speedDial: SpatialDialControl?
 
     var body: some View {
         RealityView { content in
             let renderer = WavesRenderer()
             content.add(renderer.root)
             renderer.root.addChild(bloom.root)
+
+            let faceNormal = SIMD3<Float>(0, 0.4, 1)
+            let frequency = SpatialDialControl(
+                name: "frequency-dial",
+                center: SIMD3(-0.40, 1.00, -1.70),
+                normal: faceNormal,
+                accent: UIColor(DesignTokens.Palette.wavesAccent),
+                range: WavesModel.frequencyRange,
+                read: { model.frequency },
+                write: { model.frequency = $0 },
+                // Just the frequency. λ was on here too until a screenshot
+                // showed the field already draws its own "λ = 33 cm"
+                // callout directly above these gauges, and the doubled
+                // label was wide enough to collide with the speed gauge's.
+                format: { String(format: "%.1f Hz", $0) })
+            let speed = SpatialDialControl(
+                name: "speed-dial",
+                center: SIMD3(-0.05, 1.00, -1.70),
+                normal: faceNormal,
+                accent: UIColor(DesignTokens.Palette.wavesAccent),
+                range: WavesModel.speedRange,
+                read: { model.waveSpeed },
+                write: { model.waveSpeed = $0 },
+                format: { String(format: "%.2f m/s", $0) })
+            renderer.root.addChild(frequency.root)
+            renderer.root.addChild(speed.root)
+            self.frequencyDial = frequency
+            self.speedDial = speed
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
@@ -44,6 +88,11 @@ struct WavesSpaceView: View {
                         model.moveProbe(to: point)
                     }
                     syncBloom(dt: event.deltaTime)
+                    // Out here, not at the end of syncBloom: that returns
+                    // early when no source ring is open, which would leave
+                    // the needles frozen most of the time.
+                    frequencyDial?.refresh()
+                    speedDial?.refresh()
                     renderer?.tick(model, listener: appModel.room.headPosition)
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
@@ -99,6 +148,15 @@ struct WavesSpaceView: View {
                 .onChanged { value in
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
+                    // Gauges first, in their parent's space — the root
+                    // carries `LabPlacement.offset`, so a world-space hand
+                    // would twist by an amount that drifts once the user
+                    // moves their lab.
+                    if let renderer {
+                        let inRoot = SIMD3<Double>(renderer.root.convert(
+                            position: SIMD3<Float>(hand), from: nil))
+                        if twistDials(entity: value.entity, hand: inRoot) { return }
+                    }
                     if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
                     if drag == nil,
                        bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) {
@@ -131,10 +189,29 @@ struct WavesSpaceView: View {
                     }
                 }
                 .onEnded { _ in
+                    frequencyDial?.endTwist()
+                    speedDial?.endTwist()
                     bloom.endGrip()
                     drag = nil
                 }
         )
+    }
+
+    /// Routes a drag to whichever gauge it started on. True once a twist
+    /// owns the gesture, so the caller stops looking.
+    private func twistDials(entity: Entity, hand: SIMD3<Double>) -> Bool {
+        for dial in [frequencyDial, speedDial].compactMap({ $0 }) {
+            if dial.isTwisting {
+                dial.updateTwist(hand: hand)
+                return true
+            }
+            if dial.root.isEnabled, dial.owns(entity) {
+                dial.beginTwist(hand: hand)
+                dial.updateTwist(hand: hand)
+                return true
+            }
+        }
+        return false
     }
 
     /// The tapped source's ring: amplitude is the bead you pull;

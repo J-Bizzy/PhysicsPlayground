@@ -46,18 +46,20 @@ struct WavesControlsPanel: View {
             }
 
             CollapsedSection("Medium") {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Frequency: \(self.model.frequency, specifier: "%.1f") Hz   λ = \(self.model.wavelength * 100, specifier: "%.0f") cm")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.frequency, in: WavesModel.frequencyRange)
-                        .accessibilityLabel("Frequency")
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Wave speed: \(self.model.waveSpeed, specifier: "%.2f") m/s")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.waveSpeed, in: WavesModel.speedRange)
-                        .accessibilityLabel("Wave speed")
-                }
+                // Frequency and wave speed are gauges now — two dials low
+                // and in front of the field, which you reach out and turn
+                // (DECISIONS.md, 2026-07-29). Between them they set λ, and
+                // λ is the length the whole pattern is built from, so they
+                // are the medium's two defining numbers rather than
+                // settings. The numbers stay here to be read.
+                Text("Frequency: \(self.model.frequency, specifier: "%.1f") Hz   λ = \(self.model.wavelength * 100, specifier: "%.0f") cm")
+                    .font(DesignTokens.TypeScale.control.monospacedDigit())
+                Text("Wave speed: \(self.model.waveSpeed, specifier: "%.2f") m/s")
+                    .font(DesignTokens.TypeScale.control.monospacedDigit())
+                Text("Turn the two gauges in front of the field to change them — the silence surfaces move as λ does.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Time: \(self.model.timeScale, specifier: "%.1f")×")
                         .font(DesignTokens.TypeScale.control.monospacedDigit())
