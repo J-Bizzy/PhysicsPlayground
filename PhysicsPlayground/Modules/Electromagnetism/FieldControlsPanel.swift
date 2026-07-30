@@ -187,7 +187,14 @@ struct FieldControlsPanel: View {
                     Slider(value: model.magneticFieldTesla, in: FieldModel.magneticFieldRange)
                         .accessibilityLabel("Magnetic field strength")
                 }
-                Text("F = qv×B curves the probe on an exact cyclotron circle — or flip on Electron mode for realistic fields.")
+                // This number is a stage light, not a measurement, and
+                // it has to say so where it is READ. 50 kT is about a
+                // thousand times the strongest steady field ever built
+                // on Earth; it takes that much to visibly bend a 0.5 g,
+                // 10 nC ball, because q/m is ~10¹¹ smaller than an
+                // electron's. The geometry stays exact either way, which
+                // is the one claim worth making out loud.
+                Text("That field is fictional — about a thousand times the strongest magnet ever built. A 0.5 g ball needs it to curve at all. The circle r = mv/qB is exact regardless; switch on Electron mode for a real particle in a real field.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
             }

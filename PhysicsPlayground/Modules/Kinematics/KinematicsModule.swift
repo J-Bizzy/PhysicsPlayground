@@ -17,7 +17,7 @@ enum KinematicsModule {
             id: id,
             title: "Projectile Motion",
             shortTitle: "Projectiles",
-            blurb: "Throw real balls across your room — slow time, hang hoops in mid-air, and try every gravity from zero-g to Jupiter.",
+            blurb: "Throw real balls across your room — they ricochet off your actual walls, you can catch them out of the air, and gravity runs from zero-g to Jupiter.",
             icon: "paperplane.fill",
             accent: DesignTokens.Palette.kinematicsAccent,
             firstRunHint: "Grab any ball and throw it — physics takes over the instant you let go. For precise launches, drag the launcher anywhere and pinch its orange bead to aim.",
@@ -52,7 +52,12 @@ enum KinematicsModule {
                     rows.append(.init("Flight time", String(format: "%.3f", last.flightTime), "s"))
                     rows.append(.init("Launched by", last.wasThrown ? "hand" : "launcher"))
                 }
-                rows.append(.init("Score", "\(model.totalScore)"))
+                // No Score row. Hoops left the surface in 6b2508c and
+                // `addRing` now has no caller outside tests, so the
+                // score was structurally always 0 — a column of zeroes
+                // in every exported notebook, implying a game that
+                // isn't there. The ring machinery stays in the model,
+                // dormant and tested, for whenever hoops come back.
                 return rows
             },
             reset: {
@@ -76,11 +81,7 @@ enum KinematicsModule {
         ),
         LegendItem(
             swatch: .fill(DesignTokens.Palette.projectile),
-            text: "Strobe dots — one per 1/15 s of simulated time, so wider spacing means faster (honest even in slow motion)"
-        ),
-        LegendItem(
-            swatch: .stroke(DesignTokens.Palette.target),
-            text: "Hoop — anything passing down through it scores; the dark disc under each ball marks the spot below it"
+            text: "Strobe dots — one per 1/15 s of simulated time, so wider spacing means faster"
         ),
     ]
 }

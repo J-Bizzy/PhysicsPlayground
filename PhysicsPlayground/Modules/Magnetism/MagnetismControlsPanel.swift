@@ -75,6 +75,26 @@ struct MagnetismControlsPanel: View {
                 Text("Carry the hand compass through the field — its needle and this number follow B.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
+
+                // Faraday's law was the only quantity in this app being
+                // computed every frame and shown to nobody — ε = −N dΦ/dt
+                // reached the user as a filament's brightness and nothing
+                // else. Induction is the one law here you cannot infer
+                // from a still image, so it needs a number that MOVES.
+                if self.model.electromagnetOn {
+                    Text("Coil EMF \(self.model.inducedEMF * 1000, specifier: "%.2f") mV")
+                        .font(DesignTokens.TypeScale.control.monospacedDigit())
+                        .foregroundStyle(DesignTokens.Palette.magnetismAccent)
+                    Text("ε = −N dΦ/dt over 400 turns. Hold a magnet still inside the coil and it falls to zero — only *change* induces.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Coil EMF needs the electromagnet — switch it on above, then wave a magnet through it.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }

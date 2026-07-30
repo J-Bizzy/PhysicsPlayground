@@ -83,9 +83,24 @@ enum GravityLabModule {
             swatch: .symbol("arrow.up.right", DesignTokens.Palette.velocityVector),
             text: "Vectors on the selected body: blue velocity, orange acceleration, red force toward the Sun (lengths log-scaled)"
         ),
+        // Two changes here, both about not claiming more than we do.
+        //
+        // Gone: the Lagrange entry ("drop the satellite on L1–L5").
+        // `enterLagrangeMode` has never had a caller outside tests, so
+        // the markers never appear and nothing can be dropped on one —
+        // that line described a lab no user has ever been able to reach.
+        // `PhysicsCore/Gravitation/Lagrange.swift` goes on solving L1–L3
+        // as real quintic roots, tested, waiting for a door.
+        //
+        // Added: the grid. It opens with the module and is the first
+        // thing anyone sees, and it is the one visual here NOT derived
+        // from the simulation — an authored falloff, not a solved
+        // metric. Its only caveat lived in an accessibilityHint, which
+        // VoiceOver reads aloud and every sighted user never sees. Now
+        // it is stated where the planet sizes already own up to theirs.
         LegendItem(
-            swatch: .fill(DesignTokens.Palette.target),
-            text: "Lagrange markers (L1–L5) — drop the satellite on one and see which points actually hold it"
+            swatch: .line(DesignTokens.Palette.gravityAccent),
+            text: "Spacetime grid — an analogy, not a measurement: the dips are drawn to look right, not solved. Every other number here is real"
         ),
         LegendItem(
             swatch: .symbol("clock", .secondary),

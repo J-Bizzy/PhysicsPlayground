@@ -65,6 +65,12 @@ enum MagnetismModule {
                                   String(format: "%.3e", energy), "J"))
             }
         }
+        if model.electromagnetOn {
+            rows.append(.init("Coil moment",
+                              String(format: "%.3f", model.electromagnetMoment), "A·m²"))
+            rows.append(.init("Induced EMF",
+                              String(format: "%.4f", model.inducedEMF * 1000), "mV"))
+        }
         return rows
     }
 
