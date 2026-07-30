@@ -78,6 +78,14 @@ enum HubTitleStyle: Int, CaseIterable {
         }
     }
 
+    /// Leading multiplier. The plaque needs more air: it is the only
+    /// voice set in CAPITALS, so both lines are cap-height tall, and
+    /// the flush lockup scales the shorter word up hard — two full-cap
+    /// lines at different scales close the gap from both sides at once.
+    var leadingFactor: Float {
+        self == .plaque ? 0.62 : 0.34
+    }
+
     /// Extrusion as a fraction of point size: the frosted pane and the
     /// poster are nearly flat, the plaque is milled from stock.
     var extrusionFactor: Float {
@@ -158,20 +166,32 @@ enum HubTitleStyle: Int, CaseIterable {
             pass(glass)
 
         case .plaque:
-            // Milled from stock: a dark inset shadow pass, then brushed
-            // metal — steel for the wordmark, the domain accent alloyed
-            // 30% toward steel for the signs so the colour reads as
-            // anodised rather than painted.
-            pass(Self.unlit(UIColor(white: 0.02, alpha: 1), opacity: 0.5),
-                 scale: 1.06, offset: SIMD3(0, 0, -0.06 * s))
+            // Milled from stock: a dark shadow directly behind, then
+            // brushed metal — steel for the wordmark, the domain accent
+            // alloyed 30% toward steel for the signs so the colour
+            // reads as anodised rather than painted.
+            //
+            // The shadow is NOT scaled up. A 6% larger copy is only
+            // invisible when the line is small; the flush lockup scales
+            // a short word up hard, and 6% of a big line reads as a
+            // second, ghosted set of letters. Depth alone here.
+            pass(Self.unlit(UIColor(white: 0.02, alpha: 1), opacity: 0.55),
+                 offset: SIMD3(0, 0, -0.30 * s))
             var metal = PhysicallyBasedMaterial()
             let stock = accent.map { Self.blend($0, toward: UIColor(white: 0.72, alpha: 1), by: 0.30) }
                 ?? UIColor(white: 0.78, alpha: 1)
             metal.baseColor = .init(tint: stock)
-            metal.metallic = 1.0
-            metal.roughness = 0.34
-            metal.clearcoat = .init(floatLiteral: 0.5)
-            metal.clearcoatRoughness = .init(floatLiteral: 0.18)
+            // Not a mirror. At metallic 1.0 a surface shows only what
+            // it reflects, and a passthrough room gives RealityKit
+            // almost nothing to reflect — the letters came out muddy
+            // grey. Backing off to 0.75 with a little emissive keeps
+            // the brushed read while letting base colour carry.
+            metal.metallic = 0.75
+            metal.roughness = 0.30
+            metal.clearcoat = .init(floatLiteral: 0.7)
+            metal.clearcoatRoughness = .init(floatLiteral: 0.15)
+            metal.emissiveColor = .init(color: stock)
+            metal.emissiveIntensity = 0.22
             pass(metal)
 
         case .poster:
@@ -182,6 +202,41 @@ enum HubTitleStyle: Int, CaseIterable {
             pass(Self.unlit(UIColor(white: 0.04, alpha: 1), opacity: 0.9),
                  offset: SIMD3(0.055 * s, -0.055 * s, -0.03 * s))
             pass(Self.unlit(accent ?? Self.ivory, opacity: 1))
+        }
+        return group
+    }
+
+    /// A finished flush-both-sides lockup in this voice: lines measured,
+    /// scaled to a common width, stacked with cap-height leading,
+    /// centred on the returned entity's origin. The wordmark and the
+    /// door signs run this math inline (they need the intermediate
+    /// heights for their own furniture); the audition wall just wants
+    /// the finished block.
+    @MainActor
+    func lockup(_ lines: [String], width: Float, accent: UIColor?) -> Entity {
+        let group = Entity()
+        let reference: CGFloat = 0.12
+        let built = lines.map { text -> (entity: Entity, extents: SIMD3<Float>) in
+            (line(text, size: reference, accent: accent),
+             extents(text, size: reference))
+        }
+        let scales = built.map { width / max($0.extents.x, 1e-4) }
+        let heights = zip(built, scales).map { $0.0.extents.y * $0.1 }
+        // Leading off the TALLEST line, not the average. The flush
+        // lockup scales a short line up (7-character "Physics" against
+        // 10-character "Playground"), so its cap height can far exceed
+        // the mean — and an average-derived gap then lets the tall line
+        // collide with its neighbour. Uppercase makes it worse, which
+        // is how the plaque candidate exposed it.
+        let gap = (heights.max() ?? 0) * leadingFactor
+        let blockHeight = heights.reduce(0, +)
+            + gap * Float(max(heights.count - 1, 0))
+        var cursor = blockHeight / 2
+        for (index, item) in built.enumerated() {
+            item.entity.scale = SIMD3(repeating: scales[index])
+            item.entity.position.y = cursor - heights[index] / 2
+            group.addChild(item.entity)
+            cursor -= heights[index] + gap
         }
         return group
     }

@@ -116,7 +116,8 @@ struct HubSpaceView: View {
             Attachment(id: "bar") {
                 HubUtilityBar(
                     openSettings: { openWindow(id: SettingsView.windowID) },
-                    openAbout: { openWindow(id: AboutView.windowID) })
+                    openAbout: { openWindow(id: AboutView.windowID) },
+                    openNotebook: { openWindow(id: NotebookView.windowID) })
             }
             Attachment(id: "podiumHint") {
                 // What the podium is FOR, said once, quietly, where the
@@ -317,7 +318,20 @@ final class HubScene {
         root.orientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
 
         titlePosition = SIMD3(0, arcHeight + 0.70, -(arcRadius + 0.45))
+        #if DEBUG
+        // `-titleAudition 1` replaces the wordmark and door signs with
+        // a specimen wall: the three candidate voices side by side,
+        // each named, each showing both roles — so a style is judged
+        // against its rivals in one glance rather than remembered
+        // across launches.
+        if Self.auditioningTitles {
+            buildStyleAudition()
+        } else {
+            buildBubbleTitle()
+        }
+        #else
         buildBubbleTitle()
+        #endif
         buildFloorPool()
 
         buildPodium(distance: distance)
@@ -391,11 +405,21 @@ final class HubScene {
         // exhibit (puck + lift + miniature, ~0.31 above the slab)
         // clears the sign's underline rule and the Mechanics ball's
         // landing points with room to spare.
-        let title = HubDomainTitle(domain: terrace.domain,
-                                   width: terrace.width * 0.54)
-        title.root.position = SIMD3(0, 0.62, -0.02)
-        slab.addChild(title.root)
-        domainTitles[terrace.domain] = title
+        //
+        // Suppressed while the audition wall is up: three specimens
+        // plus two live signs is five voices talking at once.
+        #if DEBUG
+        let signsSuppressed = Self.auditioningTitles
+        #else
+        let signsSuppressed = false
+        #endif
+        if !signsSuppressed {
+            let title = HubDomainTitle(domain: terrace.domain,
+                                       width: terrace.width * 0.54)
+            title.root.position = SIMD3(0, 0.62, -0.02)
+            slab.addChild(title.root)
+            domainTitles[terrace.domain] = title
+        }
         root.addChild(slab)
 
         for top in terrace.puckTops {
@@ -693,7 +717,13 @@ final class HubScene {
         let scales = built.map { Self.titleWidth / max($0.extents.x, 1e-4) }
         // Cap heights AFTER scaling — a wider scale makes taller letters.
         let heights = zip(built, scales).map { $0.0.extents.y * $0.1 }
-        let gap = heights.reduce(0, +) / Float(heights.count) * Self.titleLeading
+        // Leading off the TALLEST line, not the average. The flush
+        // lockup scales a short line up (7-character "Physics" against
+        // 10-character "Playground"), so its cap height can far exceed
+        // the mean — and an average-derived gap then lets the tall line
+        // collide with its neighbour. Uppercase makes it worse, which
+        // is how the plaque candidate exposed it.
+        let gap = (heights.max() ?? 0) * HubTitleStyle.current.leadingFactor
         let blockHeight = heights.reduce(0, +) + gap * Float(heights.count - 1)
 
         // Walk down from the top of the block, so the whole lockup ends
@@ -762,6 +792,74 @@ final class HubScene {
                                 podiumTop.z + 0.12)
         root.addChild(entity)
     }
+
+    #if DEBUG
+    /// Whether the specimen wall replaces the home's display type.
+    static var auditioningTitles: Bool {
+        UserDefaults.standard.bool(forKey: "titleAudition")
+    }
+
+    /// The specimen wall: the three candidate voices standing side by
+    /// side where the wordmark hangs, each captioned with the flag that
+    /// selects it, each showing BOTH roles it has to play — the neutral
+    /// wordmark and an accented door sign.
+    ///
+    /// A style is a comparison, not a memory. Auditioning them one
+    /// launch at a time asks the eye to hold two rooms at once, which
+    /// is exactly the thing eyes cannot do; three specimens in one
+    /// glance is the whole point of a wall.
+    private func buildStyleAudition() {
+        let candidates: [(style: HubTitleStyle, name: String)] = [
+            (.frosted, "1  FROSTED"),
+            (.plaque, "2  PLAQUE"),
+            (.poster, "3  POSTER"),
+        ]
+        // Spread across the crescent's width. Dropped well below the
+        // wordmark's usual height so the specimens hang against the
+        // WALL rather than the ceiling: the frosted candidate is
+        // translucent, and judging translucency against a blown-out
+        // white ceiling judges the ceiling.
+        let columnPitch: Float = 1.30
+        let specimenWidth: Float = 0.56
+
+        titleAnchor.position = titlePosition - SIMD3(0, 0.42, 0)
+        for (index, candidate) in candidates.enumerated() {
+            let column = Entity()
+            column.position.x = (Float(index) - 1) * columnPitch
+
+            // The name of the flag that picks this one, neutral, above
+            // its specimen.
+            let caption = Self.namePlate(candidate.name,
+                                         accent: Self.titleRimColor, size: 0.052)
+            caption.position.y = 0.40
+            column.addChild(caption)
+
+            // Role one: the wordmark, neutral.
+            let wordmark = candidate.style.lockup(
+                ["Physics", "Playground"], width: specimenWidth, accent: nil)
+            wordmark.position.y = 0.14
+            column.addChild(wordmark)
+
+            // Role two: a door sign in a domain accent. The two domains
+            // alternate across the row so both colours are on the wall.
+            let domain: HubDomain = index == 1 ? .mechanics : .electricity
+            let sign = candidate.style.lockup(
+                domain == .mechanics ? ["Mechanics", "& Energy"]
+                                     : ["Electricity", "& Magnetism"],
+                width: specimenWidth, accent: UIColor(domain.color))
+            sign.position.y = -0.25
+            column.addChild(sign)
+
+            titleAnchor.addChild(column)
+        }
+
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = "Title style audition: frosted, plaque, poster"
+        titleAnchor.components.set(accessibility)
+        root.addChild(titleAnchor)
+    }
+    #endif
 
     /// The measured size of a run of the title face, for the lockup.
     /// Internal, not private: `HubDomainTitle` builds its two-line
@@ -1375,14 +1473,15 @@ struct HubFocusPanel: View {
 }
 
 /// The utility bar under the wordmark: the home's small chrome, kept to
-/// three verbs. Settings opens the real settings window; About opens
-/// the placeholder credits panel; Exit is a labelled placeholder —
-/// visionOS offers no supported way for an app to quit itself, so the
-/// button states its intent and does nothing yet rather than lying
-/// with a broken action.
+/// three verbs, all real. Settings and the Lab Notebook open their
+/// existing windows; About opens the credits panel. An Exit button
+/// stood in the third seat briefly and was cut — visionOS offers no
+/// supported way for an app to quit itself, and a button that can
+/// never do what its icon promises is worse than no button.
 private struct HubUtilityBar: View {
     let openSettings: () -> Void
     let openAbout: () -> Void
+    let openNotebook: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
@@ -1392,19 +1491,18 @@ private struct HubUtilityBar: View {
             }
             .accessibilityLabel("Settings")
 
+            Button(action: openNotebook) {
+                Image(systemName: "book.closed.fill")
+                    .font(.title3)
+            }
+            .accessibilityLabel("Lab Notebook")
+            .accessibilityHint("Your captured observations")
+
             Button(action: openAbout) {
                 Image(systemName: "info.circle")
                     .font(.title3)
             }
             .accessibilityLabel("About Physics Playground")
-
-            Button {} label: {
-                Image(systemName: "power")
-                    .font(.title3)
-            }
-            .disabled(true)
-            .accessibilityLabel("Exit")
-            .accessibilityHint("Not available yet")
         }
         .buttonStyle(.borderless)
         .padding(.horizontal, 16)

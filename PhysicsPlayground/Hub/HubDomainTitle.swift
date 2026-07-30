@@ -91,7 +91,13 @@ final class HubDomainTitle {
         }
         let scales = built.map { width / max($0.extents.x, 1e-4) }
         let heights = zip(built, scales).map { $0.0.extents.y * $0.1 }
-        let gap = heights.reduce(0, +) / Float(heights.count) * Self.leading
+        // Leading off the TALLEST line, not the average. The flush
+        // lockup scales a short line up (7-character "Physics" against
+        // 10-character "Playground"), so its cap height can far exceed
+        // the mean — and an average-derived gap then lets the tall line
+        // collide with its neighbour. Uppercase makes it worse, which
+        // is how the plaque candidate exposed it.
+        let gap = (heights.max() ?? 0) * HubTitleStyle.current.leadingFactor
         let blockHeight = heights.reduce(0, +) + gap * Float(heights.count - 1)
         halfHeight = blockHeight / 2
 

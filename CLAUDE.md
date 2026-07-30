@@ -24,7 +24,7 @@ Two separate suites: pure-math tests go in `PhysicsCoreTests` (fast, no sim); mo
 
 The simulator can't be gaze-pinched, so debug launch args drive a module into a given state for CLI screenshots: `-openModule <id>`, `-studioMode 1`, `-startPaused 1`, `-pauseAfter <seconds>`, `-paletteOpen 1`, plus per-module ones. Full list in `AppModel.init`.
 
-`-titleStyle 1|2|3` auditions a home text style (frosted / plaque / poster) across the wordmark and both door signs; absent = shipping style. `-openModule circuits -emLink 1` stages the app's one wired pair — a driven coil with the cable running to it — since the simulator has no hands to wire an inductor with. The coil annex reads `-viewScale.field`; single-apparatus scenes read the bare `-viewScale`.
+`-titleAudition 1` hangs a specimen wall where the wordmark goes: the three candidate voices side by side, each named, each in both roles. `-titleStyle 1|2|3` instead renders the WHOLE home in one candidate (frosted / plaque / poster); absent = shipping style. `-openModule circuits -emLink 1` stages the app's one wired pair — a driven coil with the cable running to it — since the simulator has no hands to wire an inductor with. The coil annex reads `-viewScale.field`; single-apparatus scenes read the bare `-viewScale`.
 
 ## Working agreement
 
