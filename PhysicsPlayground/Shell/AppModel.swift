@@ -166,9 +166,9 @@ final class AppModel {
             activeModule?.togglePause()
         }
         // `-pauseAfter 12` lets the simulation RUN for a while and then
-        // freezes it. Some labs have nothing to freeze at t=0 — the wind
-        // tunnel has no flow field until its first solve lands — so
-        // freezing from launch shows an empty room and proves nothing.
+        // freezes it. Some labs have nothing to freeze at t=0 — a thrown
+        // bob is still in the hand, an orbit has not swept — so freezing
+        // from launch shows a room at rest and proves nothing.
         let pauseAfter = UserDefaults.standard.double(forKey: "pauseAfter")
         if pauseAfter > 0 {
             Task { @MainActor [weak self] in
@@ -220,15 +220,6 @@ final class AppModel {
     }
 
 
-
-    private var windTunnel: WindTunnelModel?
-
-    var windTunnelModel: WindTunnelModel {
-        if let windTunnel { return windTunnel }
-        let model = WindTunnelModel()
-        windTunnel = model
-        return model
-    }
 
     private var circuits: CircuitsModel?
 

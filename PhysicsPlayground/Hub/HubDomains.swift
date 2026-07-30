@@ -54,7 +54,7 @@ enum HubDomain: String, CaseIterable, Identifiable {
         // does not build a terrace for it, so the crescent closes up
         // rather than showing an empty shelf.
         case .waves: []
-        case .fluidsGravity: ["windtunnel", "gravitylab"]
+        case .fluidsGravity: ["gravitylab"]
         }
     }
 
@@ -74,8 +74,6 @@ enum HubDomain: String, CaseIterable, Identifiable {
         case "kinematics": "Fire projectiles and bend their arcs with gravity and drag"
         case "pendulums": "Throw a pendulum into a true 3-D orbit above your floor"
         case "em": "Place the charges, wire the circuit, and move the magnets its current drives"
-        case "waves": "Stand between the silent surfaces two sources carve out of the air"
-        case "windtunnel": "Raise a wind indoors and watch the flow find its way around"
         case "gravitylab": "Grow a solar system and hear its orbits as a chord"
         default: ""
         }

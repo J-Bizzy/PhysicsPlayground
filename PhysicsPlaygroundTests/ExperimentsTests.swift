@@ -73,7 +73,8 @@ final class ExperimentsTests: XCTestCase {
         }
         // The floor tracks the BENCHED catalog. Folding modules into
         // worlds moves experiments between entries but never deletes
-        // one, so this floor only ever falls when a module is ARCHIVED.
-        XCTAssertGreaterThanOrEqual(ExperimentCatalog.total(appModel: appModel), 18)
+        // one, so this floor only ever falls when a module is ARCHIVED
+        // — as Wind Tunnel was on 2026-07-30, taking its two with it.
+        XCTAssertGreaterThanOrEqual(ExperimentCatalog.total(appModel: appModel), 16)
     }
 }

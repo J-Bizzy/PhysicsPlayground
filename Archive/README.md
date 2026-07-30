@@ -16,6 +16,15 @@ the "strongly three-dimensional" test:
   `DoubleSlit`. Its tests live in `Archive/Tests`.
 - **Optics** — stays archived; not returning with the two-lab scope.
   `PhysicsCore/Optics` still holds full 3-D ray tracing, tested.
+- **WindTunnel** — cut 2026-07-30, owner's call, and the only one here
+  removed for scope rather than for a defect: the app ships two labs,
+  Electricity & Magnetism and Mechanics & Energy, and a wind tunnel
+  belongs to neither. It worked. `PhysicsCore/Fluids` is deliberately
+  NOT pruned — `FluidGrid`, `DragBody` and `SurfacePressure` stay on
+  disk and their tests keep running in `swift test`, so reviving this
+  costs a module folder rather than a rebuild. Note this also retires
+  the outstanding `WindTunnelRenderer.planePoint(fromWorld:)` scale-rig
+  prerequisite recorded in `DECISIONS.md` (2026-07-29).
 - **Fields / Oscillators** — the old merged-module wrappers, already
   unused since the modules were split back apart.
 
@@ -23,3 +32,11 @@ Nothing here is deleted. The physics these leaned on lives in
 PhysicsCore and is still fully tested. To restore a module: move its
 folder back under `PhysicsPlayground/Modules/`, add its one line to
 `ModuleCatalog.all`, and its id to `HubDomain.moduleIDs`.
+
+**These are snapshots, not living code.** Nothing here compiles — the
+`Archive/` tree sits outside the Xcode synchronized root — so an
+archived module can go stale against the app that moved on without it,
+and restoring one may mean repairing it first. The standing example:
+`Archive/Fields/FieldsModule.swift` still calls `MagnetismSpaceView`,
+which was deleted when Magnetism became a station of the E&M world. A
+restore is a merge, not a `git mv`.

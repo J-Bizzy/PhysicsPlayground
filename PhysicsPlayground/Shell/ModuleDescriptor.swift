@@ -81,15 +81,19 @@ enum ModuleCatalog {
     /// Every module in the playground, in display order. New modules
     /// register by adding one line here.
     static func all(appModel: AppModel) -> [ModuleDescriptor] {
-        // FIVE entries, heading for two. Springs, Elastic Field, and
-        // Optics are cut: a
-        // block on a rail is a ONE-dimensional oscillator, a membrane is
-        // two-dimensional, and an optical bench is a line of elements in
-        // a row — none of them earn a headset. Waves is cut too. Their
-        // code and physics stay on disk, not deleted; each returns with
-        // one line here plus its HubDomains entry. Everything else (hub
-        // arc, search, progress totals, the challenge) derives from
-        // this list.
+        // FOUR entries, heading for two: Electricity & Magnetism, and
+        // Mechanics & Energy. Everything else (hub arc, search, progress
+        // totals, the challenge) derives from this list.
+        //
+        // Cut, in order: Springs (a block on a rail is a ONE-dimensional
+        // oscillator), Elastic Field (a membrane is two-dimensional),
+        // Optics (an optical bench is a line of elements in a row),
+        // Waves (its dot lattice sampled below Nyquist and could not be
+        // fixed at a workable budget), and Wind Tunnel (owner's call —
+        // it belongs to neither of the two labs). None of it is deleted:
+        // each sits in Archive/ with its tests, the physics stays in
+        // PhysicsCore and stays tested, and each returns with one line
+        // here plus its HubDomains entry.
         //
         // A WORD ON MERGERS, because this list has been burned twice.
         // Fields and Oscillators were once merged, and both mergers were
@@ -113,7 +117,6 @@ enum ModuleCatalog {
             EMWorldModule.descriptor(appModel: appModel),
             KinematicsModule.descriptor(appModel: appModel),
             GravityLabModule.descriptor(appModel: appModel),
-            WindTunnelModule.descriptor(appModel: appModel),
             PendulumsModule.descriptor(appModel: appModel),
         ]
     }

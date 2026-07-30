@@ -292,18 +292,6 @@ enum ExperimentCatalog {
                             step: "Tap Twin suns in this window."),
                  { model.bodies.filter { $0.body.name.hasPrefix("Sun") }.count >= 2 }),
             ]
-        case "windtunnel":
-            let model = appModel.windTunnelModel
-            return [
-                (Experiment(id: "wind.lift", title: "Magnus liftoff",
-                            detail: "Spin the cylinder into more than 2 N/m of lift.",
-                            step: "Choose the Cylinder body in this window, then run Spin up until the lift arrow grows."),
-                 { model.testBody == .cylinder && abs(model.liftPerSpan) > 2 }),
-                (Experiment(id: "wind.slippery", title: "Slippery shape",
-                            detail: "Find the body that slips through with under a tenth the cube's drag.",
-                            step: "Work through the bodies in this window's Test body picker and compare how the smoke parts around each."),
-                 { model.testBody.dragCoefficient < 0.105 }),
-            ]
         default:
             return []
         }

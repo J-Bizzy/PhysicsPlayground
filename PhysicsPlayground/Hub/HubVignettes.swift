@@ -47,7 +47,6 @@ enum HubVignettes {
         switch moduleID {
         case "kinematics": projectile()
         case "gravitylab": gravity()
-        case "windtunnel": windTunnel()
         case "em": em()
         case "pendulums": pendulums()
         default: fallback()
