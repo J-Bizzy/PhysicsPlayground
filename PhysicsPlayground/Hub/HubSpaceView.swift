@@ -299,9 +299,12 @@ final class HubScene {
 
         buildPodium(distance: distance)
 
-        // The terraces themselves ARE the domain grouping — no floating
-        // text headers; colour lives in each slab's hairline, the
-        // progress ring, and the focus panel's chip.
+        // Each terrace carries its domain's name as three-dimensional
+        // signage (HubDomainTitle) — owner's call 2026-07-30, reversing
+        // the earlier no-headers doctrine. The terraces are the app's
+        // two DOORS now, and a door needs a name over it; four shelves
+        // of two could speak through colour alone, two doors of three
+        // cannot.
         let byID = Dictionary(uniqueKeysWithValues: modules.map { ($0.id, $0) })
         for terrace in GalleryLayout.terraces(moduleIDs: modules.map(\.id),
                                               distance: distance,
@@ -321,6 +324,8 @@ final class HubScene {
 
     /// Each terrace's hairline, kept for the enter flare and shimmer.
     private var terraceHairlines: [HubDomain: ModelEntity] = [:]
+    /// Each terrace's signage, driven from the idle loop.
+    private var domainTitles: [HubDomain: HubDomainTitle] = [:]
 
     /// One domain's slab: a floating graphite shelf with a lit hairline
     /// of the domain's colour along its front edge, and a pedestal puck
@@ -356,6 +361,18 @@ final class HubScene {
                                   GalleryLayout.slabDepth / 2 - 0.006)
         slab.addChild(hairline)
         terraceHairlines[terrace.domain] = hairline
+
+        // The signage, floating over the slab's miniatures. A child of
+        // the slab, so it inherits the terrace's yaw and faces the user
+        // the way the shelf does. High enough that a focus-lifted
+        // exhibit (puck + lift + miniature, ~0.31 above the slab)
+        // clears the sign's underline rule and the Mechanics ball's
+        // landing points with room to spare.
+        let title = HubDomainTitle(domain: terrace.domain,
+                                   width: terrace.width * 0.54)
+        title.root.position = SIMD3(0, 0.62, -0.02)
+        slab.addChild(title.root)
+        domainTitles[terrace.domain] = title
         root.addChild(slab)
 
         for top in terrace.puckTops {
@@ -723,7 +740,9 @@ final class HubScene {
     }
 
     /// The measured size of a run of the title face, for the lockup.
-    private static func textExtents(_ text: String, size: CGFloat) -> SIMD3<Float> {
+    /// Internal, not private: `HubDomainTitle` builds its two-line
+    /// signage with the same measured-and-scaled lockup math.
+    static func textExtents(_ text: String, size: CGFloat) -> SIMD3<Float> {
         MeshResource.generateText(
             text, extrusionDepth: Float(size) * 0.45,
             font: roundedFont(size: size), alignment: .center
@@ -1069,6 +1088,16 @@ final class HubScene {
                 let shimmer = 0.72 + 0.16 * Float(sin(time * 0.5 + Double(index) * 1.7))
                 hairline.components.set(OpacityComponent(opacity: shimmer))
             }
+        }
+
+        // The signage performs its physics — the electron laps the E&M
+        // sign, the ball lobs over the Mechanics one — each door on its
+        // own phase so the room never moves in lockstep. Called under
+        // stillness too: that is how the signs PARK rather than freeze
+        // mid-flight.
+        for (index, domain) in HubDomain.allCases.enumerated() {
+            domainTitles[domain]?.animate(time: time + Double(index) * 1.9,
+                                          stillness: stillness)
         }
     }
 

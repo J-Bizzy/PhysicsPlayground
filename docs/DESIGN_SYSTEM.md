@@ -20,6 +20,8 @@ Color is **semantic, not decorative**. Two systems coexist, deliberately:
 | Electricity & Magnetism | electrostatics, circuits, magnetism | Green | `#30D158` |
 
 **Where domain accent appears — and nowhere else:**
+- The hairline along each terrace's front edge
+- The terrace signage (`HubDomainTitle` — letters, rim and underline rule)
 - The progress ring around each exhibit
 - The domain chip on the focus panel
 
