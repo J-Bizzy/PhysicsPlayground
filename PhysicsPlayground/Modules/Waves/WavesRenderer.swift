@@ -37,6 +37,13 @@ final class WavesRenderer {
     static let probeName = "probe"
     static let latticeSide = 9
 
+    /// Bands across the fringe screen. Odd, so one band sits exactly on
+    /// the central maximum rather than straddling it — the m = 0 fringe is
+    /// the one a viewer looks for first.
+    static let fringeBandCount = 61
+    /// Half-width of the screen along the slit baseline, metres.
+    static let fringeScreenHalfSpan = 0.75
+
     var manipulatingSourceID: UUID?
     var isManipulatingProbe = false
 
@@ -93,6 +100,24 @@ final class WavesRenderer {
     private static let shellFadeBuckets = 6
     private let wavefrontsRoot = Entity()
     private var shellPool: EntityPool<ModelEntity>!
+
+    // MARK: The fringe screen — where the walkable pattern lands
+    //
+    // A row of bands standing downstream of the two slits, each lit by the
+    // exact `DoubleSlit.intensity` at its own offset. It is the second view
+    // of the field you are already standing in: the bright bands are where
+    // the crests arrive together, and walking to one is walking into a loud
+    // place. Painted with a point-like slit width so it agrees with the
+    // point-source field exactly — see `WavesModel.pointSlitWidth`.
+    private let fringeRoot = Entity()
+    private var fringePool: EntityPool<ModelEntity>!
+    /// Brightness is quantised into buckets so a band only swaps material
+    /// when it visibly changes, instead of rebuilding 61 materials a frame.
+    private var fringeMaterials: [UnlitMaterial] = []
+    private var fringeBuckets = [Int](repeating: -1, count: fringeBandCount)
+    /// The matte slab the fringes are cast onto — see the casing note in
+    /// `init`. Without it a bright band has nothing to be bright against.
+    private var fringeCasing = ModelEntity()
     private var wavefrontMaterials: [[UnlitMaterial]] = []   // [tint][fade bucket]
     private var shellBirths = [Double](repeating: 0, count: shellBudget)
     private var shellCenters = [SIMD3<Float>](repeating: .zero, count: shellBudget)
@@ -159,6 +184,62 @@ final class WavesRenderer {
         }
         wavefrontsRoot.addChild(shellPool.root)
         root.addChild(wavefrontsRoot)
+
+        // The fringe screen. Sixteen brightness buckets is far more than
+        // the eye resolves in a glowing band, and it turns a per-frame
+        // material rebuild into a per-frame integer compare.
+        fringeMaterials = (0..<16).map { bucket in
+            let level = Double(bucket) / 15
+            var material = UnlitMaterial(color: UIColor(
+                red: 0.42 + 0.52 * level,
+                green: 0.80 + 0.18 * level,
+                blue: 0.92,
+                alpha: 1))
+            // A dark fringe is genuinely dark: the pattern is about where
+            // light ISN'T, so a minimum must vanish into the casing rather
+            // than read as a dimmer stripe. Fully transparent at the
+            // bottom, near-opaque at the top — the whole dynamic range,
+            // because a two-slit pattern's contrast IS its content.
+            material.blending = .transparent(
+                opacity: .init(floatLiteral: Float(0.98 * level * level)))
+            return material
+        }
+        let bandMesh = MeshResource.generateBox(
+            size: [Float(2 * Self.fringeScreenHalfSpan / Double(Self.fringeBandCount)),
+                   0.34, 0.004],
+            cornerRadius: 0.001)
+        // Held locally: the pool's builder must not reach through `self`
+        // while the rest of the renderer's members are still unset.
+        let darkestBand = fringeMaterials[0]
+        fringePool = EntityPool(budget: Self.fringeBandCount) { container in
+            let band = ModelEntity(mesh: bandMesh, materials: [darkestBand])
+            container.addChild(band)
+            return band
+        }
+        // The casing. First light showed the bands as a washed-out haze
+        // against a lit room — which is the lesson this project already
+        // wrote down (DESIGN_SYSTEM: contours beat surfaces indoors,
+        // casings beat glows). A glowing band has nothing to be bright
+        // AGAINST unless something dark sits behind it, so the screen gets
+        // a real screen: a matte slab the fringes are cast onto.
+        var casing = PhysicallyBasedMaterial()
+        casing.baseColor = .init(tint: UIColor(white: 0.03, alpha: 1))
+        casing.roughness = 0.95
+        casing.metallic = .init(floatLiteral: 0)
+        casing.blending = .transparent(opacity: .init(floatLiteral: 0.90))
+        fringeCasing = ModelEntity(
+            mesh: .generateBox(
+                size: [Float(2 * Self.fringeScreenHalfSpan + 0.03), 0.38, 0.004],
+                cornerRadius: 0.006),
+            materials: [casing])
+        // Behind the bands, by half a band's depth plus a hair, so the two
+        // never z-fight.
+        // Repositioned per frame in updateFringeScreen; this is only so it
+        // is not at the origin before the first tick.
+        fringeRoot.addChild(fringeCasing)
+        fringeRoot.addChild(fringePool.root)
+        fringeRoot.isEnabled = false
+        root.addChild(fringeRoot)
 
         // Silence contours: a bright ring over a dark casing. Nearly
         // opaque — an outline can afford to be solid where a sheet
@@ -433,12 +514,63 @@ final class WavesRenderer {
         syncConfiguration(model)
         pulseLattice(model)
         updateWavefronts(model)
+        updateFringeScreen(model)
         updateListening(model, at: listener)
 
         if !isManipulatingProbe {
             probe.position = SIMD3<Float>(model.probePosition)
         }
         probeAnchor.position = SIMD3<Float>(model.probePosition) + SIMD3(0, 0.09, 0)
+    }
+
+    // MARK: The fringe screen
+
+    /// Stands the screen downstream of the slits and lights each band with
+    /// the exact intensity at its own offset.
+    ///
+    /// Only shows for exactly two sources, because a double slit is what
+    /// two sources ARE — with one there is no interference to land and with
+    /// three it is no longer a double slit, and painting a two-slit formula
+    /// over a three-source field would be drawing a lie.
+    private func updateFringeScreen(_ model: WavesModel) {
+        guard model.showFringeScreen, let geometry = model.fringeGeometry else {
+            if fringeRoot.isEnabled {
+                fringeRoot.isEnabled = false
+                fringePool.hideAll()
+            }
+            return
+        }
+        fringeRoot.isEnabled = true
+        fringePool.setActiveCount(Self.fringeBandCount)
+
+        let along = SIMD3<Float>(geometry.along)
+        let centre = SIMD3<Float>(geometry.centre)
+        // The casing stands square to the baseline, at the screen's centre,
+        // with the bands laid over it.
+        // PLUS the axis, not minus: `axis` points away from the user, so
+        // subtracting it put the slab in FRONT of the bands and hid the
+        // very pattern it exists to back. First screenshot showed a grey
+        // rectangle with no fringes on it.
+        fringeCasing.position = centre + SIMD3<Float>(geometry.axis) * 0.006
+        fringeCasing.orientation = simd_quatf(from: [1, 0, 0], to: along)
+        let half = Self.fringeScreenHalfSpan
+        let step = 2 * half / Double(Self.fringeBandCount - 1)
+
+        for (index, slot) in fringePool.slots.enumerated() {
+            let offset = -half + step * Double(index)
+            slot.entity.position = centre + along * Float(offset)
+            // Each band lies in the screen's plane: its own long axis is
+            // vertical, so it only has to be turned about the vertical to
+            // stand square to the baseline.
+            slot.entity.orientation = simd_quatf(from: [1, 0, 0], to: along)
+
+            let intensity = model.fringeIntensity(atOffset: offset)
+            let bucket = min(15, max(0, Int((intensity * 15).rounded())))
+            if fringeBuckets[index] != bucket {
+                fringeBuckets[index] = bucket
+                slot.payload.model?.materials = [fringeMaterials[bucket]]
+            }
+        }
     }
 
     // MARK: Hearing the field at your own head

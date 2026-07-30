@@ -100,9 +100,21 @@ struct WavesSpaceView: View {
                           symbol: "ear",
                           isOn: { model.listenToField },
                           toggle: { model.listenToField.toggle() }),
+                    .init(id: "fringes", label: "Fringe screen",
+                          symbol: "barcode",
+                          isOn: { model.showFringeScreen },
+                          toggle: { model.showFringeScreen.toggle() }),
                 ])
             renderer.root.addChild(bank.root)
             self.layers = bank
+
+            #if DEBUG
+            // `-wavesFringes 1` raises the screen at launch, so the fringe
+            // pattern can be screenshot-checked from the CLI.
+            if UserDefaults.standard.bool(forKey: "wavesFringes") {
+                model.showFringeScreen = true
+            }
+            #endif
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in

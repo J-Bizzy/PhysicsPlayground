@@ -288,6 +288,109 @@ final class WavesModel {
         return simd_distance(sources[0].wave.position, sources[1].wave.position)
     }
 
+    // MARK: The double slit — the screen the walkable field lands on
+
+    /// Whether the fringe screen is showing.
+    ///
+    /// This is the module's second bench, and it needed almost nothing
+    /// built: two sources ARE a double slit's near field, so the volume
+    /// you already walk through between them is already the two-slit
+    /// interference pattern. `PhysicsCore/Waves/DoubleSlit.swift` — exact
+    /// `cos²` under a `sinc²` envelope, six tests — has been sitting in the
+    /// package since it was written with **no caller anywhere in the app**.
+    /// The screen is that caller: the place the pattern lands, so you can
+    /// see where the bright orders fall before you walk into one.
+    var showFringeScreen = false
+
+    /// How far downstream of the slits the screen stands, metres.
+    var screenDistance = 0.85
+    nonisolated static let screenDistanceRange = 0.35...1.5
+
+    /// The slits are Huygens POINTS, so the strip is painted with a
+    /// point-like width and comes out as pure `cos²` — exactly the field
+    /// you walk through. A real slit of finite width would add the `sinc²`
+    /// envelope that `DoubleSlit.intensity` also models, and offering a
+    /// width control here would be a lie: it would dim fringes on the
+    /// screen that the walkable field still shows at full strength. Same
+    /// physics, two views, or it is not worth having.
+    nonisolated static let pointSlitWidth = 1e-6
+
+    /// Where the screen sits and which way its fringes run, for exactly
+    /// two sources. Nil otherwise — a one-source or three-source field has
+    /// no double slit in it.
+    ///
+    /// The fringe coordinate runs ALONG the line joining the slits, and the
+    /// screen stands off along the horizontal perpendicular to it, pushed
+    /// to whichever side faces away from the user's start point so the
+    /// pattern is something you walk toward rather than through your back.
+    struct FringeGeometry: Equatable {
+        var midpoint: SIMD3<Double>
+        /// Unit vector along the slit baseline — the screen's own +y.
+        var along: SIMD3<Double>
+        /// Unit vector from the slits toward the screen.
+        var axis: SIMD3<Double>
+        var separation: Double
+        var centre: SIMD3<Double>
+    }
+
+    var fringeGeometry: FringeGeometry? {
+        guard sources.count == 2 else { return nil }
+        let a = sources[0].wave.position
+        let b = sources[1].wave.position
+        let baseline = b - a
+        let separation = simd_length(baseline)
+        // Coincident slits are one slit; there is no pattern to paint and
+        // normalising a zero vector would spray NaN through the strip.
+        guard separation > 1e-4 else { return nil }
+        let along = baseline / separation
+        let midpoint = (a + b) / 2
+
+        // Horizontal perpendicular to the baseline. If the baseline is
+        // near-vertical (one source stacked above the other) the cross
+        // with up collapses, so fall back to the room's −z.
+        var axis = simd_cross(SIMD3<Double>(0, 1, 0), along)
+        if simd_length(axis) < 1e-3 {
+            axis = SIMD3(0, 0, -1)
+        } else {
+            axis = simd_normalize(axis)
+        }
+        // Point it away from the user (the room's origin), so the screen
+        // stands beyond the slits rather than behind the viewer.
+        if simd_dot(axis, midpoint) < 0 { axis = -axis }
+
+        return FringeGeometry(midpoint: midpoint, along: along, axis: axis,
+                              separation: separation,
+                              centre: midpoint + axis * screenDistance)
+    }
+
+    /// Small-angle fringe spacing Δy = λL/d — the number every intro lab
+    /// measures, and the one the screen can be checked against with a
+    /// ruler.
+    var fringeSpacing: Double? {
+        guard let geometry = fringeGeometry else { return nil }
+        return DoubleSlit.fringeSpacing(distance: screenDistance,
+                                        separation: geometry.separation,
+                                        wavelength: wavelength)
+    }
+
+    /// Screen offsets of the bright orders, along the baseline.
+    func brightFringeOffsets(count: Int = 9) -> [Double] {
+        guard let geometry = fringeGeometry else { return [] }
+        return DoubleSlit.brightFringes(distance: screenDistance,
+                                        separation: geometry.separation,
+                                        wavelength: wavelength,
+                                        count: count)
+    }
+
+    /// Normalised brightness at a screen offset — what the strip paints.
+    func fringeIntensity(atOffset y: Double) -> Double {
+        guard let geometry = fringeGeometry else { return 0 }
+        return DoubleSlit.intensity(y: y, distance: screenDistance,
+                                    separation: geometry.separation,
+                                    slitWidth: Self.pointSlitWidth,
+                                    wavelength: wavelength)
+    }
+
     /// How many silence surfaces (3D nodal sheets) thread between the two
     /// sources. Same-phase pairs go quiet where Δr = (m+½)λ; an inverted
     /// pair where Δr = mλ — including the midplane itself.
@@ -327,6 +430,8 @@ final class WavesModel {
         showSilenceSurfaces = true
         showWavefronts = true
         listenToField = true
+        showFringeScreen = false
+        screenDistance = 0.85
         lookProbe = false
         lookReach = 1.1
         isPaused = false
