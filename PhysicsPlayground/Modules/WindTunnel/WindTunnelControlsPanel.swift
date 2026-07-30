@@ -20,13 +20,13 @@ struct WindTunnelControlsPanel: View {
 
         VStack(spacing: DesignTokens.Panel.sectionSpacing) {
             PanelSection("Wind") {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Wind: \(self.model.windSpeed, specifier: "%.2f") m/s")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.windSpeed, in: WindTunnelModel.windSpeedRange)
-                        .accessibilityLabel("Wind speed")
-                }
-                Text("The fan spins with it; every streamline, particle, and force follows. Put your hands in the smoke — it bends around them.")
+                // The wind slider is a gauge now — a dial mounted on the
+                // tunnel's near side, upstream by the fan, which you reach
+                // out and turn (DECISIONS.md, 2026-07-29). The number stays
+                // here to be read; setting it is a physical act.
+                Text("Wind: \(self.model.windSpeed, specifier: "%.2f") m/s")
+                    .font(DesignTokens.TypeScale.control.monospacedDigit())
+                Text("Turn the wind gauge on the tunnel's near side to change it. The fan spins with it; every streamline, particle, and force follows. Put your hands in the smoke — it bends around them.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -45,14 +45,12 @@ struct WindTunnelControlsPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if self.model.testBody == .cylinder {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Spin: \(self.model.spinRPM, specifier: "%.0f") RPM   lift \(self.model.liftPerSpan, specifier: "%.2f") N/m")
-                            .font(DesignTokens.TypeScale.control.monospacedDigit())
-                        Slider(value: $model.circulation,
-                               in: WindTunnelModel.circulationRange)
-                            .accessibilityLabel("Cylinder spin")
-                    }
-                    Text("Kutta–Joukowski: spin bends the flow, and the bent flow pushes back — the Magnus lift a curveball rides.")
+                    // Spin is the second gauge, which appears only while a
+                    // cylinder is in the stream — there is no circulation
+                    // to set on a teardrop.
+                    Text("Spin: \(self.model.spinRPM, specifier: "%.0f") RPM   lift \(self.model.liftPerSpan, specifier: "%.2f") N/m")
+                        .font(DesignTokens.TypeScale.control.monospacedDigit())
+                    Text("Turn the spin gauge beside the wind one on the tunnel's near side. Kutta–Joukowski: spin bends the flow, and the bent flow pushes back — the Magnus lift a curveball rides.")
                         .font(DesignTokens.TypeScale.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

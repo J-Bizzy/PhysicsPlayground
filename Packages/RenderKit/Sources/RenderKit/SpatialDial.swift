@@ -188,10 +188,22 @@ public final class SpatialDial {
         valueText.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
     }
 
-    /// The hand's angle around the dial's face, in the local frame —
-    /// the quantity DialDrag accumulates.
-    public func handAngle(_ handWorld: SIMD3<Double>) -> Double {
-        let local = orientation.inverse.act(SIMD3<Float>(handWorld) - center)
+    /// The hand's angle around the dial's face — the quantity `DialDrag`
+    /// accumulates.
+    ///
+    /// `hand` must already be in the dial's PARENT space, not world space.
+    /// `center` and `orientation` are the dial's transform within its
+    /// parent, so mixing a world-space hand in here is only correct when
+    /// that parent sits at the world origin unrotated — and it usually
+    /// does not: every module offsets its renderer root by
+    /// `LabPlacement.offset`, and the Wind Tunnel nests its section root
+    /// deeper still. Feeding world coordinates in would make the dial
+    /// twist by an amount that drifts as the user moves their lab.
+    ///
+    /// `SpatialDialControl` does the conversion; callers wiring a dial by
+    /// hand must do `parent.convert(position: handWorld, from: nil)`.
+    public func handAngle(inParentSpace hand: SIMD3<Double>) -> Double {
+        let local = orientation.inverse.act(SIMD3<Float>(hand) - center)
         return Double(atan2(local.y, local.x))
     }
 

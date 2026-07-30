@@ -34,6 +34,25 @@ struct WindTunnelSpaceView: View {
     /// running and the spin you are putting on the cylinder. Both were
     /// sliders on a card; both are the kind of number a tunnel operator
     /// reaches out and turns.
+    ///
+    /// This comment has been here, promising them, since the module was
+    /// written — with nothing after it. They exist now.
+    ///
+    /// Positioned in `sectionRoot`'s frame (centred on the test section)
+    /// just outside its near face, at FLOW height, upstream by the fan —
+    /// which is where a real tunnel's controls are: on the tunnel, not
+    /// under it.
+    ///
+    /// The first attempt put them on a console below the section, at
+    /// y = −0.34, z = +0.52. They were invisible, and for the same reason
+    /// the podium was: 0.96 m high and 0.68 m away is 38° below eye level.
+    /// How far DOWN a thing sits in view is set by its height and its
+    /// distance together, and being close magnifies the drop. Here z is
+    /// kept near the section's own depth and y near the flow's own height,
+    /// so the gauges sit ~14° below eye — the same band as the apparatus
+    /// they belong to.
+    @State private var windDial: SpatialDialControl?
+    @State private var spinDial: SpatialDialControl?
 
     var body: some View {
         RealityView { content in
@@ -52,6 +71,35 @@ struct WindTunnelSpaceView: View {
                 shapePicker.toggle()
             }
             #endif
+
+            // The gauges. A gauge face tilts up toward its reader, so the
+            // normal leans out of +z rather than lying flat along it.
+            let faceNormal = SIMD3<Float>(0, 0.4, 1)
+            let wind = SpatialDialControl(
+                name: "wind-dial",
+                center: SIMD3(-0.66, 0.02, 0.48),
+                normal: faceNormal,
+                accent: UIColor(DesignTokens.Palette.windAccent),
+                range: WindTunnelModel.windSpeedRange,
+                read: { model.windSpeed },
+                write: { model.windSpeed = $0 },
+                format: { String(format: "%.2f m/s", $0) })
+            let spin = SpatialDialControl(
+                name: "spin-dial",
+                center: SIMD3(-0.48, 0.02, 0.48),
+                normal: faceNormal,
+                accent: UIColor(DesignTokens.Palette.windAccent),
+                range: WindTunnelModel.circulationRange,
+                read: { model.circulation },
+                write: { model.circulation = $0 },
+                // The dial carries circulation Γ, but RPM is what a
+                // tunnel operator reads — the model already derives one
+                // from the other, so the gauge shows the human number.
+                format: { _ in String(format: "%.0f RPM", model.spinRPM) })
+            renderer.sectionRoot.addChild(wind.root)
+            renderer.sectionRoot.addChild(spin.root)
+            self.windDial = wind
+            self.spinDial = spin
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
@@ -96,6 +144,14 @@ struct WindTunnelSpaceView: View {
                     guard let renderer else { return }
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
+                    // Dials first, and in their PARENT's space: the twist
+                    // math is local to the section root, which carries the
+                    // lab's placement offset. A world-space hand here
+                    // would turn the dial by an amount that drifts as the
+                    // user moves their lab.
+                    let inSection = SIMD3<Double>(renderer.sectionRoot.convert(
+                        position: SIMD3<Float>(hand), from: nil))
+                    if twistDials(entity: value.entity, hand: inSection) { return }
                     if fanDrag == nil {
                         fanDrag = beginDrag(entity: value.entity, hand: hand, renderer: renderer)
                     }
@@ -103,6 +159,8 @@ struct WindTunnelSpaceView: View {
                     apply(drag: fanDrag, hand: hand, renderer: renderer)
                 }
                 .onEnded { value in
+                    windDial?.endTwist()
+                    spinDial?.endTwist()
                     if let fanDrag, let renderer {
                         let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                             value.location3D, from: .local, to: .scene)))
@@ -115,6 +173,25 @@ struct WindTunnelSpaceView: View {
             // Hand tracking + scene reconstruction: device-only, quietly
             // absent in the simulator.
         }
+    }
+
+    /// Routes a drag to whichever gauge it started on. True once a twist
+    /// owns the gesture, so the caller stops looking.
+    private func twistDials(entity: Entity, hand: SIMD3<Double>) -> Bool {
+        for dial in [windDial, spinDial].compactMap({ $0 }) {
+            if dial.isTwisting {
+                dial.updateTwist(hand: hand)
+                return true
+            }
+            // Spin only exists while the cylinder does; a hidden gauge
+            // must not swallow a drag aimed past it.
+            if dial.root.isEnabled, dial.owns(entity) {
+                dial.beginTwist(hand: hand)
+                dial.updateTwist(hand: hand)
+                return true
+            }
+        }
+        return false
     }
 
     /// Resolves a pinch to a relative-drag session (fan, cylinder,
@@ -195,6 +272,15 @@ struct WindTunnelSpaceView: View {
         bloom.update(anchor: anchor, viewer: viewer, revealTarget: 1, dt: dt)
         shapePicker.update(anchor: anchor + SIMD3(0, 0.05, 0),
                            viewer: viewer, dt: dt)
+
+        // The needles follow the model, not the gesture, so anything that
+        // changes the wind — a reset, an experiment, a notebook restore —
+        // moves them too.
+        windDial?.refresh()
+        // Spin is a cylinder's property. On any other body there is no
+        // circulation to set, so the gauge is not there to be turned.
+        spinDial?.root.isEnabled = model.testBody == .cylinder
+        if model.testBody == .cylinder { spinDial?.refresh() }
     }
 
     /// The glyph each body wears on its disc. Lives here rather than in
