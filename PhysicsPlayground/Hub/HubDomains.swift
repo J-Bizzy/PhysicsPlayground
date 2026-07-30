@@ -43,7 +43,9 @@ enum HubDomain: String, CaseIterable, Identifiable {
     /// The modules in this domain, in their display order on the arc.
     var moduleIDs: [String] {
         switch self {
-        case .mechanics: ["kinematics", "pendulums"]
+        // "kinematics" and "pendulums" are the two benches of
+        // "mechanics" now, standing in one room.
+        case .mechanics: ["mechanics"]
         // "circuits", "magnetism" and "electrostatics" are all stations
         // of "em" now — three benches standing in one room, one of them
         // focused at a time. The domain has a single entry because the
@@ -71,8 +73,7 @@ enum HubDomain: String, CaseIterable, Identifiable {
     /// line the panel leads with.
     static func promise(for moduleID: String) -> String {
         switch moduleID {
-        case "kinematics": "Fire projectiles and bend their arcs with gravity and drag"
-        case "pendulums": "Throw a pendulum into a true 3-D orbit above your floor"
+        case "mechanics": "Throw balls off your real walls, then hang a pendulum beside them and set both to the Moon"
         case "em": "Place the charges, wire the circuit, and move the magnets its current drives"
         case "gravitylab": "Grow a solar system and hear its orbits as a chord"
         default: ""

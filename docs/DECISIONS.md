@@ -2,6 +2,18 @@
 
 A running log of consequential decisions — architectural, physical, or product — and why they were made. Newest first. One entry per decision.
 
+## 2026-07-30 — Projectiles and Pendulums become the Mechanics world
+
+**Decision:** `kinematics` and `pendulums` leave the catalog and become the two benches of `mechanics` ("Mechanics & Energy"): the launcher dead centre, the pendulum rig 1.75 m to its left, one focused at a time. `MechanicsWorldSpaceView` is a deliberate COPY of `EMWorldSpaceView` rather than a shared generic — about sixty lines of routing are identical and about sixty are not, and a generic host would need an escape hatch for exactly the part that differs while making the tick order harder to read.
+
+**Context:** The two benches teach one thing — what a constant downward acceleration does to a moving body, once with the body let go and once with it held by a cable — and the gravity control on each was the same number typed twice. Setting the Moon on one bench left the other on Earth, which made the app's clearest single comparison impossible to actually see.
+
+**Consequences:** One station in this world **may never be offset**, and that is new. Projectiles feeds `room.collisionWalls` and `room.bounds` straight into its solver and catches balls at real `room.fingertips`: its physics space IS the user's room, one to one. A display offset would leave every ball bouncing off a wall that is not where the bounce is drawn — silently, in the module whose whole claim is that this is happening in your actual room. So `offset(.projectile)` is `.zero` by construction, `testTheProjectileStationIsNeverOffset` says why in its failure message, and the pendulum rig is the station that gives way.
+
+That forced a second departure from `EMStationLayout`: **seat and volume are separate functions here.** E&M could derive a station's box from its seat because its benches are centred on the anchors they were authored around. A pendulum is not — it hangs from a pivot at head height and swings down past your knees — so forcing the seat to be the box's centre would either drop the rig 0.8 m or declare a box through the ceiling. Two facts, two functions.
+
+Also recorded, because someone will otherwise "fix" it: **apparatus volumes must stay apart; trajectories may cross freely.** The pendulum box is the rig's RESTING volume. A bob thrown hard sideways swings out past it — a 1.6 m cable at 90° reaches further than any box that would still leave the launcher room — and a swinging bob crossing the projectile bench is the same event as a thrown ball crossing an orbit. There is no test asserting a swinging bob stays inside, and there must not be one: it would be asserting that a pendulum cannot swing.
+
 ## 2026-07-30 — Electric Fields becomes the E&M world's centre station, and three footprints become real
 
 **Decision:** `electrostatics` leaves the catalog and becomes `EMChargeStation`, the middle seat of `em`: charges straight ahead, the circuit bench 1.40 m to the left, the magnetic field 1.33 m to the right. The catalog is down to five entries, heading for two. Every experiment id keeps its `field.` prefix, so earned progress survives.

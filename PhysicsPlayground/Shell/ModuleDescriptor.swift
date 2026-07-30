@@ -81,7 +81,7 @@ enum ModuleCatalog {
     /// Every module in the playground, in display order. New modules
     /// register by adding one line here.
     static func all(appModel: AppModel) -> [ModuleDescriptor] {
-        // FOUR entries, heading for two: Electricity & Magnetism, and
+        // THREE entries, heading for two: Electricity & Magnetism, and
         // Mechanics & Energy. Everything else (hub arc, search, progress
         // totals, the challenge) derives from this list.
         //
@@ -115,9 +115,8 @@ enum ModuleCatalog {
         // each other.
         [
             EMWorldModule.descriptor(appModel: appModel),
-            KinematicsModule.descriptor(appModel: appModel),
+            MechanicsWorldModule.descriptor(appModel: appModel),
             GravityLabModule.descriptor(appModel: appModel),
-            PendulumsModule.descriptor(appModel: appModel),
         ]
     }
 }

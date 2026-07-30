@@ -140,11 +140,16 @@ final class GalleryLayoutTests: XCTestCase {
         let with = GalleryLayout.terraces(moduleIDs: allModules + ["optics"])
         let without = GalleryLayout.terraces(moduleIDs: allModules)
 
+        // Derived, not written out: the property is that the orphan
+        // lands on its fallback domain and widens that slab by exactly
+        // one puck — true whatever the catalog currently holds.
+        let expected = HubDomain.mechanics.moduleIDs.count + 1
         let mechanics = with.first { $0.domain == .mechanics }!
-        XCTAssertEqual(mechanics.moduleIDs.count, 3)
+        XCTAssertEqual(mechanics.moduleIDs.count, expected)
         XCTAssertTrue(mechanics.moduleIDs.contains("optics"))
         XCTAssertEqual(mechanics.width,
-                       GalleryLayout.basePuckPitch * 3 + GalleryLayout.baseWidthMargin,
+                       GalleryLayout.basePuckPitch * Float(expected)
+                           + GalleryLayout.baseWidthMargin,
                        accuracy: 1e-5)
 
         for domain in [HubDomain.electricity, .fluidsGravity] {

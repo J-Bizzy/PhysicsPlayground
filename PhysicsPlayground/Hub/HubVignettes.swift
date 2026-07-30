@@ -45,10 +45,9 @@ enum HubVignettes {
 
     static func make(for moduleID: String) -> Built {
         switch moduleID {
-        case "kinematics": projectile()
+        case "mechanics": mechanics()
         case "gravitylab": gravity()
         case "em": em()
-        case "pendulums": pendulums()
         default: fallback()
         }
     }
@@ -458,6 +457,33 @@ enum HubVignettes {
     /// afresh — the card should promise exactly the two things in the
     /// room, and the cable is what makes it one exhibit instead of two
     /// sitting near each other.
+    // MARK: Mechanics — the launcher and the rig, side by side
+
+    /// Composed from the two benches the world merged, laid out left to
+    /// right exactly as the room reads: the pendulum rig on the left,
+    /// the projectile bench in the middle.
+    ///
+    /// Composed rather than newly authored for the same reason `em()`
+    /// is: the miniature is the map you arrive holding, and a map that
+    /// shows a different arrangement from the room is worse than none.
+    private static func mechanics() -> Built {
+        let root = Entity()
+
+        let rig = pendulums()
+        let bench = projectile()
+        rig.entity.position = SIMD3(-0.075, 0.012, 0)
+        rig.entity.scale = SIMD3(repeating: 0.72)
+        bench.entity.position = SIMD3(0.042, -0.008, 0)
+        bench.entity.scale = SIMD3(repeating: 0.80)
+        root.addChild(rig.entity)
+        root.addChild(bench.entity)
+
+        return Built(entity: root) { time in
+            rig.animate(time)
+            bench.animate(time)
+        }
+    }
+
     private static func em() -> Built {
         let root = Entity()
 

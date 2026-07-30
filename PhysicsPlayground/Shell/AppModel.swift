@@ -188,6 +188,7 @@ final class AppModel {
     // copies would drift apart the first time either was used.
 
     let emFocus = StationFocus(initial: EMStation.bench)
+    let mechanicsFocus = StationFocus(initial: MechanicsStation.projectile)
 
     // MARK: Per-module models — created on first entry, retained so a
     // module's state survives leaving and re-entering it.

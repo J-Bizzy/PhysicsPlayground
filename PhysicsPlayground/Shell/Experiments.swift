@@ -134,6 +134,24 @@ enum ExperimentCatalog {
     }
 
 
+    /// The pendulum rig's experiments, folded into the Mechanics
+    /// world's list. The ids keep their `pendulums.` prefix so earned
+    /// progress survives the merge.
+    private static func pendulumExperiments(_ model: PendulumsModel)
+    -> [(experiment: Experiment, isMet: () -> Bool)] {
+        [
+                (Experiment(id: "pendulums.orbit", title: "Around the world",
+                            detail: "Throw a bob into a true 3D orbit — sideways, hard.",
+                            step: "Grab a bob and throw it sideways — across the swing plane, not along it."),
+                 { model.pendulums.contains {
+                     abs($0.state.position.z) > 0.15 && simd_length($0.state.velocity) > 0.5 } }),
+                (Experiment(id: "pendulums.high", title: "Over the top",
+                            detail: "Get a bob swinging above its pivot.",
+                            step: "Throw a bob hard enough upward to carry it above its own pivot."),
+                 { model.pendulums.contains { $0.state.position.y > 0 } }),
+            ]
+    }
+
     /// The charges bench's experiments, folded into the E&M world's
     /// list when Electric Fields became its centre station. The IDs keep
     /// their `field.` prefix so a player who earned them before the
@@ -214,7 +232,7 @@ enum ExperimentCatalog {
     static func experiments(for moduleID: String, appModel: AppModel)
     -> [(experiment: Experiment, isMet: () -> Bool)] {
         switch moduleID {
-        case "kinematics":
+        case "mechanics":
             let model = appModel.kinematicsModel
             return [
                 (Experiment(id: "kinematics.range", title: "Range finder",
@@ -258,22 +276,10 @@ enum ExperimentCatalog {
                          && abs(model.readouts[component.id]?.amps ?? 0) > 0.005
                          && abs(model.readouts[component.id]?.amps ?? 0) < 0.03 } }),
             ]
+            + pendulumExperiments(appModel.pendulumsModel)
             + magnetismExperiments(appModel.magnetismModel)
             + chargeExperiments(appModel.electromagnetismModel)
             + linkExperiments(appModel: appModel)
-        case "pendulums":
-            let model = appModel.pendulumsModel
-            return [
-                (Experiment(id: "pendulums.orbit", title: "Around the world",
-                            detail: "Throw a bob into a true 3D orbit — sideways, hard.",
-                            step: "Grab a bob and throw it sideways — across the swing plane, not along it."),
-                 { model.pendulums.contains {
-                     abs($0.state.position.z) > 0.15 && simd_length($0.state.velocity) > 0.5 } }),
-                (Experiment(id: "pendulums.high", title: "Over the top",
-                            detail: "Get a bob swinging above its pivot.",
-                            step: "Throw a bob hard enough upward to carry it above its own pivot."),
-                 { model.pendulums.contains { $0.state.position.y > 0 } }),
-            ]
         case "gravitylab":
             let model = appModel.gravityLabModel
             return [

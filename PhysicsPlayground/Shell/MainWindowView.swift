@@ -47,7 +47,7 @@ struct MainWindowView: View {
                                    .init("Net charge", "0.0", "C"),
                                    .init("|E| 10 cm away", "8.99e5", "N/C")])
                     appModel.notebook.record(
-                        moduleID: "pendulums", moduleTitle: "Pendulums",
+                        moduleID: "mechanics", moduleTitle: "Mechanics & Energy",
                         title: "Seeded observation 1",
                         readings: [.init("Length", "0.80", "m"),
                                    .init("Period", "1.79", "s")])
