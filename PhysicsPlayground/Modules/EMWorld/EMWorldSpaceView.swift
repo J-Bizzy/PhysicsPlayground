@@ -261,5 +261,11 @@ struct EMWorldSpaceView: View {
         focus.apply(.bench, to: bench.root)
         focus.apply(.field, to: field.root)
         focus.apply(.charges, to: charges.root)
+        // The field lines arch across the entire room and over both
+        // neighbouring benches, which is honest — a field really is
+        // everywhere — but it means an unattended charges bench would
+        // still fill the view. Traces fade further than the apparatus
+        // that makes them.
+        focus.applyTrace(.charges, to: charges.renderer.traceRoot)
     }
 }

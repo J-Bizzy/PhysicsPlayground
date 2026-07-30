@@ -59,6 +59,24 @@ enum StationEmphasis {
     /// is greater than zero.
     static let dimFloor: Float = 0.40
 
+    /// How far a station's TRACES fade when it is not the one being
+    /// attended to — much deeper than `dimFloor`.
+    ///
+    /// A trace is a field line, a trajectory, a streamline: the drawing
+    /// of something that genuinely extends through the whole room, and
+    /// so it is the one part of an apparatus that does not stay inside
+    /// its station. Two charges 40 cm apart arch their lines over the
+    /// entire world and across both neighbouring benches. That is
+    /// honest physics and must not be clipped — but at the apparatus
+    /// floor it also means a bench you are not using still fills your
+    /// view, and a room with three of those has no subject at all.
+    ///
+    /// So traces fade further than the things that make them. The
+    /// anti-picker floor is untouched: it guards the APPARATUS, which
+    /// is what has to stay findable and grabbable. Nobody grabs a field
+    /// line.
+    static let traceFloor: Float = 0.12
+
     /// Time constant of the fade, in seconds. Long enough to read as
     /// attention moving rather than a light switch; short enough that a
     /// screenshot taken a third of a second later is settled.
@@ -127,6 +145,19 @@ final class StationFocus<ID: Hashable & Sendable> {
         return min(max(value, StationEmphasis.effectiveFloor), 1)
     }
 
+    /// How lit a station's TRACES are right now — the same eased
+    /// journey as `emphasis(for:)`, but landing on `traceFloor`.
+    func traceEmphasis(for station: ID) -> Float {
+        let floor = StationEmphasis.effectiveFloor
+        let span = 1 - floor
+        // Recover how far along the fade this station is, so both
+        // curves move together and can never disagree about which
+        // bench is being attended to.
+        let progress = span > 1e-6 ? (emphasis(for: station) - floor) / span : 1
+        let traceFloor = min(StationEmphasis.traceFloor, floor)
+        return traceFloor + progress * (1 - traceFloor)
+    }
+
     // MARK: Per-frame
 
     /// Eases every known station toward its target. Exponential
@@ -162,7 +193,23 @@ final class StationFocus<ID: Hashable & Sendable> {
     /// Emphasis, on the scene. Opacity ONLY — see the header's hard
     /// rule about geometry.
     func apply(_ station: ID, to root: Entity) {
-        let value = emphasis(for: station)
+        set(emphasis(for: station), on: root)
+    }
+
+    /// The extra fade for a trace subtree hanging INSIDE a station that
+    /// has already been dimmed.
+    ///
+    /// Nested `OpacityComponent`s multiply, so this is the ratio that
+    /// lands the net opacity on `traceEmphasis` rather than the value
+    /// itself — writing `traceEmphasis` here directly would dim the
+    /// lines twice over.
+    func applyTrace(_ station: ID, to traceRoot: Entity) {
+        let apparatus = emphasis(for: station)
+        guard apparatus > 1e-6 else { return }
+        set(min(traceEmphasis(for: station) / apparatus, 1), on: traceRoot)
+    }
+
+    private func set(_ value: Float, on root: Entity) {
         if var opacity = root.components[OpacityComponent.self] {
             // Skip sub-perceptual writes: this runs every frame for
             // every station, and a settled world should not be

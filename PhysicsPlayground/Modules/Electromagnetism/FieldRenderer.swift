@@ -102,6 +102,15 @@ final class FieldRenderer {
 
     private var geometryPipeline: GeometryPipeline<GeometryJob, GeometryResult>?
     private let fieldFlowRoot = Entity()
+
+    /// Everything traced rather than placed: the field lines, their
+    /// casings and glow, and the arrowheads riding them. A field line
+    /// is the one part of this bench that legitimately leaves its
+    /// station — two charges arch their lines over the whole room — so
+    /// the world fades this subtree further than the apparatus when
+    /// this bench is not the one being attended to. See
+    /// `StationEmphasis.traceFloor`.
+    var traceRoot: Entity { fieldFlowRoot }
     /// The charge layout the currently-applied geometry was traced from.
     private var appliedCharges: [PointCharge] = []
 

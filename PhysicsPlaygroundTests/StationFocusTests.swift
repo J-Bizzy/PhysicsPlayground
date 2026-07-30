@@ -44,6 +44,50 @@ final class StationFocusTests: XCTestCase {
                                     StationEmphasis.dimFloor)
     }
 
+    // MARK: Traces fade further than the apparatus
+
+    /// A field line leaves its station legitimately — a field really is
+    /// everywhere — so an unattended charges bench would otherwise fill
+    /// the whole view. Traces therefore fade past the apparatus floor.
+    /// The floor itself is NOT relaxed: it guards the thing you grab,
+    /// and nobody grabs a field line.
+    func testTracesFadeFurtherThanTheApparatusTheyBelongTo() {
+        let focus = StationFocus(initial: EMStation.bench)
+        focus.register(.charges)
+        focus.snap()
+        XCTAssertLessThan(focus.traceEmphasis(for: .charges),
+                          focus.emphasis(for: .charges),
+                          "an unattended bench's traces must recede further "
+                          + "than the bench")
+        XCTAssertEqual(focus.traceEmphasis(for: .charges),
+                       StationEmphasis.traceFloor, accuracy: 1e-6)
+    }
+
+    /// Both curves ride the same eased progress, so they can never
+    /// disagree about which bench is being attended to — a lit bench
+    /// with faded lines, or the reverse, would read as a glitch.
+    func testTheApparatusAndItsTracesArriveTogether() {
+        let focus = StationFocus(initial: EMStation.bench)
+        focus.register(.charges)
+        focus.snap()
+        XCTAssertEqual(focus.traceEmphasis(for: .bench), 1, accuracy: 1e-6,
+                       "the attended bench's traces must be fully lit")
+
+        focus.focus(.charges)
+        for _ in 0..<400 {
+            focus.tick(dt: 1.0 / 90.0)
+            // Whichever way each is heading, the traces are never
+            // brighter than the apparatus they hang inside.
+            XCTAssertLessThanOrEqual(focus.traceEmphasis(for: .bench),
+                                     focus.emphasis(for: .bench) + 1e-6)
+            XCTAssertLessThanOrEqual(focus.traceEmphasis(for: .charges),
+                                     focus.emphasis(for: .charges) + 1e-6)
+        }
+        XCTAssertEqual(focus.traceEmphasis(for: .charges), 1, accuracy: 0.01)
+        XCTAssertEqual(focus.traceEmphasis(for: .bench),
+                       StationEmphasis.traceFloor, accuracy: 0.01)
+    }
+
     // MARK: Easing
 
     /// Exponential approach: monotone toward the target, never
