@@ -51,7 +51,6 @@ enum HubVignettes {
         case "windtunnel": windTunnel()
         case "circuits": circuits()
         case "pendulums": pendulums()
-        case "waves": waves()
         case "magnetism": magnetism()
         default: fallback()
         }

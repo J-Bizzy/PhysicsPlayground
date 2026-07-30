@@ -17,17 +17,20 @@ import simd
 @MainActor
 final class GalleryLayoutTests: XCTestCase {
 
-    private let allModules = HubDomain.arcOrder   // the eight benched ids
+    private let allModules = HubDomain.arcOrder   // the live ids, in arc order
 
-    func testFourTerracesWithAuthoredCounts() {
+    /// Three terraces now, not four: Waves was archived on 2026-07-29 when
+    /// the app narrowed to two labs, so its domain is benched and builds
+    /// nothing.
+    func testTerracesFollowTheLiveDomains() {
         let terraces = GalleryLayout.terraces(moduleIDs: allModules)
-        XCTAssertEqual(terraces.count, 4)
+        XCTAssertEqual(terraces.count, 3)
         let counts = Dictionary(uniqueKeysWithValues:
             terraces.map { ($0.domain, $0.moduleIDs.count) })
         XCTAssertEqual(counts[.mechanics], 2)
         XCTAssertEqual(counts[.electricity], 3)
-        XCTAssertEqual(counts[.waves], 1)
         XCTAssertEqual(counts[.fluidsGravity], 2)
+        XCTAssertNil(counts[.waves], "a benched domain builds no terrace")
     }
 
     func testWidthsFollowModuleCounts() {
@@ -131,7 +134,7 @@ final class GalleryLayoutTests: XCTestCase {
                        GalleryLayout.basePuckPitch * 3 + GalleryLayout.baseWidthMargin,
                        accuracy: 1e-5)
 
-        for domain in [HubDomain.electricity, .waves, .fluidsGravity] {
+        for domain in [HubDomain.electricity, .fluidsGravity] {
             let a = with.first { $0.domain == domain }!
             let b = without.first { $0.domain == domain }!
             XCTAssertEqual(a.center, b.center)
@@ -147,9 +150,18 @@ final class GalleryLayoutTests: XCTestCase {
         }
     }
 
+    /// The crescent closes up around an archived domain rather than showing
+    /// an empty shelf — which is what makes benching a domain a one-line
+    /// change to its module list.
     func testBenchedDomainGetsNoTerrace() {
-        let onlyWaves = GalleryLayout.terraces(moduleIDs: ["waves"])
-        XCTAssertEqual(onlyWaves.count, 1)
-        XCTAssertEqual(onlyWaves[0].domain, .waves)
+        XCTAssertTrue(HubDomain.waves.moduleIDs.isEmpty, "waves is benched")
+        let terraces = GalleryLayout.terraces(moduleIDs: allModules)
+        XCTAssertFalse(terraces.contains { $0.domain == .waves })
+
+        // And an id belonging to no live domain still lands somewhere
+        // rather than vanishing: it extends its fallback slab.
+        let orphan = GalleryLayout.terraces(moduleIDs: ["waves"])
+        XCTAssertEqual(orphan.count, 1)
+        XCTAssertEqual(orphan[0].moduleIDs, ["waves"])
     }
 }

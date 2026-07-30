@@ -191,21 +191,6 @@ enum ExperimentCatalog {
                      $0.status == .flying && !$0.wasThrown
                  } }),
             ]
-        case "waves":
-            let model = appModel.wavesModel
-            return [
-                (Experiment(id: "waves.duet", title: "Duet",
-                            detail: "Run two sources at once and watch their ripples interfere.",
-                            step: "Two sources are already running — if you removed one, tap Add source in this window."),
-                 { model.sources.count >= 2 }),
-                (Experiment(id: "waves.silence", title: "Stand in the quiet",
-                            detail: "Separate the sources by more than two wavelengths — the more sheets of silence, the more room to walk between them.",
-                            step: "Grab a source and carry it away from the other; the nodal surfaces multiply as the gap grows."),
-                 { guard model.sources.count >= 2 else { return false }
-                   let gap = simd_distance(model.sources[0].wave.position,
-                                           model.sources[1].wave.position)
-                   return gap > 2 * model.wavelength }),
-            ]
         case "circuits":
             let model = appModel.circuitsModel
             return [

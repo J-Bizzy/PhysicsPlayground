@@ -2,6 +2,22 @@
 
 A running log of consequential decisions — architectural, physical, or product — and why they were made. Newest first. One entry per decision.
 
+## 2026-07-29 — Two labs, not three: Waves & Optics are cut
+
+**Decision:** Owner's call. The app aims at **two very high quality labs — Electricity & Magnetism, and Mechanics & Energy** — and Waves is archived to `Archive/Waves` with its tests, following the same convention as Springs, ElasticField and Optics. Optics stays archived rather than returning. `HubDomain.waves` is benched (empty module list), which `GalleryLayout` already handles by simply not building that terrace.
+
+**Context:** Waves was my proposed flagship one commit ago, so this reverses that. Two things drove it. The owner could not tell what the module was for, and a measured defect explained half of why: the dot lattice samples the field every 0.30 m while λ at the opening settings is 0.333 m — **1.11 samples per wavelength, below the Nyquist limit of 2**, and 0.22 at the far end of its range. Turning the frequency control genuinely changed the field; the cloud just re-aliased, so the picture changed without informing. And it does not tune away: multiple fringes need source separation ≳ λ, so λ must stay ≲ 0.4 m, and sampling that properly across a 2.4 m region needs a 59³ lattice — 205,000 dots against a 729 budget. The region size and the density cannot both be satisfied.
+
+**Consequences:** Two labs at high quality beats three at medium, which was the brief's own instruction from the start ("five extraordinary modules over twenty average"). The physics survives untouched and tested in `PhysicsCore/Waves` and `PhysicsCore/Optics` — 21 wave tests, the exact retarded-time Doppler, `DoubleSlit`, `RayOptics3D` — so a revival costs a module folder, not a rebuild. The general lesson is worth keeping: **check the sampling rate of a visualisation against the wavelength of what it visualises before believing it shows anything.** A field plot below Nyquist is not a dim picture of the physics, it is a picture of the sampling.
+
+## 2026-07-29 — The dial is rejected; a continuous quantity gets a TRACK
+
+**Decision:** Owner's call: "the dial does not do it for me." `SpatialDial` and `SpatialDialControl` are **deleted**, along with their 22 tests, and replaced by `RenderKit.SpatialTrackControl` — a labelled rail with a bead you put where you want it. This reverses the entry two above that promoted `SpatialDial` from orphan to the instrument replacing sliders.
+
+**Context:** Trying to say *why* it did not work turned up something that also indicts `Bloom`'s grip. A dial is **relative**: it accumulates a signed change in hand angle, so the value depends on the path the hand took and nothing about the control's appearance says what it is currently set to. There is no home position on a circle. A track is **absolute**: the rail is the range laid out in the room, and the bead sits at the value, so the setting is legible from across the room and half-way along means half-way through. That is what every physical fader and thermostat already taught.
+
+**Consequences:** The track is the app's one form for a continuous quantity, and it clears the replacement standard on all three counts — always visible, obviously draggable, and a mouse drag along the rail works in the simulator. Its test burden is also *smaller* rather than larger, which is a good sign: a dial needed testing for accumulation and for the atan2 ±π seam, and a track has nothing to accumulate, so those failure modes cannot occur. What remains worth pinning is that off-axis hand drift does not move the value, and that the same hand position always means the same value. **`Bloom`'s grip is now the odd one out** — it is relative like the dial was — and should be revisited when Mechanics is worked over.
+
 ## 2026-07-29 — The panels become READOUTS, not corpses: the exit criterion corrected
 
 **Decision:** Phase 1's exit criterion was "`makeControls` deleted from `ModuleDescriptor`; `grep -r makeControls` returns nothing." That is wrong and is replaced by: **no `Slider`, `Picker` or `Toggle` in any module panel.** `makeControls` survives, renamed in spirit if not in code — a surface that *displays* and never *sets*.

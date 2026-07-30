@@ -112,14 +112,6 @@ final class AppModel {
     /// Driven by the active module's descriptor; bound to the shared
     /// immersive space's style selection.
     var immersionStyle: ImmersionStyle = .mixed
-    private var waves: WavesModel?
-    var wavesModel: WavesModel {
-        if let waves { return waves }
-        let made = WavesModel()
-        waves = made
-        return made
-    }
-
     /// Completed-experiment bookkeeping, shared app-wide and persisted.
     let experiments = ExperimentProgress()
 

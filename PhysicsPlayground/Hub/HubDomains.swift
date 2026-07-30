@@ -45,7 +45,11 @@ enum HubDomain: String, CaseIterable, Identifiable {
         switch self {
         case .mechanics: ["kinematics", "pendulums"]
         case .electricity: ["electrostatics", "magnetism", "circuits"]
-        case .waves: ["waves"]
+        // Waves is archived (2026-07-29, owner's call to focus on two
+        // labs). An empty list benches the domain: GalleryLayout simply
+        // does not build a terrace for it, so the crescent closes up
+        // rather than showing an empty shelf.
+        case .waves: []
         case .fluidsGravity: ["windtunnel", "gravitylab"]
         }
     }
