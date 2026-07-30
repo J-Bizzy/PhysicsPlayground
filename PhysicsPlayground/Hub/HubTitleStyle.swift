@@ -42,18 +42,23 @@ enum HubTitleStyle: Int, CaseIterable {
     case plaque = 2
     case poster = 3
 
-    /// The style the home renders in. DEBUG launch arg `-titleStyle N`
-    /// overrides for auditioning; otherwise the shipping choice.
-    static var current: HubTitleStyle {
-        #if DEBUG
-        if let forced = HubTitleStyle(
-            rawValue: UserDefaults.standard.integer(forKey: "titleStyle")),
-           forced != .bubble || UserDefaults.standard.object(forKey: "titleStyle") != nil {
-            return forced
-        }
-        #endif
-        return .bubble
+    /// The sentinel `AppSettings.titleStyle` holds while no voice has
+    /// been chosen: the home hangs the specimen wall instead of a
+    /// wordmark, so the choice presents itself rather than waiting to
+    /// be found in a menu.
+    static let audition = -1
+
+    /// The voice the home speaks in, from settings. A raw value outside
+    /// the enum (the audition sentinel, or anything stale in defaults)
+    /// falls back to the original.
+    static func chosen(_ settings: AppSettings) -> HubTitleStyle {
+        HubTitleStyle(rawValue: settings.titleStyle) ?? .bubble
     }
+
+    /// The style currently being rendered. Set by the hub as it builds,
+    /// so the door signs and the wordmark cannot disagree — they are
+    /// built at different moments from different files.
+    @MainActor static var current: HubTitleStyle = .bubble
 
     // MARK: The voice's parameters
 

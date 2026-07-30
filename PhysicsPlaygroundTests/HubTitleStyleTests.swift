@@ -62,20 +62,36 @@ final class HubTitleStyleTests: XCTestCase {
         }
     }
 
-    /// `-titleStyle N` picks the audition voice; absent, the shipping
-    /// style. (The launch-argument domain is just UserDefaults, so the
-    /// test can drive it directly.)
-    func testTheDebugArgumentSelectsTheVoice() {
-        let key = "titleStyle"
-        defer { UserDefaults.standard.removeObject(forKey: key) }
+    /// The settings value picks the voice, and anything the enum does
+    /// not recognise — the audition sentinel, or a stale raw value left
+    /// by an older build — falls back to the original rather than
+    /// leaving the home with no type at all.
+    @MainActor
+    func testTheSettingSelectsTheVoice() {
+        let settings = AppSettings()
+        defer { UserDefaults.standard.removeObject(forKey: "settings.titleStyle") }
 
-        UserDefaults.standard.removeObject(forKey: key)
-        XCTAssertEqual(HubTitleStyle.current, .bubble, "no arg → shipping style")
-
-        for (value, expected): (Int, HubTitleStyle) in
-            [(1, .frosted), (2, .plaque), (3, .poster)] {
-            UserDefaults.standard.set(value, forKey: key)
-            XCTAssertEqual(HubTitleStyle.current, expected)
+        for expected in HubTitleStyle.allCases {
+            settings.titleStyle = expected.rawValue
+            XCTAssertEqual(HubTitleStyle.chosen(settings), expected)
         }
+
+        settings.titleStyle = HubTitleStyle.audition
+        XCTAssertEqual(HubTitleStyle.chosen(settings), .bubble,
+                       "the audition sentinel is not a voice — the wall is "
+                       + "hung by the hub, and the type still needs a face")
+
+        settings.titleStyle = 99
+        XCTAssertEqual(HubTitleStyle.chosen(settings), .bubble,
+                       "a stale raw value must not leave the home mute")
+    }
+
+    /// A fresh install auditions rather than silently picking: the
+    /// choice presents itself in the room instead of waiting to be
+    /// found in a menu.
+    @MainActor
+    func testAFreshInstallOpensOnTheAudition() {
+        UserDefaults.standard.removeObject(forKey: "settings.titleStyle")
+        XCTAssertEqual(AppSettings().titleStyle, HubTitleStyle.audition)
     }
 }

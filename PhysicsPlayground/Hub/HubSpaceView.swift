@@ -55,7 +55,8 @@ struct HubSpaceView: View {
             scene.build(modules: modules, progress: progress,
                         distance: Float(appModel.settings.arcDistance),
                         height: Float(appModel.settings.arcHeight),
-                        yaw: appModel.settings.hubYaw)
+                        yaw: appModel.settings.hubYaw,
+                        titleStyle: appModel.settings.titleStyle)
             scene.stillness = appModel.settings.reduceMotion || systemReduceMotion
             content.add(scene.root)
 
@@ -311,27 +312,28 @@ final class HubScene {
 
     func build(modules: [ModuleDescriptor],
                progress: [String: (done: Int, total: Int)] = [:],
-               distance: Float = 2.0, height: Float = 1.4, yaw: Float = 0) {
+               distance: Float = 2.0, height: Float = 1.4, yaw: Float = 0,
+               titleStyle: Int = HubTitleStyle.bubble.rawValue) {
         arcRadius = distance
         arcHeight = height
         // Recenter: the whole gallery swings about the user.
         root.orientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
 
         titlePosition = SIMD3(0, arcHeight + 0.70, -(arcRadius + 0.45))
-        #if DEBUG
-        // `-titleAudition 1` replaces the wordmark and door signs with
-        // a specimen wall: the three candidate voices side by side,
-        // each named, each showing both roles — so a style is judged
-        // against its rivals in one glance rather than remembered
-        // across launches.
-        if Self.auditioningTitles {
+        // Committed BEFORE anything draws: the wordmark and the two
+        // door signs are built at different moments from different
+        // files, and reading the setting separately would let them
+        // disagree mid-rebuild.
+        HubTitleStyle.current = HubTitleStyle(rawValue: titleStyle) ?? .bubble
+        // No voice chosen yet: hang the specimen wall instead of a
+        // wordmark, so the decision presents itself in the room rather
+        // than waiting to be discovered in a menu.
+        auditioning = titleStyle == HubTitleStyle.audition
+        if auditioning {
             buildStyleAudition()
         } else {
             buildBubbleTitle()
         }
-        #else
-        buildBubbleTitle()
-        #endif
         buildFloorPool()
 
         buildPodium(distance: distance)
@@ -363,6 +365,8 @@ final class HubScene {
     private var terraceHairlines: [HubDomain: ModelEntity] = [:]
     /// Each terrace's signage, driven from the idle loop.
     private var domainTitles: [HubDomain: HubDomainTitle] = [:]
+    /// Whether this build is showing the specimen wall.
+    private var auditioning = false
 
     /// One domain's slab: a floating graphite shelf with a lit hairline
     /// of the domain's colour along its front edge, and a pedestal puck
@@ -408,12 +412,7 @@ final class HubScene {
         //
         // Suppressed while the audition wall is up: three specimens
         // plus two live signs is five voices talking at once.
-        #if DEBUG
-        let signsSuppressed = Self.auditioningTitles
-        #else
-        let signsSuppressed = false
-        #endif
-        if !signsSuppressed {
+        if !auditioning {
             let title = HubDomainTitle(domain: terrace.domain,
                                        width: terrace.width * 0.54)
             title.root.position = SIMD3(0, 0.62, -0.02)
@@ -793,12 +792,6 @@ final class HubScene {
         root.addChild(entity)
     }
 
-    #if DEBUG
-    /// Whether the specimen wall replaces the home's display type.
-    static var auditioningTitles: Bool {
-        UserDefaults.standard.bool(forKey: "titleAudition")
-    }
-
     /// The specimen wall: the three candidate voices standing side by
     /// side where the wordmark hangs, each captioned with the flag that
     /// selects it, each showing BOTH roles it has to play — the neutral
@@ -859,7 +852,6 @@ final class HubScene {
         titleAnchor.components.set(accessibility)
         root.addChild(titleAnchor)
     }
-    #endif
 
     /// The measured size of a run of the title face, for the lockup.
     /// Internal, not private: `HubDomainTitle` builds its two-line

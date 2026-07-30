@@ -45,6 +45,28 @@ struct SettingsView: View {
                         .font(DesignTokens.TypeScale.control)
                 }
 
+                section("Home title") {
+                    Picker("Style", selection: $settings.titleStyle) {
+                        Text("Show me all three").tag(HubTitleStyle.audition)
+                        Text("Bubble (original)").tag(HubTitleStyle.bubble.rawValue)
+                        Text("Frosted glass").tag(HubTitleStyle.frosted.rawValue)
+                        Text("Machined plaque").tag(HubTitleStyle.plaque.rawValue)
+                        Text("Bold poster").tag(HubTitleStyle.poster.rawValue)
+                    }
+                    .font(DesignTokens.TypeScale.control)
+                    .onChange(of: settings.titleStyle) {
+                        // The wordmark and signs are built once, in the
+                        // scene's make closure; bumping the version is
+                        // what tears the gallery down and rebuilds it
+                        // in the new voice.
+                        settings.layoutVersion += 1
+                    }
+                    caption("The face the app's name and the two door signs "
+                            + "are set in. \"Show me all three\" hangs the "
+                            + "candidates side by side in the gallery so they "
+                            + "can be compared at a glance.")
+                }
+
                 section("Gallery") {
                     meterRow("Gallery distance", value: settings.arcDistance) {
                         Slider(value: $settings.arcDistance, in: 1.5...3.0) { editing in
