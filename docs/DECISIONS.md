@@ -2,6 +2,16 @@
 
 A running log of consequential decisions — architectural, physical, or product — and why they were made. Newest first. One entry per decision.
 
+## 2026-07-29 — The panels become READOUTS, not corpses: the exit criterion corrected
+
+**Decision:** Phase 1's exit criterion was "`makeControls` deleted from `ModuleDescriptor`; `grep -r makeControls` returns nothing." That is wrong and is replaced by: **no `Slider`, `Picker` or `Toggle` in any module panel.** `makeControls` survives, renamed in spirit if not in code — a surface that *displays* and never *sets*.
+
+**Context:** Counted before continuing to demolish. The eight panels hold **55 knobs and 71 readout `Text`s** — they are already more than half instrument display. Electric Fields alone has 21 readouts: E, V, F, a, speed, measured flux beside predicted flux. Deleting the panel to satisfy a grep would take the probe values, the Cp, the induced EMF and the energy tallies with it, and those have nowhere better to go: a number you *read* wants to hold still and be legible, which is exactly what a flat card is good at. The lab notebook is flat for the same reason, and nobody thinks it should be a dial.
+
+The interaction law never said otherwise. It governs how a quantity is **changed** — "a quantity with physical extent is changed by changing that extent" — and says nothing about how one is shown. The phrase this session kept reaching for while migrating each control is the actual rule: *the number stays here to be read; setting it is a physical act.*
+
+**Consequences:** The remaining work is 15 sliders, 5 pickers and 35 toggles, and every one of them resolves as exactly one of three outcomes, which must be stated per control rather than assumed: (1) it becomes an instrument or a labelled object in the room; (2) it becomes a readout, because it was reporting rather than setting; or (3) it is **deleted**, because it was display chrome that the law's third clause — "anything that is neither does not get to exist" — refuses. Trail length is the type specimen of (3): three lengths of ribbon is a preference, not physics, and picking the good one is better than asking. Guarding against the opposite error too: a control is not chrome merely because it is inconvenient to make physical. Gravity Lab's time scale looks like chrome and is not — at 1× an Earth year takes two minutes, so the speed IS how an orbit becomes visible at all.
+
 ## 2026-07-29 — `SpatialScale` does NOT go to every module: where the room is the apparatus, scaling is a lie
 
 **Decision:** The three-worlds plan's Phase 1 says "`SpatialScale` … to **every** world". That is wrong, and this entry overrides it. `SpatialScale` is a *presentation* transform — it scales a display root while the physics keeps running in true SI units — so it is safe only where **nothing compares a real-world measurement against the display**. Electric Fields, Magnetism, Circuits and Gravity Lab qualify and have it (4/8). Projectiles and Waves are **permanently excluded**. Wind Tunnel qualifies but has a prerequisite.

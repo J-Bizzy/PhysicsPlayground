@@ -85,13 +85,11 @@ struct PendulumsControlsPanel: View {
             }
 
             CollapsedSection("Display") {
-                Picker("Trail", selection: $model.trailMode) {
-                    ForEach(PendulumsModel.TrailMode.allCases) { mode in
-                        Text(mode.rawValue.capitalized).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .accessibilityLabel("Trail length")
+                // Deleted for the same reason as Gravity Lab's (DECISIONS.md,
+                // 2026-07-29): a trail length is a preference, not a
+                // physical quantity, and short is the one that shows a
+                // swing's shape without painting over the bob. `trailMode`
+                // stays on the model at that default.
                 Toggle("Velocity arrows", isOn: $model.showVelocity)
                     .font(DesignTokens.TypeScale.control)
                 Toggle("Acceleration arrows", isOn: $model.showAcceleration)

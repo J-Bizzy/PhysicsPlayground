@@ -33,12 +33,45 @@ struct GravityLabSpaceView: View {
     /// knees and the Kepler sectors sweeping underfoot like floor tiles.
     @State private var scaleRig = SpatialScaleRig(
         pivot: GravityLabRenderer.systemPosition, range: 0.4...9.0)
+    /// The clock: 1× / 5× / 20× / 100×, standing beside the system as a
+    /// permanent bank rather than hiding behind a pinch.
+    ///
+    /// This one looks like display chrome and is not. At 1× an Earth year
+    /// takes about two minutes, so the speed is what decides whether an
+    /// orbit is a thing you watch or a thing you wait for — Neptune at 1×
+    /// is a planet that appears not to move. It stays open because it is
+    /// also a READOUT: the bank shows which speed you are running.
+    @State private var clockPicker = SpatialPicker(
+        accessibilityNoun: "Clock speed",
+        choices: GravityLabModel.timeScales.map {
+            PickerChoice(id: String(Int($0)), label: "\(Int($0))×",
+                         symbol: "clock")
+        },
+        staysOpen: true,
+        // A bank is a ROW, not a fan. The default 150° arc is built for a
+        // menu that unfolds and folds away, and a screenshot showed why it
+        // is wrong here: four discs at ±75° and ±25° spray across the
+        // orrery at four different heights, reading as scattered debris
+        // rather than as one instrument. Narrowing the span to 50° and
+        // flattening the vertical squash to 0.25 lays them out as a
+        // shallow, tidy row — the same arithmetic, different shape.
+        layout: FanLayout(span: 50 * .pi / 180, reach: 0.30,
+                          verticalScale: 0.25, lift: 0, stagger: 0))
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
         RealityView { content in
             let renderer = GravityLabRenderer()
             content.add(renderer.root)
+
+            // Under `root`, NOT `viewRoot`: the scale rig reaches 9×, and
+            // a control that grew to nine times its size along with the
+            // solar system would be a 0.45 m clock face.
+            renderer.root.addChild(clockPicker.root)
+            clockPicker.onSelect = { id in
+                guard let scale = Double(id) else { return }
+                model.timeScale = scale
+            }
 
             // Pull a world out of the well and let go: it arrives at
             // rest beside the primary and immediately begins to fall,
@@ -69,6 +102,14 @@ struct GravityLabSpaceView: View {
                     renderer?.tickFieldParticles(dt: event.deltaTime, model: model)
                     scaleRig.apply(to: renderer?.viewRoot ?? Entity())
                     wells?.update(dt: event.deltaTime)
+                    // The clock bank stands beside the system, offset to
+                    // the right so it never sits on the Sun, and at ~16°
+                    // below eye — the same glance as the orrery itself.
+                    clockPicker.update(
+                        anchor: GravityLabRenderer.systemPosition
+                            + SIMD3(0.55, -0.09, 0),
+                        viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
+                        dt: event.deltaTime)
                     if let renderer {
                         syncBloom(renderer: renderer, dt: event.deltaTime)
                     }
@@ -174,6 +215,7 @@ struct GravityLabSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
+                    if clockPicker.handleTap(value.entity) { return }
                     if bloom.handleTap(value.entity) { return }
                     // A tap on a body toggles its control ring; the
                     // primary keeps no ring (deleting the sun deletes

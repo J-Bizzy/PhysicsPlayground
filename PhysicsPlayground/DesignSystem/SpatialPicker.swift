@@ -56,14 +56,28 @@ final class SpatialPicker {
     /// materials don't both just announce "Cube".
     private let accessibilityNoun: String
     private let layout: FanLayout
+    /// A permanent switch bank rather than a menu: it starts open, and
+    /// choosing does not fold it away.
+    ///
+    /// Both shapes are legitimate and the law tells them apart. A momentary
+    /// fan suits a choice you make occasionally from many options — nine
+    /// drag bodies, four balls — where showing them all permanently would
+    /// be clutter. A standing bank suits a small set you change often and
+    /// need to SEE the current value of, which the anti-regression standard
+    /// requires be "visible without being looked for": Gravity Lab's clock
+    /// speed is the difference between an orbit you can watch and one you
+    /// cannot, so hiding it behind a pinch would be hiding the module.
+    private let staysOpen: Bool
     private var openness: Double = 0
     private var discs: [(id: String, entity: ModelEntity)] = []
 
     init(accessibilityNoun: String,
          choices: [PickerChoice] = [],
+         staysOpen: Bool = false,
          layout: FanLayout = FanLayout()) {
         self.accessibilityNoun = accessibilityNoun
         self.layout = layout
+        self.staysOpen = staysOpen
         root.isEnabled = false
         setChoices(choices)
     }
@@ -79,9 +93,9 @@ final class SpatialPicker {
             root.addChild(disc)
             discs.append((choice.id, disc))
         }
-        isOpen = false
-        openness = 0
-        root.isEnabled = false
+        isOpen = staysOpen
+        openness = staysOpen ? 1 : 0
+        root.isEnabled = staysOpen && !choices.isEmpty
     }
 
     var isEmpty: Bool { discs.isEmpty }
@@ -125,7 +139,7 @@ final class SpatialPicker {
             if let match = discs.first(where: { $0.entity === candidate }) {
                 onSelect?(match.id)
                 SoundPalette.play(.chime, on: candidate, volume: 0.5)
-                isOpen = false
+                if !staysOpen { isOpen = false }
                 return true
             }
             if candidate === root { return false }

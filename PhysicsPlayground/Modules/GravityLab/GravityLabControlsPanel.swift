@@ -60,13 +60,15 @@ struct GravityLabControlsPanel: View {
                     .buttonStyle(.podQuiet)
                     .accessibilityLabel(self.model.isPaused ? "Resume time" : "Pause time")
 
-                    Picker("Speed", selection: $model.timeScale) {
-                        ForEach(GravityLabModel.timeScales, id: \.self) { scale in
-                            Text("\(Int(scale))×").tag(scale)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityLabel("Time scale")
+                    // The speed picker is a standing bank of labelled discs
+                    // beside the system now — tap one (DECISIONS.md,
+                    // 2026-07-29). It stays visible rather than folding,
+                    // because which speed you are running is itself a thing
+                    // worth reading: at 1× an Earth year takes two minutes.
+                    Text("Clock: \(Int(self.model.timeScale))× — tap a disc on the bank beside the system.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Text("1× is three simulated days per second.")
                     .font(DesignTokens.TypeScale.footnote)
@@ -116,13 +118,14 @@ struct GravityLabControlsPanel: View {
                     .accessibilityHint("The rubber-sheet picture underfoot — depths are conceptual, not to scale")
                 Toggle("Kepler sweep", isOn: $model.keplerSweepOn)
                     .font(DesignTokens.TypeScale.control)
-                Picker("Trails", selection: $model.trailLength) {
-                    ForEach(GravityLabModel.TrailLength.allCases) { length in
-                        Text(length.rawValue.capitalized).tag(length)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .accessibilityLabel("Trail length")
+                // The trail-length picker is deleted, not relocated. Three
+                // lengths of ribbon is a display preference, not physics,
+                // and the law's third clause refuses controls that are
+                // neither an extent nor a real choice (DECISIONS.md,
+                // 2026-07-29). Medium is the length that reads an ellipse
+                // without smearing a fast inner orbit into a band;
+                // `trailLength` stays on the model at that default, so a
+                // future spatial control has something to set.
                 Toggle("Velocity vectors", isOn: $model.showVelocityVector)
                     .font(DesignTokens.TypeScale.control)
                 Toggle("Force vectors", isOn: $model.showForceVector)
