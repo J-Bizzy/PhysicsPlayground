@@ -1109,6 +1109,7 @@ final class HubScene {
     /// where you are looking.
     func animate(dt: Double, lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?) {
         time += dt
+        fadeIn(dt: dt)
         updateFocus(lookRay: lookRay, dt: dt)
 
         for index in exhibits.indices {
@@ -1212,6 +1213,38 @@ final class HubScene {
         for (index, domain) in HubDomain.allCases.enumerated() {
             domainTitles[domain]?.animate(time: time + Double(index) * 1.9,
                                           stillness: stillness)
+        }
+    }
+
+    /// How far the gallery has faded up, 0…1.
+    private var presence: Float = 0
+
+    /// The gallery arrives rather than appears.
+    ///
+    /// A scene rebuild is a hard cut: the whole room is replaced between
+    /// two frames. That is invisible on first entry — there was nothing
+    /// there before — but changing the home's type style rebuilds the
+    /// same room around you, and a hard cut there reads as a glitch
+    /// rather than a change. Easing the whole tree up makes the switch
+    /// a dissolve, and costs one opacity write per frame for half a
+    /// second.
+    ///
+    /// Deliberately on the ROOT, not per-entity: every exhibit, sign
+    /// and slab fades on the same curve, so nothing arrives early and
+    /// breaks the illusion that the room re-set itself as one thing.
+    private func fadeIn(dt: Double) {
+        guard presence < 1 else { return }
+        // Exponential approach, frame-rate independent, τ ≈ 0.18 s.
+        presence = min(1, presence + (1 - presence)
+            * Float(1 - exp(-dt / 0.18)))
+        if presence > 0.999 {
+            presence = 1
+            // Land exactly, then stop touching the component at all —
+            // a permanent OpacityComponent forces the whole gallery
+            // down a transparency path it does not otherwise need.
+            root.components.remove(OpacityComponent.self)
+        } else {
+            root.components.set(OpacityComponent(opacity: presence))
         }
     }
 

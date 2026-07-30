@@ -53,9 +53,10 @@ final class AppSettings {
     }
 
     /// Which voice the home's display type speaks in — the wordmark
-    /// and both door signs. Persisted, because it is a taste decision
-    /// being made over several sittings; `HubTitleStyle.audition`
-    /// stands all the candidates side by side instead of choosing one.
+    /// and both door signs. Defaults to the plaque (owner's call,
+    /// 2026-07-30); `HubTitleStyle.audition` stands all the candidates
+    /// side by side instead of choosing one, which is how the plaque
+    /// was picked and how a future one would be.
     var titleStyle: Int {
         didSet { UserDefaults.standard.set(titleStyle, forKey: "settings.titleStyle") }
     }
@@ -106,7 +107,7 @@ final class AppSettings {
         masterVolume = defaults.object(forKey: "settings.masterVolume") as? Double ?? 1.0
         ambientAudio = defaults.object(forKey: "settings.ambientAudio") as? Bool ?? true
         titleStyle = defaults.object(forKey: "settings.titleStyle") as? Int
-            ?? HubTitleStyle.audition
+            ?? HubTitleStyle.plaque.rawValue
         arcDistance = defaults.object(forKey: "settings.arcDistance") as? Double ?? 2.0
         arcHeight = defaults.object(forKey: "settings.arcHeight") as? Double ?? 1.4
         seenHints = Set(defaults.stringArray(forKey: "settings.seenHints") ?? [])

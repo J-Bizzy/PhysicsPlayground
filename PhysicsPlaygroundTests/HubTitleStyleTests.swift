@@ -86,12 +86,27 @@ final class HubTitleStyleTests: XCTestCase {
                        "a stale raw value must not leave the home mute")
     }
 
-    /// A fresh install auditions rather than silently picking: the
-    /// choice presents itself in the room instead of waiting to be
-    /// found in a menu.
+    /// A fresh install ships the chosen voice (owner's call: the
+    /// plaque). The audition wall remains reachable from Settings —
+    /// it is how this was decided and how a future one would be.
     @MainActor
-    func testAFreshInstallOpensOnTheAudition() {
+    func testAFreshInstallShipsThePlaque() {
         UserDefaults.standard.removeObject(forKey: "settings.titleStyle")
-        XCTAssertEqual(AppSettings().titleStyle, HubTitleStyle.audition)
+        XCTAssertEqual(AppSettings().titleStyle, HubTitleStyle.plaque.rawValue)
+    }
+
+    /// The plaque is ONE solid, not a stack. Two meshes sharing a
+    /// volume is what made the letters look doubled and the lines look
+    /// collided: a dark copy has to sit further back than the extrusion
+    /// is deep, and this is the deepest voice in the set, so any offset
+    /// small enough to read as a shadow punched through the faces.
+    @MainActor
+    func testThePlaqueIsASingleSolid() {
+        let line = HubTitleStyle.plaque.line("MECHANICS", size: 0.12,
+                                             accent: .systemOrange)
+        XCTAssertEqual(line.children.count, 1,
+                       "the plaque grew a second pass — its own extruded "
+                       + "sides are the depth cue, and a stacked copy will "
+                       + "interpenetrate them")
     }
 }

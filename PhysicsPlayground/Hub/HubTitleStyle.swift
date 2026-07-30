@@ -5,8 +5,13 @@
 //  One typographic voice for the home's three display texts — the
 //  wordmark and the two door signs — switchable, so candidate voices
 //  can be auditioned in the room rather than argued about in the
-//  abstract. `-titleStyle 1|2|3` (DEBUG) renders the whole home in a
-//  candidate; absent, the shipping style applies.
+//  abstract. Settings picks one; the `.audition` sentinel hangs them
+//  all side by side instead.
+//
+//  THE PLAQUE SHIPS (owner's call, 2026-07-30), chosen off exactly
+//  that wall. The others stay: the wall is how this decision was made
+//  and how the next one would be, and three voices cost four hundred
+//  lines with no runtime weight beyond the one that renders.
 //
 //  DELIBERATELY NOT the style of every text in the hub. The exhibit
 //  nameplates and the Well glyphs keep `HubScene.bubbleText` whatever
@@ -58,7 +63,7 @@ enum HubTitleStyle: Int, CaseIterable {
     /// The style currently being rendered. Set by the hub as it builds,
     /// so the door signs and the wordmark cannot disagree — they are
     /// built at different moments from different files.
-    @MainActor static var current: HubTitleStyle = .bubble
+    @MainActor static var current: HubTitleStyle = .plaque
 
     // MARK: The voice's parameters
 
@@ -171,17 +176,24 @@ enum HubTitleStyle: Int, CaseIterable {
             pass(glass)
 
         case .plaque:
-            // Milled from stock: a dark shadow directly behind, then
-            // brushed metal — steel for the wordmark, the domain accent
-            // alloyed 30% toward steel for the signs so the colour
-            // reads as anodised rather than painted.
+            // ONE solid, milled from stock. Every other voice here is a
+            // stack of passes; this one deliberately is not.
             //
-            // The shadow is NOT scaled up. A 6% larger copy is only
-            // invisible when the line is small; the flush lockup scales
-            // a short word up hard, and 6% of a big line reads as a
-            // second, ghosted set of letters. Depth alone here.
-            pass(Self.unlit(UIColor(white: 0.02, alpha: 1), opacity: 0.55),
-                 offset: SIMD3(0, 0, -0.30 * s))
+            // It was three passes and they fought. A dark copy behind
+            // the metal has to sit further back than the extrusion is
+            // deep or the two meshes interpenetrate — and this is the
+            // deepest voice in the set (0.55 against the poster's
+            // 0.07), so any offset small enough to read as a shadow was
+            // small enough to punch through the faces. The symptom was
+            // letters that looked doubled and lines that looked like
+            // they collided; the cause was two solids sharing a volume.
+            //
+            // A real plaque does not need a drop shadow: it is a thick
+            // object, and its own extruded sides catch the light at a
+            // different angle from its face. That IS the depth cue, and
+            // it holds from every viewing angle, which a fixed offset
+            // never does. So: one mesh, one material, and the letters'
+            // own geometry does the work.
             var metal = PhysicallyBasedMaterial()
             let stock = accent.map { Self.blend($0, toward: UIColor(white: 0.72, alpha: 1), by: 0.30) }
                 ?? UIColor(white: 0.78, alpha: 1)
@@ -189,14 +201,21 @@ enum HubTitleStyle: Int, CaseIterable {
             // Not a mirror. At metallic 1.0 a surface shows only what
             // it reflects, and a passthrough room gives RealityKit
             // almost nothing to reflect — the letters came out muddy
-            // grey. Backing off to 0.75 with a little emissive keeps
-            // the brushed read while letting base colour carry.
-            metal.metallic = 0.75
-            metal.roughness = 0.30
-            metal.clearcoat = .init(floatLiteral: 0.7)
-            metal.clearcoatRoughness = .init(floatLiteral: 0.15)
+            // grey. 0.62 keeps the brushed read while letting base
+            // colour carry the hue.
+            metal.metallic = 0.62
+            // Rough enough to gradate. A polished face flips between
+            // hotspot and shadow as you move, which is the abrupt
+            // switch; a satin one rolls between them, so the light
+            // travels across the letter instead of snapping across it.
+            metal.roughness = 0.42
+            metal.clearcoat = .init(floatLiteral: 0.55)
+            metal.clearcoatRoughness = .init(floatLiteral: 0.30)
+            // A low emissive floor so the letters never fall to pure
+            // black in the shaded parts of the extrusion — the anodised
+            // colour stays legible all the way round the bevel.
             metal.emissiveColor = .init(color: stock)
-            metal.emissiveIntensity = 0.22
+            metal.emissiveIntensity = 0.16
             pass(metal)
 
         case .poster:
