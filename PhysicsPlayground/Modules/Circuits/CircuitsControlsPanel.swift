@@ -61,15 +61,22 @@ struct CircuitsControlsPanel: View {
             }
 
             CollapsedSection("Flow") {
-                Toggle("Electron flow", isOn: $model.showElectronFlow)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("The drifting dots — electrons run − to +, opposite the conventional arrow")
-                Toggle("True electron speed", isOn: $model.trueSpeedMode)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("Drift velocity is under a millimetre per second — the field is what moves fast")
-                Toggle("Voltage skyline", isOn: $model.showVoltageHeights)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("Each part rises to its electric potential")
+                // These are switches on the layers bank beside the bench
+                // now (DECISIONS.md, 2026-07-29) — a lit plate is on. The
+                // bank also carries ELECTRON VIEW, which had no control at
+                // all until today: it swells the bench to 4x so the
+                // drifting electrons become things you stand among, and it
+                // was reachable only by accidentally pinching past 4x.
+                Text("Electron flow, True speed, Voltage skyline and Electron view are plates on the bank beside the bench.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if self.model.electronView {
+                    Text("Electron view: each electron drifts under a millimetre per second, but the field pushes all of them at once — which is why the bulb lights instantly.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             CollapsedSection("Multimeter") {

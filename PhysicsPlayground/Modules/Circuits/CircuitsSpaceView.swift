@@ -32,12 +32,45 @@ struct CircuitsSpaceView: View {
     /// are one continuous control.
     @State private var scaleRig = SpatialScaleRig(
         pivot: CircuitsRenderer.benchPivot, range: 0.6...8.0, allowsTurn: false)
+    /// The layers bank: which views of the current are switched on.
+    ///
+    /// It also finally gives ELECTRON VIEW a door. `model.electronView`
+    /// has existed since the bench was written — it raises the zoom floor
+    /// to 4x so the wires swell around you and the drifting electrons
+    /// become things you stand among — and NOTHING in the app ever set it.
+    /// It was reachable only by happening to pinch the bench open with two
+    /// hands past 4x. The one view that kills the misconception this module
+    /// exists to kill was hidden behind an accident.
+    @State private var layers: SpatialLayerBank?
 
     var body: some View {
         RealityView { content in
             let renderer = CircuitsRenderer()
             content.add(renderer.root)
             renderer.viewRoot.addChild(bloom.root)
+
+            let bank = SpatialLayerBank(
+                accent: UIColor(DesignTokens.Palette.circuitsAccent),
+                layers: [
+                    .init(id: "flow", label: "Electron flow", symbol: "circle.dotted",
+                          isOn: { model.showElectronFlow },
+                          toggle: { model.showElectronFlow.toggle() }),
+                    .init(id: "truespeed", label: "True speed", symbol: "tortoise",
+                          isOn: { model.trueSpeedMode },
+                          toggle: { model.trueSpeedMode.toggle() }),
+                    .init(id: "skyline", label: "Voltage skyline", symbol: "building.2",
+                          isOn: { model.showVoltageHeights },
+                          toggle: { model.showVoltageHeights.toggle() }),
+                    .init(id: "electron", label: "Electron view", symbol: "arrow.down.left.and.arrow.up.right",
+                          isOn: { model.electronView },
+                          toggle: { model.electronView.toggle() }),
+                ])
+            // Under `root`, NOT `viewRoot`: the zoom reaches 8x, and a
+            // control that grew with the bench would be a metre wide —
+            // and Electron View's own switch would swell out of reach the
+            // moment you used it.
+            renderer.root.addChild(bank.root)
+            self.layers = bank
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
@@ -50,6 +83,13 @@ struct CircuitsSpaceView: View {
                     // hang off the scene content rather than the renderer
                     // root, so they never inherited the offset.)
                     model.step(dt: event.deltaTime)
+                    // The bank stands beside the bench, at the bench's own
+                    // depth so it sits in the same ~15 deg band as the
+                    // apparatus rather than dropping out of view.
+                    layers?.update(
+                        anchor: CircuitsRenderer.benchPivot + SIMD3(0.62, -0.06, 0.16),
+                        viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
+                        dt: event.deltaTime)
                     // Rendered here every frame (not via the observation
                     // loop): a steady DC circuit mutates nothing that
                     // observation reliably re-fires on, but its electrons
@@ -89,6 +129,7 @@ struct CircuitsSpaceView: View {
                     // Ring petals first; then the bench's own tap
                     // grammar (terminals wire, wires delete, levers
                     // flip, bodies toggle their control ring).
+                    if layers?.handleTap(value.entity) == true { return }
                     if bloom.handleTap(value.entity) { return }
                     handleTap(on: value.entity)
                 }
