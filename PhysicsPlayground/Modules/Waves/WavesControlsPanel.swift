@@ -35,9 +35,12 @@ struct WavesControlsPanel: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Toggle("Listen to the field", isOn: $model.listenToField)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("The interference at your head, as a tone — walk into a silence surface and the sound dies")
+                Text(self.model.listenToField
+                     ? "Listening — the interference at your head, as a tone. Walk into a silence surface and the sound dies."
+                     : "Switch on Listen at the bank to hear the field at your own ears.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text("Tap a source for its own controls — pull the bead for amplitude; petals invert its phase, send it on a Doppler flyby, or delete it.")
                     .font(DesignTokens.TypeScale.footnote)
@@ -72,11 +75,17 @@ struct WavesControlsPanel: View {
             }
 
             CollapsedSection("Display") {
-                Toggle("Silence surfaces", isOn: $model.showSilenceSurfaces)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("The 3D sheets where the waves cancel — walk between them")
-                Toggle("Wavefront rings", isOn: $model.showWavefronts)
-                    .font(DesignTokens.TypeScale.control)
+                // Silence surfaces, wavefronts and Listen moved to the
+                // layers bank standing beside the gauges (DECISIONS.md,
+                // 2026-07-29). Which representations are switched on is
+                // something you need to know while looking at the field,
+                // not something to go hunting for in a collapsed section.
+                Text("Silence surfaces, wavefronts and Listen are switches on the bank beside the gauges — a lit plate is on.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                // The gaze probe stays: an input mode, not a layer, and
+                // device-only.
                 Toggle("Probe follows my gaze", isOn: $model.lookProbe)
                     .font(DesignTokens.TypeScale.control)
                     .accessibilityHint("The probe reads the field wherever your head is facing — device only")

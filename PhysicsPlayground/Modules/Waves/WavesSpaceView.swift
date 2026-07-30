@@ -38,6 +38,18 @@ struct WavesSpaceView: View {
     /// the Silence Walk cannot survive.
     @State private var frequencyDial: SpatialDialControl?
     @State private var speedDial: SpatialDialControl?
+    /// The layers bank, standing beside the gauges: which representations
+    /// of the field are switched on.
+    ///
+    /// "Listen to the field" is in here rather than left on the panel
+    /// because it IS a layer — the amplitude at your ears is another way
+    /// of showing the same field, and it happens to be the one that makes
+    /// this module unforgettable. Putting it on the bank puts it where a
+    /// user will actually find it.
+    ///
+    /// The gaze probe stays on the panel: it is an input mode, not a
+    /// representation, and it is device-only.
+    @State private var layers: SpatialLayerBank?
 
     var body: some View {
         RealityView { content in
@@ -73,6 +85,25 @@ struct WavesSpaceView: View {
             self.frequencyDial = frequency
             self.speedDial = speed
 
+            let bank = SpatialLayerBank(
+                accent: UIColor(DesignTokens.Palette.wavesAccent),
+                layers: [
+                    .init(id: "silence", label: "Silence surfaces",
+                          symbol: "circle.dotted",
+                          isOn: { model.showSilenceSurfaces },
+                          toggle: { model.showSilenceSurfaces.toggle() }),
+                    .init(id: "wavefronts", label: "Wavefronts",
+                          symbol: "wave.3.right",
+                          isOn: { model.showWavefronts },
+                          toggle: { model.showWavefronts.toggle() }),
+                    .init(id: "listen", label: "Listen",
+                          symbol: "ear",
+                          isOn: { model.listenToField },
+                          toggle: { model.listenToField.toggle() }),
+                ])
+            renderer.root.addChild(bank.root)
+            self.layers = bank
+
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     model.step(dt: event.deltaTime)
@@ -93,6 +124,12 @@ struct WavesSpaceView: View {
                     // the needles frozen most of the time.
                     frequencyDial?.refresh()
                     speedDial?.refresh()
+                    // Beside the gauges, same ~15° band, clear of the
+                    // interference volume worth walking through.
+                    layers?.update(
+                        anchor: SIMD3(0.42, 1.05, -1.65),
+                        viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
+                        dt: event.deltaTime)
                     renderer?.tick(model, listener: appModel.room.headPosition)
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
@@ -124,6 +161,7 @@ struct WavesSpaceView: View {
                     if bloom.handleTap(value.entity) { return }
                     // A tap on a source selects it and toggles its
                     // control ring; anything else folds the ring.
+                    if layers?.handleTap(value.entity) == true { return }
                     var current: Entity? = value.entity
                     while let candidate = current {
                         if let id = UUID(uuidString: candidate.name),
