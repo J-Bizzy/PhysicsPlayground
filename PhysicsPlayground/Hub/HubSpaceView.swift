@@ -36,6 +36,7 @@ import RenderKit
 struct HubSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.openWindow) private var openWindow
     @State private var scene = HubScene()
 
     var body: some View {
@@ -78,6 +79,12 @@ struct HubSpaceView: View {
                 // `loadButton`, so the other order silently does nothing.
                 scene.seatLoadButton()
             }
+            if let bar = attachments.entity(for: "bar") {
+                scene.seatTitleBar(bar)
+            }
+            if let hint = attachments.entity(for: "podiumHint") {
+                scene.seatPodiumHint(hint)
+            }
             #if DEBUG
             // `-hubDock <module id>` seats an exhibit on the podium at
             // launch, so the docked state and Load button can be
@@ -105,6 +112,22 @@ struct HubSpaceView: View {
                     .first(where: { $0.id == scene.focusedModuleID }) {
                     HubFocusPanel(module: module) { enter(module.id) }
                 }
+            }
+            Attachment(id: "bar") {
+                HubUtilityBar(
+                    openSettings: { openWindow(id: SettingsView.windowID) },
+                    openAbout: { openWindow(id: AboutView.windowID) })
+            }
+            Attachment(id: "podiumHint") {
+                // What the podium is FOR, said once, quietly, where the
+                // action happens. The focus panel's Load button remains
+                // the guaranteed way in; this teaches the fun one.
+                Text("Drag a lab onto the podium to open it")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .glassBackgroundEffect(in: Capsule())
             }
             Attachment(id: "load") {
                 if let module = ModuleCatalog.all(appModel: appModel)
@@ -625,11 +648,11 @@ final class HubScene {
     /// Warm ivory, opaque, self-lit enough to hold its own against
     /// daylight. (It was a frosted grey at 80% opacity, which over a
     /// cream wall is a smudge.)
-    private static let titleColor = UIColor(red: 0.99, green: 0.98, blue: 0.95, alpha: 1)
+    private static let titleColor = HubTitleStyle.ivory
     /// The warm edge-light behind the letters — the thing that turns
     /// flat white type into something that looks lit. Champagne rather
     /// than gold: at full saturation it read as a toy.
-    private static let titleRimColor = UIColor(red: 1.0, green: 0.88, blue: 0.70, alpha: 1)
+    private static let titleRimColor = HubTitleStyle.champagne
     /// The lockup's overall width, metres. Both lines are scaled to
     /// exactly this, which is what makes it read as a designed mark.
     private static let titleWidth: Float = 0.60
@@ -664,7 +687,8 @@ final class HubScene {
         // Build at a reference size, then scale each to the common width.
         let reference: CGFloat = 0.17
         let built = lines.map { text -> (entity: Entity, extents: SIMD3<Float>) in
-            (Self.titleLine(text, size: reference), Self.textExtents(text, size: reference))
+            (HubTitleStyle.current.line(text, size: reference, accent: nil),
+             HubTitleStyle.current.extents(text, size: reference))
         }
         let scales = built.map { Self.titleWidth / max($0.extents.x, 1e-4) }
         // Cap heights AFTER scaling — a wider scale makes taller letters.
@@ -701,42 +725,42 @@ final class HubScene {
         accessibility.label = "Physics Playground"
         titleAnchor.components.set(accessibility)
         root.addChild(titleAnchor)
+
+        // Where the utility bar hangs: below the rule, clear of the
+        // lockup whatever the current style's metrics did to it.
+        titleBarSeat = SIMD3(0, -blockHeight / 2 - 0.20, 0.01)
     }
 
-    /// One line of the title, as three stacked passes.
+    // MARK: Attachment seats — SwiftUI riding the scene
+
+    /// Local position under the wordmark for the utility bar.
+    private var titleBarSeat = SIMD3<Float>(0, -0.35, 0.01)
+
+    /// Parents the utility-bar attachment under the wordmark, so it
+    /// inherits the title's bob and breathe — part of the lockup, not
+    /// furniture floating near it.
     ///
-    /// The old treatment was a near-black copy shoved down and back,
-    /// which is a drop shadow — and a hard offset drop shadow is exactly
-    /// what makes 3-D type look like clip art. These layers sit
-    /// CONCENTRICALLY instead: a soft dark plate that gives the letters
-    /// something to be light against whatever wall is behind them, a
-    /// warm rim just proud of the glyph edge that reads as light
-    /// catching them, and the ivory letters themselves on top.
-    private static func titleLine(_ text: String, size: CGFloat) -> Entity {
-        let line = Entity()
+    /// Scaled up: an attachment renders at SwiftUI's natural size
+    /// (1 pt ≈ 0.7 mm), which is right for a panel at arm's length and
+    /// doll's-house small on a wordmark two metres out. ×2.2 lands the
+    /// buttons at about the wordmark rule's weight.
+    func seatTitleBar(_ entity: Entity) {
+        entity.position = titleBarSeat
+        entity.scale = SIMD3(repeating: 2.2)
+        titleAnchor.addChild(entity)
+    }
 
-        let backing = bubbleText(text, size: size,
-                                 color: UIColor(white: 0.03, alpha: 1),
-                                 opacity: 0.45, emissive: 0)
-        // Pulled in tight behind the glyphs. The layers were far enough
-        // back that parallax revealed them off to one side, which is the
-        // hard offset drop shadow this was meant to replace; keeping
-        // them close makes the separation come from SCALE, which reads
-        // as a rim from any angle.
-        backing.scale = SIMD3(repeating: 1.10)
-        backing.position.z = -0.022
-        line.addChild(backing)
-
-        let rim = bubbleText(text, size: size, color: titleRimColor,
-                             opacity: 0.55, emissive: 0.75)
-        rim.scale = SIMD3(repeating: 1.042)
-        rim.position.z = -0.009
-        line.addChild(rim)
-
-        let letters = bubbleText(text, size: size, color: titleColor,
-                                 opacity: 1, emissive: 0.32)
-        line.addChild(letters)
-        return line
+    /// Parents the podium hint just under the cap's front rim, facing
+    /// the user — a small plaque saying what the podium is FOR. The
+    /// Load button hangs over the podium's top, so the two never
+    /// collide. Same distance-compensating scale story as the bar.
+    func seatPodiumHint(_ entity: Entity) {
+        entity.components.set(BillboardComponent())
+        entity.scale = SIMD3(repeating: 1.6)
+        entity.position = SIMD3(podiumTop.x,
+                                podiumTop.y - GalleryLayout.exhibitLift - 0.09,
+                                podiumTop.z + 0.12)
+        root.addChild(entity)
     }
 
     /// The measured size of a run of the title face, for the lockup.
@@ -1347,5 +1371,44 @@ struct HubFocusPanel: View {
         .frame(width: 340, alignment: .leading)
         .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .transition(.opacity)
+    }
+}
+
+/// The utility bar under the wordmark: the home's small chrome, kept to
+/// three verbs. Settings opens the real settings window; About opens
+/// the placeholder credits panel; Exit is a labelled placeholder —
+/// visionOS offers no supported way for an app to quit itself, so the
+/// button states its intent and does nothing yet rather than lying
+/// with a broken action.
+private struct HubUtilityBar: View {
+    let openSettings: () -> Void
+    let openAbout: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Button(action: openSettings) {
+                Image(systemName: "gearshape.fill")
+                    .font(.title3)
+            }
+            .accessibilityLabel("Settings")
+
+            Button(action: openAbout) {
+                Image(systemName: "info.circle")
+                    .font(.title3)
+            }
+            .accessibilityLabel("About Physics Playground")
+
+            Button {} label: {
+                Image(systemName: "power")
+                    .font(.title3)
+            }
+            .disabled(true)
+            .accessibilityLabel("Exit")
+            .accessibilityHint("Not available yet")
+        }
+        .buttonStyle(.borderless)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .glassBackgroundEffect(in: Capsule())
     }
 }

@@ -52,6 +52,14 @@ struct PhysicsPlaygroundApp: App {
         .defaultSize(width: 480, height: 760)
         .windowResizability(.contentSize)
 
+        // About: behind the home's info button. Same single-instance
+        // pattern as Settings.
+        WindowGroup(id: AboutView.windowID) {
+            AboutView()
+        }
+        .defaultSize(width: 380, height: 340)
+        .windowResizability(.contentSize)
+
         ImmersiveSpace(id: PlaygroundSpaceView.spaceID) {
             PlaygroundSpaceView()
                 .environment(appModel)

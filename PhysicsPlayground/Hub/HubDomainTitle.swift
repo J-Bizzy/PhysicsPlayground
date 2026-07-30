@@ -17,12 +17,12 @@
 //  one level down.
 //
 //  The design language is inherited, not invented:
-//  · The TYPE is `HubScene.bubbleText` — the wordmark's own face —
-//    in the wordmark's three concentric passes (dark plate, lit rim,
-//    glossy letters), so the room reads as one hand. What changes is
-//    the colour: the letters carry the DOMAIN accent, which until now
-//    appeared only in each slab's hairline, the progress rings, and
-//    the focus chip. Signage joins that short list.
+//  · The TYPE speaks in whatever voice `HubTitleStyle.current` says —
+//    the same engine the wordmark uses, so the home's three display
+//    texts always agree. What changes per sign is the colour: the
+//    letters carry the DOMAIN accent, which until now appeared only in
+//    each slab's hairline, the progress rings, and the focus chip.
+//    Signage joins that short list.
 //  · The LOCKUP is the wordmark's flush-both-sides two-line math:
 //    lines measured, scaled to a common width, stacked with leading
 //    derived from their real cap height.
@@ -86,8 +86,8 @@ final class HubDomainTitle {
         // the common width, stack with cap-height leading, centre the
         // block on the anchor.
         let built = texts.map { text -> (entity: Entity, extents: SIMD3<Float>) in
-            (Self.line(text, accent: accent),
-             HubScene.textExtents(text, size: Self.reference))
+            (HubTitleStyle.current.line(text, size: Self.reference, accent: accent),
+             HubTitleStyle.current.extents(text, size: Self.reference))
         }
         let scales = built.map { width / max($0.extents.x, 1e-4) }
         let heights = zip(built, scales).map { $0.0.extents.y * $0.1 }
@@ -242,50 +242,11 @@ final class HubDomainTitle {
 
     // MARK: Parts
 
-    /// One line of signage in the wordmark's three concentric passes,
-    /// recoloured for a domain: dark plate for contrast against any
-    /// wall, a lit rim just proud of the glyphs, the accent letters on
-    /// top. Same offsets as the wordmark's `titleLine`, so the two
-    /// treatments age together or not at all.
-    private static func line(_ text: String, accent: UIColor) -> Entity {
-        let line = Entity()
-
-        let backing = HubScene.bubbleText(
-            text, size: reference,
-            color: UIColor(white: 0.03, alpha: 1), opacity: 0.45, emissive: 0)
-        backing.scale = SIMD3(repeating: 1.10)
-        backing.position.z = -0.016
-        line.addChild(backing)
-
-        let rim = HubScene.bubbleText(
-            text, size: reference, color: lightened(accent),
-            opacity: 0.55, emissive: 0.85)
-        rim.scale = SIMD3(repeating: 1.042)
-        rim.position.z = -0.0065
-        line.addChild(rim)
-
-        let letters = HubScene.bubbleText(
-            text, size: reference, color: accent, opacity: 1, emissive: 0.5)
-        line.addChild(letters)
-        return line
-    }
-
     /// A small self-lit body for the kinetic elements — unlit, because
     /// an electron and a flying ball are the two brightest things on
     /// the sign by design.
     private static func spark(radius: Float, color: UIColor) -> ModelEntity {
         ModelEntity(mesh: .generateSphere(radius: radius),
                     materials: [UnlitMaterial(color: color)])
-    }
-
-    /// The rim tone: the accent pulled toward white — a derived tint of
-    /// the canonical domain colour, the same move the material helpers
-    /// make for glows and casings, never a new hue.
-    private static func lightened(_ color: UIColor) -> UIColor {
-        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
-        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        func lift(_ channel: CGFloat) -> CGFloat { channel + (1 - channel) * 0.55 }
-        return UIColor(red: lift(red), green: lift(green), blue: lift(blue),
-                       alpha: alpha)
     }
 }
