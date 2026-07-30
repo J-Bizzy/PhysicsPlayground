@@ -44,6 +44,16 @@ final class EMFieldStation {
 
     var root: Entity { renderer.root }
 
+    /// Which magnet's control ring is open, if any.
+    ///
+    /// Read-only, and here for the tests: `handleTap` is the whole of
+    /// this apparatus's tap grammar — open a ring, toggle it shut, fold
+    /// it away when you tap elsewhere — and none of that is reachable
+    /// from the simulator, which has no way to synthesise a pinch. A
+    /// gesture handler that can only be verified by hand in a headset
+    /// is a gesture handler nobody verifies.
+    var openRingID: UUID? { ring.openID }
+
     /// Where this apparatus stands relative to where its module
     /// authored it. Passed in rather than read from a layout table,
     /// because the station now serves two hosts: the merged world seats

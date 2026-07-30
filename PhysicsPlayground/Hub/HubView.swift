@@ -71,10 +71,27 @@ struct HubView: View {
             SoundPalette.warmUp()
             SoundPalette.masterVolume = appModel.settings.masterVolume
             // The Gallery is the menu — bring it up on arrival.
-            if !appModel.isImmersiveSpaceOpen {
+            //
+            // `-uiTesting 1` holds it back, because this window is
+            // deliberately EMPTY while the Gallery is in the room, and
+            // XCUITest can only see the window: nothing in an immersive
+            // space is addressable to it. The flat catalog it leaves up
+            // is not a test fixture, though — it is the app's real
+            // accessibility path, the one the standing rule demands
+            // (nothing may be reachable only in space), so testing
+            // against it tests something that has to work anyway.
+            if !appModel.isImmersiveSpaceOpen, !Self.isUITesting {
                 await openGallery()
             }
         }
+    }
+
+    /// Whether a UI test is driving the app. Not `#if DEBUG`-gated: the
+    /// UI test target builds and runs the shipping configuration too,
+    /// and a hook that vanishes in Release is a hook that cannot test
+    /// what ships.
+    static var isUITesting: Bool {
+        UserDefaults.standard.bool(forKey: "uiTesting")
     }
 
     private func openGallery() async {
@@ -167,6 +184,16 @@ private struct HubCatalogRow: View {
             .regularMaterial,
             in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .hoverEffect()
+        // Named as ONE control. Without this the row exposes only its
+        // composed children — an icon, a title, a progress line, a
+        // chevron — so VoiceOver reads it as four things and a UI test
+        // cannot address it by name at all. Found by the first UI test
+        // that tried to press it (`HomeChromeUITests`), which is
+        // precisely the class of defect a screenshot cannot show.
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("lab.\(module.id)")
+        .accessibilityLabel(module.title)
+        .accessibilityAddTraits(.isButton)
         .accessibilityHint("Opens \(module.title)")
     }
 }

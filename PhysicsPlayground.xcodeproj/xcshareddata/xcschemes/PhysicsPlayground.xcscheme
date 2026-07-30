@@ -41,6 +41,17 @@
                ReferencedContainer = "container:PhysicsPlayground.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "99C0D0030000000000000003"
+               BuildableName = "PhysicsPlaygroundUITests.xctest"
+               BlueprintName = "PhysicsPlaygroundUITests"
+               ReferencedContainer = "container:PhysicsPlayground.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

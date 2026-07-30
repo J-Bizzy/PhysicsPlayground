@@ -20,7 +20,12 @@ xcodebuild test -project PhysicsPlayground.xcodeproj -scheme PhysicsPlayground \
   -destination 'platform=visionOS Simulator,name=Apple Vision Pro 4K'
 ```
 
-Two separate suites: pure-math tests go in `PhysicsCoreTests` (fast, no sim); model/integration tests go in `PhysicsPlaygroundTests` in the app target.
+Three suites, and the split is about what each CAN reach:
+- `PhysicsCoreTests` — pure math, fast, no simulator.
+- `PhysicsPlaygroundTests` — models, clamps, layout, and **tap handlers called directly** (`StationTapTests` builds entities and invokes `handleTap`, because no automation can synthesise a pinch).
+- `PhysicsPlaygroundUITests` — real XCUITest taps on the **window** surfaces. Launch with `-uiTesting 1`, which holds back the immersive gallery so the flat catalog stays up; XCUITest cannot see anything in an immersive space.
+
+**Nothing automated can touch a RealityKit entity.** `simctl` has no tap verb and XCUITest has no entity API, so every spatial gesture — drag to the podium, pinch a magnet, two-hand zoom — is verified by hand against `docs/ON_DEVICE_TESTS.md`. A screenshot proves something rendered; it never proves it works.
 
 The simulator can't be gaze-pinched, so debug launch args drive a module into a given state for CLI screenshots: `-openModule <id>`, `-studioMode 1`, `-startPaused 1`, `-pauseAfter <seconds>`, `-paletteOpen 1`, plus per-module ones. Full list in `AppModel.init`.
 
