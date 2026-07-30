@@ -152,7 +152,8 @@ final class GalleryLayoutTests: XCTestCase {
                            + GalleryLayout.baseWidthMargin,
                        accuracy: 1e-5)
 
-        for domain in [HubDomain.electricity, .fluidsGravity] {
+        // …and no OTHER terrace moves or resizes to accommodate it.
+        for domain in HubDomain.allCases where domain != .mechanics {
             let a = with.first { $0.domain == domain }!
             let b = without.first { $0.domain == domain }!
             XCTAssertEqual(a.center, b.center)
@@ -168,13 +169,17 @@ final class GalleryLayoutTests: XCTestCase {
         }
     }
 
-    /// The crescent closes up around an archived domain rather than showing
-    /// an empty shelf — which is what makes benching a domain a one-line
-    /// change to its module list.
+    /// A door with none of its experiences benched builds no terrace —
+    /// which is what makes benching a domain a one-line change to its
+    /// module list. No domain is empty today (the waves case that used
+    /// to prove this was deleted with the four-domain layout), so the
+    /// fixture benches one by omission instead.
     func testBenchedDomainGetsNoTerrace() {
-        XCTAssertTrue(HubDomain.waves.moduleIDs.isEmpty, "waves is benched")
-        let terraces = GalleryLayout.terraces(moduleIDs: allModules)
-        XCTAssertFalse(terraces.contains { $0.domain == .waves })
+        let mechanicsOnly = HubDomain.mechanics.moduleIDs
+        let terraces = GalleryLayout.terraces(moduleIDs: mechanicsOnly)
+        XCTAssertEqual(terraces.count, 1)
+        XCTAssertFalse(terraces.contains { $0.domain == .electricity },
+                       "no benched experience, no terrace")
 
         // And an id belonging to no live domain still lands somewhere
         // rather than vanishing: it extends its fallback slab.

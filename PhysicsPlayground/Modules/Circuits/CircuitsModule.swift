@@ -18,6 +18,30 @@ import PhysicsCore
 
 @MainActor
 enum CircuitsModule {
+    static let id = "circuits"
+
+    static func descriptor(appModel: AppModel) -> ModuleDescriptor {
+        ModuleDescriptor(
+            id: id,
+            title: "Circuit Workshop",
+            shortTitle: "Circuits",
+            blurb: "A live electronics workbench: build anything from a flashlight to an RLC network, and watch voltage, current, and charge become visible.",
+            icon: "powerplug.fill",
+            accent: DesignTokens.Palette.circuitsAccent,
+            firstRunHint: "The loop in front of you is live — pinch the switch lever to break it. Grab parts off the tray and drop them so copper ends nearly touch: they connect themselves. Pull an orange end grip to aim or stretch a part; pinch two copper terminals to wire across a distance; the trash button removes a selected part.",
+            legend: legend,
+            isPaused: { appModel.circuitsModel.isPaused },
+            togglePause: { appModel.circuitsModel.isPaused.toggle() },
+            makeScene: {
+                AnyView(CircuitsSpaceView().environment(appModel.circuitsModel))
+            },
+            makeControls: {
+                AnyView(CircuitsControlsPanel().environment(appModel.circuitsModel))
+            },
+            captureReadings: { readings(appModel: appModel) },
+            reset: { appModel.circuitsModel.reset() }
+        )
+    }
     /// The readings this bench writes into the lab notebook.
     /// Shared with the combined module that now hosts it.
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {

@@ -232,30 +232,3 @@ final class MechanicsPendulumStation: Station {
         model.release(id: id, handVelocity: handSampler.velocity(at: now) ?? .zero)
     }
 }
-
-/// The card floating above the selected bob: the numbers behind the swing.
-///
-/// Lived at the bottom of `PendulumsSpaceView` until that file became a
-/// station; it is a panel view and has nothing to do with the scene.
-struct PendulumInfoCard: View {
-    @Environment(PendulumsModel.self) private var model
-
-    var body: some View {
-        if let pendulum = model.selected {
-            let speed = simd_length(pendulum.state.velocity)
-            let angle = pendulum.state.angle(length: pendulum.length)
-            let energies = pendulum.state.energies(
-                length: pendulum.length, gravity: model.gravity, mass: pendulum.mass)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("L \(pendulum.length, specifier: "%.2f") m   T \(pendulum.period(gravity: model.gravity), specifier: "%.2f") s")
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                Text("θ \(angle * 180 / .pi, specifier: "%.0f")°   v \(speed, specifier: "%.2f") m/s")
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                Text("KE \(energies.kinetic, specifier: "%.2f") J   PE \(energies.potential, specifier: "%.2f") J")
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            .accessibilityElement(children: .combine)
-        }
-    }
-}

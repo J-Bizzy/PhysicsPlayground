@@ -28,6 +28,32 @@ enum ElectromagnetismModule {
     // keys this bench's dismissed-hint flag and its notebook history.
     static let id = "electrostatics"
 
+    static func descriptor(appModel: AppModel) -> ModuleDescriptor {
+        ModuleDescriptor(
+            id: id,
+            title: "Electric Fields",
+            shortTitle: "Fields",
+            blurb: "Place charges, trace the field lines they make, and ride a test charge through Coulomb's law.",
+            icon: "bolt.fill",
+            accent: DesignTokens.Palette.electromagnetismAccent,
+            firstRunHint: "Grab a charge and drag it anywhere — the field follows. Tap a charge and its controls unfold around it: pull the bead to change strength, or the petal to delete. Add charges from this window.",
+            // Opens part-dimmed: field lines are thin glowing filaments —
+            // they need something to glow against.
+            preferredDimming: 0.35,
+            legend: legendItems,
+            isPaused: { appModel.electromagnetismModel.isPaused },
+            togglePause: { appModel.electromagnetismModel.isPaused.toggle() },
+            makeScene: {
+                AnyView(FieldSpaceView().environment(appModel.electromagnetismModel))
+            },
+            makeControls: {
+                AnyView(FieldControlsPanel().environment(appModel.electromagnetismModel))
+            },
+            captureReadings: { readings(appModel: appModel) },
+            reset: { appModel.electromagnetismModel.reset() }
+        )
+    }
+
     /// The readings this bench writes into the lab notebook.
     /// Shared with the combined module that now hosts it.
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {

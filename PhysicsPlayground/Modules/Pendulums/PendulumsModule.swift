@@ -13,6 +13,28 @@ import simd
 enum PendulumsModule {
     static let id = "pendulums"
 
+    static func descriptor(appModel: AppModel) -> ModuleDescriptor {
+        ModuleDescriptor(
+            id: id,
+            title: "Pendulums",
+            blurb: "Grab a steel bob off its beam and throw it — full nonlinear swings, energy trading between bars, and five-pendulum resonance.",
+            icon: "metronome.fill",
+            accent: DesignTokens.Palette.pendulumsAccent,
+            firstRunHint: "The bob is already swinging — grab it and throw it sideways. While you hold it, the faint line shows the swing you're about to launch. Pinch a bob to select it and read its numbers.",
+            legend: legendItems,
+            isPaused: { appModel.pendulumsModel.isPaused },
+            togglePause: { appModel.pendulumsModel.isPaused.toggle() },
+            makeScene: {
+                AnyView(PendulumsSpaceView().environment(appModel.pendulumsModel))
+            },
+            makeControls: {
+                AnyView(PendulumsControlsPanel().environment(appModel.pendulumsModel))
+            },
+            captureReadings: { readings(appModel: appModel) },
+            reset: { appModel.pendulumsModel.reset() }
+        )
+    }
+
     /// The readings this bench writes into the lab notebook.
     /// Shared with the combined module that now hosts it.
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {

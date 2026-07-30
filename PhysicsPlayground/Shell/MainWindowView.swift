@@ -41,13 +41,13 @@ struct MainWindowView: View {
                 if UserDefaults.standard.bool(forKey: "notebookSeed"),
                    appModel.notebook.entries.isEmpty {
                     appModel.notebook.record(
-                        moduleID: "em", moduleTitle: "Electricity & Magnetism",
+                        moduleID: "electrostatics", moduleTitle: "Electric Fields",
                         title: "Seeded observation 1",
                         readings: [.init("Charges", "2"),
                                    .init("Net charge", "0.0", "C"),
                                    .init("|E| 10 cm away", "8.99e5", "N/C")])
                     appModel.notebook.record(
-                        moduleID: "mechanics", moduleTitle: "Mechanics & Energy",
+                        moduleID: "pendulums", moduleTitle: "Pendulums",
                         title: "Seeded observation 1",
                         readings: [.init("Length", "0.80", "m"),
                                    .init("Period", "1.79", "s")])

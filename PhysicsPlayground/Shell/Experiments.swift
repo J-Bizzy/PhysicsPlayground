@@ -232,7 +232,7 @@ enum ExperimentCatalog {
     static func experiments(for moduleID: String, appModel: AppModel)
     -> [(experiment: Experiment, isMet: () -> Bool)] {
         switch moduleID {
-        case "mechanics":
+        case "kinematics":
             let model = appModel.kinematicsModel
             return [
                 (Experiment(id: "kinematics.range", title: "Range finder",
@@ -246,7 +246,7 @@ enum ExperimentCatalog {
                      $0.status == .flying && !$0.wasThrown
                  } }),
             ]
-        case "em":
+        case "circuits":
             let model = appModel.circuitsModel
             return [
                 (Experiment(id: "circuits.twoBulbs", title: "Double glow",
@@ -276,10 +276,13 @@ enum ExperimentCatalog {
                          && abs(model.readouts[component.id]?.amps ?? 0) > 0.005
                          && abs(model.readouts[component.id]?.amps ?? 0) < 0.03 } }),
             ]
-            + pendulumExperiments(appModel.pendulumsModel)
-            + magnetismExperiments(appModel.magnetismModel)
-            + chargeExperiments(appModel.electromagnetismModel)
             + linkExperiments(appModel: appModel)
+        case "electrostatics":
+            return chargeExperiments(appModel.electromagnetismModel)
+        case "magnetism":
+            return magnetismExperiments(appModel.magnetismModel)
+        case "pendulums":
+            return pendulumExperiments(appModel.pendulumsModel)
         case "gravitylab":
             let model = appModel.gravityLabModel
             return [

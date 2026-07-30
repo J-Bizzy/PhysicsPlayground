@@ -124,47 +124,53 @@ final class EMWorldLinkTests: XCTestCase {
         XCTAssertEqual(circuits.inductorCurrent, 0, accuracy: 1e-12)
     }
 
-    // MARK: The world is registered as one module
+    // MARK: The catalog — six experiences behind two doors
 
-    func testTheCatalogListsOneEMWorldAndNotItsTwoBenches() {
+    /// The catalog is the six experiences; the merged worlds are gone.
+    /// They were undone for GEOMETRY (see DECISIONS.md 2026-07-30):
+    /// three benches in one room pushed everything a step out of reach,
+    /// and the orrery proved impossible outright.
+    func testTheCatalogListsTheSixExperiencesAndNoWorlds() {
         let ids = ModuleCatalog.all(appModel: AppModel()).map(\.id)
-        XCTAssertTrue(ids.contains(EMWorldModule.id))
-        XCTAssertFalse(ids.contains("circuits"),
-                       "the bench is a station of the world, not an entry")
-        XCTAssertFalse(ids.contains("magnetism"),
-                       "the field is a station of the world, not an entry")
-    }
-
-    /// Both benches' experiments, plus the ones that need both.
-    func testTheWorldCarriesBothBenchesExperimentsPlusTheLink() {
-        let appModel = AppModel()
-        let ids = ExperimentCatalog
-            .experiments(for: EMWorldModule.id, appModel: appModel)
-            .map(\.experiment.id)
-        XCTAssertTrue(ids.contains("circuits.charged"), "bench experiments survive")
-        XCTAssertTrue(ids.contains("magnetism.snap"), "field experiments survive")
-        XCTAssertTrue(ids.contains("em.reach"), "and the link gets its own")
-    }
-
-    /// Pause is a freeze-EVERYTHING orb: it must not leave one bench
-    /// running while the other is stopped.
-    func testPauseFreezesBothBenches() {
-        let appModel = AppModel()
-        guard let world = ModuleCatalog.all(appModel: appModel)
-            .first(where: { $0.id == EMWorldModule.id }) else {
-            return XCTFail("the E&M world should be in the catalog")
+        for id in ["electrostatics", "circuits", "magnetism",
+                   "kinematics", "pendulums", "gravitylab"] {
+            XCTAssertTrue(ids.contains(id), "\(id) should be an entry")
         }
-        appModel.circuitsModel.isPaused = false
-        appModel.magnetismModel.isPaused = false
-        XCTAssertFalse(world.isPaused())
+        XCTAssertFalse(ids.contains("em"), "the merged E&M world was undone")
+        XCTAssertFalse(ids.contains("mechanics"),
+                       "the merged Mechanics world was undone")
+    }
 
-        world.togglePause()
-        XCTAssertTrue(appModel.circuitsModel.isPaused)
-        XCTAssertTrue(appModel.magnetismModel.isPaused)
-        XCTAssertTrue(world.isPaused())
+    /// Every experience sits behind one of the two doors, and each door
+    /// leads somewhere — the Home Screen's whole promise.
+    func testEveryExperienceHasADoorAndEveryDoorHasExperiences() {
+        let ids = ModuleCatalog.all(appModel: AppModel()).map(\.id)
+        XCTAssertEqual(Set(HubDomain.arcOrder), Set(ids),
+                       "the doors and the catalog have drifted apart")
+        for domain in HubDomain.allCases {
+            XCTAssertFalse(domain.moduleIDs.isEmpty,
+                           "\(domain) is a door onto nothing")
+        }
+    }
 
-        world.togglePause()
-        XCTAssertFalse(appModel.circuitsModel.isPaused)
-        XCTAssertFalse(appModel.magnetismModel.isPaused)
+    /// The link experiments live with Circuit Workshop, which is the
+    /// experience that BRINGS the coil (the one wired pair — the cable
+    /// demonstration cannot exist with a single bench). Magnetism alone
+    /// keeps only its own.
+    func testTheLinkExperimentsBelongToCircuitWorkshop() {
+        let appModel = AppModel()
+        let circuits = ExperimentCatalog
+            .experiments(for: "circuits", appModel: appModel)
+            .map(\.experiment.id)
+        XCTAssertTrue(circuits.contains("circuits.charged"))
+        XCTAssertTrue(circuits.contains("em.reach"),
+                      "the cable's experiments ride with the bench that powers it")
+
+        let magnetism = ExperimentCatalog
+            .experiments(for: "magnetism", appModel: appModel)
+            .map(\.experiment.id)
+        XCTAssertTrue(magnetism.contains("magnetism.snap"))
+        XCTAssertFalse(magnetism.contains("em.reach"),
+                       "alone, the field has no cable to earn these with")
     }
 }

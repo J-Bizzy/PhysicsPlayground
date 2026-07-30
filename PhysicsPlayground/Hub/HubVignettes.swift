@@ -45,9 +45,12 @@ enum HubVignettes {
 
     static func make(for moduleID: String) -> Built {
         switch moduleID {
-        case "mechanics": mechanics()
+        case "electrostatics": fields()
+        case "circuits": circuits()
+        case "magnetism": magnetism()
+        case "kinematics": projectile()
+        case "pendulums": pendulums()
         case "gravitylab": gravity()
-        case "em": em()
         default: fallback()
         }
     }

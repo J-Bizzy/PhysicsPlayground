@@ -20,6 +20,31 @@ import simd
 
 @MainActor
 enum MagnetismModule {
+    static let id = "magnetism"
+
+    static func descriptor(appModel: AppModel) -> ModuleDescriptor {
+        ModuleDescriptor(
+            id: id,
+            title: "Magnetism",
+            blurb: "Carry bar magnets around the room; their looping field reorganises live and they attract, repel, and snap into alignment.",
+            icon: "cylinder.fill",
+            accent: DesignTokens.Palette.magnetismAccent,
+            firstRunHint: "Pinch a magnet and carry it. Bring two close and watch — they pull together head-to-tail, push apart N-to-N, and swing to align. Tap a magnet and its controls unfold: flip its poles to switch attraction for repulsion.",
+            // Opens part-dimmed: the looping lines ARE the module.
+            preferredDimming: 0.35,
+            legend: legendItems,
+            isPaused: { appModel.magnetismModel.isPaused },
+            togglePause: { appModel.magnetismModel.isPaused.toggle() },
+            makeScene: {
+                AnyView(MagnetismSpaceView().environment(appModel.magnetismModel))
+            },
+            makeControls: {
+                AnyView(MagnetismControlsPanel().environment(appModel.magnetismModel))
+            },
+            captureReadings: { readings(appModel: appModel) },
+            reset: { appModel.magnetismModel.reset() }
+        )
+    }
     /// The readings this bench writes into the lab notebook.
     /// Shared with the combined module that now hosts it.
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {

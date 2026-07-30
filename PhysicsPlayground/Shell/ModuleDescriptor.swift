@@ -81,41 +81,41 @@ enum ModuleCatalog {
     /// Every module in the playground, in display order. New modules
     /// register by adding one line here.
     static func all(appModel: AppModel) -> [ModuleDescriptor] {
-        // THREE entries, heading for two: Electricity & Magnetism, and
-        // Mechanics & Energy. Everything else (hub arc, search, progress
-        // totals, the challenge) derives from this list.
+        // SIX experiences behind TWO doors. The Home Screen shows two
+        // domains — Electricity & Magnetism, Mechanics & Energy — and
+        // each door opens onto its three experiences. An experience
+        // gets the room to ITSELF: no arcs, no seats, no shared space.
+        // Everything else (hub terraces, search, progress totals)
+        // derives from this list, grouped by HubDomain.
         //
-        // Cut, in order: Springs (a block on a rail is a ONE-dimensional
-        // oscillator), Elastic Field (a membrane is two-dimensional),
-        // Optics (an optical bench is a line of elements in a row),
-        // Waves (its dot lattice sampled below Nyquist and could not be
-        // fixed at a workable budget), and Wind Tunnel (owner's call —
-        // it belongs to neither of the two labs). None of it is deleted:
-        // each sits in Archive/ with its tests, the physics stays in
-        // PhysicsCore and stays tested, and each returns with one line
-        // here plus its HubDomains entry.
+        // This list has now been burned THREE times, and the third burn
+        // taught the real lesson. Fields and Oscillators died as
+        // pickers (a segmented control hidden in the window panel made
+        // each second half unreachable). The 2026-07-30 worlds died of
+        // GEOMETRY: standing three benches in one room pushed every
+        // bench a step out of reach, and the orrery proved outright
+        // impossible — the pendulum station's diagonal (2.65 m) is
+        // wider than the whole Mars–Jupiter shell (1.84 m), so no Sun
+        // position existed anywhere. See DECISIONS.md. The rule that
+        // survives all three: choosing belongs at the FRONT DOOR, the
+        // most discoverable surface in the app — never in a module's
+        // window panel, and not by cramming apparatus into one room.
         //
-        // A WORD ON MERGERS, because this list has been burned twice.
-        // Fields and Oscillators were once merged, and both mergers were
-        // undone: each hid its second half behind a bench picker that
-        // lived only in the window's control panel, and the app's
-        // controls had moved into spatial pods long ago, so Magnetism
-        // and Springs became unreachable. A module you cannot find is
-        // not a module.
+        // The one exception is wiring, not layout: an experience may
+        // bring a partner bench it is physically cabled to (Circuit
+        // Workshop's inductor drives a coil standing in a magnetic
+        // field). Co-presence survives exactly where a demonstration
+        // cannot exist without it, and nowhere else.
         //
-        // The E&M world is a merger that does not do that. Its three
-        // benches — circuits, magnets, charges — are not three modes of
-        // one entry; they stand in the room AT THE SAME TIME, all three
-        // solving, with a cable running from the circuit's inductor to a
-        // coil in the magnetic field. One of them is FOCUSED at a time,
-        // which is emphasis and not a picker: the others stay built,
-        // live, and one tap from attention. See StationFocus for the
-        // four properties that keep that distinction real, and
-        // EMStationLayout for the geometry that keeps the benches out of
-        // each other.
+        // Cut and archived, each returning with one line here plus its
+        // HubDomains entry: Springs, Elastic Field, Optics, Waves,
+        // Wind Tunnel. Physics stays in PhysicsCore, tested.
         [
-            EMWorldModule.descriptor(appModel: appModel),
-            MechanicsWorldModule.descriptor(appModel: appModel),
+            ElectromagnetismModule.descriptor(appModel: appModel),
+            CircuitsModule.descriptor(appModel: appModel),
+            MagnetismModule.descriptor(appModel: appModel),
+            KinematicsModule.descriptor(appModel: appModel),
+            PendulumsModule.descriptor(appModel: appModel),
             GravityLabModule.descriptor(appModel: appModel),
         ]
     }
