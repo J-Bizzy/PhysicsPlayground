@@ -26,15 +26,26 @@ final class MagnetismModel {
     // MARK: Region (immersive-space coordinates)
 
     nonisolated static let regionCenter = SIMD3<Double>(0, 1.35, -0.7)
-    nonisolated static let regionHalfExtent = 0.85
-    /// Per-axis bounds for the CLAMP. Width and height match the old
-    /// cube, but depth stops 15 cm in FRONT of the user instead of
-    /// 15 cm behind their head: the cube ran to z = +0.15, so a free
-    /// cluster that glided forward ended up floating at the user's ear,
-    /// looming over the control pods at enormous parallax. Magnets
-    /// wander — that is the module working — but they wander in the
-    /// room, not in your face.
-    nonisolated static let regionHalfExtents = SIMD3<Double>(0.85, 0.85, 0.55)
+    /// Isotropic reach, used for what the region DRAWS — the field-line
+    /// tracing radius and the compass grid's span. Narrowed from 0.85
+    /// when this bench became the right-hand station of the E&M world:
+    /// the grid is laid out as a cube of this span, so at 0.85 the
+    /// needles reached across the world's centre line and into the
+    /// circuit bench. See EMStationLayout.
+    nonisolated static let regionHalfExtent = 0.72
+    /// Per-axis bounds for the CLAMP. Height matches the old cube, but
+    /// depth stops 15 cm in FRONT of the user instead of 15 cm behind
+    /// their head: the cube ran to z = +0.15, so a free cluster that
+    /// glided forward ended up floating at the user's ear, looming over
+    /// the control pods at enormous parallax. Magnets wander — that is
+    /// the module working — but they wander in the room, not in your
+    /// face.
+    ///
+    /// Width is narrower than height for a second reason: this bench
+    /// now shares the room with the circuit bench, and a magnet free to
+    /// glide 0.85 m off centre could glide out of its own station and
+    /// into the other one. EMStationLayoutTests enforces the clearance.
+    nonisolated static let regionHalfExtents = SIMD3<Double>(0.62, 0.85, 0.55)
     nonisolated static let regionFloor = 0.35
     /// Visual length of a bar magnet (m); also the touching distance.
     nonisolated static let magnetLength = 0.16

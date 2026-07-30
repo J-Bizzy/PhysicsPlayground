@@ -158,8 +158,39 @@ enum ExperimentCatalog {
         ]
     }
 
-    /// The spring bench's experiments, folded into the merged
-    /// Oscillators module's list.
+    /// The experiments that exist ONLY because the two benches share a
+    /// room. Each one needs both halves of the world at once, which is
+    /// precisely what neither module could ask for while they were
+    /// separate entries a hub apart.
+    private static func linkExperiments(appModel: AppModel)
+    -> [(experiment: Experiment, isMet: () -> Bool)] {
+        let circuits = appModel.circuitsModel
+        let magnetism = appModel.magnetismModel
+        return [
+            (Experiment(id: "em.powered", title: "Electromagnet",
+                        detail: "Drive the coil from your own circuit — a current in a loop of wire IS a magnet.",
+                        step: "Switch the electromagnet on in this window, then drag an inductor off the tray and wire it into the live loop. A cable runs across the room to the coil."),
+             { magnetism.electromagnetOn && abs(circuits.inductorCurrent) > 0.01 }),
+
+            (Experiment(id: "em.reach", title: "Action at a distance",
+                        detail: "Push a bar magnet around using nothing but the current in your circuit.",
+                        step: "With the coil powered, carry a bar magnet close to it — or carry the coil to the magnets — until the coil's field is what's moving them."),
+             {
+                 // The honest test is the force the coil actually
+                 // exerts, not proximity: a dead coil sitting next to a
+                 // magnet must not count.
+                 guard let coil = magnetism.electromagnet else { return false }
+                 return magnetism.magnets.contains {
+                     simd_length(MagneticField.netForce(on: $0, from: [coil])) > 1e-4
+                 }
+             }),
+
+            (Experiment(id: "em.faraday", title: "Run it backwards",
+                        detail: "Make the coil generate instead of consume — ε = −N dΦ/dt.",
+                        step: "With the coil on, sweep a bar magnet through it. Watch the coil EMF in this window jump while the magnet MOVES, and fall to zero the moment you hold it still."),
+             { abs(magnetism.inducedEMF) > 0.001 }),
+        ]
+    }
 
     static func experiments(for moduleID: String, appModel: AppModel)
     -> [(experiment: Experiment, isMet: () -> Bool)] {
@@ -191,7 +222,7 @@ enum ExperimentCatalog {
                      $0.status == .flying && !$0.wasThrown
                  } }),
             ]
-        case "circuits":
+        case "em":
             let model = appModel.circuitsModel
             return [
                 (Experiment(id: "circuits.twoBulbs", title: "Double glow",
@@ -221,8 +252,8 @@ enum ExperimentCatalog {
                          && abs(model.readouts[component.id]?.amps ?? 0) > 0.005
                          && abs(model.readouts[component.id]?.amps ?? 0) < 0.03 } }),
             ]
-        case "magnetism":
-            return magnetismExperiments(appModel.magnetismModel)
+            + magnetismExperiments(appModel.magnetismModel)
+            + linkExperiments(appModel: appModel)
         case "pendulums":
             let model = appModel.pendulumsModel
             return [

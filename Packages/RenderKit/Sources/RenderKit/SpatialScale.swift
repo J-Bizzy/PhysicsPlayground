@@ -150,5 +150,67 @@ public extension View {
                     .onEnded { _ in rig.endGesture() }
             )
     }
+
+    /// The same gesture for a scene holding MORE THAN ONE apparatus.
+    ///
+    /// `spatialScale(_:)` targets any entity, so two of them stacked on
+    /// one view both fire on every two-handed pinch — grab the circuit
+    /// bench and the magnets across the room would swell with it. Here
+    /// the pinched entity chooses: `route` walks whatever was hit up to
+    /// the station that owns it and returns that station's rig, and only
+    /// that rig moves.
+    ///
+    /// `rigs` is every rig the scene owns. A gesture that ends is ended
+    /// on all of them rather than on the re-resolved one — if the hands
+    /// drift off the entity they started on, re-resolving would leave
+    /// the original rig stuck mid-gesture, with its committed scale
+    /// never catching up to the live one. `endGesture()` on a rig that
+    /// is not gesturing is already a no-op, so the sweep is free.
+    func spatialScale(
+        rigs: [SpatialScaleRig],
+        routing route: @escaping (Entity) -> SpatialScaleRig?
+    ) -> some View {
+        self
+            .simultaneousGesture(
+                MagnifyGesture()
+                    .targetedToAnyEntity()
+                    .onChanged { value in
+                        route(value.entity)?
+                            .updateMagnification(Float(value.magnification))
+                    }
+                    .onEnded { _ in rigs.forEach { $0.endGesture() } }
+            )
+            .simultaneousGesture(
+                RotateGesture3D(constrainedToAxis: .y)
+                    .targetedToAnyEntity()
+                    .onChanged { value in
+                        let rotation = value.rotation
+                        let angle = Float(rotation.angle.radians)
+                        let sign: Float = rotation.axis.y < 0 ? -1 : 1
+                        route(value.entity)?.updateRotation(radians: angle * sign)
+                    }
+                    .onEnded { _ in rigs.forEach { $0.endGesture() } }
+            )
+    }
+}
+
+public extension Entity {
+    /// The nearest ancestor (starting with self) that `test` accepts.
+    /// The scene's gestures arrive on whatever collider was hit — a
+    /// terminal, a petal, a magnet's halo — so every routing decision
+    /// in a multi-apparatus scene starts by walking up to the owner.
+    func nearestAncestor(where test: (Entity) -> Bool) -> Entity? {
+        var current: Entity? = self
+        while let candidate = current {
+            if test(candidate) { return candidate }
+            current = candidate.parent
+        }
+        return nil
+    }
+
+    /// Whether `ancestor` is this entity or anywhere above it.
+    func isDescendant(of ancestor: Entity) -> Bool {
+        nearestAncestor { $0 === ancestor } != nil
+    }
 }
 

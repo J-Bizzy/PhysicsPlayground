@@ -49,9 +49,8 @@ enum HubVignettes {
         case "kinematics": projectile()
         case "gravitylab": gravity()
         case "windtunnel": windTunnel()
-        case "circuits": circuits()
+        case "em": em()
         case "pendulums": pendulums()
-        case "magnetism": magnetism()
         default: fallback()
         }
     }
@@ -448,6 +447,61 @@ enum HubVignettes {
             let glow = 0.75 + 0.25 * Float(sin(time * 2.1))
             halo.scale = SIMD3(repeating: 0.85 + glow * 0.3)
             halo.components.set(OpacityComponent(opacity: glow * 0.55))
+        }
+    }
+
+    // MARK: E&M — the loop and the magnets, on one cable
+
+    /// The merged world's miniature: the circuit loop on the left, the
+    /// magnet pair on the right, and the feed line between them with
+    /// electrons crossing it.
+    ///
+    /// Composed from the two benches' own vignettes rather than drawn
+    /// afresh — the card should promise exactly the two things in the
+    /// room, and the cable is what makes it one exhibit instead of two
+    /// sitting near each other.
+    private static func em() -> Built {
+        let root = Entity()
+
+        let bench = circuits()
+        let field = magnetism()
+        bench.entity.position.x = -0.105
+        field.entity.position.x = 0.115
+        root.addChild(bench.entity)
+        root.addChild(field.entity)
+
+        // A slack cable from the loop's right edge to under the
+        // magnets, sagging the way the real one does.
+        let from = SIMD3<Float>(-0.105 + 0.062, -0.010, 0)
+        let to = SIMD3<Float>(0.115, -0.030, 0)
+        let control = (from + to) / 2 - SIMD3<Float>(0, 0.055, 0)
+        func onCable(_ t: Float) -> SIMD3<Float> {
+            let u = 1 - t
+            return u * u * from + 2 * u * t * control + t * t * to
+        }
+        if let cable = line((0...24).map { onCable(Float($0) / 24) },
+                            radius: 0.0018, DesignTokens.Palette.copperUI) {
+            root.addChild(cable)
+        }
+
+        var beads: [ModelEntity] = []
+        for _ in 0..<5 {
+            let bead = ModelEntity(
+                mesh: .generateSphere(radius: 0.0030),
+                materials: [Materials.energized(
+                    DesignTokens.Palette.electronUI, glow: 0.9)])
+            root.addChild(bead)
+            beads.append(bead)
+        }
+
+        return Built(entity: root) { time in
+            bench.animate(time)
+            field.animate(time)
+            for (index, bead) in beads.enumerated() {
+                let t = Float((time * 0.14 + Double(index) / Double(beads.count))
+                    .truncatingRemainder(dividingBy: 1))
+                bead.position = onCable(t)
+            }
         }
     }
 

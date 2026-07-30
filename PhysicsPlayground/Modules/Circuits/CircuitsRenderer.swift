@@ -1174,6 +1174,29 @@ final class CircuitsRenderer {
     /// stop dead. That is the lesson, not a bug.
     private static let trueSpeedGain = 1.0 / ChargeTransport.speedOfLight / 0.66
 
+    /// How fast to slide electron beads along a conductor, in display
+    /// metres per second, signed so they run AGAINST the conventional
+    /// current.
+    ///
+    /// TWO SPEEDS, and only one of them is true. The default is the
+    /// usual pretty lie every circuit animation tells: a rate picked to
+    /// look like flow. True-speed mode replaces it with the real drift
+    /// scaled by the SAME factor the field front is scaled by, so the
+    /// ratio you see is the ratio that exists — which means the
+    /// electrons stop dead. That is the lesson, not a bug.
+    ///
+    /// Shared with the E&M world's feed line, which carries the bench's
+    /// current across the room to the electromagnet. The beads on that
+    /// span have to move at exactly the rate the beads on the bench's
+    /// own wires do, or the eye reads the coil as a separate machine
+    /// rather than the far end of one circuit.
+    static func electronDisplaySpeed(current: Double, model: CircuitsModel) -> Double {
+        if model.trueSpeedMode {
+            return model.driftSpeed * trueSpeedGain * (current > 0 ? -1 : 1)
+        }
+        return min(0.03 + 0.5 * abs(current), 0.35) * (current > 0 ? -1 : 1)
+    }
+
     private let fieldFront = ModelEntity(
         mesh: .generateSphere(radius: 0.012),
         materials: [UnlitMaterial(color: UIColor(
@@ -1298,20 +1321,7 @@ final class CircuitsRenderer {
 
         let length = Double(simd_distance(a, b))
         let dots = min(max(Int(length / 0.045), 2), 9)
-        // Electrons drift against conventional current.
-        //
-        // TWO SPEEDS, and only one of them is true. The default is the
-        // usual pretty lie every circuit animation tells: a rate picked
-        // to look like flow. True-speed mode replaces it with the real
-        // drift scaled by the SAME factor the field front is scaled by,
-        // so the ratio you see is the ratio that exists — which means
-        // the electrons stop dead. That is the lesson, not a bug.
-        let speed: Double
-        if model.trueSpeedMode {
-            speed = model.driftSpeed * Self.trueSpeedGain * (current > 0 ? -1 : 1)
-        } else {
-            speed = min(0.03 + 0.5 * abs(current), 0.35) * (current > 0 ? -1 : 1)
-        }
+        let speed = Self.electronDisplaySpeed(current: current, model: model)
         if !model.isPaused {
             wirePhases[key] = ((wirePhases[key] ?? 0)
                 + speed / max(length, 0.05) * dt).truncatingRemainder(dividingBy: 1)

@@ -14,6 +14,17 @@ The dependency points one way only. **PhysicsCore never imports RealityKit or Sw
 
 Every lab is a `ModuleDescriptor`: a catalog card, `makeControls`/`makeScene`, and shared closures (`isPaused`/`togglePause`, `reset`, `captureReadings`). The shell renders all other chrome identically by construction — a module supplies only its physics and its scene. Four files per module (`<Name>Model`, `<Name>Module`, `<Name>Renderer`, `<Name>SpaceView`), registered with one line in `ModuleCatalog.all`.
 
+### Multi-station modules
+
+One module may host more than one apparatus **standing in the room together** — `Modules/EMWorld` is the pattern. Each bench keeps its own model, renderer, and interior coordinates untouched; the world composes them:
+
+- **`EMStationLayout`** owns the geometry — a native anchor, a seat on the arc, and a bounding volume per station. Placement is a constant translation of each station's display root, which is safe because every grab in this app moves a body by hand *displacement*. Station volumes must stay disjoint, and each bench's clamps and grids must stay inside its own station; both are enforced by `EMStationLayoutTests`, not by inspection.
+- **A station type** (`EMBenchStation`, `EMFieldStation`) owns one apparatus's renderer, zoom rig, and drag state, and answers `handleTap`/`dragChanged`/`dragEnded`.
+- **The world view** runs one `RealityView`, one `SceneEvents.Update` tick, and routes gestures by walking the hit entity up to its owning station root. Use `spatialScale(rigs:routing:)`, never `spatialScale(_:)` — the latter targets any entity, so two of them would zoom both stations at once.
+- **Side furniture hangs outboard** (`EMStationLayout.outboard`): flanks that were free when a bench owned the room now face each other.
+
+The bar for merging modules is in `DECISIONS.md` (2026-07-30) and is absolute: both halves must be simultaneously present. If the user has to pick which half exists, it is a picker, and this app has already undone two mergers that were.
+
 ## Conventions
 
 - **Room-scale only, always.** No tables, planes, or miniature dioramas. This has regressed multiple times — don't reintroduce it.

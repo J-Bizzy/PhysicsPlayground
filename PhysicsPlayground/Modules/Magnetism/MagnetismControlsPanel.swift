@@ -44,20 +44,10 @@ struct MagnetismControlsPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            CollapsedSection("Electromagnet") {
-                Toggle("Electromagnet coil", isOn: $model.electromagnetOn)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("A coil whose current comes LIVE from the Circuit Workshop bench")
-                if self.model.electromagnetOn {
-                    Text("Its current is whatever the Circuit Workshop's inductor carries right now. Build a loop over there, open its switch — this coil dies.")
-                        .font(DesignTokens.TypeScale.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("moment \(self.model.electromagnetMoment, specifier: "%.2f") A·m²")
-                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                        .foregroundStyle(DesignTokens.Palette.magnetismAccent)
-                }
-            }
+            // The electromagnet's switch and readouts are NOT here any
+            // more. The coil is the join between this bench and the
+            // circuit bench, so it belongs to neither — it lives in the
+            // merged panel's own "The link" section, between the two.
 
             CollapsedSection("Display") {
                 Toggle("Field lines", isOn: $model.showFieldLines)
@@ -75,26 +65,8 @@ struct MagnetismControlsPanel: View {
                 Text("Carry the hand compass through the field — its needle and this number follow B.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
-
-                // Faraday's law was the only quantity in this app being
-                // computed every frame and shown to nobody — ε = −N dΦ/dt
-                // reached the user as a filament's brightness and nothing
-                // else. Induction is the one law here you cannot infer
-                // from a still image, so it needs a number that MOVES.
-                if self.model.electromagnetOn {
-                    Text("Coil EMF \(self.model.inducedEMF * 1000, specifier: "%.2f") mV")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                        .foregroundStyle(DesignTokens.Palette.magnetismAccent)
-                    Text("ε = −N dΦ/dt over 400 turns. Hold a magnet still inside the coil and it falls to zero — only *change* induces.")
-                        .font(DesignTokens.TypeScale.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text("Coil EMF needs the electromagnet — switch it on above, then wave a magnet through it.")
-                        .font(DesignTokens.TypeScale.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                // Induced EMF reads out in "The link" section above,
+                // beside the coil switch that makes it meaningful.
             }
         }
     }

@@ -26,7 +26,10 @@ final class ExperimentsTests: XCTestCase {
 
     func testCircuitExperimentPredicateReadsTheModel() {
         let appModel = AppModel()
-        let entries = ExperimentCatalog.experiments(for: "circuits", appModel: appModel)
+        // The bench's experiments live under the merged E&M world now;
+        // their own ids ("circuits.charged") are unchanged, so recorded
+        // progress survives the merge.
+        let entries = ExperimentCatalog.experiments(for: "em", appModel: appModel)
         let charged = entries.first { $0.experiment.id == "circuits.charged" }!
         XCTAssertFalse(charged.isMet(), "nothing charged on the starter loop")
 

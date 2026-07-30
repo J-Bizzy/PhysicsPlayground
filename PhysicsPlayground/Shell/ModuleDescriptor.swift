@@ -81,39 +81,37 @@ enum ModuleCatalog {
     /// Every module in the playground, in display order. New modules
     /// register by adding one line here.
     static func all(appModel: AppModel) -> [ModuleDescriptor] {
-        // NINE modules, not eleven.
-        //
-        // Electric Fields and Magnetism were the same experience with
-        // different math behind the line; Pendulums and Springs were one
-        // chapter split in two. Merging each pair into a module with two
-        // benches makes the comparison the point instead of hiding it —
-        // and leaves every remaining entry with a reason to exist that
-        // no other entry already covers.
-        // SIX labs. Springs, Elastic Field, and Optics are cut: a block
-        // on a rail is a ONE-dimensional oscillator, a membrane is
+        // SIX entries. Springs, Elastic Field, and Optics are cut: a
+        // block on a rail is a ONE-dimensional oscillator, a membrane is
         // two-dimensional, and an optical bench is a line of elements in
-        // a row — none of them earn a headset. Waves is BACK, rebuilt: its
-        // silence is a set of 3-D surfaces you walk between. Their code
-        // and physics stay on disk; each returns with one line here.
+        // a row — none of them earn a headset. Waves is cut too. Their
+        // code and physics stay on disk, not deleted; each returns with
+        // one line here plus its HubDomains entry. Everything else (hub
+        // arc, search, progress totals, the challenge) derives from
+        // this list.
         //
-        // not deleted — each returns with one line here plus its
-        // HubDomains entry. Everything else (hub arc, search, progress
-        // totals, the challenge) derives from this list.
+        // A WORD ON MERGERS, because this list has been burned twice.
+        // Fields and Oscillators were once merged, and both mergers were
+        // undone: each hid its second half behind a bench picker that
+        // lived only in the window's control panel, and the app's
+        // controls had moved into spatial pods long ago, so Magnetism
+        // and Springs became unreachable. A module you cannot find is
+        // not a module.
         //
-        // The Fields and Oscillators MERGERS are undone. Each merged
-        // module hid its second half behind a bench picker that lived
-        // only in the window's control panel — and the app's controls
-        // moved into spatial pods long ago, so Magnetism and Springs
-        // were effectively unreachable. A module you cannot find is not
-        // a module; four standalone entries put all four back on the
-        // shelf where they can be seen.
+        // The E&M world is a merger that does not do that. Circuits and
+        // Magnetism are not two modes of one entry — they are two
+        // benches standing in the room AT THE SAME TIME, on opposite
+        // sides of the user, with a cable between them carrying the
+        // circuit's current to a coil in the magnetic field. There is
+        // nothing to pick and nothing to find, which is the whole
+        // difference. See EMStationLayout for the geometry that keeps
+        // them out of each other.
         [
             ElectromagnetismModule.descriptor(appModel: appModel),
-            MagnetismModule.descriptor(appModel: appModel),
+            EMWorldModule.descriptor(appModel: appModel),
             KinematicsModule.descriptor(appModel: appModel),
             GravityLabModule.descriptor(appModel: appModel),
             WindTunnelModule.descriptor(appModel: appModel),
-            CircuitsModule.descriptor(appModel: appModel),
             PendulumsModule.descriptor(appModel: appModel),
         ]
     }

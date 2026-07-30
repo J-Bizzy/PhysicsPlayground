@@ -1,10 +1,17 @@
 //
 //  MagnetismModule.swift
-//  Physics Playground — Magnetism module
+//  Physics Playground — Magnetism bench
 //
-//  Catalog registration for the magnetism sandbox: descriptor, legend,
-//  first-run hint, and the real-world story. The magnetic twin of Electric
-//  Fields — bar magnets whose looping field fills the room in 3D.
+//  What the magnetic bench contributes to the catalog: its legend and
+//  its notebook readings. Bar magnets whose looping field fills the
+//  room in 3D.
+//
+//  This is NOT a catalog entry any more. Magnetism is the right-hand
+//  station of the merged E&M world (EMWorldModule) rather than a module
+//  of its own — a coil carrying a current is a magnet, and keeping the
+//  coil in one room and the current in another made the app's single
+//  best demonstration impossible to see. The bench's model, renderer,
+//  panel, and physics are all unchanged; only its front door moved.
 //
 
 import SwiftUI
@@ -13,32 +20,6 @@ import simd
 
 @MainActor
 enum MagnetismModule {
-    static let id = "magnetism"
-
-    static func descriptor(appModel: AppModel) -> ModuleDescriptor {
-        ModuleDescriptor(
-            id: id,
-            title: "Magnetism",
-            blurb: "Carry bar magnets around the room; their looping field reorganises live and they attract, repel, and snap into alignment.",
-            icon: "cylinder.fill",
-            accent: DesignTokens.Palette.magnetismAccent,
-            firstRunHint: "Pinch a magnet and carry it. Bring two close and watch — they pull together head-to-tail, push apart N-to-N, and swing to align. Tap a magnet and its controls unfold: flip its poles to switch attraction for repulsion.",
-            // Opens part-dimmed: same as the electric field: the looping lines are the module.
-            preferredDimming: 0.35,
-            legend: legendItems,
-            isPaused: { appModel.magnetismModel.isPaused },
-            togglePause: { appModel.magnetismModel.isPaused.toggle() },
-            makeScene: {
-                AnyView(MagnetismSpaceView().environment(appModel.magnetismModel))
-            },
-            makeControls: {
-                AnyView(MagnetismControlsPanel().environment(appModel.magnetismModel))
-            },
-            captureReadings: { readings(appModel: appModel) },
-            reset: { appModel.magnetismModel.reset() }
-        )
-    }
-
     /// The readings this bench writes into the lab notebook.
     /// Shared with the combined module that now hosts it.
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {

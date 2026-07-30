@@ -28,7 +28,9 @@ final class GalleryLayoutTests: XCTestCase {
         let counts = Dictionary(uniqueKeysWithValues:
             terraces.map { ($0.domain, $0.moduleIDs.count) })
         XCTAssertEqual(counts[.mechanics], 2)
-        XCTAssertEqual(counts[.electricity], 3)
+        // Two, not three: Circuits and Magnetism are one merged E&M
+        // world now, so the domain lists Electric Fields and "em".
+        XCTAssertEqual(counts[.electricity], 2)
         XCTAssertEqual(counts[.fluidsGravity], 2)
         XCTAssertNil(counts[.waves], "a benched domain builds no terrace")
     }
