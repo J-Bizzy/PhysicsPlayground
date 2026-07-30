@@ -50,7 +50,8 @@ struct EMWorldSpaceView: View {
     var body: some View {
         RealityView { content in
             let bench = EMBenchStation(model: circuits)
-            let field = EMFieldStation(model: magnetism)
+            let field = EMFieldStation(model: magnetism,
+                                       offset: EMStationLayout.offset(.field))
             let charges = EMChargeStation(model: fields)
             let feed = EMFeedLine()
             let focus = appModel.emFocus

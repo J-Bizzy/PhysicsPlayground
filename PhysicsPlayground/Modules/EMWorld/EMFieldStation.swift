@@ -45,8 +45,16 @@ final class EMFieldStation: Station {
 
     var root: Entity { renderer.root }
 
-    init(model: MagnetismModel) {
+    /// Where this apparatus stands relative to where its module
+    /// authored it. Passed in rather than read from a layout table,
+    /// because the station now serves two hosts: the merged world seats
+    /// it on an arc, and Circuit Workshop stands it beside the bench it
+    /// is cabled to.
+    private let displayOffset: SIMD3<Float>
+
+    init(model: MagnetismModel, offset: SIMD3<Float>) {
         self.model = model
+        displayOffset = offset
     }
 
     // MARK: Installation
@@ -108,16 +116,14 @@ final class EMFieldStation: Station {
         renderer.tick(model, viewer: appModel.room.headPosition.map {
             renderer.displayPoint(fromWorld: SIMD3<Float>($0))
         })
-        // Lab placement plus this station's seat on the arc — a pure
-        // display offset, safe because every grab here moves a body by
-        // hand DISPLACEMENT, which a constant translation leaves
-        // untouched.
+        // Lab placement plus this station's seat — a pure display
+        // offset, safe because every grab here moves a body by hand
+        // DISPLACEMENT, which a constant translation leaves untouched.
         //
         // …but the control pods do NOT go with it: the user parked them
         // where they wanted them, and moving the apparatus is not a
         // request to move the controls.
-        renderer.root.position =
-            appModel.labPlacement.offset + EMStationLayout.offset(.field)
+        renderer.root.position = appModel.labPlacement.offset + displayOffset
     }
 
     // MARK: The far end of the circuit

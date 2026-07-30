@@ -30,13 +30,34 @@ enum CircuitsModule {
             accent: DesignTokens.Palette.circuitsAccent,
             firstRunHint: "The loop in front of you is live — pinch the switch lever to break it. Grab parts off the tray and drop them so copper ends nearly touch: they connect themselves. Pull an orange end grip to aim or stretch a part; pinch two copper terminals to wire across a distance; the trash button removes a selected part.",
             legend: legend,
-            isPaused: { appModel.circuitsModel.isPaused },
-            togglePause: { appModel.circuitsModel.isPaused.toggle() },
+            // Pause freezes the PAIR: when the coil is on, the magnetic
+            // field beside the bench is running this bench's current,
+            // and a frozen circuit driving a live magnet would be a
+            // frame of physics that never happened.
+            isPaused: {
+                appModel.circuitsModel.isPaused && appModel.magnetismModel.isPaused
+            },
+            togglePause: {
+                let paused = appModel.circuitsModel.isPaused
+                    && appModel.magnetismModel.isPaused
+                appModel.circuitsModel.isPaused = !paused
+                appModel.magnetismModel.isPaused = !paused
+            },
             makeScene: {
-                AnyView(CircuitsSpaceView().environment(appModel.circuitsModel))
+                AnyView(
+                    CircuitsSpaceView()
+                        .environment(appModel.circuitsModel)
+                        // The wired pair: the magnetic field this bench
+                        // summons when its electromagnet switch is on.
+                        .environment(appModel.magnetismModel)
+                )
             },
             makeControls: {
-                AnyView(CircuitsControlsPanel().environment(appModel.circuitsModel))
+                AnyView(
+                    CircuitsControlsPanel()
+                        .environment(appModel.circuitsModel)
+                        .environment(appModel.magnetismModel)
+                )
             },
             captureReadings: { readings(appModel: appModel) },
             reset: { appModel.circuitsModel.reset() }

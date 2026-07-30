@@ -99,7 +99,68 @@ struct CircuitsControlsPanel: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            CircuitLinkSection()
         }
+    }
+}
+
+/// The one wired pair in the app: switch the coil on and the magnetic
+/// field materialises beside the bench, cabled to the inductor.
+///
+/// This section lives on Circuit Workshop's panel — not Magnetism's —
+/// because the CIRCUIT is what powers it: the coil's moment is
+/// m = N·I·A with I read off this bench, and opening the switch here
+/// is what kills the magnet over there. Magnetism alone has no cable
+/// and no coil; the demonstration cannot exist with one bench, which
+/// is exactly why this experience brings the second one (DECISIONS.md,
+/// 2026-07-30: co-presence survives where it is WIRING, never layout).
+private struct CircuitLinkSection: View {
+    @Environment(CircuitsModel.self) private var circuits
+    @Environment(MagnetismModel.self) private var magnetism
+
+    var body: some View {
+        @Bindable var magnetism = magnetism
+
+        PanelSection("The link") {
+            Toggle("Electromagnet coil", isOn: $magnetism.electromagnetOn)
+                .font(DesignTokens.TypeScale.control)
+                .accessibilityHint("Stands the magnetic field beside the bench and runs a cable to its coil from your inductor")
+
+            if magnetism.electromagnetOn {
+                if hasInductor {
+                    Text("Feed current \(circuits.inductorCurrent, specifier: "%.3f") A")
+                        .font(DesignTokens.TypeScale.control.monospacedDigit())
+                        .foregroundStyle(DesignTokens.Palette.circuitsAccent)
+                    Text("moment \(magnetism.electromagnetMoment, specifier: "%.2f") A·m²  (m = N·I·A, 400 turns)")
+                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                        .foregroundStyle(DesignTokens.Palette.magnetismAccent)
+                    Text("Open the switch and this falls to zero — the cable's electrons stop and the coil stops being a magnet.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    // The coil is on but nothing feeds it. Say why,
+                    // rather than showing a confident 0.000 A.
+                    Label("No inductor on the bench", systemImage: "cable.connector")
+                        .font(DesignTokens.TypeScale.control)
+                        .foregroundStyle(.secondary)
+                    Text("The coil is standing in its field but nothing is driving it. Add an inductor and wire it into a live loop — the cable wakes up.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                Text("Switch the coil on and the magnetic field appears beside the bench, cabled to your inductor — build a loop and your current becomes a magnet.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var hasInductor: Bool {
+        circuits.components.contains { $0.kind == .inductor }
     }
 }
 
