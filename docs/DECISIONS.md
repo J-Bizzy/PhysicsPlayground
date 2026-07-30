@@ -2,6 +2,16 @@
 
 A running log of consequential decisions — architectural, physical, or product — and why they were made. Newest first. One entry per decision.
 
+## 2026-07-30 — Electric Fields becomes the E&M world's centre station, and three footprints become real
+
+**Decision:** `electrostatics` leaves the catalog and becomes `EMChargeStation`, the middle seat of `em`: charges straight ahead, the circuit bench 1.40 m to the left, the magnetic field 1.33 m to the right. The catalog is down to five entries, heading for two. Every experiment id keeps its `field.` prefix, so earned progress survives.
+
+**Context:** A circuit makes a current, a current makes a magnet, and a charge is what both are made of — but the module that drew charges was a separate entry, so the app asserted they were one subject and then made you leave the room to check.
+
+**Consequences, and the honest cost:** Three apparatus want about four metres of width and a room does not have four metres of *arm's reach*. The boxes are axis-aligned so one clear axis suffices, and x is the only axis available — y puts a bench on the floor or the ceiling, and separating in z is what pushed the reserved charges seat out to z = −2.25, out of reach for an apparatus whose whole grammar is drag-a-charge. So the three sit side by side and each station's **centre lands ~1.5 m away, near face ~1.1 m: you turn and take a step.** The alternative was halving the electrostatics volume (capping capacitor plate separation at 0.4 m against a range that goes to 1.0), and the physics was judged worth more than the step. `testEveryStationHasAFaceWithinOneStep` holds the bound.
+
+The bigger finding is that **two of the three footprints were fiction.** `FieldModel.moveCharge` and `moveGaussSurface` clamped only `y` — a charge could be dragged clear across the room — and `CircuitsModel` clamped to a 3 m **sphere**. Alone in a room, both were harmless; with three benches inside 1.4 m of each other, either one parks an object inside a neighbour. Both now clamp to their station (`FieldModel.regionHalfExtents`, `CircuitsModel.buildHalfExtents`), inset by the object's own half-size so a *thing with size* stays inside rather than merely having its centre inside — which is why a charge dragged at the floor now rests its surface on the boundary instead of sinking half-way through it. The generalisable lesson: **co-presence does not create these bugs, it reveals them. A limit nothing was near is a limit nobody tested.** Free-charge drift narrows 0.715 → 0.55 and Gauss radius 0.6 → 0.55 so each still has somewhere to move once inset.
+
 ## 2026-07-30 — Focus is not a picker: emphasis without absence
 
 **Decision:** One station of a world is **focused** at a time — lit, with its panel section open — while the others stand back at `StationEmphasis.dimFloor` (0.40) with their sections folded to a single live readout. Focus follows the hands: any tap or drag landing on a station attends to it **and is forwarded in the same event**, never consumed. It also follows the panel, since opening a section attends to its bench. This amends the entry below, which said both halves must be simultaneously *present*; the amended rule is that both halves must be simultaneously **present, live and reachable**.

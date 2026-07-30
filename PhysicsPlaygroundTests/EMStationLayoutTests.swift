@@ -11,6 +11,7 @@
 //
 
 import XCTest
+import PhysicsCore
 import simd
 @testable import PhysicsPlayground
 
@@ -75,16 +76,36 @@ final class EMStationLayoutTests: XCTestCase {
         }
     }
 
-    /// The two built stations are the ones a user actually stands
-    /// between, so they get the stricter check: separated along x
-    /// specifically, one either side of the centre line.
-    func testBuiltStationsSitOnOppositeSidesOfTheCentreLine() {
+    /// The arc's shape, asserted rather than described: circuits left,
+    /// charges straight ahead, magnets right, in that order along x and
+    /// never overlapping.
+    func testTheStationsRunLeftToRightInTheOrderTheWorldClaims() {
         let bench = EMStationLayout.bounds(.bench)
+        let charges = EMStationLayout.bounds(.charges)
         let field = EMStationLayout.bounds(.field)
-        XCTAssertLessThanOrEqual(bench.max.x, 0,
-                                 "the circuit bench crosses to the right")
-        XCTAssertGreaterThanOrEqual(field.min.x, 0,
-                                    "the magnet field crosses to the left")
+        XCTAssertLessThan(bench.max.x, charges.min.x,
+                          "the circuit bench reaches into the charges")
+        XCTAssertLessThan(charges.max.x, field.min.x,
+                          "the charges reach into the magnetic field")
+    }
+
+    /// Every station has to be worth walking to: its NEAR face within
+    /// reach of a user who takes one step toward it.
+    ///
+    /// This is the invariant the arc was traded for. Keeping all three
+    /// benches at full size means their centres land ~1.5 m out, so the
+    /// bound here is on the near face, not the centre — you turn and
+    /// step, and then the apparatus is under your hands.
+    func testEveryStationHasAFaceWithinOneStep() {
+        // Eye height, standing at the room's origin.
+        let user = SIMD3<Double>(0, 1.5, 0)
+        for station in EMStation.allCases {
+            let (near, _) = EMStationLayout.box(station).distanceRange(from: user)
+            XCTAssertLessThanOrEqual(
+                near, 1.25,
+                "\(station.rawValue) is more than a step away — its nearest "
+                + "face is \(String(format: "%.2f", near)) m from the user")
+        }
     }
 
     // MARK: The clamps and grids that draw inside those boxes
@@ -125,18 +146,100 @@ final class EMStationLayoutTests: XCTestCase {
         }
     }
 
-    // MARK: The reserved seat
+    // MARK: The clamps that back each station's declared box
+    //
+    // Every one of these boxes used to be a promise the apparatus was
+    // trusted to keep. Two of the three were not keeping it: Electric
+    // Fields clamped only `y`, so a charge could be dragged across the
+    // room, and Circuits clamped to a 3 m SPHERE. Alone in a room that
+    // cost nothing. These are the assertions that make the footprints
+    // real.
 
-    func testOnlyTheChargesStationIsUnbuilt() {
-        XCTAssertTrue(EMStation.bench.isBuilt)
-        XCTAssertTrue(EMStation.field.isBuilt)
-        XCTAssertFalse(EMStation.charges.isBuilt,
-                       "Electric Fields is reserved, not built — building "
-                       + "it means giving it a station, not flipping a flag")
+    /// The charges bench's own clamp must not promise more room than
+    /// its station has.
+    func testTheChargeClampMatchesTheChargesStation() {
+        XCTAssertEqual(
+            FieldModel.regionHalfExtents,
+            EMStationLayout.halfExtents(.charges),
+            "FieldModel's clamp and the charges station's box have "
+            + "drifted apart — the layout may not promise a footprint "
+            + "the model does not enforce")
     }
 
-    /// Side furniture hangs outboard so the two benches' flanks don't
-    /// collide across the middle of the world.
+    /// The capacitor is up to a metre wide at full separation. Its
+    /// clamp is inset by its own half-size, so even wide open it stays
+    /// inside — this is the one that would otherwise put a charged
+    /// plate inside the circuit bench.
+    func testTheWidestCapacitorStaysInsideTheChargesStation() {
+        let model = FieldModel()
+        model.plateSeparation = FieldModel.plateSeparationRange.upperBound
+        // Shove it hard at the wall the circuit bench is behind.
+        model.movePlate(1, toWorld: SIMD3(50, 1.35, -0.9))
+        let half = SIMD3(model.plateSeparation / 2,
+                         FieldModel.plateSize / 2, FieldModel.plateSize / 2)
+        assertInsideChargesStation(
+            StationBox(center: model.capacitorCenter, halfExtents: half),
+            "the capacitor at full separation")
+    }
+
+    /// Same for the flux meter, which is a 1.1 m sphere at full radius.
+    func testTheWidestGaussSurfaceStaysInsideTheChargesStation() {
+        let model = FieldModel()
+        model.gaussSurfaceRadius = FieldModel.gaussRadiusRange.upperBound
+        model.moveGaussSurface(to: SIMD3(-50, 1.35, -0.9))
+        assertInsideChargesStation(
+            StationBox(center: model.gaussSurfaceCenter,
+                       halfExtents: SIMD3(repeating: model.gaussSurfaceRadius)),
+            "the Gauss surface at full radius")
+    }
+
+    /// And a dragged charge, which is what a user actually does.
+    func testADraggedChargeCannotLeaveTheChargesStation() {
+        let model = FieldModel()
+        guard let id = model.charges.first?.id else {
+            return XCTFail("a fresh field model should open with charges")
+        }
+        model.moveCharge(id: id, to: SIMD3(-50, 90, 50))
+        guard let moved = model.charges.first(where: { $0.id == id }) else {
+            return XCTFail("the charge vanished")
+        }
+        assertInsideChargesStation(
+            StationBox(center: moved.position,
+                       halfExtents: SIMD3(repeating: FieldModel.chargeContact)),
+            "a charge dragged at the room")
+    }
+
+    private func assertInsideChargesStation(
+        _ box: StationBox, _ what: String,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        // The station's box lives in world coordinates; the model works
+        // in its own, so compare in the model's frame.
+        let station = EMStationLayout.box(.charges)
+            .offset(by: -SIMD3<Double>(EMStationLayout.offset(.charges)))
+        XCTAssertTrue(
+            station.contains(box, tolerance: 1e-6),
+            "\(what) escapes the charges station: "
+            + "\(box.minimum)…\(box.maximum) is not inside "
+            + "\(station.minimum)…\(station.maximum)",
+            file: file, line: line)
+    }
+
+    /// The circuit bench's build volume must sit inside its station too
+    /// — it was a 3 m sphere until the world stood two other benches
+    /// within 1.4 m of it.
+    func testTheBenchBuildVolumeStaysInsideTheBenchStation() {
+        let build = StationBox(center: CircuitsModel.buildCenter,
+                               halfExtents: CircuitsModel.buildHalfExtents)
+        let station = EMStationLayout.box(.bench)
+            .offset(by: -SIMD3<Double>(EMStationLayout.offset(.bench)))
+        XCTAssertTrue(
+            station.contains(build, tolerance: 1e-6),
+            "a circuit part can be dragged outside the bench's station")
+    }
+
+    /// Side furniture hangs outboard so the two flanking benches' sides
+    /// don't collide with the middle of the world.
     func testBuiltStationsFaceTheirFurnitureAwayFromTheCentre() {
         XCTAssertEqual(EMStationLayout.outboard(.bench),
                        EMStationLayout.center(.bench).x < 0 ? -1 : 1)

@@ -17,8 +17,8 @@ Color is **semantic, not decorative**. Two systems coexist, deliberately:
 | Domain | Modules | Accent | Hex |
 |---|---|---|---|
 | Mechanics | kinematics, pendulums | Orange | `#FF9F0A` |
-| Electricity & Magnetism | electrostatics, em | Green | `#30D158` |
-| Waves | waves | Cyan | `#64D2FF` |
+| Electricity & Magnetism | em | Green | `#30D158` |
+| Waves | *(benched — archived 2026-07-29)* | Cyan | `#64D2FF` |
 | Fluids & Gravity | windtunnel, gravitylab | Violet | `#BF5AF2` |
 
 **Where domain accent appears — and nowhere else:**

@@ -34,10 +34,10 @@ enum EMWorldModule {
             id: id,
             title: "Electricity & Magnetism",
             shortTitle: "E&M",
-            blurb: "A live electronics bench on your left and a magnetic field on your right, joined by a cable: build a circuit and watch its current move magnets across the room.",
+            blurb: "Charges, circuits and magnets in one room: place the charges that make a field, build the circuit that moves them, and watch its current turn a coil into a magnet across the room.",
             icon: "bolt.circle.fill",
             accent: DesignTokens.Palette.circuitsAccent,
-            firstRunHint: "Two benches, one room. On your LEFT the circuit is already live — pinch the switch lever to break it, or drag parts off the tray. On your RIGHT, carry the bar magnets and watch their field reorganise. To join them: drop an inductor into the circuit and switch the electromagnet on in this window — a cable appears, and the coil becomes a magnet powered by your loop.",
+            firstRunHint: "Three benches, one room. STRAIGHT AHEAD are the charges — drag one and its field follows. On your LEFT the circuit is already live: pinch the switch lever to break it, or drag parts off the tray. On your RIGHT, carry the bar magnets and watch their field reorganise. Whichever bench you touch comes forward and the others stand back. To join the left and right: drop an inductor into the circuit and switch the electromagnet on in this window — a cable appears, and the coil becomes a magnet powered by your loop.",
             // Both halves need contrast: the magnetic field lines and
             // the electron beads are thin bright things, and a sunlit
             // wall eats them.
@@ -47,19 +47,24 @@ enum EMWorldModule {
             // paused only when both benches are, and pressing it
             // commits both to whichever state that isn't.
             isPaused: {
-                appModel.circuitsModel.isPaused && appModel.magnetismModel.isPaused
+                appModel.circuitsModel.isPaused
+                    && appModel.magnetismModel.isPaused
+                    && appModel.electromagnetismModel.isPaused
             },
             togglePause: {
                 let paused = appModel.circuitsModel.isPaused
                     && appModel.magnetismModel.isPaused
+                    && appModel.electromagnetismModel.isPaused
                 appModel.circuitsModel.isPaused = !paused
                 appModel.magnetismModel.isPaused = !paused
+                appModel.electromagnetismModel.isPaused = !paused
             },
             makeScene: {
                 AnyView(
                     EMWorldSpaceView()
                         .environment(appModel.circuitsModel)
                         .environment(appModel.magnetismModel)
+                        .environment(appModel.electromagnetismModel)
                 )
             },
             makeControls: {
@@ -67,12 +72,14 @@ enum EMWorldModule {
                     EMWorldControlsPanel()
                         .environment(appModel.circuitsModel)
                         .environment(appModel.magnetismModel)
+                        .environment(appModel.electromagnetismModel)
                 )
             },
             captureReadings: { readings(appModel: appModel) },
             reset: {
                 appModel.circuitsModel.reset()
                 appModel.magnetismModel.reset()
+                appModel.electromagnetismModel.reset()
             }
         )
     }
@@ -80,7 +87,8 @@ enum EMWorldModule {
     /// Both benches' readings, plus the one number that belongs to
     /// neither of them alone.
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
-        var rows = CircuitsModule.readings(appModel: appModel)
+        var rows = ElectromagnetismModule.readings(appModel: appModel)
+        rows.append(contentsOf: CircuitsModule.readings(appModel: appModel))
         rows.append(contentsOf: MagnetismModule.readings(appModel: appModel))
         let current = appModel.circuitsModel.inductorCurrent
         if appModel.magnetismModel.electromagnetOn {
@@ -96,6 +104,15 @@ enum EMWorldModule {
     /// actually moving in front of them, ordered left bench, cable,
     /// right bench.
     private static let legend: [LegendItem] = [
+        LegendItem(
+            swatch: .fill(DesignTokens.Palette.positive),
+            text: "Positive charge (and a magnet's N pole) — red is + throughout"),
+        LegendItem(
+            swatch: .fill(DesignTokens.Palette.negative),
+            text: "Negative charge (and a magnet's S pole) — blue is − throughout"),
+        LegendItem(
+            swatch: .line(DesignTokens.Palette.fieldLine),
+            text: "Electric field lines run from positive to negative"),
         LegendItem(
             swatch: .fill(Color(uiColor: DesignTokens.Palette.copperUI)),
             text: "Copper terminals — pinch one, then another, to wire them; pinch a wire to remove it"),

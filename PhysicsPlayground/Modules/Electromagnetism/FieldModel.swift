@@ -39,6 +39,36 @@ final class FieldModel {
     /// Sample points never go below this height (no arrows in the floor).
     nonisolated static let regionFloor = 0.05
 
+    /// How far anything belonging to this apparatus may get from
+    /// `regionCenter` — the station's walls.
+    ///
+    /// This bench had no lateral limit at all until it became the
+    /// middle seat of the E&M world: `moveCharge` and
+    /// `moveGaussSurface` clamped only `y`, so a charge could be
+    /// dragged to the far side of the room. Alone in a room that cost
+    /// nothing. With a circuit bench 1.4 m to the left and a magnetic
+    /// field 1.33 m to the right, an unclamped drag ends up inside a
+    /// neighbour's apparatus, which is the exact silent failure
+    /// co-presence exists to make impossible.
+    ///
+    /// Kept in step with `EMStationLayout.halfExtents(.charges)` by
+    /// `EMStationLayoutTests`; the layout may not promise a footprint
+    /// the model does not enforce.
+    nonisolated static let regionHalfExtents = SIMD3<Double>(0.62, 1.20, 0.62)
+
+    /// Clamps a point into the station, keeping `inset` of clearance on
+    /// every side so a thing WITH SIZE — a plate, a Gauss sphere —
+    /// stays inside rather than merely having its centre inside.
+    nonisolated static func clampToStation(
+        _ point: SIMD3<Double>, inset: SIMD3<Double> = .zero
+    ) -> SIMD3<Double> {
+        let half = simd_max(regionHalfExtents - simd_abs(inset),
+                            SIMD3(repeating: 0.01))
+        var clamped = simd_clamp(point, regionCenter - half, regionCenter + half)
+        clamped.y = max(clamped.y, floorClearance)
+        return clamped
+    }
+
     nonisolated static let defaultMagnitude = 1e-6  // 1 µC
     nonisolated static let floorClearance = 0.15    // charges can't be dragged below this height
 
@@ -110,7 +140,9 @@ final class FieldModel {
     /// The disc's facing direction (ignored by the bubble).
     var gaussSurfaceNormal = SIMD3<Double>(0, 0, 1)
     var gaussSurfaceRadius = 0.22
-    nonisolated static let gaussRadiusRange = 0.08...0.6
+    /// Capped just under the station's half-width (0.62) so the bubble
+    /// still has somewhere to move once it is inset by its own radius.
+    nonisolated static let gaussRadiusRange = 0.08...0.55
 
     /// Measure by LOOKING: the Gauss surface rides the head ray, so
     /// turning to face part of the field carries the flux meter there
@@ -128,9 +160,13 @@ final class FieldModel {
     }
 
     func moveGaussSurface(to point: SIMD3<Double>) {
-        var clamped = point
-        clamped.y = max(clamped.y, Self.regionFloor)
-        gaussSurfaceCenter = clamped
+        // Inset by the surface's own radius: the flux meter is a metre-
+        // wide sphere at full size, and a centre that is merely inside
+        // the station still puts half the bubble in the circuit bench.
+        // Moving it near a wall therefore stops early rather than
+        // shrinking it — the radius is a measurement, not a decoration.
+        gaussSurfaceCenter = Self.clampToStation(
+            point, inset: SIMD3(repeating: gaussSurfaceRadius))
     }
 
     /// Everything the flux integral depends on. If none of it moved,
@@ -275,9 +311,19 @@ final class FieldModel {
         let separation = min(max(pulled, Self.plateSeparationRange.lowerBound),
                              Self.plateSeparationRange.upperBound)
         plateSeparation = separation
-        capacitorCenter.x = index == 0 ? fixedX - separation / 2 : fixedX + separation / 2
-        capacitorCenter.y = max(world.y, Self.plateSize / 2 + 0.15)
-        capacitorCenter.z = world.z
+        var center = capacitorCenter
+        center.x = index == 0 ? fixedX - separation / 2 : fixedX + separation / 2
+        center.y = max(world.y, Self.plateSize / 2 + 0.15)
+        center.z = world.z
+        // The assembly is separation wide in x and a plate tall and deep
+        // in y/z, so it is clamped by its own half-size. At the widest
+        // gap (1.0 m against a 1.24 m station) that leaves the capacitor
+        // roughly centred, which is where a capacitor belongs — but the
+        // full separation range survives, which is the range that
+        // teaches E = V/d.
+        capacitorCenter = Self.clampToStation(
+            center,
+            inset: SIMD3(separation / 2, Self.plateSize / 2, Self.plateSize / 2))
     }
 
     /// The uniform field between the plates (zero outside them).
@@ -327,7 +373,10 @@ final class FieldModel {
         // Keep the flock from wandering off: drift stays within the
         // region the arrows sample, centred on the charges themselves.
         let centroid = charges.map(\.position).reduce(.zero, +) / Double(charges.count)
-        let bound = Self.regionExtent * 0.55
+        // Narrowed from regionExtent * 0.55 (0.715) when this bench
+        // became the middle seat of a three-station world: a flock that
+        // may spread 1.43 m does not fit a 1.24 m station.
+        let bound = 0.55
 
         var next = charges.map(\.position)
         for j in charges.indices {
@@ -349,11 +398,16 @@ final class FieldModel {
                 velocity *= Self.chargeMaxSpeed / speed
             }
             var position = mover.position + velocity * h
-            position.y = max(position.y, Self.floorClearance)
             position = simd_clamp(position,
                                   centroid - SIMD3(repeating: bound),
                                   centroid + SIMD3(repeating: bound))
-            next[j] = position
+            // The centroid-relative bound keeps the FLOCK together; it
+            // does not keep the flock in the room, because the centroid
+            // drifts with it. The station clamp is what stops a mutually
+            // repelling pair walking into the circuit bench over a
+            // minute of drift.
+            next[j] = Self.clampToStation(
+                position, inset: SIMD3(repeating: Self.chargeContact))
         }
 
         // Contact: spheres can touch but never interpenetrate (which also
@@ -576,9 +630,10 @@ final class FieldModel {
 
     func moveCharge(id: UUID, to position: SIMD3<Double>) {
         guard let index = charges.firstIndex(where: { $0.id == id }) else { return }
-        var clamped = position
-        clamped.y = max(clamped.y, Self.floorClearance)
-        charges[index].position = clamped
+        // Inset by the charge's own contact radius so the sphere stays
+        // inside its station, not just its centre.
+        charges[index].position = Self.clampToStation(
+            position, inset: SIMD3(repeating: Self.chargeContact))
     }
 
     func select(id: UUID) {

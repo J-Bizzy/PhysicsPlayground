@@ -22,17 +22,28 @@ final class GalleryLayoutTests: XCTestCase {
     /// Three terraces now, not four: Waves was archived on 2026-07-29 when
     /// the app narrowed to two labs, so its domain is benched and builds
     /// nothing.
+    /// Derived from `HubDomain`, not written out — the catalog is being
+    /// folded down to two flagship worlds, and a test that hard-codes
+    /// today's counts fails on every phase of that for no reason. What
+    /// is actually worth asserting is the RELATIONSHIP: one terrace per
+    /// domain that has modules, carrying exactly that domain's modules,
+    /// and none for a domain that has been benched.
     func testTerracesFollowTheLiveDomains() {
         let terraces = GalleryLayout.terraces(moduleIDs: allModules)
-        XCTAssertEqual(terraces.count, 3)
+        let live = HubDomain.allCases.filter { !$0.moduleIDs.isEmpty }
+        XCTAssertEqual(terraces.count, live.count)
+
         let counts = Dictionary(uniqueKeysWithValues:
             terraces.map { ($0.domain, $0.moduleIDs.count) })
-        XCTAssertEqual(counts[.mechanics], 2)
-        // Two, not three: Circuits and Magnetism are one merged E&M
-        // world now, so the domain lists Electric Fields and "em".
-        XCTAssertEqual(counts[.electricity], 2)
-        XCTAssertEqual(counts[.fluidsGravity], 2)
-        XCTAssertNil(counts[.waves], "a benched domain builds no terrace")
+        for domain in HubDomain.allCases {
+            if domain.moduleIDs.isEmpty {
+                XCTAssertNil(counts[domain],
+                             "\(domain) is benched and must build no terrace")
+            } else {
+                XCTAssertEqual(counts[domain], domain.moduleIDs.count,
+                               "\(domain)'s terrace lost or gained a module")
+            }
+        }
     }
 
     func testWidthsFollowModuleCounts() {

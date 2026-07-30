@@ -35,12 +35,23 @@ import SwiftUI
 struct EMWorldControlsPanel: View {
     @Environment(CircuitsModel.self) private var circuits
     @Environment(MagnetismModel.self) private var magnetism
+    @Environment(FieldModel.self) private var fields
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
         VStack(spacing: DesignTokens.Panel.sectionSpacing) {
             StationSection(
-                "Circuit bench",
+                EMStation.charges.title,
+                readout: "\(fields.charges.count) charges",
+                accent: DesignTokens.Palette.electromagnetismAccent,
+                isFocused: appModel.emFocus.focused == .charges,
+                focus: { appModel.emFocus.focus(.charges) }
+            ) {
+                FieldControlsPanel()
+            }
+
+            StationSection(
+                EMStation.bench.title,
                 readout: String(format: "%.3f W", circuits.totalSourcePower),
                 accent: DesignTokens.Palette.circuitsAccent,
                 isFocused: appModel.emFocus.focused == .bench,
@@ -52,7 +63,7 @@ struct EMWorldControlsPanel: View {
             EMLinkSection()
 
             StationSection(
-                "Magnetic field",
+                EMStation.field.title,
                 readout: String(format: "%.3f mT", magnetism.centerFieldMilliTesla),
                 accent: DesignTokens.Palette.magnetismAccent,
                 isFocused: appModel.emFocus.focused == .field,

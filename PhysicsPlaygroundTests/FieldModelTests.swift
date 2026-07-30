@@ -81,12 +81,21 @@ final class FieldModelTests: XCTestCase {
                        "magnitude set, sign kept from birth")
     }
 
+    /// Dragged at the floor, a charge stops with its SURFACE resting on
+    /// the station's floor rather than its centre — the clamp insets by
+    /// the charge's contact radius, so the sphere no longer sinks
+    /// half-way through the boundary the way it used to.
     func testMoveChargeClampsAboveFloor() {
         let model = FieldModel()
         let id = model.charges[0].id
         model.moveCharge(id: id, to: SIMD3(0.2, -0.5, -1.0))
-        XCTAssertEqual(model.charges[0].position.y, FieldModel.floorClearance)
-        XCTAssertEqual(model.charges[0].position.x, 0.2)
+        let floor = FieldModel.regionCenter.y - FieldModel.regionHalfExtents.y
+        XCTAssertEqual(model.charges[0].position.y,
+                       floor + FieldModel.chargeContact, accuracy: 1e-9)
+        XCTAssertGreaterThanOrEqual(model.charges[0].position.y,
+                                    FieldModel.floorClearance)
+        // Laterally it is well inside the station, so it is untouched.
+        XCTAssertEqual(model.charges[0].position.x, 0.2, accuracy: 1e-9)
     }
 
     func testMoveChargeMovesOnlyTheTarget() {
@@ -107,11 +116,19 @@ final class FieldModelTests: XCTestCase {
 
     // MARK: Sampling region
 
+    /// "Far away" now means the far corner of this bench's STATION, not
+    /// the far corner of the room: since Electric Fields became the
+    /// middle seat of the E&M world, a charge dragged at the wall stops
+    /// at its own boundary rather than drifting into the circuit bench.
+    /// The property under test is unchanged — the sampling region
+    /// follows the charge wherever the charge is allowed to go.
     func testRegionFollowsChargeDraggedFarAway() {
         let model = FieldModel()
         let id = model.charges[0].id
-        let farAway = SIMD3<Double>(2.0, 1.2, -2.5)
-        model.moveCharge(id: id, to: farAway)
+        model.moveCharge(id: id, to: SIMD3(2.0, 1.2, -2.5))
+        let farAway = model.charges[0].position
+        XCTAssertGreaterThan(simd_distance(farAway, FieldModel.regionCenter), 0.5,
+                             "the drag should still have gone somewhere")
 
         let region = model.samplingRegion
         let lower = region.center - region.extents / 2

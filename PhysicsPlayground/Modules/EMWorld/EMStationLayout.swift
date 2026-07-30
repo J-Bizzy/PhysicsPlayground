@@ -19,10 +19,29 @@
 //  this app moves a body by hand DISPLACEMENT, which a fixed
 //  translation leaves untouched.
 //
-//  The third slot is REAL but unbuilt. The two-lab plan ends with
-//  Electric Fields in this world too, so its seat is reserved and
-//  bounded here rather than discovered later — `isBuilt` is what keeps
-//  it off the arc until its station exists.
+//  ── Why the stations are a step away rather than at arm's length ──
+//
+//  Three apparatus want about four metres of width and a room does not
+//  have four metres of arm's reach. The boxes are axis-aligned, so
+//  clearance on ONE axis is enough, and x is the only axis available:
+//  y would put a station on the floor or the ceiling, and separating in
+//  z pushes a bench two and a quarter metres out — which is where the
+//  charges seat was reserved, and it is out of reach for an apparatus
+//  whose whole grammar is drag-a-charge.
+//
+//  So the three sit side by side in x with the charges in the middle,
+//  and each station's CENTRE lands about 1.5 m away — near face about
+//  1.1 m. You turn and take a step to work at one. That is a real cost,
+//  chosen over the alternative of halving the electrostatics volume
+//  (which would have capped capacitor plate separation at 0.4 m against
+//  a range that goes to 1.0), and it is the cost the focus mechanic
+//  makes legible: the bench you are standing at is lit and the others
+//  stand back, so "which one am I working on" is answered by the room.
+//
+//  The middle seat needs NO offset at all — Electric Fields already
+//  believes it is centred on the world's centre line, so its station is
+//  the one apparatus in this app that stands exactly where its module
+//  put it.
 //
 
 import PhysicsCore
@@ -34,14 +53,19 @@ enum EMStation: String, CaseIterable, Identifiable {
     case bench
     /// The magnetic field volume — right of the user.
     case field
-    /// Electric Fields. Reserved, not yet built (see `isBuilt`).
+    /// Electric Fields — the centre seat, straight ahead.
     case charges
 
     var id: String { rawValue }
 
-    /// Whether this station actually renders today. The reserved seat
-    /// is laid out and bounds-checked but never installed.
-    var isBuilt: Bool { self != .charges }
+    /// What the panel and the legend call this bench.
+    var title: String {
+        switch self {
+        case .bench:   "Circuit bench"
+        case .field:   "Magnetic field"
+        case .charges: "Electric charges"
+        }
+    }
 }
 
 enum EMStationLayout {
@@ -58,15 +82,18 @@ enum EMStationLayout {
         }
     }
 
-    /// Where the station stands in the merged world. The two built
-    /// stations sit symmetrically about the user's centre line at a
-    /// comfortable turn of the head; the reserved seat is centre-rear,
-    /// far enough back that its volume clears both.
+    /// Where the station stands in the merged world: charges straight
+    /// ahead, the circuit bench to the left, the magnetic field to the
+    /// right, all at the same depth. The x values are not chosen for
+    /// looks — they are the nearest seats that clear the neighbouring
+    /// box by the 6 cm margin `EMStationLayoutTests` enforces, so
+    /// pulling either flank inward is a test failure, not a taste
+    /// argument.
     static func center(_ station: EMStation) -> SIMD3<Double> {
         switch station {
-        case .bench:   SIMD3(-0.72, 1.25, -0.90)
-        case .field:   SIMD3(0.72, 1.35, -0.90)
-        case .charges: SIMD3(0, 1.35, -2.25)
+        case .bench:   SIMD3(-1.40, 1.25, -0.90)
+        case .charges: SIMD3(0, 1.35, -0.90)
+        case .field:   SIMD3(1.33, 1.35, -0.90)
         }
     }
 
@@ -78,11 +105,24 @@ enum EMStationLayout {
     /// The field box is wider than its magnet clamp (0.62) because the
     /// compass grid is drawn from `MagnetismModel.regionHalfExtent`
     /// rather than the clamp, and reaches slightly further.
+    ///
+    /// Every one of these is now BACKED by a clamp in the model that
+    /// owns it — `CircuitsModel.buildHalfExtents`,
+    /// `FieldModel.regionHalfExtents`, `MagnetismModel.regionHalfExtents`
+    /// — rather than being a footprint the apparatus was trusted to
+    /// respect. Before co-presence that trust cost nothing; with three
+    /// benches in one room an unclamped drag ends inside a neighbour.
     static func halfExtents(_ station: EMStation) -> SIMD3<Double> {
         switch station {
         case .bench:   SIMD3(0.72, 0.50, 0.38)
+        // Tall on purpose: x is the axis that keeps the stations apart,
+        // so y buys no separation and a short box would only take
+        // working volume away. 1.20 puts the floor of the box exactly
+        // at `FieldModel.floorClearance`, the height charges were
+        // already stopped at — so clamping to the station costs this
+        // bench nothing vertically.
+        case .charges: SIMD3(0.62, 1.20, 0.62)
         case .field:   SIMD3(0.65, 0.85, 0.66)
-        case .charges: SIMD3(0.62, 0.65, 0.60)
         }
     }
 
@@ -104,7 +144,11 @@ enum EMStationLayout {
         switch station {
         case .bench:   -1
         case .field:    1
-        // Centre-rear has no outer flank; its furniture stays put.
+        // The middle seat has no outer flank — both its sides face a
+        // neighbour. It has no side furniture either (its only control
+        // is the per-charge ring, which rides the charge), so nothing
+        // reads this; it answers +1 rather than trapping, because a
+        // layout question should not be able to crash a render.
         case .charges:  1
         }
     }

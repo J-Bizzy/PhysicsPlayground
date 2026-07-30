@@ -508,17 +508,33 @@ final class CircuitsModelTests: XCTestCase {
         let id = model.components.last!.id
         model.move(id: id, to: SIMD3(50, -50, 50))
         let position = model.components.last!.position
-        XCTAssertLessThanOrEqual(
-            simd_distance(position, CircuitsModel.buildCenter),
-            CircuitsModel.buildRadius + 1e-9)
+        assertOnTheBench(position)
         XCTAssertGreaterThanOrEqual(position.y, CircuitsModel.floorMargin - 1e-9)
 
-        // Off-sphere tray drops clamp too.
+        // Off-bench tray drops clamp too.
         model.clearBench()
         model.add(.bulb, at: CircuitsModel.buildCenter + SIMD3(100, 0, 0))
-        XCTAssertLessThanOrEqual(
-            simd_distance(model.components[0].position, CircuitsModel.buildCenter),
-            CircuitsModel.buildRadius + 1e-9)
+        assertOnTheBench(model.components[0].position)
+    }
+
+    /// The bench is a BOX, not the 3 m sphere it was before the E&M
+    /// world stood a magnetic field 1.33 m to its right. A part that
+    /// can be dragged three metres is a part that can be parked inside
+    /// the neighbouring apparatus.
+    private func assertOnTheBench(
+        _ position: SIMD3<Double>,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        let low = CircuitsModel.buildCenter - CircuitsModel.buildHalfExtents
+        let high = CircuitsModel.buildCenter + CircuitsModel.buildHalfExtents
+        for axis in 0..<3 {
+            XCTAssertGreaterThanOrEqual(
+                position[axis], low[axis] - 1e-9,
+                "a part escaped the bench on axis \(axis)", file: file, line: line)
+            XCTAssertLessThanOrEqual(
+                position[axis], high[axis] + 1e-9,
+                "a part escaped the bench on axis \(axis)", file: file, line: line)
+        }
     }
 
     /// Pulling an end grip goes through setWireLength: clamped to the

@@ -44,11 +44,11 @@ enum HubDomain: String, CaseIterable, Identifiable {
     var moduleIDs: [String] {
         switch self {
         case .mechanics: ["kinematics", "pendulums"]
-        // "magnetism" and "circuits" merged into "em" — one world with
-        // both benches in it at once. Electric Fields is the third seat
-        // in that world once its station is built (EMStationLayout
-        // reserves it); until then it stands on its own here.
-        case .electricity: ["electrostatics", "em"]
+        // "circuits", "magnetism" and "electrostatics" are all stations
+        // of "em" now — three benches standing in one room, one of them
+        // focused at a time. The domain has a single entry because the
+        // domain IS the module.
+        case .electricity: ["em"]
         // Waves is archived (2026-07-29, owner's call to focus on two
         // labs). An empty list benches the domain: GalleryLayout simply
         // does not build a terrace for it, so the crescent closes up
@@ -73,8 +73,7 @@ enum HubDomain: String, CaseIterable, Identifiable {
         switch moduleID {
         case "kinematics": "Fire projectiles and bend their arcs with gravity and drag"
         case "pendulums": "Throw a pendulum into a true 3-D orbit above your floor"
-        case "electrostatics": "Place charges and walk through the field they make"
-        case "em": "Wire a circuit on one side of the room and move magnets on the other"
+        case "em": "Place the charges, wire the circuit, and move the magnets its current drives"
         case "waves": "Stand between the silent surfaces two sources carve out of the air"
         case "windtunnel": "Raise a wind indoors and watch the flow find its way around"
         case "gravitylab": "Grow a solar system and hear its orbits as a chord"

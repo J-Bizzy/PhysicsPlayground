@@ -134,6 +134,25 @@ enum ExperimentCatalog {
     }
 
 
+    /// The charges bench's experiments, folded into the E&M world's
+    /// list when Electric Fields became its centre station. The IDs keep
+    /// their `field.` prefix so a player who earned them before the
+    /// merge keeps them.
+    private static func chargeExperiments(_ model: FieldModel)
+    -> [(experiment: Experiment, isMet: () -> Bool)] {
+        [
+            (Experiment(id: "field.dipole", title: "Opposites attract",
+                        detail: "Build a dipole — one positive and one negative charge sharing the field.",
+                        step: "The dipole is already here — if you cleared it, tap Add + and Add −."),
+             { model.charges.contains(where: \.isPositive)
+                 && model.charges.contains(where: { !$0.isPositive }) }),
+            (Experiment(id: "field.crowd", title: "Crowd control",
+                        detail: "Shape the field with six or more charges at once.",
+                        step: "Tap Add + and Add − until six charges share the room, then drag them into a shape."),
+             { model.charges.count >= 6 }),
+        ]
+    }
+
     /// The magnetic bench's experiments, folded into the merged Fields
     /// module's list.
     private static func magnetismExperiments(_ model: MagnetismModel)
@@ -195,19 +214,6 @@ enum ExperimentCatalog {
     static func experiments(for moduleID: String, appModel: AppModel)
     -> [(experiment: Experiment, isMet: () -> Bool)] {
         switch moduleID {
-        case "electrostatics":
-            let model = appModel.electromagnetismModel
-            return [
-                (Experiment(id: "field.dipole", title: "Opposites attract",
-                            detail: "Build a dipole — one positive and one negative charge sharing the field.",
-                            step: "The dipole is already here — if you cleared it, tap Add + and Add −."),
-                 { model.charges.contains(where: \.isPositive)
-                     && model.charges.contains(where: { !$0.isPositive }) }),
-                (Experiment(id: "field.crowd", title: "Crowd control",
-                            detail: "Shape the field with six or more charges at once.",
-                            step: "Tap Add + and Add − until six charges share the room, then drag them into a shape."),
-                 { model.charges.count >= 6 }),
-            ]
         case "kinematics":
             let model = appModel.kinematicsModel
             return [
@@ -253,6 +259,7 @@ enum ExperimentCatalog {
                          && abs(model.readouts[component.id]?.amps ?? 0) < 0.03 } }),
             ]
             + magnetismExperiments(appModel.magnetismModel)
+            + chargeExperiments(appModel.electromagnetismModel)
             + linkExperiments(appModel: appModel)
         case "pendulums":
             let model = appModel.pendulumsModel

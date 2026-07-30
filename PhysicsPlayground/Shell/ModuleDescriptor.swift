@@ -81,7 +81,8 @@ enum ModuleCatalog {
     /// Every module in the playground, in display order. New modules
     /// register by adding one line here.
     static func all(appModel: AppModel) -> [ModuleDescriptor] {
-        // SIX entries. Springs, Elastic Field, and Optics are cut: a
+        // FIVE entries, heading for two. Springs, Elastic Field, and
+        // Optics are cut: a
         // block on a rail is a ONE-dimensional oscillator, a membrane is
         // two-dimensional, and an optical bench is a line of elements in
         // a row — none of them earn a headset. Waves is cut too. Their
@@ -98,16 +99,17 @@ enum ModuleCatalog {
         // and Springs became unreachable. A module you cannot find is
         // not a module.
         //
-        // The E&M world is a merger that does not do that. Circuits and
-        // Magnetism are not two modes of one entry — they are two
-        // benches standing in the room AT THE SAME TIME, on opposite
-        // sides of the user, with a cable between them carrying the
-        // circuit's current to a coil in the magnetic field. There is
-        // nothing to pick and nothing to find, which is the whole
-        // difference. See EMStationLayout for the geometry that keeps
-        // them out of each other.
+        // The E&M world is a merger that does not do that. Its three
+        // benches — circuits, magnets, charges — are not three modes of
+        // one entry; they stand in the room AT THE SAME TIME, all three
+        // solving, with a cable running from the circuit's inductor to a
+        // coil in the magnetic field. One of them is FOCUSED at a time,
+        // which is emphasis and not a picker: the others stay built,
+        // live, and one tap from attention. See StationFocus for the
+        // four properties that keep that distinction real, and
+        // EMStationLayout for the geometry that keeps the benches out of
+        // each other.
         [
-            ElectromagnetismModule.descriptor(appModel: appModel),
             EMWorldModule.descriptor(appModel: appModel),
             KinematicsModule.descriptor(appModel: appModel),
             GravityLabModule.descriptor(appModel: appModel),

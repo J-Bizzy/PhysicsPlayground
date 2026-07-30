@@ -38,10 +38,12 @@ import RenderKit
 struct EMWorldSpaceView: View {
     @Environment(CircuitsModel.self) private var circuits
     @Environment(MagnetismModel.self) private var magnetism
+    @Environment(FieldModel.self) private var fields
     @Environment(AppModel.self) private var appModel
 
     @State private var bench: EMBenchStation?
     @State private var field: EMFieldStation?
+    @State private var charges: EMChargeStation?
     @State private var feed: EMFeedLine?
     @State private var subscription: EventSubscription?
 
@@ -49,17 +51,18 @@ struct EMWorldSpaceView: View {
         RealityView { content in
             let bench = EMBenchStation(model: circuits)
             let field = EMFieldStation(model: magnetism)
+            let charges = EMChargeStation(model: fields)
             let feed = EMFeedLine()
             let focus = appModel.emFocus
 
             bench.install(into: content)
             field.install(into: content)
+            charges.install(into: content)
             // The cable belongs to neither station's frame, so it hangs
             // at the scene root and is given scene-space endpoints.
             content.add(feed.root)
 
-            focus.register(.bench)
-            focus.register(.field)
+            for station in EMStation.allCases { focus.register(station) }
 
             #if DEBUG
             // `-emLink 1` stages the world's whole point — a driven
@@ -83,11 +86,13 @@ struct EMWorldSpaceView: View {
 
             subscription = content.subscribe(to: SceneEvents.Update.self) { event in
                 Self.tick(dt: event.deltaTime, bench: bench, field: field,
-                          feed: feed, focus: focus, appModel: appModel)
+                          charges: charges, feed: feed, focus: focus,
+                          appModel: appModel)
             }
 
             self.bench = bench
             self.field = field
+            self.charges = charges
             self.feed = feed
         }
         // Routed, not stacked: `spatialScale(_:)` targets any entity, so
@@ -105,15 +110,18 @@ struct EMWorldSpaceView: View {
                     case .field:
                         attend(.field)
                         _ = field?.handleTap(value.entity)
+                    case .charges:
+                        attend(.charges)
+                        _ = charges?.handleTap(value.entity)
                     // A tap on the cable, the room, or nothing at all
-                    // folds both benches' rings away — the same "you
+                    // folds every bench's rings away — the same "you
                     // tapped elsewhere" each module meant on its own.
                     // It does NOT move focus: attention should follow
-                    // what you touched, and you touched neither.
+                    // what you touched, and you touched none of them.
                     case nil:
                         _ = bench?.handleTap(value.entity)
                         _ = field?.handleTap(value.entity)
-                    default: break
+                        _ = charges?.handleTap(value.entity)
                     }
                 }
         )
@@ -133,18 +141,21 @@ struct EMWorldSpaceView: View {
                     case .field:
                         attend(.field)
                         field?.dragChanged(value)
+                    case .charges:
+                        attend(.charges)
+                        charges?.dragChanged(value)
                     case nil: break
-                    default: break
                     }
                 }
                 .onEnded { value in
-                    // Ended goes to BOTH regardless of where the hand
-                    // finished. A drag that begins on a magnet and ends
-                    // over the bench must still release the magnet, and
-                    // each station's end-handler is a no-op when it has
-                    // no drag in flight.
+                    // Ended goes to EVERY station regardless of where
+                    // the hand finished. A drag that begins on a magnet
+                    // and ends over the bench must still release the
+                    // magnet, and each station's end-handler is a no-op
+                    // when it has no drag in flight.
                     bench?.dragEnded(value)
                     field?.dragEnded(value)
+                    charges?.dragEnded(value)
                 }
         )
     }
@@ -162,7 +173,7 @@ struct EMWorldSpaceView: View {
     /// Every rig in the scene — the sweep a finished gesture is ended
     /// on, so none is left stuck mid-pinch.
     private var rigs: [SpatialScaleRig] {
-        [bench?.scaleRig, field?.scaleRig].compactMap { $0 ?? nil }
+        EMStation.allCases.compactMap { rig(of: $0) }
     }
 
     /// Which station owns the entity a gesture landed on, found by
@@ -170,15 +181,20 @@ struct EMWorldSpaceView: View {
     private func station(owning entity: Entity) -> EMStation? {
         if let bench, entity.isDescendant(of: bench.root) { return .bench }
         if let field, entity.isDescendant(of: field.root) { return .field }
+        if let charges, entity.isDescendant(of: charges.root) { return .charges }
         return nil
     }
 
-    private func rig(forEntity entity: Entity) -> SpatialScaleRig? {
-        switch station(owning: entity) {
-        case .bench: bench?.scaleRig ?? nil
-        case .field: field?.scaleRig ?? nil
-        default: nil
+    private func rig(of station: EMStation) -> SpatialScaleRig? {
+        switch station {
+        case .bench:   bench?.scaleRig ?? nil
+        case .field:   field?.scaleRig ?? nil
+        case .charges: charges?.scaleRig ?? nil
         }
+    }
+
+    private func rig(forEntity entity: Entity) -> SpatialScaleRig? {
+        station(owning: entity).flatMap(rig(of:))
     }
 
     #if DEBUG
@@ -210,7 +226,8 @@ struct EMWorldSpaceView: View {
     /// place, in a fixed order, once per frame.
     private static func tick(
         dt: Double, bench: EMBenchStation, field: EMFieldStation,
-        feed: EMFeedLine, focus: StationFocus<EMStation>, appModel: AppModel
+        charges: EMChargeStation, feed: EMFeedLine,
+        focus: StationFocus<EMStation>, appModel: AppModel
     ) {
         // PROPERTY 1 of the focus contract: both stations solve every
         // frame, whichever one is being attended to. Skipping the dim
@@ -232,6 +249,10 @@ struct EMWorldSpaceView: View {
                 current: current, model: bench.model),
             isPaused: bench.model.isPaused,
             dt: dt)
+        // The charges bench takes nothing from the other two and gives
+        // them nothing — it is the same subject, not the same circuit —
+        // so its place in the order is free.
+        charges.tick(dt: dt, appModel: appModel)
 
         // Emphasis last, so it lands on this frame's scene. Opacity
         // only — never a transform: a station receding mid-drag would
@@ -239,5 +260,6 @@ struct EMWorldSpaceView: View {
         focus.tick(dt: dt)
         focus.apply(.bench, to: bench.root)
         focus.apply(.field, to: field.root)
+        focus.apply(.charges, to: charges.root)
     }
 }

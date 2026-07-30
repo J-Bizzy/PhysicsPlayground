@@ -26,7 +26,7 @@ final class FieldGrabResolutionTests: XCTestCase {
     func testUUIDNameResolvesThatCharge() {
         // Even with the hand right on top of the OTHER charge: an
         // explicit name is the user's actual target.
-        let id = FieldSpaceView.resolveCharge(
+        let id = EMChargeStation.resolveCharge(
             names: ["some-child", far.uuidString],
             hand: SIMD3(0, 1, -1),
             charges: charges)
@@ -36,7 +36,7 @@ final class FieldGrabResolutionTests: XCTestCase {
     func testAnonymousHitNearAChargeFallsBackToIt() {
         // The scale-handle scenario: no name matches, but the hand is
         // 5 cm from a charge — that is the charge being grabbed.
-        let id = FieldSpaceView.resolveCharge(
+        let id = EMChargeStation.resolveCharge(
             names: ["scale-handle"],
             hand: SIMD3(0.05, 1, -1),
             charges: charges)
@@ -44,7 +44,7 @@ final class FieldGrabResolutionTests: XCTestCase {
     }
 
     func testFallbackPicksTheNearestCharge() {
-        let id = FieldSpaceView.resolveCharge(
+        let id = EMChargeStation.resolveCharge(
             names: [""],
             hand: SIMD3(0.4, 1, -1),
             charges: charges)
@@ -54,7 +54,7 @@ final class FieldGrabResolutionTests: XCTestCase {
     func testFarHandResolvesNothing() {
         // 30 cm from every charge: a pinch on empty space must not
         // yank a distant charge into the hand.
-        let id = FieldSpaceView.resolveCharge(
+        let id = EMChargeStation.resolveCharge(
             names: ["scale-handle"],
             hand: SIMD3(0, 1, -0.7),
             charges: charges)
@@ -64,7 +64,7 @@ final class FieldGrabResolutionTests: XCTestCase {
     func testUnknownUUIDNameStillFallsBackByProximity() {
         // A stale name (charge deleted mid-gesture) is not a match,
         // but the hand may still be on a live charge.
-        let id = FieldSpaceView.resolveCharge(
+        let id = EMChargeStation.resolveCharge(
             names: [UUID().uuidString],
             hand: SIMD3(0.02, 1, -1),
             charges: charges)

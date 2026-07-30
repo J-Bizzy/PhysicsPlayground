@@ -50,7 +50,9 @@ final class ExperimentsTests: XCTestCase {
 
     func testFieldExperimentSeesTheDipole() {
         let appModel = AppModel()
-        let entries = ExperimentCatalog.experiments(for: "electrostatics", appModel: appModel)
+        // The charges bench is the E&M world's centre station now; the
+        // "field." ids are unchanged, so earned progress survives.
+        let entries = ExperimentCatalog.experiments(for: "em", appModel: appModel)
         let dipole = entries.first { $0.experiment.id == "field.dipole" }!
 
         let model = appModel.electromagnetismModel
@@ -69,9 +71,9 @@ final class ExperimentsTests: XCTestCase {
             XCTAssertFalse(entries.isEmpty,
                            "\(module.id) should offer at least one experiment")
         }
-        // The floor tracks the BENCHED catalog: six modules offer 18
-        // experiments (Waves, Elastic Field, and Optics are out of the
-        // catalog for now; restoring them raises this back past 20).
-        XCTAssertGreaterThanOrEqual(ExperimentCatalog.total(appModel: appModel), 15)
+        // The floor tracks the BENCHED catalog. Folding modules into
+        // worlds moves experiments between entries but never deletes
+        // one, so this floor only ever falls when a module is ARCHIVED.
+        XCTAssertGreaterThanOrEqual(ExperimentCatalog.total(appModel: appModel), 18)
     }
 }

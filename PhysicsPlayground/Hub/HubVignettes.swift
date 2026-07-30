@@ -45,7 +45,6 @@ enum HubVignettes {
 
     static func make(for moduleID: String) -> Built {
         switch moduleID {
-        case "electrostatics": fields()
         case "kinematics": projectile()
         case "gravitylab": gravity()
         case "windtunnel": windTunnel()
@@ -463,11 +462,17 @@ enum HubVignettes {
     private static func em() -> Built {
         let root = Entity()
 
+        // Left to right exactly as the room reads: circuits, charges,
+        // magnets. The miniature is the map you arrive holding.
         let bench = circuits()
+        let charges = fields()
         let field = magnetism()
         bench.entity.position.x = -0.105
+        charges.entity.position = SIMD3(0, 0.052, 0)
+        charges.entity.scale = SIMD3(repeating: 0.62)
         field.entity.position.x = 0.115
         root.addChild(bench.entity)
+        root.addChild(charges.entity)
         root.addChild(field.entity)
 
         // A slack cable from the loop's right edge to under the

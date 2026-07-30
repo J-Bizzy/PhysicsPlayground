@@ -2,8 +2,20 @@
 //  ElectromagnetismModule.swift
 //  Physics Playground — Electromagnetism module
 //
-//  Catalog registration for the electromagnetism sandbox (the original
-//  Field Playground experience): descriptor, legend, and first-run hint.
+//  The electrostatics bench — no longer a catalog entry of its own.
+//
+//  This was "Electric Fields", the app's original module and the last
+//  standalone half of E&M. It is now the CENTRE STATION of the `em`
+//  world (`Modules/EMWorld/EMChargeStation`), which is where it always
+//  belonged: a circuit bench makes a current, a current makes a magnet,
+//  and a charge is what both of them are made of. Keeping it a separate
+//  entry meant the app asserted that they were one subject and then
+//  made you leave the room to check.
+//
+//  What survives here is what the world composes: the readings the
+//  notebook writes down, and the full legend. `FieldModel`,
+//  `FieldRenderer` and `FieldControlsPanel` are untouched in this
+//  folder — the world folder holds only composition.
 //
 
 import SwiftUI
@@ -12,42 +24,9 @@ import simd
 
 @MainActor
 enum ElectromagnetismModule {
-    // Kept from the original module so saved per-module state (like the
-    // dismissed-hint flag) survives the rename.
+    // Kept even though nothing registers under it any more: it still
+    // keys this bench's dismissed-hint flag and its notebook history.
     static let id = "electrostatics"
-
-    static func descriptor(appModel: AppModel) -> ModuleDescriptor {
-        ModuleDescriptor(
-            id: id,
-            title: "Electric Fields",
-            shortTitle: "Fields",
-            blurb: "Place charges, trace the field lines they make, and ride a test charge through Coulomb's law.",
-            icon: "bolt.fill",
-            accent: DesignTokens.Palette.electromagnetismAccent,
-            firstRunHint: "Grab a charge and drag it anywhere — the field follows. Tap a charge and its controls unfold around it: pull the bead to change strength, or the petal to delete. Add charges from this window.",
-            // Opens part-dimmed: field lines are thin glowing filaments — they need something to glow against.
-            preferredDimming: 0.35,
-            legend: legendItems,
-            isPaused: { appModel.electromagnetismModel.isPaused },
-            togglePause: { appModel.electromagnetismModel.isPaused.toggle() },
-            makeScene: {
-                AnyView(
-                    FieldSpaceView()
-                        .environment(appModel.electromagnetismModel)
-                )
-            },
-            makeControls: {
-                AnyView(
-                    FieldControlsPanel()
-                        .environment(appModel.electromagnetismModel)
-                )
-            },
-            captureReadings: { readings(appModel: appModel) },
-            reset: {
-                appModel.electromagnetismModel.reset()
-            }
-        )
-    }
 
     /// The readings this bench writes into the lab notebook.
     /// Shared with the combined module that now hosts it.

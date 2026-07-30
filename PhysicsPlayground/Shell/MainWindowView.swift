@@ -41,7 +41,7 @@ struct MainWindowView: View {
                 if UserDefaults.standard.bool(forKey: "notebookSeed"),
                    appModel.notebook.entries.isEmpty {
                     appModel.notebook.record(
-                        moduleID: "electrostatics", moduleTitle: "Electric Fields",
+                        moduleID: "em", moduleTitle: "Electricity & Magnetism",
                         title: "Seeded observation 1",
                         readings: [.init("Charges", "2"),
                                    .init("Net charge", "0.0", "C"),

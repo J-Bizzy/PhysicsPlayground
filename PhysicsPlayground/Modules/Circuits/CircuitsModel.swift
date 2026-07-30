@@ -28,8 +28,20 @@ final class CircuitsModel {
     // MARK: Build volume & budgets
 
     nonisolated static let buildCenter = SIMD3<Double>(0, 1.25, -0.9)
-    /// The only restriction: a generous reach from the build center.
-    nonisolated static let buildRadius = 3.0
+    /// The bench's walls, as a half-size about `buildCenter`.
+    ///
+    /// This was a 3 m *sphere* — "the only restriction: a generous reach
+    /// from the build center" — which was true and harmless while the
+    /// bench owned the room. In the E&M world the magnetic field stands
+    /// 1.33 m to the right and the charges straight ahead, so a 3 m
+    /// reach means a resistor can be parked inside either of them. A box
+    /// rather than a sphere because that is what the station layout
+    /// promises and what `EMStationLayoutTests` checks.
+    ///
+    /// Kept just inside `EMStationLayout.halfExtents(.bench)`, which is
+    /// measured about the bench PIVOT (z = −0.85) while this is measured
+    /// about the build centre (z = −0.9) — hence the shallower z.
+    nonisolated static let buildHalfExtents = SIMD3<Double>(0.70, 0.48, 0.33)
     nonisolated static let floorMargin = 0.2
     nonisolated static let componentBudget = 16
     nonisolated static let wireBudget = 36
@@ -483,15 +495,18 @@ final class CircuitsModel {
         components[index].position = clamp(point)
     }
 
-    private func clamp(_ point: SIMD3<Double>) -> SIMD3<Double> {
-        var clamped = point
-        let offset = clamped - Self.buildCenter
-        let distance = simd_length(offset)
-        if distance > Self.buildRadius {
-            clamped = Self.buildCenter + offset * (Self.buildRadius / distance)
-        }
-        clamped.y = max(clamped.y, Self.floorMargin)
+    nonisolated static func clampToBench(
+        _ point: SIMD3<Double>
+    ) -> SIMD3<Double> {
+        var clamped = simd_clamp(point,
+                                 buildCenter - buildHalfExtents,
+                                 buildCenter + buildHalfExtents)
+        clamped.y = max(clamped.y, floorMargin)
         return clamped
+    }
+
+    private func clamp(_ point: SIMD3<Double>) -> SIMD3<Double> {
+        Self.clampToBench(point)
     }
 
     // MARK: Wiring (tap one terminal, then another)
