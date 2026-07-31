@@ -31,6 +31,8 @@ The simulator can't be gaze-pinched, so debug launch args drive a module into a 
 
 The home's display type is chosen in Settings ("Home title"), not by a launch arg: a fresh install opens on the specimen wall — the three candidates side by side — and picking one rebuilds the gallery in that voice. `-electronView 1` shrinks the bench into the copper (its switch is a plate on the in-room layers bank, which the simulator cannot press). `-openModule circuits -emLink 1` stages the app's one wired pair — a driven coil with the cable running to it — since the simulator has no hands to wire an inductor with. The coil annex reads `-viewScale.field`; single-apparatus scenes read the bare `-viewScale`.
 
+**Electric Fields is fully spatial** — every control is an object in the room, so nothing in it can be reached from the CLI without an argument: `-emCap 1`, `-emGauss disc|bubble`, `-emLines 0`, `-emParticle plus|minus|electron|positron`, `-emVolts <V>`, `-emTesla <T>`, `-emRadius <m>`, `-emTilt <degrees>`, `-emProbeCharge <C>`, `-emRing charge|probe`, plus the older `-emMagnetic`/`-emProbe`/`-emFree`. The VALUE arguments matter as much as the on/off ones: a rail whose bead sits at its default in every screenshot proves nothing about the mapping behind it.
+
 ## Working agreement
 
 - Plan before any change touching more than one file.

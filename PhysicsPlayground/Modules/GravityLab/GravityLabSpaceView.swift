@@ -72,6 +72,13 @@ struct GravityLabSpaceView: View {
                 guard let scale = Double(id) else { return }
                 model.timeScale = scale
             }
+            // The bank has claimed to be a READOUT since it was built, and
+            // was not one: four identical discs, nothing lit, no way to see
+            // which speed was running without inferring it from how fast
+            // Neptune moved. One closure makes the claim true, and it reads
+            // from the model rather than remembering a choice, so a reset
+            // moves the lit disc too.
+            clockPicker.selectedID = { String(Int(model.timeScale)) }
 
             // Pull a world out of the well and let go: it arrives at
             // rest beside the primary and immediately begins to fall,

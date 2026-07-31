@@ -52,6 +52,21 @@ final class SpatialPicker {
     /// Called with the chosen `PickerChoice.id`.
     var onSelect: ((String) -> Void)?
 
+    /// Which choice is current, read every frame.
+    ///
+    /// Without this a standing picker renders N identical discs and shows
+    /// **nothing** about the value it is picking — which flatly contradicts
+    /// the doc comment below claiming a standing bank exists so you can
+    /// "SEE the current value of" a setting, and fails the replacement
+    /// standard's "visible without being looked for". A control that cannot
+    /// be read is not a readout; it is a row of buttons.
+    ///
+    /// A closure rather than a stored id, for the same reason
+    /// `SpatialLayerBank.Layer.isOn` is one: the model is the truth, and a
+    /// reset or a launch argument must move the lit disc without anybody
+    /// remembering to tell the picker.
+    var selectedID: (() -> String?)?
+
     /// Spoken before each choice's label, so a fan of shapes and a fan of
     /// materials don't both just announce "Cube".
     private let accessibilityNoun: String
@@ -69,15 +84,34 @@ final class SpatialPicker {
     /// cannot, so hiding it behind a pinch would be hiding the module.
     private let staysOpen: Bool
     private var openness: Double = 0
-    private var discs: [(id: String, entity: ModelEntity)] = []
+
+    private struct Disc {
+        let id: String
+        let label: String
+        let entity: ModelEntity
+        /// The ring behind the face, lit when this choice is the current
+        /// one — the same device Bloom's petals use to carry meaning.
+        let rim: ModelEntity
+        /// Last painted state, so an unchanged fan writes no materials.
+        var wasSelected: Bool?
+    }
+    private var discs: [Disc] = []
+
+    private let litRim: UnlitMaterial
+    private let dimRim: UnlitMaterial
 
     init(accessibilityNoun: String,
          choices: [PickerChoice] = [],
          staysOpen: Bool = false,
+         accent: UIColor = .white,
          layout: FanLayout = FanLayout()) {
         self.accessibilityNoun = accessibilityNoun
         self.layout = layout
         self.staysOpen = staysOpen
+        self.litRim = UnlitMaterial(color: accent)
+        var dim = UnlitMaterial(color: UIColor(white: 0.30, alpha: 1))
+        dim.blending = .transparent(opacity: 0.55)
+        self.dimRim = dim
         root.isEnabled = false
         setChoices(choices)
     }
@@ -86,12 +120,13 @@ final class SpatialPicker {
     /// options change; the fan folds so it can't be left showing a stale
     /// set mid-unfold.
     func setChoices(_ choices: [PickerChoice]) {
-        for (_, entity) in discs { entity.removeFromParent() }
+        for disc in discs { disc.entity.removeFromParent() }
         discs.removeAll()
         for choice in choices {
-            let disc = makeDisc(choice)
+            let (disc, rim) = makeDisc(choice)
             root.addChild(disc)
-            discs.append((choice.id, disc))
+            discs.append(Disc(id: choice.id, label: choice.label,
+                              entity: disc, rim: rim))
         }
         isOpen = staysOpen
         openness = staysOpen ? 1 : 0
@@ -121,12 +156,31 @@ final class SpatialPicker {
             }
         }
 
-        for (index, disc) in discs.enumerated() {
+        let current = selectedID?()
+        for index in discs.indices {
             let placement = layout.placement(index: index, count: discs.count,
                                              openness: openness)
+            let disc = discs[index]
             disc.entity.position = SIMD3<Float>(placement.offset)
             disc.entity.scale = SIMD3(repeating: Float(placement.scale))
             disc.entity.isEnabled = placement.isVisible
+
+            // Repaint only on change. `update` runs every frame, and a
+            // material write per disc per frame is exactly the defect this
+            // codebase has been sweeping out of its renderers.
+            guard selectedID != nil else { continue }
+            let selected = disc.id == current
+            if disc.wasSelected != selected {
+                discs[index].wasSelected = selected
+                disc.rim.model?.materials = [selected ? litRim : dimRim]
+                var accessibility = AccessibilityComponent()
+                accessibility.isAccessibilityElement = true
+                accessibility.label = LocalizedStringResource(
+                    stringLiteral: "\(accessibilityNoun): \(disc.label)")
+                accessibility.value = LocalizedStringResource(
+                    stringLiteral: selected ? "selected" : "not selected")
+                disc.entity.components.set(accessibility)
+            }
         }
     }
 
@@ -148,7 +202,7 @@ final class SpatialPicker {
         return false
     }
 
-    private func makeDisc(_ choice: PickerChoice) -> ModelEntity {
+    private func makeDisc(_ choice: PickerChoice) -> (ModelEntity, ModelEntity) {
         var casing = PhysicallyBasedMaterial()
         casing.baseColor = .init(tint: UIColor(white: 0.06, alpha: 1))
         casing.roughness = 0.28
@@ -159,6 +213,14 @@ final class SpatialPicker {
             materials: [casing])
         disc.name = "picker-\(choice.id)"
         disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+
+        // The selection ring, behind the face. Starts dim; `update` lights
+        // whichever disc the model says is current.
+        let rim = ModelEntity(
+            mesh: .generateCylinder(height: 0.003, radius: 0.0302),
+            materials: [dimRim])
+        rim.position = [0, -0.002, 0]
+        disc.addChild(rim)
 
         if let symbol = choice.symbol, let texture = Bloom.symbolTexture(symbol) {
             var iconMaterial = UnlitMaterial()
@@ -191,6 +253,6 @@ final class SpatialPicker {
             stringLiteral: "\(accessibilityNoun): \(choice.label)")
         disc.components.set(accessibility)
         disc.isEnabled = false
-        return disc
+        return (disc, rim)
     }
 }

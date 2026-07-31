@@ -101,19 +101,65 @@ Work top to bottom; each item says what CORRECT looks like, because
 - [ ] The hand-held compass needle points along the local field as you
       walk it around a magnet.
 
-## Electric Fields
+## Electric Fields — now the app's only fully spatial module
 
+Every control here left the window panel on 2026-07-31, so **this section
+is the only place most of them can be tested at all**. A screenshot proves
+a rail rendered; only a hand proves it sets anything.
+
+- [ ] **Flick each of the five bank plates** on your left. Each apparatus
+      should ARRIVE — and the ones that carry an instrument should bring it
+      with them: Parallel plates puts a ΔV rail on top of the capacitor,
+      Uniform B puts a strength rail under the bank. If a plate lights but
+      nothing appears, the plate is lying.
+- [ ] **Pull each of the three wells** on your right. The new charge (or
+      probe) must be IN YOUR HAND already — if it appears somewhere else
+      and then jumps to you, the born-at-the-fingertips path regressed.
+- [ ] **Pull the test charge out with Uniform B on and throw it sideways.**
+      It must curve into a circle in the direction you threw. Release it
+      almost still: it should still circle, on the fallback push. A probe
+      that just sits there means `releaseProbe(flick:)` lost its launch.
+- [ ] **The particle bank:** tap each of the four discs. The tapped one
+      lights, and only one is ever lit. Electron and positron must curve
+      OPPOSITE ways in the same field.
+- [ ] **Drag each rail's bead.** The number follows your hand while it
+      moves, the fill grows behind the bead, and half way along the rail is
+      half way through the range. Drag off the end: it pins, never wraps.
+- [ ] **Drag along a rail with your hand drifting up and down.** The value
+      must not wander with the drift.
+- [ ] **Switch the capacitor OFF while dragging its ΔV bead.** The rail
+      vanishes and the voltage stops changing. (Before `isEnabled`, it kept
+      writing.)
+- [ ] **Carry the capacitor low, then high.** Its rail stays on top of the
+      plates the whole way — never inside them, never left behind.
+- [ ] **Grab the flux meter's rim and pull.** It resizes under your
+      fingertips, and the skin stays where your hand is.
+- [ ] **THE DISC.** Cycle the meter to the disc, grab its rim and turn it
+      edge-on to the field: **Φ must fall to zero.** Then cycle to the
+      bubble and turn it however you like: Φ holds at Q/ε₀. That contrast
+      is Gauss's law, and until this change the app instructed the user to
+      perform it while providing no way to do so.
+- [ ] **Grow the bubble while it is against a wall.** It must pull itself
+      back inside the region rather than pushing its skin through.
+- [ ] **Pinch a charge that is INSIDE the bubble.** The charge moves, not
+      the surface. (The surface is a container; the thing inside is the
+      subject.)
+- [ ] **Pinch a charge that is between the capacitor plates.** It must be
+      grabbable — the plates carry 26 cm collision spheres that overlap in
+      the gap, and only the 12 cm proximity fallback gets you through them.
 - [ ] Drag a charge: the field lines re-trace and follow, sticking to
       your hand rather than lagging visibly.
 - [ ] **Drag a charge at the wall.** It should stop at the region
-      boundary — the clamp added on 2026-07-30. Before that it could be
-      dragged across the room.
+      boundary — the clamp added on 2026-07-30.
 - [ ] Tap a charge → ring; pull the strength bead → the sphere grows
       and the field answers live.
+- [ ] **Tap the probe → its own ring.** With a ball selected it has a
+      charge bead; switch to the electron **while the ring is open** and
+      the bead must disappear (e is a constant of nature, not a setting).
+- [ ] **Two-hand pinch to 4×.** The field grows; the bank, the wells and
+      the particle bank do NOT, and stay reachable.
 - [ ] Capacitor on, plates pulled to full separation: the assembly
       stays inside the region.
-- [ ] Gauss bubble: carry it over a charge and the flux jumps to
-      Q/ε₀; carry it out and it returns to zero.
 
 ## Projectiles — the one that is 1:1 with your room
 

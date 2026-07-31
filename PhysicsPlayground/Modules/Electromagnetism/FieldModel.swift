@@ -144,20 +144,15 @@ final class FieldModel {
     /// still has somewhere to move once it is inset by its own radius.
     nonisolated static let gaussRadiusRange = 0.08...0.55
 
-    /// Measure by LOOKING: the Gauss surface rides the head ray, so
-    /// turning to face part of the field carries the flux meter there
-    /// without reaching for it. Head direction, not eye gaze — visionOS
-    /// never hands an app the eyes, and the UI says as much.
-    var lookToPlace = false
-    var lookReach = 1.0
-    nonisolated static let lookReachRange = 0.4...2.0
-
-    /// The charge region as a clip box, so a look ray that misses the
-    /// experiment moves nothing rather than parking the meter in a wall.
-    var lookRegion: RoomBox {
-        let region = samplingRegion
-        return RoomBox(center: region.center, halfExtents: region.extents / 2)
-    }
+    // Look-to-place is GONE, and the reason is worth keeping so it is not
+    // rebuilt. "The meter rides your head ray" sounds like the most
+    // headset-native idea in the module, and it rewrote
+    // `gaussSurfaceCenter` from that ray EVERY FRAME — so a hand that
+    // grabbed the meter and moved it was silently overruled on the next
+    // tick. A mode that disables direct manipulation is not an alternative
+    // to it; the interaction law prefers the hand, and this fought it. It
+    // was also unverifiable: `room.lookRay` is nil in the simulator, so no
+    // screenshot could ever show it working or failing.
 
     func moveGaussSurface(to point: SIMD3<Double>) {
         // Inset by the surface's own radius: the flux meter is a metre-
@@ -167,6 +162,42 @@ final class FieldModel {
         // shrinking it — the radius is a measurement, not a decoration.
         gaussSurfaceCenter = Self.clampToStation(
             point, inset: SIMD3(repeating: gaussSurfaceRadius))
+    }
+
+    /// Sets the meter's radius, then re-clamps its centre.
+    ///
+    /// The re-clamp is the whole point and it fixes a real escape.
+    /// `moveGaussSurface` insets by the radius the surface had AT THE TIME,
+    /// so a bubble parked against a wall and then GROWN pushes its own skin
+    /// straight through the station boundary — the centre is still legal
+    /// and the surface is not. `FieldClampTests` asserts the widest bubble
+    /// stays inside the region, and this was the path around it.
+    ///
+    /// It never mattered much while the only way to grow the bubble was a
+    /// slider in a panel, three taps away from the surface itself. Now the
+    /// gesture IS grabbing the skin and pulling, so a user's hand travels
+    /// outward against a wall constantly, and the escape stops being
+    /// theoretical.
+    func setGaussRadius(_ radius: Double) {
+        gaussSurfaceRadius = min(max(radius, Self.gaussRadiusRange.lowerBound),
+                                 Self.gaussRadiusRange.upperBound)
+        moveGaussSurface(to: gaussSurfaceCenter)
+    }
+
+    /// Sets the disc's facing direction. Unit, and never zero: a degenerate
+    /// normal would make the flux integral meaningless rather than merely
+    /// wrong, so a caller handing over garbage leaves the disc as it was.
+    func setGaussNormal(_ normal: SIMD3<Double>) {
+        let magnitude = simd_length(normal)
+        guard magnitude > 1e-9 else { return }
+        gaussSurfaceNormal = normal / magnitude
+    }
+
+    /// Clamps to `probeChargeRange`, so a hand that keeps pulling past the
+    /// end of the bead's rail pins there instead of running off the scale.
+    func setProbeMagnitude(_ coulombs: Double) {
+        probeChargeMagnitude = min(max(coulombs, Self.probeChargeRange.lowerBound),
+                                   Self.probeChargeRange.upperBound)
     }
 
     /// Everything the flux integral depends on. If none of it moved,
@@ -458,6 +489,52 @@ final class FieldModel {
             addCharge(positive: false)
             chargesRespond = true
         }
+
+        // Every control in this module is now an object standing in the
+        // room, and `simctl` has no tap verb — so each apparatus needs a
+        // way in from the command line or the migration cannot be
+        // screenshot at all. The VALUE arguments matter as much as the
+        // on/off ones: a rail whose bead sits at its default in every
+        // picture proves nothing about the mapping behind it.
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: "emCap") { capacitorOn = true }
+        if defaults.object(forKey: "emLines") != nil {
+            showLines = defaults.bool(forKey: "emLines")
+        }
+        if let shape = defaults.string(forKey: "emGauss") {
+            gaussSurfaceOn = true
+            gaussSurfaceKind = shape == "disc" ? .disc : .bubble
+        }
+        if let particle = defaults.string(forKey: "emParticle") {
+            electronMode = particle == "electron" || particle == "positron"
+            probeIsPositive = particle == "plus" || particle == "positron"
+        }
+        let volts = defaults.double(forKey: "emVolts")
+        if volts > 0 {
+            plateVoltage = min(max(volts, Self.plateVoltageRange.lowerBound),
+                               Self.plateVoltageRange.upperBound)
+        }
+        let tesla = defaults.double(forKey: "emTesla")
+        if tesla > 0 {
+            if electronMode {
+                electronFieldTesla = min(max(tesla, Self.electronFieldRange.lowerBound),
+                                         Self.electronFieldRange.upperBound)
+            } else {
+                magneticFieldTesla = min(max(tesla, Self.magneticFieldRange.lowerBound),
+                                         Self.magneticFieldRange.upperBound)
+            }
+        }
+        let radius = defaults.double(forKey: "emRadius")
+        if radius > 0 { setGaussRadius(radius) }
+        // `-emTilt 90` turns the disc edge-on to the field, which is the
+        // one picture that proves the tilt gesture does anything.
+        let tilt = defaults.double(forKey: "emTilt")
+        if tilt != 0 {
+            let radians = tilt * .pi / 180
+            setGaussNormal(SIMD3(0, sin(radians), cos(radians)))
+        }
+        let probeCharge = defaults.double(forKey: "emProbeCharge")
+        if probeCharge > 0 { setProbeMagnitude(probeCharge) }
         #endif
     }
 
@@ -493,8 +570,6 @@ final class FieldModel {
         electronMode = false
         electronFieldTesla = 1e-4
         gaussSurfaceOn = false
-        lookToPlace = false
-        lookReach = 1.0
         gaussSurfaceKind = .bubble
         gaussSurfaceCenter = SIMD3(0, 1.35, -0.55)
         gaussSurfaceNormal = SIMD3(0, 0, 1)
@@ -670,9 +745,33 @@ final class FieldModel {
         probeStatus = .held
     }
 
-    /// Called when the user releases the probe: resume from rest there.
-    func releaseProbe() {
+    /// Called when the user releases the probe.
+    ///
+    /// - Parameter flick: the hand's velocity at the moment of release,
+    ///   m/s in model space. Only its DIRECTION is used; the speed is the
+    ///   physics' own launch speed, because a cathode ray leaves its gun at
+    ///   2×10⁶ m/s whatever your wrist was doing.
+    ///
+    /// Why this takes a flick at all, when the old panel button did not:
+    /// with a magnetic field on, a probe released at REST has nothing for B
+    /// to bend — F = qv×B is zero when v is zero, so it simply sits there.
+    /// `dropProbe` handled that by pushing it sideways along +x, and the
+    /// cyclotron demo (the classic Helmholtz e/m experiment, which this
+    /// module gets genuinely right) depends on it. Replacing "press Drop"
+    /// with "pull it out of a well and let go" would have silently deleted
+    /// that demonstration, so the throw carries the aim instead — which is
+    /// also better, because now you choose the direction and can watch the
+    /// radius stay the same while the circle moves.
+    func releaseProbe(flick: SIMD3<Double> = .zero) {
         guard probe != nil else { return }
+        if magneticFieldOn || electronMode {
+            let speed = simd_length(flick)
+            // Below a slow deliberate hand, treat it as a drop rather than
+            // a throw and fall back to the old sideways push — releasing
+            // "gently" must not mean releasing into a dead scene.
+            let direction = speed > 0.05 ? flick / speed : SIMD3(1, 0, 0)
+            probe?.velocity = direction * launchSpeed
+        }
         probeStatus = .running
     }
 

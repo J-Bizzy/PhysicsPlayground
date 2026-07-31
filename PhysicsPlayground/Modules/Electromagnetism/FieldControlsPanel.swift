@@ -2,14 +2,36 @@
 //  FieldControlsPanel.swift
 //  Physics Playground — Electromagnetism module
 //
-//  The module's flat control panel, kept ONE GLANCE TALL: the always-
-//  visible card carries only the global actions (add, free, clear),
-//  and everything deeper — test charge, imposed fields, Gauss, the
-//  numbers — waits behind collapsed sections. Editing ONE charge never
-//  happens here at all: tap the charge in the field and its own ring
-//  of controls unfolds around it (strength bead, delete). The window
-//  states the rule once and points at the object. A charge's polarity
-//  is fixed at birth — add the sign you want.
+//  The module's flat panel, and — since 2026-07-31 — a READOUT rather than
+//  a control surface. There is no `Slider`, `Picker` or `Toggle` here, and
+//  there is not meant to be one again.
+//
+//  What happened: this panel held seven toggles, six sliders and two
+//  pickers in six stacked disclosure cards, two of which contained no
+//  controls at all. Everything the module could do was buried in twisties —
+//  the capacitor's voltage three levels down, a mode switch silently
+//  swapping one slider for another behind a single label. That is the exact
+//  condition the interaction law was written against (DECISIONS.md,
+//  2026-07-29): "a quantity with physical extent is changed by changing
+//  that extent; a quantity without extent is a discrete choice and gets a
+//  labelled object in the room."
+//
+//  So every setting moved into the room — a layers bank for what exists,
+//  wells for what you make, rails for the continuous quantities, and the
+//  flux meter's own size and facing became the act of grabbing its edge.
+//  See `FieldSpaceView` for the instruments and `FieldInstrumentLayout`
+//  for where they stand.
+//
+//  What did NOT move, and why the panel survives: the numbers. The law
+//  governs how a quantity is CHANGED and says nothing about how one is
+//  shown, and a number you read wants to hold still and be legible — which
+//  is what a flat card is good at. The lab notebook is flat for the same
+//  reason and nobody thinks it should be a dial.
+//
+//  One button stays too. `Clear` is a bulk destructive action with no
+//  honest physical analogue; "drag every charge back into the well" would
+//  be cleverness, not clarity. Buttons were never what the exit criterion
+//  banned.
 //
 
 import PhysicsCore
@@ -19,69 +41,37 @@ struct FieldControlsPanel: View {
     @Environment(FieldModel.self) private var model
 
     var body: some View {
-        @Bindable var model = model
-
         VStack(spacing: DesignTokens.Panel.sectionSpacing) {
-            // The only always-open card: make things, free things.
-            // Everything about ONE charge — strength, polarity, delete —
-            // lives on the charge itself: tap it and its ring unfolds.
             PanelSection("Charges") {
-                chargeControls(model: $model)
-            }
-            CollapsedSection("Test charge") {
-                probeControls(model: $model)
-            }
-            CollapsedSection("Uniform fields") {
-                uniformFieldControls(model: $model)
-            }
-            CollapsedSection("Display & Gauss's law") {
-                displayToggles(model: $model)
-                GaussSurfaceControls()
+                chargeControls
             }
             CollapsedSection("Numbers") {
                 PhysicsStatsView()
+                apparatusReadouts
             }
         }
     }
 
-    // MARK: Charges
+    // MARK: Charges — one button, and directions to the room
 
     @ViewBuilder
-    private func chargeControls(model: Bindable<FieldModel>) -> some View {
-        HStack(spacing: 12) {
-            Button {
-                self.model.addCharge(positive: true)
-            } label: {
-                Label("Add +", systemImage: "plus.circle.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.podProminent(DesignTokens.Palette.positive))
-            .accessibilityLabel("Add positive charge")
-
-            Button {
-                self.model.addCharge(positive: false)
-            } label: {
-                Label("Add −", systemImage: "minus.circle.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.podProminent(DesignTokens.Palette.negative))
-            .accessibilityLabel("Add negative charge")
-
-            Button(role: .destructive) {
-                self.model.removeAllCharges()
-            } label: {
-                Label("Clear", systemImage: "trash.slash")
-            }
-            .buttonStyle(.podQuiet)
-            .disabled(self.model.charges.isEmpty)
-            .accessibilityLabel("Remove all charges")
+    private var chargeControls: some View {
+        Button(role: .destructive) {
+            model.removeAllCharges()
+        } label: {
+            Label("Clear the field", systemImage: "trash.slash")
+                .frame(maxWidth: .infinity)
         }
+        .buttonStyle(.podQuiet)
+        .disabled(model.charges.isEmpty)
+        .accessibilityLabel("Remove all charges")
 
-        Toggle("Charges respond to forces", isOn: model.chargesRespond)
-            .font(DesignTokens.TypeScale.control)
-            .accessibilityHint("Free the charges: opposites drift together, likes push apart. Off, they stay exactly where you put them.")
-
-        Text("Tap a charge in the field for its own controls — pull the bead to change strength, or the petal to delete it.")
+        Text("""
+             Everything else is in the room. Pull a charge out of the wells \
+             on your right — it is in your hand the moment it exists. Tap one \
+             for its own ring: pull the bead for strength, the petal to \
+             delete. The plates on your left decide what exists at all.
+             """)
             .font(DesignTokens.TypeScale.footnote)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -93,186 +83,103 @@ struct FieldControlsPanel: View {
 
     private var statusLine: String {
         let count = model.charges.count
-        guard count > 0 else { return "No charges — add one to see a field." }
+        guard count > 0 else { return "No charges — pull one out of a well to see a field." }
         let selected = model.selectedCharge.map {
             "the halo marks the \($0.isPositive ? "red" : "blue") one you tapped"
         }
         return "\(count) charge\(count == 1 ? "" : "s") in the field\(selected.map { " — \($0)" } ?? "")."
     }
 
-    // MARK: Test charge
+    // MARK: The apparatus, as numbers
+    //
+    // Each block appears only while its apparatus is standing, so the card
+    // reports what is actually in the room rather than listing everything
+    // the module could do.
 
     @ViewBuilder
-    private func probeControls(model: Bindable<FieldModel>) -> some View {
-        HStack(spacing: 8) {
-            Button {
-                self.model.dropProbe()
-            } label: {
-                Label(self.model.probe == nil ? "Drop" : "Reset", systemImage: "scope")
-                    .frame(maxWidth: .infinity)
-            }
-            .tint(self.model.probeIsPositive
-                  ? DesignTokens.Palette.probePositive
-                  : DesignTokens.Palette.probeNegative)
-            .disabled(self.model.charges.isEmpty
-                      && !self.model.capacitorOn && !self.model.magneticFieldOn)
-            .accessibilityLabel("Drop the test charge")
-            .accessibilityHint("A small charge that accelerates along the field")
-
-            Picker("Test charge polarity", selection: model.probeIsPositive) {
-                Text("+").tag(true)
-                Text("−").tag(false)
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 84)
-            .accessibilityLabel("Test charge polarity")
-
-            if self.model.probe != nil {
-                Button {
-                    self.model.removeProbe()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .accessibilityLabel("Remove test charge")
-            }
-        }
-        .buttonStyle(.podQuiet)
-
-        VStack(alignment: .leading, spacing: 4) {
-            Text("q = \(self.model.probeIsPositive ? "+" : "−")\(self.model.probeChargeMagnitude * 1e9, specifier: "%.0f") nC — F = qE scales with it")
-                .font(DesignTokens.TypeScale.control.monospacedDigit())
-            Slider(value: model.probeChargeMagnitude, in: FieldModel.probeChargeRange)
-                .accessibilityLabel("Test charge magnitude")
-        }
-    }
-
-    // MARK: Uniform fields
-
-    @ViewBuilder
-    private func uniformFieldControls(model: Bindable<FieldModel>) -> some View {
-        Toggle("Parallel plates", isOn: model.capacitorOn)
-            .font(DesignTokens.TypeScale.control)
-        if self.model.capacitorOn {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("ΔV \(self.model.plateVoltage / 1000, specifier: "%.0f") kV   E = V/d = \(self.model.plateVoltage / self.model.plateSeparation / 1000, specifier: "%.1f") kV/m   d = \(self.model.plateSeparation * 100, specifier: "%.0f") cm")
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                Slider(value: model.plateVoltage, in: FieldModel.plateVoltageRange)
-                    .accessibilityLabel("Plate voltage")
-            }
-            Text("Uniform field in the gap — drop the probe there and it drifts with a = qE/m. Grab a plate to change d.")
+    private var apparatusReadouts: some View {
+        if model.capacitorOn {
+            Divider().opacity(0.4)
+            Text("ΔV \(model.plateVoltage / 1000, specifier: "%.0f") kV   E = V/d = \(model.plateVoltage / model.plateSeparation / 1000, specifier: "%.1f") kV/m   d = \(model.plateSeparation * 100, specifier: "%.0f") cm")
+                .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+            Text("Uniform field in the gap. The rail under the plates sets ΔV; grabbing a plate sets d.")
                 .font(DesignTokens.TypeScale.footnote)
                 .foregroundStyle(.secondary)
         }
 
-        Toggle("Uniform B (up)", isOn: model.magneticFieldOn)
-            .font(DesignTokens.TypeScale.control)
-        if self.model.magneticFieldOn {
-            Toggle("Electron mode", isOn: model.electronMode)
-                .font(DesignTokens.TypeScale.control)
-                .accessibilityHint("The probe becomes a real electron; realistic fields curve it")
-            if self.model.electronMode {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("B \(self.model.electronFieldTesla * 1000, specifier: "%.2f") mT   r = mv/qB = \(self.model.cyclotronRadius * 100, specifier: "%.0f") cm")
-                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                    Slider(value: model.electronFieldTesla, in: FieldModel.electronFieldRange)
-                        .accessibilityLabel("Magnetic field strength")
-                }
+        if model.magneticFieldOn {
+            Divider().opacity(0.4)
+            if model.electronMode {
+                Text("B \(model.electronFieldTesla * 1000, specifier: "%.2f") mT   r = mv/qB = \(model.cyclotronRadius * 100, specifier: "%.0f") cm")
+                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                // Disclosed where it is READ. The display clock is the
+                // fiction here, and the physics is not.
                 Text("A real electron at 2×10⁶ m/s: a tenth of a millitesla bends an 11 cm circle. Display time runs 10⁷× slow; the physics is SI-exact.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("B \(self.model.magneticFieldTesla / 1000, specifier: "%.0f") kT   r = mv/qB = \(self.model.cyclotronRadius * 100, specifier: "%.0f") cm")
-                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                    Slider(value: model.magneticFieldTesla, in: FieldModel.magneticFieldRange)
-                        .accessibilityLabel("Magnetic field strength")
-                }
-                // This number is a stage light, not a measurement, and
-                // it has to say so where it is READ. 50 kT is about a
-                // thousand times the strongest steady field ever built
-                // on Earth; it takes that much to visibly bend a 0.5 g,
-                // 10 nC ball, because q/m is ~10¹¹ smaller than an
-                // electron's. The geometry stays exact either way, which
-                // is the one claim worth making out loud.
-                Text("That field is fictional — about a thousand times the strongest magnet ever built. A 0.5 g ball needs it to curve at all. The circle r = mv/qB is exact regardless; switch on Electron mode for a real particle in a real field.")
+                Text("B \(model.magneticFieldTesla / 1000, specifier: "%.0f") kT   r = mv/qB = \(model.cyclotronRadius * 100, specifier: "%.0f") cm")
+                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                // This number is a stage light, not a measurement, and it
+                // has to say so where it is READ. It used to live under the
+                // slider that set it; the slider became a rail in the room,
+                // and the disclosure followed the NUMBER rather than the
+                // control, because that is who it is addressed to. A
+                // migration that quietly dropped it would have turned a
+                // disclosed fiction into an undisclosed one.
+                //
+                // 50 kT is about a thousand times the strongest steady
+                // field ever built on Earth; it takes that much to visibly
+                // bend a 0.5 g, 10 nC ball, because q/m is ~10¹¹ smaller
+                // than an electron's. The geometry stays exact either way.
+                Text("That field is fictional — about a thousand times the strongest magnet ever built. A 0.5 g ball needs it to curve at all. The circle r = mv/qB is exact regardless; pick the electron on the particle bank for a real particle in a real field.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
             }
         }
-    }
 
-    // MARK: Display
-
-    @ViewBuilder
-    private func displayToggles(model: Bindable<FieldModel>) -> some View {
-        Toggle("Field lines", isOn: model.showLines)
-            .accessibilityHint("Continuous lines with arrowheads riding them, showing the field's direction")
+        if model.gaussSurfaceOn {
+            Divider().opacity(0.4)
+            GaussReadout()
+        }
     }
 }
 
-/// Gauss's law, as a thing you carry through the field.
+/// Gauss's law, as numbers beside the surface that is measuring them.
 ///
-/// A page can state ∮E·dA = Q/ε₀; it cannot let you move the surface.
-/// The closed bubble is the demonstration: put a charge inside and the
-/// flux jumps to exactly Q/ε₀, take it out and it drops to zero, and
-/// nothing you do to the shape's position changes that.
-struct GaussSurfaceControls: View {
+/// A page can state ∮E·dA = Q/ε₀; it cannot let you move the surface. The
+/// closed bubble is the demonstration — put a charge inside and the flux
+/// jumps to exactly Q/ε₀, take it out and it drops to zero — and the open
+/// disc is the contrast that makes it mean something, because its flux
+/// depends entirely on how it is turned.
+///
+/// Both used to be set from here (a segmented picker, a radius slider).
+/// They are the surface itself now: grab its edge to resize it, and swing
+/// your hand out of the disc's plane to tilt it. That last gesture is new,
+/// and it is worth knowing that the sentence below has been printed in this
+/// panel since the disc was written while NOTHING in the app could tilt it —
+/// `gaussSurfaceNormal` had two writers, its declaration and `reset()`.
+struct GaussReadout: View {
     @Environment(FieldModel.self) private var model
 
     var body: some View {
-        @Bindable var model = model
-        Divider().opacity(0.4)
-        Toggle("Gauss surface", isOn: $model.gaussSurfaceOn)
-            .accessibilityHint("A flux meter you carry through the field")
-        if model.gaussSurfaceOn {
-            Picker("Shape", selection: $model.gaussSurfaceKind) {
-                ForEach(FieldModel.GaussSurfaceKind.allCases) { kind in
-                    Text(kind.displayName).tag(kind)
-                }
+        if let enclosed = model.gaussEnclosedCharge,
+           let predicted = model.gaussPredictedFlux {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Φ measured  \(PhysicsFormat.scientific(model.gaussFlux)) N·m²/C")
+                Text("Q enclosed  \(PhysicsFormat.scientific(enclosed)) C")
+                Text("Q/ε₀        \(PhysicsFormat.scientific(predicted)) N·m²/C")
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            Toggle("Move it where I look", isOn: $model.lookToPlace)
-                .accessibilityHint("The surface follows the direction your head is facing")
-            if model.lookToPlace {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Reach: \(model.lookReach, specifier: "%.2f") m")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.lookReach, in: FieldModel.lookReachRange)
-                        .accessibilityLabel("How far along your look direction the surface sits")
-                    Text("Head direction, not eye tracking — visionOS never gives an app your gaze.")
-                        .font(DesignTokens.TypeScale.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Radius: \(model.gaussSurfaceRadius * 100, specifier: "%.0f") cm")
-                    .font(DesignTokens.TypeScale.control)
-                Slider(value: $model.gaussSurfaceRadius,
-                       in: FieldModel.gaussRadiusRange)
-                    .accessibilityLabel("Gauss surface radius")
-            }
-
-            if let enclosed = model.gaussEnclosedCharge,
-               let predicted = model.gaussPredictedFlux {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Φ measured  \(PhysicsFormat.scientific(model.gaussFlux)) N·m²/C")
-                    Text("Q enclosed  \(PhysicsFormat.scientific(enclosed)) C")
-                    Text("Q/ε₀        \(PhysicsFormat.scientific(predicted)) N·m²/C")
-                }
+            .font(DesignTokens.TypeScale.footnote.monospaced())
+            Text("Closed surface: the flux is the enclosed charge over ε₀ and nothing else. Carry the bubble anywhere, turn it however you like — outside charges contribute exactly zero.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
+        } else {
+            Text("Φ  \(PhysicsFormat.scientific(model.gaussFlux)) N·m²/C")
                 .font(DesignTokens.TypeScale.footnote.monospaced())
-                Text("Closed surface: the flux is the enclosed charge over ε₀ and nothing else. Carry the bubble anywhere — outside charges contribute exactly zero.")
-                    .font(DesignTokens.TypeScale.footnote)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Φ  \(PhysicsFormat.scientific(model.gaussFlux)) N·m²/C")
-                    .font(DesignTokens.TypeScale.footnote.monospaced())
-                Text("Open surface: tilt it edge-on to the field and the flux falls to zero. Switch to the bubble for Gauss's law.")
-                    .font(DesignTokens.TypeScale.footnote)
-                    .foregroundStyle(.secondary)
-            }
+            Text("Open surface: grab the disc's rim and turn it edge-on to the field, and the flux falls to zero. Cycle it to the bubble for Gauss's law.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 }

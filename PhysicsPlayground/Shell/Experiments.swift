@@ -161,12 +161,12 @@ enum ExperimentCatalog {
         [
             (Experiment(id: "field.dipole", title: "Opposites attract",
                         detail: "Build a dipole — one positive and one negative charge sharing the field.",
-                        step: "The dipole is already here — if you cleared it, tap Add + and Add −."),
+                        step: "The dipole is already here — if you cleared it, pull one charge out of the + well and one out of the −."),
              { model.charges.contains(where: \.isPositive)
                  && model.charges.contains(where: { !$0.isPositive }) }),
             (Experiment(id: "field.crowd", title: "Crowd control",
                         detail: "Shape the field with six or more charges at once.",
-                        step: "Tap Add + and Add − until six charges share the room, then drag them into a shape."),
+                        step: "Pull charges out of the + and − wells until six share the room, then drag them into a shape."),
              { model.charges.count >= 6 }),
         ]
     }
