@@ -1250,7 +1250,14 @@ final class CircuitsRenderer {
             trueSpeedCallout = callout
         }
         trueSpeedCallout?.isEnabled = true
-        trueSpeedCallout?.anchor(at: fieldFront.position)
+        // Parked at the bench, NOT on the field front.
+        //
+        // It rode the front for a long time, which meant the most
+        // quotable text in the app was pinned to the fastest-moving
+        // object in it: unreadable while it swept the loop, and
+        // impossible to catch in a still frame. The number is a fact
+        // about the whole circuit, not about a position on it.
+        trueSpeedCallout?.anchor(at: Self.benchPivot + SIMD3(0, 0.26, 0))
         trueSpeedCallout?.setText(
             "electron: \(Self.humanTime(model.driftLapTime)) per lap\n"
             + "field: \(Self.humanTime(model.signalLapTime))")
@@ -1315,7 +1322,29 @@ final class CircuitsRenderer {
         guard abs(current) > 5e-4 else { return }
 
         let length = Double(simd_distance(a, b))
-        let dots = min(max(Int(length / 0.045), 2), 9)
+        // Bead count grows with the zoom, but SUBLINEARLY, and the
+        // exponent is the whole subtlety here.
+        //
+        // The pool hangs under `viewRoot`, so the beads are scaled by
+        // the zoom exactly like the wire they ride: at 4x a bead is 4x
+        // fatter and a gap 4x wider, and the picture is unchanged. A
+        // flat model-space spacing is therefore already correct — it is
+        // the CAP of 9 that starves the moment, because Electron View
+        // puts you inside one long wire and nine beads on a barrel that
+        // fills your view reads as a dotted line, not a current.
+        //
+        // Dividing the spacing by the full zoom (the obvious fix) packs
+        // them until they overlap into a striped tube, because the
+        // beads grew too. The square root splits the difference: denser
+        // when you are inside the wire, still visibly separate beads.
+        //
+        // The pool remains the ceiling — EntityPool's contract is to
+        // show what the budget affords rather than drop frames — so the
+        // loop below stops at the budget regardless.
+        let zoom = Double(max(benchScale, 1))
+        let spacing = 0.045 / zoom.squareRoot()
+        let cap = Int((9 * zoom).rounded())
+        let dots = min(max(Int(length / spacing), 2), cap)
         let speed = Self.electronDisplaySpeed(current: current, model: model)
         if !model.isPaused {
             wirePhases[key] = ((wirePhases[key] ?? 0)

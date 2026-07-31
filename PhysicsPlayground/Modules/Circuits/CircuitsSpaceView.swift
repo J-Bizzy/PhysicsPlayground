@@ -154,6 +154,15 @@ struct CircuitsSpaceView: View {
             if UserDefaults.standard.double(forKey: "trueSpeed") > 0 {
                 model.trueSpeedMode = true
             }
+            // `-electronView 1` shrinks the bench into the copper at
+            // launch. Its switch is a plate on the layers bank standing
+            // beside the bench, and the simulator has no hand to press
+            // it — so without this the app's named centrepiece (the
+            // demo reel's, per DECISIONS.md) is the one thing that
+            // cannot be screenshot from the CLI at all.
+            if UserDefaults.standard.bool(forKey: "electronView") {
+                model.electronView = true
+            }
             // `-emLink 1` stages the pair's whole point — a driven coil
             // with the cable running to it — at launch. The simulator
             // has no hands to wire an inductor with, so without this
