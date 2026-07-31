@@ -373,12 +373,7 @@ final class HubScene {
     /// per module. Architecture BENEATH the physics, never around it —
     /// the miniatures stay shell-free.
     private func buildTerrace(_ terrace: GalleryLayout.Terrace) {
-        var graphite = PhysicallyBasedMaterial()
-        graphite.baseColor = .init(tint: Self.slabTint)
-        graphite.roughness = 0.3
-        graphite.metallic = 0.1
-        graphite.clearcoat = .init(floatLiteral: 0.6)
-        graphite.clearcoatRoughness = .init(floatLiteral: 0.25)
+        let graphite = Materials.graphite(Self.slabTint)
 
         let slab = Entity()
         slab.position = terrace.center
@@ -500,11 +495,7 @@ final class HubScene {
                           capTop + GalleryLayout.exhibitLift,
                           -Self.podiumReach * (distance / 2.0))
 
-        var graphite = PhysicallyBasedMaterial()
-        graphite.baseColor = .init(tint: Self.slabTint)
-        graphite.roughness = 0.3
-        graphite.metallic = 0.1
-        graphite.clearcoat = .init(floatLiteral: 0.6)
+        let graphite = Materials.graphite(Self.slabTint)
 
         let podium = Entity()
         podium.position = SIMD3(podiumTop.x, 0, podiumTop.z)
@@ -887,14 +878,7 @@ final class HubScene {
         let centerX = -(bounds.min.x + bounds.max.x) / 2
         let centerY = -(bounds.min.y + bounds.max.y) / 2
 
-        var glossy = PhysicallyBasedMaterial()
-        glossy.baseColor = .init(tint: color)
-        glossy.roughness = 0.16
-        glossy.metallic = 0.0
-        glossy.clearcoat = .init(floatLiteral: 1.0)
-        glossy.clearcoatRoughness = .init(floatLiteral: 0.12)
-        glossy.emissiveColor = .init(color: color)
-        glossy.emissiveIntensity = emissive
+        var glossy = Materials.glossy(color, glow: emissive)
         if opacity < 1 {
             glossy.blending = .transparent(opacity: .init(floatLiteral: opacity))
         }

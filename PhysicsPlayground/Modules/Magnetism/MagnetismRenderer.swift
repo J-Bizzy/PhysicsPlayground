@@ -49,10 +49,21 @@ final class MagnetismRenderer {
     private var magnetHalos: [UUID: Entity] = [:]
 
     private let linesEntity = ModelEntity()
+    private let lineCasingEntity = ModelEntity()
     private let lineGlowEntity = ModelEntity()
+    /// Core radius of a field loop; the casing is swept from it.
+    static let lineRadius: Float = 0.0016
     /// Direction cones riding the field loops, N→S outside the magnet.
     private let arrowHeads: EntityPool<ModelEntity>
     private let lineMaterial = UnlitMaterial(color: MagnetismRenderer.lineColor)
+    /// The near-black outline the bright core sits against. Passthrough
+    /// is a BRIGHT medium — cream walls, daylight — so a pale 1.6 mm
+    /// loop drawn over it has almost no luminance contrast and simply
+    /// disappears. Electric Fields has had this since it was written;
+    /// the dipole loops are this module's entire subject and went
+    /// without it.
+    private let lineCasingMaterial =
+        Materials.contrastLine(MagnetismRenderer.lineColor).casing
     private let lineGlowMaterial: UnlitMaterial = {
         var m = UnlitMaterial(color: MagnetismRenderer.lineColor)
         m.blending = .transparent(opacity: 0.2)
@@ -77,6 +88,9 @@ final class MagnetismRenderer {
 
         root.addChild(Lighting.keyLight())
         root.addChild(viewRoot)
+        // Order is the treatment: casing (darkness) under the glow,
+        // glow under the bright core.
+        viewRoot.addChild(lineCasingEntity)
         viewRoot.addChild(lineGlowEntity)
         viewRoot.addChild(linesEntity)
         viewRoot.addChild(arrowHeads.root)
@@ -160,8 +174,7 @@ final class MagnetismRenderer {
         let radius = Float(MagnetismModel.coilRadius)
         let core = ModelEntity(
             mesh: .generateCylinder(height: radius * 2.4, radius: radius * 0.52),
-            materials: [Materials.energized(UIColor(white: 0.42, alpha: 1),
-                                            roughness: 0.35, metallic: 1.0, glow: 0.0)])
+            materials: [Materials.machined(UIColor(white: 0.42, alpha: 1))])
         core.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
         coilRoot.addChild(core)
 
@@ -179,8 +192,10 @@ final class MagnetismRenderer {
         if let mesh = TubeMesh.tube(lines: [helix], radius: 0.0045, sides: 5) {
             coilRoot.addChild(ModelEntity(
                 mesh: mesh,
-                materials: [Materials.energized(DesignTokens.Palette.copperUI,
-                                                roughness: 0.28, metallic: 1.0, glow: 0.12)]))
+                // A driven winding is genuinely warm, so this is the
+                // one metal here that keeps a glow.
+                materials: [Materials.machined(DesignTokens.Palette.copperUI,
+                                               glow: 0.12)]))
         }
 
         let callout = Callout(color: DesignTokens.Palette.copperUI,
@@ -227,9 +242,8 @@ final class MagnetismRenderer {
         // A brass case with a pale dial — an instrument, not a marker.
         let caseBody = ModelEntity(
             mesh: .generateCylinder(height: 0.016, radius: 0.052),
-            materials: [Materials.energized(
-                UIColor(red: 0.72, green: 0.56, blue: 0.28, alpha: 1),
-                roughness: 0.22, metallic: 1.0, glow: 0.0)])
+            materials: [Materials.machined(
+                UIColor(red: 0.72, green: 0.56, blue: 0.28, alpha: 1))])
         caseBody.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
         handCompass.addChild(caseBody)
 
@@ -407,8 +421,7 @@ final class MagnetismRenderer {
         // magnet, and a crisp divider between the poles.
         let band = ModelEntity(
             mesh: .generateBox(size: [w + 0.006, 0.014, w + 0.006], cornerRadius: 0.004),
-            materials: [Materials.energized(UIColor(white: 0.86, alpha: 1),
-                                            roughness: 0.14, metallic: 1.0, glow: 0)])
+            materials: [Materials.machined(UIColor(white: 0.86, alpha: 1))])
         container.addChild(band)
 
         // Selection halo (a soft box shell), hidden until selected.
@@ -438,6 +451,7 @@ final class MagnetismRenderer {
     private nonisolated struct LinesJob: Sendable { var magnets: [BarMagnet] }
     private nonisolated struct LinesResult: Sendable {
         var core = TubeBuffers()
+        var casing = TubeBuffers()
         var glow = TubeBuffers()
         /// Sample points along the loops where arrowheads ride, with
         /// the local line direction — B points N→S outside the magnet,
@@ -465,7 +479,10 @@ final class MagnetismRenderer {
         let traced = MagneticFieldLineTracer.trace(magnets: job.magnets, config: config)
         let lines = traced.map { $0.map(SIMD3<Float>.init) }
         var result = LinesResult()
-        result.core = TubeMesh.buffers(lines: lines, radius: 0.0016)
+        result.core = TubeMesh.buffers(lines: lines, radius: MagnetismRenderer.lineRadius)
+        result.casing = TubeMesh.buffers(
+            lines: lines,
+            radius: Materials.casingRadius(forCore: MagnetismRenderer.lineRadius))
         result.glow = TubeMesh.buffers(lines: lines, radius: 0.0044)
 
         for line in traced {
@@ -493,6 +510,9 @@ final class MagnetismRenderer {
     private func applyLines(_ result: LinesResult) {
         linesEntity.model = TubeMesh.mesh(from: result.core).map {
             ModelComponent(mesh: $0, materials: [lineMaterial])
+        }
+        lineCasingEntity.model = TubeMesh.mesh(from: result.casing).map {
+            ModelComponent(mesh: $0, materials: [lineCasingMaterial])
         }
         lineGlowEntity.model = TubeMesh.mesh(from: result.glow).map {
             ModelComponent(mesh: $0, materials: [lineGlowMaterial])
@@ -525,6 +545,7 @@ final class MagnetismRenderer {
 
     private func syncFieldLines(_ model: MagnetismModel) {
         linesEntity.isEnabled = model.showFieldLines
+        lineCasingEntity.isEnabled = model.showFieldLines
         lineGlowEntity.isEnabled = model.showFieldLines
         arrowHeads.root.isEnabled = model.showFieldLines
         guard model.showFieldLines else { return }

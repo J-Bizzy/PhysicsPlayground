@@ -38,6 +38,7 @@
 //
 
 import RealityKit
+import RenderKit
 import SwiftUI
 import UIKit
 
@@ -194,23 +195,13 @@ enum HubTitleStyle: Int, CaseIterable {
             // it holds from every viewing angle, which a fixed offset
             // never does. So: one mesh, one material, and the letters'
             // own geometry does the work.
-            var metal = PhysicallyBasedMaterial()
+            // These values were derived here, on a specimen wall, and
+            // then promoted: `Materials.machined` IS this recipe, and
+            // the reasoning behind every number lives on it now. The
+            // labs' metal is the same alloy as the signage.
             let stock = accent.map { Self.blend($0, toward: UIColor(white: 0.72, alpha: 1), by: 0.30) }
                 ?? UIColor(white: 0.78, alpha: 1)
-            metal.baseColor = .init(tint: stock)
-            // Not a mirror. At metallic 1.0 a surface shows only what
-            // it reflects, and a passthrough room gives RealityKit
-            // almost nothing to reflect — the letters came out muddy
-            // grey. 0.62 keeps the brushed read while letting base
-            // colour carry the hue.
-            metal.metallic = 0.62
-            // Rough enough to gradate. A polished face flips between
-            // hotspot and shadow as you move, which is the abrupt
-            // switch; a satin one rolls between them, so the light
-            // travels across the letter instead of snapping across it.
-            metal.roughness = 0.42
-            metal.clearcoat = .init(floatLiteral: 0.55)
-            metal.clearcoatRoughness = .init(floatLiteral: 0.30)
+            var metal = Materials.machined(stock)
             // A low emissive floor so the letters never fall to pure
             // black in the shaded parts of the extrusion — the anodised
             // colour stays legible all the way round the bevel.
@@ -286,14 +277,7 @@ enum HubTitleStyle: Int, CaseIterable {
 
     private static func glossy(_ color: UIColor, opacity: Float,
                                emissive: Float) -> PhysicallyBasedMaterial {
-        var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: color)
-        material.roughness = 0.16
-        material.metallic = 0.0
-        material.clearcoat = .init(floatLiteral: 1.0)
-        material.clearcoatRoughness = .init(floatLiteral: 0.12)
-        material.emissiveColor = .init(color: color)
-        material.emissiveIntensity = emissive
+        var material = Materials.glossy(color, glow: emissive)
         if opacity < 1 {
             material.blending = .transparent(opacity: .init(floatLiteral: opacity))
         }

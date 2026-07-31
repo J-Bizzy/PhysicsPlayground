@@ -93,8 +93,11 @@ final class CircuitsRenderer {
     private var lastSoundID = 0
     private var appliedResistorTextureVersion = -1
 
-    private let copperMaterial = SimpleMaterial(
-        color: DesignTokens.Palette.copperUI, roughness: 0.35, isMetallic: true)
+    /// The wire core, and the most scrutinised surface in the app:
+    /// Electron View shrinks you into it until it is a barrel filling
+    /// your view, so this is the one metal that gets looked at closely.
+    private let copperMaterial = Materials.machined(
+        DesignTokens.Palette.copperUI, roughness: 0.35)
     private var glowMaterials: [UnlitMaterial] = []
 
 
@@ -848,8 +851,7 @@ final class CircuitsRenderer {
             rotor.position = [0.05, 0, 0]
             let hub = ModelEntity(
                 mesh: .generateSphere(radius: 0.008),
-                materials: [SimpleMaterial(color: UIColor(white: 0.6, alpha: 1),
-                                           roughness: 0.3, isMetallic: true)])
+                materials: [Materials.machined(UIColor(white: 0.6, alpha: 1), roughness: 0.3)])
             rotor.addChild(hub)
             let accent = UIColor(red: 0.2, green: 0.85, blue: 0.75, alpha: 1)
             for axis: SIMD3<Float> in [[0, 1, 0], [0, 0, 1]] {
@@ -876,8 +878,7 @@ final class CircuitsRenderer {
             pivot.components.set(leverAccessibility)
             let arm = ModelEntity(
                 mesh: .generateBox(size: [0.06, 0.008, 0.014], cornerRadius: 0.003),
-                materials: [SimpleMaterial(color: UIColor(white: 0.75, alpha: 1),
-                                           roughness: 0.3, isMetallic: true)])
+                materials: [Materials.machined(UIColor(white: 0.75, alpha: 1), roughness: 0.3)])
             arm.position = [0.028, 0.006, 0]
             pivot.addChild(arm)
             body.addChild(pivot)
@@ -920,8 +921,7 @@ final class CircuitsRenderer {
         case .battery:
             let body = ModelEntity(
                 mesh: .generateCylinder(height: 0.11, radius: 0.022),
-                materials: [SimpleMaterial(color: UIColor(red: 0.35, green: 0.45, blue: 0.35, alpha: 1),
-                                           roughness: 0.3, isMetallic: true)])
+                materials: [Materials.machined(UIColor(red: 0.35, green: 0.45, blue: 0.35, alpha: 1), roughness: 0.3)])
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             // The + cap on terminal 0's side (nodeA convention).
             let cap = ModelEntity(
@@ -965,8 +965,7 @@ final class CircuitsRenderer {
         case .acSource:
             let body = ModelEntity(
                 mesh: .generateCylinder(height: 0.02, radius: 0.032),
-                materials: [SimpleMaterial(color: UIColor(red: 0.1, green: 0.5, blue: 0.6, alpha: 1),
-                                           roughness: 0.35, isMetallic: true)])
+                materials: [Materials.machined(UIColor(red: 0.1, green: 0.5, blue: 0.6, alpha: 1), roughness: 0.35)])
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             let band = ModelEntity(
                 mesh: .generateCylinder(height: 0.021, radius: 0.012),
@@ -990,8 +989,7 @@ final class CircuitsRenderer {
         case .led:
             let base = ModelEntity(
                 mesh: .generateCylinder(height: 0.016, radius: 0.012),
-                materials: [SimpleMaterial(color: UIColor(white: 0.75, alpha: 1),
-                                           roughness: 0.3, isMetallic: true)])
+                materials: [Materials.machined(UIColor(white: 0.75, alpha: 1), roughness: 0.3)])
             var dome = PhysicallyBasedMaterial()
             dome.baseColor = .init(tint: UIColor(red: 0.9, green: 0.2, blue: 0.15, alpha: 1))
             dome.roughness = 0.15
@@ -1005,13 +1003,11 @@ final class CircuitsRenderer {
             // makeVisual so it can be spun.
             let housing = ModelEntity(
                 mesh: .generateCylinder(height: 0.07, radius: 0.022),
-                materials: [SimpleMaterial(color: UIColor(white: 0.2, alpha: 1),
-                                           roughness: 0.4, isMetallic: true)])
+                materials: [Materials.machined(UIColor(white: 0.2, alpha: 1), roughness: 0.4)])
             housing.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             let plate = ModelEntity(
                 mesh: .generateCylinder(height: 0.006, radius: 0.023),
-                materials: [SimpleMaterial(color: UIColor(red: 0.15, green: 0.5, blue: 0.55, alpha: 1),
-                                           roughness: 0.35, isMetallic: true)])
+                materials: [Materials.machined(UIColor(red: 0.15, green: 0.5, blue: 0.55, alpha: 1), roughness: 0.35)])
             plate.position = [0, -0.038, 0]   // local −y = +x (shaft end)
             housing.addChild(plate)
             return housing
@@ -1030,8 +1026,7 @@ final class CircuitsRenderer {
             for sign: Float in [-1, 1] {
                 let cap = ModelEntity(
                     mesh: .generateCylinder(height: 0.01, radius: 0.0125),
-                    materials: [SimpleMaterial(color: UIColor(white: 0.8, alpha: 1),
-                                               roughness: 0.25, isMetallic: true)])
+                    materials: [Materials.machined(UIColor(white: 0.8, alpha: 1), roughness: 0.25)])
                 cap.position = [0, sign * 0.03, 0]
                 body.addChild(cap)
             }

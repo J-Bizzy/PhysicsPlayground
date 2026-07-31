@@ -119,8 +119,7 @@ final class KinematicsRenderer {
         root.addChild(Lighting.keyLight())
         // Launcher: grabbable base sphere, barrel, aim bead — siblings at
         // room coordinates so manipulation never fights a parent transform.
-        let launcherMaterial = Materials.energized(
-            DesignTokens.Palette.launcherUI, roughness: 0.15, metallic: 1.0, glow: 0.0)
+        let launcherMaterial = Materials.machined(DesignTokens.Palette.launcherUI)
         launcherBase = ModelEntity(
             mesh: .generateSphere(radius: 0.05), materials: [launcherMaterial])
         launcherBase.name = Self.launcherName

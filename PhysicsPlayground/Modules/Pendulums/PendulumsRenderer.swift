@@ -145,16 +145,19 @@ final class PendulumsRenderer {
     }()
     private var ghostCounter = 0
 
-    private let steelMaterial = SimpleMaterial(
-        color: UIColor(white: 0.85, alpha: 1), roughness: 0.15, isMetallic: true)
-    /// The bob: mirror-polished chrome — clear-coat gloss over metal, no
-    /// glow (it's a mass, not a source).
-    private static let bobMaterial = Materials.energized(
-        UIColor(white: 0.9, alpha: 1), roughness: 0.1, metallic: 1.0, glow: 0.0)
-    private let aluminumMaterial = Materials.energized(
-        UIColor(white: 0.7, alpha: 1), roughness: 0.3, metallic: 1.0, glow: 0.0)
-    private let cableMaterial = SimpleMaterial(
-        color: UIColor(white: 0.25, alpha: 1), roughness: 0.6, isMetallic: true)
+    private let steelMaterial = Materials.machined(UIColor(white: 0.85, alpha: 1))
+    /// The bob: satin steel, not a mirror. It was mirror-polished chrome
+    /// (metallic 1.0, roughness 0.1) and it read as a flat white disc —
+    /// a full mirror in a passthrough room has almost nothing to
+    /// reflect, and a polished face flips between hotspot and shadow as
+    /// you move rather than rolling between them. No glow either way:
+    /// this is a mass, not a source.
+    private static let bobMaterial = Materials.machined(UIColor(white: 0.9, alpha: 1))
+    private let aluminumMaterial = Materials.machined(UIColor(white: 0.7, alpha: 1))
+    /// Darker and rougher than the bob on purpose — a cable should not
+    /// compete with the mass hanging off it.
+    private let cableMaterial = Materials.machined(
+        UIColor(white: 0.25, alpha: 1), roughness: 0.6)
 
     private let audioEmitter = Entity()
     private var lastSoundID = 0
