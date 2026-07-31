@@ -35,7 +35,7 @@ struct PendulumsSpaceView: View {
     /// enough to keep until someone compares the two on device. Stated
     /// here rather than diverging silently in a third file.
     @State private var handSampler = ThrowSampler(window: 0.14)
-    /// A gravity gauge under the beam. "What if this were the Moon" is
+    /// A gravity gauge on the rig. "What if this were the Moon" is
     /// the question this bench exists to answer, and it was a slider in
     /// a card — now it is a dial you turn while watching the swing
     /// stretch out in front of you.

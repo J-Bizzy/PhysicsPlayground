@@ -2,6 +2,16 @@
 
 A running log of consequential decisions — architectural, physical, or product — and why they were made. Newest first. One entry per decision.
 
+## 2026-07-30 — The canon gains a recipe for built things
+
+**Decision:** `RenderKit.Materials` grows a second family — `machined`, `graphite`, `glossy` — beside `energized`, and the eighteen fully-metallic surfaces across Pendulums, Magnetism and Circuits are swept onto it. `metallic` is deliberately **not** a parameter of `machined`: 0.62 is the whole point of the recipe, and a call site that wants 1.0 wants the bug the entry below diagnosed.
+
+**Context:** `Materials.swift` called itself the material canon while offering exactly one recipe, and that recipe was for **lit energy** — a charge, a source, a bead of current. There was no shared recipe for a *built* thing: a bob, a coil, a knob, a shelf. The absence is legible in the source, because every module that needed a machined part fell back to `SimpleMaterial` with a hand-typed grey, and eighteen of them landed on `metallic = 1.0` — the exact configuration the plaque had already rejected on measured grounds one entry below, and which none of them had heard about. Meanwhile the Hub had authored good values for precisely this and kept them inline, copy-pasted across four call sites. Nothing here was invented; it was **promoted**. The same pass found `Materials.contrastLine` describing itself as "the fix used everywhere in the app" while shipping in one module of nine, and gave Magnetism's dipole loops the casing pass they had been missing.
+
+**Consequences:** Colour is semantic in this project, and two defects that only that rule makes visible went with it. Pendulums' period label and its gravity-force arrow were the **byte-identical** `(0.55, 0.35, 0.95)` — a period readout painted in the force-vector colour — so the arrow now takes `VectorPalette.force` and the label the module's own accent. Circuits' motor blades wore a teal belonging to no palette entry at all; an unowned hue on a physics object is the state a palette exists to prevent, and it is `motorAccentUI` now. The generalisable lesson: **a canon with one recipe is not a canon, it is a default** — and the tell is a grep for hand-typed colours and materials, each of which marks a call site the shared layer failed to serve.
+
+Two per-frame material allocations went in the same pass (the voltage skyline rebuilt a `PhysicallyBasedMaterial` per tower *and* per cap every frame it showed; Magnetism's induction filament rebuilt its own on every frame it burned, which is every frame a magnet is moving). Both are banked ramps now, and a bucket that has not moved writes nothing — the pattern Circuits already used twice and had simply missed here. The rule that falls out: **a continuous quantity does not need a continuous material.** The eye cannot resolve the steps, and the allocator can.
+
 ## 2026-07-30 — The home speaks in machined plaque
 
 **Decision:** Owner's call, made off a specimen wall: the home's three display texts — the wordmark and both door signs — are set in `HubTitleStyle.plaque`. Uppercase bold, milled deep, brushed metal, the domain accents alloyed 30% toward steel so green and orange read as anodised rather than painted. The other three voices (bubble, frosted, poster) stay in the enum and stay reachable from Settings.

@@ -2,8 +2,9 @@
 //  PendulumsModel.swift
 //  Physics Playground — Pendulums module
 //
-//  App state for the pendulum lab: any number of pendulums hanging
-//  from a floating beam, each a fully nonlinear SphericalPendulum from
+//  App state for the pendulum lab: any number of pendulums, each hung
+//  from its own pivot anywhere in the room and each a fully nonlinear
+//  SphericalPendulum from
 //  PhysicsCore. Substepped integration keeps motion glassy at every
 //  time scale; grabbing freezes a pendulum and release rethrows it
 //  with the hand's velocity, projected onto the taut-cable sphere.

@@ -2,8 +2,8 @@
 //  PendulumsRenderer.swift
 //  Physics Playground — Pendulums module
 //
-//  Renders the pendulum lab: a brushed-aluminum beam overhead, and per
-//  pendulum a pivot collar, taut cable, polished steel bob (grabbable),
+//  Renders the pendulum lab: per pendulum a pivot collar you can hang
+//  anywhere, a taut cable, a satin steel bob (grabbable),
 //  a speed-colored motion trail, velocity/acceleration/force arrows,
 //  floating kinetic/potential energy bars, and a faint ghost of the
 //  future swing while a bob is held.
@@ -93,10 +93,11 @@ final class PendulumsRenderer {
     }
 
     private var visuals: [UUID: PendulumVisual] = [:]
-    private let beam: ModelEntity
 
-    // Energy bars: kinetic (blue) and potential (green), floating
-    // beside the beam's right end.
+    // Energy bars: kinetic (blue) and potential (green), standing
+    // together at a fixed corner of the room. Deliberately NOT attached
+    // to a pendulum: they read the whole rig's energy, and a reading
+    // that follows one bob would claim to be about that bob.
     private let kineticBar: ModelEntity
     private let potentialBar: ModelEntity
     private let energyBarsRoot = Entity()
@@ -136,8 +137,15 @@ final class PendulumsRenderer {
     private var periodLabels: [UUID: (holder: Entity, text: ModelEntity)] = [:]
     private var periodKeys: [UUID: String] = [:]
     private var periodMeshCache: [String: MeshResource] = [:]
-    private let periodMaterial = UnlitMaterial(color: UIColor(
-        red: 0.55, green: 0.35, blue: 0.95, alpha: 1))
+    /// The period tag's own colour — this module's accent.
+    ///
+    /// It used to be a hand-typed purple that was BYTE-IDENTICAL to the
+    /// gravity-force arrow below, so a period readout was painted in
+    /// the force-vector colour. In an app whose first rule is that
+    /// colour is semantic and never decorative, two different meanings
+    /// cannot share a hex.
+    private let periodMaterial = UnlitMaterial(
+        color: DesignTokens.Palette.pendulumsAccentUI)
     private let ghostMaterial: UnlitMaterial = {
         var material = UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))
         material.blending = .transparent(opacity: 0.28)
@@ -164,11 +172,10 @@ final class PendulumsRenderer {
 
     init() {
         root.addChild(Lighting.keyLight())
-        // No beam. Each pendulum carries its own anchor now, wherever
-        // it was hung — the rig is the room, not a bar overhead.
-        beam = ModelEntity()
-        beam.isEnabled = false
-        root.addChild(beam)
+        // No beam: each pendulum carries its own anchor, wherever it
+        // was hung — the rig is the room, not a bar overhead. An empty
+        // disabled ModelEntity was still being built and parented here
+        // long after the beam was removed; the corpse is gone now.
 
         // Glowing glossy columns — they read as energy, not plastic bars.
         let kineticMaterial = Materials.energized(
@@ -371,7 +378,8 @@ final class PendulumsRenderer {
             pivot: pivot, cable: cable, bob: bob,
             velocityArrow: Arrow(color: VectorPalette.velocity),
             accelerationArrow: Arrow(color: VectorPalette.acceleration),
-            gravityArrow: Arrow(color: UIColor(red: 0.55, green: 0.35, blue: 0.95, alpha: 1)),
+            // Gravity is a force, and the vector language says so.
+            gravityArrow: Arrow(color: DesignTokens.Palette.forceVectorUI),
             tensionArrow: Arrow(color: UIColor(red: 0.95, green: 0.85, blue: 0.2, alpha: 1)),
             netArrow: Arrow(color: VectorPalette.force))
         [visual.velocityArrow, visual.accelerationArrow, visual.gravityArrow,

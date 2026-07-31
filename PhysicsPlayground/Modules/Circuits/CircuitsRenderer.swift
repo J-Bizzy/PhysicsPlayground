@@ -68,6 +68,9 @@ final class CircuitsRenderer {
     private var towerLabelPivots: [Entity] = []
     private var towerLabelCache: [String: MeshResource] = [:]
     private var towerLabelKeys: [String] = []
+    /// The colour step each tower is currently wearing, so an unchanged
+    /// potential costs no material write.
+    private var towerBuckets: [Int] = []
 
     /// The wire rod's generated mesh length; live length is a scale on top.
     private static let wireBaseLength: Float = 0.12
@@ -420,13 +423,53 @@ final class CircuitsRenderer {
 
     /// Warm for high potential, cool for low — the same language the
     /// gradient wires speak, saturated for the towers.
-    private static func potentialColor(_ volts: Double, span: Double) -> UIColor {
-        let t = span > 1e-6 ? CGFloat(max(-1, min(1, volts / span))) : 0   // −1…1
+    /// The skyline's warm↔cool ramp, over a normalised −1…1 axis.
+    private static func potentialTint(_ t: CGFloat) -> UIColor {
         if t >= 0 {
             return UIColor(red: 1.0, green: 0.6 - 0.35 * t, blue: 0.3 - 0.25 * t, alpha: 1)
         }
         return UIColor(red: 0.35 + 0.35 * t, green: 0.65 + 0.2 * t, blue: 1.0, alpha: 1)
     }
+
+    // The skyline's materials, resolved once.
+    //
+    // Every tower and every cap used to build a fresh
+    // `PhysicallyBasedMaterial` from its live voltage on EVERY frame the
+    // skyline was shown — two allocations per node per frame, for a
+    // picture whose colour only moves when the ramp crosses a step the
+    // eye can actually see. Quantising the axis into 33 steps turns the
+    // whole thing into a table lookup, and a bucket that has not moved
+    // since last frame writes nothing at all. The file already banked
+    // its other ramps this way (`glowMaterials`, `voltageMaterials`);
+    // this one was simply missed.
+    private static let skylineSteps = 33
+
+    private static func skylineBucket(_ volts: Double, span: Double) -> Int {
+        let t = span > 1e-6 ? max(-1, min(1, volts / span)) : 0
+        return min(max(Int(((t + 1) / 2) * Double(skylineSteps - 1) + 0.5), 0),
+                   skylineSteps - 1)
+    }
+
+    private static func skylineTint(_ bucket: Int) -> UIColor {
+        potentialTint(CGFloat(bucket) / CGFloat(skylineSteps - 1) * 2 - 1)
+    }
+
+    private static func skylineMaterial(_ bucket: Int, intensity: Float)
+    -> PhysicallyBasedMaterial {
+        let color = skylineTint(bucket)
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: color)
+        material.roughness = 0.4
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.6))
+        material.emissiveColor = .init(color: color)
+        material.emissiveIntensity = intensity
+        return material
+    }
+
+    private static let towerMaterials: [PhysicallyBasedMaterial] =
+        (0..<skylineSteps).map { skylineMaterial($0, intensity: 0.6) }
+    private static let capMaterials: [PhysicallyBasedMaterial] =
+        (0..<skylineSteps).map { skylineMaterial($0, intensity: 0.9) }
 
     /// Raises a translucent glowing tower over every circuit node to a
     /// height equal to its voltage, linked to the node by a faint
@@ -453,20 +496,25 @@ final class CircuitsRenderer {
             let base = SIMD3<Float>(Float(node.position.x), Self.skylineDatumY,
                                     Float(node.position.z))
             let height = Float(node.voltage) * Self.voltsToMeters
-            let color = Self.potentialColor(node.voltage, span: span)
+            let bucket = Self.skylineBucket(node.voltage, span: span)
+            let colorMoved = towerBuckets[index] != bucket
+            if colorMoved { towerBuckets[index] = bucket }
 
             // The tower: a slim column from the datum to the potential.
             tower.isEnabled = true
             let mag = max(abs(height), 0.001)
             tower.position = base + SIMD3(0, height / 2, 0)
             tower.scale = SIMD3(1, mag / 0.1, 1)   // base mesh is 0.1 tall
-            setEmissive(tower, color, intensity: 0.6)
 
             // A glowing cap disc at the top.
             let cap = towerCaps[index]
             cap.isEnabled = true
             cap.position = base + SIMD3(0, height, 0)
-            setEmissive(cap, color, intensity: 0.9)
+
+            if colorMoved {
+                tower.model?.materials = [Self.towerMaterials[bucket]]
+                cap.model?.materials = [Self.capMaterials[bucket]]
+            }
 
             // A faint thread from the node's real position up to the base.
             let thread = towerThreads[index]
@@ -484,25 +532,16 @@ final class CircuitsRenderer {
             pivot.isEnabled = true
             pivot.position = base + SIMD3(0, height + (height >= 0 ? 0.05 : -0.06), 0)
             let text = String(format: "%.1f V", node.voltage)
-            if towerLabelKeys[index] != text {
+            if towerLabelKeys[index] != text || colorMoved {
                 towerLabelKeys[index] = text
                 let mesh = towerLabelMesh(text)
                 towerLabels[index].model = ModelComponent(
-                    mesh: mesh, materials: [UnlitMaterial(color: color)])
+                    mesh: mesh,
+                    materials: [UnlitMaterial(color: Self.skylineTint(bucket))])
                 let bounds = mesh.bounds
                 towerLabels[index].position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
             }
         }
-    }
-
-    private func setEmissive(_ entity: ModelEntity, _ color: UIColor, intensity: Float) {
-        var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: color)
-        material.roughness = 0.4
-        material.blending = .transparent(opacity: .init(floatLiteral: 0.6))
-        material.emissiveColor = .init(color: color)
-        material.emissiveIntensity = intensity
-        entity.model?.materials = [material]
     }
 
     private func growTower() {
@@ -531,6 +570,7 @@ final class CircuitsRenderer {
         towerLabels.append(label)
         towerLabelPivots.append(pivot)
         towerLabelKeys.append("")
+        towerBuckets.append(-1)
     }
 
     private func towerLabelMesh(_ text: String) -> MeshResource {
@@ -803,7 +843,8 @@ final class CircuitsRenderer {
         holder.addChild(knob)
 
         // Selection halo.
-        var haloMaterial = UnlitMaterial(color: .white)
+        var haloMaterial = UnlitMaterial(
+            color: DesignTokens.Palette.selectionHaloUI)
         haloMaterial.blending = .transparent(opacity: 0.18)
         let halo = ModelEntity(
             mesh: .generateSphere(radius: 0.085), materials: [haloMaterial])
@@ -853,7 +894,10 @@ final class CircuitsRenderer {
                 mesh: .generateSphere(radius: 0.008),
                 materials: [Materials.machined(UIColor(white: 0.6, alpha: 1), roughness: 0.3)])
             rotor.addChild(hub)
-            let accent = UIColor(red: 0.2, green: 0.85, blue: 0.75, alpha: 1)
+            // The motor's own accent, from the tokens. This was a
+            // hand-typed teal that belonged to no palette entry — an
+            // unowned hue on a physics object.
+            let accent = DesignTokens.Palette.motorAccentUI
             for axis: SIMD3<Float> in [[0, 1, 0], [0, 0, 1]] {
                 let blade = ModelEntity(
                     mesh: .generateBox(size: [0.005, 0.05, 0.004], cornerRadius: 0.002),

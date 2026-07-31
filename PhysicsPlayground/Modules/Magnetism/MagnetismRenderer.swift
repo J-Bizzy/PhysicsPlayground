@@ -112,6 +112,19 @@ final class MagnetismRenderer {
     /// worth reading. Wave a magnet through the coil — the harder you
     /// pump, the brighter it burns. The coil needs no battery for
     /// this; that is the entire point.
+    /// Opacity steps for the induction filament, banked once.
+    private static let filamentSteps = 12
+    private static let filamentMaterials: [UnlitMaterial] =
+        (0..<filamentSteps).map { step in
+            var material = UnlitMaterial(
+                color: UIColor(red: 1.0, green: 0.85, blue: 0.55, alpha: 1))
+            let level = Float(step) / Float(filamentSteps - 1)
+            material.blending = .transparent(
+                opacity: .init(floatLiteral: 0.25 + 0.75 * level))
+            return material
+        }
+    private var filamentBucket = -1
+
     private func syncInduction(_ model: MagnetismModel) {
         guard model.electromagnetOn else {
             inductionGlow.isEnabled = false
@@ -123,10 +136,18 @@ final class MagnetismRenderer {
         inductionGlow.position = SIMD3<Float>(model.electromagnetPosition)
         inductionGlow.isEnabled = level > 0.03
         if inductionGlow.isEnabled {
-            var filament = UnlitMaterial(
-                color: UIColor(red: 1.0, green: 0.85, blue: 0.55, alpha: 1))
-            filament.blending = .transparent(opacity: .init(floatLiteral: 0.25 + 0.75 * level))
-            inductionGlow.model?.materials = [filament]
+            // The brightness is continuous; the MATERIAL is not. This
+            // used to build a fresh `UnlitMaterial` on every frame the
+            // filament burned — which is every frame a magnet is moving,
+            // the one time the module is busiest. Twelve banked steps
+            // are indistinguishable from the ramp, and a step that has
+            // not changed writes nothing.
+            let bucket = min(max(Int(level * Float(Self.filamentSteps - 1) + 0.5), 0),
+                             Self.filamentSteps - 1)
+            if filamentBucket != bucket {
+                filamentBucket = bucket
+                inductionGlow.model?.materials = [Self.filamentMaterials[bucket]]
+            }
             inductionGlow.scale = SIMD3(repeating: 0.7 + 0.9 * level)
         }
         if inductionCallout == nil {

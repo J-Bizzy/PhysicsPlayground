@@ -87,6 +87,11 @@ enum DesignTokens {
         // Circuits
         static let copperUI = UIColor(red: 0.75, green: 0.48, blue: 0.25, alpha: 1)
         static let electronUI: UIColor = .systemCyan
+        /// The motor's propeller. Its own entry rather than a borrowed
+        /// one: this teal was hand-typed at the call site and happened
+        /// to match nothing, which is the state a palette exists to
+        /// prevent — an unowned hue on a physics object.
+        static let motorAccentUI = UIColor(red: 0.2, green: 0.85, blue: 0.75, alpha: 1)
 
         // Module accent colors, one per catalog entry.
         static let electromagnetismAccent = Color.yellow

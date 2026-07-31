@@ -186,6 +186,16 @@ struct CircuitsSpaceView: View {
                     magnetism.electromagnetOn = true
                 }
             }
+            // `-skyline 1` raises the voltage towers at launch. Same
+            // reason as the two above: the toggle lives on the layers
+            // bank, which needs a hand. This one earned its arg by
+            // being the module's heaviest per-frame path — every tower
+            // and cap rebuilt its material each frame until the ramp
+            // was banked — and a rewrite of a picture nobody can see
+            // from the CLI is a rewrite nobody can check.
+            if UserDefaults.standard.bool(forKey: "skyline") {
+                model.showVoltageHeights = true
+            }
             let forcedScale = UserDefaults.standard.double(forKey: "viewScale")
             if forcedScale > 0 {
                 scaleRig.updateMagnification(Float(forcedScale))
