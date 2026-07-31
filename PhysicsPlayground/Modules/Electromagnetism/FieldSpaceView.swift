@@ -83,11 +83,16 @@ struct FieldSpaceView: View {
     /// once, which is one particle choice wearing a toggle's clothes.
     @State private var particles = SpatialPicker(
         accessibilityNoun: "Test particle",
+        // Labels kept SHORT because the discs are close together: at this
+        // fan's spacing (~7.5 cm) a label much over 5 cm wide runs into its
+        // neighbour's, and "Electron e⁻" did. The symbol on each disc
+        // already carries the sign, so the word only has to carry the
+        // particle.
         choices: [
-            PickerChoice(id: "plus", label: "+ ball", symbol: "plus.circle.fill"),
-            PickerChoice(id: "minus", label: "− ball", symbol: "minus.circle.fill"),
-            PickerChoice(id: "electron", label: "Electron e⁻", symbol: "e.circle.fill"),
-            PickerChoice(id: "positron", label: "Positron e⁺", symbol: "e.circle"),
+            PickerChoice(id: "plus", label: "Ball +", symbol: "plus.circle.fill"),
+            PickerChoice(id: "minus", label: "Ball −", symbol: "minus.circle.fill"),
+            PickerChoice(id: "electron", label: "Electron", symbol: "e.circle.fill"),
+            PickerChoice(id: "positron", label: "Positron", symbol: "e.circle"),
         ],
         staysOpen: true,
         accent: UIColor(DesignTokens.Palette.probePositive),

@@ -135,6 +135,22 @@ final class SpatialLayerBank {
         return material
     }
 
+    /// The switch plate's own width. The label is placed relative to it,
+    /// so the two must not be able to disagree.
+    private static let plateWidth: Float = 0.086
+    private static let labelSize: CGFloat = 0.0104
+    private static let labelGap: Float = 0.008
+
+    /// How far this bank's widest label reaches from a plate's centre —
+    /// what a caller needs to keep the bank clear of its apparatus.
+    /// `FieldInstrumentLayout` asserts against it rather than guessing.
+    static func reach(forLabels labels: [String]) -> Float {
+        let widest = labels
+            .map { HubScene.namePlateWidth($0, size: labelSize) }
+            .max() ?? 0
+        return plateWidth / 2 + labelGap + widest
+    }
+
     private func makePlate(_ layer: LayerSwitch) -> (ModelEntity, ModelEntity) {
         // The casing: a dark slab that reads as hardware whatever the
         // layer's state, so the bank keeps its shape when everything is
@@ -145,7 +161,8 @@ final class SpatialLayerBank {
         casing.clearcoat = .init(floatLiteral: 0.9)
         casing.blending = .transparent(opacity: .init(floatLiteral: 0.92))
         let plate = ModelEntity(
-            mesh: .generateBox(size: [0.086, 0.050, 0.007], cornerRadius: 0.010),
+            mesh: .generateBox(size: [Self.plateWidth, 0.050, 0.007],
+                               cornerRadius: 0.010),
             materials: [casing])
         plate.name = "layer-\(layer.id)"
 
@@ -167,10 +184,18 @@ final class SpatialLayerBank {
             plate.addChild(icon)
         }
 
+        // The label sits BESIDE the switch, and has to be placed by its
+        // own left edge rather than by a fixed offset. `namePlate` returns
+        // a pill centred on its origin, so parking that origin 0.050 out —
+        // just 0.007 clear of a plate 0.086 wide — put half of every pill
+        // back on top of the switch it named. "Parallel plates" straddled
+        // its own icon. The label now starts where the plate ends, however
+        // long the words are.
+        let labelWidth = HubScene.namePlateWidth(layer.label, size: Self.labelSize)
         let label = HubScene.namePlate(layer.label,
                                        accent: UIColor(white: 0.94, alpha: 1),
-                                       size: 0.0104)
-        label.position = [0.050, 0, 0.005]
+                                       size: Self.labelSize)
+        label.position = [Self.plateWidth / 2 + Self.labelGap + labelWidth / 2, 0, 0.005]
         plate.addChild(label)
 
         plate.components.set(InputTargetComponent())

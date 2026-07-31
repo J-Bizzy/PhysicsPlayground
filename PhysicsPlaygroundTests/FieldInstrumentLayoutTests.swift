@@ -17,6 +17,7 @@
 
 import XCTest
 import PhysicsCore
+import RenderKit
 import simd
 @testable import PhysicsPlayground
 
@@ -25,6 +26,45 @@ final class FieldInstrumentLayoutTests: XCTestCase {
 
     private let station = FieldInstrumentLayout.station
     private let margin = FieldInstrumentLayout.stationMargin
+
+    // MARK: Labels are part of the object
+
+    /// A label is as much a part of an instrument as its switch, and the
+    /// declared bounding box has to include it — otherwise every clearance
+    /// checked in this file is measuring a smaller object than the one in
+    /// the room. The bank's widest label reaches ~0.147 m from a plate's
+    /// centre, which is most of its footprint.
+    func testTheBanksBoxIncludesItsLabels() {
+        let reach = SpatialLayerBank.reach(forLabels: [
+            "Field lines", "Free charges", "Parallel plates",
+            "Uniform B", "Flux meter"])
+        XCTAssertLessThanOrEqual(
+            Double(reach), FieldInstrumentLayout.bankHalfExtents.x,
+            """
+            A bank label reaches \(reach) m from the plate centre but the \
+            declared half-extent is \(FieldInstrumentLayout.bankHalfExtents.x). \
+            Every clearance in this file is then measuring the switches \
+            without their names.
+            """)
+    }
+
+    /// The particle bank's discs sit close together, so its labels have to
+    /// be short enough not to run into each other. "Electron e⁻" was not,
+    /// and the four names read as one smear.
+    func testTheParticleLabelsDoNotCollide() {
+        let layout = FanLayout(span: 50 * .pi / 180, reach: 0.26,
+                               verticalScale: 0.25, lift: 0, stagger: 0)
+        let first = layout.placement(index: 0, count: 4, openness: 1).offset
+        let second = layout.placement(index: 1, count: 4, openness: 1).offset
+        let spacing = simd_distance(first, second)
+
+        for label in ["Ball +", "Ball −", "Electron", "Positron"] {
+            let width = Double(HubScene.namePlateWidth(label, size: 0.009))
+            XCTAssertLessThan(
+                width, spacing,
+                "\"\(label)\" is \(width) m wide but the discs are only \(spacing) m apart.")
+        }
+    }
 
     // MARK: Nothing stands where the physics is
 

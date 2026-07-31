@@ -1027,6 +1027,19 @@ final class HubScene {
     /// unframed.
     /// Internal, not private: the palette ring borrows this exact
     /// treatment for its slot labels, so the app has ONE nameplate.
+    /// How wide the pill `namePlate` will build for this text.
+    ///
+    /// Exposed because a caller that mounts a label BESIDE something has
+    /// to know how far it reaches: `namePlate` returns a plate centred on
+    /// its own origin, so positioning it by a fixed offset works only
+    /// while the text is short enough. The layers bank did exactly that
+    /// and every label longer than 14 mm straddled the switch it named.
+    /// One formula, two callers — a second copy of the padding arithmetic
+    /// would drift the moment either changed.
+    static func namePlateWidth(_ text: String, size: CGFloat = 0.036) -> Float {
+        textExtents(text, size: size).x + Float(size) * 0.72 * 2
+    }
+
     static func namePlate(_ text: String, accent: UIColor,
                           size: CGFloat = 0.036) -> Entity {
         let plate = Entity()
@@ -1036,9 +1049,8 @@ final class HubScene {
         // gallery's 36 mm plates made a 10 mm palette label wear a
         // plate three text-heights wide — neighbouring labels collided
         // into one smear of backing.
-        let padX = Float(size) * 0.72
         let padY = Float(size) * 0.44
-        let width = extents.x + padX * 2
+        let width = namePlateWidth(text, size: size)
         let height = extents.y + padY * 2
 
         var backing = UnlitMaterial(color: UIColor(white: 0.02, alpha: 1))

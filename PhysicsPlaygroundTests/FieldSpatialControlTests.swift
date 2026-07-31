@@ -23,6 +23,39 @@ import simd
 @MainActor
 final class FieldSpatialControlTests: XCTestCase {
 
+    // MARK: What the bank shows on arrival
+
+    /// The opening state, pinned. Arriving in the module you get the
+    /// dipole and its field lines and NOTHING else — no plates, no
+    /// uniform B, no flux meter, and the charges pinned where they are.
+    ///
+    /// Worth a test rather than a glance now that the bank makes the whole
+    /// set visible at once: five lit plates on arrival would read as five
+    /// things demanding attention, and the module's first picture should
+    /// be the dipole, which is the one everybody recognises.
+    func testTheModuleOpensWithFieldLinesAndNothingElse() {
+        let model = FieldModel()
+
+        XCTAssertTrue(model.showLines, "The field is the module; it must be on.")
+        XCTAssertFalse(model.gaussSurfaceOn, "The flux meter must not be out on arrival.")
+        XCTAssertFalse(model.capacitorOn)
+        XCTAssertFalse(model.magneticFieldOn)
+        XCTAssertFalse(model.electronMode)
+        XCTAssertFalse(model.chargesRespond)
+
+        // And a reset returns to exactly that, not to whatever was last on.
+        model.gaussSurfaceOn = true
+        model.capacitorOn = true
+        model.magneticFieldOn = true
+        model.showLines = false
+        model.reset()
+
+        XCTAssertTrue(model.showLines)
+        XCTAssertFalse(model.gaussSurfaceOn)
+        XCTAssertFalse(model.capacitorOn)
+        XCTAssertFalse(model.magneticFieldOn)
+    }
+
     // MARK: The throw that replaced the Drop button
 
     /// With B on, the probe must leave your hand MOVING, or F = qv×B is
