@@ -2,6 +2,16 @@
 
 A running log of consequential decisions — architectural, physical, or product — and why they were made. Newest first. One entry per decision.
 
+## 2026-07-31 — Magnetism's four switches become one bank, and a second reset defect
+
+**Decision:** Magnetism's four panel toggles become a four-plate `SpatialLayerBank` standing to the right of the field, at the region's own depth. `MagnetismControlsPanel` keeps the Add-magnet button, the magnet count, the µT compass readout and its prose, and holds **zero `Slider`/`Picker`/`Toggle`** — the fourth module to meet the exit criterion. Two remain: Kinematics (4) and Circuits (2).
+
+**The top plate is not a display layer, and the bank has to admit it.** Three of these switches change what is DRAWN — field lines, compass grid, hand compass. The fourth, `dynamicsOn`, decides whether the magnets glide together and swing into alignment at all, which is the difference between a field diagram and a physics lab. It takes the top plate and the label "Magnets move" rather than a drawing verb. A bank whose plates all mean *draw this*, with one meaning *run the simulation* hidden among them, would be lying by arrangement. Two tests state the pair from both sides: freezing must stop the physics however hard the magnets pull, and hiding any drawn layer must move nothing.
+
+**The bank does not scale with the field.** It is parented to the renderer's `root`, not `viewRoot`, so the two-hand rig's 4× leaves it alone. The well and the blooms belong to the field and correctly scale with it; an instrument belongs to the room. This is the same call Gravity Lab made at 9× and for the same reason — an instrument that grows with the apparatus puts its own controls out of reach at exactly the moment you zoomed in to use them.
+
+**A SECOND RESET DEFECT, IDENTICAL IN SHAPE TO THE ONE FOUND IN PENDULUMS THE SAME DAY.** `reset()` restored `showFieldLines`, `showCompasses`, `compassOn` and `electromagnetOn`, and silently skipped `dynamicsOn` — so freezing the magnets and pressing Reset returned a frozen bench. Pendulums' `reset()` skipped `frictionOn` in exactly the same way. **This is now a pattern worth naming: a model flag with no visible control can drift out of `reset()` and stay wrong indefinitely, because nothing in the room contradicts it. The moment it gets a lamp, the lamp makes a claim every frame, and a wrong one is visible.** Both are fixed and both are pinned by a test that lists every state its bank shows. The rule for the two modules left: when a toggle becomes a plate, check `reset()` covers it *before* looking at anything.
+
 ## 2026-07-31 — Pendulums empties its panel, and the Bloom grip stays relative
 
 **Decision:** The module's seven panel controls — the joint-largest panel left in the app, and the last one with two sliders — become four objects in the room. A five-plate `SpatialLayerBank` to the left of the swing carries the four display layers plus air resistance; a standing three-disc `SpatialPicker` of worlds and a `SpatialTrackControl` rail for g stand to the right; a second rail under them carries time. `PendulumsControlsPanel` keeps the two making buttons, two readout cards and its prose, and holds **zero `Slider`/`Picker`/`Toggle`** — the third module to meet the 2026-07-29 exit criterion, after Electric Fields and Gravity Lab.

@@ -445,6 +445,16 @@ final class MagnetismModel {
         showFieldLines = true
         showCompasses = true
         compassOn = true
+        // The fourth state the switch bank shows, and reset restored the
+        // other three while silently skipping this one — so freezing the
+        // magnets and pressing Reset left them frozen under a dark plate
+        // claiming they were free. The identical omission was found in
+        // Pendulums' `frictionOn` the same day: a flag with no visible
+        // control can drift out of reset unnoticed for months, and the
+        // moment it gets a lamp the lamp starts telling the truth about
+        // it. (`-magFrozen` still opens frozen — `init()` applies it
+        // after this runs.)
+        dynamicsOn = true
         compassPosition = Self.regionCenter + SIMD3(0.0, -0.42, 0.55)
         electromagnetOn = false
         coilCurrent = 0

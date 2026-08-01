@@ -141,6 +141,30 @@ pass, and are the ones worth doing first.
 - [ ] The hand-held compass needle points along the local field as you
       walk it around a magnet.
 
+### ⟳ The switch bank
+
+Four toggles left the panel; the bank stands to the right of the field
+at the region's own depth. **Not looked at yet** — the simulator's shell
+crash-looped through the pass that built it.
+
+- [ ] **Visible without hunting**, off your right shoulder, at about the
+      same glance as the magnets themselves.
+- [ ] Each label sits BESIDE its plate, never across it.
+- [ ] **It does not grow when you zoom.** Two-hand scale the field out to
+      4×: the magnets and their loops should swell, and the bank should
+      stay exactly where and what it is. A bank that scaled would put its
+      own plates out of reach at the moment you most wanted them.
+- [ ] **"Magnets move" is the physics switch, and should feel unlike the
+      other three.** Bring two magnets close, switch it off: they must
+      stop dead and hold, however hard they are pulling. Switch it on:
+      they resume closing.
+- [ ] The other three only change what is DRAWN — hiding the field lines
+      must not nudge a magnet.
+- [ ] **Reset relights all four.** Freeze the magnets, press Reset: they
+      must come back free with the top plate lit. This was genuinely
+      broken — `reset()` restored three of the four and skipped the
+      freeze, so the bench came back frozen under a lamp saying otherwise.
+
 ## Electric Fields — the app's only fully spatial module
 
 Every control here is an object in the room, so **this section is the

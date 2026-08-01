@@ -2,11 +2,17 @@
 //  MagnetismControlsPanel.swift
 //  Physics Playground — Magnetism module
 //
-//  The module's one-glance panel. The always-open card makes magnets
-//  and frees or freezes them; the electromagnet (the live wire to the
-//  Circuit Workshop), the display layers, and the compass reading wait
-//  behind collapsed sections. Per-MAGNET editing (strength bead, flip
-//  poles, delete) lives on the magnet: tap it and its ring unfolds.
+//  The module's one-glance panel — and it holds no slider, no picker and
+//  no toggle. It makes magnets, and otherwise it READS.
+//
+//  All four switches stand beside the field now, as one bank: whether
+//  the magnets are free to move, and the three things that can be drawn.
+//  Freezing them was the odd one out and gets the top plate, because a
+//  bank of "draw this" plates with one "run the simulation" plate hidden
+//  among them would be lying by arrangement.
+//
+//  Per-MAGNET editing (strength bead, flip poles, delete) lives on the
+//  magnet: tap it and its ring unfolds.
 //
 
 import SwiftUI
@@ -34,9 +40,12 @@ struct MagnetismControlsPanel: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Toggle("Magnets respond to forces", isOn: $model.dynamicsOn)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("Free, they glide together head-to-tail and swing to align. Frozen, they hold exactly where you put them.")
+                Text(self.model.dynamicsOn
+                     ? "Free: they glide together head-to-tail and swing to align."
+                     : "Frozen: they hold exactly where you put them.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text("Tap a magnet for its own controls — pull the bead for strength, petals flip its poles or delete it.")
                     .font(DesignTokens.TypeScale.footnote)
@@ -49,14 +58,19 @@ struct MagnetismControlsPanel: View {
             // circuit bench, so it belongs to neither — it lives in the
             // merged panel's own "The link" section, between the two.
 
-            CollapsedSection("Display") {
-                Toggle("Field lines", isOn: $model.showFieldLines)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("Closed loops — magnetic lines have no endpoints")
-                Toggle("Compass grid", isOn: $model.showCompasses)
-                    .font(DesignTokens.TypeScale.control)
-                Toggle("Hand compass", isOn: $model.compassOn)
-                    .font(DesignTokens.TypeScale.control)
+            CollapsedSection("The room") {
+                Text("The bank beside the field carries all four switches: "
+                     + "whether the magnets move, and whether you see the "
+                     + "field lines, the compass grid and the hand compass.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Field lines are closed LOOPS — a magnetic line has no "
+                     + "endpoint to start or stop at, which is the one way "
+                     + "they differ from the electric ones next door.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             CollapsedSection("Numbers") {

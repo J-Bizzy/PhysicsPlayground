@@ -29,6 +29,26 @@ struct MagnetismSpaceView: View {
     /// side-on. A pure view transform — the tesla stay honest.
     @State private var scaleRig = SpatialScaleRig(
         pivot: SIMD3<Float>(MagnetismModel.regionCenter), range: 0.5...4.0)
+    /// What is drawn, and whether the magnets are free.
+    ///
+    /// Four plates for the four states the panel used to hold as toggles.
+    /// The top one is not a display layer: `dynamicsOn` decides whether
+    /// the magnets glide together and swing into alignment at all, which
+    /// is the difference between a field diagram and a physics lab. It
+    /// takes the top plate and a label that says what it does, because a
+    /// bank whose plates all mean "draw this" plus one that means "run
+    /// the simulation" has to admit the difference somewhere.
+    @State private var layers: SpatialLayerBank?
+
+    /// Beside the magnets, at the region's own depth.
+    ///
+    /// NOT under `viewRoot`: the scale rig reaches 4×, and a switch bank
+    /// that grew fourfold with the field would push its own plates out of
+    /// reach exactly when you had zoomed in to look at something. The
+    /// well and the blooms belong to the field and DO scale with it; an
+    /// instrument belongs to the room.
+    private static let bankAnchor = SIMD3<Float>(MagnetismModel.regionCenter)
+        + SIMD3(0.80, 0.10, 0.08)
 
     var body: some View {
         RealityView { content in
@@ -47,6 +67,27 @@ struct MagnetismSpaceView: View {
             renderer.viewRoot.addChild(bloom.root)
             wells = sources
 
+            let bank = SpatialLayerBank(
+                accent: UIColor(DesignTokens.Palette.magnetismAccent),
+                layers: [
+                    .init(id: "dynamics", label: "Magnets move",
+                          symbol: "arrow.triangle.merge",
+                          isOn: { model.dynamicsOn },
+                          toggle: { model.dynamicsOn.toggle() }),
+                    .init(id: "lines", label: "Field lines", symbol: "scribble",
+                          isOn: { model.showFieldLines },
+                          toggle: { model.showFieldLines.toggle() }),
+                    .init(id: "compasses", label: "Compass grid", symbol: "grid",
+                          isOn: { model.showCompasses },
+                          toggle: { model.showCompasses.toggle() }),
+                    .init(id: "handCompass", label: "Hand compass",
+                          symbol: "location.north.circle",
+                          isOn: { model.compassOn },
+                          toggle: { model.compassOn.toggle() }),
+                ])
+            renderer.root.addChild(bank.root)
+            layers = bank
+
             // Magnetism alone is MAGNETS alone. The electromagnet coil
             // lives with Circuit Workshop now — the one wired pair —
             // because its current is that bench's inductor current, and
@@ -63,6 +104,10 @@ struct MagnetismSpaceView: View {
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
                     wells?.update(dt: event.deltaTime)
+                    layers?.update(
+                        anchor: Self.bankAnchor,
+                        viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
+                        dt: event.deltaTime)
                     if let renderer {
                         syncBloom(renderer: renderer, dt: event.deltaTime)
                     }
@@ -99,6 +144,18 @@ struct MagnetismSpaceView: View {
                let first = model.magnets.first {
                 ring.openID = first.id
             }
+            // `-magLayers 0` darkens every plate on the bank, so one shot
+            // shows all four lamps OFF against the four labels — the only
+            // way to check the dark state, since the scene opens with
+            // three of them already lit and the simulator has no finger
+            // to flick them with.
+            if UserDefaults.standard.object(forKey: "magLayers") != nil,
+               !UserDefaults.standard.bool(forKey: "magLayers") {
+                model.showFieldLines = false
+                model.showCompasses = false
+                model.compassOn = false
+                model.dynamicsOn = false
+            }
             #endif
             renderer.tick(model, viewer: appModel.room.headPosition)
             self.renderer = renderer
@@ -108,6 +165,11 @@ struct MagnetismSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
+                    // The bank gets first refusal, ahead of the
+                    // fall-through that folds the ring away — otherwise
+                    // flicking a switch would also close whichever
+                    // magnet's ring was open.
+                    if layers?.handleTap(value.entity) == true { return }
                     if bloom.handleTap(value.entity) { return }
                     // A tap on a magnet toggles its control ring; a tap
                     // on anything else folds it away.
