@@ -28,14 +28,18 @@
 //    derived from their real cap height.
 //  · The MOTION follows the vignette doctrine — every animated thing
 //    in the hub does the physics of the module it stands for. E&M gets
-//    an electron riding a tilted orbit around the sign (in front at
+//    an electron riding a tilted orbit ACROSS the sign (in front at
 //    the bottom of the lap, behind at the top — the pass that sells
 //    the letters as solids). Mechanics gets a ball lobbed over the
-//    sign on a parabola, landing at the far end of the rule and
-//    launching back. Cadences are signage cadences, chosen to be read
+//    sign on a parabola, launching and landing on the overhanging ends
+//    of the rule. Cadences are signage cadences, chosen to be read
 //    at a glance — the same licence the miniatures already take; the
 //    SHAPES (an ellipse, a parabola, a trail fading along it) are the
 //    honest part.
+//  · The DEPTH is measured, not chosen. Both bodies fly in lanes
+//    derived from the finished letters' own visual bounds, because the
+//    letters are extruded solids whose depth changes with the voice,
+//    the line and the sign's width. See `frontLane`.
 //
 
 import RealityKit
@@ -59,6 +63,22 @@ final class HubDomainTitle {
     private let trail: [ModelEntity]
     /// Where the rule sits, for the Mechanics launch/land points.
     private let ruleY: Float
+
+    /// The two depth lanes the kinetic bodies fly in: clear of the
+    /// letters' front faces, and clear of everything behind them.
+    ///
+    /// MEASURED, never assumed. `generateText` extrudes the glyphs along
+    /// z into real solids, each voice stacks its own passes at its own
+    /// offsets, and the flush lockup scales all of it per line — so the
+    /// depth the letters occupy is a different number for every sign in
+    /// the app. The ball flew at a hardcoded z = 0.02 for exactly as
+    /// long as it took someone to put the headset on: the plaque's
+    /// letters are ~55 mm deep, so 20 mm put the ball INSIDE the type it
+    /// was supposed to clear. Nothing about that is visible in a
+    /// screenshot taken head-on, which is the whole reason this file
+    /// measures instead of guessing.
+    private(set) var frontLane: Float = 0
+    private(set) var backLane: Float = 0
 
     /// The signage face, built at this size and scaled per line.
     private static let reference: CGFloat = 0.12
@@ -109,13 +129,29 @@ final class HubDomainTitle {
             cursor -= heights[index] + gap
         }
 
+        // How deep the finished letters actually are. Only the two lines
+        // are on `root` at this point, so this is the type and nothing
+        // else — every pass, every per-style offset, every per-line
+        // scale, in one measurement.
+        let letters = root.visualBounds(relativeTo: root)
+        let beadRadius: Float = domain == .mechanics ? 0.014 : 0.011
+        frontLane = letters.max.z + beadRadius + Self.laneClearance
+        backLane = letters.min.z - beadRadius - Self.laneClearance
+
         // The rule, in the domain accent — the same lit line as the
         // slab hairline below it, so sign and shelf read as one lamp.
+        //
+        // Wider than the type it underlines, by design: the Mechanics
+        // ball launches and lands on its ends, and ends that sit UNDER
+        // the letters (the original width * 0.92) meant every throw
+        // began and finished inside the word. A rule that overhangs is
+        // also just better signage — it reads as a bar the words rest
+        // on rather than a shy dash trapped beneath them.
         var ruleMaterial = UnlitMaterial(color: accent)
         ruleMaterial.blending = .transparent(opacity: 0.7)
         ruleY = -blockHeight / 2 - 0.055
         rule = ModelEntity(
-            mesh: .generateBox(width: width * 0.92, height: 0.0035,
+            mesh: .generateBox(width: width * Self.ruleOverhang, height: 0.0035,
                                depth: 0.0035, cornerRadius: 0.0017),
             materials: [ruleMaterial])
         rule.position = SIMD3(0, ruleY, 0)
@@ -134,10 +170,12 @@ final class HubDomainTitle {
             // Locals, not properties: the map's closure must not capture
             // self while `bead` and `trail` are still uninitialised.
             let (signHalfWidth, signHalfHeight) = (halfWidth, halfHeight)
+            let (front, back) = (frontLane, backLane)
             let points = (0...64).map { step -> SIMD3<Float> in
                 Self.orbitPoint(theta: Float(step) / 64 * 2 * .pi,
                                 halfWidth: signHalfWidth,
-                                halfHeight: signHalfHeight)
+                                halfHeight: signHalfHeight,
+                                frontLane: front, backLane: back)
             }
             if let mesh = TubeMesh.tube(lines: [points], radius: 0.0015, sides: 5) {
                 root.addChild(ModelEntity(mesh: mesh, materials: [trackMaterial]))
@@ -192,7 +230,8 @@ final class HubDomainTitle {
             let lag = Double(index + 1) * 0.055
             ghost.position = Self.path(for: domain, time: time - lag,
                                        halfWidth: halfWidth,
-                                       halfHeight: halfHeight, ruleY: ruleY)
+                                       halfHeight: halfHeight, ruleY: ruleY,
+                                       frontLane: frontLane, backLane: backLane)
             ghost.components.set(OpacityComponent(
                 opacity: 0.55 * (1 - Float(index) / Float(trail.count))))
         }
@@ -201,7 +240,8 @@ final class HubDomainTitle {
     private func place(beadAt time: Double) {
         bead.position = Self.path(for: domain, time: time,
                                   halfWidth: halfWidth,
-                                  halfHeight: halfHeight, ruleY: ruleY)
+                                  halfHeight: halfHeight, ruleY: ruleY,
+                                  frontLane: frontLane, backLane: backLane)
     }
 
     // MARK: The two paths — pure functions, so the tests can hold them
@@ -211,40 +251,93 @@ final class HubDomainTitle {
     /// arc actually clears the sign and lands back on the rule.
     nonisolated static func path(
         for domain: HubDomain, time: Double,
-        halfWidth: Float, halfHeight: Float, ruleY: Float
+        halfWidth: Float, halfHeight: Float, ruleY: Float,
+        frontLane: Float, backLane: Float
     ) -> SIMD3<Float> {
         switch domain {
         case .electricity:
             // One lap every 4.5 s, counter-clockwise as read.
             let theta = Float(time / 4.5 * 2 * .pi)
             return orbitPoint(theta: theta, halfWidth: halfWidth,
-                              halfHeight: halfHeight)
+                              halfHeight: halfHeight,
+                              frontLane: frontLane, backLane: backLane)
         case .mechanics:
             // A 2.8 s lob from one end of the rule to the other, then
             // back the other way — a ball kept in play, not a loop.
             // The arc is a true parabola: y is quadratic in horizontal
             // progress, apex clearing the top of the letters.
+            //
+            // It launches OUTBOARD of the type, off the overhanging
+            // ends of the rule. It used to launch at 0.92 halfWidth —
+            // under the letters — and a parabola that starts under a
+            // word 6 times wider than it is tall has no way out through
+            // the top: it would need a metre of apex over a 20 cm sign.
+            // Starting outside the word is what buys the arc its
+            // clearance at both shoulders.
             let period = 2.8
             let crossing = Int(floor(time / period))
             let s = Float(time / period - floor(time / period))
             let direction: Float = crossing.isMultiple(of: 2) ? 1 : -1
-            let x = direction * (s * 2 - 1) * (halfWidth * 0.92)
+            let x = direction * (s * 2 - 1) * (halfWidth * launchReach)
             let apex = halfHeight + 0.13 - ruleY
             let y = ruleY + apex * 4 * s * (1 - s)
-            return SIMD3(x, y, 0.02)
+            // The whole flight happens in the front lane, so the ball
+            // passes the letters instead of through them.
+            return SIMD3(x, y, frontLane)
         }
     }
 
-    /// The electron's ellipse: hugging the lockup, tilted in z so the
+    /// The electron's ellipse: crossing the lockup, tilted in z so the
     /// lap passes IN FRONT across the bottom and BEHIND across the top
     /// — the depth crossing is what makes the letters read as solids.
+    ///
+    /// It CROSSES the lockup on purpose. The first pass hung the ellipse
+    /// outside the type on every side (halfWidth + 0.09), which meant
+    /// the "behind" half had no letter in front of it to be hidden by:
+    /// the depth swap was real in the transform and invisible to the
+    /// eye. A semi-axis inside the block's half-width puts the spark
+    /// behind actual glyphs on the top of the lap, which is the entire
+    /// effect this orbit exists to produce.
     nonisolated static func orbitPoint(
-        theta: Float, halfWidth: Float, halfHeight: Float
+        theta: Float, halfWidth: Float, halfHeight: Float,
+        frontLane: Float, backLane: Float
     ) -> SIMD3<Float> {
-        SIMD3(cos(theta) * (halfWidth + 0.09),
-              sin(theta) * (halfHeight + 0.055),
-              -sin(theta) * 0.055)
+        let mid = (frontLane + backLane) / 2
+        let swing = (frontLane - backLane) / 2
+        // Depth eases like a tanh, not a sine. A sine spends most of
+        // the lap part-buried in the letters and only reaches a clean
+        // lane at the two poles — the spark reads as half-sunk for most
+        // of the orbit and the crossing never resolves. Shaped this way
+        // it sits SOLIDLY behind for most of the top half and SOLIDLY
+        // in front for most of the bottom, and does its swapping at
+        // theta 0 and pi, the far left and right of the ellipse, where
+        // it is clear of the type anyway. x and y are untouched: the
+        // spark is still exactly on its drawn track.
+        let s = tanh(orbitSnap * sin(theta)) / tanh(orbitSnap)
+        return SIMD3(cos(theta) * (halfWidth * orbitReach),
+                     sin(theta) * (halfHeight + orbitRise),
+                     mid - s * swing)
     }
+
+    // MARK: The numbers the two paths are cut to
+
+    /// How far the ball's launch and landing sit outboard of the type,
+    /// as a multiple of the lockup's half-width.
+    nonisolated static let launchReach: Float = 1.06
+    /// The rule's width as a multiple of the lockup's — wide enough that
+    /// the ball's landing points are on it, not past it.
+    nonisolated static let ruleOverhang: Float = 1.16
+    /// The electron ellipse's horizontal semi-axis, as a multiple of the
+    /// lockup's half-width. Inside 1, so the lap crosses the letters.
+    nonisolated static let orbitReach: Float = 0.88
+    /// How far the ellipse rises above the block, metres. Small: the
+    /// lap has to spend real time INSIDE the letters' silhouette, and
+    /// an ellipse that clears the block vertically never does.
+    nonisolated static let orbitRise: Float = 0.035
+    /// How hard the depth eases between lanes. 0 would be a plain sine.
+    nonisolated static let orbitSnap: Float = 2.2
+    /// Air between a kinetic body's skin and the letters it passes.
+    nonisolated static let laneClearance: Float = 0.013
 
     // MARK: Parts
 

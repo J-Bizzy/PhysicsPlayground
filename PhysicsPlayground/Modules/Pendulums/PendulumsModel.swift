@@ -36,8 +36,18 @@ final class PendulumsModel {
 
     /// Where a pendulum lands when you have not said otherwise.
     nonisolated static let defaultPivot = SIMD3<Double>(0, 2.0, -1.1)
-    /// A pivot may not be hung lower than this, or the bob is in the floor.
-    nonisolated static let minimumPivotHeight = 0.85
+    /// How much air a bob must keep under it at the bottom of its
+    /// swing. The pivot's floor is this PLUS the cable's length, so a
+    /// long pendulum has to hang from higher up.
+    ///
+    /// It was 0.85 m, which is not clearance — it is chest height. With
+    /// a default 0.8 m cable that put the pivot's floor at 1.65 m,
+    /// nineteen centimetres above the spawn well's own mouth: pulling a
+    /// pendulum out and moving your hand a millimetre teleported the
+    /// whole rig up out of your fingers, and it could not be hung
+    /// anywhere in the lower half of the room afterwards. A bob a third
+    /// of a metre off the floor is not in the floor.
+    nonisolated static let minimumPivotHeight = 0.30
 
     nonisolated static let lengthRange = 0.25...1.6      // m
     nonisolated static let massRange = 0.1...5.0         // kg
@@ -127,11 +137,19 @@ final class PendulumsModel {
     func addPendulum(length: Double = 0.8, angle: Double = 0.45,
                      mass: Double = 1.0, at: SIMD3<Double>? = nil) -> UUID? {
         guard pendulums.count < Self.pendulumBudget else { return nil }
+        // Clamped at BIRTH, not on the first frame of the drag that
+        // follows. It used to be legal to create a pendulum somewhere
+        // `movePivot` would immediately refuse to keep it, so the thing
+        // appeared under your fingers and jumped out of them one frame
+        // later — the well's whole promise, broken by an inconsistency
+        // between two functions three lines apart.
+        var pivot = at ?? Self.defaultPivot
+        pivot.y = max(pivot.y, Self.minimumPivotHeight + length)
         let pendulum = Pendulum(
             id: UUID(), length: length, mass: mass, damping: 0.02,
             bobRadius: 0.035, cableThickness: 0.002,
             state: SphericalPendulum(length: length, angle: angle),
-            pivotPoint: at ?? Self.defaultPivot)
+            pivotPoint: pivot)
         pendulums.append(pendulum)
         selectedID = pendulum.id
         emitSound(.pop, at: pendulum.bobWorld, volume: 0.5)

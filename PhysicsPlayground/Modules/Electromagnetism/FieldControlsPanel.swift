@@ -70,7 +70,7 @@ struct FieldControlsPanel: View {
              Everything else is in the room. Pull a charge out of the wells \
              on your right — it is in your hand the moment it exists. Tap one \
              for its own ring: pull the bead for strength, the petal to \
-             delete. The plates on your left decide what exists at all.
+             delete. The switches on your left decide what exists at all.
              """)
             .font(DesignTokens.TypeScale.footnote)
             .foregroundStyle(.secondary)

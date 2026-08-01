@@ -3,15 +3,19 @@
 //  Physics Playground — Hub
 //
 //  One typographic voice for the home's three display texts — the
-//  wordmark and the two door signs — switchable, so candidate voices
-//  can be auditioned in the room rather than argued about in the
-//  abstract. Settings picks one; the `.audition` sentinel hangs them
-//  all side by side instead.
+//  wordmark and the two door signs.
 //
-//  THE PLAQUE SHIPS (owner's call, 2026-07-30), chosen off exactly
-//  that wall. The others stay: the wall is how this decision was made
-//  and how the next one would be, and three voices cost four hundred
-//  lines with no runtime weight beyond the one that renders.
+//  THE PLAQUE SHIPS (owner's call, 2026-07-30), chosen off a specimen
+//  wall that hung all the candidates side by side in the room. On
+//  2026-07-31 the wall and the Settings picker behind it both came
+//  out: the decision had been made, and a made decision offered back
+//  as a menu is not a feature, it is an unfinished argument.
+//
+//  The other three voices stay in this file, unreferenced by the
+//  running app except through `shipping`. They are what the choice was
+//  made against — deleting them would leave the surviving one looking
+//  arbitrary — and they cost nothing but source: a voice that never
+//  renders builds no mesh.
 //
 //  DELIBERATELY NOT the style of every text in the hub. The exhibit
 //  nameplates and the Well glyphs keep `HubScene.bubbleText` whatever
@@ -48,18 +52,10 @@ enum HubTitleStyle: Int, CaseIterable {
     case plaque = 2
     case poster = 3
 
-    /// The sentinel `AppSettings.titleStyle` holds while no voice has
-    /// been chosen: the home hangs the specimen wall instead of a
-    /// wordmark, so the choice presents itself rather than waiting to
-    /// be found in a menu.
-    static let audition = -1
-
-    /// The voice the home speaks in, from settings. A raw value outside
-    /// the enum (the audition sentinel, or anything stale in defaults)
-    /// falls back to the original.
-    static func chosen(_ settings: AppSettings) -> HubTitleStyle {
-        HubTitleStyle(rawValue: settings.titleStyle) ?? .bubble
-    }
+    /// The voice the home ships in. Not a setting, not a default with an
+    /// override behind it — the app's own name is set in one face, and
+    /// this is it. See the note below on why the other three stay.
+    static let shipping: HubTitleStyle = .plaque
 
     /// The style currently being rendered. Set by the hub as it builds,
     /// so the door signs and the wordmark cannot disagree — they are

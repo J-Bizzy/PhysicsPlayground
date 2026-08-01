@@ -38,6 +38,10 @@ struct ModuleDescriptor: Identifiable {
     /// sunlit wall — those open part-dimmed rather than asking the user
     /// to discover a toggle before the module looks like anything.
     var preferredDimming: Double = 0
+    /// How far out this module wants the dimming shell, metres. Bigger
+    /// than the default only when the apparatus itself is bigger than
+    /// the default — see `RoomDimmerView.radius`.
+    var preferredDimmingRadius: Float = RoomDimmerView.defaultRadius
     /// Rendered by the shell in the shared legend style.
     let legend: [LegendItem]
     /// Freeze-everything state, driving the shared in-space pause orb.

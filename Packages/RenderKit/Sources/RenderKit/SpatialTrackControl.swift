@@ -81,15 +81,14 @@ public final class SpatialTrackControl {
 
         let length = Float(layout.length)
 
-        // The rail: a dark casing so the lit part reads against it, per the
-        // house rule that casings beat glows indoors.
-        var casing = PhysicallyBasedMaterial()
-        casing.baseColor = .init(tint: UIColor(white: 0.06, alpha: 1))
-        casing.roughness = 0.35
-        casing.clearcoat = .init(floatLiteral: 0.8)
+        // The rail: a dark glass casing so the lit fill reads against it,
+        // per the house rule that casings beat glows indoors. Frosted
+        // rather than lacquered — same dark scrim, now scattering, so it
+        // belongs to the same family as the plates and discs it stands
+        // beside.
         let rail = ModelEntity(
             mesh: .generateBox(size: [length, 0.010, 0.010], cornerRadius: 0.005),
-            materials: [casing])
+            materials: [Materials.frostedGlass(opacity: 0.64)])
         root.addChild(rail)
 
         // The travelled part, lit: how far along the range you are, readable

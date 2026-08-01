@@ -78,6 +78,15 @@ public struct CelestialBody: Equatable, Sendable {
 
     /// This body placed on a circular prograde orbit of `central` at
     /// `distance`, in the xz plane (offset along +x, moving along −z).
+    ///
+    /// The speed is √(G(M+m)/r), not √(GM/r). The relative orbit of a
+    /// two-body system obeys r̈ = −G(M+m)r̂/r², so the test-particle form
+    /// leaves the orbit slightly slow and therefore slightly ELLIPTICAL —
+    /// by a part in a million for Earth, which no one would ever notice,
+    /// and by 1.2 % for the Moon about the Earth, which they would. It
+    /// surfaced when the orbit ring started reading these orbits back:
+    /// a planet built circular has to READ as circular, or the app is
+    /// disagreeing with itself about what it just built.
     public func onCircularOrbit(
         of central: CelestialBody,
         distance: Double,
@@ -85,7 +94,8 @@ public struct CelestialBody: Equatable, Sendable {
     ) -> CelestialBody {
         var body = self
         let speed = NBody.circularOrbitSpeed(
-            centralMass: central.mass, distance: distance, gravitationalConstant: G)
+            centralMass: central.mass + mass, distance: distance,
+            gravitationalConstant: G)
         body.position = central.position + SIMD3(distance, 0, 0)
         body.velocity = central.velocity + SIMD3(0, 0, -speed)
         return body
@@ -102,8 +112,11 @@ public struct CelestialBody: Equatable, Sendable {
     /// dramatic enough to watch.
     ///
     /// Exact: at perihelion the velocity is perpendicular to the radius,
-    /// with magnitude v_p = √(GM(1+e)/(a(1−e))) — the vis-viva equation
-    /// evaluated at r = a(1−e). The orbit plane is the ecliptic tilted
+    /// with magnitude v_p = √(G(M+m)(1+e)/(a(1−e))) — the vis-viva
+    /// equation evaluated at r = a(1−e). M+m rather than M for the same
+    /// reason `onCircularOrbit` uses it: this is the RELATIVE orbit, and
+    /// the two builders have to agree at e = 0 or they describe different
+    /// circles. The orbit plane is the ecliptic tilted
     /// by `inclination` about the +x axis, so perihelion still lies on
     /// +x and the whole ellipse rides up out of the planets' plane.
     ///
@@ -121,7 +134,7 @@ public struct CelestialBody: Equatable, Sendable {
         var body = self
         let e = min(max(eccentricity, 0), 0.999)
         let perihelion = semiMajorAxis * (1 - e)
-        let speed = (G * central.mass * (1 + e) / perihelion).squareRoot()
+        let speed = (G * (central.mass + mass) * (1 + e) / perihelion).squareRoot()
         // In-plane basis: radius along +x, velocity along −z, both then
         // tilted about +x so the plane rises out of the ecliptic.
         let cosI = cos(inclination), sinI = sin(inclination)

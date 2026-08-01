@@ -187,9 +187,19 @@ final class GravityLabRenderer {
     // grid computation can read them without actor hops.
     private nonisolated enum GridSpec {
         static let floorHeight: Float = -0.42
-        static let extent: Float = 1.4
-        static let lineCount = 11
-        static let samples = 25
+        /// Out past Jupiter's 2.6 m ring. It was 1.4 m, which stops at
+        /// Mars — so the four biggest wells in the scene had no floor
+        /// under them at all, and the rubber sheet ended in mid-air
+        /// exactly where the interesting orbits begin.
+        static let extent: Float = 2.9
+        static let lineCount = 17
+        static let samples = 33
+        /// Above this view scale the grid is switched off. At 3x the
+        /// sheet is 1.3 m below your feet and stretches 17 m out; you are
+        /// standing INSIDE the inner system by then, and a rubber sheet
+        /// under the floorboards is neither visible nor meaningful. It is
+        /// also the module's second most expensive rebuild.
+        static let maximumViewScale: Float = 2.5
     }
     private let gridEntity = ModelEntity()
 
@@ -237,7 +247,10 @@ final class GravityLabRenderer {
         particlePool = EntityPool(budget: Self.particleBudget) { container in
             container.addChild(ModelEntity(mesh: particleMesh, materials: [particleMaterial]))
         }
-        particlePositions = (0..<Self.particleBudget).map { _ in Self.randomParticleHome() }
+        // Born at 1x; the shell follows the rig from the first tick on.
+        particlePositions = (0..<Self.particleBudget).map { _ in
+            Self.randomParticleHome(spread: 1)
+        }
         particleAges = (0..<Self.particleBudget).map { _ in Double.random(in: 0..<Self.particleLife) }
         systemRoot.addChild(particlePool.root)
 
@@ -267,10 +280,16 @@ final class GravityLabRenderer {
 
         // The Sun's light: warm, following the heaviest body — plus a
         // soft corona shell so it reads as incandescent, not painted.
+        // 40 m, not 5. Neptune's orbit is a 15 m ring at 1x, so a 5 m
+        // attenuation radius meant the Sun lit as far as Saturn and no
+        // further: from there out the planets were lit only by the room's
+        // own key light, which comes from the wrong direction entirely.
+        // The one cue this scene cannot afford to lose is which side of a
+        // planet faces the Sun.
         sunLight.components.set(PointLightComponent(
             color: UIColor(red: 1.0, green: 0.9, blue: 0.75, alpha: 1),
             intensity: 12_000,
-            attenuationRadius: 5
+            attenuationRadius: 40
         ))
         systemRoot.addChild(sunLight)
 
@@ -345,6 +364,10 @@ final class GravityLabRenderer {
             systemRoot.addChild(marker)
         }
 
+        systemRoot.addChild(orbitRing.root)
+        scaleReadout.isEnabled = false
+        root.addChild(scaleReadout)
+
         trailPipeline = GeometryPipeline(
             compute: { Self.computeTrails($0) },
             apply: { [weak self] in self?.applyTrails($0) }
@@ -360,6 +383,131 @@ final class GravityLabRenderer {
     }
 
     private var lagrangeMarkers: [ModelEntity] = []
+
+    // MARK: The orbit ring — the selected body's conic, as an object
+    //
+    // Under `systemRoot`, like the wells and the bloom, and for the same
+    // reason: a hand arrives here through `displayPoint(fromWorld:)`, and
+    // an anchor parented in one frame while positioned in another lands
+    // nowhere near the thing it belongs to.
+    private let orbitRing = OrbitRing(
+        accent: UIColor(DesignTokens.Palette.gravityAccent))
+
+    /// Which apsis bead an entity is, if any — the renderer owns the
+    /// beads, so the renderer answers whether a pinch landed on one.
+    /// Mirrors `Well.pull(_:at:)` in shape.
+    func apsis(for entity: Entity) -> Apsis? { orbitRing.apsis(for: entity) }
+
+    func beadDisplayPoint(_ apsis: Apsis) -> SIMD3<Double> {
+        orbitRing.beadDisplayPoint(apsis)
+    }
+
+    /// The viewer, needed for the beads' reach rule. Written by the space
+    /// view each frame, already converted into the system's own frame.
+    var viewerInSystem: SIMD3<Float>?
+    /// The two-hand rig's live scale, so the beads can compensate for it.
+    var rigScale: Float = 1
+
+    /// EVERYTHING THAT IS READ RATHER THAN SIMULATED HOLDS ITS SIZE.
+    ///
+    /// The rig scales `systemRoot`, and it has to: the planets, their
+    /// orbits, the trails and the rings are the thing being resized, and
+    /// resizing them is the whole gesture. But the LABELS are not part of
+    /// the solar system. A 22 mm name plate parented in that frame is
+    /// 20 cm tall at 9x and 9 mm at 0.4x — unreadable at both ends, for
+    /// opposite reasons — and the spawn well, which is an instrument and
+    /// not an object in the sky, ends up a 29 cm ball five metres to your
+    /// left at full zoom.
+    ///
+    /// Counter-scaling by 1/rig cancels the rig exactly. Note what it
+    /// does for a child whose POSITION is set on the compensated entity
+    /// itself (a name plate follows its planet, because the plate's
+    /// position is on the holder and the scale only reaches its
+    /// children) versus one set on a child (the well stays put in the
+    /// room, because both its offset and its size are inside the
+    /// compensated root). Both behaviours are the ones wanted, and they
+    /// fall out of where the position is written.
+    ///
+    /// `Bloom` already does this for itself, by distance rather than by
+    /// rig — see its `update`. This is the same rule for everything that
+    /// is not a bloom.
+    private func applyRigCompensation() {
+        let compensation = SIMD3<Float>(repeating: 1 / max(rigScale, 0.001))
+        for label in bodyLabels { label.scale = compensation }
+        for callout in [lookCallout, ghostCallout, verdictCallout,
+                        sweepCurrentLabel, sweepHeldLabel] {
+            callout?.root.scale = compensation
+        }
+        for instrument in rigCompensatedInstruments {
+            instrument.scale = compensation
+        }
+    }
+
+    /// Instruments parented under `systemRoot` that must keep their size
+    /// and their place in the room — the spawn well, chiefly. Registered
+    /// by the space view, which owns them.
+    private var rigCompensatedInstruments: [Entity] = []
+
+    func compensateForRig(_ entity: Entity) {
+        rigCompensatedInstruments.append(entity)
+    }
+
+    // MARK: The scale readout
+    //
+    // The rig is the module's signature gesture and it had no readout at
+    // all: nothing anywhere said whether you were at 1x or 6x, so "how
+    // big is this now" could only be answered by recognising a planet.
+    // Under `root`, so the readout does not resize along with the thing
+    // it is reporting on.
+
+    private let scaleReadout = Entity()
+    private var scaleReadoutText: String?
+
+    /// Shows "3.4x" beside the clock bank, or nothing at 1x — the
+    /// affordance only means something once the view has been changed.
+    ///
+    /// It took a `viewer:` and discarded it: the plate carries a
+    /// `BillboardComponent`, so RealityKit aims it at the camera every
+    /// frame and there is nothing for a head position to do here.
+    func showScaleReadout(_ label: String?, anchor: SIMD3<Float>) {
+        guard let label else {
+            scaleReadout.isEnabled = false
+            return
+        }
+        scaleReadout.isEnabled = true
+        scaleReadout.position = anchor
+        if scaleReadoutText != label {
+            scaleReadoutText = label
+            scaleReadout.children.forEach { $0.removeFromParent() }
+            let plate = HubScene.namePlate(
+                label, accent: UIColor(DesignTokens.Palette.gravityAccent),
+                size: 0.030)
+            plate.components.set(BillboardComponent())
+            scaleReadout.addChild(plate)
+        }
+    }
+
+    private func syncOrbitRing(_ model: GravityLabModel) {
+        guard let selected = model.selectedBody,
+              let primary = model.ringPrimary(for: selected),
+              let frame = model.orbitFrame(for: selected.id) else {
+            orbitRing.update(frame: nil, primaryDisplay: .zero,
+                             simToDisplay: model.simToDisplay, rigScale: rigScale,
+                             occluders: [], head: viewerInSystem)
+            return
+        }
+        let occluders = model.bodies.map {
+            (center: SIMD3<Float>($0.body.position) * scale,
+             radius: Float($0.displayRadius))
+        }
+        orbitRing.update(
+            frame: frame,
+            primaryDisplay: SIMD3<Float>(primary.body.position) * scale,
+            simToDisplay: model.simToDisplay,
+            rigScale: rigScale,
+            occluders: occluders,
+            head: viewerInSystem)
+    }
 
 
     private static func makeArrow(color: UIColor) -> Arrow {
@@ -666,6 +814,9 @@ final class GravityLabRenderer {
         syncPrediction(model)
         syncVectors(model)
         syncMergeFlash(model)
+        syncOrbitRing(model)
+        applyRigCompensation()
+        drainTrailUploads()
         syncLagrangeMarkers(model)
         syncSpacetimeGrid(model)
     }
@@ -732,8 +883,8 @@ final class GravityLabRenderer {
 
             // Absorbed, expired, or wandered off: respawn somewhere fresh.
             if nearBody || particleAges[index] > Self.particleLife
-                || simd_length(position) > 1.6 {
-                position = Self.randomParticleHome()
+                || simd_length(position) > 1.6 * particleSpread {
+                position = Self.randomParticleHome(spread: particleSpread)
                 particleAges[index] = 0
             }
             particlePositions[index] = position
@@ -748,14 +899,29 @@ final class GravityLabRenderer {
         }
     }
 
-    private static func randomParticleHome() -> SIMD3<Float> {
+    private static func randomParticleHome(spread: Float) -> SIMD3<Float> {
         // A point in a spherical shell around the system, biased outward
         // so particles enter from the quiet far field.
         var direction = SIMD3<Float>(
             Float.random(in: -1...1), Float.random(in: -1...1), Float.random(in: -1...1))
         let length = simd_length(direction)
         direction = length > 1e-5 ? direction / length : SIMD3(0, 1, 0)
-        return direction * Float.random(in: 0.45...1.5)
+        return direction * Float.random(in: 0.45...1.5) * spread
+    }
+
+    /// How far the particle shell reaches, in DISPLAY metres, as a
+    /// multiple of its 1x size.
+    ///
+    /// Inversely proportional to the view scale, which keeps the shell
+    /// roughly the same size IN THE ROOM whatever the rig is doing. Four
+    /// hundred and fifty particles are a field when they fill the volume
+    /// around your head and a scattering of dust when they are spread
+    /// over fifteen metres — so rather than growing the budget, the
+    /// volume follows the viewer. At 9x they populate the space you are
+    /// standing in; at 0.4x they fill the tabletop orrery you are looking
+    /// down at.
+    private var particleSpread: Float {
+        min(max(1 / max(rigScale, 0.001), 0.3), 2.6)
     }
 
     // MARK: Spacetime grid (the rubber-sheet picture — conceptual only)
@@ -803,8 +969,8 @@ final class GravityLabRenderer {
     }
 
     private func syncSpacetimeGrid(_ model: GravityLabModel) {
-        let show = model.showSpacetimeGrid
-        platform.isEnabled = !show
+        let show = model.showSpacetimeGrid && rigScale <= GridSpec.maximumViewScale
+        platform.isEnabled = !show && rigScale <= GridSpec.maximumViewScale
         gridEntity.isEnabled = show
         // Resubmit at a third of the render rate; bodies barely move per
         // frame, and the sheet itself is sampled on the worker.
@@ -822,7 +988,7 @@ final class GravityLabRenderer {
     }
 
     private func syncLagrangeMarkers(_ model: GravityLabModel) {
-        let points = model.mode == .lagrange ? model.lagrangePoints : []
+        let points = model.lagrangePoints
         for (index, marker) in lagrangeMarkers.enumerated() {
             guard index < points.count else {
                 marker.isEnabled = false
@@ -969,16 +1135,45 @@ final class GravityLabRenderer {
         )
     }
 
+    /// Meshes waiting to be handed to the GPU, at most a few per frame.
+    private var pendingTrailUploads: [(index: Int, buffers: TubeBuffers, name: String)] = []
+    /// How many trail meshes may be uploaded in one frame.
+    ///
+    /// THE VERTEX MATH WAS ALREADY OFF THE MAIN THREAD; THE UPLOAD WAS
+    /// NOT. `TubeMesh.buffers` runs on the pipeline worker, but
+    /// `MeshResource.generate` has to happen on the main actor, and this
+    /// function used to do every body's in one callback — twelve mesh
+    /// uploads inside a single frame, which was the module's largest
+    /// hitch. Raising the body budget to sixteen would have made it a
+    /// third worse. Three a frame spreads the same work over five frames
+    /// at ninety hertz, which is under a tenth of a second: slower than
+    /// the physics and far faster than the eye.
+    private static let trailUploadsPerFrame = 3
+
     private func applyTrails(_ result: TrailResult) {
-        for (index, buffers) in result.buffers.enumerated()
-        where index < trailEntities.count {
-            // A body removed after submission: don't repaint its slot.
-            guard index < activeTrailSlots else { continue }
-            if let mesh = TubeMesh.mesh(from: buffers) {
-                trailEntities[index].model = ModelComponent(
-                    mesh: mesh, materials: [trailMaterial(for: result.names[index])])
+        pendingTrailUploads = result.buffers.enumerated().compactMap { index, buffers in
+            guard index < trailEntities.count, index < activeTrailSlots,
+                  index < result.names.count else { return nil }
+            return (index, buffers, result.names[index])
+        }
+        drainTrailUploads()
+    }
+
+    /// Hands the next few meshes over. Called from `applyTrails` and then
+    /// once per tick until the queue is empty.
+    private func drainTrailUploads() {
+        guard !pendingTrailUploads.isEmpty else { return }
+        let batch = pendingTrailUploads.prefix(Self.trailUploadsPerFrame)
+        pendingTrailUploads.removeFirst(batch.count)
+        for upload in batch {
+            // The body may have merged or been deleted between the
+            // submission and this frame's slice of the upload.
+            guard upload.index < activeTrailSlots else { continue }
+            if let mesh = TubeMesh.mesh(from: upload.buffers) {
+                trailEntities[upload.index].model = ModelComponent(
+                    mesh: mesh, materials: [trailMaterial(for: upload.name)])
             } else {
-                trailEntities[index].model = nil
+                trailEntities[upload.index].model = nil
             }
         }
     }

@@ -138,6 +138,17 @@ final class SpatialLayerBank {
     /// The switch plate's own width. The label is placed relative to it,
     /// so the two must not be able to disagree.
     private static let plateWidth: Float = 0.086
+    private static let plateHeight: Float = 0.050
+    /// Corner radius of a switch plate.
+    ///
+    /// 0.020 of a 0.050-tall plate — 80 % of the way to a full lozenge,
+    /// which is where visionOS's own panels sit. It was 0.010, a radius
+    /// that reads as "a box with the sharpness taken off" rather than as
+    /// a rounded rectangle, and the difference is the single loudest
+    /// signal of whether a surface belongs to the platform. Anything
+    /// above 0.025 IS a lozenge: the flat top and bottom disappear and
+    /// the plate stops being a plate.
+    private static let plateCorner: Float = 0.020
     private static let labelSize: CGFloat = 0.0104
     private static let labelGap: Float = 0.008
 
@@ -152,19 +163,35 @@ final class SpatialLayerBank {
     }
 
     private func makePlate(_ layer: LayerSwitch) -> (ModelEntity, ModelEntity) {
-        // The casing: a dark slab that reads as hardware whatever the
-        // layer's state, so the bank keeps its shape when everything is
-        // switched off.
-        var casing = PhysicallyBasedMaterial()
-        casing.baseColor = .init(tint: UIColor(white: 0.07, alpha: 1))
-        casing.roughness = 0.32
-        casing.clearcoat = .init(floatLiteral: 0.9)
-        casing.blending = .transparent(opacity: .init(floatLiteral: 0.92))
+        // A pane of frosted glass, dark enough to hold its shape against
+        // a lit wall — the plate still reads as one object when every
+        // layer on it is switched off.
         let plate = ModelEntity(
-            mesh: .generateBox(size: [Self.plateWidth, 0.050, 0.007],
-                               cornerRadius: 0.010),
-            materials: [casing])
+            mesh: .generateBox(size: [Self.plateWidth, Self.plateHeight, 0.007],
+                               cornerRadius: Self.plateCorner),
+            materials: [Materials.frostedGlass()])
         plate.name = "layer-\(layer.id)"
+
+        // The edge hairline: a slightly larger pane behind this one, so
+        // its border shows all the way round. This is the part that
+        // makes the pane read as glass rather than as a dark tile.
+        //
+        // Its radius takes the SAME inset the box does, or the two
+        // outlines stop being concentric: grow a rounded rectangle by a
+        // constant on every side and its corner radius grows by exactly
+        // that constant too. Add the inset to the size and not to the
+        // radius and the border pinches in at the corners while bulging
+        // along the flats, which reads as a bad drop shadow rather than
+        // as an edge.
+        let edge = Materials.glassEdgeInset
+        let border = ModelEntity(
+            mesh: .generateBox(
+                size: [Self.plateWidth + edge * 2,
+                       Self.plateHeight + edge * 2, 0.006],
+                cornerRadius: Self.plateCorner + edge),
+            materials: [Materials.glassEdge()])
+        border.position = [0, 0, -0.0008]
+        plate.addChild(border)
 
         // The lamp: the strip that lights when the layer is on.
         let face = ModelEntity(

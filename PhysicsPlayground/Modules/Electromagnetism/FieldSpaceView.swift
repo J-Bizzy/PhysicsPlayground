@@ -185,7 +185,16 @@ struct FieldSpaceView: View {
                 .init(id: "free", label: "Free charges", symbol: "arrow.left.and.right",
                       isOn: { model.chargesRespond },
                       toggle: { model.chargesRespond.toggle() }),
-                .init(id: "plates", label: "Parallel plates", symbol: "square.split.2x1",
+                // "Capacitor", not "Parallel plates". An on-device pass
+                // could not find this switch at all — and the copy is
+                // why: the panel and the module blurb both say "the
+                // plates on your left decide what exists", where THE
+                // PLATES means these five bank switches, while the thing
+                // this one summons is also a pair of plates. Two objects
+                // in one room called the same word, on opposite walls.
+                // The apparatus keeps the name it is; the switch takes
+                // the name of what it makes.
+                .init(id: "plates", label: "Capacitor", symbol: "square.split.2x1",
                       isOn: { model.capacitorOn },
                       toggle: { model.capacitorOn.toggle() }),
                 .init(id: "bfield", label: "Uniform B", symbol: "arrow.up",
@@ -442,6 +451,16 @@ struct FieldSpaceView: View {
                 // dragging the charge halfway through.
                 if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
                 if let track = activeTrack {
+                    // A rail can go away underneath a live drag — switch
+                    // the capacitor off while pulling its ΔV bead and the
+                    // ΔV rail is disabled the same frame. `adjust` then
+                    // no-ops correctly but the hand stays captured by a
+                    // dead instrument for the rest of the gesture, and
+                    // nothing else can claim it.
+                    guard track.isEnabled else {
+                        activeTrack = nil
+                        return
+                    }
                     track.adjust(hand: hand)
                     return
                 }
@@ -497,6 +516,10 @@ struct FieldSpaceView: View {
                 drag = nil
                 flick.reset()
                 model.heldChargeID = nil
+                // A charge pulled from a well is exempt from the station
+                // walls until it gets inside them; letting go spends the
+                // exemption either way. See `FieldModel.addCharge`.
+                model.endEscort()
             }
     }
 

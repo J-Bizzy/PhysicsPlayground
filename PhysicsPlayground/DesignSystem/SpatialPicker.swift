@@ -203,16 +203,21 @@ final class SpatialPicker {
     }
 
     private func makeDisc(_ choice: PickerChoice) -> (ModelEntity, ModelEntity) {
-        var casing = PhysicallyBasedMaterial()
-        casing.baseColor = .init(tint: UIColor(white: 0.06, alpha: 1))
-        casing.roughness = 0.28
-        casing.clearcoat = .init(floatLiteral: 1.0)
-        casing.blending = .transparent(opacity: .init(floatLiteral: 0.92))
         let disc = ModelEntity(
             mesh: .generateCylinder(height: 0.005, radius: 0.026),
-            materials: [casing])
+            materials: [Materials.frostedGlass()])
         disc.name = "picker-\(choice.id)"
         disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+
+        // The glass edge, proud of the face all the way round. It sits
+        // UNDER the selection ring below, which is brighter and coloured
+        // — the hairline says "this is a pane", the ring says "this one
+        // is chosen", and they must not be the same cue.
+        let border = ModelEntity(
+            mesh: .generateCylinder(height: 0.0042,
+                                    radius: 0.026 + Materials.glassEdgeInset),
+            materials: [Materials.glassEdge()])
+        disc.addChild(border)
 
         // The selection ring, behind the face. Starts dim; `update` lights
         // whichever disc the model says is current.

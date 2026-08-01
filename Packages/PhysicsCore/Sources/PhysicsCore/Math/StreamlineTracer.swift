@@ -87,11 +87,24 @@ public enum StreamlineTracer {
         /// Which way lines run from this source: +1 out, −1 in. Ignored
         /// by `loopedLines`, which traces both ways regardless.
         public var sign: Double
+        /// Where on the seed sphere this source's lines start.
+        ///
+        /// `nil` spreads them evenly over the whole sphere, which is
+        /// right for a source with no preferred axis — a point charge
+        /// radiates the same in every direction. A source that DOES have
+        /// an axis supplies its own, because for those "evenly over the
+        /// sphere" is the wrong distribution twice over: it draws as
+        /// many lines out of the weak equator as out of the strong
+        /// poles, and it does not know that the far hemisphere's seeds
+        /// lie on loops the near hemisphere's have already drawn.
+        public var directions: [SIMD3<Double>]?
 
-        public init(position: SIMD3<Double>, seeds: Int, sign: Double = 1) {
+        public init(position: SIMD3<Double>, seeds: Int, sign: Double = 1,
+                    directions: [SIMD3<Double>]? = nil) {
             self.position = position
             self.seeds = seeds
             self.sign = sign
+            self.directions = directions
         }
     }
 
@@ -113,7 +126,7 @@ public enum StreamlineTracer {
         config.stopCenters = stopCenters
         var lines: [[SIMD3<Double>]] = []
         for source in sources {
-            for direction in fibonacciSphere(count: source.seeds) {
+            for direction in source.directions ?? fibonacciSphere(count: source.seeds) {
                 let line = streamline(from: source.position + seedRadius * direction,
                                       sign: source.sign, field: field, config: config)
                 if line.count > 1 { lines.append(line) }
@@ -140,7 +153,7 @@ public enum StreamlineTracer {
         config.stopCenters = stopCenters
         var lines: [[SIMD3<Double>]] = []
         for source in sources {
-            for direction in fibonacciSphere(count: source.seeds) {
+            for direction in source.directions ?? fibonacciSphere(count: source.seeds) {
                 let seed = source.position + seedRadius * direction
                 let forward = streamline(from: seed, sign: 1, field: field, config: config)
                 let backward = streamline(from: seed, sign: -1, field: field, config: config)

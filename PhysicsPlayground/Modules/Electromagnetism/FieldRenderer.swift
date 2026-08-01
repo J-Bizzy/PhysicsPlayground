@@ -153,6 +153,7 @@ final class FieldRenderer {
     func tick(_ model: FieldModel, room: RoomBox = .unscanned) {
         self.model = model
         syncGaussSurface(model)
+        syncProbeTrail(model)
         render(
                 charges: model.charges,
                 region: model.samplingRegion,
@@ -678,6 +679,75 @@ final class FieldRenderer {
         }
         if !isManipulatingProbe {
             entity.position = SIMD3<Float>(probe.position)
+        }
+    }
+
+    // MARK: The probe's trail
+
+    /// The path the test charge has taken, as a run of pooled beads
+    /// fading toward the tail.
+    ///
+    /// Beads rather than a swept tube, and the reason is where the work
+    /// would land. A tube means regenerating a `MeshResource` every time
+    /// a point is laid down — up to forty times a second during a fast
+    /// flight, on the main thread, in a module that is already running a
+    /// field-line re-trace whenever a charge moves. Pooled beads are
+    /// transform writes on entities that were built once, which is the
+    /// same trade Pendulums made for the same reason. At 11 mm spacing
+    /// they read as a drawn curve, not as dots.
+    ///
+    /// Under `viewRoot`, so the path scales with the two-hand rig and
+    /// stays registered with the field it was drawn through.
+    private lazy var probeTrailPool: EntityPool<ModelEntity> = {
+        let mesh = MeshResource.generateSphere(radius: 0.0042)
+        let pool = EntityPool<ModelEntity>(budget: FieldModel.probeTrailLength) { container in
+            let bead = ModelEntity(mesh: mesh,
+                                   materials: [UnlitMaterial(color: Self.probePositiveColor)])
+            container.addChild(bead)
+            return bead
+        }
+        viewRoot.addChild(pool.root)
+        return pool
+    }()
+    private var appliedTrailPolarity: Bool?
+
+    private func syncProbeTrail(_ model: FieldModel) {
+        let trail = model.probeTrail
+        guard trail.count > 1 else {
+            probeTrailPool.hideAll()
+            return
+        }
+        // Recolour only when the polarity actually flips — the sign can
+        // be changed mid-flight, and the trail behind the probe should
+        // say which particle drew it.
+        let positive = model.probeIsPositive
+        if appliedTrailPolarity != positive {
+            let color = positive ? Self.probePositiveColor : Self.probeNegativeColor
+            var material = UnlitMaterial(color: color)
+            material.blending = .transparent(opacity: 0.9)
+            for slot in probeTrailPool.slots {
+                slot.payload.model?.materials = [material]
+            }
+            appliedTrailPolarity = positive
+        }
+
+        let count = min(trail.count, probeTrailPool.budget)
+        // The newest points are the ones worth keeping when the path is
+        // longer than the pool.
+        let visible = trail.suffix(count)
+        for (index, point) in visible.enumerated() {
+            let slot = probeTrailPool.slots[index]
+            slot.entity.isEnabled = true
+            slot.entity.position = SIMD3<Float>(point)
+            // Fade and taper toward the tail, so the curve reads with a
+            // direction rather than as a static loop of beads.
+            let age = Float(index) / Float(max(count - 1, 1))
+            slot.entity.scale = SIMD3(repeating: 0.35 + 0.65 * age)
+            slot.entity.components.set(
+                OpacityComponent(opacity: 0.12 + 0.68 * age))
+        }
+        for index in count..<probeTrailPool.slots.count {
+            probeTrailPool.slots[index].entity.isEnabled = false
         }
     }
 

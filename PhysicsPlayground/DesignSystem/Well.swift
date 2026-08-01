@@ -40,6 +40,9 @@ final class Well {
     private var mouths: [ModelEntity] = []
     private var haloes: [ModelEntity] = []
     private var dip: [Float] = []
+    /// A brief dark pulse when a pull is refused — the lab is at its
+    /// object budget and nothing came out.
+    private var refusal: [Float] = []
     private var time: Double = 0
 
     private static let mouthRadius: Float = 0.032
@@ -47,6 +50,7 @@ final class Well {
     init(_ specs: [Spec]) {
         self.specs = specs
         dip = Array(repeating: 0, count: specs.count)
+        refusal = Array(repeating: 0, count: specs.count)
         for spec in specs {
             let mouth = Self.makeMouth(spec)
             mouth.position = spec.position
@@ -64,11 +68,13 @@ final class Well {
         time += dt
         for (index, mouth) in mouths.enumerated() {
             dip[index] = max(0, dip[index] - Float(dt) * 2.6)
+            refusal[index] = max(0, refusal[index] - Float(dt) * 2.2)
             let breath = 1 + 0.035 * Float(sin(time * 1.4 + Double(index) * 1.1))
             // The dip is a recoil: it shrinks on giving, then swells back.
             mouth.scale = SIMD3(repeating: breath * (1 - 0.42 * dip[index]))
             if index < haloes.count {
-                let glow = 0.18 + 0.5 * dip[index]
+                // Flares on giving, goes dark on refusing.
+                let glow = (0.18 + 0.5 * dip[index]) * (1 - 0.85 * refusal[index])
                 haloes[index].components.set(
                     OpacityComponent(opacity: glow))
             }
@@ -81,9 +87,18 @@ final class Well {
         guard let name = Self.mouthName(of: entity, under: root),
               let index = mouths.firstIndex(where: { $0.name == name })
         else { return nil }
+        // The recoil and the pop are the well SAYING it just gave
+        // something up, so they only happen when it did. A lab at its
+        // budget used to chirp and flinch and hand back nothing — the
+        // gesture read as working and the object simply never arrived,
+        // which is the worst of both answers.
+        guard let id = specs[index].spawn(hand) else {
+            refusal[index] = 1
+            return nil
+        }
         dip[index] = 1
         SoundPalette.play(.pop, on: mouths[index], volume: 0.5)
-        return specs[index].spawn(hand)
+        return id
     }
 
     private static func mouthName(of entity: Entity, under root: Entity) -> String? {
@@ -97,12 +112,14 @@ final class Well {
     }
 
     private static func makeMouth(_ spec: Spec) -> ModelEntity {
-        var shell = PhysicallyBasedMaterial()
-        shell.baseColor = .init(tint: spec.tint)
-        shell.roughness = 0.18
-        shell.metallic = 0.0
-        shell.clearcoat = .init(floatLiteral: 1.0)
-        shell.blending = .transparent(opacity: .init(floatLiteral: 0.55))
+        // A well is glass with a light inside it: the pane is tinted
+        // toward the source's own colour rather than away from black —
+        // which is what `frostedGlass` means by "a caller wanting a
+        // coloured pane should tint toward its accent" — and it keeps
+        // its emissive, because a source that does not glow reads as a
+        // hole rather than as somewhere things come from.
+        var shell = Materials.frostedGlass(
+            Materials.deepened(spec.tint), opacity: 0.52, frost: 0.56)
         shell.emissiveColor = .init(color: spec.tint)
         shell.emissiveIntensity = 0.5
 

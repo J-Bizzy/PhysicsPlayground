@@ -55,9 +55,8 @@ struct HubSpaceView: View {
             scene.build(modules: modules, progress: progress,
                         distance: Float(appModel.settings.arcDistance),
                         height: Float(appModel.settings.arcHeight),
-                        yaw: appModel.settings.hubYaw,
-                        titleStyle: appModel.settings.titleStyle)
-            scene.stillness = appModel.settings.reduceMotion || systemReduceMotion
+                        yaw: appModel.settings.hubYaw)
+            scene.stillness = systemReduceMotion
             content.add(scene.root)
 
             if let card = attachments.entity(for: "detail") {
@@ -106,7 +105,7 @@ struct HubSpaceView: View {
                 scene?.animate(dt: event.deltaTime, lookRay: appModel.room.lookRay)
             }
         } update: { _, _ in
-            scene.stillness = appModel.settings.reduceMotion || systemReduceMotion
+            scene.stillness = systemReduceMotion
         } attachments: {
             Attachment(id: "detail") {
                 if let module = ModuleCatalog.all(appModel: appModel)
@@ -307,13 +306,18 @@ final class HubScene {
     /// toward the user, but a step off a pedestal reads as falling;
     /// lifting reads as the exhibit answering.)
     private static let focusedLift: Float = 0.09
+    /// Where the focus panel hangs relative to its exhibit: up, and a
+    /// step toward the user. The step has to clear the door sign, which
+    /// stands 2 cm nearer than the exhibits at roughly the panel's own
+    /// height — see the reasoning in `applyFocus`.
+    private static let focusPanelLift: Float = 0.38
+    private static let focusPanelStep: Float = 0.26
 
     // MARK: Build
 
     func build(modules: [ModuleDescriptor],
                progress: [String: (done: Int, total: Int)] = [:],
-               distance: Float = 2.0, height: Float = 1.4, yaw: Float = 0,
-               titleStyle: Int = HubTitleStyle.bubble.rawValue) {
+               distance: Float = 2.0, height: Float = 1.4, yaw: Float = 0) {
         arcRadius = distance
         arcHeight = height
         // Recenter: the whole gallery swings about the user.
@@ -322,20 +326,10 @@ final class HubScene {
         titlePosition = SIMD3(0, arcHeight + 0.70, -(arcRadius + 0.45))
         // Committed BEFORE anything draws: the wordmark and the two
         // door signs are built at different moments from different
-        // files, and reading the setting separately would let them
-        // disagree mid-rebuild.
-        HubTitleStyle.current = HubTitleStyle(rawValue: titleStyle) ?? .bubble
-        // No voice chosen yet: hang the specimen wall instead of a
-        // wordmark, so the decision presents itself in the room rather
-        // than waiting to be discovered in a menu.
-        auditioning = titleStyle == HubTitleStyle.audition
-        if auditioning {
-            buildStyleAudition()
-        } else {
-            buildBubbleTitle()
-        }
-        buildFloorPool()
-
+        // files, and one of them reading the voice late is how they
+        // would come to disagree mid-rebuild.
+        HubTitleStyle.current = HubTitleStyle.shipping
+        buildBubbleTitle()
         buildPodium(distance: distance)
 
         // Each terrace carries its domain's name as three-dimensional
@@ -365,9 +359,6 @@ final class HubScene {
     private var terraceHairlines: [HubDomain: ModelEntity] = [:]
     /// Each terrace's signage, driven from the idle loop.
     private var domainTitles: [HubDomain: HubDomainTitle] = [:]
-    /// Whether this build is showing the specimen wall.
-    private var auditioning = false
-
     /// One domain's slab: a floating graphite shelf with a lit hairline
     /// of the domain's colour along its front edge, and a pedestal puck
     /// per module. Architecture BENEATH the physics, never around it —
@@ -404,16 +395,11 @@ final class HubScene {
         // exhibit (puck + lift + miniature, ~0.31 above the slab)
         // clears the sign's underline rule and the Mechanics ball's
         // landing points with room to spare.
-        //
-        // Suppressed while the audition wall is up: three specimens
-        // plus two live signs is five voices talking at once.
-        if !auditioning {
-            let title = HubDomainTitle(domain: terrace.domain,
-                                       width: terrace.width * 0.54)
-            title.root.position = SIMD3(0, 0.62, -0.02)
-            slab.addChild(title.root)
-            domainTitles[terrace.domain] = title
-        }
+        let title = HubDomainTitle(domain: terrace.domain,
+                                   width: terrace.width * 0.54)
+        title.root.position = SIMD3(0, 0.62, -0.02)
+        slab.addChild(title.root)
+        domainTitles[terrace.domain] = title
         root.addChild(slab)
 
         for top in terrace.puckTops {
@@ -634,24 +620,24 @@ final class HubScene {
         }
     }
 
-    /// A soft warm pool on the real floor beneath the crescent's centre
-    /// — the one thing that ties the floating architecture to the room.
-    private func buildFloorPool() {
-        let pool = Entity()
-        pool.position = SIMD3(0, 0.006, -arcRadius * 0.75)
-        let warm = UIColor(red: 1.0, green: 0.95, blue: 0.85, alpha: 1)
-        for (radius, opacity) in [(Float(0.55), Float(0.10)),
-                                  (Float(0.85), Float(0.05)),
-                                  (Float(1.10), Float(0.025))] {
-            var material = UnlitMaterial(color: warm)
-            material.blending = .transparent(opacity: .init(floatLiteral: opacity))
-            let disc = ModelEntity(
-                mesh: .generateCylinder(height: 0.001, radius: radius),
-                materials: [material])
-            pool.addChild(disc)
-        }
-        root.addChild(pool)
-    }
+    // THE FLOOR POOL IS GONE (2026-07-31), and it is not coming back in
+    // this form. It was three concentric translucent discs — 0.55, 0.85
+    // and 1.10 m — laid 6 mm above y = 0 under the crescent's centre,
+    // meant as "a soft warm pool that ties the floating architecture to
+    // the room."
+    //
+    // It could not do that, because it did not know where the room was.
+    // y = 0 is where the user happened to be standing when the immersive
+    // space opened, not where their floor is; 6 mm of clearance is
+    // nothing against that error or against depth precision at 1.5 m, so
+    // the discs z-fought the passthrough floor and each other. And they
+    // sat directly under the podium, which is the one place in the
+    // gallery the eye is asked to go.
+    //
+    // Anything that wants to touch the real floor has to be placed off
+    // `RoomModel`'s scanned geometry, like the labs' own room-aware
+    // furniture. A guess at 6 mm is not a light pool, it is a bug with a
+    // rationale.
 
     // MARK: The 3-D bubble title
 
@@ -781,67 +767,6 @@ final class HubScene {
                                 podiumTop.y - GalleryLayout.exhibitLift - 0.09,
                                 podiumTop.z + 0.12)
         root.addChild(entity)
-    }
-
-    /// The specimen wall: the three candidate voices standing side by
-    /// side where the wordmark hangs, each captioned with the flag that
-    /// selects it, each showing BOTH roles it has to play — the neutral
-    /// wordmark and an accented door sign.
-    ///
-    /// A style is a comparison, not a memory. Auditioning them one
-    /// launch at a time asks the eye to hold two rooms at once, which
-    /// is exactly the thing eyes cannot do; three specimens in one
-    /// glance is the whole point of a wall.
-    private func buildStyleAudition() {
-        let candidates: [(style: HubTitleStyle, name: String)] = [
-            (.frosted, "1  FROSTED"),
-            (.plaque, "2  PLAQUE"),
-            (.poster, "3  POSTER"),
-        ]
-        // Spread across the crescent's width. Dropped well below the
-        // wordmark's usual height so the specimens hang against the
-        // WALL rather than the ceiling: the frosted candidate is
-        // translucent, and judging translucency against a blown-out
-        // white ceiling judges the ceiling.
-        let columnPitch: Float = 1.30
-        let specimenWidth: Float = 0.56
-
-        titleAnchor.position = titlePosition - SIMD3(0, 0.42, 0)
-        for (index, candidate) in candidates.enumerated() {
-            let column = Entity()
-            column.position.x = (Float(index) - 1) * columnPitch
-
-            // The name of the flag that picks this one, neutral, above
-            // its specimen.
-            let caption = Self.namePlate(candidate.name,
-                                         accent: Self.titleRimColor, size: 0.052)
-            caption.position.y = 0.40
-            column.addChild(caption)
-
-            // Role one: the wordmark, neutral.
-            let wordmark = candidate.style.lockup(
-                ["Physics", "Playground"], width: specimenWidth, accent: nil)
-            wordmark.position.y = 0.14
-            column.addChild(wordmark)
-
-            // Role two: a door sign in a domain accent. The two domains
-            // alternate across the row so both colours are on the wall.
-            let domain: HubDomain = index == 1 ? .mechanics : .electricity
-            let sign = candidate.style.lockup(
-                domain == .mechanics ? ["Mechanics", "& Energy"]
-                                     : ["Electricity", "& Magnetism"],
-                width: specimenWidth, accent: UIColor(domain.color))
-            sign.position.y = -0.25
-            column.addChild(sign)
-
-            titleAnchor.addChild(column)
-        }
-
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Title style audition: frosted, plaque, poster"
-        titleAnchor.components.set(accessibility)
-        root.addChild(titleAnchor)
     }
 
     /// The measured size of a run of the title face, for the lockup.
@@ -1326,8 +1251,8 @@ final class HubScene {
             detailCard?.isEnabled = focused != nil
         }
 
-        // The panel floats ABOVE the focused exhibit, a step behind it.
-        // Straight behind was the first attempt — the diorama is
+        // The panel floats ABOVE the focused exhibit, a step IN FRONT of
+        // it. Straight behind was the first attempt — the diorama is
         // angularly larger than the panel from where the user stands, so
         // "behind" meant "hidden". Below was the second — and the app's
         // own window and dock live dead ahead below the arc, so the
@@ -1335,6 +1260,24 @@ final class HubScene {
         // direction that is always clear: the diorama keeps the stage,
         // its story hangs over it like a gallery caption. One panel,
         // moved, not nine built.
+        //
+        // Above-and-BEHIND was the third, and it is what shipped, and it
+        // was wrong. The door signs went up over the terraces after this
+        // line was written and nothing rechecked it: a sign stands 2 cm
+        // nearer the user than its exhibits and 43 cm higher, which is
+        // to say exactly where a panel lifted 38 cm and pushed 24 cm
+        // further out lands. The middle module of each terrace had its
+        // whole panel behind a sign, and the left module had just its
+        // Load button behind one — which is why an on-device pass could
+        // find the guaranteed way into a lab simply missing. Signs do
+        // not carry colliders, so this was never a hit-testing failure:
+        // the button was there, and unhittable because it was unseeable.
+        //
+        // So the step is now TOWARD the user, and it has to be bigger
+        // than the sign's own lead over the exhibits. The panel occludes
+        // the sign for as long as focus holds, which is correct: a
+        // caption for the thing you are looking at outranks the name of
+        // the room it is in.
         //
         // Its PLACE is a transform write, not an observable publish, so
         // unlike the id above it is safe to redo every frame — and it
@@ -1347,7 +1290,8 @@ final class HubScene {
             let flat = SIMD3<Float>(aim.x, 0, aim.z)
             let outward = simd_length(flat) > 1e-4
                 ? simd_normalize(flat) : SIMD3<Float>(0, 0, -1)
-            detailCard?.position = aim + outward * 0.24 + SIMD3(0, 0.38, 0)
+            detailCard?.position = aim - outward * Self.focusPanelStep
+                + SIMD3(0, Self.focusPanelLift, 0)
         }
 
         let rate = Float(min(dt * 7, 1))
@@ -1474,17 +1418,21 @@ struct HubFocusPanel: View {
                     .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 10) {
-                Spacer(minLength: 0)
-                Button(action: enter) {
-                    Label("Load Module", systemImage: "arrow.forward")
-                        .font(.callout.weight(.semibold))
-                        .padding(.horizontal, 4)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(module.accent)
-                .accessibilityHint("Opens \(module.title) — or carry its exhibit to the podium")
+            // Full width, not tucked into the right edge. This is the
+            // GUARANTEED way into a lab — the one path that works when
+            // the carry-to-the-podium gesture does not — and a 7 cm
+            // button on a panel two metres away subtends under two
+            // degrees. Spanning the panel roughly quadruples the target
+            // and costs nothing: there is nothing else on this row.
+            Button(action: enter) {
+                Label("Load \(module.title)", systemImage: "arrow.forward")
+                    .font(.callout.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 2)
             }
+            .buttonStyle(.borderedProminent)
+            .tint(module.accent)
+            .accessibilityHint("Opens \(module.title) — or carry its exhibit to the podium")
         }
         .padding(16)
         .frame(width: 340, alignment: .leading)

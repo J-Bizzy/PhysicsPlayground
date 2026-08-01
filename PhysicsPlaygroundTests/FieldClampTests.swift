@@ -72,4 +72,67 @@ final class FieldClampTests: XCTestCase {
                 tolerance: 1e-6),
             "a charge dragged at the room escapes the region")
     }
+
+    // MARK: The escort — a charge pulled from a well outside the walls
+
+    /// The wells stand outside the station by construction, so a charge
+    /// is born somewhere it is not allowed to stay. It must follow the
+    /// hand from there rather than being clamped home on the next frame,
+    /// which is what made pulling one out feel broken next to the test
+    /// charge, whose well-pull has no clamp at all.
+    func testAChargeFromAWellFollowsTheHandBackIn() {
+        let model = FieldModel()
+        model.removeAllCharges()
+        let wellMouth = FieldInstrumentLayout.wellAnchor(index: 0)
+        XCTAssertFalse(region.contains(wellMouth),
+                       "this test is meaningless if the well is inside the "
+                       + "station — check the layout, not the clamp")
+
+        let id = model.addCharge(positive: true, at: wellMouth)
+        XCTAssertEqual(model.charges.first(where: { $0.id == id })?.position,
+                       wellMouth,
+                       "the charge was not born at the fingertips")
+
+        // Still outside: it tracks the hand exactly.
+        let stillOutside = wellMouth + SIMD3(-0.05, 0, 0)
+        model.moveCharge(id: id, to: stillOutside)
+        XCTAssertEqual(model.charges.first(where: { $0.id == id })?.position,
+                       stillOutside,
+                       "the charge was yanked out of the hand that made it")
+    }
+
+    /// …and once it has arrived, the walls are real again. The exemption
+    /// is a one-way door, or a charge could be pulled from a well and
+    /// then carried anywhere in the room forever.
+    func testTheEscortEndsWhenTheChargeGetsHome() {
+        let model = FieldModel()
+        model.removeAllCharges()
+        let id = model.addCharge(positive: true,
+                                 at: FieldInstrumentLayout.wellAnchor(index: 1))
+
+        // Carry it to the middle of the station.
+        model.moveCharge(id: id, to: FieldModel.regionCenter)
+        XCTAssertNil(model.escortedChargeID, "the escort outstayed its welcome")
+
+        // Now push it back out: the wall holds.
+        model.moveCharge(id: id, to: SIMD3(9, 1.35, -0.9))
+        let position = model.charges.first(where: { $0.id == id })!.position
+        XCTAssertTrue(region.contains(position),
+                      "the charge left the station after coming home")
+    }
+
+    /// Letting go outside the station carries the charge in rather than
+    /// stranding it in the furniture.
+    func testReleasingOutsideTheStationBringsTheChargeHome() {
+        let model = FieldModel()
+        model.removeAllCharges()
+        let id = model.addCharge(positive: false,
+                                 at: FieldInstrumentLayout.wellAnchor(index: 0))
+        model.endEscort()
+        let position = model.charges.first(where: { $0.id == id })!.position
+        XCTAssertTrue(region.contains(position),
+                      "a charge dropped at the well stayed at the well")
+        XCTAssertNil(model.escortedChargeID)
+    }
+
 }

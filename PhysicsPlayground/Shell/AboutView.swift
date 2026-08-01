@@ -2,9 +2,18 @@
 //  AboutView.swift
 //  Physics Playground — Shell
 //
-//  The About window: placeholder copy behind the home's info button.
+//  The About window: the credits behind the home's info button.
 //  Deliberately small and finished-looking — a stub that reads as a
 //  broken feature would cost more than it saves.
+//
+//  The copy is SHORT on purpose, and it got shorter on 2026-07-31.
+//  `.windowResizability(.contentSize)` pins this window to exactly what
+//  the content asks for, so a sentence that wraps one line further does
+//  not scroll and does not grow the window — it clips. Which is what it
+//  did: 300 pt of declared minimum height plus 64 pt of padding inside
+//  a 340 pt window, with a description long enough to wrap to four
+//  lines at .callout. Every number here now has slack in it, and the
+//  view no longer declares a minimum that fights the window's size.
 //
 
 import SwiftUI
@@ -21,10 +30,11 @@ struct AboutView: View {
             Text("Physics Playground")
                 .font(.system(.title2, design: .rounded).weight(.heavy))
 
-            Text("Room-scale physics labs, in your actual room. Real constants, exact solutions, no shortcuts.")
+            Text("Room-scale physics labs. Real constants, exact solutions.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
             Divider().frame(maxWidth: 220)
 
@@ -36,8 +46,8 @@ struct AboutView: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(32)
-        .frame(minWidth: 340, minHeight: 300)
+        .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var appVersion: String {

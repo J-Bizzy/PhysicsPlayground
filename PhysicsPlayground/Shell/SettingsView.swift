@@ -4,10 +4,17 @@
 //
 //  The settings window: the first real UI over AppSettings. Every row
 //  here obeys AppSettings' own rule — it does something the moment it
-//  is flipped. Reduce motion, volume, and room tone apply instantly;
-//  the arc sliders commit on release (each commit rebuilds the whole
-//  constellation, so per-tick commits would thrash it); the two resets
-//  act once, the destructive one behind a confirm.
+//  is flipped. Volume and room tone apply instantly; the arc sliders
+//  commit on release (each commit rebuilds the whole constellation, so
+//  per-tick commits would thrash it); the two resets act once, the
+//  destructive one behind a confirm.
+//
+//  Two rows LEFT on 2026-07-31 and the deletions are the point.
+//  "Reduce motion" duplicated a system accessibility switch the hub now
+//  reads directly. "Home title" offered five typographic voices for the
+//  app's own name — a decision that had already been made, handed back
+//  to the user as a menu. A settings screen is not a museum of every
+//  choice the project ever weighed.
 //
 //  Opens from the palette bead's gear petal, or `-settingsOpen 1` from
 //  the command line. Lives in its own glass window so it works with or
@@ -30,41 +37,12 @@ struct SettingsView: View {
                 Text("Settings")
                     .font(DesignTokens.TypeScale.cardTitle)
 
-                section("Comfort") {
-                    Toggle("Reduce motion", isOn: $settings.reduceMotion)
-                        .font(DesignTokens.TypeScale.control)
-                    caption("Stills the idle life of the hub — the bob, the "
-                            + "sway, the running miniatures.")
-                }
-
                 section("Sound") {
                     row("Effects volume") {
                         Slider(value: $settings.masterVolume, in: 0...1)
                     }
                     Toggle("Lab room tone", isOn: $settings.ambientAudio)
                         .font(DesignTokens.TypeScale.control)
-                }
-
-                section("Home title") {
-                    Picker("Style", selection: $settings.titleStyle) {
-                        Text("Show me all three").tag(HubTitleStyle.audition)
-                        Text("Bubble (original)").tag(HubTitleStyle.bubble.rawValue)
-                        Text("Frosted glass").tag(HubTitleStyle.frosted.rawValue)
-                        Text("Machined plaque").tag(HubTitleStyle.plaque.rawValue)
-                        Text("Bold poster").tag(HubTitleStyle.poster.rawValue)
-                    }
-                    .font(DesignTokens.TypeScale.control)
-                    .onChange(of: settings.titleStyle) {
-                        // The wordmark and signs are built once, in the
-                        // scene's make closure; bumping the version is
-                        // what tears the gallery down and rebuilds it
-                        // in the new voice.
-                        settings.layoutVersion += 1
-                    }
-                    caption("The face the app's name and the two door signs "
-                            + "are set in. \"Show me all three\" hangs the "
-                            + "candidates side by side in the gallery so they "
-                            + "can be compared at a glance.")
                 }
 
                 section("Gallery") {

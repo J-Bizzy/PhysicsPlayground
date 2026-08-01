@@ -8,6 +8,39 @@
 //  halves joined into one continuous loop. The RK4 integration is Math's
 //  shared StreamlineTracer; this file owns only the magnetism policy.
 //
+//  That policy was rewritten on 2026-07-31, after an on-device pass
+//  reported the loops as "a little off". They were, in four separate
+//  ways, and none of them was the integrator:
+//
+//  1. THE LINES WERE BORN INSIDE THE MAGNET. Seeds sat 6 cm from centre
+//     and lines died at 5 cm, on a bar 16 cm long — so every loop
+//     emerged from the middle of the bar's FLANK and vanished into it
+//     again, leaving a dead sphere where the poles should be. The one
+//     thing a bar magnet's field picture has to show is flux leaving one
+//     end and entering the other.
+//  2. THEY WERE TRACED THROUGH THE WRONG FIELD. See `MagneticField`'s
+//     note on `barVector`: a point dipole is not a bar magnet at one
+//     bar-length's range, and one bar-length is exactly where these
+//     curves live.
+//  3. THE SEEDS WERE SPREAD BY AREA, NOT BY FLUX. A Fibonacci sphere is
+//     uniform in solid angle; a dipole's outward flux is not. Equal-area
+//     seeding draws as many lines out of the equator — where the field
+//     is weak and tangential — as out of the poles, so line density said
+//     nothing. Density IS the classical encoding, and the electric
+//     tracer next door has argued this in its own header for months.
+//  4. HALF OF THEM WERE THE SAME LOOP TWICE. A loop through (R, θ)
+//     passes through (R, π−θ) as well, so seeding both hemispheres and
+//     then tracing each seed BOTH WAYS drew every curve about twice —
+//     at random offsets, which is what made some loops read as thick
+//     and others as thin for no reason.
+//
+//  And one consequence worth stating plainly, because the module's own
+//  comments promised it and it was false: the strength bead now changes
+//  the picture. It could not before. `StreamlineTracer` integrates the
+//  NORMALIZED field, so a single magnet's traced geometry is completely
+//  invariant to |m| — the loops were pixel-identical at strength 1 and
+//  strength 12, and the bead you pulled rebuilt an unchanged mesh.
+//
 
 import Foundation
 import simd
@@ -16,15 +49,40 @@ public enum MagneticFieldLineTracer {
     public struct Config: Sendable {
         public var stepSize = 0.01
         public var maxSteps = 260
-        /// Seeds start this far from the magnet centre…
-        public var seedRadius = 0.06
-        /// …and a line ends when it comes this close to any magnet centre.
-        public var terminationRadius = 0.05
+        /// The bar's physical length (m) — what makes this a bar magnet
+        /// rather than a point. Seeds, terminations and the field model
+        /// itself are all derived from it.
+        public var magnetLength = 0.16
+        /// Seeds start this far out from the magnet's CENTRE. Must clear
+        /// the bar's own half-length or the lines start underground.
+        public var seedRadius: Double { magnetLength * seedStandoff }
+        /// …and a line ends when it comes this close to a magnet centre.
+        /// Just inside the seed sphere: any closer and short loops never
+        /// close, any further and every line stops on the step it was
+        /// born.
+        public var terminationRadius: Double { seedRadius * 0.90 }
+        /// Seed sphere radius as a multiple of the bar's length. 0.72
+        /// puts it 15 % clear of the pole tips at 0.5.
+        public var seedStandoff = 0.72
         public var boundsCenter: SIMD3<Double> = .zero
         public var boundsRadius = 1.1
+        /// Lines drawn for a magnet of `referenceStrength`. A magnet
+        /// twice as strong gets twice as many — see the header.
         public var seedsPerMagnet = 12
+        public var referenceStrength = 6.0
+        /// Proportional, but bounded: one loop does not read as a field,
+        /// and a maxed-out magnet must not blow the frame budget.
+        public var seedRange: ClosedRange<Int> = 5...30
 
         public init() {}
+
+        /// How many loops a magnet of this strength earns.
+        public func seedCount(forStrength magnitude: Double) -> Int {
+            guard referenceStrength > 0 else { return seedsPerMagnet }
+            let proportional = Double(seedsPerMagnet) * abs(magnitude) / referenceStrength
+            let rounded = Int(proportional.rounded())
+            return min(max(rounded, seedRange.lowerBound), seedRange.upperBound)
+        }
 
         var streamlineConfig: StreamlineTracer.Config {
             var config = StreamlineTracer.Config()
@@ -39,21 +97,59 @@ public enum MagneticFieldLineTracer {
 
     /// Traces looping field lines for the given magnets. Each returned line
     /// is a polyline spaced ~stepSize apart.
-    /// The both-ways trace and the splice are
-    /// `StreamlineTracer.loopedLines`, shared with the electric tracer;
-    /// what stays here is the magnetism policy — every magnet seeds the
-    /// same number of lines, because a dipole moment has no equivalent of
-    /// the charge-density rule that scales the electric bundle.
     public static func trace(magnets: [BarMagnet], config: Config) -> [[SIMD3<Double>]] {
         guard !magnets.isEmpty else { return [] }
+        let length = config.magnetLength
         return StreamlineTracer.loopedLines(
-            from: magnets.map {
-                StreamlineTracer.Seeded(position: $0.position,
-                                        seeds: config.seedsPerMagnet)
+            from: magnets.map { magnet in
+                let count = config.seedCount(forStrength: magnet.strength)
+                return StreamlineTracer.Seeded(
+                    position: magnet.position,
+                    seeds: count,
+                    directions: fluxSeedDirections(axis: magnet.axis, count: count))
             },
             seedRadius: config.seedRadius,
             stopCenters: magnets.map(\.position),
             config: config.streamlineConfig,
-            field: { MagneticField.vector(at: $0, dueTo: magnets) })
+            field: { MagneticField.barVector(at: $0, dueTo: magnets, length: length) })
+    }
+
+    /// Seed directions on the NORTH half of a sphere around a dipole,
+    /// one per equal slice of outward flux.
+    ///
+    /// The rule falls straight out of the dipole field. Its radial part
+    /// is B_r ∝ cos θ, so the flux through a cap of half-angle θ is
+    ///
+    ///     Φ(θ) ∝ ∫₀^θ cos θ′ sin θ′ dθ′ ∝ sin²θ
+    ///
+    /// — the classical r = C sin²θ result, read as a seeding rule
+    /// instead of a curve. Equal flux per line therefore means equal
+    /// steps in sin²θ, which is what the square root below does. The
+    /// azimuth is spread by the golden angle so the loops do not stack
+    /// into a fan on one plane.
+    ///
+    /// North half only, and that is not an optimisation: each of these
+    /// seeds is traced in BOTH directions and comes back a closed loop,
+    /// and that loop already crosses the southern hemisphere. Seeding
+    /// there too would redraw curves that are already on screen.
+    public static func fluxSeedDirections(axis: SIMD3<Double>,
+                                          count: Int) -> [SIMD3<Double>] {
+        let n = max(count, 1)
+        let pole = simd_length(axis) > 1e-12
+            ? simd_normalize(axis) : SIMD3<Double>(0, 1, 0)
+        // Any two axes perpendicular to the pole. The seed is chosen
+        // away from the pole so the cross product is well conditioned.
+        var reference = SIMD3<Double>(1, 0, 0)
+        if abs(simd_dot(reference, pole)) > 0.9 { reference = SIMD3(0, 0, 1) }
+        let u = simd_normalize(simd_cross(pole, reference))
+        let v = simd_cross(pole, u)
+
+        let goldenAngle = Double.pi * (3 - 5.0.squareRoot())
+        return (0..<n).map { k in
+            let sinTheta = ((Double(k) + 0.5) / Double(n)).squareRoot()
+            let cosTheta = (max(0, 1 - sinTheta * sinTheta)).squareRoot()
+            let phi = Double(k) * goldenAngle
+            return sinTheta * (cos(phi) * u + sin(phi) * v) + cosTheta * pole
+        }
     }
 }

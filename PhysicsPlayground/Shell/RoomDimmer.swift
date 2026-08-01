@@ -29,10 +29,21 @@ import UIKit
 struct RoomDimmerView: View {
     /// 0 = off, 1 = as dark as the shell goes.
     let level: Double
+    /// How far out the shell stands, metres.
+    ///
+    /// A parameter because one module's apparatus is bigger than the
+    /// shell that is supposed to sit behind it: Gravity Lab puts Jupiter
+    /// 2.6 m out and Neptune at 15, so a 3.4 m dome cuts straight
+    /// through the solar system — the inner planets read against
+    /// darkness and the outer ones against the wall, which is the exact
+    /// inconsistency the dimmer exists to remove.
+    var radius: Float = RoomDimmerView.defaultRadius
+
+    static let defaultRadius: Float = 3.4
 
     var body: some View {
         RealityView { content in
-            content.add(Self.makeShell(level: level))
+            content.add(Self.makeShell(level: level, radius: radius))
         } update: { content in
             guard let shell = content.entities.first else { return }
             shell.isEnabled = level > 0.01
@@ -46,7 +57,8 @@ struct RoomDimmerView: View {
     /// vertical alpha ramp — opaque-ish at eye level and above, fading
     /// out toward the floor so the user keeps their footing.
     @MainActor
-    static func makeShell(level: Double) -> Entity {
+    static func makeShell(level: Double,
+                          radius: Float = RoomDimmerView.defaultRadius) -> Entity {
         let root = Entity()
         root.name = "room-dimmer"
 
@@ -57,7 +69,7 @@ struct RoomDimmerView: View {
         material.blending = .transparent(opacity: 0.9)
         material.opacityThreshold = 0
 
-        let dome = ModelEntity(mesh: .generateSphere(radius: 3.4), materials: [material])
+        let dome = ModelEntity(mesh: .generateSphere(radius: radius), materials: [material])
         dome.scale = SIMD3(-1, 1, 1)          // seen from the inside
         dome.position = [0, 1.4, 0]
         root.addChild(dome)

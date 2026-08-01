@@ -27,8 +27,15 @@ struct PlaygroundSpaceView: View {
             } else if appModel.roomDimming > 0.01 {
                 // The middle setting: the room stays, but a dark shell
                 // gives the physics its contrast back.
-                RoomDimmerView(level: appModel.roomDimming)
-                    .id("dimmer")
+                RoomDimmerView(
+                    level: appModel.roomDimming,
+                    radius: appModel.activeModule?.preferredDimmingRadius
+                        ?? RoomDimmerView.defaultRadius)
+                    // Keyed on the radius as well as on being the dimmer:
+                    // the shell's mesh is built once in `make`, so a
+                    // module that wants a different one needs a new view
+                    // identity to get it.
+                    .id("dimmer-\(appModel.activeModule?.preferredDimmingRadius ?? 0)")
             }
             if let module = appModel.activeModule {
                 ZStack {

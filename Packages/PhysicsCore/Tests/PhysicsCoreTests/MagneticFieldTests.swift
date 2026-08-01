@@ -93,4 +93,123 @@ final class MagneticFieldTests: XCTestCase {
         }
         XCTAssertFalse(loops.isEmpty, "field lines should loop back to the magnet")
     }
+
+    // MARK: The finite bar
+
+    /// The pole-pair bar carries the same total moment as the point
+    /// dipole, so far away the two must agree — that convergence is the
+    /// whole licence for using either. Checked at four bar-lengths and
+    /// again at twenty, where the error has to have shrunk.
+    func testTheFiniteBarConvergesToThePointDipoleFarAway() {
+        let length = 0.16
+        let magnet = BarMagnet(position: .zero, moment: SIMD3(0, 6, 0))
+
+        func relativeError(at radius: Double) -> Double {
+            // Off-axis, so the test is not fooled by an accidental
+            // agreement on one symmetry axis.
+            let point = SIMD3(radius * 0.6, radius * 0.8, 0)
+            let ideal = MagneticField.vector(at: point, dueTo: magnet)
+            let bar = MagneticField.barVector(at: point, dueTo: magnet, length: length)
+            return simd_length(bar - ideal) / simd_length(ideal)
+        }
+
+        let near = relativeError(at: length * 4)
+        let far = relativeError(at: length * 20)
+        XCTAssertLessThan(near, 0.05,
+                          "the bar has drifted off the dipole it is made of")
+        XCTAssertLessThan(far, near / 10,
+                          "the error is not falling with distance — the bar "
+                          + "does not carry the moment it claims")
+    }
+
+    /// …and CLOSE to the bar the two genuinely disagree. If they did not,
+    /// there would be no reason for the tracer to pay for the pole-pair
+    /// model at all.
+    func testTheFiniteBarDepartsFromThePointDipoleNearTheMagnet() {
+        let length = 0.16
+        let magnet = BarMagnet(position: .zero, moment: SIMD3(0, 6, 0))
+        // Just off the bar's flank — where the field lines are seeded.
+        let point = SIMD3(0.115, 0.02, 0)
+        let ideal = MagneticField.vector(at: point, dueTo: magnet)
+        let bar = MagneticField.barVector(at: point, dueTo: magnet, length: length)
+        let error = simd_length(bar - ideal) / simd_length(ideal)
+        XCTAssertGreaterThan(error, 0.10,
+                             "at two-thirds of a bar-length the point dipole "
+                             + "is supposed to be a poor model of a bar")
+    }
+
+    // MARK: Seeding
+
+    /// Seeds are spread by equal slices of FLUX, not equal area. For a
+    /// dipole the flux through a cap of half-angle θ goes as sin²θ, so
+    /// the k-th of n seeds sits at sin²θ = (k + ½)/n. Checked against
+    /// that closed form directly, in a tilted frame so the test cannot
+    /// pass by accident on a coordinate axis.
+    func testSeedsAreSpacedByEqualFlux() {
+        let axis = simd_normalize(SIMD3<Double>(1, 2, -0.5))
+        let n = 12
+        let directions = MagneticFieldLineTracer.fluxSeedDirections(
+            axis: axis, count: n)
+        XCTAssertEqual(directions.count, n)
+        for (k, direction) in directions.enumerated() {
+            XCTAssertEqual(simd_length(direction), 1, accuracy: 1e-12,
+                           "seed \(k) is not on the unit sphere")
+            let cosTheta = simd_dot(direction, axis)
+            let sin2 = 1 - cosTheta * cosTheta
+            XCTAssertEqual(sin2, (Double(k) + 0.5) / Double(n), accuracy: 1e-12,
+                           "seed \(k) does not carry its equal share of flux")
+        }
+    }
+
+    /// Every seed is on the NORTH half. Both halves would be redundant:
+    /// each seed is traced in both directions and comes back a closed
+    /// loop that already crosses the south.
+    func testSeedsStayOnTheNorthHalfOfTheSphere() {
+        let axis = simd_normalize(SIMD3<Double>(0, -1, 0.3))
+        for direction in MagneticFieldLineTracer.fluxSeedDirections(
+            axis: axis, count: 20) {
+            XCTAssertGreaterThanOrEqual(simd_dot(direction, axis), 0,
+                                        "a seed crossed into the far hemisphere")
+        }
+    }
+
+    // MARK: Density
+
+    /// A stronger magnet draws more loops. This was the promise the
+    /// module's strength bead made and could not keep: the tracer
+    /// integrates the NORMALIZED field, so with a fixed seed count a
+    /// magnet's loops were identical at every strength and pulling the
+    /// bead rebuilt an unchanged mesh.
+    func testAStrongerMagnetEarnsMoreLines() {
+        var config = MagneticFieldLineTracer.Config()
+        config.referenceStrength = 6
+        config.seedsPerMagnet = 12
+        XCTAssertEqual(config.seedCount(forStrength: 6), 12)
+        XCTAssertEqual(config.seedCount(forStrength: 12), 24)
+        XCTAssertEqual(config.seedCount(forStrength: 3), 6)
+        // Bounded at both ends: one loop is not a field, and a maxed
+        // magnet must not blow the frame budget.
+        XCTAssertEqual(config.seedCount(forStrength: 0.01),
+                       config.seedRange.lowerBound)
+        XCTAssertEqual(config.seedCount(forStrength: 1e6),
+                       config.seedRange.upperBound)
+    }
+
+    /// Lines are born and die OUTSIDE the bar they belong to. They used
+    /// to be seeded 6 cm from the centre of a 16 cm magnet and to
+    /// terminate at 5 cm — inside its body — so every loop emerged from
+    /// the middle of a flank and vanished into it, with a dead sphere
+    /// where the poles should have been.
+    func testLinesAreSeededClearOfTheBarItself() {
+        var config = MagneticFieldLineTracer.Config()
+        config.magnetLength = 0.16
+        let halfLength = config.magnetLength / 2
+        XCTAssertGreaterThan(config.seedRadius, halfLength,
+                             "lines start inside the magnet")
+        XCTAssertGreaterThan(config.terminationRadius, halfLength,
+                             "lines end inside the magnet")
+        // …and the stop sphere is inside the seed sphere, or every line
+        // terminates on the step it was born.
+        XCTAssertLessThan(config.terminationRadius, config.seedRadius)
+    }
 }

@@ -118,6 +118,101 @@ public enum Materials {
         return material
     }
 
+    // MARK: Glass — the platform's own surface, for the app's own controls
+
+    /// Frosted glass, for the instruments the user operates: switch
+    /// plates, picker discs, rail casings, petals, beads, wells.
+    ///
+    /// THIS IS NOT A REVERSAL OF "CASINGS BEAT GLOWS", it is that rule
+    /// executed properly, and the distinction is the whole recipe.
+    /// visionOS glass is not a pale translucent pane — put one of those
+    /// over a cream wall and it disappears, which is the failure that
+    /// produced `contrastLine` below. Real system glass is a DARK,
+    /// light-scattering scrim with a bright specular skin: it darkens
+    /// what is behind it and catches a hard highlight at its edge. Both
+    /// halves are load-bearing, and a recipe with only the second one is
+    /// the thing this app already banned.
+    ///
+    /// So the tint stays dark. What changes from the near-black casings
+    /// these replace is the SCATTERING — roughness up, so the surface
+    /// diffuses rather than mirrors — and a full clearcoat over it, which
+    /// is the wet outer skin that makes a pane read as glass rather than
+    /// as matte plastic. The material underneath is doing what frosted
+    /// glass physically does: a rough interface that scatters, behind a
+    /// smooth one that reflects.
+    ///
+    /// Note what this is deliberately NOT: `.glassBackgroundEffect()`.
+    /// That is a SwiftUI modifier and reaches only as far as a
+    /// RealityView attachment; every surface here is a `ModelEntity`,
+    /// pooled and placed by arithmetic, and converting the app's
+    /// instruments into hosted SwiftUI views to borrow one material would
+    /// trade the whole spatial design for a finish. This is the closest
+    /// honest approximation available to geometry.
+    ///
+    /// - `tint`: the scrim. Keep it dark. A caller wanting a coloured
+    ///   pane should tint toward its accent, not away from black.
+    /// - `opacity`: how much room shows through. Higher is more solid.
+    /// - `frost`: interface roughness. 0 is a clear window, 1 is deeply
+    ///   etched; the default is a pane you can read a shape through.
+    ///
+    /// The two defaults were tuned on device, and they move together:
+    /// letting more room through (lower opacity) costs contrast, and
+    /// scattering it harder (higher frost) buys some back by blurring
+    /// whatever is behind into an average rather than a pattern. A pane
+    /// made more transparent WITHOUT more frost just shows you the
+    /// bookshelf behind your controls.
+    public static func frostedGlass(_ tint: UIColor = UIColor(white: 0.09, alpha: 1),
+                                    opacity: Float = 0.58,
+                                    frost: Float = 0.68) -> PhysicallyBasedMaterial {
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: tint)
+        material.metallic = .init(floatLiteral: 0)
+        material.roughness = .init(floatLiteral: frost)
+        material.clearcoat = .init(floatLiteral: 1.0)
+        material.clearcoatRoughness = .init(floatLiteral: 0.06)
+        material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+        return material
+    }
+
+    /// The hairline along a glass panel's edge.
+    ///
+    /// This is the part that actually sells the look, and it is the part
+    /// a material cannot supply on its own: what the eye reads as "glass"
+    /// is the bright rim where the pane's thickness catches the light.
+    /// Swept as a slightly larger piece of geometry behind or around the
+    /// pane — the same two-pass trick as `contrastLine`, inverted:
+    /// there a dark casing sits under a bright core, here a bright edge
+    /// sits under a dark pane.
+    ///
+    /// Unlit on purpose. The rim has to hold its brightness in a dim
+    /// room and against a sunlit wall alike, and a lit material would
+    /// vary with whatever the room's IBL happens to be.
+    public static func glassEdge(_ color: UIColor = UIColor(white: 0.92, alpha: 1),
+                                 opacity: Float = 0.34) -> UnlitMaterial {
+        var material = UnlitMaterial(color: color)
+        material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+        return material
+    }
+
+    /// How far proud of a panel its edge hairline should sit. Small: a
+    /// rim that reads as a border rather than as a halo.
+    public static let glassEdgeInset: Float = 0.0016
+
+    /// A colour pulled toward black, for tinting a glass scrim.
+    ///
+    /// `frostedGlass` needs a DARK pane or it stops darkening what is
+    /// behind it and becomes the pale wash this app has already banned
+    /// once. A caller with an accent colour to honour should deepen it
+    /// rather than substitute grey: the pane keeps the hue that says
+    /// which source it is, and still holds contrast against a lit wall.
+    public static func deepened(_ color: UIColor, by fraction: CGFloat = 0.72)
+    -> UIColor {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let keep = 1 - min(max(fraction, 0), 1)
+        return UIColor(red: r * keep, green: g * keep, blue: b * keep, alpha: a)
+    }
+
     // MARK: Reading against a bright room
 
     /// Passthrough is a *bright* medium — cream walls, daylight, pale

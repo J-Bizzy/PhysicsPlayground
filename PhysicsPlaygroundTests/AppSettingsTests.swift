@@ -15,7 +15,7 @@ import XCTest
 final class AppSettingsTests: XCTestCase {
 
     private static let keys = [
-        "settings.reduceMotion", "settings.masterVolume",
+        "settings.masterVolume",
         "settings.ambientAudio", "settings.arcDistance",
         "settings.arcHeight", "settings.seenHints",
     ]
@@ -37,7 +37,6 @@ final class AppSettingsTests: XCTestCase {
 
     func testDefaultsOnFirstLaunch() {
         let settings = AppSettings()
-        XCTAssertFalse(settings.reduceMotion)
         XCTAssertEqual(settings.masterVolume, 1.0)
         XCTAssertTrue(settings.ambientAudio)
         XCTAssertEqual(settings.arcDistance, 2.0)
@@ -47,7 +46,6 @@ final class AppSettingsTests: XCTestCase {
 
     func testEveryPreferenceSurvivesRelaunch() {
         let settings = AppSettings()
-        settings.reduceMotion = true
         settings.masterVolume = 0.4
         settings.ambientAudio = false
         settings.arcDistance = 2.6
@@ -58,7 +56,6 @@ final class AppSettingsTests: XCTestCase {
         // A second instance is a relaunch: nothing but UserDefaults
         // connects the two.
         let relaunched = AppSettings()
-        XCTAssertTrue(relaunched.reduceMotion)
         XCTAssertEqual(relaunched.masterVolume, 0.4)
         XCTAssertFalse(relaunched.ambientAudio)
         XCTAssertEqual(relaunched.arcDistance, 2.6)

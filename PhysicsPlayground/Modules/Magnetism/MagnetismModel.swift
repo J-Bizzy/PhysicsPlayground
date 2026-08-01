@@ -61,6 +61,12 @@ final class MagnetismModel {
     private static let maxAngularSpeed = 3.0    // rad/s
     /// Magnets can't pass through each other — they stick at a touch.
     private static let contactDistance = magnetLength * 0.92
+    /// How far above contact a magnet begins to slow — the cushion that
+    /// turns an impact into a landing. See `softenedAtContact`.
+    private static let contactBand = 0.030
+    /// Below this glide speed a magnet is simply at rest. Without it the
+    /// last hundredth of a millimetre per second never quite runs out.
+    private static let restSpeed = 3.0e-4    // m/s
 
     private(set) var magnets: [BarMagnet] = []
     private(set) var selectedID: UUID?
@@ -226,7 +232,12 @@ final class MagnetismModel {
             let fMag = simd_length(force)
             if fMag > 1e-22 {
                 let speed = min(Self.forceGain * fMag, Self.maxLinearSpeed)
-                next[i].position = clamp(magnets[i].position + (force / fMag) * speed * h)
+                let velocity = softenedAtContact(
+                    velocity: (force / fMag) * speed,
+                    of: magnets[i], among: magnets)
+                if simd_length(velocity) > Self.restSpeed {
+                    next[i].position = clamp(magnets[i].position + velocity * h)
+                }
             }
             // Turn the moment toward the local field (τ = m × B).
             let torque = MagneticField.torque(on: magnets[i], inFieldOf: others)
@@ -238,6 +249,46 @@ final class MagnetismModel {
             }
         }
         magnets = separated(next)
+    }
+
+    /// Takes the INWARD component out of a magnet's glide as it closes
+    /// on one it is already touching, so a pair that has come together
+    /// stops instead of buzzing.
+    ///
+    /// Two aligned magnets never came to rest, and the mechanism was a
+    /// standoff between the two halves of `step`. The dipole force at
+    /// contact is ~0.05 N, which `forceGain` turns into a speed well
+    /// past `maxLinearSpeed` — so each magnet drove a full 8 mm inward
+    /// every frame, at the cap, and `separated` then hard-projected it
+    /// straight back out to exactly where it started. Identical force
+    /// next frame, identical 8 mm, identical projection: a limit cycle
+    /// locked to the frame rate, running forever, with the visible
+    /// symptom of two magnets vibrating against each other. The speed
+    /// cap was making it worse rather than better — it removed the only
+    /// mechanism by which an approaching magnet would ever slow down.
+    ///
+    /// Only the closing component is removed, and only in proportion to
+    /// how little gap is left. A magnet at contact can still slide
+    /// along its neighbour, and can still be pulled away from it; it
+    /// simply cannot keep charging into a wall. Real magnets stick.
+    private func softenedAtContact(velocity: SIMD3<Double>,
+                                   of magnet: BarMagnet,
+                                   among all: [BarMagnet]) -> SIMD3<Double> {
+        var result = velocity
+        for other in all where other.id != magnet.id {
+            let delta = other.position - magnet.position
+            let distance = simd_length(delta)
+            guard distance > 1e-6,
+                  distance < Self.contactDistance + Self.contactBand else { continue }
+            let toward = delta / distance
+            let closing = simd_dot(result, toward)
+            guard closing > 0 else { continue }
+            // 1 at the far edge of the band, 0 at contact and inside it.
+            let gap = (distance - Self.contactDistance) / Self.contactBand
+            let ease = min(max(gap, 0), 1)
+            result -= toward * (closing * (1 - ease))
+        }
+        return result
     }
 
     /// Pushes overlapping magnets apart to the touching distance so they

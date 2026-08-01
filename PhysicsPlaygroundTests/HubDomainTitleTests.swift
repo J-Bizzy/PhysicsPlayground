@@ -19,6 +19,18 @@ final class HubDomainTitleTests: XCTestCase {
     private let halfWidth: Float = 0.31
     private let halfHeight: Float = 0.14
     private let ruleY: Float = -0.20
+    /// Stand-ins for a real sign's measured lanes: the letters here are
+    /// 55 mm of plaque extrusion, so the front lane clears +0.055 and
+    /// the back lane clears 0.
+    private let frontLane: Float = 0.079
+    private let backLane: Float = -0.024
+
+    private func path(_ domain: HubDomain, _ time: Double) -> SIMD3<Float> {
+        HubDomainTitle.path(for: domain, time: time,
+                            halfWidth: halfWidth, halfHeight: halfHeight,
+                            ruleY: ruleY,
+                            frontLane: frontLane, backLane: backLane)
+    }
 
     // MARK: The electron's orbit
 
@@ -26,12 +38,10 @@ final class HubDomainTitleTests: XCTestCase {
     /// spark that drifts off the drawn track reads as a bug within one
     /// orbit, because the track is right there to compare against.
     func testTheElectronStaysOnItsTrack() {
-        let a = halfWidth + 0.09
-        let b = halfHeight + 0.055
+        let a = halfWidth * HubDomainTitle.orbitReach
+        let b = halfHeight + HubDomainTitle.orbitRise
         for step in 0..<97 {
-            let position = HubDomainTitle.path(
-                for: .electricity, time: Double(step) * 0.17,
-                halfWidth: halfWidth, halfHeight: halfHeight, ruleY: ruleY)
+            let position = path(.electricity, Double(step) * 0.17)
             let radial = (position.x / a) * (position.x / a)
                 + (position.y / b) * (position.y / b)
             XCTAssertEqual(radial, 1, accuracy: 1e-4,
@@ -41,15 +51,40 @@ final class HubDomainTitleTests: XCTestCase {
 
     /// The orbit is tilted in z so the lap crosses IN FRONT of the
     /// letters on one half and BEHIND on the other — the depth pass is
-    /// what sells the type as solid, so it must actually happen.
+    /// what sells the type as solid, so it must actually happen. Both
+    /// extremes have to reach their measured lane: an amplitude smaller
+    /// than the extrusion leaves the spark buried in the glyphs, which
+    /// is exactly the bug the lanes were introduced to kill.
     func testTheOrbitCrossesInFrontAndBehindTheLetters() {
         let depths = (0..<64).map { step in
             HubDomainTitle.orbitPoint(theta: Float(step) / 64 * 2 * .pi,
                                       halfWidth: halfWidth,
-                                      halfHeight: halfHeight).z
+                                      halfHeight: halfHeight,
+                                      frontLane: frontLane,
+                                      backLane: backLane).z
         }
-        XCTAssertLessThan(depths.min() ?? 0, -0.03, "never passes behind")
-        XCTAssertGreaterThan(depths.max() ?? 0, 0.03, "never passes in front")
+        XCTAssertEqual(depths.min() ?? 0, backLane, accuracy: 1e-3,
+                       "the lap never reaches the lane behind the letters")
+        XCTAssertEqual(depths.max() ?? 0, frontLane, accuracy: 1e-3,
+                       "the lap never reaches the lane in front of the letters")
+    }
+
+    /// And the lap has to actually GO somewhere the letters are, or the
+    /// depth swap happens in empty air where nothing can occlude it.
+    /// The first orbit hung outside the lockup on every side and the
+    /// "behind" half was invisible for that reason alone.
+    func testTheOrbitPassesInsideTheLettersSilhouette() {
+        let inside = (0..<128).contains { step in
+            let p = HubDomainTitle.orbitPoint(
+                theta: Float(step) / 128 * 2 * .pi,
+                halfWidth: halfWidth, halfHeight: halfHeight,
+                frontLane: frontLane, backLane: backLane)
+            // Behind the letters AND within the block's silhouette.
+            return p.z < 0 && abs(p.x) < halfWidth && abs(p.y) < halfHeight
+        }
+        XCTAssertTrue(inside,
+                      "no part of the lap passes behind an actual letter — "
+                      + "the depth crossing has nothing to sell")
     }
 
     // MARK: The ball's lob
@@ -59,13 +94,38 @@ final class HubDomainTitleTests: XCTestCase {
     func testTheBallLaunchesAndLandsOnTheRule() {
         let period = 2.8
         for crossing in 0..<4 {
-            let start = HubDomainTitle.path(
-                for: .mechanics, time: Double(crossing) * period + 1e-4,
-                halfWidth: halfWidth, halfHeight: halfHeight, ruleY: ruleY)
+            let start = path(.mechanics, Double(crossing) * period + 1e-4)
             XCTAssertEqual(start.y, ruleY, accuracy: 1e-2,
                            "crossing \(crossing) launches off the rule")
-            XCTAssertEqual(abs(start.x), halfWidth * 0.92, accuracy: 1e-2,
+            XCTAssertEqual(abs(start.x),
+                           halfWidth * HubDomainTitle.launchReach, accuracy: 1e-2,
                            "crossing \(crossing) launches from mid-air")
+        }
+    }
+
+    /// …and those two ends are ON the rule but OUTBOARD of the type.
+    /// Launching from under a letter is what made the old arc
+    /// unwinnable: a parabola that starts inside a word six times wider
+    /// than it is tall cannot get out through the top.
+    func testTheBallLaunchesFromOutsideTheLettersButOntoTheRule() {
+        let launch = halfWidth * HubDomainTitle.launchReach
+        let ruleEnd = halfWidth * HubDomainTitle.ruleOverhang
+        XCTAssertGreaterThan(launch, halfWidth,
+                             "the ball launches from under the letters")
+        XCTAssertLessThan(launch, ruleEnd,
+                          "the ball launches off the end of the rule, into space")
+    }
+
+    /// The ball flies in the lane in FRONT of the letters — the whole
+    /// flight, not just the apex. It flew at a hardcoded z = 0.02 until
+    /// an on-device pass caught it passing through a glyph: the plaque
+    /// voice extrudes its letters far deeper than that.
+    func testTheBallNeverEntersTheLetters() {
+        for step in 0..<200 {
+            let p = path(.mechanics, Double(step) * 0.043)
+            XCTAssertGreaterThanOrEqual(
+                p.z, frontLane - 1e-5,
+                "the ball is inside the letter solids at step \(step)")
         }
     }
 
@@ -73,18 +133,12 @@ final class HubDomainTitleTests: XCTestCase {
     /// THROUGH the sign it decorates is the one unforgivable frame.
     func testTheArcClearsTheSign() {
         let period = 2.8
-        let apex = HubDomainTitle.path(
-            for: .mechanics, time: period / 2,
-            halfWidth: halfWidth, halfHeight: halfHeight, ruleY: ruleY)
+        let apex = path(.mechanics, period / 2)
         XCTAssertGreaterThan(apex.y, halfHeight + 0.10,
                              "the ball grazes the letters at the top of its arc")
         // And the path truly is a parabola: symmetric about the apex.
-        let early = HubDomainTitle.path(
-            for: .mechanics, time: period * 0.25,
-            halfWidth: halfWidth, halfHeight: halfHeight, ruleY: ruleY)
-        let late = HubDomainTitle.path(
-            for: .mechanics, time: period * 0.75,
-            halfWidth: halfWidth, halfHeight: halfHeight, ruleY: ruleY)
+        let early = path(.mechanics, period * 0.25)
+        let late = path(.mechanics, period * 0.75)
         XCTAssertEqual(early.y, late.y, accuracy: 1e-4,
                        "the arc is not symmetric — that is not a parabola")
     }
@@ -93,14 +147,34 @@ final class HubDomainTitleTests: XCTestCase {
     /// between two points, not a film loop rewinding.
     func testConsecutiveCrossingsAlternateDirection() {
         let period = 2.8
-        let first = HubDomainTitle.path(
-            for: .mechanics, time: period * 0.1,
-            halfWidth: halfWidth, halfHeight: halfHeight, ruleY: ruleY)
-        let second = HubDomainTitle.path(
-            for: .mechanics, time: period * 1.1,
-            halfWidth: halfWidth, halfHeight: halfHeight, ruleY: ruleY)
+        let first = path(.mechanics, period * 0.1)
+        let second = path(.mechanics, period * 1.1)
         XCTAssertEqual(first.x, -second.x, accuracy: 1e-3,
                        "the second crossing retraces the first instead of returning")
+    }
+
+    // MARK: The measured lanes
+
+    /// A real sign measures its own letters and puts both lanes clear of
+    /// them. This is the test that would have caught the ball flying
+    /// through a glyph, and the only one that can: every number involved
+    /// comes out of RealityKit's text extrusion at runtime.
+    @MainActor
+    func testEachSignMeasuresLanesClearOfItsOwnLetters() {
+        for domain in HubDomain.allCases {
+            let title = HubDomainTitle(domain: domain, width: 0.62)
+            // The two line entities are the first two children.
+            let letters = Array(title.root.children.prefix(2))
+                .map { $0.visualBounds(relativeTo: title.root) }
+            let front = letters.map(\.max.z).max() ?? 0
+            let back = letters.map(\.min.z).min() ?? 0
+            XCTAssertGreaterThan(
+                title.frontLane, front,
+                "\(domain)'s front lane is inside its own letters")
+            XCTAssertLessThan(
+                title.backLane, back,
+                "\(domain)'s back lane is inside its own letters")
+        }
     }
 
     // MARK: The lockup

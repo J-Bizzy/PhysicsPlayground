@@ -62,37 +62,14 @@ final class HubTitleStyleTests: XCTestCase {
         }
     }
 
-    /// The settings value picks the voice, and anything the enum does
-    /// not recognise — the audition sentinel, or a stale raw value left
-    /// by an older build — falls back to the original rather than
-    /// leaving the home with no type at all.
-    @MainActor
-    func testTheSettingSelectsTheVoice() {
-        let settings = AppSettings()
-        defer { UserDefaults.standard.removeObject(forKey: "settings.titleStyle") }
-
-        for expected in HubTitleStyle.allCases {
-            settings.titleStyle = expected.rawValue
-            XCTAssertEqual(HubTitleStyle.chosen(settings), expected)
-        }
-
-        settings.titleStyle = HubTitleStyle.audition
-        XCTAssertEqual(HubTitleStyle.chosen(settings), .bubble,
-                       "the audition sentinel is not a voice — the wall is "
-                       + "hung by the hub, and the type still needs a face")
-
-        settings.titleStyle = 99
-        XCTAssertEqual(HubTitleStyle.chosen(settings), .bubble,
-                       "a stale raw value must not leave the home mute")
-    }
-
-    /// A fresh install ships the chosen voice (owner's call: the
-    /// plaque). The audition wall remains reachable from Settings —
-    /// it is how this was decided and how a future one would be.
-    @MainActor
-    func testAFreshInstallShipsThePlaque() {
-        UserDefaults.standard.removeObject(forKey: "settings.titleStyle")
-        XCTAssertEqual(AppSettings().titleStyle, HubTitleStyle.plaque.rawValue)
+    /// The home ships in ONE voice, pinned in code. It used to come
+    /// out of Settings, with a sentinel that hung a specimen wall and a
+    /// fallback for stale raw values; both went on 2026-07-31, when the
+    /// choice stopped being a choice. If this constant ever moves, the
+    /// wordmark and both door signs move with it — they all read
+    /// `HubTitleStyle.current`, which the hub sets from this.
+    func testTheHomeShipsInThePlaque() {
+        XCTAssertEqual(HubTitleStyle.shipping, .plaque)
     }
 
     /// The plaque is ONE solid, not a stack. Two meshes sharing a

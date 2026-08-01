@@ -31,34 +31,47 @@ struct PhysicsPlaygroundApp: App {
         // hub nameplate centers itself in whatever height it gets.
         .defaultSize(width: 560, height: 720)
 
-        // The settings window keeps the system glass (unlike the plain
-        // main window — its bareness serves the floating nameplate, not
-        // control surfaces). A value-less WindowGroup(id:) is single-
-        // instance, so reopening it just brings it forward.
+        // The three utility windows — Settings, the Lab Notebook, About.
+        // Each keeps the system glass (unlike the plain main window,
+        // whose bareness serves the floating nameplate, not control
+        // surfaces), and each is a value-less WindowGroup(id:), which is
+        // single-instance: reopening one just brings it forward.
+        //
+        // All three ask for `.utilityPanel`. Without a placement,
+        // visionOS anchors a programmatically opened window off the
+        // app's key window — and while the gallery is up that is the
+        // MAIN window, which is deliberately empty and parked wherever
+        // the user last left it. The symptom on device was exact and
+        // unmissable: every one of these opened somewhere behind the
+        // podium, off to one side, half of it occluded by a plinth. A
+        // utility panel is placed in front of the user instead, which is
+        // the only correct answer for a window summoned by a button the
+        // user is looking at.
         WindowGroup(id: SettingsView.windowID) {
             SettingsView()
                 .environment(appModel)
         }
         // Tall enough that the whole form shows without scrolling at
         // default type size; the ScrollView is there for Dynamic Type.
-        .defaultSize(width: 460, height: 900)
+        .defaultSize(width: 460, height: 780)
         .windowResizability(.contentSize)
+        .defaultWindowPlacement { _, _ in WindowPlacement(.utilityPanel) }
 
-        // The Lab Notebook: same single-instance pattern as Settings.
         WindowGroup(id: NotebookView.windowID) {
             NotebookView()
                 .environment(appModel)
         }
         .defaultSize(width: 480, height: 760)
         .windowResizability(.contentSize)
+        .defaultWindowPlacement { _, _ in WindowPlacement(.utilityPanel) }
 
-        // About: behind the home's info button. Same single-instance
-        // pattern as Settings.
+        // About: behind the home's info button.
         WindowGroup(id: AboutView.windowID) {
             AboutView()
         }
-        .defaultSize(width: 380, height: 340)
+        .defaultSize(width: 420, height: 380)
         .windowResizability(.contentSize)
+        .defaultWindowPlacement { _, _ in WindowPlacement(.utilityPanel) }
 
         ImmersiveSpace(id: PlaygroundSpaceView.spaceID) {
             PlaygroundSpaceView()

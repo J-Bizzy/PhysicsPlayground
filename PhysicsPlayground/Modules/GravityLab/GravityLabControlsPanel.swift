@@ -2,13 +2,30 @@
 //  GravityLabControlsPanel.swift
 //  Physics Playground — Gravity Lab module
 //
-//  The module's one-glance panel. The always-open card makes worlds —
-//  presets, a custom body, and the twin-suns split — and shows the
-//  clock; time, prediction, the star itself, and the display layers
-//  wait behind collapsed sections. Per-BODY editing (mass bead,
-//  delete) lives on the body: tap a planet and its ring unfolds.
+//  The module's one-glance panel — and as of 2026-07-31 it holds no
+//  slider, no picker and no toggle. It makes worlds, it runs the clock,
+//  it arms a prediction, and otherwise it READS.
+//
+//  What left, and where each thing went:
+//  · Five display toggles → the switch bank standing to the left of the
+//    system, joined by a SIXTH the panel never had: the acceleration
+//    vector, which the renderer has read and defaulted to false since it
+//    was written, with no control anywhere in the app.
+//  · Sun mass → the star's own bead. Mass has physical extent; the star
+//    inflates as its cube root while you pull.
+//  · G → the rail under the bank. It is the one quantity here with no
+//    extent of its own, which is exactly why it gets the app's decided
+//    form for a continuous quantity rather than an invented one.
+//
+//  What arrived: the ORBIT of the selected body, in the classical
+//  elements, and its ENERGY. Four of the eleven numbers this model
+//  computes every frame — mass, kinetic, potential and total energy —
+//  were shown to nobody at all, and the total is the one that makes
+//  "bound" a fact rather than a label: negative and it comes back,
+//  positive and it never does.
 //
 
+import PhysicsCore
 import SwiftUI
 
 struct GravityLabControlsPanel: View {
@@ -91,46 +108,121 @@ struct GravityLabControlsPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            CollapsedSection("The star") {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Sun mass: \(self.model.sunMassMultiplier, specifier: "%.1f")×")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.sunMassMultiplier, in: 0.2...4.0)
-                        .accessibilityLabel("Sun mass multiplier")
+            CollapsedSection("This orbit") {
+                if let selected = model.selectedBody,
+                   let elements = model.orbitElements(for: selected.id) {
+                    orbitRows(selected.body.name, elements)
+                } else {
+                    Text("Tap a planet: its orbit appears as a ring you can "
+                         + "take hold of, and its numbers appear here.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("G: \(self.model.gMultiplier, specifier: "%.1f")×")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.gMultiplier, in: 0.2...4.0)
-                        .accessibilityLabel("Gravitational constant multiplier")
-                }
-                Text("Heavier star, faster orbits: v = √(GM/r) live.")
-                    .font(DesignTokens.TypeScale.footnote)
-                    .foregroundStyle(.secondary)
             }
 
-            CollapsedSection("Display") {
-                Toggle("Field particles", isOn: $model.showFieldParticles)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("A flow of motes falling along the true field")
-                Toggle("Spacetime grid", isOn: $model.showSpacetimeGrid)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("The rubber-sheet picture underfoot — depths are conceptual, not to scale")
-                Toggle("Kepler sweep", isOn: $model.keplerSweepOn)
-                    .font(DesignTokens.TypeScale.control)
-                // The trail-length picker is deleted, not relocated. Three
-                // lengths of ribbon is a display preference, not physics,
-                // and the law's third clause refuses controls that are
-                // neither an extent nor a real choice (DECISIONS.md,
-                // 2026-07-29). Medium is the length that reads an ellipse
-                // without smearing a fast inner orbit into a band;
-                // `trailLength` stays on the model at that default, so a
-                // future spatial control has something to set.
-                Toggle("Velocity vectors", isOn: $model.showVelocityVector)
-                    .font(DesignTokens.TypeScale.control)
-                Toggle("Force vectors", isOn: $model.showForceVector)
-                    .font(DesignTokens.TypeScale.control)
+            CollapsedSection("Energy") {
+                if let selected = model.selectedBody,
+                   let readout = model.readout(for: selected) {
+                    energyRows(readout)
+                } else {
+                    Text("Total energy is what decides whether an orbit comes "
+                         + "back: negative is bound, positive is gone.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+        }
+    }
+
+    // MARK: Readouts
+
+    @ViewBuilder
+    private func orbitRows(_ name: String, _ elements: OrbitalElements) -> some View {
+        let au = CelestialBody.astronomicalUnit
+        VStack(alignment: .leading, spacing: 3) {
+            Text(name)
+                .font(DesignTokens.TypeScale.control.weight(.semibold))
+            row("Semi-major axis a",
+                elements.semiMajorAxis.map { String(format: "%.3f AU", $0 / au) }
+                    ?? "∞ (parabolic)")
+            row("Eccentricity e", String(format: "%.4f", elements.eccentricity))
+            row("Periapsis r_p", String(format: "%.3f AU", elements.periapsisRadius / au))
+            // A hyperbola's far apsis is algebraically behind the focus,
+            // which is correct and is not a distance anyone wants read out.
+            row("Apoapsis r_a", elements.hasApoapsis
+                ? String(format: "%.3f AU", elements.apoapsisRadius / au)
+                : "—")
+            row("Inclination i", degrees(elements.inclination))
+            if elements.degeneracy != .equatorial
+                && elements.degeneracy != .circularEquatorial {
+                row("Ascending node Ω", degrees(elements.longitudeOfAscendingNode))
+            }
+            if elements.degeneracy != .circular
+                && elements.degeneracy != .circularEquatorial {
+                row("Arg. of periapsis ω", degrees(elements.argumentOfPeriapsis))
+            }
+            row("True anomaly ν", degrees(elements.trueAnomaly))
+            row("Period T", elements.period.map {
+                String(format: "%.2f years", $0 / (365.25 * 86_400))
+            } ?? "unbound")
+            // A circular orbit has no periapsis and an equatorial one has
+            // no node, so the angles measured from them are conventions
+            // rather than measurements. Saying which is cheaper than
+            // showing a number that means nothing.
+            if elements.degeneracy != .none {
+                Text(degeneracyNote(elements.degeneracy))
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func energyRows(_ readout: GravityLabModel.Readout) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            row("Mass", PhysicsFormat.scientific(readout.massKg) + " kg")
+            row("Kinetic", PhysicsFormat.scientific(readout.kineticEnergy) + " J")
+            row("Potential", PhysicsFormat.scientific(readout.potentialEnergy) + " J")
+            row("Total", PhysicsFormat.scientific(readout.totalEnergy) + " J")
+            Text(readout.totalEnergy < 0
+                 ? "Negative: bound. It comes back."
+                 : "Positive: unbound. It is leaving.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+        }
+    }
+
+    private func degrees(_ radians: Double) -> String {
+        String(format: "%.2f°", radians * 180 / .pi)
+    }
+
+    private func degeneracyNote(_ degeneracy: OrbitDegeneracy) -> String {
+        switch degeneracy {
+        case .none: ""
+        case .circular:
+            "Circular: there is no periapsis, so ω is a convention and ν is "
+            + "measured from the ascending node."
+        case .equatorial:
+            "In the reference plane: there is no node, so Ω is a convention "
+            + "and ω is measured from the +x axis."
+        case .circularEquatorial:
+            "Circular and in the reference plane: neither a periapsis nor a "
+            + "node exists, so ν is measured from the +x axis."
         }
     }
 

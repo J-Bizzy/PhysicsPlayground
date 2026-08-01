@@ -95,7 +95,16 @@ struct PendulumsSpaceView: View {
                         value.location3D, from: .local, to: .scene)))
                     if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
                     if drag == nil {
-                        if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
+                        if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) {
+                            // Hold the swing still for the length edit.
+                            // The bead rides the bob, and the bob was
+                            // sweeping past at about a metre a second
+                            // while you tried to pinch it — the one
+                            // grip in the app whose handle runs away
+                            // from the hand reaching for it.
+                            if let id = ring.openID { model.beginGrab(id: id) }
+                            return
+                        }
                         if let id = wells?.pull(value.entity, at: hand) {
                             drag = RelativeDrag(name: "pivot-\(id.uuidString)",
                                                 target: hand, hand: hand)
@@ -132,10 +141,36 @@ struct PendulumsSpaceView: View {
                     handSampler.record(world, at: Date.timeIntervalSinceReferenceDate)
                 }
                 .onEnded { value in
+                    // `bloom.endGrip()` — every other module in the app
+                    // called it and this one never did. `gripDrag` then
+                    // stayed non-nil forever after the first touch of a
+                    // length bead, which made `updateGrip` claim EVERY
+                    // subsequent drag in the scene: grabbing a bob,
+                    // re-hanging a pivot, pulling one out of the well
+                    // all silently became length edits on whatever the
+                    // ring had last been open on. One missing line.
+                    let wasGripping = bloom.isGripping
+                    bloom.endGrip()
                     defer {
                         renderer?.grabbedID = nil
                         drag = nil
                         handSampler.reset()
+                    }
+                    if wasGripping {
+                        // Hand the swing back exactly as it was. Not
+                        // `.zero`: `release` writes the velocity it is
+                        // given, so releasing a length bead with zero
+                        // would stop a pendulum dead every time anyone
+                        // adjusted its cable — and `setLength` goes to
+                        // some trouble to keep the swing running through
+                        // the edit, which is the lesson (the period
+                        // changes, the motion does not restart).
+                        if let id = ring.openID,
+                           let pendulum = model.pendulums.first(where: { $0.id == id }) {
+                            model.release(id: id,
+                                          handVelocity: pendulum.state.velocity)
+                        }
+                        return
                     }
                     guard let drag, let id = UUID(uuidString: drag.name) else { return }
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(

@@ -6,12 +6,14 @@
 //  its notebook readings. Bar magnets whose looping field fills the
 //  room in 3D.
 //
-//  This is NOT a catalog entry any more. Magnetism is the right-hand
-//  station of the since-undone merged E&M world rather than a module
-//  of its own — a coil carrying a current is a magnet, and keeping the
-//  coil in one room and the current in another made the app's single
-//  best demonstration impossible to see. The bench's model, renderer,
-//  panel, and physics are all unchanged; only its front door moved.
+//  This IS a catalog entry — one of the three behind the Electricity &
+//  Magnetism door. It briefly was not: the merged E&M world made this
+//  the right-hand station of a shared room, and that world was undone
+//  on 2026-07-30 when the geometry refused to close (see DECISIONS.md).
+//  The coil that makes "a current is a magnet" watchable did not come
+//  back here — it belongs to Circuit Workshop, because the CIRCUIT is
+//  what powers it. Magnetism opened alone forces `electromagnetOn` off
+//  on entry rather than reading a current from a room you are not in.
 //
 
 import SwiftUI

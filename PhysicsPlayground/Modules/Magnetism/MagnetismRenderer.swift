@@ -490,11 +490,21 @@ final class MagnetismRenderer {
         var config = MagneticFieldLineTracer.Config()
         config.boundsCenter = MagnetismModel.regionCenter
         // Let each loop run far enough to close — the full curvy dipole
-        // pattern, not a few short arcs. The half-millimetre step is
-        // what makes the loops read as drawn curves instead of chained
-        // segments.
+        // pattern, not a few short arcs. The 6 mm step is what makes the
+        // loops read as drawn curves instead of chained segments.
         config.boundsRadius = MagnetismModel.regionHalfExtent * 1.9
-        config.seedsPerMagnet = 24
+        // The bar the lines belong to. Everything the tracer does with
+        // geometry — where seeds sit, where loops close, which field
+        // model it integrates — comes off this one number, so it must
+        // be the length the RENDERER actually draws.
+        config.magnetLength = MagnetismModel.magnetLength
+        // Twelve loops at the default strength of 6, scaling with the
+        // bead: enough to read as a field at a glance, few enough that a
+        // maxed-out magnet stays legible rather than becoming a ball of
+        // wool. These are DISTINCT loops now — the old 24 were seeded
+        // over the whole sphere and drew each curve about twice.
+        config.seedsPerMagnet = 12
+        config.referenceStrength = MagnetismModel.defaultStrength
         config.maxSteps = 950
         config.stepSize = 0.006
         let traced = MagneticFieldLineTracer.trace(magnets: job.magnets, config: config)

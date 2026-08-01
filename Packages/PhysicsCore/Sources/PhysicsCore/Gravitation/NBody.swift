@@ -104,6 +104,23 @@ public enum NBody {
 
     // MARK: Two-body orbit math (planet vs. a dominant central mass)
 
+    /// μ = G(M + m) — the parameter every two-body formula is actually
+    /// written in terms of.
+    ///
+    /// The textbook shorthand μ = GM quietly assumes m ≪ M, which is fine
+    /// for a spacecraft and not fine for Jupiter: dropping the planet's
+    /// own mass shifts its period by about 0.05 %. More to the point,
+    /// mixing the two conventions inside one readout makes a body's
+    /// semi-major axis and its period describe slightly different orbits,
+    /// which is exactly the kind of error that hides forever because both
+    /// numbers look right.
+    public static func standardGravitationalParameter(
+        primaryMass: Double, bodyMass: Double = 0,
+        gravitationalConstant G: Double = gravitationalConstant
+    ) -> Double {
+        G * (primaryMass + bodyMass)
+    }
+
     /// v_circ = √(GM/r)
     public static func circularOrbitSpeed(
         centralMass: Double, distance: Double,

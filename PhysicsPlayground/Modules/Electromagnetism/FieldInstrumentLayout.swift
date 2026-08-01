@@ -30,6 +30,24 @@
 //  the strength of the field it summons), what you MAKE is on the right
 //  (the wells, and what the test particle is).
 //
+//  EVERY ANCHOR MOVED OUTWARD ON 2026-07-31, and none of them moved
+//  because they looked better there. The station widened from 0.62 to
+//  0.78 (see `FieldModel.regionHalfExtents`), and these four boxes are
+//  what a station is allowed to widen INTO — every one of them has to
+//  stay `stationMargin` clear of the new wall, so all four followed it
+//  out by the same 0.14 m. That runs the two invariants in this file
+//  straight at each other: separation pushes furniture away from the
+//  physics, `maximumReach` pulls it back toward the user, and there is
+//  now about 2 cm of slack between them. Anything further and something
+//  becomes a walk rather than a reach.
+//
+//  The B rail also came 8 cm nearer in z, which is the one anchor here
+//  that is not simply the old one plus 0.14. It is the lowest and
+//  deepest instrument in the room, so it was the first to run out of
+//  reach; pulling it forward to z = −0.82 buys back the distance its
+//  outward move cost. It is still under the bank plate that summons it,
+//  which is the only thing about its position that carries meaning.
+//
 
 import Foundation
 import PhysicsCore
@@ -67,14 +85,14 @@ enum FieldInstrumentLayout {
     /// brings the instruments back into the same band as the apparatus
     /// they belong to. Circuits' bank sits beside its bench for exactly
     /// this reason, and says so.
-    static let bankAnchor = SIMD3<Double>(-0.91, 1.38, -0.90)
+    static let bankAnchor = SIMD3<Double>(-1.05, 1.38, -0.90)
     static let bankHalfExtents = SIMD3<Double>(0.15, 0.15, 0.15)
 
     /// The B-strength rail, directly under the bank's bottom plate —
     /// under the very switch that summons it, so the pair reads as one
     /// instrument: turn the field on here, set its strength immediately
     /// below. (The bank's plates span y 1.25…1.51.)
-    static let fieldTrackAnchor = SIMD3<Double>(-0.93, 1.13, -0.90)
+    static let fieldTrackAnchor = SIMD3<Double>(-1.06, 1.13, -0.82)
     static let fieldTrackHalfExtents = SIMD3<Double>(0.16, 0.05, 0.07)
     /// Faces the user across the station's corner, so the rail runs
     /// horizontally across their view rather than edge-on.
@@ -91,7 +109,7 @@ enum FieldInstrumentLayout {
     /// the frame entirely — reachable by the arithmetic, invisible in
     /// practice, which is the standard's "visible without being looked
     /// for" failing quietly.
-    static let wellColumnX = 0.85
+    static let wellColumnX = 0.96
     static let wellColumnZ = -0.90
     static let wellPitch = 0.11
     static let wellTopY = 1.55
@@ -102,7 +120,7 @@ enum FieldInstrumentLayout {
     }
 
     /// The particle bank: four discs in a shallow row under the wells.
-    static let particlePickerAnchor = SIMD3<Double>(0.92, 1.15, -0.92)
+    static let particlePickerAnchor = SIMD3<Double>(1.06, 1.15, -0.92)
     static let particlePickerHalfExtents = SIMD3<Double>(0.16, 0.07, 0.16)
 
     // MARK: On the apparatus

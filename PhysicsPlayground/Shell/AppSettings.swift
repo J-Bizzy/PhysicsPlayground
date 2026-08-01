@@ -16,14 +16,13 @@ import Observation
 @Observable
 final class AppSettings {
     // MARK: Comfort
-
-    /// Stops the hub's idle life — the bob, the sway, the running
-    /// miniatures. The system-wide Reduce Motion accessibility switch
-    /// also forces this on; the in-app toggle exists for people who want
-    /// a calm menu without changing a device-wide setting.
-    var reduceMotion: Bool {
-        didSet { UserDefaults.standard.set(reduceMotion, forKey: "settings.reduceMotion") }
-    }
+    //
+    // There is no `reduceMotion` here any more. The hub's idle life
+    // still stills — it reads the SYSTEM accessibility switch, in
+    // `HubSpaceView`, which is the switch someone who needs it has
+    // already set. An in-app duplicate of a device-wide accessibility
+    // setting is a second place for the same answer to live, and the
+    // second place is the one that goes stale.
 
     // MARK: Audio
 
@@ -52,14 +51,13 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(arcHeight, forKey: "settings.arcHeight") }
     }
 
-    /// Which voice the home's display type speaks in — the wordmark
-    /// and both door signs. Defaults to the plaque (owner's call,
-    /// 2026-07-30); `HubTitleStyle.audition` stands all the candidates
-    /// side by side instead of choosing one, which is how the plaque
-    /// was picked and how a future one would be.
-    var titleStyle: Int {
-        didSet { UserDefaults.standard.set(titleStyle, forKey: "settings.titleStyle") }
-    }
+    // There is no `titleStyle` here any more either. The home speaks in
+    // the machined plaque, full stop (owner's call, 2026-07-31) —
+    // `HubTitleStyle.shipping`. The specimen wall did its job: it is how
+    // the plaque was chosen, off three candidates hanging side by side
+    // in the room. A decision that has been made is not a preference,
+    // and leaving it in Settings invites every user to re-litigate the
+    // app's own identity from a menu.
 
     /// Bumped whenever the arc needs rebuilding (sliders committed,
     /// recenter). The hub view keys its RealityView identity to this, so
@@ -103,11 +101,8 @@ final class AppSettings {
 
     init() {
         let defaults = UserDefaults.standard
-        reduceMotion = defaults.bool(forKey: "settings.reduceMotion")
         masterVolume = defaults.object(forKey: "settings.masterVolume") as? Double ?? 1.0
         ambientAudio = defaults.object(forKey: "settings.ambientAudio") as? Bool ?? true
-        titleStyle = defaults.object(forKey: "settings.titleStyle") as? Int
-            ?? HubTitleStyle.plaque.rawValue
         arcDistance = defaults.object(forKey: "settings.arcDistance") as? Double ?? 2.0
         arcHeight = defaults.object(forKey: "settings.arcHeight") as? Double ?? 1.4
         seenHints = Set(defaults.stringArray(forKey: "settings.seenHints") ?? [])

@@ -54,7 +54,35 @@ final class FieldModel {
     /// Containment is enforced by `FieldClampTests` — the widest
     /// capacitor, the largest Gauss sphere, and a dragged charge all
     /// stay inside, inset by their own half-size.
-    nonisolated static let regionHalfExtents = SIMD3<Double>(0.62, 1.20, 0.62)
+    ///
+    /// WIDENED 0.62 → 0.76 on 2026-07-31, on the report that the wall
+    /// arrives too soon. The original number was sized for a room this
+    /// bench no longer lives in: it was cut to fit between a circuit
+    /// bench 1.4 m to the left and a magnetic field 1.33 m to the
+    /// right, and that merged world was undone the next day (see
+    /// `ElectromagnetismModule`). Nothing has stood beside this station
+    /// since, and the clamp went on enforcing clearance from neighbours
+    /// that do not exist.
+    ///
+    /// What DOES still bind is this module's own furniture: every
+    /// instrument has to stay `FieldInstrumentLayout.stationMargin`
+    /// clear of these walls, so widening the station meant moving the
+    /// bank, the B rail, the wells and the particle bank outward with
+    /// it — which in turn runs into `maximumReach`. 0.76 is where those
+    /// two constraints meet with a couple of centimetres to spare, and
+    /// `FieldInstrumentLayoutTests` holds both ends of it. It is not
+    /// rounder than that for a reason: the first attempt at 0.78 left
+    /// the wells' clearance sitting exactly ON the margin, where it
+    /// failed by one part in 10^16 of floating-point error. An invariant
+    /// that holds only to the last bit is not being satisfied, it is
+    /// being grazed.
+    ///
+    /// Depth did not grow with width, and the asymmetry is deliberate.
+    /// The box is centred 0.9 m ahead, so growing z pushes the NEAR
+    /// wall toward the user's chest as fast as it pushes the far one
+    /// away — at this width the near face would sit 14 cm off the user,
+    /// and a charge you can drag into your own face is not more freedom.
+    nonisolated static let regionHalfExtents = SIMD3<Double>(0.76, 1.20, 0.62)
 
     /// Clamps a point into the station, keeping `inset` of clearance on
     /// every side so a thing WITH SIZE — a plate, a Gauss sphere —
@@ -140,8 +168,10 @@ final class FieldModel {
     /// The disc's facing direction (ignored by the bubble).
     var gaussSurfaceNormal = SIMD3<Double>(0, 0, 1)
     var gaussSurfaceRadius = 0.22
-    /// Capped just under the station's half-width (0.62) so the bubble
+    /// Capped just under the station's half-DEPTH (0.62) so the bubble
     /// still has somewhere to move once it is inset by its own radius.
+    /// Depth, not width: the station is wider than it is deep, and a
+    /// sphere is bounded by its tightest axis.
     nonisolated static let gaussRadiusRange = 0.08...0.55
 
     // Look-to-place is GONE, and the reason is worth keeping so it is not
@@ -406,7 +436,9 @@ final class FieldModel {
         let centroid = charges.map(\.position).reduce(.zero, +) / Double(charges.count)
         // Narrowed from regionExtent * 0.55 (0.715) when this bench
         // became the middle seat of a three-station world: a flock that
-        // may spread 1.43 m does not fit a 1.24 m station.
+        // may spread 1.43 m does not fit a 1.24 m station. The station
+        // is 1.52 m wide now, but still 1.24 m deep — and a flock is
+        // bounded by a radius, so it is the depth that sets this.
         let bound = 0.55
 
         var next = charges.map(\.position)
@@ -558,6 +590,7 @@ final class FieldModel {
         selectedChargeID = positive.id
         probe = nil
         probeStatus = .none
+        probeTrail = []
         probeIsPositive = true
         showLines = true
         capacitorOn = false
@@ -668,8 +701,31 @@ final class FieldModel {
             charge: (positive ? 1 : -1) * Self.defaultMagnitude)
         charges.append(charge)
         selectedChargeID = charge.id
+        // The wells stand OUTSIDE the station, by construction — they are
+        // instruments, and instruments are kept a margin clear of the
+        // physics. So a charge born at the well's mouth is born somewhere
+        // it is not allowed to stay, and until now `moveCharge` enforced
+        // that on the very next frame: the charge appeared under your
+        // fingers exactly as promised, then teleported a foot inward and
+        // sat pinned against the wall while your hand was still out at
+        // the well. The test charge next door had no such clamp and so
+        // felt, in the user's words, flawless.
+        //
+        // It is escorted instead. A charge that starts outside the
+        // station is exempt from the walls until it first crosses INTO
+        // them, at which point the exemption is spent and the walls hold
+        // for good. Coming home is a one-way door.
+        if Self.clampToStation(clamped,
+                               inset: SIMD3(repeating: Self.chargeContact)) != clamped {
+            escortedChargeID = charge.id
+        }
         return charge.id
     }
+
+    /// The one charge currently exempt from the station walls: pulled
+    /// from a well outside them, and not yet carried inside. See
+    /// `addCharge`.
+    private(set) var escortedChargeID: UUID?
 
     func removeCharge(id: UUID) {
         charges.removeAll { $0.id == id }
@@ -707,8 +763,33 @@ final class FieldModel {
         guard let index = charges.firstIndex(where: { $0.id == id }) else { return }
         // Inset by the charge's own contact radius so the sphere stays
         // inside its station, not just its centre.
-        charges[index].position = Self.clampToStation(
+        let inside = Self.clampToStation(
             position, inset: SIMD3(repeating: Self.chargeContact))
+        if id == escortedChargeID {
+            if inside == position {
+                // It has arrived. From here the walls are real.
+                escortedChargeID = nil
+            } else {
+                charges[index].position = position
+                return
+            }
+        }
+        charges[index].position = inside
+    }
+
+    /// Ends any escort — the hand let go, so wherever the charge is now
+    /// is where it lives, and the walls apply from the next move on.
+    /// A charge released outside the station is carried home rather than
+    /// left stranded in the furniture.
+    func endEscort() {
+        guard let id = escortedChargeID,
+              let index = charges.firstIndex(where: { $0.id == id }) else {
+            escortedChargeID = nil
+            return
+        }
+        charges[index].position = Self.clampToStation(
+            charges[index].position, inset: SIMD3(repeating: Self.chargeContact))
+        escortedChargeID = nil
     }
 
     func select(id: UUID) {
@@ -734,7 +815,28 @@ final class FieldModel {
     func removeProbe() {
         probe = nil
         probeStatus = .none
+        probeTrail = []
     }
+
+    // MARK: The trail — the shape of the path, kept
+
+    /// Where the test charge has been. A trajectory is a SHAPE, and this
+    /// module's best moment is one you cannot see without it: throw the
+    /// probe sideways with a uniform B on and it curves into a circle,
+    /// r = mv/qB, closing exactly back on itself. Watching a dot go
+    /// round tells you it went round. Watching it draw the circle tells
+    /// you the circle is a circle — that it closes, that its radius is
+    /// constant, that reversing the charge reverses the winding.
+    private(set) var probeTrail: [SIMD3<Double>] = []
+    /// A point is laid down every this far along the path, so the trail
+    /// samples DISTANCE rather than frames — a fast probe does not draw a
+    /// sparser curve than a slow one.
+    nonisolated static let probeTrailSpacing = 0.011
+    /// How many points the trail remembers. At the spacing above that is
+    /// about 2 m of path: comfortably more than one full cyclotron orbit
+    /// at the default field, so the circle closes before its own tail
+    /// disappears — which is the entire thing being demonstrated.
+    nonisolated static let probeTrailLength = 190
 
     /// Called while the user drags the probe: it follows the hand with no
     /// momentum, and the simulation waits.
@@ -743,6 +845,8 @@ final class FieldModel {
         clamped.y = max(clamped.y, Self.floorClearance)
         probe = TestChargeDynamics.ProbeState(position: clamped)
         probeStatus = .held
+        // A hand on the probe ends the flight the trail was drawing.
+        probeTrail = []
     }
 
     /// Called when the user releases the probe.
@@ -812,6 +916,16 @@ final class FieldModel {
             probeStatus = .captured
         }
         probe = state
+        recordTrail(at: state.position)
+    }
+
+    private func recordTrail(at point: SIMD3<Double>) {
+        if let last = probeTrail.last,
+           simd_distance(last, point) < Self.probeTrailSpacing { return }
+        probeTrail.append(point)
+        if probeTrail.count > Self.probeTrailLength {
+            probeTrail.removeFirst(probeTrail.count - Self.probeTrailLength)
+        }
     }
 
     /// Live physics numbers at the probe's location, for the stats panel.

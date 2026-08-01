@@ -32,9 +32,18 @@ enum GravityLabModule {
             // space. The 0.85 dimming shell still does the contrast work,
             // since a pale Sun has none against a lit wall.
             immersionStyle: .progressive,
-            firstRunHint: "Pinch Earth and drag — the white line shows the orbit you're about to create. Release gently for an ellipse, throw hard to escape the Sun. Turn the crown to dim your room into deep space.",
+            firstRunHint: "Tap a planet: its orbit appears as a ring with a bead at each end. Pull a bead and the orbit reshapes under your hand — out to stretch it, sideways to swing it round the Sun, up to tilt it out of the plane. Distant orbits are drawn but out of arm's reach; pinch with both hands to bring them in.",
             // Opens part-dimmed: a pale Sun and specks of planet have no contrast at all against a bright wall — this module is unreadable in daylight.
             preferredDimming: 0.85,
+            // And the shell has to stand OUTSIDE the apparatus. The
+            // default 3.4 m dome is a sphere drawn through the middle of
+            // this solar system: Jupiter's 2.6 m ring is inside it and
+            // Saturn's 4.8 m ring is not, so half the planets read
+            // against darkness and half against the wall — with the seam
+            // moving as the user zooms. 16 m clears Neptune at 1×, and
+            // at any scale above about 1× the outer planets are past it
+            // anyway and were never going to be lit.
+            preferredDimmingRadius: 16,
             legend: legend,
             isPaused: { appModel.gravityLabModel.isPaused },
             togglePause: { appModel.gravityLabModel.isPaused.toggle() },
@@ -60,6 +69,22 @@ enum GravityLabModule {
                 ]
                 if let body = model.selectedBody, let readout = model.readout(for: body) {
                     rows.append(.init("Selected", body.body.name))
+                    // The orbit as elements — the thing the ring draws.
+                    if let elements = model.orbitElements(for: body.id) {
+                        if let a = elements.semiMajorAxis {
+                            rows.append(.init(
+                                "Semi-major axis",
+                                String(format: "%.4f", a / CelestialBody.astronomicalUnit),
+                                "AU"))
+                        }
+                        rows.append(.init("Eccentricity",
+                                          String(format: "%.4f", elements.eccentricity)))
+                        rows.append(.init("Inclination",
+                                          String(format: "%.2f",
+                                                 elements.inclination * 180 / .pi), "°"))
+                    }
+                    rows.append(.init("Total energy",
+                                      PhysicsFormat.scientific(readout.totalEnergy), "J"))
                     rows.append(.init("Distance", String(format: "%.4f", readout.distanceAU), "AU"))
                     rows.append(.init("Speed", String(format: "%.3f", readout.speedKmPerS), "km/s"))
                     rows.append(.init("Escape speed",
@@ -90,20 +115,35 @@ enum GravityLabModule {
             swatch: .line(DesignTokens.Palette.predictedArc),
             text: "While holding a body: the orbit it gets if you release right now"
         ),
+        // The ring, and what the gap between it and the trail MEANS. It
+        // is not an approximation of the path — it is the exact orbit
+        // this body would follow if nothing else pulled on it, which is
+        // a different and honest claim. The trail is drawn next to it,
+        // so the difference between the two is a measurement.
+        LegendItem(
+            swatch: .line(DesignTokens.Palette.gravityAccent),
+            text: "The selected body's orbit ring: the two-body ellipse it is on RIGHT NOW — the path it would take if nothing else pulled on it. The trail beside it is what actually happens; the gap between them is Jupiter's pull, and it is real. Grab a bead at either end to reshape the orbit."
+        ),
+        // Everyone will connect a precessing periapsis to Mercury. Say
+        // what this is and what it is not, or the module implies it has
+        // explained the most famous test of general relativity.
+        LegendItem(
+            swatch: .symbol("exclamationmark.circle", DesignTokens.Palette.gravityAccent),
+            text: "The precession you can watch here is NEWTONIAN — the other planets tugging. Mercury's famous extra 43 arcseconds per century needs general relativity, which this lab does not model."
+        ),
+        LegendItem(
+            swatch: .symbol("arrow.counterclockwise", DesignTokens.Palette.gravityAccent),
+            text: "The clock runs backwards. Verlet integration is time-symmetric, so reverse is the real physics run the other way, not a replay — perturb an orbit and rewind it and it un-perturbs. Merges are the exception: combining two bodies destroys the information needed to separate them again."
+        ),
+        LegendItem(
+            swatch: .symbol("circlebadge.2", DesignTokens.Palette.gravityAccent),
+            text: "Lagrange points, for the planet you last tapped: L1–L3 solved as real roots of the rotating frame, L4/L5 exactly equilateral. Release a body onto one and it matches the rotating frame — L4 and L5 hold (that is where Jupiter's Trojans are), L1–L3 shed their occupants within days."
+        ),
         LegendItem(
             swatch: .symbol("arrow.up.right", DesignTokens.Palette.velocityVector),
             text: "Vectors on the selected body: blue velocity, orange acceleration, red force toward the Sun (lengths log-scaled)"
         ),
-        // Two changes here, both about not claiming more than we do.
-        //
-        // Gone: the Lagrange entry ("drop the satellite on L1–L5").
-        // `enterLagrangeMode` has never had a caller outside tests, so
-        // the markers never appear and nothing can be dropped on one —
-        // that line described a lab no user has ever been able to reach.
-        // `PhysicsCore/Gravitation/Lagrange.swift` goes on solving L1–L3
-        // as real quintic roots, tested, waiting for a door.
-        //
-        // Added: the grid. It opens with the module and is the first
+        // The grid. It opens with the module and is the first
         // thing anyone sees, and it is the one visual here NOT derived
         // from the simulation — an authored falloff, not a solved
         // metric. Its only caveat lived in an accessibilityHint, which

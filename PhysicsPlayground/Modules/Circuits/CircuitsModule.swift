@@ -5,12 +5,16 @@
 //  What the circuit bench contributes to the catalog: its legend and
 //  its notebook readings.
 //
-//  This is NOT a catalog entry any more. The workshop is the left-hand
-//  station of the since-undone merged E&M world rather than a module
-//  of its own — its inductor current has always driven the magnet
-//  bench's electromagnet, and that link was unwatchable while the two
-//  benches were in different rooms. The bench's model, renderer, panel,
-//  and physics are all unchanged; only its front door moved.
+//  This IS a catalog entry — one of the three behind the Electricity &
+//  Magnetism door. It briefly was not: the merged E&M world made this
+//  the left-hand station of a shared room, and that world was undone on
+//  2026-07-30 when the geometry refused to close (see DECISIONS.md).
+//  What survived the undo is the WIRING, which was the point all along:
+//  this bench's inductor current drives the magnet bench's
+//  electromagnet, and `EMFieldStation`/`EMFeedLine` stand that coil
+//  beside the workshop with a visible cable running to it. Co-presence
+//  lives where a demonstration cannot exist without it, and nowhere
+//  else.
 //
 
 import SwiftUI

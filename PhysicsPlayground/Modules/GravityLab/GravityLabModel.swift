@@ -27,50 +27,59 @@ import simd
 @MainActor
 @Observable
 final class GravityLabModel {
-    // MARK: Modes
-
-    enum Mode: Equatable {
-        /// The solar system: Sun-centered, 1 AU = 0.35 m.
-        case solarSystem
-        /// Earth–Moon–satellite: Lagrange laboratory, Moon's orbit = 0.5 m.
-        case lagrange
-    }
-
-    private(set) var mode: Mode = .solarSystem
-
     // MARK: Scale mappings (the only two numbers between sim and room)
 
-    /// Room meters per astronomical unit (solar system mode): Jupiter's
-    /// orbit is a 2.6 m ring — the planets genuinely circle the room.
+    // There was a second MODE here — an Earth–Moon Lagrange laboratory at
+    // its own scale, with its own throw calibration and its own
+    // prediction horizon. It is a GRAVE, not a missing door: the Lagrange
+    // points earned a real entrance on 2026-07-31 as a display LAYER on
+    // whichever planet you last tapped, which is strictly better physics
+    // (Jupiter's L4/L5 are where the Trojans actually are, Sun–Earth L2 is
+    // where JWST actually is) and strictly less code. The mode it replaced
+    // had never had a caller outside its own tests, so every
+    // `mode == .solarSystem` branch below was a conditional with one
+    // reachable arm. `PhysicsCore.Lagrange.earthMoonSystem` stays — it is
+    // tested, and the layer uses the same `Lagrange.points` it always did.
+
+    /// Room meters per astronomical unit: Jupiter's orbit is a 2.6 m ring
+    /// — the planets genuinely circle the room.
     nonisolated static let metersPerAU = 0.5
-    /// Real Earth–Moon separation, m.
-    nonisolated static let earthMoonSeparation = 3.844e8
-    /// Room meters for the Earth–Moon separation (Lagrange mode) — the
-    /// five points spread across most of the room.
-    nonisolated static let metersPerEarthMoon = 0.8
     /// Simulated days per real second at 1× speed.
     nonisolated static let daysPerSecond = 3.0
-    /// Sim m/s per display m/s when throwing, per mode: tuned so a relaxed
-    /// ~0.35 m/s hand toss imparts roughly the natural orbital speed of
-    /// each scene (~30 km/s solar, ~1 km/s around Earth).
-    nonisolated static let solarThrowVelocityScale = 8.6e4
-    nonisolated static let lagrangeThrowVelocityScale = 2.9e3
+    /// Sim m/s per display m/s when throwing: tuned so a relaxed ~0.35 m/s
+    /// hand toss imparts roughly the scene's natural orbital speed
+    /// (~30 km/s).
+    nonisolated static let throwVelocityScale = 8.6e4
 
-    var throwVelocityScale: Double {
-        mode == .solarSystem ? Self.solarThrowVelocityScale : Self.lagrangeThrowVelocityScale
-    }
-
-    /// Sim meters per display meter (mode-dependent).
-    private(set) var displayToSim = CelestialBody.astronomicalUnit / metersPerAU
+    /// Sim meters per display meter. A constant now that there is only
+    /// one scene — it used to be re-written on entering the other mode.
+    let displayToSim = CelestialBody.astronomicalUnit / metersPerAU
     var simToDisplay: Double { 1 / displayToSim }
 
     // MARK: Budgets & integration limits
 
-    nonisolated static let bodyBudget = 12
+    /// Sixteen, not twelve. `reset()` alone puts ten bodies in the scene
+    /// (Sun, eight planets, Halley), so twelve meant you could add
+    /// exactly TWO worlds before everything — the well, the preset menu,
+    /// the twin-suns split — began refusing. A lab about building
+    /// systems has to let you build one.
+    nonisolated static let bodyBudget = 16
     /// Verlet substep never exceeds 6 simulated hours.
     nonisolated static let maxSubstep = 6.0 * 3600
     nonisolated static let maxSubstepsPerFrame = 96
-    nonisolated static let timeScales: [Double] = [1, 5, 20, 100]
+    /// The clock, INCLUDING REVERSE.
+    ///
+    /// Velocity Verlet is time-symmetric for a conservative force, so a
+    /// negative step does not replay a recording — it integrates the
+    /// same equations backwards and arrives at where the system genuinely
+    /// was. Perturb an orbit, run it back, and it un-perturbs. That is a
+    /// property of the physics and of this integrator specifically (a
+    /// naive Euler scheme would not come back), and it costs one sign.
+    ///
+    /// MERGES ARE THE EXCEPTION and the legend says so: merging two
+    /// bodies destroys information, so rewinding past one cannot bring
+    /// them back. Everything else is exactly reversible.
+    nonisolated static let timeScales: [Double] = [-20, -1, 1, 5, 20, 100]
 
     enum TrailLength: String, CaseIterable, Identifiable {
         case short, medium, long
@@ -248,6 +257,10 @@ final class GravityLabModel {
     // MARK: Environment controls
 
     /// Multiplies the Sun preset's real mass, live.
+    /// Still here, still live, and no longer a CONTROL: the star's mass
+    /// is its own bead now (`setMass(id:suns:)`). Kept because it is the
+    /// clean programmatic way to set the star — used by `reset()` and
+    /// pinned by tests — where the bead is the user's way.
     var sunMassMultiplier = 1.0 {
         didSet { applySunMass() }
     }
@@ -270,25 +283,22 @@ final class GravityLabModel {
     /// set by its period, so perturbing an orbit is audible.
     var playOrbitalChord = true
 
-    /// The scene's natural length: 1 AU in solar mode, the Earth–Moon
-    /// separation in Lagrange mode. Visualizations normalize against the
-    /// field strength at this distance from the primary.
-    var characteristicLength: Double {
-        mode == .solarSystem ? CelestialBody.astronomicalUnit : Self.earthMoonSeparation
-    }
+    /// The scene's natural length — 1 AU. Visualizations normalize
+    /// against the field strength at this distance from the primary.
+    var characteristicLength: Double { CelestialBody.astronomicalUnit }
 
     /// Total simulated time, in days (shown on the time panel).
     private(set) var simulatedDays = 0.0
 
-    // MARK: Custom planet builder
-
-    var customDistanceAU = 1.5
-    /// Mass = 10^exponent kg (22 ≈ Moon, 25 ≈ super-Earth, 28 ≈ 5 Jupiters).
-    var customMassExponent = 24.0
-    /// × the local circular-orbit speed: 1.0 = circle, less = ellipse
-    /// falling inward, more = ellipse reaching outward (≥ √2 escapes).
-    var customSpeedFactor = 1.0
-    private var customCount = 0
+    // The CUSTOM PLANET BUILDER stood here — a distance, a mass exponent
+    // and a speed factor, plus `spawnCustom()` to assemble them. It is a
+    // GRAVE, not a missing door: it was three sliders in a panel section
+    // that was deliberately deleted, and `addBody(at:earths:)` replaced
+    // the whole idea with a better one. You pull a world out of the well
+    // and it is born on a circular orbit at the distance your hand chose;
+    // the throw is the speed factor, and it is a gesture rather than a
+    // number. Its last callers were its own tests, now rebased on the
+    // well.
 
     // MARK: Merge flash (renderer reads position when nonce changes)
 
@@ -364,22 +374,6 @@ final class GravityLabModel {
         }
     }
 
-    func spawnCustom() {
-        guard bodies.count < Self.bodyBudget else { return }
-        customCount += 1
-        let sun = primaryBody?.body ?? .sun
-        let distance = customDistanceAU * CelestialBody.astronomicalUnit
-        let mass = pow(10, customMassExponent)
-        var body = CelestialBody(
-            name: "Custom \(customCount)",
-            mass: mass,
-            radius: 6.4e6
-        ).onCircularOrbit(of: sun, distance: distance, gravitationalConstant: effectiveG)
-        body.velocity = sun.velocity + customSpeedFactor * (body.velocity - sun.velocity)
-        // Display size grows gently with mass: 22 → 6 mm, 28 → 3.6 cm.
-        append(body, displayRadius: 0.006 + (customMassExponent - 22) * 0.005)
-    }
-
     private func append(_ body: CelestialBody, displayRadius: Double) {
         let orbiting = OrbitingBody(id: UUID(), body: body, displayRadius: displayRadius)
         bodies.append(orbiting)
@@ -420,6 +414,36 @@ final class GravityLabModel {
     nonisolated static let earthMass = 5.972e24
     nonisolated static let massRangeEarths = 0.02...400.0
 
+    // MARK: The star's own mass
+    //
+    // The primary gets a mass bead like every other body, and the "Sun
+    // mass" slider is gone. Mass is the textbook case of a quantity with
+    // physical extent — the star visibly inflates as you pull, because
+    // radius goes as the cube root — so by the interaction law it is
+    // changed by changing that extent, not by a slider in a window.
+    //
+    // It needs its own range and its own UNIT. The Sun is 333,000 Earth
+    // masses, so the planets' 0.02…400 range does not reach it and
+    // "333000 Earths" is not a number anyone reads. Solar masses, 0.2×
+    // to 4×, are what a star is measured in.
+    nonisolated static let primaryMassRangeSuns = 0.2...4.0
+
+    func massInSuns(id: UUID) -> Double {
+        guard let body = bodies.first(where: { $0.id == id }) else { return 1 }
+        return body.body.mass / CelestialBody.sun.mass
+    }
+
+    func setMass(id: UUID, suns: Double) {
+        guard let index = bodies.firstIndex(where: { $0.id == id }) else { return }
+        let clamped = min(max(suns, Self.primaryMassRangeSuns.lowerBound),
+                          Self.primaryMassRangeSuns.upperBound)
+        let old = bodies[index].body.mass
+        bodies[index].body.mass = clamped * CelestialBody.sun.mass
+        if old > 0 {
+            bodies[index].displayRadius *= pow(bodies[index].body.mass / old, 1.0 / 3.0)
+        }
+    }
+
     func massInEarths(id: UUID) -> Double {
         guard let body = bodies.first(where: { $0.id == id }) else { return 1 }
         return body.body.mass / Self.earthMass
@@ -444,21 +468,77 @@ final class GravityLabModel {
     }
 
     func removeBody(id: UUID) {
+        if orbitEdit?.bodyID == id { endOrbitEdit() }
         bodies.removeAll { $0.id == id }
         if selectedID == id { selectedID = bodies.first?.id }
     }
 
-    /// Spawns a body where you pull it out of the well, at rest
-    /// relative to the primary — so it immediately starts to fall, and
-    /// you watch a capture or a plunge depending on where you let go.
+    /// Spawns a body where you pull it out of the well, ALREADY IN
+    /// ORBIT: circular, at whatever radius your hand is at, in the
+    /// ecliptic and going the same way as everything else.
+    ///
+    /// It used to be born at rest relative to the primary, and the
+    /// on-device verdict was that a new planet's orbit "is all whack".
+    /// It was — at rest relative to the Sun means falling straight into
+    /// it, and the only thing that could ever save it was the throw.
+    /// Rescuing it by hand meant supplying v = √(GM/r) ≈ 26 km/s, which
+    /// through this module's velocity mapping is a hand moving at
+    /// 0.31 m/s, aimed perpendicular to the radius vector, in the
+    /// orbital plane, held steady across a 0.12 s sampling window. That
+    /// is not a difficulty; it is a demand nobody can meet, and every
+    /// world anyone made fell into the Sun.
+    ///
+    /// The model already knew how to do this: `CelestialBody`'s
+    /// `onCircularOrbit` had been sitting in PhysicsCore, tested, driven
+    /// only by the custom-planet builder whose panel was deleted. The
+    /// well uses it now, and the THROW becomes what it should always have
+    /// been: a perturbation you add to a working orbit, which is what
+    /// makes the ellipse open up and the Kepler sweep worth recording.
+    /// Release it without moving your hand and you get a clean circle.
     @discardableResult
     func addBody(at displayPoint: SIMD3<Double>, earths: Double = 1) -> UUID? {
+        // The budget guard `spawn` has and this one did not. The
+        // renderer pools exactly `bodyBudget` spheres,
+        // so the 13th world was fully simulated — gravitating, merging,
+        // perturbing everything else — and completely invisible.
+        guard bodies.count < Self.bodyBudget else { return nil }
+        let primary = primaryBody?.body ?? .sun
         let simPosition = displayPoint * displayToSim
-        let body = CelestialBody(
+        let offset = simPosition - primary.position
+        let distance = simd_length(offset)
+        var body = CelestialBody(
             name: "New world", mass: earths * Self.earthMass,
             radius: 6.37e6,
             position: simPosition,
-            velocity: primaryBody?.body.velocity ?? .zero)
+            velocity: primary.velocity)
+
+        // Circular speed at the radius the hand chose, directed along
+        // the ecliptic and prograde — the direction every other body in
+        // the scene is already going, so a new world joins the system
+        // rather than driving the wrong way up it.
+        if distance > 1e3 {
+            // M + m, matching `onCircularOrbit` and the orbit ring's own
+            // μ — a world born circular must read back as circular.
+            let speed = NBody.circularOrbitSpeed(
+                centralMass: primary.mass + body.mass, distance: distance,
+                gravitationalConstant: effectiveG)
+            let up = SIMD3<Double>(0, 1, 0)
+            let radial = offset / distance
+            var heading = simd_cross(up, radial)
+            let headingLength = simd_length(heading)
+            // Directly over a pole there is no ecliptic tangent to pick;
+            // fall back to any perpendicular rather than to zero.
+            heading = headingLength > 1e-6
+                ? heading / headingLength
+                : simd_normalize(simd_cross(radial, SIMD3(1, 0, 0)))
+            // Sign checked against `CelestialBody.onCircularOrbit`, which
+            // every preset body in the scene was built by: it places a
+            // planet at +x with velocity −z, and (ŷ × x̂) is −ẑ. Get this
+            // backwards and the new world orbits the right shape the
+            // wrong way round, which looks fine alone and wrong the
+            // instant it passes anything else.
+            body.velocity = primary.velocity + speed * heading
+        }
         let orbiting = OrbitingBody(id: UUID(), body: body, displayRadius: 0.03)
         bodies.append(orbiting)
         selectedID = orbiting.id
@@ -508,11 +588,20 @@ final class GravityLabModel {
     func select(id: UUID) {
         guard bodies.contains(where: { $0.id == id }) else { return }
         selectedID = id
+        // An explicit tap, and the only thing that re-homes the Lagrange
+        // layer. See `lagrangeSecondaryID`.
+        if id != primaryBody?.id { lagrangeSecondaryID = id }
     }
 
     private func applySunMass() {
         guard let index = bodies.firstIndex(where: { $0.body.name == "Sun" }) else { return }
+        let old = bodies[index].body.mass
         bodies[index].body.mass = CelestialBody.sun.mass * sunMassMultiplier
+        // The star inflates here too, or the bead and the programmatic
+        // path would disagree about how big the same mass looks.
+        if old > 0 {
+            bodies[index].displayRadius *= pow(bodies[index].body.mass / old, 1.0 / 3.0)
+        }
     }
 
     // MARK: Hold / throw
@@ -538,7 +627,7 @@ final class GravityLabModel {
     /// The sim velocity the body would get if released now.
     func currentHandVelocity(timestamp: Double = CACurrentMediaTime()) -> SIMD3<Double> {
         guard let handVelocity = throwSampler.velocity(at: timestamp) else { return .zero }
-        return throwVelocityScale * handVelocity
+        return Self.throwVelocityScale * handVelocity
     }
 
     func release(id: UUID, timestamp: Double = CACurrentMediaTime()) {
@@ -556,24 +645,178 @@ final class GravityLabModel {
             emitSound(.whoosh, at: bodies[index].body.position, volume: min(speed / 45_000, 1))
         }
 
-        // Lagrange mode: releasing near one of the five points matches the
-        // body's velocity to the rotating frame ("station insertion"), so
-        // the user can experience which points actually hold — L4/L5 do,
-        // L1/L2/L3 drift off within days. Real dynamics from then on.
-        if mode == .lagrange, let (name, point) = nearestLagrangePoint(
-            to: bodies[index].body.position, within: 0.06 * displayToSim) {
-            if let pair = earthMoonPair() {
-                bodies[index].body.position = point
-                bodies[index].body.velocity = Lagrange.corotatingVelocity(
-                    at: point, primary: pair.primary, secondary: pair.secondary)
-                capturedPointName = name
-            }
+        // STATION INSERTION. Releasing a body near one of the five points
+        // matches its velocity to the rotating frame, so you can find out
+        // by hand which points actually hold: L4 and L5 do, and L1, L2
+        // and L3 shed their occupants within days because they are saddle
+        // points. Park something at Jupiter's L4 and it stays there,
+        // which is why the Trojans are there.
+        //
+        // This branch has existed, correct and unreachable, since it was
+        // written — it was gated on a mode with no caller.
+        if let (name, point) = nearestLagrangePoint(
+            to: bodies[index].body.position, within: 0.06 * displayToSim),
+           let pair = lagrangePair() {
+            bodies[index].body.position = point
+            bodies[index].body.velocity = Lagrange.corotatingVelocity(
+                at: point, primary: pair.primary, secondary: pair.secondary)
+            capturedPointName = name
         } else {
             capturedPointName = nil
         }
     }
 
     var heldBodyID: UUID? { heldID }
+
+    // MARK: The orbit as an object
+    //
+    // Until now the only way to change an orbit was to throw the planet:
+    // `release` multiplies your hand's velocity by 8.6e4, a number that
+    // appears nowhere in the room and that no two gestures reproduce. It
+    // was the app's last surviving RELATIVE control, of the kind
+    // DECISIONS.md convicted when it deleted the spatial dial.
+    //
+    // The orbit itself is the control now. A selected body draws its
+    // osculating conic as a ring with a bead at each end; dragging a bead
+    // sets the ellipse's shape and plane directly, in closed form. The
+    // whole manipulation lives in `PhysicsCore.ApsisFrame` — read its
+    // `dragged` doc for why two beads are enough for five degrees of
+    // freedom, and why the plane is transported rather than set.
+
+    /// How much heavier the primary must be than everything else before
+    /// a two-body ring means anything.
+    ///
+    /// Sun/Jupiter is 1047, so the solar system passes easily. Twin suns
+    /// is 1.0 and fails — correctly. A planet's osculating ellipse about
+    /// ONE of two equal stars is not a description of anything, and the
+    /// ring going out when you press "Twin suns" is the scene telling you
+    /// the two-body picture just stopped applying.
+    nonisolated static let ringDominance = 20.0
+
+    /// The body a ring is drawn around, or nil if no ring is honest here.
+    func ringPrimary(for orbiting: OrbitingBody) -> OrbitingBody? {
+        guard let primary = primaryBody, primary.id != orbiting.id else { return nil }
+        let rivals = bodies.filter { $0.id != primary.id }.map(\.body.mass)
+        guard let heaviestRival = rivals.max(),
+              primary.body.mass >= Self.ringDominance * heaviestRival else { return nil }
+        return primary
+    }
+
+    /// μ = G(M + m) for a body against its primary.
+    private func mu(for orbiting: OrbitingBody, about primary: OrbitingBody) -> Double {
+        NBody.standardGravitationalParameter(
+            primaryMass: primary.body.mass, bodyMass: orbiting.body.mass,
+            gravitationalConstant: effectiveG)
+    }
+
+    /// The conic this body is on — the thing the ring draws and the beads
+    /// hold. Nil when the body is the primary, when nothing dominates, or
+    /// when it is falling dead straight and has no orbital plane at all.
+    ///
+    /// WHILE A BEAD IS HELD this returns the CARRIED frame rather than
+    /// re-deriving one from the state. Re-deriving would recompute the
+    /// apse line from the eccentricity vector every frame, which is
+    /// ill-conditioned near e = 0 — precisely where someone tuning an
+    /// orbit spends their time, and precisely where a jittering ring
+    /// would be least forgivable.
+    func orbitFrame(for id: UUID) -> ApsisFrame? {
+        if let orbitEdit, orbitEdit.bodyID == id { return orbitEdit.frame }
+        // A BODY IN THE HAND HAS NO ORBIT. `hold` zeroes its velocity, so
+        // its osculating conic is a degenerate radial line — no plane, no
+        // ellipse, nothing a ring could honestly draw. The white
+        // prediction tube is the right instrument during a hold: it shows
+        // the orbit RELEASING would create, which is the question you are
+        // actually asking while you hold something.
+        //
+        // The state alone would nearly answer this — `ApsisFrame` rejects
+        // r × v = 0 — but "nearly" rests on the velocity being exactly
+        // zero, and a ring that reappears as a wild ellipse the moment
+        // one bit of numerical velocity survives is worse than no ring.
+        if heldID == id { return nil }
+        guard let orbiting = bodies.first(where: { $0.id == id }),
+              let primary = ringPrimary(for: orbiting) else { return nil }
+        return ApsisFrame(
+            position: orbiting.body.position - primary.body.position,
+            velocity: orbiting.body.velocity - primary.body.velocity,
+            mu: mu(for: orbiting, about: primary))
+    }
+
+    /// The same orbit in classical elements, for readouts and the
+    /// notebook.
+    func orbitElements(for id: UUID) -> OrbitalElements? {
+        orbitFrame(for: id)?.elements
+    }
+
+    private struct OrbitEdit {
+        let bodyID: UUID
+        /// The radius of the bead NOT being held. Fixed for the whole
+        /// gesture: you grabbed one end, the other stays where it is.
+        ///
+        /// Deliberately a DISTANCE and not a `.near`/`.far` label. The
+        /// held bead can cross the other one mid-drag and become the
+        /// opposite apsis, at which point a stored label would be
+        /// pointing at the bead in your own hand.
+        let otherRadius: Double
+        var frame: ApsisFrame
+    }
+
+    private var orbitEdit: OrbitEdit?
+
+    var isEditingOrbit: Bool { orbitEdit != nil }
+
+    /// Takes hold of one end of a body's orbit. Fails if there is no
+    /// honest ring, or if the far bead was grabbed on an orbit that has
+    /// no far end.
+    @discardableResult
+    func beginOrbitEdit(bodyID: UUID, holding apsis: Apsis) -> Bool {
+        guard let frame = orbitFrame(for: bodyID) else { return false }
+        guard apsis == .near || frame.hasApoapsis else { return false }
+        orbitEdit = OrbitEdit(
+            bodyID: bodyID,
+            otherRadius: frame.radius(at: apsis == .near ? .far : .near),
+            frame: frame)
+        // `heldID` already means "attracts everything but does not move",
+        // and `step` already restores a held body after every substep —
+        // which is exactly the behaviour an edited body wants. Note this
+        // does NOT go through `hold(id:at:)`: that zeroes velocity, and
+        // this path writes both position AND velocity.
+        heldID = bodyID
+        selectedID = bodyID
+        return true
+    }
+
+    /// Reshapes the orbit so the held bead sits under the hand.
+    func dragApsis(toDisplayPoint displayPoint: SIMD3<Double>) {
+        guard var edit = orbitEdit,
+              let index = bodies.firstIndex(where: { $0.id == edit.bodyID }),
+              let primary = ringPrimary(for: bodies[index]) else { return }
+        let focus = primary.body.position
+        let offset = bodies[index].body.position - focus
+        let length = simd_length(offset)
+
+        edit.frame = edit.frame.dragged(
+            handOffset: displayPoint * displayToSim - focus,
+            otherRadius: edit.otherRadius,
+            bodyDirection: length > 0 ? offset / length : edit.frame.periapsisDirection)
+        orbitEdit = edit
+
+        let state = edit.frame.state()
+        bodies[index].body.position = focus + state.position
+        bodies[index].body.velocity = primary.body.velocity + state.velocity
+    }
+
+    /// Lets go. The body is left on exactly the state that produces the
+    /// ring you were just holding, so the ring's meaning is continuous
+    /// through the gesture: authored while held, osculating after.
+    func endOrbitEdit() {
+        guard let edit = orbitEdit else { return }
+        orbitEdit = nil
+        heldID = nil
+        guard let index = bodies.firstIndex(where: { $0.id == edit.bodyID }) else { return }
+        // The trail behind it described an orbit that no longer exists.
+        bodies[index].trail.removeAll()
+        bodies[index].lastTrailPosition = nil
+    }
 
     /// Everything the held-body orbit prediction needs, packaged so the
     /// 1200-step n-body integration can run OFF the main thread (the
@@ -589,14 +832,14 @@ final class GravityLabModel {
 
     /// Snapshot for the "orbit you're about to create" preview, with the
     /// current hand velocity substituted on the held body. Lookahead
-    /// matches the scene: ~600 days solar, ~17 days Earth–Moon.
+    /// matches the scene: ~600 simulated days.
     func heldPredictionInputs(timestamp: Double = CACurrentMediaTime()) -> PredictionInputs? {
         guard let heldID, let index = bodies.firstIndex(where: { $0.id == heldID }) else { return nil }
         var snapshot = bodies.map(\.body)
         snapshot[index].velocity = currentHandVelocity(timestamp: timestamp)
         return PredictionInputs(
             bodies: snapshot, index: index,
-            dt: mode == .solarSystem ? 12 * 3600 : 1200,
+            dt: 12 * 3600,
             gravitationalConstant: effectiveG
         )
     }
@@ -613,23 +856,55 @@ final class GravityLabModel {
         )
     }
 
-    // MARK: Lagrange mode
+    // MARK: The Lagrange points — a LAYER, not a mode
+    //
+    // `PhysicsCore.Lagrange` solves L1–L3 as real roots of the rotating
+    // frame's quintic by bisection, places L4/L5 exactly, and knows the
+    // co-rotating velocity. It is tested end to end. For a long time it
+    // had no caller outside those tests, because its only door was an
+    // Earth–Moon MODE that nothing invoked — the module's own legend
+    // admitted it described "a lab no user has ever been able to reach."
+    // That mode is now deleted; this layer is what replaced it.
+    //
+    // The door is a switch plate, and the points belong to the SELECTED
+    // planet rather than to a special Earth–Moon scene. That is strictly
+    // better physics teaching and strictly less code: `Lagrange.points`
+    // was always written for an arbitrary pair, Jupiter's L4 and L5 are
+    // where the Trojan asteroids actually live, and Sun–Earth L2 is
+    // where JWST actually is. Nothing had to be built; something had to
+    // be connected.
+
+    var showLagrangePoints = false
 
     /// Which point the satellite was inserted at, for the explanation.
     private(set) var capturedPointName: String?
 
-    private func earthMoonPair() -> (primary: CelestialBody, secondary: CelestialBody)? {
-        guard mode == .lagrange,
-              let earth = bodies.first(where: { $0.body.name == "Earth" })?.body,
-              let moon = bodies.first(where: { $0.body.name == "Moon" })?.body
+    /// Whose points these are — the last planet the user TAPPED, not
+    /// whatever happens to be selected.
+    ///
+    /// The distinction is load-bearing. Spawning a body selects it, so
+    /// deriving the host from the live selection meant that pulling a
+    /// world out of the well to park at Jupiter's L4 re-pointed the whole
+    /// layer at the satellite mid-gesture — the five markers you were
+    /// aiming for moved the instant you made the thing to aim with. Only
+    /// `select(id:)` — an explicit tap — moves the host.
+    private(set) var lagrangeSecondaryID: UUID?
+
+    /// The pair whose Lagrange points are shown.
+    private func lagrangePair() -> (primary: CelestialBody, secondary: CelestialBody)? {
+        guard showLagrangePoints,
+              let hostID = lagrangeSecondaryID ?? selectedBody?.id,
+              let host = bodies.first(where: { $0.id == hostID }),
+              let primary = primaryBody, primary.id != host.id
         else { return nil }
-        return (earth, moon)
+        return (primary.body, host.body)
     }
 
-    /// The five points for the live Earth–Moon geometry — they co-rotate
-    /// with the Moon as it orbits.
+    /// The five points for the live geometry — they co-rotate with the
+    /// selected planet as it orbits.
     var lagrangePoints: [(name: String, position: SIMD3<Double>)] {
-        guard let pair = earthMoonPair() else { return [] }
+        guard showLagrangePoints,
+              let pair = lagrangePair() else { return [] }
         return Lagrange.points(primary: pair.primary, secondary: pair.secondary,
                                gravitationalConstant: effectiveG).all
     }
@@ -643,46 +918,22 @@ final class GravityLabModel {
             .flatMap { simd_distance($0.1, position) < radius ? $0 : nil }
     }
 
+    /// Why the point you just parked on behaves the way it does.
+    ///
+    /// These were written for the deleted Earth–Moon mode and named it in
+    /// every line — "L1 balances Earth's pull, the Moon's pull…". The
+    /// layer that replaced that mode draws the points for WHICHEVER pair
+    /// you tapped, so the old prose would have been confidently wrong for
+    /// four planets out of five. Phrased against "the star" and "the
+    /// planet", they are true for every pair the layer can show; the real
+    /// missions stay because naming them is what makes the point land.
     static let lagrangeExplanations: [String: String] = [
-        "L1": "L1 balances Earth's pull, the Moon's pull, and the orbit's rotation — but it's a saddle point: any nudge grows, so real L1 missions burn fuel for station-keeping. Watch your satellite slide off within days.",
-        "L2": "L2 sits beyond the Moon, where the combined pull of both bodies speeds a satellite up to match the Moon's orbit. Unstable like L1 — the Sun–Earth L2 is where JWST lives, on a slowly maintained halo orbit.",
-        "L3": "L3 hides on the far side of Earth from the Moon — the science-fiction 'counter-Earth' spot. It's the most weakly unstable of the three colinear points, but still won't hold without correction.",
-        "L4": "L4 leads the Moon by 60°, forming an equilateral triangle — and it's genuinely stable: displaced satellites orbit *around* the point (watch the trail 'tadpole'). Jupiter's L4/L5 hold thousands of Trojan asteroids.",
-        "L5": "L5 trails the Moon by 60° — the mirror of L4 and just as stable. Proposed home for space colonies since the 1970s precisely because things parked here stay.",
+        "L1": "L1 sits between the star and the planet, where their pulls and the orbit's rotation balance — but it is a saddle: any nudge grows, so real L1 missions burn fuel to stay. Watch yours slide off.",
+        "L2": "L2 lies beyond the planet, where the two pulls together speed a satellite up enough to keep pace with the planet's orbit. Unstable like L1 — Sun–Earth L2 is where JWST flies, on a halo orbit it has to maintain.",
+        "L3": "L3 hides on the far side of the star, opposite the planet — the science-fiction 'counter-Earth' spot. The most weakly unstable of the three collinear points, and still no place to park unattended.",
+        "L4": "L4 leads the planet by 60°, an equilateral triangle with the star — and it is genuinely stable: displaced bodies orbit *around* the point. Jupiter's L4 holds thousands of Trojan asteroids.",
+        "L5": "L5 trails the planet by 60°, the mirror of L4 and just as stable. Proposed home for space colonies since the 1970s precisely because what you leave here stays.",
     ]
-
-    /// Rebuilds the scene as Earth–Moon–satellite at Lagrange scale
-    /// (the Moon's real orbit becomes half a meter of room).
-    func enterLagrangeMode() {
-        mode = .lagrange
-        displayToSim = Self.earthMoonSeparation / Self.metersPerEarthMoon
-        bodies.removeAll()
-        heldID = nil
-        throwSampler.reset()
-        capturedPointName = nil
-        simulatedDays = 0
-        timeScale = 1
-        isPaused = false
-
-        let (earth, moon) = Lagrange.earthMoonSystem(gravitationalConstant: effectiveG)
-        bodies.append(OrbitingBody(id: UUID(), body: earth, displayRadius: 0.045))
-        bodies.append(OrbitingBody(id: UUID(), body: moon, displayRadius: 0.018))
-
-        // The satellite starts near (not at) L4 — grab it and place it.
-        var satellite = CelestialBody(name: "Satellite", mass: 1e3, radius: 5)
-        let l4 = Lagrange.points(primary: earth, secondary: moon,
-                                 gravitationalConstant: effectiveG).l4
-        satellite.position = l4 + SIMD3(0.06 * Self.earthMoonSeparation, 0, 0)
-        satellite.velocity = Lagrange.corotatingVelocity(at: satellite.position,
-                                                         primary: earth, secondary: moon)
-        let orbiting = OrbitingBody(id: UUID(), body: satellite, displayRadius: 0.008)
-        bodies.append(orbiting)
-        selectedID = orbiting.id
-    }
-
-    func exitLagrangeMode() {
-        reset()
-    }
 
     // MARK: Stepping
 
@@ -691,7 +942,13 @@ final class GravityLabModel {
     func step(dt: Double) {
         guard !isPaused, bodies.count > 1 else { return }
         let simDt = min(dt, 1.0 / 30.0) * timeScale * Self.daysPerSecond * 86_400
-        let substeps = min(max(Int(ceil(simDt / Self.maxSubstep)), 1), Self.maxSubstepsPerFrame)
+        // MAGNITUDE, not the signed value. Running time backwards makes
+        // `simDt` negative, and `ceil` of a negative number is <= 0, so
+        // the clamp would have pinned this to a single substep — one
+        // enormous reverse leap per frame, which is exactly the case the
+        // substep cap exists to prevent.
+        let substeps = min(max(Int(ceil(abs(simDt) / Self.maxSubstep)), 1),
+                           Self.maxSubstepsPerFrame)
         let h = simDt / Double(substeps)
 
         var system = bodies.map(\.body)
@@ -816,9 +1073,16 @@ final class GravityLabModel {
         let relativeSpeed = simd_length(body.velocity - primary.body.velocity)
         let kinetic = NBody.kineticEnergy(of: body)
         let potential = NBody.potentialEnergy(of: index, in: all, gravitationalConstant: effectiveG)
+        // ONE μ FOR THE WHOLE READOUT. This used to be μ = GM here and in
+        // the escape speed, but G(M+m) in the period two lines down — two
+        // different two-body problems described in one card. The gap is
+        // 0.05 % at Jupiter, which is well under any tolerance a test
+        // would have caught it with, and it made a body's semi-major axis
+        // and its period belong to slightly different orbits.
+        let twoBodyMass = primary.body.mass + body.mass
         let semiMajor = NBody.semiMajorAxis(
             distance: distance, speed: relativeSpeed,
-            centralMass: primary.body.mass, gravitationalConstant: effectiveG)
+            centralMass: twoBodyMass, gravitationalConstant: effectiveG)
 
         let result = Readout(
             distanceAU: distance / CelestialBody.astronomicalUnit,
@@ -826,15 +1090,14 @@ final class GravityLabModel {
             accelerationMS2: effectiveG * primary.body.mass / (distance * distance),
             massKg: body.mass,
             periodDays: semiMajor.map {
-                NBody.orbitalPeriod(semiMajorAxis: $0,
-                                    centralMass: primary.body.mass + body.mass,
+                NBody.orbitalPeriod(semiMajorAxis: $0, centralMass: twoBodyMass,
                                     gravitationalConstant: effectiveG) / 86_400
             },
             kineticEnergy: kinetic,
             potentialEnergy: potential,
             totalEnergy: kinetic + potential,
             escapeSpeedKmPerS: NBody.escapeSpeed(
-                centralMass: primary.body.mass, distance: distance,
+                centralMass: twoBodyMass, distance: distance,
                 gravitationalConstant: effectiveG) / 1000,
             isBound: semiMajor != nil,
             forceNewtons: effectiveG * primary.body.mass * body.mass / (distance * distance)
@@ -845,17 +1108,23 @@ final class GravityLabModel {
 
     // MARK: Reset
 
+    /// Bumped by `reset()`. The two-hand view scale lives in the space
+    /// view (it is a VIEW transform, not state), so the model cannot
+    /// reset it directly — but Reset that leaves you at 6x and turned
+    /// 40 degrees has not reset the thing the user was looking at.
+    private(set) var viewResetNonce = 0
+
     /// Sun + Earth on its real orbit — the module's opening scene.
     func reset() {
+        viewResetNonce += 1
         sweep.reset()
         sweepBodyID = nil
         sweepWindowStart = nil
         sweepHeldArc = []
-        mode = .solarSystem
-        displayToSim = CelestialBody.astronomicalUnit / Self.metersPerAU
         capturedPointName = nil
         bodies.removeAll()
         heldID = nil
+        orbitEdit = nil
         throwSampler.reset()
         sunMassMultiplier = 1.0
         gMultiplier = 1.0
@@ -871,12 +1140,10 @@ final class GravityLabModel {
         // the module now; the m^(1/4) depth compression stays disclosed
         // in the UI footnote, as before.
         showSpacetimeGrid = true
+        showLagrangePoints = false
+        lagrangeSecondaryID = nil
         playOrbitalChord = true
         simulatedDays = 0
-        customCount = 0
-        customDistanceAU = 1.5
-        customMassExponent = 24.0
-        customSpeedFactor = 1.0
 
         // The whole solar system, live from the start: every planet on
         // its true circular orbit (real masses, real AU distances at
