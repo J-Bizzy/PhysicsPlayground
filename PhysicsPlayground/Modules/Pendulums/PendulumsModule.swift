@@ -69,6 +69,12 @@ enum PendulumsModule {
                    text: "Force arrows — purple gravity, yellow cable tension, red net force"),
         LegendItem(swatch: .line(.white),
                    text: "White ghost line while holding a bob — the exact swing a release right now would launch"),
+        LegendItem(
+            swatch: .symbol("globe.europe.africa", DesignTokens.Palette.pendulumsAccent),
+            text: "Earth turns: the swing plane holds still against the STARS while your room rotates under it at Ω sin(latitude) — one turn per sidereal day at the pole, none at all on the equator. Markers fall as the plane sweeps past them."),
+        LegendItem(
+            swatch: .symbol("exclamationmark.circle", DesignTokens.Palette.pendulumsAccent),
+            text: "Earth is spun FASTER than life here so the turn is watchable — the panel quotes the true rate (11.3°/h at Paris) beside it. Gravity stays the unmodified g: the centrifugal term grows as the square of that exaggeration and is deliberately left out."),
     ]
 
 }

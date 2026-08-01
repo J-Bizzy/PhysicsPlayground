@@ -371,6 +371,36 @@ three times already while the arithmetic looked fine.
 
 - [ ] Gravity → Moon: the swing visibly slows.
 
+### ⟳ Foucault — the module's signature moment
+
+Flick **Earth turns** on the bank. A globe and a spin rail appear to the
+far left, and a ring of markers lies on the floor under the first pivot.
+**Everything here is new and none of it has been seen.**
+
+- [ ] **The plane holds still and the ROOM turns.** Start a clean planar
+      swing, then stand still and watch. What should read is that the
+      swing is not moving — your room is. This is the whole point, and it
+      is the one thing that cannot be checked on a screen.
+- [ ] **The markers fall, one after another**, and stay down. Come back
+      after a minute: the arc of fallen markers is how far the plane has
+      come. That record is the screenshot.
+- [ ] **The globe.** Slide a finger up its face: latitude follows the
+      finger, absolutely — touch the top and you are at the pole. The lit
+      band shrinks to nothing there and is widest at the equator.
+- [ ] **Sit the globe at the equator.** The plane must stop turning
+      entirely and no further markers fall. Ω is not zero there — it is
+      horizontal — so this is the sine law doing its job, not a special
+      case.
+- [ ] **Drag toward the pole and the turn speeds up.** Southern
+      latitudes reverse the direction.
+- [ ] **The disclosure is legible and honest.** The globe's caption
+      quotes the TRUE rate (11.3°/h at Paris, one turn in 31.8 h) while
+      the spin rail says "×3000 Earth". Wind the rail up and down: the
+      true rate must NOT move. If it does, the app is lying.
+- [ ] **Switch it off:** globe, rail and ring all disappear, and the
+      pendulum goes back to an ordinary one.
+- [ ] Reset returns it to off, Paris, ×3000, all markers standing.
+
 ## Gravity Lab
 
 **Rewritten on 2026-07-31 — the orbit became the object.** Nothing

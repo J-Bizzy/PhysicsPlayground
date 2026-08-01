@@ -85,12 +85,69 @@ struct PendulumsControlsPanel: View {
                 // the bob. `trailMode` stays on the model at that default.
             }
 
+            CollapsedSection("Foucault") {
+                if model.foucaultOn {
+                    foucaultRows
+                } else {
+                    Text("Flick \"Earth turns\" on the bank and the bench "
+                         + "starts standing on a rotating planet. The swing "
+                         + "plane holds still against the stars; the room "
+                         + "turns under it at Ω sin(latitude).")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             CollapsedSection("Numbers") {
                 PendulumInfoCard()
                 Text("The selected bob — tap one to read it here.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    /// The true numbers beside the shown ones. The room is turned faster
+    /// than Earth so the effect is watchable, and this is where that is
+    /// said out loud — an exaggeration that is disclosed is honest, and
+    /// one that is quietly migrated becomes a lie.
+    @ViewBuilder
+    private var foucaultRows: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            row("Latitude φ", String(format: "%.2f°", model.latitudeDegrees))
+            row("Shown", String(format: "×%.0f Earth", model.earthSpin))
+            row("True rate", String(format: "%.2f °/h",
+                                    abs(model.truePrecessionDegreesPerHour)))
+            row("True turn", model.truePrecessionHours.map {
+                String(format: "%.1f h", $0)
+            } ?? "never — this is the equator")
+            row("Markers down", "\(model.markersFelled) of \(PendulumsModel.markerCount)")
+        }
+        Text("The plane is fixed relative to the STARS, not to your room — "
+             + "what turns is the ground. That is what Foucault built it to "
+             + "prove.")
+            .font(DesignTokens.TypeScale.footnote)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        Text("Earth is spun faster here so the turn is watchable; the rate "
+             + "above is the real one. Gravity is the unmodified g — the "
+             + "centrifugal term is left out, because it grows as the "
+             + "SQUARE of the exaggeration and would swamp everything.")
+            .font(DesignTokens.TypeScale.footnote)
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private func row(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(DesignTokens.TypeScale.footnote.monospacedDigit())
         }
     }
 

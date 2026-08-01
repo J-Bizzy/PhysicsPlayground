@@ -47,15 +47,47 @@ public struct SphericalPendulum: Sendable, Equatable {
     /// constraint sphere — the standard stable way to keep a cable taut
     /// forever without spring hacks or drift. `damping` is a linear
     /// drag coefficient (N·s/m) against the bob's velocity.
+    /// - Parameter angularVelocity: Ω of the rotating frame, rad/s. Non-zero
+    ///   turns this into a **Foucault pendulum**: the Coriolis term −2Ω × v
+    ///   holds the swing plane fixed against the stars while the room turns
+    ///   under it at Ω sin φ. `.zero` is the ordinary pendulum, bit for bit —
+    ///   the term vanishes rather than being skipped, so nothing about the
+    ///   existing behaviour is conditional on a flag.
+    ///
+    ///   **Centrifugal is deliberately NOT here**, and the omission is
+    ///   load-bearing rather than lazy. −Ω × (Ω × r) is a static correction
+    ///   to effective gravity worth ~0.03 m/s² at Earth's real rate, i.e.
+    ///   0.3 % — but it scales as Ω², so an exaggerated spin would inflate
+    ///   it by the SQUARE of the exaggeration and swamp g entirely. Coriolis
+    ///   scales linearly and stays the honest thing to show. Callers using a
+    ///   spin multiplier must say that gravity here is the unmodified g.
     public static func step(
         _ state: SphericalPendulum, dt: Double,
-        length: Double, gravity: Double, mass: Double, damping: Double
+        length: Double, gravity: Double, mass: Double, damping: Double,
+        angularVelocity: SIMD3<Double> = .zero
     ) -> SphericalPendulum {
         guard dt > 0, length > 0, mass > 0 else { return state }
         var s = state
 
         func acceleration(_ p: SIMD3<Double>, _ v: SIMD3<Double>) -> SIMD3<Double> {
             var a = SIMD3(0.0, -gravity, 0.0) - (damping / mass) * v
+            // Coriolis: −2Ω × v. Perpendicular to the velocity by
+            // construction, so it does NO WORK — which is why the
+            // work-energy speed pinning below stays exactly valid with it
+            // in, and why an undamped Foucault pendulum conserves energy
+            // to machine precision.
+            //
+            // What that energy test does and does NOT catch, measured
+            // rather than assumed: flipping this sign was tried, and
+            // `testCoriolisDoesNoWork` still passed — a reversed cross
+            // product is just as perpendicular to v, so it pumps nothing.
+            // It was `testMeasuredPrecessionFollowsOmegaSineLatitude` that
+            // failed, at all three latitudes, with the rate exactly
+            // negated. The two tests are complementary: energy catches a
+            // term with a component ALONG v (a stray factor, a wrong
+            // axis), and the recovered sine law catches the direction.
+            // Neither alone is sufficient.
+            a -= 2 * simd_cross(angularVelocity, v)
             // Remove the radial component: the cable supplies exactly the
             // tension that keeps |p| fixed; the centripetal part is
             // handled by the projection itself.
