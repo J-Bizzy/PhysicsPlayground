@@ -2,12 +2,23 @@
 //  PendulumsControlsPanel.swift
 //  Physics Playground — Pendulums module
 //
-//  The module's one-glance panel — and the door to its whole reason
-//  for existing: "what if this were the Moon?" The always-open card
-//  makes pendulums and carries the three worlds; the full gravity
-//  slider, display layers, time, and numbers wait behind collapsed
-//  sections. Per-BOB editing (length bead, mass petal, delete) lives
-//  on the bob itself: tap it and its ring unfolds.
+//  The module's one-glance panel — and as of this pass it holds no
+//  slider, no picker and no toggle. It makes pendulums, it runs the
+//  clock's stop button, and otherwise it READS.
+//
+//  What left, and where each thing went:
+//  · The three worlds → a standing bank of discs beside the rig, which
+//    is also the readout for which world you are on.
+//  · g → a rail under that bank. Neither the worlds nor g had any
+//    physical extent to grab: in this module the extent belongs to the
+//    CABLE (the length bead) and the BOB (the mass petal), and both were
+//    already grips on the object itself.
+//  · Air resistance and the four display layers → one five-plate switch
+//    bank on the other side of the swing.
+//  · Time → a rail under the worlds.
+//
+//  Per-BOB editing (length bead, mass petal, delete) lives on the bob:
+//  tap it and its ring unfolds.
 //
 
 import PhysicsCore
@@ -43,22 +54,10 @@ struct PendulumsControlsPanel: View {
                     .accessibilityHint("Five lengths, five periods — watch them drift apart and realign")
                 }
 
-                // The worlds: one pinch and every swing stretches or
-                // snaps tight — T = 2π√(L/g), felt before it is read.
-                HStack(spacing: 10) {
-                    ForEach(Self.worlds) { world in
-                        Button {
-                            self.model.gravity = world.gravity
-                        } label: {
-                            Text(world.name)
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(abs(self.model.gravity - world.gravity) < 0.01
-                                     ? AnyButtonStyle(.podProminent)
-                                     : AnyButtonStyle(.podQuiet))
-                        .accessibilityLabel("Gravity of \(world.name)")
-                    }
-                }
+                Text(worldText)
+                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text("Tap a bob for its own controls — pull the bead to pay out cable, petals cycle its mass or delete it.")
                     .font(DesignTokens.TypeScale.footnote)
@@ -66,47 +65,24 @@ struct PendulumsControlsPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            CollapsedSection("Gravity & friction") {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("g = \(self.model.gravity, specifier: "%.2f") m/s²")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.gravity, in: PendulumsModel.gravityRange)
-                        .accessibilityLabel("Gravity")
-                }
-                Toggle("Air resistance", isOn: $model.frictionOn)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("Off, the pendulum is ideal and swings forever")
+            CollapsedSection("The room") {
+                Text("Worlds and g are a bank of discs and a rail to the "
+                     + "right of the rig; what is drawn — and whether the "
+                     + "air is real — is the switch bank to the left.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 if !self.model.insightText.isEmpty {
                     Text(self.model.insightText)
                         .font(DesignTokens.TypeScale.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-
-            CollapsedSection("Display") {
-                // Deleted for the same reason as Gravity Lab's (DECISIONS.md,
-                // 2026-07-29): a trail length is a preference, not a
-                // physical quantity, and short is the one that shows a
-                // swing's shape without painting over the bob. `trailMode`
-                // stays on the model at that default.
-                Toggle("Velocity arrows", isOn: $model.showVelocity)
-                    .font(DesignTokens.TypeScale.control)
-                Toggle("Acceleration arrows", isOn: $model.showAcceleration)
-                    .font(DesignTokens.TypeScale.control)
-                Toggle("Force arrows", isOn: $model.showForces)
-                    .font(DesignTokens.TypeScale.control)
-                Toggle("Energy bars", isOn: $model.showEnergyBars)
-                    .font(DesignTokens.TypeScale.control)
-            }
-
-            CollapsedSection("Time") {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Time: \(self.model.timeScale, specifier: "%.2f")×")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.timeScale, in: 0.1...5.0)
-                        .accessibilityLabel("Time scale")
-                }
+                // The trail-length picker was deleted rather than moved
+                // (DECISIONS.md, 2026-07-29): a trail length is a
+                // preference, not a physical quantity, and short is the
+                // one that shows a swing's shape without painting over
+                // the bob. `trailMode` stays on the model at that default.
             }
 
             CollapsedSection("Numbers") {
@@ -117,18 +93,16 @@ struct PendulumsControlsPanel: View {
             }
         }
     }
-}
 
-/// Type-erases a pod button style so a button can pick prominent vs
-/// quiet from state (the selected world wears the filled capsule).
-private struct AnyButtonStyle: ButtonStyle {
-    private let make: (Configuration) -> AnyView
-
-    init(_ style: some ButtonStyle) {
-        make = { AnyView(style.makeBody(configuration: $0)) }
-    }
-
-    func makeBody(configuration: Configuration) -> some View {
-        make(configuration)
+    /// g, and the world it matches if it matches one. The bank beside the
+    /// rig lights the same disc from the same comparison — this is the
+    /// number behind that lamp, not a second opinion about it.
+    private var worldText: String {
+        let g = String(format: "%.2f m/s²", model.gravity)
+        guard let world = Self.worlds
+            .first(where: { abs($0.gravity - model.gravity) < 0.01 }) else {
+            return "g = \(g) — between worlds"
+        }
+        return "g = \(g) — \(world.name)"
     }
 }

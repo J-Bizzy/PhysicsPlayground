@@ -89,7 +89,13 @@ final class PendulumsModel {
 
     var gravity = 9.81 { didSet { insight(.gravity) } }
     var isPaused = false
-    /// Time scale: 0.25× … 20×. Pause is separate.
+    /// Time scale. Pause is separate.
+    ///
+    /// The range is stated ONCE, here, because it is now the rail's range
+    /// too. The comment that stood in its place claimed "0.25× … 20×"
+    /// while the slider driving it ran 0.1 … 5.0 — a number nobody could
+    /// reach described in a doc comment nobody could check.
+    nonisolated static let timeScaleRange = 0.1...5.0
     var timeScale = 1.0
 
     enum TrailMode: String, CaseIterable, Identifiable {
@@ -354,6 +360,12 @@ final class PendulumsModel {
         showAcceleration = false
         showForces = false
         showEnergyBars = true
+        // Reset restored four of the five states the switch bank shows and
+        // silently skipped this one, so an ideal pendulum stayed ideal
+        // through a reset while its plate sat dark over a bench that was
+        // still swinging for ever. Invisible while these were toggles in a
+        // collapsed card; a lit lamp is a claim, and the claim was wrong.
+        frictionOn = true
         insightText = ""
         accumulator = 0
         loadResonancePreset()

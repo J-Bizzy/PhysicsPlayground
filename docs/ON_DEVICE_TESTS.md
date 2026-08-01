@@ -248,6 +248,45 @@ rail rendered; only a hand proves it sets anything.
   - [ ] Pull one out when the lab is already full: the well should go
         **dark and NOT pop**. It used to chirp and recoil while handing
         back nothing.
+### ⟳ The four new instruments
+
+The panel is empty of controls now; all seven moved into the room, and
+**not one of them has ever been looked at** — the simulator was wedged on
+its boot logo for the whole pass that built them. Placement is the risk,
+not wiring: every one is at the pivot plane's depth (z ≈ −1.08) aiming for
+the ~14° band, but this project has put controls 38° below the eye line
+three times already while the arithmetic looked fine.
+
+- [ ] **Can you SEE all four without hunting?** Stand where you naturally
+      stand. The switch bank should be off your left shoulder, the worlds
+      bank and two rails off your right. Anything you have to look down or
+      lean for has failed, however correct its numbers are.
+- [ ] **Nothing is inside the swing.** Let a bob swing wide, and pull one
+      out to a 1.6 m cable. No instrument should be swept through.
+- [ ] **The five-plate bank.** Each plate lights when its layer is on:
+      Velocity, Acceleration, Force, Energy bars, Air resistance.
+  - [ ] Every label sits BESIDE its plate, never across it — the bug that
+        made this module's neighbours unreadable on 2026-07-31.
+  - [ ] Switch Air resistance off and the swing stops decaying. It is the
+        only plate on the bank that changes the physics rather than the
+        picture, and it should feel different.
+- [ ] **The worlds bank is also a readout.** Tap Moon: g follows, the
+      swing stretches to about 2.5× its Earth period (T ∝ 1/√g), and the
+      **Moon disc lights**.
+  - [ ] Now drag the g rail slightly off 1.62. The Moon disc must go
+        **dark** — you are between worlds, and nothing should claim
+        otherwise. Drag back and it relights.
+- [ ] **The g rail is absolute.** Where you put the bead is the value —
+      start a drag from the middle of the rail and the bead must not
+      jump. Its callout should read the same number the panel does.
+- [ ] **The time rail.** 0.1× should make a fast swing legible; 5× should
+      make a 1.6 m pendulum's 2.5 s period quick. Pause still freezes it
+      independently.
+- [ ] **A drag that starts on a rail stays on that rail** — slide off the
+      end and over a bob, and the bob must not start swinging.
+- [ ] **Reset returns all of it**: five plates to their defaults, g to
+      Earth with the Earth disc lit, time to 1×.
+
 - [ ] Gravity → Moon: the swing visibly slows.
 
 ## Gravity Lab

@@ -35,10 +35,71 @@ struct PendulumsSpaceView: View {
     /// enough to keep until someone compares the two on device. Stated
     /// here rather than diverging silently in a third file.
     @State private var handSampler = ThrowSampler(window: 0.14)
-    /// A gravity gauge on the rig. "What if this were the Moon" is
-    /// the question this bench exists to answer, and it was a slider in
-    /// a card — now it is a dial you turn while watching the swing
-    /// stretch out in front of you.
+
+    // MARK: The instruments
+    //
+    // This module held SEVEN panel controls — two sliders and five
+    // toggles, the largest surviving panel in the app — while the
+    // interaction law (DECISIONS.md, 2026-07-29) said a display layer is
+    // a labelled object in the room and a continuous quantity is a rail.
+    //
+    // The claim that used to stand here was worse than absent: it said
+    // gravity "is a dial you turn while watching the swing stretch out in
+    // front of you." There was no dial. `SpatialDial` was deleted on
+    // 2026-07-29 for being relative, and gravity was a `Slider` in a
+    // collapsed card three taps from the physics. It is a rail now, and
+    // the sentence is finally true.
+
+    /// What is drawn, and whether the air is real. Five plates, and the
+    /// fifth is not a display layer — air resistance decides whether the
+    /// swing ever stops. It earns the bank anyway: it is a labelled
+    /// discrete choice, and one lone plate standing beside a bank of four
+    /// is worse than one bank of five.
+    @State private var layers: SpatialLayerBank?
+    /// "What if this were the Moon?" — the question the bench exists to
+    /// ask, as three discs you tap rather than three buttons in a card.
+    @State private var worldPicker = SpatialPicker(
+        accessibilityNoun: "World",
+        choices: SurfaceGravity.bodies.map {
+            PickerChoice(id: $0.name, label: $0.name, symbol: "globe")
+        },
+        staysOpen: true,
+        // A standing bank is a ROW, not a fan: the default 150° arc is
+        // built for a menu that unfolds and folds away, and at that span
+        // three discs spray across the swing at three different heights.
+        // Same arithmetic as Gravity Lab's clock, same shape.
+        layout: FanLayout(span: 50 * .pi / 180, reach: 0.30,
+                          verticalScale: 0.25, lift: 0, stagger: 0))
+    /// g itself, between and beyond the three worlds — 0.5 to 25 m/s²,
+    /// so you can also ask what a pendulum does somewhere that is not a
+    /// place. Gravity has no extent of its own here (the BOB's mass and
+    /// the CABLE's length do, and both are already grips), which is
+    /// exactly why it takes the app's decided form for a continuous
+    /// quantity rather than an invented one.
+    @State private var gravityTrack: SpatialTrackControl?
+    /// Time. Not chrome: a 1.6 m pendulum has a 2.5 s period, and
+    /// whether you can see the swing's shape at all is a question about
+    /// this number.
+    @State private var timeTrack: SpatialTrackControl?
+    /// The rail a drag is currently in, if any.
+    @State private var activeTrack: SpatialTrackControl?
+
+    // Placement. Every one of these sits at the apparatus's own DEPTH
+    // (z ≈ −1.08, the pivot plane) rather than at a height picked on its
+    // own — the podium mistake this project has now made three times is
+    // to put controls on a console BELOW the thing they belong to, where
+    // they read 38° under the eye line and are simply never seen. Being
+    // close magnifies the drop. The band that works is ~14°, which at
+    // this depth is y ≈ 1.35.
+    private static let instrumentZ: Float = -1.08
+    /// Left of the swing, above the well at y = 1.30.
+    private static let bankAnchor = SIMD3<Float>(-0.92, 1.58, instrumentZ)
+    private static let worldsAnchor = SIMD3<Float>(0.80, 1.56, instrumentZ)
+    private static let gravityCenter = SIMD3<Float>(0.80, 1.34, instrumentZ)
+    private static let timeCenter = SIMD3<Float>(0.80, 1.14, instrumentZ)
+    /// The rails face the user, not straight down the room.
+    private static let instrumentNormal = SIMD3<Float>(-0.34, 0, 0.94)
+
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -62,11 +123,90 @@ struct PendulumsSpaceView: View {
             renderer.root.addChild(sources.root)
             wells = sources
 
+            let bank = SpatialLayerBank(
+                accent: UIColor(DesignTokens.Palette.pendulumsAccent),
+                layers: [
+                    .init(id: "velocity", label: "Velocity", symbol: "arrow.right",
+                          isOn: { model.showVelocity },
+                          toggle: { model.showVelocity.toggle() }),
+                    .init(id: "acceleration", label: "Acceleration",
+                          symbol: "arrow.up.right",
+                          isOn: { model.showAcceleration },
+                          toggle: { model.showAcceleration.toggle() }),
+                    .init(id: "force", label: "Force", symbol: "arrow.down.right",
+                          isOn: { model.showForces },
+                          toggle: { model.showForces.toggle() }),
+                    .init(id: "energy", label: "Energy bars", symbol: "chart.bar",
+                          isOn: { model.showEnergyBars },
+                          toggle: { model.showEnergyBars.toggle() }),
+                    // Not a display layer, and the label says so plainly:
+                    // switched off the pendulum is ideal and swings for
+                    // ever, which is a statement about the physics and not
+                    // about what is drawn.
+                    .init(id: "friction", label: "Air resistance", symbol: "wind",
+                          isOn: { model.frictionOn },
+                          toggle: { model.frictionOn.toggle() }),
+                ])
+            renderer.root.addChild(bank.root)
+            layers = bank
+
+            renderer.root.addChild(worldPicker.root)
+            worldPicker.onSelect = { name in
+                guard let world = SurfaceGravity.bodies
+                    .first(where: { $0.name == name }) else { return }
+                model.gravity = world.gravity
+            }
+            // The bank is a READOUT as well as a control: the lit disc is
+            // whichever world your current g matches, read from the model
+            // every frame rather than remembered from the last tap — so
+            // dragging the rail off Earth unlights Earth, and a reset
+            // lights it again.
+            worldPicker.selectedID = {
+                SurfaceGravity.bodies
+                    .first { abs($0.gravity - model.gravity) < 0.01 }?.name
+            }
+
+            let gravity = SpatialTrackControl(
+                name: "Gravity",
+                center: Self.gravityCenter,
+                normal: Self.instrumentNormal,
+                accent: UIColor(DesignTokens.Palette.pendulumsAccent),
+                range: PendulumsModel.gravityRange,
+                read: { model.gravity },
+                write: { model.gravity = $0 },
+                format: { String(format: "%.2f m/s²", $0) })
+            renderer.root.addChild(gravity.root)
+            gravityTrack = gravity
+
+            let time = SpatialTrackControl(
+                name: "Time",
+                center: Self.timeCenter,
+                normal: Self.instrumentNormal,
+                accent: UIColor(DesignTokens.Palette.pendulumsAccent),
+                range: PendulumsModel.timeScaleRange,
+                read: { model.timeScale },
+                write: { model.timeScale = $0 },
+                format: { String(format: "%.2f×", $0) })
+            renderer.root.addChild(time.root)
+            timeTrack = time
+
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     renderer?.tick(dt: event.deltaTime, model: model)
                     wells?.update(dt: event.deltaTime)
                     syncBloom(dt: event.deltaTime)
+                    let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
+                    layers?.update(anchor: Self.bankAnchor,
+                                   viewer: viewer, dt: event.deltaTime)
+                    worldPicker.update(anchor: Self.worldsAnchor,
+                                       viewer: viewer, dt: event.deltaTime)
+                    // Nothing ticks a track by itself — the caller's duty,
+                    // stated on `SpatialTrackControl.refresh`. Without
+                    // these two lines the beads would keep showing the
+                    // value they were last dragged to while Reset moved
+                    // the model out from under them.
+                    gravityTrack?.refresh()
+                    timeTrack?.refresh()
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
                     // moves a body by hand DISPLACEMENT, which a constant
@@ -84,6 +224,39 @@ struct PendulumsSpaceView: View {
                let first = model.pendulums.first {
                 ring.openID = first.id
             }
+            // The instruments are all pinch-operated, and the simulator
+            // has no hands — so each one gets an argument that sets a
+            // VALUE rather than a flag. A bead parked at its default in
+            // every screenshot proves the rail rendered and nothing at
+            // all about the mapping behind it, which is the mistake
+            // CLAUDE.md already records against the field module.
+            //
+            // `-penGravity 1.62` puts the bench on the Moon, which should
+            // light the Moon disc on the standing bank as well as moving
+            // the rail's bead — the two are one readout.
+            let forcedGravity = UserDefaults.standard.double(forKey: "penGravity")
+            if forcedGravity > 0 {
+                model.gravity = min(max(forcedGravity,
+                                        PendulumsModel.gravityRange.lowerBound),
+                                    PendulumsModel.gravityRange.upperBound)
+            }
+            // `-penTime 0.25` for the time rail.
+            let forcedTime = UserDefaults.standard.double(forKey: "penTime")
+            if forcedTime > 0 {
+                model.timeScale = min(max(forcedTime,
+                                          PendulumsModel.timeScaleRange.lowerBound),
+                                      PendulumsModel.timeScaleRange.upperBound)
+            }
+            // `-penLayers 1` lights every plate on the bank, so one shot
+            // shows all five lamps and all five labels rather than the
+            // two that happen to be on by default.
+            if UserDefaults.standard.bool(forKey: "penLayers") {
+                model.showVelocity = true
+                model.showAcceleration = true
+                model.showForces = true
+                model.showEnergyBars = true
+                model.frictionOn = true
+            }
             #endif
             self.renderer = renderer
         }
@@ -94,7 +267,24 @@ struct PendulumsSpaceView: View {
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
                     if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
+                    // A gesture already in a rail may not be re-claimed: a
+                    // drag that starts on the time rail and wanders over a
+                    // bob must not start swinging the bob.
+                    if let track = activeTrack {
+                        guard track.isEnabled else {
+                            activeTrack = nil
+                            return
+                        }
+                        track.adjust(hand: hand)
+                        return
+                    }
                     if drag == nil {
+                        for track in [gravityTrack, timeTrack].compactMap({ $0 })
+                        where track.owns(value.entity) {
+                            activeTrack = track
+                            track.adjust(hand: hand)
+                            return
+                        }
                         if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) {
                             // Hold the swing still for the length edit.
                             // The bead rides the bob, and the bob was
@@ -149,6 +339,11 @@ struct PendulumsSpaceView: View {
                     // re-hanging a pivot, pulling one out of the well
                     // all silently became length edits on whatever the
                     // ring had last been open on. One missing line.
+                    if let track = activeTrack {
+                        track.endAdjust()
+                        activeTrack = nil
+                        return
+                    }
                     let wasGripping = bloom.isGripping
                     bloom.endGrip()
                     defer {
@@ -189,6 +384,12 @@ struct PendulumsSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
+                    // The instruments get first refusal, before the
+                    // fall-through that folds the ring away — otherwise
+                    // tapping a switch plate would also close whatever
+                    // bob ring was open.
+                    if worldPicker.handleTap(value.entity) { return }
+                    if layers?.handleTap(value.entity) == true { return }
                     if bloom.handleTap(value.entity) { return }
                     // A tap on a bob selects it and toggles its control
                     // ring; a tap on anything else folds the ring away.

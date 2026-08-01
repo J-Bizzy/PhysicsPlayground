@@ -20,7 +20,7 @@ enum PendulumsModule {
             blurb: "Hang a pendulum anywhere in the room, then grab the steel bob and throw it — full nonlinear swings, energy trading between bars, and five-pendulum resonance.",
             icon: "metronome.fill",
             accent: DesignTokens.Palette.pendulumsAccent,
-            firstRunHint: "The bob is already swinging — grab it and throw it sideways. While you hold it, the faint line shows the swing you're about to launch. Pinch a bob to select it and read its numbers.",
+            firstRunHint: "The bob is already swinging — grab it and throw it sideways. While you hold it, the faint line shows the swing you're about to launch. Tap a bob to select it. To your right, tap a world — the Moon stretches every swing out to two and a half times its period.",
             legend: legendItems,
             isPaused: { appModel.pendulumsModel.isPaused },
             togglePause: { appModel.pendulumsModel.isPaused.toggle() },
