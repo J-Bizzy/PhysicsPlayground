@@ -15,7 +15,7 @@ fourth:
 
 | Layer | Covered by | Runs where |
 |---|---|---|
-| Physics & geometry | `PhysicsCoreTests` (319) | `swift test`, no simulator |
+| Physics & geometry | `PhysicsCoreTests` (328) | `swift test`, no simulator |
 | Models, clamps, layout | `PhysicsPlaygroundTests` | simulator |
 | Tap *handlers* | `StationTapTests` — calls `handleTap` directly | simulator |
 | Window chrome | `PhysicsPlaygroundUITests` — real taps | simulator |

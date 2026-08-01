@@ -2,6 +2,35 @@
 
 A running log of consequential decisions — architectural, physical, or product — and why they were made. Newest first. One entry per decision.
 
+## Format
+
+```markdown
+## YYYY-MM-DD — Short title
+
+**Decision:** What was decided, in one or two sentences.
+
+**Context:** What prompted it — the problem, constraint, or alternative on the table.
+
+**Consequences:** What this commits us to, and what it rules out.
+```
+
+(The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
+
+## 2026-08-01 — The submission sweep: gates re-verified, two open items closed
+
+**Decision:** The three App Store gates closed on 2026-07-29 are re-verified **in the shipping bundle** rather than on disk, and the two items standing in `HOMESCREEN_SPEC.md` §3 are resolved rather than carried.
+
+**The gates, read out of a signed Release build** for `generic/platform=visionOS` (signing identity: Apple Development) — that build, not the simulator, is the deployment gate:
+- `ITSAppUsesNonExemptEncryption` = `false` (without it every upload stalls on the export-compliance interview).
+- `MinimumOSVersion` = **26.0**, not 26.5. 26.5 was the newest visionOS in existence and would have been installable by almost nobody.
+- `PrivacyInfo.xcprivacy` present: no tracking, no tracking domains, no collected data, one required-reason API — `NSPrivacyAccessedAPICategoryUserDefaults` / `CA92.1`.
+
+**The manifest's load-bearing constraint still holds and was re-checked, not assumed:** the app has **no networking code at all** — zero `URLSession`/`URLRequest`/`Network` imports across the app target and both packages, and **zero remote package dependencies** in the project. Adding any means revisiting the manifest.
+
+**Ambient volume — closed as a NON-FEATURE.** Settings ships master volume plus ambient on/off, and that is the whole honest surface: there is no gain path into the ambient loop, so a continuous slider would be a control over nothing. The app deliberately ships no dead slider. It was listed as "open work" for months when the correct entry was "decided against, for now."
+
+**`Archive/` — DECIDED TO KEEP, explicitly.** 30 files, 464 KB, tracked, and **not referenced by the Xcode project at all**: it compiles nothing and cannot affect a submission. It holds five cut modules whose physics is still live and tested in `PhysicsCore` — ~2 600 of 6 573 lines are reachable only from there, and `swift test` exercises all of them every run. That is defensible as parked work with a documented restore path and indefensible as an accident, which is why `Archive/README.md` says which it is. **Deleting it before the repo goes public remains the owner's call, not a cleanup.** One genuine grave inside it: `Waves/EmissionTrail` has zero references anywhere, including the Archive.
+
 ## 2026-08-01 — The Foucault pendulum: the physics that makes the sphere necessary
 
 **Decision:** Pendulums gains Earth's rotation. `PhysicsCore/Oscillations/Foucault.swift` carries `EarthRotation` (Ω from latitude, the sine law, the precession period, and the plane-angle reading); `SphericalPendulum.step` gains an `angularVelocity:` parameter defaulting to `.zero` and applies the Coriolis term −2Ω × v. In the room: a **globe you touch** for latitude, a **rail** for the exaggerated spin, a bank plate to arm it, and the **Panthéon ring** of markers the swing fells as its plane sweeps round.
@@ -305,18 +334,6 @@ The interaction law never said otherwise. It governs how a quantity is **changed
 **Context:** The App Store readiness audit found the entire guidance layer authored but dark. The hints say everything the coach script said, per module, in context, with less machinery.
 
 **Consequences:** One onboarding mechanism to maintain. Every module's hint must name real, current controls (enforced again in the experiments-repair pass). The shell owns hint and legend presentation; modules only author strings.
-
-## Format
-
-```markdown
-## YYYY-MM-DD — Short title
-
-**Decision:** What was decided, in one or two sentences.
-
-**Context:** What prompted it — the problem, constraint, or alternative on the table.
-
-**Consequences:** What this commits us to, and what it rules out.
-```
 
 ## 2026-07-29 — Electric Fields stripped to two verbs; the invisible scale plate is banned
 

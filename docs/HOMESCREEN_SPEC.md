@@ -15,16 +15,24 @@ Two rendering paths; the spatial one is primary:
 
 ### The Gallery
 
-A crescent of **four floating graphite terraces**, one per `HubDomain`, arcing around the user at azimuths −54°/−18°/+18°/+54°, at slightly varied radii (1.90–2.05 m at the default distance) and slab-top heights (0.92–1.12 m at the default height). Each terrace:
+A crescent of **two floating graphite terraces**, one per `HubDomain`, arcing around the user at azimuths **−28° (Electricity & Magnetism) and +28° (Mechanics & Energy)**, at slightly varied radii (1.95 / 2.05 m at the default distance) and slab-top heights (1.00 / 0.92 m at the default height). Values are authored in `GalleryLayout.slots`.
 
-- is a dark rounded slab (0.42 m deep, 0.055 m thick) with a **domain-coloured emissive hairline** along its front-top edge — the only place domain colour lives besides the progress ring and the focus panel chip; there are still no floating text headers;
+*(Was four terraces at ±54°/±18° while the catalog held four domains. The catalog was cut to two doors on 2026-07-30 when the merged-worlds geometry failed; the code followed and this paragraph did not, until 2026-08-01.)*
+
+Each terrace:
+
+- is a dark rounded slab (0.42 m deep, 0.055 m thick) with a **domain-coloured emissive hairline** along its front-top edge — one of the four places domain colour lives, alongside the door signage, the progress ring and the focus panel chip;
 - carries one **pedestal puck** per module (r 0.085 m, 0.36 m pitch), each holding the module's **shell-free live miniature** (`Hub/HubVignettes.swift`), normalized to a constant 0.24 m world size, with a billboarded bubble-type name plate in front of the puck and the domain-coloured **progress ring** (gold when complete).
 
 Slab widths derive from module counts (`0.36·n + 0.08`); a module outside every domain extends its fallback domain's slab, so the old slot-wrap overlap bug is structurally impossible (`GalleryLayoutTests`). The **distance setting scales the crescent's plan** (radials, widths, pitch) and the **height setting scales terrace heights**; exhibits keep constant world size. A soft warm pool of light on the real floor ties the crescent to the room.
 
-### Title
+### Title and signage
 
-The two-line 3D bubble wordmark ("Physics / Playground", 0.60 m wide, champagne rule beneath) floats **permanently** above the crescent's centre (≈2.1 m at defaults). The one-shot `hasSeenWordmark` behavior is deleted.
+The two-line wordmark ("Physics / Playground", champagne rule beneath) floats **permanently** above the crescent's centre (≈2.1 m at defaults). The one-shot `hasSeenWordmark` behaviour is deleted.
+
+Its **voice is the machined plaque** — `HubTitleStyle.shipping = .plaque`, pinned in code on 2026-07-31 after an audition against three alternatives. There is no setting; the other voices remain in the enum as what the choice was made against. A plaque is one solid, not a stack.
+
+Each terrace also carries an **animated 3-D door sign** (`HubDomainTitle`) naming its domain, with one kinetic element apiece — an electron lapping the E&M sign, a ball on a true parabola over Mechanics. **This reverses the earlier "no floating domain headers" rule** (2026-07-30), which is why the branding budget was re-opened for exactly two signs. Under reduce-motion the signs park at a composed rest pose rather than freezing mid-flight.
 
 ### Focus
 
@@ -36,7 +44,7 @@ Pinch the exhibit or its Enter button → 0.42 s swell-and-rise with a pop, the 
 
 ### Idle life & comfort
 
-Miniatures breathe ±8 mm on desynced periods and run their physics; hairlines shimmer slowly; the title bobs. All idle motion is stilled by `scene.stillness` (in-app reduce-motion setting or the system switch). Everything ticks from one `SceneEvents.Update` subscription (`[weak scene]`, cancelled on disappear).
+Miniatures breathe ±8 mm on desynced periods and run their physics; hairlines shimmer slowly; the title bobs. All idle motion is stilled by `scene.stillness`, which follows the **system** `accessibilityReduceMotion` switch — the in-app duplicate was deleted and there is no `reduceMotion` in `AppSettings`. Everything ticks from one `SceneEvents.Update` subscription (`[weak scene]`, cancelled on disappear).
 
 ### Persistent chrome
 
@@ -62,5 +70,6 @@ Numbering from v3. Don't revisit a standing one without a `DECISIONS.md` entry.
 
 1. ~~Lab Notebook surface~~ — **shipped** (2026-07-29): capture petal on the bead (its fourth and final), book button in every module title bar, Notebook window with CSV/Markdown export.
 2. ~~Coach-mark rendering~~ — **deleted by decision** (2026-07-29): onboarding is each module's first-run hint, rendered by the shell until dismissed. See DECISIONS.md.
-3. **Ambient volume (continuous).** The settings window ships master volume + ambient on/off; a continuous ambient level awaits a gain path into the ambient loop.
-4. **Pre-public-repo sweep.** `Archive/` (retired modules) is tracked but uncompiled — remove before the repository goes public.
+3. ~~Ambient volume (continuous)~~ — **closed as a non-feature** (2026-08-01). Settings ships master volume plus ambient on/off, and that is the whole honest surface: there is no gain path into the ambient loop, so a continuous slider would be a control over nothing. The app deliberately ships no dead slider. If a gain path is ever built, the slider comes with it and not before.
+4. **Pre-public-repo sweep — `Archive/`: DECIDED TO KEEP, and the reasoning is on the record.** It is 30 files and 464 KB, tracked, and **not referenced by the Xcode project at all** — it compiles nothing, ships nothing, and cannot affect the app bundle or a submission. What it holds is five cut modules whose *physics is still live and tested* in `PhysicsCore` (Optics 665 lines, Fluids 1 067, Waves 332, `ElasticSheet` 273, the spring oscillators) — roughly 2 600 of PhysicsCore's 6 573 lines are reachable only from there, and `swift test` exercises every one of them on every run. That is defensible as parked work with a documented restore path and indefensible as an accident, which is why `Archive/README.md` says which it is. **Deleting it is the owner's call, not a cleanup**, and it is the last thing that would need doing before the repo goes public if the answer changes.
+   - One genuine grave inside it: `PhysicsCore/Waves/EmissionTrail` has **zero references anywhere**, including the Archive itself.

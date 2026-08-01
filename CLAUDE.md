@@ -35,6 +35,14 @@ The home's display type is no longer a setting: the machined plaque ships, pinne
 
 **Electric Fields is fully spatial** — every control is an object in the room, so nothing in it can be reached from the CLI without an argument: `-emCap 1`, `-emGauss disc|bubble`, `-emLines 0`, `-emParticle plus|minus|electron|positron`, `-emVolts <V>`, `-emTesla <T>`, `-emRadius <m>`, `-emTilt <degrees>`, `-emProbeCharge <C>`, `-emRing charge|probe`, plus the older `-emMagnetic`/`-emProbe`/`-emFree`. The VALUE arguments matter as much as the on/off ones: a rail whose bead sits at its default in every screenshot proves nothing about the mapping behind it.
 
+**ALL SIX MODULES ARE NOW FULLY SPATIAL (2026-08-01).** No module panel holds a `Slider`, `Picker` or `Toggle` — the panels are readout surfaces, and `PanelControlCriterionTests` fails the build if one comes back. So every module needs an argument to reach its controls from the CLI:
+- **Pendulums** — `-penGravity <m/s²>`, `-penTime <×>`, `-penLayers 1` (lights all five plates), `-penRing 1`; and for the Foucault rig, which is hidden until armed: `-penFoucault <latitude>` and `-penSpin <×Earth>`.
+- **Magnetism** — `-magLayers 0` darkens all four plates (the scene opens with three lit, and there is no finger to flick them with), `-magRing 1`, `-magFrozen 1`.
+- **Projectiles** — `-kinGravity <m/s²>` (also lights the matching world disc), `-kinWind <m/s>` (switches the air on, since the wind rail does not exist without it), `-kinBalls 1`, `-kinWalls 1`.
+- **Circuits** — `-electronView 1`, `-trueSpeed 1`, `-emLink 1`, `-circRing 1`.
+
+**When a toggle becomes a switch plate, check `reset()` restores the flag behind it.** Four modules had that defect, all found in two days. A flag with no visible control drifts out of `reset()` and stays wrong because nothing in the room contradicts it; the moment it gets a lamp, the lamp makes the claim every frame.
+
 ## Working agreement
 
 - Plan before any change touching more than one file.

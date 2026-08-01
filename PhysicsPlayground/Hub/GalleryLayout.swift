@@ -2,7 +2,7 @@
 //  GalleryLayout.swift
 //  Physics Playground — Hub
 //
-//  The Gallery's geometry, as pure math: four domain terraces — floating
+//  The Gallery's geometry, as pure math: one terrace per domain — floating
 //  slabs arcing around the user in a crescent — each carrying its
 //  domain's modules on pedestal pucks. Domains stop being a colour
 //  legend and become physical structure: where a lab sits tells you
