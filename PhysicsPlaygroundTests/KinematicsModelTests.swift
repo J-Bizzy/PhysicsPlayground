@@ -306,11 +306,61 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(simd_distance(event.position, model.muzzlePoint), 0, accuracy: 1e-9)
     }
 
+    /// Wind only blows through air. The wind rail is hidden and disabled
+    /// unless `airResistance` is on, so the model must agree: a wind
+    /// speed left over from an earlier gust must do nothing at all once
+    /// the air is switched off, or the rail would be hiding a force that
+    /// is still bending trajectories.
+    func testWindDoesNothingWithoutAirResistance() {
+        func landing(air: Bool, wind: Double) -> SIMD3<Double> {
+            let model = bareModel()
+            model.airResistance = air
+            model.windSpeed = wind
+            model.fire()
+            for _ in 0..<400 { model.step(dt: 1.0 / 90.0) }
+            return model.flights[0].state.position
+        }
+        // With no air, the wind setting is inert — the same flight, to
+        // the last bit, whatever the rail was left at.
+        XCTAssertEqual(
+            simd_distance(landing(air: false, wind: 0),
+                          landing(air: false, wind: 12)),
+            0, accuracy: 1e-12, "wind blew a ball through vacuum")
+        // With air it is emphatically not inert, or the rail would be a
+        // control over nothing.
+        XCTAssertGreaterThan(
+            simd_distance(landing(air: true, wind: 0),
+                          landing(air: true, wind: 12)),
+            0.05, "12 m/s of wind moved the ball less than 5 cm")
+    }
+
+    /// The standing bank lights whichever world's g you are on, by this
+    /// comparison — the same one the panel prints. Zero-g is a world
+    /// here and not in Pendulums: a pendulum in zero-g has no period,
+    /// but a projectile in zero-g flies dead straight, which is a lesson.
+    func testTheWorldBankLightsTheMatchingDisc() {
+        let model = bareModel()
+        func lit() -> String? {
+            KinematicsModel.gravityPresets
+                .first { abs($0.gravity - model.gravity) < 0.01 }?.name
+        }
+        XCTAssertEqual(lit(), "Earth")
+        for world in KinematicsModel.gravityPresets {
+            model.gravity = world.gravity
+            XCTAssertEqual(lit(), world.name)
+            XCTAssertTrue(KinematicsModel.gravityRange.contains(world.gravity),
+                          "\(world.name) is off the rail the discs share")
+        }
+        model.gravity = 5.0
+        XCTAssertNil(lit(), "between worlds, no disc is lit")
+    }
+
     func testResetRestoresFreshlyEnteredState() {
         let model = bareModel()
         model.launchSpeed = 3
         model.gravity = 1.62
         model.airResistance = true
+        model.respectRoomWalls = false
         model.windSpeed = 5
         model.timeScale = 0.3
         model.isPaused = true
@@ -336,6 +386,13 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(model.launchSpeed, KinematicsModel.roomFittingSpeed, accuracy: 1e-12)
         XCTAssertEqual(model.gravity, 9.81)
         XCTAssertFalse(model.airResistance)
+        // The two states the switch bank shows, and this one used to
+        // escape reset entirely — walls off plus Reset handed back a room
+        // that balls flew straight out of, under a dark plate. Third
+        // instance of the same defect in one day (Pendulums' `frictionOn`,
+        // Magnetism's `dynamicsOn`); a flag with no visible control drifts
+        // out of reset and nothing in the room contradicts it.
+        XCTAssertTrue(model.respectRoomWalls, "the room stopped being real")
         XCTAssertEqual(model.windSpeed, 0)
         XCTAssertEqual(model.timeScale, 1.0)
         XCTAssertFalse(model.isPaused)

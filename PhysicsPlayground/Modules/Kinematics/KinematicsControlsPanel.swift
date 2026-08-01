@@ -48,33 +48,19 @@ struct KinematicsControlsPanel: View {
             }
 
             CollapsedSection("World") {
-                HStack(spacing: 8) {
-                    ForEach(KinematicsModel.gravityPresets) { preset in
-                        Button(preset.name) {
-                            self.model.gravity = preset.gravity
-                        }
-                        .buttonStyle(.podQuiet)
-                        .accessibilityLabel("Gravity of \(preset.name)")
-                    }
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("g = \(self.model.gravity, specifier: "%.2f") m/s²")
-                        .font(DesignTokens.TypeScale.control.monospacedDigit())
-                    Slider(value: $model.gravity, in: KinematicsModel.gravityRange)
-                        .accessibilityLabel("Gravity")
-                }
-                Toggle("Bounce off walls", isOn: $model.respectRoomWalls)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("Off, balls sail through the walls and ceiling")
-                Toggle("Air resistance", isOn: $model.airResistance)
-                    .font(DesignTokens.TypeScale.control)
+                Text(worldText)
+                    .font(DesignTokens.TypeScale.control.monospacedDigit())
+                Text("Worlds and g are a bank of discs and a rail to the "
+                     + "left of the launcher; whether the walls bounce and "
+                     + "whether there is air are two plates beside them. "
+                     + "The wind rail appears with the air.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 if self.model.airResistance {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Wind: \(self.model.windSpeed, specifier: "%.1f") m/s")
-                            .font(DesignTokens.TypeScale.control.monospacedDigit())
-                        Slider(value: $model.windSpeed, in: KinematicsModel.windSpeedRange)
-                            .accessibilityLabel("Wind speed")
-                    }
+                    Text("Wind \(self.model.windSpeed, specifier: "%.1f") m/s")
+                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                        .foregroundStyle(.secondary)
                 }
                 // The ball menu is gone — it is a labelled fan on the
                 // launcher's Balls petal now (DECISIONS.md, 2026-07-29:
@@ -93,5 +79,16 @@ struct KinematicsControlsPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// g, and the world it matches if it matches one — the same
+    /// comparison the standing bank lights its disc by.
+    private var worldText: String {
+        let g = String(format: "%.2f m/s²", model.gravity)
+        guard let world = KinematicsModel.gravityPresets
+            .first(where: { abs($0.gravity - model.gravity) < 0.01 }) else {
+            return "g = \(g) — between worlds"
+        }
+        return "g = \(g) — \(world.name)"
     }
 }

@@ -754,6 +754,15 @@ final class KinematicsModel {
         launchSpeed = Self.roomFittingSpeed
         gravity = 9.81
         airResistance = false
+        // The third state a switch bank shows that reset had never
+        // restored — Pendulums' `frictionOn` and Magnetism's `dynamicsOn`
+        // were the other two, all found the same day. A flag with no
+        // visible control drifts out of reset and stays wrong
+        // indefinitely, because nothing in the room contradicts it; the
+        // moment it gets a lamp, the lamp makes the claim every frame.
+        // Walls off + Reset used to hand back a room balls flew straight
+        // out of.
+        respectRoomWalls = true
         windSpeed = 0
         windDirectionDegrees = 0
         timeScale = 1.0

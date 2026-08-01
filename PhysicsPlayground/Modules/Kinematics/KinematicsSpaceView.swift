@@ -31,6 +31,54 @@ struct KinematicsSpaceView: View {
                 PickerChoice(id: $0.rawValue, label: $0.displayName,
                              symbol: KinematicsSpaceView.symbol(for: $0))
             })
+    /// The world you are throwing on, as four discs.
+    ///
+    /// Zero-g is in this bank and NOT in Pendulums' — a pendulum in
+    /// zero-g does not swing, so there is no period to show, whereas a
+    /// projectile in zero-g flies dead straight and the straight line IS
+    /// the lesson. Same object, same grammar, one more choice.
+    @State private var worldPicker = SpatialPicker(
+        accessibilityNoun: "World",
+        choices: KinematicsModel.gravityPresets.map {
+            PickerChoice(id: $0.name, label: $0.name, symbol: "globe")
+        },
+        staysOpen: true,
+        layout: FanLayout(span: 54 * .pi / 180, reach: 0.32,
+                          verticalScale: 0.25, lift: 0, stagger: 0))
+    /// g between and beyond the worlds — including 0, which is why the
+    /// range starts there rather than at the rail's usual floor.
+    @State private var gravityTrack: SpatialTrackControl?
+    /// Wind. Only exists while the air does: `SpatialTrackControl` gained
+    /// an `isEnabled` check during the Electric Fields pass precisely so
+    /// a hidden rail stops writing, and this is its first user — a drag
+    /// already in flight when air resistance goes off must not keep
+    /// setting a wind speed nothing is applying.
+    @State private var windTrack: SpatialTrackControl?
+    /// Whether the room's walls are real, and whether the air is.
+    @State private var layers: SpatialLayerBank?
+    @State private var activeTrack: SpatialTrackControl?
+
+    // Placement: an instrument wall to the LEFT of the launcher's home,
+    // at its depth. This module is 1:1 with the room and balls go
+    // everywhere, so the one thing these must not do is stand in the
+    // firing line — the launcher opens at x = −0.6 aiming down −z, so
+    // everything here sits further out in −x, beside the shot rather
+    // than in front of it.
+    //
+    // They do NOT ride the launcher, though it is grabbable and the
+    // controls would then live on the apparatus. Two reasons, and the
+    // second is a correctness one: `SpatialTrackControl.adjust(hand:)`
+    // measures the hand against `root.position`, so a rail whose root is
+    // being carried would shift its own mapping mid-drag; and a rig of
+    // four instruments swinging around the room with the launcher is a
+    // lot of furniture to drag through a wall.
+    private static let instrumentZ: Float = -1.10
+    private static let bankAnchor = SIMD3<Float>(-1.52, 1.34, instrumentZ)
+    private static let worldsAnchor = SIMD3<Float>(-1.05, 1.50, instrumentZ)
+    private static let gravityCenter = SIMD3<Float>(-1.05, 1.30, instrumentZ)
+    private static let windCenter = SIMD3<Float>(-1.05, 1.10, instrumentZ)
+    private static let instrumentNormal = SIMD3<Float>(0.42, 0, 0.91)
+
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -43,11 +91,86 @@ struct KinematicsSpaceView: View {
                 guard let kind = KinematicsModel.ProjectileKind(rawValue: id) else { return }
                 model.kind = kind
             }
+            renderer.root.addChild(worldPicker.root)
+            worldPicker.onSelect = { name in
+                guard let world = KinematicsModel.gravityPresets
+                    .first(where: { $0.name == name }) else { return }
+                model.gravity = world.gravity
+            }
+            // The lit disc is read from the model, so dragging the rail
+            // off a world darkens it and Reset lights Earth again.
+            worldPicker.selectedID = {
+                KinematicsModel.gravityPresets
+                    .first { abs($0.gravity - model.gravity) < 0.01 }?.name
+            }
+
+            let bank = SpatialLayerBank(
+                accent: UIColor(DesignTokens.Palette.kinematicsAccent),
+                layers: [
+                    // Neither of these draws anything. Both change what
+                    // the room IS: whether its walls stop a ball, and
+                    // whether its air does. The bank carries them because
+                    // they are still labelled discrete choices, and the
+                    // labels say what they do rather than what is shown.
+                    .init(id: "walls", label: "Walls bounce",
+                          symbol: "square.dashed",
+                          isOn: { model.respectRoomWalls },
+                          toggle: { model.respectRoomWalls.toggle() }),
+                    .init(id: "air", label: "Air resistance", symbol: "wind",
+                          isOn: { model.airResistance },
+                          toggle: { model.airResistance.toggle() }),
+                ])
+            renderer.root.addChild(bank.root)
+            layers = bank
+
+            let gravity = SpatialTrackControl(
+                name: "Gravity",
+                center: Self.gravityCenter,
+                normal: Self.instrumentNormal,
+                accent: UIColor(DesignTokens.Palette.kinematicsAccent),
+                range: KinematicsModel.gravityRange,
+                read: { model.gravity },
+                write: { model.gravity = $0 },
+                format: { String(format: "%.2f m/s²", $0) })
+            renderer.root.addChild(gravity.root)
+            gravityTrack = gravity
+
+            let wind = SpatialTrackControl(
+                name: "Wind",
+                center: Self.windCenter,
+                normal: Self.instrumentNormal,
+                accent: UIColor(DesignTokens.Palette.kinematicsAccent),
+                range: KinematicsModel.windSpeedRange,
+                read: { model.windSpeed },
+                write: { model.windSpeed = $0 },
+                format: { String(format: "%.1f m/s", $0) })
+            renderer.root.addChild(wind.root)
+            windTrack = wind
+
             #if DEBUG
             // `-kinBalls 1` opens the ball fan at launch, so the picker is
             // screenshot-checkable from the CLI (no hand to pinch with).
             if UserDefaults.standard.bool(forKey: "kinBalls") {
                 ballPicker.toggle()
+            }
+            // `-kinGravity 1.62` moves the g rail's bead AND lights the
+            // Moon disc — a value, not a flag, because a bead parked at
+            // its default proves nothing about the mapping behind it.
+            let forcedGravity = UserDefaults.standard.object(forKey: "kinGravity")
+            if forcedGravity != nil {
+                let g = UserDefaults.standard.double(forKey: "kinGravity")
+                model.gravity = min(max(g, KinematicsModel.gravityRange.lowerBound),
+                                    KinematicsModel.gravityRange.upperBound)
+            }
+            // `-kinWind 8` switches the air on and sets a wind — the only
+            // way to see the wind rail at all, since it is hidden until
+            // there is air for it to blow.
+            if UserDefaults.standard.object(forKey: "kinWind") != nil {
+                model.airResistance = true
+                let speed = UserDefaults.standard.double(forKey: "kinWind")
+                model.windSpeed = min(max(speed,
+                                          KinematicsModel.windSpeedRange.lowerBound),
+                                      KinematicsModel.windSpeedRange.upperBound)
             }
             #endif
 
@@ -104,6 +227,8 @@ struct KinematicsSpaceView: View {
                     // The fan first: its discs sit above the launcher and
                     // would otherwise be read as a tap on the launcher.
                     if ballPicker.handleTap(value.entity) { return }
+                    if worldPicker.handleTap(value.entity) { return }
+                    if layers?.handleTap(value.entity) == true { return }
                     _ = bloom.handleTap(value.entity)
                 }
         )
@@ -114,7 +239,24 @@ struct KinematicsSpaceView: View {
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
                     if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
+                    // A gesture already in a rail may not be re-claimed: a
+                    // drag that starts on the wind rail and wanders over a
+                    // ball must not pick the ball up.
+                    if let track = activeTrack {
+                        guard track.isEnabled else {
+                            activeTrack = nil
+                            return
+                        }
+                        track.adjust(hand: hand)
+                        return
+                    }
                     if drag == nil {
+                        for track in [gravityTrack, windTrack].compactMap({ $0 })
+                        where track.owns(value.entity) {
+                            activeTrack = track
+                            track.adjust(hand: hand)
+                            return
+                        }
                         if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
                         drag = beginDrag(entity: value.entity, hand: hand)
                     }
@@ -122,6 +264,11 @@ struct KinematicsSpaceView: View {
                     apply(drag: drag, hand: hand)
                 }
                 .onEnded { value in
+                    if let track = activeTrack {
+                        track.endAdjust()
+                        activeTrack = nil
+                        return
+                    }
                     bloom.endGrip()
                     defer { drag = nil }
                     guard let drag else { return }
@@ -169,6 +316,19 @@ struct KinematicsSpaceView: View {
         // Clear of the bloom's own petal arc, which reaches ~0.17 m up.
         ballPicker.update(anchor: anchor + SIMD3(0, 0.20, 0),
                           viewer: viewer, dt: dt)
+
+        worldPicker.update(anchor: Self.worldsAnchor, viewer: viewer, dt: dt)
+        layers?.update(anchor: Self.bankAnchor, viewer: viewer, dt: dt)
+        // Nothing ticks a track by itself — the caller's duty, stated on
+        // `SpatialTrackControl.refresh`.
+        gravityTrack?.refresh()
+        // The wind rail exists only while the air does. `isEnabled` also
+        // kills a drag already in flight, which is the case that bites:
+        // the gesture keeps delivering `onChanged` after the plate goes
+        // dark, and without this the rail would go on writing a wind
+        // speed nothing is applying.
+        windTrack?.isEnabled = model.airResistance
+        if model.airResistance { windTrack?.refresh() }
     }
 
     /// The glyph each ball wears on its disc — Kinematics vocabulary, not

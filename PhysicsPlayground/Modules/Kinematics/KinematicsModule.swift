@@ -54,11 +54,20 @@ enum KinematicsModule {
                 rows.append(.init("Launched by", last.wasThrown ? "hand" : "launcher"))
             }
             // No Score row. Hoops left the surface in 6b2508c and
-            // `addRing` now has no caller outside tests, so the
-            // score was structurally always 0 — a column of zeroes
-            // in every exported notebook, implying a game that
-            // isn't there. The ring machinery stays in the model,
-            // dormant and tested, for whenever hoops come back.
+            // `addRing` has no caller outside tests, so the score was
+            // structurally always 0 — a column of zeroes in every
+            // exported notebook, implying a game that isn't there.
+            //
+            // CLASSIFIED, since the project's rule is that every
+            // caller-less thing must say which it is: this is a
+            // MOTHBALL, and it is the third category. Not a missing
+            // door (the surface existed and worked), not a grave (the
+            // code was not decided against — the SURFACE was, because
+            // hoops read as clutter around a bench about trajectories).
+            // Model, renderer, scoring and tests are all intact and
+            // exercised; only the way to make one is gone. Restoring it
+            // is one call from a Bloom petal on the launcher, and that
+            // is a decision for the owner, not a cleanup.
             return rows
     }
 

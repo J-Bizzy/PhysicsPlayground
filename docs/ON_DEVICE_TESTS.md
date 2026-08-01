@@ -250,6 +250,37 @@ rail rendered; only a hand proves it sets anything.
 - [ ] **Two-handed pinch does NOTHING here.** Projectiles is
       permanently excluded from scaling.
 
+### ⟳ The instrument wall
+
+Four controls left the panel and stand to the LEFT of the launcher, out
+of the firing line. **Not looked at yet.** The specific risk in this
+module is different from the others: balls go everywhere, and the
+launcher is carried around the room.
+
+- [ ] **Fire a dozen shots, sweep the launcher around, throw by hand.**
+      Nothing should ever hit an instrument or pass through one.
+- [ ] **They do not ride the launcher.** Carry it across the room: the
+      instruments stay where they are. That is deliberate — a rail
+      measures your hand against its own position, so one being carried
+      would shift its mapping mid-drag.
+- [ ] **Four worlds, not three.** Zero-g is on this bank and not on
+      Pendulums'. Tap it: the shot must fly **dead straight**, no arc at
+      all. That straight line is the reason the choice exists here.
+- [ ] Tap Moon, then Jupiter: the arc stretches, then collapses. The
+      matching disc lights each time, and drifting the g rail off a
+      world darkens it.
+- [ ] **The wind rail only exists in air.** With Air resistance off there
+      should be no wind rail at all. Switch air on and it appears; set a
+      wind and the flight visibly bends.
+  - [ ] **Start dragging the wind bead, and while still dragging, have
+        the air switched off.** The rail must go dead, not keep writing.
+        This is the case `SpatialTrackControl.isEnabled` exists for and
+        this is its first user anywhere in the app.
+- [ ] **Reset makes the room real again.** Switch Walls bounce off, press
+      Reset: walls must come back on with the plate lit. This was broken
+      — `reset()` never restored it, so Reset handed back a room balls
+      flew straight out of.
+
 ## Pendulums
 
 - [ ] Grab a bob and throw it sideways → a true 3-D orbit, not a plane.
