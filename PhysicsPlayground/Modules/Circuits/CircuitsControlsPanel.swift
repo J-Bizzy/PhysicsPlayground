@@ -80,9 +80,18 @@ struct CircuitsControlsPanel: View {
             }
 
             CollapsedSection("Multimeter") {
-                Toggle("Multimeter", isOn: $model.multimeterArmed)
-                    .font(DesignTokens.TypeScale.control)
-                    .accessibilityHint("Armed, tapping two terminals reads the voltage between them instead of wiring them")
+                // The meter is an object on the bench now — tap it to arm
+                // it, and the answer appears ON IT rather than here,
+                // which is where you were already looking and where a
+                // real bench meter puts it.
+                Text(self.model.multimeterArmed
+                     ? "Armed — tap two terminals and the meter reads the "
+                       + "voltage between them instead of wiring them."
+                     : "The meter stands to the left of the bench. Tap it "
+                       + "to arm it, then tap two terminals.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let reading = self.model.multimeterReading {
                     Text("ΔV \(reading.deltaVolts, specifier: "%.2f") V\(reading.inlineAmps.map { String(format: "   I %.1f mA", abs($0) * 1000) } ?? "")")
                         .font(DesignTokens.TypeScale.footnote.monospacedDigit())
@@ -123,9 +132,17 @@ private struct CircuitLinkSection: View {
         @Bindable var magnetism = magnetism
 
         PanelSection("The link") {
-            Toggle("Electromagnet coil", isOn: $magnetism.electromagnetOn)
-                .font(DesignTokens.TypeScale.control)
-                .accessibilityHint("Stands the magnetic field beside the bench and runs a cable to its coil from your inductor")
+            // The switch stands ON the cable run now, between the bench
+            // and where the coil appears — throw it and you watch the
+            // cable it belongs to wake up, which is the whole reason this
+            // pair is co-present at all.
+            Text(magnetism.electromagnetOn
+                 ? "The coil is standing beside the bench, cabled to your inductor."
+                 : "The coil's switch is on the run to its right — flick it "
+                   + "and the magnetic field stands up beside the bench.")
+                .font(DesignTokens.TypeScale.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             if magnetism.electromagnetOn {
                 if hasInductor {

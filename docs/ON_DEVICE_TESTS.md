@@ -97,10 +97,37 @@ pass, and are the ones worth doing first.
       a radial distance.
 - [ ] **Two-handed pinch the bench**: it zooms. Past 4× you should be
       standing among the drifting electrons (Electron View's floor).
+### ⟳ The meter and the coil switch
+
+Both left the panel. **Not looked at yet.**
+
+- [ ] **The multimeter stands to the LEFT of the bench**, mirroring the
+      layers bank on the right. Dark casing, dark face, its name above it.
+- [ ] **Tap it: the face lights** and reads "tap two terminals" — not a
+      confident 0.00 V.
+- [ ] Tap two terminals: **the answer appears ON THE METER**, not only in
+      the window. Same number the panel prints.
+- [ ] **Arming it must not also probe whatever is behind it.** The meter
+      stands among the bench's own terminals by design, so tap it several
+      times and confirm no stray terminal gets selected.
+- [ ] Tap it again to disarm: face goes dark, reading clears, and
+      re-arming starts from nothing probed.
+- [ ] **Zoom the bench to 8×.** Neither the meter nor either bank should
+      grow — they are instruments in the room, not parts on the bench.
+- [ ] **Reset from Electron View.** The bench must come back at normal
+      size with only Electron flow lit. This was broken: `reset()`
+      restored one of the four bank states, so Reset handed back a bench
+      still swollen to 4× under three lit plates.
+
 - [ ] **THE WIRED PAIR.** Add an inductor, wire it into a live loop,
-      then switch **Electromagnet coil** on in the panel. The magnetic
-      field should stand up to the RIGHT of the bench with a visible
+      then throw the **Electromagnet coil** switch — it stands on the run
+      to the RIGHT of the bench, wearing Magnetism's magenta rather than
+      Circuits' accent, because what it summons belongs to the other
+      bench. The magnetic field should stand up beyond it with a visible
       cable running from your inductor to its coil.
+  - [ ] ⟳ **The switch is ON the cable run**, between bench and coil —
+        that adjacency is the point. Throwing it and watching the cable
+        it belongs to wake up is the demonstration.
   - [ ] Beads travel along the cable, faster with more current.
   - [ ] **Open the switch → the coil dies**, the beads stop, and the
         bar magnets near it fall still. This is the app's best single

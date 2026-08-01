@@ -592,6 +592,12 @@ final class CircuitsModelTests: XCTestCase {
         model.add(.capacitor)
         model.showElectronFlow = false
         model.isPaused = true
+        // The other three states the bank shows, plus the meter — all of
+        // which reset used to leave exactly as it found them.
+        model.trueSpeedMode = true
+        model.showVoltageHeights = true
+        model.electronView = true
+        model.multimeterArmed = true
 
         model.reset()
 
@@ -601,6 +607,37 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertFalse(model.isPaused)
         XCTAssertNil(model.pendingTerminal)
         XCTAssertGreaterThan(model.totalSourcePower, 3, "the loop comes back lit")
+
+        // Every lamp standing beside this bench, back where it started.
+        // Reset from Electron View used to hand back a bench still
+        // swollen to 4× with three lit plates over it — the worst of the
+        // four reset defects found across the app in one day.
+        XCTAssertFalse(model.trueSpeedMode)
+        XCTAssertFalse(model.showVoltageHeights)
+        XCTAssertFalse(model.electronView, "the bench stayed inside the copper")
+        XCTAssertFalse(model.multimeterArmed)
+    }
+
+    /// Disarming the meter drops both probes, so a stale pair cannot come
+    /// back the next time it is armed. The meter is an object on the
+    /// bench now and its lit face is a claim about exactly this.
+    func testDisarmingTheMeterForgetsItsProbes() {
+        let model = CircuitsModel()
+        model.multimeterArmed = true
+        let battery = model.components.first { $0.kind == .battery }!
+        let bulb = model.components.first { $0.kind == .bulb }!
+        model.step(dt: 1.0 / 90.0)
+        model.probeTap(CircuitsModel.Terminal(componentID: battery.id, end: 0))
+        model.probeTap(CircuitsModel.Terminal(componentID: bulb.id, end: 1))
+        XCTAssertNotNil(model.multimeterReading)
+
+        model.multimeterArmed = false
+        XCTAssertNil(model.multimeterReading,
+                     "a disarmed meter must not still be reading")
+
+        model.multimeterArmed = true
+        XCTAssertNil(model.multimeterReading,
+                     "re-arming must start from nothing probed")
     }
 
     /// Releasing a part with a terminal near another part's terminal

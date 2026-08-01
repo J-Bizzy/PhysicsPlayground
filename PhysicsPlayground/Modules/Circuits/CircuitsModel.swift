@@ -1211,7 +1211,21 @@ final class CircuitsModel {
     /// switch, pull it apart, or Clear bench and build from nothing.
     func reset() {
         clearBench()
+        // The bank beside the bench shows four states and this restored
+        // exactly one of them — the worst instance of a defect found in
+        // three other modules the same day (Pendulums' `frictionOn`,
+        // Magnetism's `dynamicsOn`, Kinematics' `respectRoomWalls`).
+        // Reset from Electron View used to hand back a bench still
+        // swollen to 4× with three lamps lit over it. A flag with no
+        // visible control drifts out of reset unnoticed; the moment it
+        // gets a lamp, the lamp makes the claim every frame.
         showElectronFlow = true
+        trueSpeedMode = false
+        showVoltageHeights = false
+        electronView = false
+        // The meter is a tool now, standing armed-or-not on the bench,
+        // so it has a lamp too. Its `didSet` drops both probes.
+        multimeterArmed = false
         isPaused = false
         seedStarterLoop()
     }

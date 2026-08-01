@@ -56,6 +56,26 @@ struct CircuitsSpaceView: View {
     /// hands past 4x. The one view that kills the misconception this module
     /// exists to kill was hidden behind an accident.
     @State private var layers: SpatialLayerBank?
+    /// The bench's meter — a tool, not a layer. See `Multimeter`.
+    @State private var meter: Multimeter?
+    /// The coil's switch, standing ON the cable run between the bench and
+    /// the annex rather than in the window.
+    ///
+    /// A bank of ONE, and that is right here where it would be wrong on
+    /// the display bank: this switch is not one of a set of view options,
+    /// it is the thing that summons a second apparatus and runs a cable
+    /// to it. Putting it physically on the run is what makes the pair
+    /// legible — you throw the switch and watch the cable it belongs to
+    /// wake up. (Contrast Pendulums, where a lone plate beside a bank of
+    /// four would just have been a stray.)
+    @State private var coilSwitch: SpatialLayerBank?
+
+    /// Left of the bench, mirroring the layers bank on the right.
+    private static let meterAnchor = CircuitsRenderer.benchPivot
+        + SIMD3<Float>(-0.62, -0.03, 0.16)
+    /// On the way to the annex, clear of the layers bank's widest label.
+    private static let coilSwitchAnchor = CircuitsRenderer.benchPivot
+        + SIMD3<Float>(1.02, -0.02, 0.10)
 
     var body: some View {
         RealityView { content in
@@ -86,6 +106,30 @@ struct CircuitsSpaceView: View {
             renderer.root.addChild(bank.root)
             self.layers = bank
 
+            // Both under `root` for the same reason the layers bank is:
+            // the zoom reaches 8×, and an instrument that grew with the
+            // bench would put itself out of reach exactly when you had
+            // zoomed in to use it.
+            let multimeter = Multimeter(
+                accent: UIColor(DesignTokens.Palette.circuitsAccent))
+            renderer.root.addChild(multimeter.root)
+            self.meter = multimeter
+
+            let coil = SpatialLayerBank(
+                accent: UIColor(DesignTokens.Palette.magnetismAccent),
+                layers: [
+                    // Magnetism's accent, not Circuits', because the thing
+                    // this summons belongs to the other bench. The colour
+                    // is the only warning you get that flicking it stands
+                    // an apparatus up beside you.
+                    .init(id: "coil", label: "Electromagnet coil",
+                          symbol: "bolt.horizontal",
+                          isOn: { magnetism.electromagnetOn },
+                          toggle: { magnetism.electromagnetOn.toggle() }),
+                ])
+            renderer.root.addChild(coil.root)
+            self.coilSwitch = coil
+
             // The coil annex is installed from launch and ENABLED by the
             // switch: RealityKit teardown mid-gesture is the fiddly
             // path, isEnabled is the honest one. Disabled, it renders
@@ -114,10 +158,16 @@ struct CircuitsSpaceView: View {
                     // The bank stands beside the bench, at the bench's own
                     // depth so it sits in the same ~15 deg band as the
                     // apparatus rather than dropping out of view.
+                    let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
                     layers?.update(
                         anchor: CircuitsRenderer.benchPivot + SIMD3(0.62, -0.06, 0.16),
-                        viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
+                        viewer: viewer,
                         dt: event.deltaTime)
+                    coilSwitch?.update(anchor: Self.coilSwitchAnchor,
+                                       viewer: viewer, dt: event.deltaTime)
+                    meter?.update(anchor: Self.meterAnchor, viewer: viewer,
+                                  armed: model.multimeterArmed,
+                                  reading: model.multimeterReading)
                     // Rendered here every frame (not via the observation
                     // loop): a steady DC circuit mutates nothing that
                     // observation reliably re-fires on, but its electrons
@@ -229,6 +279,15 @@ struct CircuitsSpaceView: View {
                     // grammar (terminals wire, wires delete, levers
                     // flip, bodies toggle their control ring).
                     if layers?.handleTap(value.entity) == true { return }
+                    if coilSwitch?.handleTap(value.entity) == true { return }
+                    // Ahead of `handleTap(on:)`, which is what reads a
+                    // TERMINAL — the meter stands among the bench's
+                    // terminals by design, and arming it must not also
+                    // count as probing whatever is behind it.
+                    if meter?.handleTap(value.entity) == true {
+                        model.multimeterArmed.toggle()
+                        return
+                    }
                     if bloom.handleTap(value.entity) { return }
                     handleTap(on: value.entity)
                 }
