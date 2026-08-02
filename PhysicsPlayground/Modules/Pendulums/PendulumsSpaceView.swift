@@ -286,6 +286,16 @@ struct PendulumsSpaceView: View {
                let first = model.pendulums.first {
                 ring.openID = first.id
             }
+            // `-penPivotRing 1` opens the COLLAR's ring — the cable bead
+            // and the trash petal. It needs its own argument because the
+            // collar's ring is opened by a press that does not MOVE the
+            // collar, and the simulator has neither a hand to press with
+            // nor a way to hold one still.
+            if UserDefaults.standard.bool(forKey: "penPivotRing"),
+               let first = model.pendulums.first {
+                pivotRing.openID = first.id
+                ring.openID = nil
+            }
             // NO `-penResonance`, deliberately. Every other instrument
             // here gets an argument because its state is invisible until
             // something sets it. The Resonance plate is the opposite: it
@@ -612,20 +622,41 @@ struct PendulumsSpaceView: View {
     /// it, and the period tag over the pivot climbs as the square root
     /// of length while your hand is still moving.
     private func syncBloom(dt: Double) {
-        // THE PIVOT'S BEAD, and nothing else on it.
+        // THE PIVOT'S RING: a bead for the cable, and Delete.
         //
-        // Cable length is the one quantity a pivot owns: it is where the
+        // Cable length is the quantity a pivot owns — it is where the
         // cable is paid out from, and the length is visibly the distance
-        // between this collar and the bob. Everything else about a
-        // pendulum belongs to its BOB (mass, delete) or to the collar's
-        // own drag (where it hangs), so this ring has a grip and no
-        // petals — which is the whole of what was asked for and less
-        // than a menu would have been.
+        // between this collar and the bob. Delete is here because the
+        // collar IS the rig: every other module in the app puts a trash
+        // petal on the ring of whatever you tapped (a charge, a planet, a
+        // magnet, a circuit part), and a pendulum whose top could be
+        // pressed but not thrown away would be the one object in the app
+        // that broke that grammar.
+        //
+        // The BOB's ring keeps its own Delete rather than handing the
+        // verb over. Both rings act on the same pendulum, which is
+        // correct: you can throw a rig away from either end of it, the
+        // way you can pick up a real one by either end.
+        if let openPivot = pivotRing.openID,
+           !model.pendulums.contains(where: { $0.id == openPivot }) {
+            // Deleted out from under the ring — by its own trash petal,
+            // by the bob's, or by a reset. The bob's ring already had
+            // this guard; the pivot's needs it for the same reason, and
+            // now needs it MORE, because its own petal is what usually
+            // triggers it.
+            pivotRing.openID = nil
+            bloom.clearTarget()
+        }
         if let pivotID = pivotRing.openID,
            let pendulum = model.pendulums.first(where: { $0.id == pivotID }) {
             bloom.retarget(
                 "pivot-\(pivotID)",
-                petals: [],
+                petals: [
+                    .init(name: "Delete", symbol: "trash",
+                          tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
+                        model.removePendulum(id: pivotID)
+                    },
+                ],
                 grip: .init(
                     name: "Length",
                     range: PendulumsModel.lengthRange,

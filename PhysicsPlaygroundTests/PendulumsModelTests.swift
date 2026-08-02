@@ -487,4 +487,37 @@ final class PendulumsModelTests: XCTestCase {
                        accuracy: 1e-9)
         XCTAssertEqual(simd_distance(elbow, bob), pendulum.length2, accuracy: 1e-9)
     }
+
+    /// Deleting a pendulum removes it and everything that referred to
+    /// it, whichever end it was thrown away from.
+    ///
+    /// The pivot's ring grew a trash petal on 2026-08-02, matching every
+    /// other module — so deleting from the TOP is now the usual path,
+    /// and a stale `selectedID` left behind by it would leave the info
+    /// card describing a rig that is not there.
+    @MainActor
+    func testDeletingAPendulumClearsEverythingThatPointedAtIt() throws {
+        let model = PendulumsModel()
+        let id = try XCTUnwrap(model.addPendulum())
+        model.select(id: id)
+        XCTAssertEqual(model.selectedID, id)
+
+        let before = model.pendulums.count
+        model.removePendulum(id: id)
+
+        XCTAssertEqual(model.pendulums.count, before - 1)
+        XCTAssertFalse(model.pendulums.contains { $0.id == id })
+        XCTAssertNotEqual(model.selectedID, id,
+                          "the selection still points at a deleted rig")
+    }
+
+    /// A double pendulum deletes the same way a simple one does — one
+    /// rig, one id, whichever kind it is.
+    @MainActor
+    func testDeletingADoublePendulumWorksToo() throws {
+        let model = PendulumsModel()
+        let id = try XCTUnwrap(model.addDoublePendulum())
+        model.removePendulum(id: id)
+        XCTAssertFalse(model.pendulums.contains { $0.id == id })
+    }
 }
