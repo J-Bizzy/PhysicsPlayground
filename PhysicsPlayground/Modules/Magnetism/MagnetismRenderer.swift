@@ -183,8 +183,6 @@ final class MagnetismRenderer {
     private let coilRoot = Entity()
     private var coilBuilt = false
     private var coilCallout: Callout?
-    /// Set while a hand owns the coil.
-    var isCarryingCoil = false
 
     private func buildElectromagnet() {
         coilBuilt = true
@@ -237,9 +235,8 @@ final class MagnetismRenderer {
         coilRoot.isEnabled = model.electromagnetOn
         syncInduction(model)
         guard model.electromagnetOn else { return }
-        if !isCarryingCoil {
-            coilRoot.position = SIMD3<Float>(model.electromagnetPosition)
-        }
+        // Every frame, held or not — see `syncHandCompass`.
+        coilRoot.position = SIMD3<Float>(model.electromagnetPosition)
         coilRoot.orientation = simd_quatf(
             from: [1, 0, 0], to: SIMD3<Float>(simd_normalize(model.electromagnetAxis)))
         // The coil says what the circuit is giving it: no current, no
@@ -294,24 +291,20 @@ final class MagnetismRenderer {
                               materials: [shell])
         handCompass.addChild(orb)
 
-        // Two rings at right angles — a gimbal. Without them a glass ball
-        // gives the eye nothing to judge the needle's direction against,
-        // and "pointing 30° up" and "pointing at you" look identical.
-        var ringMaterial = UnlitMaterial(color: UIColor(red: 0.72, green: 0.56,
-                                                        blue: 0.28, alpha: 1))
-        ringMaterial.blending = .transparent(opacity: 0.55)
-        for axis in [SIMD3<Float>(1, 0, 0), SIMD3<Float>(0, 0, 1)] {
-            let ring = ModelEntity(
-                mesh: .generateBox(
-                    size: [Self.compassRadius * 2.06, 0.0022,
-                           Self.compassRadius * 2.06],
-                    cornerRadius: Self.compassRadius),
-                materials: [ringMaterial])
-            if axis.x > 0 {
-                ring.orientation = simd_quatf(angle: .pi / 2, axis: axis)
-            }
-            handCompass.addChild(ring)
-        }
+        // NO GIMBAL RINGS. Two were tried here and they were a bug: a
+        // ring needs a torus, RealityKit has no `generateTorus`, and a
+        // thin box with `cornerRadius` equal to its half-width is not a
+        // ring — it is a rounded SLAB. So what rendered was two solid
+        // brass-coloured discs intersecting inside the glass, which the
+        // owner correctly reported as "an odd yellowish plane cutting
+        // through it."
+        //
+        // They were there to give the eye a reference for depth, so that
+        // "pointing 30 degrees up" and "pointing at you" would not look
+        // alike. The honest way to build one is a swept circle
+        // (`TubeMesh`, the way the reset orb's ring icon is made), but a
+        // clean glass ball with a needle in it reads well enough, and a
+        // ring is furniture until something proves it is needed.
 
         // The needle: red north, white south, free to point ANYWHERE —
         // the same alignment a free magnet finds, now in a case that
@@ -359,9 +352,21 @@ final class MagnetismRenderer {
         if handCompassNeedle == nil { buildHandCompass() }
         handCompass.isEnabled = model.compassOn
         guard model.compassOn else { return }
-        if !isCarryingCompass {
-            handCompass.position = SIMD3<Float>(model.compassPosition)
-        }
+        // EVERY frame, including while a hand owns it. This used to be
+        // gated on `isCarryingCompass`, so dragging the compass moved the
+        // MODEL and left the orb sitting where it was — you could swing
+        // the needle (it re-aims to the field at the model's new spot)
+        // and never move the instrument.
+        //
+        // The exact bug this module already fixed once, for the magnets,
+        // in 86106b9: these are RELATIVE drags, so the model owns motion
+        // and the renderer must follow it unconditionally. A guard of
+        // this shape only makes sense against a system-driven
+        // `ManipulationComponent`, and `configureTouchTarget` does not
+        // install one — it sets a collider and nothing else. The compass
+        // and the coil kept the defect for months because nobody had
+        // tried to carry either of them.
+        handCompass.position = SIMD3<Float>(model.compassPosition)
         let field = model.compassField
         let magnitude = simd_length(field)
         if magnitude > 1e-12 {
@@ -375,9 +380,6 @@ final class MagnetismRenderer {
         handCompassCallout?.setText(String(format: "%.1f µT", model.compassMicroTesla))
         handCompassCallout?.anchor(at: SIMD3(0, 0.05, 0))
     }
-
-    /// Set while the hand owns the compass, so the model never fights it.
-    var isCarryingCompass = false
 
     // MARK: Magnets
 

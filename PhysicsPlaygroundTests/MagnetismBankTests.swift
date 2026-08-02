@@ -98,3 +98,54 @@ final class MagnetismBankTests: XCTestCase {
         XCTAssertFalse(model.electromagnetOn)
     }
 }
+
+/// Carrying things: the model must actually move when a hand drags.
+///
+/// The renderer half of this bug cannot be reached from a test — nothing
+/// automated can touch a RealityKit entity — so what is pinned here is
+/// the model contract the renderer depends on: a drag writes a new
+/// position, unconditionally. The renderer's matching duty (sync the
+/// entity from the model EVERY frame, held or not) is stated at
+/// `syncHandCompass` and checked by hand.
+@MainActor
+final class MagnetismCarryTests: XCTestCase {
+
+    func testMovingTheCompassWritesItsPosition() {
+        let model = MagnetismModel()
+        let start = model.compassPosition
+        let target = start + SIMD3(0.30, 0.10, -0.20)
+        model.moveCompass(to: target)
+        XCTAssertNotEqual(model.compassPosition, start)
+        XCTAssertEqual(simd_distance(model.compassPosition, target), 0,
+                       accuracy: 1e-9)
+    }
+
+    /// …and it cannot be dragged through the floor.
+    func testTheCompassStopsAtTheFloor() {
+        let model = MagnetismModel()
+        model.moveCompass(to: SIMD3(0, -5, -0.7))
+        XCTAssertGreaterThan(model.compassPosition.y, -5,
+                             "the compass went through the floor")
+    }
+
+    func testMovingTheElectromagnetWritesItsPosition() {
+        let model = MagnetismModel()
+        let start = model.electromagnetPosition
+        let target = start + SIMD3(-0.25, 0.05, 0.15)
+        model.moveElectromagnet(to: target)
+        XCTAssertNotEqual(model.electromagnetPosition, start)
+    }
+
+    /// The compass reads the field where it IS, so moving it has to
+    /// change what the needle is given. If a drag failed to write the
+    /// position, this is the number that would silently stop moving.
+    func testTheFieldFollowsTheCompassAsItMoves() {
+        let model = MagnetismModel()
+        model.moveCompass(to: MagnetismModel.regionCenter + SIMD3(0.18, 0, 0))
+        let near = simd_length(model.compassField)
+        model.moveCompass(to: MagnetismModel.regionCenter + SIMD3(0.90, 0, 0))
+        let far = simd_length(model.compassField)
+        XCTAssertGreaterThan(near, far * 2,
+                             "the field did not weaken with distance")
+    }
+}

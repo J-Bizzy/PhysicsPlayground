@@ -213,8 +213,6 @@ final class EMFieldStation {
     func dragEnded(_ value: EntityTargetValue<DragGesture.Value>) {
         bloom.endGrip()
         model.release()
-        renderer.isCarryingCompass = false
-        renderer.isCarryingCoil = false
         drag = nil
     }
 
@@ -268,12 +266,10 @@ final class EMFieldStation {
         var current: Entity? = entity
         while let candidate = current {
             if candidate.name == MagnetismRenderer.electromagnetName {
-                renderer.isCarryingCoil = true
                 return RelativeDrag(name: candidate.name,
                                     target: model.electromagnetPosition, hand: hand)
             }
             if candidate.name == MagnetismRenderer.handCompassName {
-                renderer.isCarryingCompass = true
                 return RelativeDrag(name: candidate.name,
                                     target: model.compassPosition, hand: hand)
             }
