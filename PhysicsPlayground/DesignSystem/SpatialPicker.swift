@@ -10,8 +10,9 @@
 //  act rather than a menu — and the interaction law (DECISIONS.md,
 //  2026-07-29) makes it the only allowed form: a quantity without extent
 //  is a discrete choice, and a discrete choice gets a labelled object in
-//  the room. Every `Picker` in a window panel is due to become one of
-//  these.
+//  the room. Every `Picker` that was ever in a window panel is one of
+//  these now — the last of them on 2026-08-01, when the panels
+//  themselves were deleted and `makeControls` went with them.
 //
 //  It sits in DesignSystem rather than RenderKit because it needs the
 //  app's own vocabulary — `Bloom.symbolTexture`, `HubScene.namePlate`,

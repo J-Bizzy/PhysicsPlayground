@@ -3,8 +3,10 @@
 //  Physics Playground — Electromagnetism module
 //
 //  The electrostatics immersive scene, hosted by PlaygroundSpaceView, and
-//  since 2026-07-31 the module's ONLY control surface. The window panel
-//  next door reports numbers and does not set anything.
+//  since 2026-08-01 the module's ONLY surface of any kind. There is no
+//  window panel: it reported numbers and set nothing, and its numbers
+//  stand in the room now on `FieldReadoutCard`. The module's window is a
+//  title bar.
 //
 //  The room, left to right:
 //
