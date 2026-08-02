@@ -368,6 +368,16 @@ struct GravityLabSpaceView: View {
             if UserDefaults.standard.double(forKey: "predict") > 0 {
                 model.armPrediction()
             }
+            // `-gravBinary 1` splits the star into a binary pair, which
+            // reshapes every orbit in the system at once. Unlike the two
+            // Clear plates, this one is FIRED rather than armed: it does
+            // not confirm, and its effect is the most visible change any
+            // control in this app makes — a second sun and a system of
+            // reshaped ellipses is a photograph of the physics, not of a
+            // lit lamp.
+            if UserDefaults.standard.bool(forKey: "gravBinary") {
+                model.makeBinary()
+            }
             // `-gravWorlds 1` opens the ten-preset fan, the one control
             // here that is invisible until something opens it. A fan
             // this wide is also the thing most likely to be WRONG —
