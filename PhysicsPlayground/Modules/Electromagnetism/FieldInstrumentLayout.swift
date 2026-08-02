@@ -100,7 +100,7 @@ enum FieldInstrumentLayout {
 
     // MARK: Right — what you make
 
-    /// The three well mouths, in a column: +, −, and the test charge.
+    /// The well mouths, in a column.
     ///
     /// The column is hung from the TOP rather than centred, because the
     /// particle bank sits under it and the pair has to fit between the
@@ -109,18 +109,40 @@ enum FieldInstrumentLayout {
     /// the frame entirely — reachable by the arithmetic, invisible in
     /// practice, which is the standard's "visible without being looked
     /// for" failing quietly.
+    /// FOUR mouths now, not three: + charge, − charge, and one test
+    /// charge of EACH sign. The probe's polarity used to be a choice made
+    /// on the particle bank after the fact, which meant the thing you
+    /// pulled out of the well was whatever the bank happened to be set
+    /// to. Making it two mouths puts the choice in the act of creation,
+    /// the same way the ± charge mouths already did.
+    ///
+    /// The pitch tightens from 0.11 to 0.095 to fit the fourth without
+    /// the column growing into its neighbours, and the particle bank
+    /// drops 5 cm to keep the 3 cm separation the layout test demands.
+    /// The arithmetic, since it is tight in both directions: four mouths
+    /// at 0.095 span 0.285, so the column's box is 0.1425 + a 0.06 mouth
+    /// radius = 0.2025 half-height about a centre of 1.4075 — i.e. y
+    /// 1.205…1.610. That clears the Clear plate above (1.65) by 0.04 and
+    /// the particle bank below (now topping out at 1.16) by 0.045.
+    ///
+    /// The half-extent is 0.2025 and NOT 0.21, which is the value this
+    /// comment was first written beside. `testInstrumentsDoNotOverlapEachOther`
+    /// caught the difference: rounding it up pushed the column's bottom
+    /// to 1.1975 and left 0.0275 against a 0.03 margin. Eight tenths of a
+    /// centimetre, invisible in any screenshot, and the exact class of
+    /// error this file's boxes exist to make impossible.
     static let wellColumnX = 0.96
     static let wellColumnZ = -0.90
-    static let wellPitch = 0.11
+    static let wellPitch = 0.095
     static let wellTopY = 1.55
-    static let wellHalfExtents = SIMD3<Double>(0.06, 0.17, 0.06)
+    static let wellHalfExtents = SIMD3<Double>(0.06, 0.2025, 0.06)
 
     static func wellAnchor(index: Int) -> SIMD3<Double> {
         SIMD3(wellColumnX, wellTopY - Double(index) * wellPitch, wellColumnZ)
     }
 
     /// The particle bank: four discs in a shallow row under the wells.
-    static let particlePickerAnchor = SIMD3<Double>(1.06, 1.15, -0.92)
+    static let particlePickerAnchor = SIMD3<Double>(1.06, 1.09, -0.92)
     static let particlePickerHalfExtents = SIMD3<Double>(0.16, 0.07, 0.16)
 
     /// The Clear plate, capping the well column from above.
@@ -233,7 +255,7 @@ enum FieldInstrumentLayout {
         // The three wells share one column; as a group they are one object
         // to keep clear of everything else.
         let top = wellAnchor(index: 0)
-        let bottom = wellAnchor(index: 2)
+        let bottom = wellAnchor(index: 3)
         boxes.append(("wells", StationBox(center: (top + bottom) / 2,
                                           halfExtents: wellHalfExtents)))
         // (The column's own box: `wellHalfExtents.y` must cover the pitch

@@ -303,11 +303,29 @@ struct FieldSpaceView: View {
                   preview: { FieldRenderer.chargePreview(isPositive: false) },
                   position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 1)),
                   spawn: { model.addCharge(positive: false, at: $0) }),
-            .init(name: "Test charge", tint: DesignTokens.Palette.probePositiveUI,
-                  label: "Test charge",
-                  preview: { FieldRenderer.probePreview() },
+            // TWO test-charge mouths, one per polarity. The probe's sign
+            // used to be set on the particle bank AFTER it existed, so
+            // what came out of the well was whatever the bank happened to
+            // be on — the one object whose sign you could not choose
+            // while making it, in a module whose other two mouths are
+            // exactly that choice. (The bank still switches a live probe,
+            // and still chooses ball vs electron, which is a different
+            // question: what it IS rather than what sign it carries.)
+            .init(name: "Test +", tint: DesignTokens.Palette.probePositiveUI,
+                  label: "Test +",
+                  preview: { FieldRenderer.probePreview(isPositive: true) },
                   position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 2)),
                   spawn: { point in
+                      model.probeIsPositive = true
+                      model.holdProbe(at: point)
+                      return Self.probeWellID
+                  }),
+            .init(name: "Test −", tint: DesignTokens.Palette.probeNegativeUI,
+                  label: "Test −",
+                  preview: { FieldRenderer.probePreview(isPositive: false) },
+                  position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 3)),
+                  spawn: { point in
+                      model.probeIsPositive = false
                       model.holdProbe(at: point)
                       return Self.probeWellID
                   }),

@@ -586,17 +586,69 @@ final class FieldRenderer {
     /// one wears, so pulling it out is recognisably getting this object.
     /// No touch target and no selection halo: a preview is not
     /// selectable, and the well owns the collider.
-    static func chargePreview(isPositive: Bool) -> Entity {
-        ModelEntity(mesh: .generateSphere(radius: chargeRadius),
-                    materials: [chargeMaterial(isPositive: isPositive)])
+    /// The + or − glyph a charge wears: two white strokes on a
+    /// billboarded pivot, with the vertical one hidden to make a minus.
+    ///
+    /// Factored out so the WELL MOUTHS wear it too. They did not, and a
+    /// red ball and a blue ball are not a sign — colour is the app's
+    /// convention (`VectorPalette`: red positive, blue negative) but a
+    /// convention has to be learned, and the well is the first place
+    /// anyone meets one of these. The charge you pull out has a + on it;
+    /// the mouth you pull it from now says so before you commit.
+    static func signGlyph(isPositive: Bool, radius: Float) -> Entity {
+        let pivot = Entity()
+        pivot.components.set(BillboardComponent())
+        let stroke = UnlitMaterial(color: UIColor(white: 1.0, alpha: 1))
+        let bar = min(radius * 0.9, 0.015)
+        let thickness = max(bar * 0.27, 0.0025)
+        let horizontal = ModelEntity(
+            mesh: .generateBox(size: [bar, thickness, 0.002], cornerRadius: 0.001),
+            materials: [stroke])
+        horizontal.position = [0, 0, radius * 1.2]
+        pivot.addChild(horizontal)
+        if isPositive {
+            let vertical = ModelEntity(
+                mesh: .generateBox(size: [thickness, bar, 0.002], cornerRadius: 0.001),
+                materials: [stroke])
+            vertical.position = [0, 0, radius * 1.2]
+            pivot.addChild(vertical)
+        }
+        return pivot
     }
 
-    /// The test probe as the well shows it.
-    static func probePreview() -> Entity {
-        ModelEntity(
-            mesh: .generateSphere(radius: chargeRadius * 0.72),
+    /// How big a mouth's preview is, which is NOT `chargeRadius`.
+    ///
+    /// The column went from three mouths to four and its pitch tightened
+    /// to 0.095 m, and a `Well` hangs its nameplate 0.034 below the
+    /// preview's underside. At the charge's own 0.03 radius that puts the
+    /// label 0.074 below centre while the next mouth's top edge is only
+    /// 0.065 below — so every label sat on the sphere beneath it, which a
+    /// screenshot showed immediately.
+    ///
+    /// The fit is `2r + 0.044 < pitch`, i.e. r < 0.0255. At 0.024 each
+    /// mouth clears its neighbour's label with a couple of millimetres to
+    /// spare. A mouth is a sign saying what comes out, not a promise
+    /// about the size of it — the charge you actually pull is full size.
+    static let wellPreviewRadius: Float = 0.024
+
+    static func chargePreview(isPositive: Bool) -> Entity {
+        let sphere = ModelEntity(mesh: .generateSphere(radius: wellPreviewRadius),
+                                 materials: [chargeMaterial(isPositive: isPositive)])
+        sphere.addChild(signGlyph(isPositive: isPositive, radius: wellPreviewRadius))
+        return sphere
+    }
+
+    /// The test probe as the well shows it — one mouth per polarity, so
+    /// the preview has to carry the sign as well as the tint.
+    static func probePreview(isPositive: Bool) -> Entity {
+        let radius = wellPreviewRadius * 0.8
+        let sphere = ModelEntity(
+            mesh: .generateSphere(radius: radius),
             materials: [Materials.energized(
-                DesignTokens.Palette.probePositiveUI, glow: 0.4)])
+                isPositive ? DesignTokens.Palette.probePositiveUI
+                           : DesignTokens.Palette.probeNegativeUI, glow: 0.4)])
+        sphere.addChild(signGlyph(isPositive: isPositive, radius: radius))
+        return sphere
     }
 
     private func makeChargeEntity(for charge: PointCharge) -> ModelEntity {
