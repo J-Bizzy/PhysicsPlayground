@@ -16,17 +16,9 @@ Every lab is a `ModuleDescriptor`: a catalog card, `makeScene`, and shared closu
 
 **A module has no flat control surface.** `makeControls` and the six `*ControlsPanel.swift` were deleted on 2026-08-01: a module's window is a title bar, plus "Show in room" while the immersive space is closed and the first-run hint until it is dismissed. Every control and every readout stands on the apparatus — a plate, a rail, a disc, a well, a petal, a `Callout`, or a RealityView attachment. `PanelControlCriterionTests` fails the build if a panel comes back, and it states the cost the decision accepted: there is no fallback surface, so a regression in a spatial instrument has nowhere to fall back to. Four files per module (`<Name>Model`, `<Name>Module`, `<Name>Renderer`, `<Name>SpaceView`), registered with one line in `ModuleCatalog.all`. Six experiences ship, grouped behind the Home Screen's two domain doors (`HubDomain`).
 
-### One apparatus per room, and the one wired pair
+### One apparatus per room
 
-**An experience gets the room to itself.** The app tried the alternative — merged "worlds" standing two and three benches in one room with a focus mechanic deciding which was attended to — and undid it for geometry, with the measurement recorded in `DECISIONS.md` (2026-07-30): every bench ended a step out of reach, and the orrery proved impossible outright. Domain grouping lives at the front door now, not in the room.
-
-The exception is **wiring, not layout**: an experience may summon a partner apparatus it is physically cabled to. `Modules/Circuits/EMFieldStation` + `EMFeedLine` are the pattern — Circuit Workshop's electromagnet switch stands the magnetic field up beside the bench, cabled to the inductor, and folds it away again (`isEnabled`, never mid-gesture teardown). Rules a wired pair must keep, each held by `CircuitsCoilAnnexTests` or a comment at the code it governs:
-
-- The pair's volumes stay **disjoint** (`PhysicsCore.StationBox` — general AABB/containment/reach math, testable in `swift test` without a simulator), and the summoned apparatus is within a step.
-- Gestures route by walking the hit entity up to its owning root, and the scale rig is **routed** — `spatialScale(rigs:routing:)`, never `spatialScale(_:)`, which targets any entity and would zoom both apparatus on one pinch.
-- The host solves first, so the cable carries **this frame's** current, not last frame's.
-- Pause freezes the pair together — a frozen circuit driving a live magnet is a frame of physics that never happened.
-- Placement is a **constant** translation of the summoned root (safe because every grab is a `RelativeDrag` — hand *displacement* — which a constant offset leaves untouched; an animating one would slide a held body out from under the fingers).
+**An experience gets the room to itself.** The app tried the alternative — merged "worlds" standing two and three benches in one room with a focus mechanic deciding which was attended to — and undid it for geometry, with the measurement recorded in `DECISIONS.md` (2026-07-30): every bench ended a step out of reach, and the orrery proved impossible outright. Domain grouping lives at the front door now, not in the room. No module reaches into another's model.
 
 Model-level clamps back every declared footprint (`CircuitsModel.buildHalfExtents`, `FieldModel.regionHalfExtents` — held by `CircuitsModelTests` and `FieldClampTests`). The merged worlds forced these into existence and they are kept on purpose: a charge that could be dragged across the room was a bug with or without a neighbour.
 

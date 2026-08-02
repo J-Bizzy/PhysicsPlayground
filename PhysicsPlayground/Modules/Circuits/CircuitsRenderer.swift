@@ -88,9 +88,27 @@ final class CircuitsRenderer {
         return SIMD3<Double>(visual.holder.orientation.act([1, 0, 0]))
     }
 
+    /// The bench's own magnetic field, as arrows on a coarse grid.
+    ///
+    /// Budget and spacing are deliberately modest. This is a field that
+    /// exists EVERYWHERE around every wire, so a fine grid would fill the
+    /// room with arrows and read as fog; what teaches is seeing the
+    /// arrows CIRCLE a wire and reverse when the current does.
+    private let fieldArrows = VectorFieldArrows(count: 260)
+    /// How many runs get rings, longest first.
+    private static let fieldRunBudget = 10
+    /// Rings per run, and arrows per ring.
+    private static let fieldStations = 3
+    private static let fieldSpokes = 8
+    /// How far out the ring sits. Far enough from the copper that the
+    /// 1/d field is not a spike, close enough that the circulation reads
+    /// as belonging to THIS wire rather than to the bench in general.
+    private static let fieldRingRadius: Double = 0.055
+
     private static let electronBudget = 200
     private let electronPool: EntityPool<Void>
     private var electronsVisible = false
+    private var fieldArrowsVisible = false
 
     private let audioEmitter = Entity()
     private var lastSoundID = 0
@@ -139,6 +157,8 @@ final class CircuitsRenderer {
             container.addChild(core)
         }
         viewRoot.addChild(electronPool.root)
+        viewRoot.addChild(fieldArrows.root)
+        fieldArrows.hideAll()
 
         selectedAnchor.components.set(BillboardComponent())
         viewRoot.addChild(selectedAnchor)
@@ -150,6 +170,91 @@ final class CircuitsRenderer {
         viewRoot.addChild(audioEmitter)
 
         buildTray()
+    }
+
+    // MARK: The bench's magnetic field
+
+    /// Places arrows on RINGS around each current-carrying run.
+    ///
+    /// Not a volume grid, and the first version's failure is the reason.
+    /// A grid over the build volume at a useful pitch is about 2 200
+    /// samples against a 260-arrow pool, and `VectorFieldArrows` takes
+    /// the first ones it is given — so the whole budget went to the
+    /// lowest-x slab and the field appeared as a wall of arrows stacked
+    /// against the left edge of the room, nowhere near a wire.
+    ///
+    /// Rings are better than a coarser grid would have been anyway. The
+    /// thing worth seeing is that B CIRCLES a conductor and reverses when
+    /// the current does; a sparse grid samples mostly empty room, while a
+    /// ring puts every arrow exactly where the circulation is legible.
+    /// The vector at each point is still the TOTAL field from every
+    /// segment, so two nearby wires visibly reinforce or cancel.
+    private func syncMagneticField(_ model: CircuitsModel) {
+        guard model.showMagneticField else {
+            if fieldArrowsVisible {
+                fieldArrows.hideAll()
+                fieldArrowsVisible = false
+            }
+            return
+        }
+        fieldArrowsVisible = true
+
+        let segments = model.currentSegments
+        guard !segments.isEmpty else {
+            fieldArrows.hideAll()
+            return
+        }
+
+        // The longest runs first: a 2 cm component stub carries the same
+        // current as the wire it feeds, but there is no room around it to
+        // read a circulation from.
+        let ranked = segments
+            .sorted { simd_length($0.b - $0.a) > simd_length($1.b - $1.a) }
+            .prefix(Self.fieldRunBudget)
+
+        var points: [SIMD3<Double>] = []
+        var vectors: [SIMD3<Double>] = []
+
+        for segment in ranked {
+            let along = segment.b - segment.a
+            let length = simd_length(along)
+            guard length > 1e-4 else { continue }
+            let axis = along / length
+            // Any vector not parallel to the run gives a perpendicular
+            // basis; picking the world axis the run is LEAST aligned with
+            // keeps the cross product well conditioned.
+            let reference: SIMD3<Double> = abs(axis.y) < 0.9
+                ? SIMD3(0, 1, 0) : SIMD3(1, 0, 0)
+            let u = simd_normalize(simd_cross(axis, reference))
+            let v = simd_cross(axis, u)
+
+            for stationIndex in 0..<Self.fieldStations {
+                let t = (Double(stationIndex) + 0.5) / Double(Self.fieldStations)
+                let centre = segment.a + along * t
+                for spokeIndex in 0..<Self.fieldSpokes {
+                    let angle = 2 * Double.pi * Double(spokeIndex)
+                        / Double(Self.fieldSpokes)
+                    let offset = (u * cos(angle) + v * sin(angle)) * Self.fieldRingRadius
+                    let point = centre + offset
+                    points.append(point)
+                    vectors.append(WireField.field(at: point, segments: segments))
+                }
+            }
+        }
+        fieldArrows.update(points: points, vectors: vectors,
+                           hidden: Array(repeating: false, count: points.count))
+    }
+
+    /// Perpendicular distance from a point to a SEGMENT — clamped to the
+    /// ends, so a point past a wire's end is measured to that end rather
+    /// than to the infinite line it lies on.
+    private static func distance(from point: SIMD3<Double>,
+                                 to segment: WireField.Segment) -> Double {
+        let along = segment.b - segment.a
+        let lengthSquared = simd_length_squared(along)
+        guard lengthSquared > 1e-12 else { return simd_distance(point, segment.a) }
+        let t = min(max(simd_dot(point - segment.a, along) / lengthSquared, 0), 1)
+        return simd_distance(point, segment.a + along * t)
     }
 
     // MARK: The parts tray (grab a part and a copy lifts off it)
@@ -410,6 +515,7 @@ final class CircuitsRenderer {
         syncWires(model)
         syncElectrons(model, dt: dt)
         syncVoltageSkyline(model)
+        syncMagneticField(model)
 
         if let selected = model.selectedComponent {
             selectedAnchor.isEnabled = true
@@ -1234,12 +1340,6 @@ final class CircuitsRenderer {
     /// scaled by the SAME factor the field front is scaled by, so the
     /// ratio you see is the ratio that exists — which means the
     /// electrons stop dead. That is the lesson, not a bug.
-    ///
-    /// Shared with the E&M world's feed line, which carries the bench's
-    /// current across the room to the electromagnet. The beads on that
-    /// span have to move at exactly the rate the beads on the bench's
-    /// own wires do, or the eye reads the coil as a separate machine
-    /// rather than the far end of one circuit.
     static func electronDisplaySpeed(current: Double, model: CircuitsModel) -> Double {
         if model.trueSpeedMode {
             return model.driftSpeed * trueSpeedGain * (current > 0 ? -1 : 1)

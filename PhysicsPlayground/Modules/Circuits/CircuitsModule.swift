@@ -9,12 +9,7 @@
 //  Magnetism door. It briefly was not: the merged E&M world made this
 //  the left-hand station of a shared room, and that world was undone on
 //  2026-07-30 when the geometry refused to close (see DECISIONS.md).
-//  What survived the undo is the WIRING, which was the point all along:
-//  this bench's inductor current drives the magnet bench's
-//  electromagnet, and `EMFieldStation`/`EMFeedLine` stand that coil
-//  beside the workshop with a visible cable running to it. Co-presence
-//  lives where a demonstration cannot exist without it, and nowhere
-//  else.
+//  The bench stands alone now: one apparatus, one room.
 //
 
 import SwiftUI
@@ -34,26 +29,12 @@ enum CircuitsModule {
             accent: DesignTokens.Palette.circuitsAccent,
             firstRunHint: "The loop in front of you is live — pinch the switch lever to break it. Grab parts off the tray and drop them so copper ends nearly touch: they connect themselves. Pull an orange end grip to aim or stretch a part; pinch two copper terminals to wire across a distance; the trash button removes a selected part.",
             legend: legend,
-            // Pause freezes the PAIR: when the coil is on, the magnetic
-            // field beside the bench is running this bench's current,
-            // and a frozen circuit driving a live magnet would be a
-            // frame of physics that never happened.
-            isPaused: {
-                appModel.circuitsModel.isPaused && appModel.magnetismModel.isPaused
-            },
-            togglePause: {
-                let paused = appModel.circuitsModel.isPaused
-                    && appModel.magnetismModel.isPaused
-                appModel.circuitsModel.isPaused = !paused
-                appModel.magnetismModel.isPaused = !paused
-            },
+            isPaused: { appModel.circuitsModel.isPaused },
+            togglePause: { appModel.circuitsModel.isPaused.toggle() },
             makeScene: {
                 AnyView(
                     CircuitsSpaceView()
                         .environment(appModel.circuitsModel)
-                        // The wired pair: the magnetic field this bench
-                        // summons when its electromagnet switch is on.
-                        .environment(appModel.magnetismModel)
                 )
             },
             captureReadings: { readings(appModel: appModel) },
@@ -61,7 +42,6 @@ enum CircuitsModule {
         )
     }
     /// The readings this bench writes into the lab notebook.
-    /// Shared with the combined module that now hosts it.
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
         let model = appModel.circuitsModel
         var rows: [NotebookEntry.Reading] = [
@@ -81,10 +61,7 @@ enum CircuitsModule {
         return rows
     }
 
-    /// The bench's full legend. The merged world curates its own
-    /// shorter key from this and the magnet bench's; this stays as the
-    /// complete one, and is what the bench would show if it ever
-    /// stands alone again.
+    /// The bench's full legend.
     static let legend: [LegendItem] = [
         LegendItem(
             swatch: .fill(Color(uiColor: DesignTokens.Palette.copperUI)),

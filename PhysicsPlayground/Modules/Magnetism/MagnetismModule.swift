@@ -10,10 +10,8 @@
 //  Magnetism door. It briefly was not: the merged E&M world made this
 //  the right-hand station of a shared room, and that world was undone
 //  on 2026-07-30 when the geometry refused to close (see DECISIONS.md).
-//  The coil that makes "a current is a magnet" watchable did not come
-//  back here — it belongs to Circuit Workshop, because the CIRCUIT is
-//  what powers it. Magnetism opened alone forces `electromagnetOn` off
-//  on entry rather than reading a current from a room you are not in.
+//  The bench stands alone now: bar magnets and the field they make,
+//  and nothing that belongs to another module.
 //
 
 import SwiftUI
@@ -45,7 +43,6 @@ enum MagnetismModule {
         )
     }
     /// The readings this bench writes into the lab notebook.
-    /// Shared with the combined module that now hosts it.
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
         let model = appModel.magnetismModel
         var rows: [NotebookEntry.Reading] = [
@@ -69,12 +66,6 @@ enum MagnetismModule {
                 rows.append(.init("Potential energy",
                                   String(format: "%.3e", energy), "J"))
             }
-        }
-        if model.electromagnetOn {
-            rows.append(.init("Coil moment",
-                              String(format: "%.3f", model.electromagnetMoment), "A·m²"))
-            rows.append(.init("Induced EMF",
-                              String(format: "%.4f", model.inducedEMF * 1000), "mV"))
         }
         return rows
     }

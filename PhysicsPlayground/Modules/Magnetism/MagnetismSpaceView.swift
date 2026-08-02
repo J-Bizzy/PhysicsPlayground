@@ -97,18 +97,6 @@ struct MagnetismSpaceView: View {
             renderer.root.addChild(bank.root)
             layers = bank
 
-            // Magnetism alone is MAGNETS alone. The electromagnet coil
-            // lives with Circuit Workshop now — the one wired pair —
-            // because its current is that bench's inductor current, and
-            // a coil driven by a circuit in another room is a rumour,
-            // not a demonstration. This scene once read
-            // `appModel.circuitsModel.inductorCurrent` across the
-            // module boundary every frame; that invisible link is what
-            // the pair made visible, so it does not come back here.
-            // Forced off on entry in case a Circuit Workshop session
-            // left it on: the switch belongs to that room.
-            model.electromagnetOn = false
-
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
@@ -220,9 +208,7 @@ struct MagnetismSpaceView: View {
                         drag = beginDrag(entity: value.entity, hand: hand)
                     }
                     guard let drag else { return }
-                    if drag.name == MagnetismRenderer.electromagnetName {
-                        model.moveElectromagnet(to: drag.position(forHand: hand))
-                    } else if drag.name == MagnetismRenderer.handCompassName {
+                    if drag.name == MagnetismRenderer.handCompassName {
                         model.moveCompass(to: drag.position(forHand: hand))
                     } else if let id = UUID(uuidString: drag.name) {
                         model.move(id: id, to: drag.position(forHand: hand))
@@ -282,10 +268,6 @@ struct MagnetismSpaceView: View {
     private func beginDrag(entity: Entity, hand: SIMD3<Double>) -> RelativeDrag? {
         var current: Entity? = entity
         while let candidate = current {
-            if candidate.name == MagnetismRenderer.electromagnetName {
-                return RelativeDrag(name: candidate.name,
-                                    target: model.electromagnetPosition, hand: hand)
-            }
             if candidate.name == MagnetismRenderer.handCompassName {
                 return RelativeDrag(name: candidate.name,
                                     target: model.compassPosition, hand: hand)

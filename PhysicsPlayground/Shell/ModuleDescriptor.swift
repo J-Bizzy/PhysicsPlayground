@@ -101,12 +101,6 @@ enum ModuleCatalog {
         // most discoverable surface in the app — never in a module's
         // window panel, and not by cramming apparatus into one room.
         //
-        // The one exception is wiring, not layout: an experience may
-        // bring a partner bench it is physically cabled to (Circuit
-        // Workshop's inductor drives a coil standing in a magnetic
-        // field). Co-presence survives exactly where a demonstration
-        // cannot exist without it, and nowhere else.
-        //
         // Cut and archived, each returning with one line here plus its
         // HubDomains entry: Springs, Elastic Field, Optics, Waves,
         // Wind Tunnel. Physics stays in PhysicsCore, tested.

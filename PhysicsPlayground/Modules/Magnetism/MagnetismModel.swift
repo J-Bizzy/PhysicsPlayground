@@ -27,11 +27,7 @@ final class MagnetismModel {
 
     nonisolated static let regionCenter = SIMD3<Double>(0, 1.35, -0.7)
     /// Isotropic reach, used for what the region DRAWS — the field-line
-    /// tracing radius and the compass grid's span. Narrowed from 0.85
-    /// when this bench became the right-hand station of the E&M world:
-    /// the grid is laid out as a cube of this span, so at 0.85 the
-    /// needles reached across the world's centre line and into the
-    /// circuit bench when it stands as Circuit Workshop's coil annex.
+    /// tracing radius and the compass grid's span.
     nonisolated static let regionHalfExtent = 0.72
     /// Per-axis bounds for the CLAMP. Height matches the old cube, but
     /// depth stops 15 cm in FRONT of the user instead of 15 cm behind
@@ -40,11 +36,6 @@ final class MagnetismModel {
     /// the control pods at enormous parallax. Magnets wander — that is
     /// the module working — but they wander in the room, not in your
     /// face.
-    ///
-    /// Width is narrower than height for a second reason: this bench
-    /// now shares the room with the circuit bench, and a magnet free to
-    /// glide 0.85 m off centre could glide out of its own station and
-    /// into the other one. CircuitsCoilAnnexTests enforces the clearance.
     nonisolated static let regionHalfExtents = SIMD3<Double>(0.62, 0.85, 0.55)
     nonisolated static let regionFloor = 0.35
     /// Visual length of a bar magnet (m); also the touching distance.
@@ -77,62 +68,6 @@ final class MagnetismModel {
     var isPaused = false
     var showFieldLines = true
     var showCompasses = true
-
-    // MARK: The electromagnet your circuit powers
-
-    /// An electromagnet on the field bench, driven by the current the
-    /// CIRCUIT bench is actually delivering through its inductor.
-    ///
-    /// This is the one place the app's nine modules stop being nine
-    /// islands. A coil carrying a current is a magnet — m = N·I·A — and
-    /// that identity is the whole bridge between the two halves of
-    /// electromagnetism. So: build a loop in Circuit Workshop, wire an
-    /// inductor into it, and its live current becomes a magnet here that
-    /// the other magnets respond to and the carried compass points at.
-    /// Open the switch on the circuit bench and the electromagnet dies;
-    /// reverse the battery and its poles swap. Nothing is faked: the
-    /// current is the solver's, and the moment is N·I·A.
-    var electromagnetOn = false
-    /// The coil's geometry — a chunky demo solenoid.
-    nonisolated static let coilTurns = 400
-    nonisolated static let coilRadius = 0.05
-    /// Where the electromagnet sits, and which way its axis points.
-    var electromagnetPosition = MagnetismModel.regionCenter + SIMD3(0, 0.34, -0.3)
-    var electromagnetAxis = SIMD3<Double>(1, 0, 0)
-    /// Amps through the coil, pushed in from the circuit bench each
-    /// frame. Zero when nothing is wired or the switch is open.
-    private(set) var coilCurrent = 0.0
-
-    func setCoilCurrent(_ amps: Double) {
-        guard abs(amps - coilCurrent) > 1e-9 else { return }
-        coilCurrent = amps
-    }
-
-    func moveElectromagnet(to point: SIMD3<Double>) {
-        electromagnetPosition = clamp(point)
-    }
-
-    /// The coil as a dipole — nil when it is off or carrying nothing.
-    var electromagnet: BarMagnet? {
-        guard electromagnetOn, abs(coilCurrent) > 1e-6 else { return nil }
-        return CurrentLoop.magnet(
-            at: electromagnetPosition, axis: electromagnetAxis,
-            turns: Self.coilTurns, current: coilCurrent, radius: Self.coilRadius)
-    }
-
-    /// m = N·I·A for the current the circuit is delivering, A·m².
-    var electromagnetMoment: Double {
-        CurrentLoop.momentMagnitude(
-            turns: Self.coilTurns, current: coilCurrent,
-            area: CurrentLoop.area(radius: Self.coilRadius))
-    }
-
-    /// Every dipole in the scene: the bar magnets plus the coil. The
-    /// field, the forces and the compass all read this, so the
-    /// electromagnet is a first-class source rather than a decoration.
-    var allSources: [BarMagnet] {
-        electromagnet.map { magnets + [$0] } ?? magnets
-    }
 
     // MARK: The compass you carry
 
@@ -183,7 +118,7 @@ final class MagnetismModel {
     /// What a COMPASS feels anywhere in the room: every magnet, plus the
     /// planet. Distinct from the field the magnets feel from each other.
     func compassField(at point: SIMD3<Double>) -> SIMD3<Double> {
-        MagneticField.vector(at: point, dueTo: allSources) + earthField
+        MagneticField.vector(at: point, dueTo: magnets) + earthField
     }
 
     /// The field where the hand compass is — what its needle points along.
@@ -195,7 +130,7 @@ final class MagnetismModel {
     /// completely different things on either side of that line.
     var compassIsReadingEarth: Bool {
         guard earthFieldOn else { return false }
-        let fromMagnets = MagneticField.vector(at: compassPosition, dueTo: allSources)
+        let fromMagnets = MagneticField.vector(at: compassPosition, dueTo: magnets)
         return simd_length(fromMagnets) < simd_length(earthField)
     }
 
@@ -217,43 +152,8 @@ final class MagnetismModel {
     /// charges.
     var dynamicsOn = true
 
-    // MARK: Faraday induction — the coil notices moving magnets
-
-    /// EMF induced in the electromagnet's coil by the BAR magnets'
-    /// motion, volts, lightly smoothed. ε = −N dΦ/dt with the flux
-    /// integrated numerically over the coil disc from the same dipole
-    /// field every other number in this module comes from. Wave a
-    /// magnet through the coil and this is what the wave is worth.
-    private(set) var inducedEMF = 0.0
-    @ObservationIgnored private var lastCoilFlux: Double?
-
-    private func updateInduction(dt: Double) {
-        guard electromagnetOn, dt > 1e-6 else {
-            lastCoilFlux = nil
-            if inducedEMF != 0 { inducedEMF = 0 }
-            return
-        }
-        let flux = Induction.flux(
-            throughDiscAt: electromagnetPosition, normal: electromagnetAxis,
-            radius: Self.coilRadius, magnets: magnets)
-        if let last = lastCoilFlux {
-            let raw = Induction.emf(turns: Self.coilTurns,
-                                    fluxNow: flux, fluxBefore: last, dt: dt)
-            // ~80 ms smoothing: the raw finite difference carries the
-            // simulation's frame jitter; the physical signal doesn't.
-            inducedEMF += (raw - inducedEMF) * min(dt * 12, 1)
-        }
-        lastCoilFlux = flux
-    }
-
     func step(dt: Double) {
         guard !isPaused else { return }
-        // BEFORE the dynamics gate: Faraday's law does not care WHY the
-        // flux changed. A magnet carried by hand across a frozen bench
-        // induces exactly as one gliding under its own forces — the
-        // first draft ran this after the gate, and a hand-waved magnet
-        // on a frozen bench lit nothing, which is wrong physics.
-        updateInduction(dt: dt)
         guard dynamicsOn else {
             // Frozen: no forces, but contact separation still holds so a
             // dragged magnet can't be parked inside another.
@@ -263,10 +163,7 @@ final class MagnetismModel {
         let h = min(dt, 1.0 / 60.0)
         var next = magnets
         for i in magnets.indices where magnets[i].id != heldID {
-            var others = magnets.enumerated().filter { $0.offset != i }.map(\.element)
-            // The coil is a source like any other: a magnet near a live
-            // electromagnet is pulled by it and swings to align with it.
-            if let coil = electromagnet { others.append(coil) }
+            let others = magnets.enumerated().filter { $0.offset != i }.map(\.element)
             guard !others.isEmpty else { continue }
 
             // Translate down the net force (direction exact; speed capped).
@@ -494,7 +391,7 @@ final class MagnetismModel {
 
     /// |B| in millitesla at the region centre — a live sense of the field.
     var centerFieldMilliTesla: Double {
-        MagneticField.magnitude(at: Self.regionCenter, dueTo: allSources) * 1000
+        MagneticField.magnitude(at: Self.regionCenter, dueTo: magnets) * 1000
     }
 
     // MARK: Reset
@@ -528,10 +425,6 @@ final class MagnetismModel {
         dynamicsOn = true
         earthFieldOn = true
         compassPosition = Self.regionCenter + SIMD3(0.0, -0.42, 0.55)
-        electromagnetOn = false
-        coilCurrent = 0
-        electromagnetPosition = Self.regionCenter + SIMD3(0, 0.34, -0.3)
-        electromagnetAxis = SIMD3(1, 0, 0)
     }
 
     init() {

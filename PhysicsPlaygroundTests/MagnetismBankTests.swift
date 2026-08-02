@@ -87,18 +87,6 @@ final class MagnetismBankTests: XCTestCase {
                            "what is drawn changed where a magnet went")
         }
     }
-
-    /// Magnetism opened alone must not inherit a coil left switched on by
-    /// a Circuit Workshop session — the coil belongs to that room, and
-    /// its current is that bench's inductor current. `reset()` is one of
-    /// the two places that has to hold the line (the space view forces it
-    /// again on entry).
-    func testResetLeavesTheElectromagnetOff() {
-        let model = MagnetismModel()
-        model.electromagnetOn = true
-        model.reset()
-        XCTAssertFalse(model.electromagnetOn)
-    }
 }
 
 /// Carrying things: the model must actually move when a hand drags.
@@ -128,14 +116,6 @@ final class MagnetismCarryTests: XCTestCase {
         model.moveCompass(to: SIMD3(0, -5, -0.7))
         XCTAssertGreaterThan(model.compassPosition.y, -5,
                              "the compass went through the floor")
-    }
-
-    func testMovingTheElectromagnetWritesItsPosition() {
-        let model = MagnetismModel()
-        let start = model.electromagnetPosition
-        let target = start + SIMD3(-0.25, 0.05, 0.15)
-        model.moveElectromagnet(to: target)
-        XCTAssertNotEqual(model.electromagnetPosition, start)
     }
 
     /// The compass reads the field where it IS, so moving it has to

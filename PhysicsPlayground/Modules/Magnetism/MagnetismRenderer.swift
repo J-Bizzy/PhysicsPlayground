@@ -33,12 +33,6 @@ final class MagnetismRenderer {
     /// every hand position converts through this root on its way in.
     let viewRoot = Entity()
 
-    // MARK: Induction — the coil's filament answers a waved magnet
-    private let inductionGlow = ModelEntity(
-        mesh: .generateSphere(radius: 0.016),
-        materials: [UnlitMaterial(color: .white)])
-    private var inductionCallout: Callout?
-    private static let fullGlowVolts = 0.04
     var subscriptions: [EventSubscription] = []
 
     static let northColor = DesignTokens.Palette.positiveUI
@@ -107,144 +101,16 @@ final class MagnetismRenderer {
 
     /// World → model coordinates, through however the view is scaled
     /// and turned. Every hand and head position enters the model here.
-    /// Faraday's law with a face: a filament in the coil's bore that
-    /// glows with the induced EMF, and a millivolt readout when it is
-    /// worth reading. Wave a magnet through the coil — the harder you
-    /// pump, the brighter it burns. The coil needs no battery for
-    /// this; that is the entire point.
-    /// Opacity steps for the induction filament, banked once.
-    private static let filamentSteps = 12
-    private static let filamentMaterials: [UnlitMaterial] =
-        (0..<filamentSteps).map { step in
-            var material = UnlitMaterial(
-                color: UIColor(red: 1.0, green: 0.85, blue: 0.55, alpha: 1))
-            let level = Float(step) / Float(filamentSteps - 1)
-            material.blending = .transparent(
-                opacity: .init(floatLiteral: 0.25 + 0.75 * level))
-            return material
-        }
-    private var filamentBucket = -1
-
-    private func syncInduction(_ model: MagnetismModel) {
-        guard model.electromagnetOn else {
-            inductionGlow.isEnabled = false
-            inductionCallout?.isEnabled = false
-            return
-        }
-        if inductionGlow.parent == nil { viewRoot.addChild(inductionGlow) }
-        let level = Float(min(abs(model.inducedEMF) / Self.fullGlowVolts, 1))
-        inductionGlow.position = SIMD3<Float>(model.electromagnetPosition)
-        inductionGlow.isEnabled = level > 0.03
-        if inductionGlow.isEnabled {
-            // The brightness is continuous; the MATERIAL is not. This
-            // used to build a fresh `UnlitMaterial` on every frame the
-            // filament burned — which is every frame a magnet is moving,
-            // the one time the module is busiest. Twelve banked steps
-            // are indistinguishable from the ramp, and a step that has
-            // not changed writes nothing.
-            let bucket = min(max(Int(level * Float(Self.filamentSteps - 1) + 0.5), 0),
-                             Self.filamentSteps - 1)
-            if filamentBucket != bucket {
-                filamentBucket = bucket
-                inductionGlow.model?.materials = [Self.filamentMaterials[bucket]]
-            }
-            inductionGlow.scale = SIMD3(repeating: 0.7 + 0.9 * level)
-        }
-        if inductionCallout == nil {
-            let callout = Callout(color: UIColor(red: 1.0, green: 0.85, blue: 0.55, alpha: 1),
-                                  textSize: 0.018, offset: SIMD3(0, 0.10, 0))
-            viewRoot.addChild(callout.root)
-            inductionCallout = callout
-        }
-        let showText = level > 0.08
-        inductionCallout?.isEnabled = showText
-        if showText {
-            inductionCallout?.anchor(at: SIMD3<Float>(model.electromagnetPosition))
-            inductionCallout?.setText(String(format: "ε %.0f mV", model.inducedEMF * 1000))
-        }
-    }
-
     func displayPoint(fromWorld world: SIMD3<Float>) -> SIMD3<Double> {
         SIMD3<Double>(viewRoot.convert(position: world, from: nil))
     }
 
     func tick(_ model: MagnetismModel, viewer: SIMD3<Double>? = nil) {
         tickSounds(model)
-        syncElectromagnet(model)
         syncMagnets(model)
         syncFieldLines(model)
         syncCompasses(model, viewer: viewer.map(SIMD3<Float>.init))
         syncHandCompass(model)
-    }
-
-    // MARK: The electromagnet the circuit bench powers
-
-    static let electromagnetName = "electromagnet"
-    private let coilRoot = Entity()
-    private var coilBuilt = false
-    private var coilCallout: Callout?
-
-    private func buildElectromagnet() {
-        coilBuilt = true
-        coilRoot.name = Self.electromagnetName
-
-        // An iron core with copper windings — a solenoid anyone would
-        // recognise, sized to the coil radius the physics uses.
-        let radius = Float(MagnetismModel.coilRadius)
-        let core = ModelEntity(
-            mesh: .generateCylinder(height: radius * 2.4, radius: radius * 0.52),
-            materials: [Materials.machined(UIColor(white: 0.42, alpha: 1))])
-        core.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-        coilRoot.addChild(core)
-
-        // The winding, as a real helix swept along the axis.
-        let turnsShown = 14
-        let stepsPerTurn = 16
-        var helix: [SIMD3<Float>] = []
-        for step in 0...(turnsShown * stepsPerTurn) {
-            let t = Float(step) / Float(turnsShown * stepsPerTurn)
-            let angle = t * Float(turnsShown) * 2 * .pi
-            helix.append(SIMD3((t - 0.5) * radius * 2.2,
-                               cos(angle) * radius * 0.78,
-                               sin(angle) * radius * 0.78))
-        }
-        if let mesh = TubeMesh.tube(lines: [helix], radius: 0.0045, sides: 5) {
-            coilRoot.addChild(ModelEntity(
-                mesh: mesh,
-                // A driven winding is genuinely warm, so this is the
-                // one metal here that keeps a glow.
-                materials: [Materials.machined(DesignTokens.Palette.copperUI,
-                                               glow: 0.12)]))
-        }
-
-        let callout = Callout(color: DesignTokens.Palette.copperUI,
-                              textSize: 0.024, offset: SIMD3(0, 0.12, 0))
-        coilCallout = callout
-        coilRoot.addChild(callout.root)
-
-        Grabbable.configureTouchTarget(coilRoot, collisionRadius: radius * 1.6)
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Electromagnet. Its strength is the current your circuit bench is delivering."
-        coilRoot.components.set(accessibility)
-        viewRoot.addChild(coilRoot)
-    }
-
-    private func syncElectromagnet(_ model: MagnetismModel) {
-        if !coilBuilt { buildElectromagnet() }
-        coilRoot.isEnabled = model.electromagnetOn
-        syncInduction(model)
-        guard model.electromagnetOn else { return }
-        // Every frame, held or not — see `syncHandCompass`.
-        coilRoot.position = SIMD3<Float>(model.electromagnetPosition)
-        coilRoot.orientation = simd_quatf(
-            from: [1, 0, 0], to: SIMD3<Float>(simd_normalize(model.electromagnetAxis)))
-        // The coil says what the circuit is giving it: no current, no
-        // magnet — which is exactly what opening the switch does.
-        coilCallout?.setText(String(
-            format: "%.3f A   m = %.2f A·m²",
-            model.coilCurrent, model.electromagnetMoment))
-        coilCallout?.anchor(at: SIMD3(0, Float(MagnetismModel.coilRadius) * 1.2, 0))
     }
 
     // MARK: The compass you carry
@@ -364,8 +230,8 @@ final class MagnetismRenderer {
         // this shape only makes sense against a system-driven
         // `ManipulationComponent`, and `configureTouchTarget` does not
         // install one — it sets a collider and nothing else. The compass
-        // and the coil kept the defect for months because nobody had
-        // tried to carry either of them.
+        // kept the defect for months because nobody had tried to carry
+        // it.
         handCompass.position = SIMD3<Float>(model.compassPosition)
         let field = model.compassField
         let magnitude = simd_length(field)
@@ -688,7 +554,7 @@ final class MagnetismRenderer {
         lineGlowEntity.isEnabled = model.showFieldLines
         arrowHeads.root.isEnabled = model.showFieldLines
         guard model.showFieldLines else { return }
-        let sources = model.allSources
+        let sources = model.magnets
         guard sources != lastLineInputs else { return }
         lastLineInputs = sources
         linesPipeline?.submit(LinesJob(magnets: sources))
@@ -750,7 +616,7 @@ final class MagnetismRenderer {
         // Hide needles too close to a magnet (inside the singular near
         // field), where the field is too weak to read, or right in the
         // viewer's face.
-        let magnets = model.allSources
+        let magnets = model.magnets
         let eye = viewer ?? SIMD3<Float>(0, 1.5, 0)
         for (index, needle) in needles.enumerated() {
             let gridPoint = Self.gridPoints[index]

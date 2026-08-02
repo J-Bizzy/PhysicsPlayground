@@ -129,8 +129,7 @@ final class Multimeter {
     }
 
     /// What the face says. An armed meter with nothing probed yet says so
-    /// rather than showing a confident 0.00 V — the same honesty the
-    /// coil's "no inductor on the bench" line exists for.
+    /// rather than showing a confident 0.00 V.
     private static func text(armed: Bool,
                              reading: CircuitsModel.MultimeterReading?) -> String {
         guard armed else { return "" }

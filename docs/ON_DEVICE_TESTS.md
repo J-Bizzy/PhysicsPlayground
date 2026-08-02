@@ -76,7 +76,7 @@ pass, and are the ones worth doing first.
       plaque is the app's voice, full stop; motion still stills for the
       SYSTEM accessibility setting.
 
-## Circuit Workshop — and the app's one wired pair
+## Circuit Workshop
 
 - [ ] **The loop is live on arrival.** Pinch the switch lever: the bulb
       goes out, the electron beads stop.
@@ -97,7 +97,7 @@ pass, and are the ones worth doing first.
       a radial distance.
 - [ ] **Two-handed pinch the bench**: it zooms. Past 4× you should be
       standing among the drifting electrons (Electron View's floor).
-### ⟳ The meter and the coil switch
+### ⟳ The meter
 
 Both left the panel. **Not looked at yet.**
 
@@ -119,31 +119,13 @@ Both left the panel. **Not looked at yet.**
       restored one of the four bank states, so Reset handed back a bench
       still swollen to 4× under three lit plates.
 
-- [ ] **THE WIRED PAIR.** Add an inductor, wire it into a live loop,
-      then throw the **Electromagnet coil** switch — it stands on the run
-      to the RIGHT of the bench, wearing Magnetism's magenta rather than
-      Circuits' accent, because what it summons belongs to the other
-      bench. The magnetic field should stand up beyond it with a visible
-      cable running from your inductor to its coil.
-  - [ ] ⟳ **The switch is ON the cable run**, between bench and coil —
-        that adjacency is the point. Throwing it and watching the cable
-        it belongs to wake up is the demonstration.
-  - [ ] Beads travel along the cable, faster with more current.
-  - [ ] **Open the switch → the coil dies**, the beads stop, and the
-        bar magnets near it fall still. This is the app's best single
-        demonstration; if it does not read, nothing else here matters.
-  - [ ] **Carry a bar magnet through the coil** → the Coil EMF number
-        jumps. Hold it still inside → it falls to zero.
-  - [ ] **Two-handed pinch a MAGNET** → the field zooms and the bench
-        does NOT.
-  - [ ] Switch the coil off → the whole annex folds away cleanly.
-- [ ] **Pause freezes the pair together** — never a frozen circuit
-      driving a live magnet.
+- [ ] **Nothing but the bench is in the room.** No coil, no cable, no
+      second apparatus — Circuit Workshop stands alone.
 
-## Magnetism (alone)
+## Magnetism
 
-- [ ] **No coil, no cable.** The electromagnet belongs to Circuit
-      Workshop; arriving here it must be off.
+- [ ] **Nothing but the magnets is in the room.** Bar magnets, the
+      compass grid, the hand compass — no coil and no cable.
 - [ ] Carry a magnet toward another: they pull head-to-tail, push
       N-to-N, and swing to align.
 - [ ] ⟳ **Two attracting magnets COME TO REST.** They should glide
@@ -551,8 +533,7 @@ fire rather than latching. It must never read as a layer-bank plate.
 - [ ] **Electric Fields — Clear all**, above the well column. Dim when
       there are no charges, and a tap on it while dim must fall through
       rather than be swallowed.
-- [ ] **Circuit Workshop — Clear bench**, mirroring the coil switch on
-      the far left.
+- [ ] **Circuit Workshop — Clear bench**, on the bench's far left flank.
 - [ ] **Gravity Lab — Twin suns** and **Worlds**, below the clock bank.
 
 **The confirmation, on both Clear plates that have one:**
@@ -613,8 +594,8 @@ Each floats on the thing it describes and must never intercept a pinch.
 
 - [ ] ⟳ **Every rail in the app hangs under the thing it adjusts.**
       `Bloom` is shared by eight modules, so this moved everywhere at
-      once: Circuits, the coil annex, Electric Fields (charge and
-      probe), Kinematics, Pendulums, Magnetism and Gravity Lab. The
+      once: Circuits, Electric Fields (charge and probe), Kinematics,
+      Pendulums, Magnetism and Gravity Lab. The
       stack is always petals / object / rail / number.
 - [ ] ⟳ **Every ring folds in place.** Same class of fix, same eight
       modules.

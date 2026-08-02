@@ -16,21 +16,7 @@ import RenderKit
 
 struct CircuitsSpaceView: View {
     @Environment(CircuitsModel.self) private var model
-    @Environment(MagnetismModel.self) private var magnetism
     @State private var renderer: CircuitsRenderer?
-    /// The one wired pair in the app: the magnetic field, standing to
-    /// the bench's right and cabled to its inductor, present ONLY while
-    /// the electromagnet is switched on. This is wiring, not layout —
-    /// the coil's current IS this bench's inductor current, and the
-    /// demonstration cannot exist with one bench (DECISIONS.md,
-    /// 2026-07-30). Switch it off and the whole annex folds away.
-    @State private var coilAnnex: EMFieldStation?
-    @State private var feed: EMFeedLine?
-
-    /// Where the annex stands: to the right, clear of the bench's build
-    /// box (x ≤ 0.72) by the field's own half-width (0.65) plus 6 cm.
-    /// Verified disjoint by `CircuitsCoilAnnexTests`.
-    static let coilAnnexOffset = SIMD3<Float>(1.43, 0, -0.2)
     @State private var bloom = Bloom()
     /// Which component's ring is open — shared by the tap gesture and
     /// the render loop (see RingState's header).
@@ -58,17 +44,6 @@ struct CircuitsSpaceView: View {
     @State private var layers: SpatialLayerBank?
     /// The bench's meter — a tool, not a layer. See `Multimeter`.
     @State private var meter: Multimeter?
-    /// The coil's switch, standing ON the cable run between the bench and
-    /// the annex rather than in the window.
-    ///
-    /// A bank of ONE, and that is right here where it would be wrong on
-    /// the display bank: this switch is not one of a set of view options,
-    /// it is the thing that summons a second apparatus and runs a cable
-    /// to it. Putting it physically on the run is what makes the pair
-    /// legible — you throw the switch and watch the cable it belongs to
-    /// wake up. (Contrast Pendulums, where a lone plate beside a bank of
-    /// four would just have been a stray.)
-    @State private var coilSwitch: SpatialLayerBank?
     /// The bench's one standing verb: clear it. See `clearAnchor`.
     @State private var verbs: SpatialActionBank?
 
@@ -78,10 +53,7 @@ struct CircuitsSpaceView: View {
     /// Left of the bench, mirroring the layers bank on the right.
     private static let meterAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-0.62, -0.03, 0.16)
-    /// On the way to the annex, clear of the layers bank's widest label.
-    private static let coilSwitchAnchor = CircuitsRenderer.benchPivot
-        + SIMD3<Float>(1.02, -0.02, 0.10)
-    /// The Clear plate, mirroring the coil switch across the bench.
+    /// The Clear plate, on the bench's far left flank.
     ///
     /// It went beside the TRAY first, on the reasoning that the tray is
     /// where every part came from — the pairing Electric Fields makes
@@ -94,11 +66,10 @@ struct CircuitsSpaceView: View {
     /// `FieldInstrumentLayout`'s "reachable by the arithmetic, invisible
     /// in practice" in a second module.
     ///
-    /// So it takes the free flank instead, at the coil switch's own
-    /// height and its exact mirror in x. The bench's furniture now reads
-    /// as a row at one height — meter, bench, layers, coil switch — with
-    /// this at the far end, rather than one stray plate down among the
-    /// parts.
+    /// So it takes the free flank instead, at the furniture's own
+    /// height. The bench's furniture now reads as a row at one height —
+    /// meter, bench, layers — with this at the far end, rather than one
+    /// stray plate down among the parts.
     ///
     /// This is the most dangerous of the seven verbs that left the
     /// window. Circuit Workshop's bench PERSISTS ACROSS LAUNCHES
@@ -131,6 +102,14 @@ struct CircuitsSpaceView: View {
                     .init(id: "truespeed", label: "True speed", symbol: "tortoise",
                           isOn: { model.trueSpeedMode },
                           toggle: { model.trueSpeedMode.toggle() }),
+                    // The bench's own field. It replaces the
+                    // electromagnet annex, and it makes the smaller,
+                    // truer claim: EVERY wire here has a field around
+                    // it, not just one wound into a coil.
+                    .init(id: "bfield", label: "Magnetic field",
+                          symbol: "circle.hexagongrid",
+                          isOn: { model.showMagneticField },
+                          toggle: { model.showMagneticField.toggle() }),
                     .init(id: "skyline", label: "Voltage skyline", symbol: "building.2",
                           isOn: { model.showVoltageHeights },
                           toggle: { model.showVoltageHeights.toggle() }),
@@ -154,21 +133,6 @@ struct CircuitsSpaceView: View {
             renderer.root.addChild(multimeter.root)
             self.meter = multimeter
 
-            let coil = SpatialLayerBank(
-                accent: UIColor(DesignTokens.Palette.magnetismAccent),
-                layers: [
-                    // Magnetism's accent, not Circuits', because the thing
-                    // this summons belongs to the other bench. The colour
-                    // is the only warning you get that flicking it stands
-                    // an apparatus up beside you.
-                    .init(id: "coil", label: "Electromagnet coil",
-                          symbol: "bolt.horizontal",
-                          isOn: { magnetism.electromagnetOn },
-                          toggle: { magnetism.electromagnetOn.toggle() }),
-                ])
-            renderer.root.addChild(coil.root)
-            self.coilSwitch = coil
-
             // Clearing the bench, off the window panel. Same parenting
             // rule as everything above: under `root`, so an 8× zoom
             // cannot carry it away.
@@ -183,20 +147,6 @@ struct CircuitsSpaceView: View {
                 ])
             renderer.root.addChild(benchVerbs.root)
             self.verbs = benchVerbs
-
-            // The coil annex is installed from launch and ENABLED by the
-            // switch: RealityKit teardown mid-gesture is the fiddly
-            // path, isEnabled is the honest one. Disabled, it renders
-            // nothing, hit-tests nothing, and costs nothing per frame
-            // (its tick is gated below).
-            let annex = EMFieldStation(model: magnetism,
-                                       offset: Self.coilAnnexOffset)
-            let feedLine = EMFeedLine()
-            annex.install(into: content)
-            content.add(feedLine.root)
-            annex.root.isEnabled = magnetism.electromagnetOn
-            self.coilAnnex = annex
-            self.feed = feedLine
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
@@ -217,8 +167,6 @@ struct CircuitsSpaceView: View {
                         anchor: CircuitsRenderer.benchPivot + SIMD3(0.62, -0.06, 0.16),
                         viewer: viewer,
                         dt: event.deltaTime)
-                    coilSwitch?.update(anchor: Self.coilSwitchAnchor,
-                                       viewer: viewer, dt: event.deltaTime)
                     meter?.update(anchor: Self.meterAnchor, viewer: viewer,
                                   armed: model.multimeterArmed,
                                   reading: model.multimeterReading)
@@ -232,27 +180,6 @@ struct CircuitsSpaceView: View {
                     renderer?.tick(dt: event.deltaTime, model: model)
                     if let renderer {
                         syncBloom(renderer: renderer, dt: event.deltaTime)
-                    }
-
-                    // The wired pair. The bench has already solved, so
-                    // the current the coil reads is this frame's, not
-                    // last frame's — the ordering the old cross-module
-                    // link could never guarantee.
-                    annex.root.isEnabled = magnetism.electromagnetOn
-                    feedLine.root.isEnabled = magnetism.electromagnetOn
-                    if magnetism.electromagnetOn, let renderer {
-                        let current = model.inductorCurrent
-                        annex.tick(dt: event.deltaTime, appModel: appModel,
-                                   coilCurrent: current)
-                        feedLine.update(
-                            benchLeads: Self.inductorLeads(renderer: renderer,
-                                                           model: model),
-                            coilLeads: annex.coilLeads,
-                            current: current,
-                            speed: CircuitsRenderer.electronDisplaySpeed(
-                                current: current, model: model),
-                            isPaused: model.isPaused,
-                            dt: event.deltaTime)
                     }
                 }
             )
@@ -268,29 +195,6 @@ struct CircuitsSpaceView: View {
             // cannot be screenshot from the CLI at all.
             if UserDefaults.standard.bool(forKey: "electronView") {
                 model.electronView = true
-            }
-            // `-emLink 1` stages the pair's whole point — a driven coil
-            // with the cable running to it — at launch. The simulator
-            // has no hands to wire an inductor with, so without this
-            // the demonstration cannot be screenshot from the CLI.
-            if UserDefaults.standard.bool(forKey: "emLink") {
-                model.clearBench()
-                model.add(.battery)
-                model.add(.switcher)
-                model.add(.inductor)
-                model.add(.bulb)
-                let parts = model.components
-                if parts.count == 4 {
-                    // Terminal-to-terminal round the ring, closing on
-                    // the battery it started from.
-                    let loop = [(0, 1), (1, 0), (1, 1), (2, 0),
-                                (2, 1), (3, 0), (3, 1), (0, 0)]
-                    for (part, end) in loop {
-                        model.tapTerminal(.init(componentID: parts[part].id,
-                                                end: end))
-                    }
-                    magnetism.electromagnetOn = true
-                }
             }
             // `-skyline 1` raises the voltage towers at launch. Same
             // reason as the two above: the toggle lives on the layers
@@ -315,6 +219,13 @@ struct CircuitsSpaceView: View {
             if UserDefaults.standard.bool(forKey: "circRing"),
                let first = model.components.first {
                 ring.openID = first.id
+            }
+            // `-circField 1` switches on the bench's own magnetic
+            // field. The plate is on the layers bank and the simulator
+            // has no finger to flick it with, and this is the one layer
+            // whose whole content is invisible until it is on.
+            if UserDefaults.standard.bool(forKey: "circField") {
+                model.showMagneticField = true
             }
             // `-circClear 1` ARMS the Clear plate — it does not fire it.
             // Firing would photograph an empty bench, which looks the
@@ -341,19 +252,10 @@ struct CircuitsSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
-                    // The coil annex owns its own tap grammar (magnet
-                    // rings). Routed by ancestry, exactly as the merged
-                    // world routed — the annex is the one place that
-                    // pattern survives.
-                    if let coilAnnex, value.entity.isDescendant(of: coilAnnex.root) {
-                        _ = coilAnnex.handleTap(value.entity)
-                        return
-                    }
                     // Ring petals first; then the bench's own tap
                     // grammar (terminals wire, wires delete, levers
                     // flip, bodies toggle their control ring).
                     if layers?.handleTap(value.entity) == true { return }
-                    if coilSwitch?.handleTap(value.entity) == true { return }
                     // Ahead of `handleTap(on:)`, which is what reads a
                     // TERMINAL — the meter stands among the bench's
                     // terminals by design, and arming it must not also
@@ -381,12 +283,6 @@ struct CircuitsSpaceView: View {
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
                 .onChanged { value in
-                    // The annex's magnets are grabbable the moment they
-                    // exist — its handler converts into its own frame.
-                    if let coilAnnex, value.entity.isDescendant(of: coilAnnex.root) {
-                        coilAnnex.dragChanged(value)
-                        return
-                    }
                     guard let renderer else { return }
                     // Into the BENCH's own frame, not the room's. The
                     // bench can be zoomed (Electron View, two hands) and
@@ -417,11 +313,6 @@ struct CircuitsSpaceView: View {
                     }
                 }
                 .onEnded { value in
-                    // Ended goes to the annex too, wherever the hand
-                    // finished — a drag that starts on a magnet and ends
-                    // over the bench must still release the magnet, and
-                    // its end-handler is a no-op with no drag in flight.
-                    coilAnnex?.dragEnded(value)
                     bloom.endGrip()
                     defer {
                         renderer?.hideRubberBand()
@@ -462,38 +353,7 @@ struct CircuitsSpaceView: View {
                     }
                 }
         )
-        // Routed, not bare: `spatialScale(_:)` targets any entity, so a
-        // two-handed pinch on the annex's magnets would zoom the bench
-        // and the field together. The lesson the merged world paid for.
-        .spatialScale(rigs: rigs, routing: rig(forEntity:))
-    }
-
-    private var rigs: [SpatialScaleRig] {
-        [scaleRig, coilAnnex?.scaleRig ?? nil].compactMap { $0 }
-    }
-
-    private func rig(forEntity entity: Entity) -> SpatialScaleRig? {
-        if let coilAnnex, entity.isDescendant(of: coilAnnex.root) {
-            return coilAnnex.scaleRig ?? nil
-        }
-        return scaleRig
-    }
-
-    /// Where the feed line leaves the bench — the inductor's two
-    /// terminals, converted out of the bench's own zoomed, offset frame:
-    /// at 4x the terminals are somewhere quite different from where the
-    /// model put them, and the cable has to meet them where they look.
-    /// Nil with no inductor on the bench, which the feed line renders
-    /// as no cable.
-    private static func inductorLeads(
-        renderer: CircuitsRenderer, model: CircuitsModel
-    ) -> (SIMD3<Float>, SIMD3<Float>)? {
-        guard let inductor = model.components.first(where: { $0.kind == .inductor })
-        else { return nil }
-        return (renderer.viewRoot.convert(
-                    position: SIMD3<Float>(inductor.terminalPosition(0)), to: nil),
-                renderer.viewRoot.convert(
-                    position: SIMD3<Float>(inductor.terminalPosition(1)), to: nil))
+        .spatialScale(scaleRig)
     }
 
     /// Resolves what the pinch landed on and opens the right session:

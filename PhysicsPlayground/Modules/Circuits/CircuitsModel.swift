@@ -32,14 +32,9 @@ final class CircuitsModel {
     ///
     /// This was a 3 m *sphere* — "the only restriction: a generous reach
     /// from the build center" — which was true and harmless while the
-    /// bench owned the room. In the E&M world the magnetic field stands
-    /// 1.33 m to the right and the charges straight ahead, so a 3 m
-    /// reach means a resistor can be parked inside either of them. A box
-    /// rather than a sphere because that is what the station layout
-    /// promises and what `CircuitsModelTests.assertOnTheBench` checks
-    /// — and, since the bench can summon the magnetic field beside it
-    /// (the coil annex), what keeps a dragged part out of that field's
-    /// volume (`CircuitsCoilAnnexTests`).
+    /// bench owned the room — a 3 m reach means a resistor can be parked
+    /// most of the way across it. A box rather than a sphere because
+    /// that is what `CircuitsModelTests.assertOnTheBench` checks.
     ///
     /// Sized about the build centre (z = −0.9), slightly shallower in
     /// z than the bench's visual footprint about its pivot (z = −0.85).
@@ -927,6 +922,16 @@ final class CircuitsModel {
     /// The signature 3-D view: raise every node to a height equal to
     /// its voltage, so potential becomes terrain.
     var showVoltageHeights = false
+
+    /// Draw the magnetic field the bench's own current makes.
+    ///
+    /// This is what replaced the electromagnet annex (2026-08-02). The
+    /// annex answered "a current is a magnet" by standing a SECOND
+    /// apparatus in the room and cabling to it; this answers the same
+    /// question with the bench you already built, which is both the
+    /// smaller claim and the truer one — every wire here has a field
+    /// around it, not just the one wound into a coil.
+    var showMagneticField = false
     /// The Electron View toggle: the whole bench swells around the user.
     var electronView = false
     /// The latest failure explanation (shown until the part is replaced).
@@ -1172,15 +1177,65 @@ final class CircuitsModel {
         step(dt: 1.0 / 90.0)
     }
 
-    // MARK: The bridge to the field bench
+    // MARK: The bench's own magnetic field
+
+    /// Every current-carrying straight run on the bench, for
+    /// `WireField`.
+    ///
+    /// Two kinds of segment, and both are needed for the field to close
+    /// the way a real loop's does:
+    ///
+    /// - each COMPONENT, from its terminal 0 to its terminal 1, carrying
+    ///   the current the solver put through it;
+    /// - each WIRE, carrying the current of the component it leaves.
+    ///
+    /// The wire's current is read from the component at its `from` end
+    /// because a wire is not an element in the nodal solve — it is a
+    /// short, so whatever flows into it flows out, and that is the
+    /// current of the branch it belongs to. In a series loop every
+    /// segment then carries the same amps, which is exactly what makes
+    /// the field around a loop look like a loop's.
+    ///
+    /// SIGNED, and the sign is the direction of flow: a segment written
+    /// terminal-0-to-terminal-1 with negative amps is current running the
+    /// other way, and `WireField` reverses the field for it. Take the
+    /// signs out and a loop's two sides would reinforce instead of
+    /// opposing, which is the one error that would look plausible.
+    var currentSegments: [WireField.Segment] {
+        var segments: [WireField.Segment] = []
+        segments.reserveCapacity(components.count + wires.count)
+
+        for component in components {
+            guard let amps = readouts[component.id]?.amps, amps != 0 else { continue }
+            segments.append(.init(a: component.terminalPosition(0),
+                                  b: component.terminalPosition(1),
+                                  current: amps))
+        }
+        for wire in wires {
+            guard let amps = readouts[wire.from.componentID]?.amps,
+                  amps != 0 else { continue }
+            guard let from = components.first(where: { $0.id == wire.from.componentID }),
+                  let to = components.first(where: { $0.id == wire.to.componentID })
+            else { continue }
+            // A wire leaving terminal 1 carries the branch current in the
+            // same sense the component does; leaving terminal 0 it is
+            // running back into it, so the sign flips.
+            segments.append(.init(a: from.terminalPosition(wire.from.end),
+                                  b: to.terminalPosition(wire.to.end),
+                                  current: wire.from.end == 1 ? amps : -amps))
+        }
+        return segments
+    }
+
+    /// B at a point in the room, tesla — the bench's field and nothing
+    /// else. Earth's field is Magnetism's business, not this bench's.
+    func magneticField(at point: SIMD3<Double>) -> SIMD3<Double> {
+        WireField.field(at: point, segments: currentSegments)
+    }
+
+    // MARK: Inductor current
 
     /// The current through the bench's inductor, in amps.
-    ///
-    /// A coil carrying a current is a magnet (m = N·I·A), so this one
-    /// number is the whole link between Circuit Workshop and the
-    /// magnetic bench in Fields: wire an inductor into a live loop and
-    /// its current becomes an electromagnet over there, with the poles
-    /// your battery's polarity implies. Open the switch and it dies.
     ///
     /// Sums every inductor on the bench, so two coils in series read as
     /// the current they share and a second parallel branch adds to it.
@@ -1222,6 +1277,7 @@ final class CircuitsModel {
         showElectronFlow = true
         trueSpeedMode = false
         showVoltageHeights = false
+        showMagneticField = false
         electronView = false
         // The meter is a tool now, standing armed-or-not on the bench,
         // so it has a lamp too. Its `didSet` drops both probes.

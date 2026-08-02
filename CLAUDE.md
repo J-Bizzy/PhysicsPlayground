@@ -29,7 +29,7 @@ Three suites, and the split is about what each CAN reach:
 
 The simulator can't be gaze-pinched, so debug launch args drive a module into a given state for CLI screenshots: `-openModule <id>`, `-studioMode 1`, `-startPaused 1`, `-pauseAfter <seconds>`, `-paletteOpen 1`, plus per-module ones. Full list in `AppModel.init`.
 
-The home's display type is no longer a setting: the machined plaque ships, pinned in code as `HubTitleStyle.shipping` (2026-07-31). The specimen wall and the Settings picker that hung it are both gone — the other three voices stay in `HubTitleStyle` as the alternatives the choice was made against. `-electronView 1` shrinks the bench into the copper (its switch is a plate on the in-room layers bank, which the simulator cannot press). `-openModule circuits -emLink 1` stages the app's one wired pair — a driven coil with the cable running to it — since the simulator has no hands to wire an inductor with. The coil annex reads `-viewScale.field`; single-apparatus scenes read the bare `-viewScale`.
+The home's display type is no longer a setting: the machined plaque ships, pinned in code as `HubTitleStyle.shipping` (2026-07-31). The specimen wall and the Settings picker that hung it are both gone — the other three voices stay in `HubTitleStyle` as the alternatives the choice was made against. `-electronView 1` shrinks the bench into the copper (its switch is a plate on the in-room layers bank, which the simulator cannot press). Scenes read the bare `-viewScale`.
 
 **Gravity Lab's orbit ring is its centrepiece and cannot be pinched from the CLI**: `-selectBody <name>` picks the planet whose ring is drawn, and `-apsisDrag near|far,<factor>` actually RESHAPES that orbit — `-apsisDrag far,2.2` pulls apoapsis out to 2.2× its radius. It has no panel at all: the display layers are a switch bank, G is a rail, and the star's mass is a bead on the star, so all three need `-openModule gravitylab` plus a hand or an argument. `-gravRing 1` opens a body's control ring; `-predict 1` arms the ghost.
 
@@ -39,7 +39,7 @@ The home's display type is no longer a setting: the machined plaque ships, pinne
 - **Pendulums** — `-penGravity <m/s²>`, `-penTime <×>`, `-penLayers 1` (lights all five plates), `-penRing 1` (also the only way to see the floating readout card); and for the Foucault rig, which is hidden until armed: `-penFoucault <latitude>` and `-penSpin <×Earth>`.
 - **Magnetism** — `-magLayers 0` darkens all four plates (the scene opens with three lit, and there is no finger to flick them with), `-magRing 1`, `-magFrozen 1`.
 - **Projectiles** — `-kinGravity <m/s²>` (also lights the matching world disc), `-kinWind <m/s>` (switches the air on, since the wind rail does not exist without it), `-kinBalls 1`, `-kinWalls 1`.
-- **Circuits** — `-electronView 1`, `-trueSpeed 1`, `-emLink 1`, `-circRing 1`, `-circClear 1`.
+- **Circuits** — `-electronView 1`, `-trueSpeed 1`, `-circRing 1`, `-circClear 1`.
 
 **A destructive plate is screenshot ARMED, never fired.** `-emClear 1`, `-circClear 1` put the plate into its armed state (lit lamp, nameplate swapped to "Tap again") and hold it there past the four-second timer, because firing photographs an empty room — which looks the same as a room nobody filled. Gravity Lab's two verbs are `-gravBinary 1` and `-gravWorlds 1` (the ten-preset fan); Pendulums' Resonance plate deliberately has no argument, and its own code says why.
 

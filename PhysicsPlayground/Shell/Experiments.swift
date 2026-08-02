@@ -171,8 +171,7 @@ enum ExperimentCatalog {
         ]
     }
 
-    /// The magnetic bench's experiments, folded into the merged Fields
-    /// module's list.
+    /// The magnetic bench's experiments.
     private static func magnetismExperiments(_ model: MagnetismModel)
     -> [(experiment: Experiment, isMet: () -> Bool)] {
         [
@@ -192,40 +191,6 @@ enum ExperimentCatalog {
                         detail: "Get all four bar magnets into the field at once.",
                             step: "Tap Add magnet until four are floating."),
              { model.magnets.count >= 4 }),
-        ]
-    }
-
-    /// The experiments that exist ONLY because the two benches share a
-    /// room. Each one needs both halves of the world at once, which is
-    /// precisely what neither module could ask for while they were
-    /// separate entries a hub apart.
-    private static func linkExperiments(appModel: AppModel)
-    -> [(experiment: Experiment, isMet: () -> Bool)] {
-        let circuits = appModel.circuitsModel
-        let magnetism = appModel.magnetismModel
-        return [
-            (Experiment(id: "em.powered", title: "Electromagnet",
-                        detail: "Drive the coil from your own circuit — a current in a loop of wire IS a magnet.",
-                        step: "Flick the electromagnet switch standing on the cable run to the bench's right, then drag an inductor off the tray and wire it into the live loop. The cable carries the current across to the coil."),
-             { magnetism.electromagnetOn && abs(circuits.inductorCurrent) > 0.01 }),
-
-            (Experiment(id: "em.reach", title: "Action at a distance",
-                        detail: "Push a bar magnet around using nothing but the current in your circuit.",
-                        step: "With the coil powered, carry a bar magnet close to it — or carry the coil to the magnets — until the coil's field is what's moving them."),
-             {
-                 // The honest test is the force the coil actually
-                 // exerts, not proximity: a dead coil sitting next to a
-                 // magnet must not count.
-                 guard let coil = magnetism.electromagnet else { return false }
-                 return magnetism.magnets.contains {
-                     simd_length(MagneticField.netForce(on: $0, from: [coil])) > 1e-4
-                 }
-             }),
-
-            (Experiment(id: "em.faraday", title: "Run it backwards",
-                        detail: "Make the coil generate instead of consume — ε = −N dΦ/dt.",
-                        step: "With the coil on, sweep a bar magnet through it. The coil's EMF readout jumps while the magnet MOVES, and falls to zero the moment you hold it still."),
-             { abs(magnetism.inducedEMF) > 0.001 }),
         ]
     }
 
@@ -276,7 +241,6 @@ enum ExperimentCatalog {
                          && abs(model.readouts[component.id]?.amps ?? 0) > 0.005
                          && abs(model.readouts[component.id]?.amps ?? 0) < 0.03 } }),
             ]
-            + linkExperiments(appModel: appModel)
         case "electrostatics":
             return chargeExperiments(appModel.electromagnetismModel)
         case "magnetism":
