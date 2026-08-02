@@ -54,6 +54,56 @@ final class RoomModel {
     /// it to decide whether to promise room-aware behaviour in the UI.
     private(set) var hasScannedRoom = false
 
+    /// Why the room is not being sensed, when it is not.
+    ///
+    /// Every failure path in `retain()` used to be a bare `return`. That
+    /// is correct behaviour — the app runs fine without walls, it just
+    /// runs a lesser version of itself — but it was also SILENT. Deny the
+    /// permission and Projectiles quietly stops bouncing off anything,
+    /// occlusion never appears, and Recenter is disabled with a caption
+    /// blaming the simulator. A grep for permission copy across the whole
+    /// app found comments and nothing else: not one user-facing string.
+    ///
+    /// The cases are kept distinct because they call for different
+    /// sentences, and collapsing them would produce the worst kind of
+    /// message — one that tells a simulator user to open Settings.
+    enum Sensing: Equatable {
+        /// Running, or not asked for yet. Nothing to say.
+        case fine
+        /// No provider on this device supports what we need. The
+        /// simulator, mostly. Not the user's fault and not fixable by
+        /// them, so this is FYI rather than a call to action.
+        case unsupported
+        /// The user said no. This one has a remedy.
+        case denied
+        /// Authorized, but `session.run` threw anyway.
+        case failed
+    }
+
+    /// Read by the shell to explain a lesser room. See `Sensing`.
+    private(set) var sensing: Sensing = .fine
+
+    #if DEBUG
+    /// `-roomSensing denied|unsupported|failed` forces the flag, so the
+    /// warning and its copy can be screenshot from the CLI.
+    ///
+    /// This is not optional polish. The three sentences behind this flag
+    /// are user-facing text that ships, and on a headset that granted the
+    /// permission — and in the simulator, which grants it too — there is
+    /// no way to see any of them. Untestable shipping copy is how this
+    /// project ended up with an ARKit prompt advertising a module that
+    /// had been deleted. Applied AFTER `retain()`, so it overrides the
+    /// real result rather than racing it.
+    func forceSensingForDebug() {
+        switch UserDefaults.standard.string(forKey: "roomSensing") {
+        case "denied": sensing = .denied
+        case "unsupported": sensing = .unsupported
+        case "failed": sensing = .failed
+        default: break
+        }
+    }
+    #endif
+
     /// The scene-reconstruction mesh, wearing an occlusion material.
     /// Add it to a module's scene and real furniture starts hiding
     /// virtual content behind it.
@@ -106,7 +156,9 @@ final class RoomModel {
     }
 
     private var clients = 0
-    private var isRunning = false
+    /// Readable so the invariant "`sensing == .fine` iff we are actually
+    /// running" can be asserted; see `RoomSessionTests`.
+    private(set) var isRunning = false
     /// Set BEFORE the first await in `retain()`, not after. See below.
     private var isStarting = false
     private var tasks: [Task<Void, Never>] = []
@@ -172,7 +224,13 @@ final class RoomModel {
         if HandTrackingProvider.isSupported { providers.append(hands) }
         if SceneReconstructionProvider.isSupported { providers.append(sceneMesh) }
         if WorldTrackingProvider.isSupported { providers.append(worldTracking) }
-        guard !providers.isEmpty else { return }   // simulator: nothing to run
+        guard !providers.isEmpty else {
+            sensing = .unsupported
+            #if DEBUG
+            forceSensingForDebug()
+            #endif
+            return   // simulator: nothing to run
+        }
 
         // Authorization is asked for explicitly rather than implicitly by
         // running: a denied provider is another way `run` throws, and
@@ -189,14 +247,25 @@ final class RoomModel {
                 !denied.contains($0)
             }
         }
-        guard !providers.isEmpty else { return }
+        guard !providers.isEmpty else {
+            // Everything we asked for was refused. (A PARTIAL denial
+            // does not land here — the filter above keeps whatever was
+            // granted, so losing hands still leaves you walls.)
+            sensing = .denied
+            return
+        }
 
         do {
             try await session.run(providers)
         } catch {
+            sensing = .failed
             return
         }
+        sensing = .fine
         isRunning = true
+        #if DEBUG
+        forceSensingForDebug()
+        #endif
         if PlaneDetectionProvider.isSupported {
             tasks.append(Task { await self.consumePlanes() })
         }

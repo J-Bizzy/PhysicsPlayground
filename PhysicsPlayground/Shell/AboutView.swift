@@ -22,7 +22,16 @@ struct AboutView: View {
     static let windowID = "about"
 
     var body: some View {
-        VStack(spacing: 14) {
+        // WRAPPED, after the same lesson twice. `.contentSize` pins this
+        // window to exactly what the content asks for, so at an
+        // accessibility text size the copy does not scroll and does not
+        // grow the window — it clips, which is precisely what happened
+        // once already and is recorded above. Trimming the copy fixed it
+        // for DEFAULT type and left AX sizes broken; Settings and the
+        // Notebook are both wrapped for this reason and this was the one
+        // window that was not.
+        ScrollView {
+            VStack(spacing: 14) {
             Image(systemName: "atom")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
@@ -45,8 +54,10 @@ struct AboutView: View {
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(.tertiary)
             }
+            }
+            .padding(28)
+            .frame(maxWidth: .infinity)
         }
-        .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 

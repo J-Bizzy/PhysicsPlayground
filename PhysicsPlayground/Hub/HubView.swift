@@ -90,6 +90,21 @@ struct HubView: View {
     /// UI test target builds and runs the shipping configuration too,
     /// and a hook that vanishes in Release is a hook that cannot test
     /// what ships.
+    ///
+    /// SIGNED OFF FOR RELEASE, consciously, as part of the 2026-08-01
+    /// submission pass. It is the only launch-argument read in the app
+    /// that is live outside `#if DEBUG`, so it deserves a decision rather
+    /// than an oversight, and the decision is that it stays. What it does
+    /// in a shipped build: suppresses the automatic opening of the
+    /// Gallery, leaving the flat catalog up. That is it — no data is
+    /// exposed, nothing is unlocked, and no state is written.
+    ///
+    /// And it is not reachable by a user. Launch arguments come from the
+    /// debugger or from `simctl`; a shipped visionOS app launched from
+    /// the Home View is handed none, and this key is never written to
+    /// `UserDefaults` by any code path in the app. Removing the hook
+    /// would cost the only automated coverage that proves the catalog is
+    /// reachable at all.
     static var isUITesting: Bool {
         UserDefaults.standard.bool(forKey: "uiTesting")
     }

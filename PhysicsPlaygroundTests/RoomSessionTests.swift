@@ -78,4 +78,57 @@ final class RoomSessionTests: XCTestCase {
                       "B still holds the room; the linger must not have torn it down.")
         room.release()
     }
+
+    // MARK: The room says when it cannot see the room
+
+    /// Every failure path in `retain()` used to be a bare `return`, and
+    /// the app said nothing: deny the permission and Projectiles quietly
+    /// stopped bouncing off your walls, occlusion never appeared, and a
+    /// grep for permission copy across the whole app found comments and
+    /// nothing else.
+    ///
+    /// The invariant, and it is the one that matters: **`sensing` may
+    /// only say `.fine` when sensing is actually running.** Every other
+    /// arrangement is the silence this was added to break — an app that
+    /// reports nothing wrong while Projectiles quietly stops bouncing off
+    /// your walls.
+    ///
+    /// Asserted as an iff rather than as a specific case, deliberately.
+    /// The first version of this test asserted `.unsupported` on the
+    /// theory that the simulator supports no ARKit providers; it does
+    /// support some, so the test failed for a reason that had nothing to
+    /// do with the feature. What is true on every machine is the
+    /// relationship, not the branch.
+    @MainActor
+    func testTheRoomNeverClaimsToBeSensingWhenItIsNot() async {
+        let room = RoomModel()
+        XCTAssertEqual(room.sensing, .fine,
+                       "a room nobody has asked for anything has nothing to report")
+
+        await room.retain()
+
+        XCTAssertEqual(
+            room.sensing == .fine, room.isRunning,
+            """
+            After retain() the room is running=\(room.isRunning) but reports \
+            \(room.sensing). `.fine` means "nothing to say"; anything else \
+            means the shell puts a warning in the title bar. Those two have \
+            to agree, or the app is either crying wolf or — the case this \
+            exists for — silently doing less than the user thinks.
+            """)
+        room.release()
+    }
+
+    /// The cases are distinct on purpose, and this is the reason: the
+    /// worst version of this feature is one message with a variable in
+    /// it, telling a simulator user to go and grant a permission they
+    /// were never asked for.
+    func testEachSensingCaseIsDistinct() {
+        let all: [RoomModel.Sensing] = [.fine, .unsupported, .denied, .failed]
+        for (index, one) in all.enumerated() {
+            for other in all[(index + 1)...] {
+                XCTAssertNotEqual(one, other)
+            }
+        }
+    }
 }

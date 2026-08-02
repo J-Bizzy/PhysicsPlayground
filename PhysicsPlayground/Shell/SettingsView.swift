@@ -59,8 +59,13 @@ struct SettingsView: View {
                     Button("Recenter gallery", action: recenter)
                         .font(DesignTokens.TypeScale.control)
                         .disabled(appModel.room.lookRay == nil)
-                    caption("Swings the gallery round to face you. "
-                            + "Needs headset tracking — unavailable in the simulator.")
+                    // The caption used to blame the simulator
+                    // unconditionally, which was true on a Mac and a lie
+                    // on a headset where the user had simply declined the
+                    // permission — the one case where the person reading
+                    // it could actually do something. `RoomModel.sensing`
+                    // knows which it is now.
+                    caption(recenterCaption)
                 }
 
                 section("Onboarding") {
@@ -158,6 +163,25 @@ struct SettingsView: View {
         Text(text)
             .font(DesignTokens.TypeScale.footnote)
             .foregroundStyle(.secondary)
+    }
+
+    /// Why Recenter is unavailable, when it is — and not "the simulator"
+    /// every time. See `RoomModel.Sensing`.
+    private var recenterCaption: String {
+        let lead = "Swings the gallery round to face you. "
+        guard appModel.room.lookRay == nil else { return lead }
+        return switch appModel.room.sensing {
+        case .denied:
+            lead + "Needs to know which way you are facing, which is off: "
+            + "allow World Sensing for Physics Playground in Settings."
+        case .unsupported:
+            lead + "Needs headset tracking — unavailable in the simulator."
+        case .failed:
+            lead + "Headset tracking did not start; reopening the app "
+            + "usually fixes it."
+        case .fine:
+            lead + "Waiting for headset tracking to start."
+        }
     }
 }
 

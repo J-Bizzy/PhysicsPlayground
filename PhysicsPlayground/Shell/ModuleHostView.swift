@@ -37,6 +37,7 @@ struct ModuleHostView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var confirmingReset = false
     @State private var showingLegend = false
+    @State private var showingSensing = false
 
     var body: some View {
         VStack(spacing: 14) {
@@ -72,7 +73,11 @@ struct ModuleHostView: View {
                 // Center: the module's identity.
                 HStack(spacing: 10) {
                     Image(systemName: module.icon)
-                        .font(.system(size: 15, weight: .semibold))
+                        // A semantic style, not a point size: this is
+                        // real text in the largest row of the window, and
+                        // `.system(size: 15)` did not scale with Dynamic
+                        // Type at all.
+                        .font(.headline)
                         .foregroundStyle(module.accent)
                         .frame(width: 30, height: 30)
                         .background(module.accent.opacity(0.18),
@@ -110,6 +115,45 @@ struct ModuleHostView: View {
                 }
                 .accessibilityLabel("Studio Mode")
                 .accessibilityHint("Replaces your room with a dark studio")
+
+                // THE ROOM, when the app cannot see it.
+                //
+                // Shown only when there is something to say, so in the
+                // ordinary case the bar is unchanged. Every failure path
+                // in `RoomModel.retain()` used to be a silent `return`:
+                // deny the permission and Projectiles simply stopped
+                // bouncing off your walls, occlusion never appeared, and
+                // nothing anywhere in the app said why. A capability the
+                // user switched off is the one kind of missing feature
+                // they can actually fix, and it was the one the app was
+                // quietest about.
+                //
+                // It is a popover on the bar rather than a banner under
+                // it for the same reason the legend is: the module window
+                // is a title bar, and a persistent row would be the
+                // beginning of a panel growing back.
+                if appModel.room.sensing != .fine {
+                    Button {
+                        showingSensing.toggle()
+                    } label: {
+                        Image(systemName: "exclamationmark.triangle")
+                    }
+                    .accessibilityLabel("Room sensing unavailable")
+                    .accessibilityHint(Self.sensingHeadline(appModel.room.sensing))
+                    .popover(isPresented: $showingSensing,
+                             attachmentAnchor: .point(.bottom)) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(Self.sensingHeadline(appModel.room.sensing))
+                                .font(DesignTokens.TypeScale.sectionHeader)
+                            Text(Self.sensingDetail(appModel.room.sensing))
+                                .font(DesignTokens.TypeScale.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(20)
+                        .frame(maxWidth: 340)
+                    }
+                }
 
                 // The legend, as a POPOVER rather than a section
                 // stacked under the bar.
@@ -229,5 +273,38 @@ struct ModuleHostView: View {
         .frame(minWidth: 740)
         .glassBackgroundEffect(
             in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
+
+    // The three cases get three sentences, and they are deliberately not
+    // one sentence with a variable in it. The worst version of this
+    // message is the one that tells a simulator user to open Settings and
+    // grant a permission they were never asked for.
+
+    private static func sensingHeadline(_ sensing: RoomModel.Sensing) -> String {
+        switch sensing {
+        case .fine: ""
+        case .unsupported: "This device can't sense your room"
+        case .denied: "Physics Playground can't see your room"
+        case .failed: "Room sensing didn't start"
+        }
+    }
+
+    private static func sensingDetail(_ sensing: RoomModel.Sensing) -> String {
+        switch sensing {
+        case .fine:
+            ""
+        case .unsupported:
+            "Experiments run in open space instead. The physics is "
+            + "identical — only the parts that use your real walls and "
+            + "furniture are missing."
+        case .denied:
+            "Experiments won't bounce off your real walls or floor, and "
+            + "apparatus won't be hidden behind your furniture. To turn "
+            + "it back on, open Settings › Privacy & Security › World "
+            + "Sensing and allow Physics Playground."
+        case .failed:
+            "Something went wrong starting it. Leaving this lab and "
+            + "opening it again usually fixes it."
+        }
     }
 }
