@@ -77,8 +77,6 @@ struct PendulumsSpaceView: View {
     // `gravity` and `timeScale` are still real properties of the model
     // and still reachable from the debug arguments (`-penGravity`,
     // `-penTime`) — what has gone is their furniture, not the physics.
-    // `loadResonancePreset` also survives on the model; nothing in the
-    // room calls it now.
     //
     // What is left in this room: the swing, the two wells that make one,
     // the layers bank — and Foucault's globe and spin rail, which appear
@@ -296,19 +294,6 @@ struct PendulumsSpaceView: View {
                 pivotRing.openID = first.id
                 ring.openID = nil
             }
-            // NO `-penResonance`, deliberately. Every other instrument
-            // here gets an argument because its state is invisible until
-            // something sets it. The Resonance plate is the opposite: it
-            // stands lit and labelled at launch with nothing to reveal,
-            // and `reset()` already calls `loadResonancePreset()`, so the
-            // five stepped bobs ARE the opening state. An argument that
-            // fired it would change nothing on screen and photograph as
-            // proof of a mapping it never exercised — the "bead parked at
-            // its default" mistake CLAUDE.md records against the field
-            // module. The plate's tap path is covered by
-            // `SpatialActionBankTests` instead, and its placement by the
-            // launch screenshot.
-            //
             // The instruments are all pinch-operated, and the simulator
             // has no hands — so each one gets an argument that sets a
             // VALUE rather than a flag. A bead parked at its default in

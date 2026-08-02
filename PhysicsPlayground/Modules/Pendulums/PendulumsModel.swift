@@ -412,26 +412,6 @@ final class PendulumsModel {
         return pendulum.id
     }
 
-    /// Five pendulums, lengths stepped 4% apart: they start in phase,
-    /// drift, scramble, and re-align — beat frequencies teaching
-    /// themselves.
-    func loadResonancePreset() {
-        pendulums = []
-        for index in 0..<5 {
-            let length = 0.7 * pow(1.04, Double(index))
-            let pendulum = Pendulum(
-                id: UUID(), length: length, mass: 1.0, damping: 0,
-                bobRadius: 0.032, cableThickness: 0.002,
-                state: SphericalPendulum(length: length, angle: 0.5),
-                pivotPoint: Self.defaultPivot
-                    + SIMD3(Double(index - 2) * 0.30, 0,
-                            -abs(Double(index - 2)) * 0.10))
-            pendulums.append(pendulum)
-        }
-        selectedID = pendulums.first?.id
-        insightText = "Five lengths, 4% apart: they leave together, drift out of step, then re-align — the beat period is set by the difference of their frequencies."
-    }
-
     /// Moves a pendulum's pivot. Clamped so a bob can never end up
     /// below the floor.
     func movePivot(id: UUID, to point: SIMD3<Double>) {
