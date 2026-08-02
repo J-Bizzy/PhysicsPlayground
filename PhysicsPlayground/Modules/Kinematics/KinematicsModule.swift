@@ -20,7 +20,20 @@ enum KinematicsModule {
             blurb: "Throw real balls across your room — they ricochet off your actual walls, you can catch them out of the air, and gravity runs from zero-g to Jupiter.",
             icon: "paperplane.fill",
             accent: DesignTokens.Palette.kinematicsAccent,
-            firstRunHint: "Grab any ball and throw it — physics takes over the instant you let go. For precise launches, drag the launcher anywhere and pinch its orange bead to aim.",
+            // The room clause PRIMES the ARKit prompt, and this is the
+            // module it belongs in: Projectiles is the one whose physics
+            // visibly changes without world sensing, because the walls it
+            // bounces off are yours.
+            //
+            // Where the prompt actually fires decided this. `retain()` is
+            // called from `RoomOcclusionView.task`, and that view is
+            // mounted only inside the `activeModule` branch of
+            // `PlaygroundSpaceView` — so the prompt arrives as a module
+            // opens, which is exactly when this window and its hint
+            // appear. A launch-time prompt could not have been primed
+            // this way and would have needed a surface of its own; this
+            // one is already on screen.
+            firstRunHint: "Grab any ball and throw it — physics takes over the instant you let go. For precise launches, drag the launcher anywhere and pinch its orange bead to aim. Balls bounce off your real walls and floor, so visionOS will ask to use your room.",
             legend: legend,
             isPaused: { appModel.kinematicsModel.isPaused },
             togglePause: { appModel.kinematicsModel.isPaused.toggle() },
