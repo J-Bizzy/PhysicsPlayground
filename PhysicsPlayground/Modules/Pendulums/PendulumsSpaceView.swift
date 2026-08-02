@@ -138,13 +138,27 @@ struct PendulumsSpaceView: View {
     /// The rails face the user, not straight down the room.
     private static let instrumentNormal = SIMD3<Float>(-0.34, 0, 0.94)
 
+    /// Identifies the floating readout above the selected bob.
+    private static let infoCardID = "pendulum-info"
+
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
-        RealityView { content in
+        RealityView { content, attachments in
             let renderer = PendulumsRenderer()
             content.add(renderer.root)
             renderer.root.addChild(bloom.root)
+
+            // The selected bob's numbers, finally attached.
+            //
+            // `infoAnchor` has been built, billboarded, added to the
+            // scene and repositioned above the selected bob every frame
+            // since the renderer was written — with NOTHING on it. The
+            // card it was waiting for existed too, in the window panel's
+            // "Numbers" dropdown. This is the wire that was never run.
+            if let card = attachments.entity(for: Self.infoCardID) {
+                renderer.infoAnchor.addChild(card)
+            }
 
             // Pull a pendulum out and hang it wherever you let go. The
             // pivot lands at your fingertips, so rigging one and moving
@@ -401,6 +415,20 @@ struct PendulumsSpaceView: View {
             }
             #endif
             self.renderer = renderer
+        } attachments: {
+            Attachment(id: Self.infoCardID) {
+                PendulumInfoCard()
+                    // An attachment carries a collider for its content.
+                    // A readout that intercepted a pinch would be
+                    // `SpatialScaleHandle` all over again — and this one
+                    // floats directly above a bob you are meant to grab.
+                    .allowsHitTesting(false)
+                    // The environment does NOT flow into an attachment
+                    // the way it flows down a view tree; `makeControls`
+                    // got the model because the shell injected it, and
+                    // nothing injects it here.
+                    .environment(model)
+            }
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
@@ -624,19 +652,44 @@ struct PendulumsSpaceView: View {
 }
 
 /// The card floating above the selected bob: the numbers behind the swing.
+///
+/// It hangs on `PendulumsRenderer.infoAnchor`, which is billboarded and
+/// re-pointed at the selected bob every frame. It was written for the
+/// window panel's "Numbers" dropdown and rendered nowhere else; the
+/// anchor was built for it and carried nothing. They are connected now.
+///
+/// TWO of its four numbers change every frame — θ and v — which is the
+/// cost `Callout.minimumInterval` exists to bound for text meshes. The
+/// same argument applies to an attachment, whose content is rasterised
+/// into a texture: what matters is how often the RENDERED OUTPUT
+/// changes, not how often `body` runs. So every value is quantised to
+/// the precision it is displayed at, and the strings are built from the
+/// quantised numbers rather than by handing raw doubles to a format
+/// specifier. A bob swinging at 1.2345 m/s then redraws when the reading
+/// changes, roughly ten times a second, instead of ninety.
 struct PendulumInfoCard: View {
     @Environment(PendulumsModel.self) private var model
 
     var body: some View {
         if let pendulum = model.selected {
-            let speed = simd_length(pendulum.state.velocity)
-            let angle = pendulum.state.angle(length: pendulum.length)
+            let speed = (simd_length(pendulum.state.velocity) * 100).rounded() / 100
+            let degrees = (pendulum.state.angle(length: pendulum.length)
+                           * 180 / .pi).rounded()
+            let length = (pendulum.length * 100).rounded() / 100
+            let period = (pendulum.period(gravity: model.gravity) * 100).rounded() / 100
             VStack(alignment: .leading, spacing: 3) {
-                Text("L \(pendulum.length, specifier: "%.2f") m   T \(pendulum.period(gravity: model.gravity), specifier: "%.2f") s")
+                Text(String(format: "L %.2f m   T %.2f s", length, period))
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                Text("θ \(angle * 180 / .pi, specifier: "%.0f")°   v \(speed, specifier: "%.2f") m/s")
+                Text(String(format: "θ %.0f°   v %.2f m/s", degrees, speed))
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            // A card in a ROOM, not on a panel: it has to hold its shape
+            // against a sunlit wall, a dark studio, and whatever the
+            // user's furniture is doing behind it.
+            .background(.regularMaterial,
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .accessibilityElement(children: .combine)
         }
     }
