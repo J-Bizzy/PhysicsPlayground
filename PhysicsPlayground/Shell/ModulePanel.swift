@@ -2,16 +2,21 @@
 //  ModulePanel.swift
 //  Physics Playground — Shell
 //
-//  The shared panel building blocks every module's controls are built from:
+//  Two shared building blocks. There used to be three, and there used to
+//  be module panels to build out of them.
 //
-//  · PanelSection — the standard material card (one look for every module).
-//  · CollapsedSection — a card that shows only its header until opened,
-//    so a panel stays one glance tall with depth on demand.
+//  · PanelSection — the standard material card. Its callers are now the
+//    NOTEBOOK and the settings window; no module has one.
 //  · LegendView — a module's legend items in the house legend style,
-//    rendered by the shell so no module can restyle it.
+//    rendered by the shell (from the title bar's Key popover) so that no
+//    module can restyle or forget it.
 //
-//  Modules compose sections inside makeControls; the shell renders the
-//  first-run hint above and appends the legend below.
+//  CollapsedSection is deleted, and it is worth saying which kind of
+//  corpse it is: a GRAVE, not a missing door. The disclosure card was not
+//  abandoned half-built — the surface it existed for was decided against
+//  (DECISIONS.md, 2026-08-01), and every one of the fourteen dropdowns it
+//  drew is either standing in the room now or was prose describing where
+//  a control had gone.
 //
 
 import SwiftUI
@@ -51,35 +56,6 @@ struct PanelSection<Content: View>: View {
             .regularMaterial,
             in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cornerRadius, style: .continuous)
         )
-    }
-}
-
-/// A card that shows only its header until opened — the panel stays
-/// one glance tall, and depth is there when asked for.
-struct CollapsedSection<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-
-    init(_ title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
-
-    var body: some View {
-        PanelSection {
-            DisclosureGroup {
-                VStack(alignment: .leading,
-                       spacing: DesignTokens.Panel.rowSpacing) {
-                    content
-                }
-                .padding(.top, 10)
-            } label: {
-                Text(title)
-                    .font(DesignTokens.TypeScale.sectionHeader)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            .tint(.secondary)
-        }
     }
 }
 

@@ -4,11 +4,15 @@
 //
 //  The module contract that makes this a *platform*: every physics module
 //  is a ModuleDescriptor — a catalog card, its shared-shell content (hint,
-//  legend, reset), and two view factories, one for the pod controls and
-//  one for the immersive scene. The hub lists the catalog; picking a
-//  card swaps the active module. The shell renders everything but
-//  makeControls/makeScene itself, so the hint, legend, and experiments
-//  presentation are identical in every module by construction.
+//  legend, reset), and ONE view factory, for the immersive scene. The hub
+//  lists the catalog; picking a card swaps the active module.
+//
+//  There is no `makeControls`. It existed from 2026-07-29 to 2026-08-01,
+//  and it is gone because a module has no flat control surface at all
+//  now: every control and every readout stands on the apparatus in the
+//  room, and the module window is a title bar. `PanelControlCriterionTests`
+//  fails the build if one grows back. See DECISIONS.md for what that
+//  costs, which is stated there plainly rather than glossed.
 //
 
 import SwiftUI
@@ -48,14 +52,6 @@ struct ModuleDescriptor: Identifiable {
     let isPaused: () -> Bool
     let togglePause: () -> Void
     let makeScene: () -> AnyView
-    /// Optional flat control panel, rendered by the shell in the module
-    /// window beneath the title bar. Nil means the module's spatial
-    /// affordances carry every control on their own. A module supplies
-    /// this when some of its controls need to be *discoverable* — a
-    /// panel of labelled buttons and sliders is also the simulator and
-    /// accessibility path, where gaze-revealed spatial controls barely
-    /// exist.
-    var makeControls: (() -> AnyView)? = nil
     /// The readings the notebook writes down when the user captures a
     /// moment in this module. Read live from the module's model, so a
     /// captured row is exactly what the physics said at that instant.

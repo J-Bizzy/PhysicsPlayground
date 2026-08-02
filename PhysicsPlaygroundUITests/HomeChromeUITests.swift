@@ -82,18 +82,29 @@ final class HomeChromeUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
 
-        // The catalog is REPLACED by the module. Asserting on what
-        // disappears rather than what appears is the robust shape here:
-        // a lab's own window chrome varies per module, but the home's
-        // catalog is gone in every case, and a row that is still there
-        // means the tap did nothing.
-        let entered = app.buttons["Add part"].waitForExistence(timeout: 20)
-            || app.staticTexts["Bench"].waitForExistence(timeout: 2)
-        let catalogGone = !app.buttons["Gravity Lab"].exists
-        XCTAssertTrue(entered || catalogGone,
-                      "tapping Circuit Workshop left the home exactly as it "
-                      + "was: catalog still up, no lab controls. Either the "
-                      + "row is not receiving the tap or its action is not "
-                      + "wired.")
+        // The catalog is REPLACED by the module's window.
+        //
+        // This used to wait for `Add part`, a button on Circuit
+        // Workshop's control panel. There are no control panels
+        // (DECISIONS.md, 2026-08-01) and there is no `Add part` — parts
+        // come off a tray in the room, which XCUITest cannot see at all.
+        //
+        // "Show in room" is the right replacement, and not merely
+        // because it survived. Under `-uiTesting 1` the immersive space
+        // is deliberately held back (`HubView.isUITesting`), so this
+        // button is on screen for exactly this run; it is a real
+        // capability rather than a decorative label; and it is one of
+        // the three things the module window is now allowed to contain.
+        //
+        // It is deliberately NOT `app.staticTexts["Circuit Workshop"]`:
+        // the catalog row carries that same string as its accessibility
+        // label, so that assertion would have passed before the tap.
+        let entered = app.buttons["Show in room"].waitForExistence(timeout: 20)
+        XCTAssertTrue(entered,
+                      "tapping Circuit Workshop did not open its window: no "
+                      + "\"Show in room\" appeared. Either the row is not "
+                      + "receiving the tap or its action is not wired.")
+        XCTAssertFalse(app.buttons["lab.gravitylab"].exists,
+                       "the module opened but the catalog is still up behind it")
     }
 }

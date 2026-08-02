@@ -40,9 +40,6 @@ enum MagnetismModule {
             makeScene: {
                 AnyView(MagnetismSpaceView().environment(appModel.magnetismModel))
             },
-            makeControls: {
-                AnyView(MagnetismControlsPanel().environment(appModel.magnetismModel))
-            },
             captureReadings: { readings(appModel: appModel) },
             reset: { appModel.magnetismModel.reset() }
         )

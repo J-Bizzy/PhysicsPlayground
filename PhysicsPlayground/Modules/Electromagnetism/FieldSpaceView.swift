@@ -134,10 +134,30 @@ struct FieldSpaceView: View {
     @State private var scaleRig = SpatialScaleRig(
         pivot: SIMD3<Float>(FieldModel.regionCenter), range: 0.5...4.0)
 
+    /// Identifies the standing readout card. See `FieldReadoutCard`.
+    private static let readoutCardID = "field-readout"
+    /// Above the layers bank on the left flank — the one band in this
+    /// room with nothing drawn in it and nothing grabbable. It is NOT in
+    /// `FieldInstrumentLayout`, and the card's own header says why: those
+    /// invariants govern colliders, and this carries none.
+    private static let readoutCardAnchor = SIMD3<Double>(-1.02, 1.72, -0.88)
+
     var body: some View {
-        RealityView { content in
+        RealityView { content, attachments in
             let renderer = FieldRenderer()
             content.add(renderer.root)
+
+            // Everything this module measures, on one card standing with
+            // the instruments. Billboarded so it faces the reader from
+            // anywhere, and parented to `root` rather than `viewRoot`
+            // for the same reason every bank here is: the scale rig
+            // reaches 4×, and a readout that grew with the field would
+            // put its own text out of the frame.
+            if let card = attachments.entity(for: Self.readoutCardID) {
+                card.components.set(BillboardComponent())
+                card.position = SIMD3<Float>(Self.readoutCardAnchor)
+                renderer.root.addChild(card)
+            }
             renderer.viewRoot.addChild(bloom.root)
 
             install(into: renderer)
@@ -161,6 +181,16 @@ struct FieldSpaceView: View {
             )
             applyDebugArguments()
             self.renderer = renderer
+        } attachments: {
+            Attachment(id: Self.readoutCardID) {
+                FieldReadoutCard()
+                    // A readout, not an instrument: no hit testing, so it
+                    // can never contend for a pinch with the charges it
+                    // reports on. This is the distinction that keeps it
+                    // out of `FieldInstrumentLayout`'s clearance rules.
+                    .allowsHitTesting(false)
+                    .environment(model)
+            }
         }
         .spatialScale(scaleRig)
         .simultaneousGesture(tap)

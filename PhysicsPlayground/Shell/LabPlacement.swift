@@ -115,6 +115,26 @@ struct LabAnchorView: View {
                 }
                 .onEnded { _ in drag = nil }
         )
+        // RECENTRE, which used to be a button on a strip under the
+        // module's title bar. That strip is gone with the rest of the
+        // window's furniture (DECISIONS.md, 2026-08-01), and its other
+        // button — "Done" — went with it as pure duplication: the
+        // title-bar control TOGGLES `isPlacing`, so pressing it again
+        // has always been Done.
+        //
+        // Recentre was not duplicated anywhere, so it lands on the
+        // object it acts on. The cross-hair only exists while you are
+        // placing the lab, which makes it the one affordance that is
+        // present exactly when this verb is meaningful.
+        .simultaneousGesture(
+            TapGesture()
+                .targetedToAnyEntity()
+                .onEnded { value in
+                    guard appModel.labPlacement.isPlacing,
+                          Self.isAnchor(value.entity) else { return }
+                    appModel.labPlacement.recentre()
+                }
+        )
     }
 
     /// Where the anchor sits when the lab has not been moved — roughly

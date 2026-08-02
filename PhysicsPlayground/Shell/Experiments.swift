@@ -206,7 +206,7 @@ enum ExperimentCatalog {
         return [
             (Experiment(id: "em.powered", title: "Electromagnet",
                         detail: "Drive the coil from your own circuit — a current in a loop of wire IS a magnet.",
-                        step: "Switch the electromagnet on in this window, then drag an inductor off the tray and wire it into the live loop. A cable runs across the room to the coil."),
+                        step: "Flick the electromagnet switch standing on the cable run to the bench's right, then drag an inductor off the tray and wire it into the live loop. The cable carries the current across to the coil."),
              { magnetism.electromagnetOn && abs(circuits.inductorCurrent) > 0.01 }),
 
             (Experiment(id: "em.reach", title: "Action at a distance",
@@ -224,7 +224,7 @@ enum ExperimentCatalog {
 
             (Experiment(id: "em.faraday", title: "Run it backwards",
                         detail: "Make the coil generate instead of consume — ε = −N dΦ/dt.",
-                        step: "With the coil on, sweep a bar magnet through it. Watch the coil EMF in this window jump while the magnet MOVES, and fall to zero the moment you hold it still."),
+                        step: "With the coil on, sweep a bar magnet through it. The coil's EMF readout jumps while the magnet MOVES, and falls to zero the moment you hold it still."),
              { abs(magnetism.inducedEMF) > 0.001 }),
         ]
     }
@@ -241,7 +241,7 @@ enum ExperimentCatalog {
                  { (model.lastFlight?.range ?? 0) > 3.0 }),
                 (Experiment(id: "kinematics.moonshot", title: "Moon shot",
                             detail: "Watch the same launch hang in lunar gravity.",
-                            step: "Tap Moon in this window's World section, then Fire — the arc stretches six times as far."),
+                            step: "Tap the Moon disc on the world bank to the launcher's left, then pinch Fire — the arc stretches six times as far."),
                  { model.gravity < 2.0 && model.flights.contains {
                      $0.status == .flying && !$0.wasThrown
                  } }),
@@ -256,7 +256,7 @@ enum ExperimentCatalog {
                      .filter { abs(model.readouts[$0.id]?.watts ?? 0) > 0.5 }.count >= 2 }),
                 (Experiment(id: "circuits.slowpoke", title: "Slowpoke",
                             detail: "Get an electron's lap time under twelve hours — drift speed rises with current.",
-                            step: "Turn on True electron speed in this window's Flow section, then push more current: add a battery in series, or lower the resistance."),
+                            step: "Flick True speed on the layers bank beside the bench, then push more current: add a battery in series, or lower the resistance."),
                  { model.driftLapTime < 12 * 3600 }),
                 (Experiment(id: "circuits.bright", title: "Overdrive",
                             detail: "Push one bulb past 2 W — series batteries help.",
@@ -294,11 +294,11 @@ enum ExperimentCatalog {
                          && model.readout(for: $0)?.isBound == false } }),
                 (Experiment(id: "gravity.prophet", title: "Prophet",
                             detail: "Predict where a planet will be — and miss by less than a tenth of an AU.",
-                            step: "Tap a planet to select it, tap Predict an orbit in this window, drag the ghost to your guess, and let time run."),
+                            step: "Tap a planet to select it, tap the Predict petal on its ring, drag the ghost to your guess, and let time run."),
                  { (model.bestPredictionMissAU ?? 1) < 0.1 }),
                 (Experiment(id: "gravity.binary", title: "Twin suns",
                             detail: "Split the Sun into a binary pair.",
-                            step: "Tap Twin suns in this window."),
+                            step: "Tap the Twin suns plate on the bank beside the system."),
                  { model.bodies.filter { $0.body.name.hasPrefix("Sun") }.count >= 2 }),
             ]
         default:

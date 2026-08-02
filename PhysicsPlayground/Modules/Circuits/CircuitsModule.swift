@@ -56,13 +56,6 @@ enum CircuitsModule {
                         .environment(appModel.magnetismModel)
                 )
             },
-            makeControls: {
-                AnyView(
-                    CircuitsControlsPanel()
-                        .environment(appModel.circuitsModel)
-                        .environment(appModel.magnetismModel)
-                )
-            },
             captureReadings: { readings(appModel: appModel) },
             reset: { appModel.circuitsModel.reset() }
         )

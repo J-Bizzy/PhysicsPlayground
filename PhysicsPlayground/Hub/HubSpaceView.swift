@@ -1413,9 +1413,29 @@ struct HubFocusPanel: View {
             if let next = entries.first(where: {
                 !appModel.experiments.completed.contains($0.experiment.id)
             }) {
-                Label(next.experiment.title, systemImage: "flask")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Label(next.experiment.title, systemImage: "flask")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    // The STEP, which had exactly one reader in the whole
+                    // app — a row under the module's title bar — and lost
+                    // it when the module window became a title bar
+                    // (DECISIONS.md, 2026-08-01). Twenty authored strings
+                    // would have gone dark, which is the "authored but
+                    // never rendered" defect this project has now caught
+                    // three times.
+                    //
+                    // The front door is the better home anyway: an
+                    // instruction telling you to go and touch something
+                    // is worth more BEFORE you walk in than on a card
+                    // floating in front of the thing it is talking about.
+                    if !next.experiment.step.isEmpty {
+                        Text(next.experiment.step)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
 
             // Full width, not tucked into the right edge. This is the

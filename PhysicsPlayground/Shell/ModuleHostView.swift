@@ -2,14 +2,29 @@
 //  ModuleHostView.swift
 //  Physics Playground — Shell
 //
-//  The module's window is a floating TITLE BAR — the module's name in
-//  the middle, navigation on the left (back to the catalog, jump to any
-//  module), modes on the right (Studio, Reset) — plus an optional flat
-//  control panel beneath it for modules that opt in via makeControls.
-//  Modules whose spatial affordances carry everything show the bare bar.
+//  The module's window is a TITLE BAR. Not "a title bar plus" — the bar,
+//  and two things that appear only when they have something to say.
 //
-//  When the immersive space is closed the pods don't exist, so the bar
-//  grows a "Show in room" button; the space is where the module lives.
+//  Left: back to the catalog, and a jump to any module. Middle: the
+//  module's name. Right: notebook, place-the-lab, studio, the legend
+//  key, and Reset. Beneath it, and only conditionally: "Show in room"
+//  while the immersive space is closed, because the space is where the
+//  module lives and there would otherwise be no way back into it; and
+//  the module's one authored first-run sentence until it is dismissed.
+//
+//  EVERYTHING ELSE WENT (DECISIONS.md, 2026-08-01). `makeControls` is
+//  deleted from the module contract, the six `*ControlsPanel.swift` are
+//  gone, the legend moved into a popover on the bar, the placement strip
+//  became a tap on the cross-hair it describes, and the experiment's
+//  current step moved to the hub — where you read it before you come in,
+//  rather than off a card floating in front of the apparatus it is
+//  telling you to touch.
+//
+//  What the panels held at the end was 71 readout `Text`s, 13 buttons —
+//  six of them duplicating a control already standing in the room — and
+//  four collapsed cards whose entire content was prose explaining where
+//  a control had gone. A surface whose content is directions to
+//  elsewhere is not a surface.
 //
 
 import SwiftUI
@@ -21,6 +36,7 @@ struct ModuleHostView: View {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.openWindow) private var openWindow
     @State private var confirmingReset = false
+    @State private var showingLegend = false
 
     var body: some View {
         VStack(spacing: 14) {
@@ -95,6 +111,38 @@ struct ModuleHostView: View {
                 .accessibilityLabel("Studio Mode")
                 .accessibilityHint("Replaces your room with a dark studio")
 
+                // The legend, as a POPOVER rather than a section
+                // stacked under the bar.
+                //
+                // It could not simply be deleted with the rest: colour
+                // is semantic in this app and owned by `VectorPalette`
+                // (red = positive/N-pole, blue = negative, arrow length
+                // = strength), so the legend is the key to the app's own
+                // vocabulary — and Gravity Lab's carries the load-bearing
+                // admission that Mercury's 43″/century needs GR, "which
+                // this lab does not model". Dropping that would repeat
+                // the disclosed-fiction failure the field module was
+                // pulled up on.
+                //
+                // Anchored to the bar, so the window still shows only
+                // the bar at rest, and still rendered by the SHELL from
+                // `module.legend`, so no module can restyle or forget it.
+                if !module.legend.isEmpty {
+                    Button {
+                        showingLegend.toggle()
+                    } label: {
+                        Image(systemName: "list.bullet.rectangle")
+                    }
+                    .accessibilityLabel("Key")
+                    .accessibilityHint("What the colours and shapes in this simulation mean")
+                    .popover(isPresented: $showingLegend,
+                             attachmentAnchor: .point(.bottom)) {
+                        LegendView(items: module.legend)
+                            .padding(20)
+                            .frame(maxWidth: 340)
+                    }
+                }
+
                 // Reset ASKS FIRST.
                 //
                 // It used to live on the in-space rail, where a stray
@@ -121,19 +169,6 @@ struct ModuleHostView: View {
                 }
             }
             .buttonBorderShape(.circle)
-
-            if appModel.labPlacement.isPlacing {
-                HStack(spacing: 10) {
-                    Text("Drag the cross-hair to move the whole experiment.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 6)
-                    Button("Recentre") { appModel.labPlacement.recentre() }
-                        .buttonStyle(.podQuiet)
-                    Button("Done") { appModel.labPlacement.isPlacing = false }
-                        .buttonStyle(.podProminent(module.accent))
-                }
-            }
 
             if !appModel.isImmersiveSpaceOpen {
                 Button {
@@ -177,55 +212,6 @@ struct ModuleHostView: View {
                 .padding(.horizontal, 8)
             }
 
-            // The module's current task: the first unfinished
-            // experiment, with its step — the strings were authored
-            // for exactly this and never rendered until now. It
-            // advances on its own as experiments land.
-            if let next = ExperimentCatalog.experiments(for: module.id,
-                                                        appModel: appModel)
-                .first(where: {
-                    !appModel.experiments.completed.contains($0.experiment.id)
-                }) {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "flask")
-                        .font(.footnote)
-                        .foregroundStyle(module.accent)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(next.experiment.title)
-                            .font(DesignTokens.TypeScale.footnote.weight(.semibold))
-                        if !next.experiment.step.isEmpty {
-                            Text(next.experiment.step)
-                                .font(DesignTokens.TypeScale.footnote)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 8)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Current experiment: \(next.experiment.title). \(next.experiment.step)")
-            }
-
-            if module.makeControls != nil || !module.legend.isEmpty {
-                ScrollView {
-                    VStack(spacing: DesignTokens.Panel.sectionSpacing) {
-                        if let makeControls = module.makeControls {
-                            makeControls()
-                        }
-                        // The legend, appended by the SHELL — every
-                        // module gets the same key in the same place,
-                        // and none can restyle or forget it.
-                        if !module.legend.isEmpty {
-                            CollapsedSection("Legend") {
-                                LegendView(items: module.legend)
-                            }
-                        }
-                    }
-                    .padding(.top, 2)
-                }
-                .frame(maxHeight: 480)
-            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
@@ -234,9 +220,13 @@ struct ModuleHostView: View {
         // At 560 the bar ran out of room and truncated: "Circuit
         // Workshop" arrived as "Circuit Works…", which is the module's
         // own name, misspelled by the layout, in the largest type on
-        // screen. Five circular buttons take about 280 points before the
-        // title gets any, and "Wave Interference" needs about 200 more.
-        .frame(minWidth: 680)
+        // screen. Five circular buttons took about 280 points before the
+        // title got any, and "Wave Interference" needs about 200 more.
+        //
+        // The legend's Key button makes SIX, so this went to 740. The
+        // number is load-bearing and the arithmetic is why: shave it and
+        // the module's own name is what breaks first.
+        .frame(minWidth: 740)
         .glassBackgroundEffect(
             in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }

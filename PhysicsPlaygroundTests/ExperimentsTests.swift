@@ -72,4 +72,40 @@ final class ExperimentsTests: XCTestCase {
         // — as Wind Tunnel was on 2026-07-30, taking its two with it.
         XCTAssertGreaterThanOrEqual(ExperimentCatalog.total(appModel: appModel), 16)
     }
+
+    // MARK: The steps must describe the app that exists
+
+    /// No experiment may tell you to do something "in this window".
+    ///
+    /// Six of them did, and every one became a lie on 2026-08-01 when
+    /// the module window became a title bar: "Tap Twin suns in this
+    /// window", "Turn on True electron speed in this window's Flow
+    /// section". The controls they named are plates and petals in the
+    /// room now.
+    ///
+    /// This is cheap to re-break — the strings are prose, nothing
+    /// compiles against them, and the panel they referred to is gone, so
+    /// nobody writing a new experiment would even see the old shape.
+    /// The project's recurring defect is authored content that quietly
+    /// stops matching the app; this is the check for that.
+    @MainActor
+    func testNoExperimentStepPointsAtTheWindowPanel() {
+        let appModel = AppModel()
+        for module in ModuleCatalog.all(appModel: appModel) {
+            for entry in ExperimentCatalog.experiments(for: module.id,
+                                                       appModel: appModel) {
+                let step = entry.experiment.step.lowercased()
+                for phrase in ["this window", "the panel", "control panel"] {
+                    XCTAssertFalse(step.contains(phrase), """
+                        \(module.id)/\(entry.experiment.id) says "\(phrase)": \
+                        "\(entry.experiment.step)"
+
+                        There is no window panel. Name the instrument in the \
+                        room instead — the plate, the rail, the disc, the \
+                        petal, the well.
+                        """)
+                }
+            }
+        }
+    }
 }

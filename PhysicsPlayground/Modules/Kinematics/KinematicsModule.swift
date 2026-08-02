@@ -27,9 +27,6 @@ enum KinematicsModule {
             makeScene: {
                 AnyView(KinematicsSpaceView().environment(appModel.kinematicsModel))
             },
-            makeControls: {
-                AnyView(KinematicsControlsPanel().environment(appModel.kinematicsModel))
-            },
             captureReadings: { readings(appModel: appModel) },
             reset: { appModel.kinematicsModel.reset() }
         )

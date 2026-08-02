@@ -38,9 +38,6 @@ enum ElectromagnetismModule {
             makeScene: {
                 AnyView(FieldSpaceView().environment(appModel.electromagnetismModel))
             },
-            makeControls: {
-                AnyView(FieldControlsPanel().environment(appModel.electromagnetismModel))
-            },
             captureReadings: { readings(appModel: appModel) },
             reset: { appModel.electromagnetismModel.reset() }
         )
