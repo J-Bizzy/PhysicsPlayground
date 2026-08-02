@@ -253,6 +253,9 @@ final class MagnetismRenderer {
     // MARK: The compass you carry
 
     static let handCompassName = "hand-compass"
+    /// The orb's radius — the collider matches it, per the rule that an
+    /// input-targetable collider must never exceed what it represents.
+    private static let compassRadius: Float = 0.055
     private let handCompass = Entity()
     private var handCompassNeedle: Entity?
     private var handCompassCallout: Callout?
@@ -260,37 +263,79 @@ final class MagnetismRenderer {
     private func buildHandCompass() {
         handCompass.name = Self.handCompassName
 
-        // A brass case with a pale dial — an instrument, not a marker.
-        let caseBody = ModelEntity(
-            mesh: .generateCylinder(height: 0.016, radius: 0.052),
-            materials: [Materials.machined(
-                UIColor(red: 0.72, green: 0.56, blue: 0.28, alpha: 1))])
-        caseBody.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        handCompass.addChild(caseBody)
+        // A SPHERE, not a pocket compass (2026-08-01, owner's call).
+        //
+        // It was a brass cylinder with a flat pale dial and a flat
+        // needle, and that shape was making a promise the physics does
+        // not keep. A magnetic field points wherever it likes — steeply
+        // up between two attracting poles, straight down beside them —
+        // and a dial can only ever show you the part of it lying in the
+        // dial's plane. On Earth we get away with that because we only
+        // ever ask a compass for a heading. In a room with bar magnets
+        // in it the interesting answer is usually the one pointing out
+        // of the dial.
+        //
+        // A CURIOUS DETAIL FOUND WHILE CHANGING IT: the needle was
+        // already aiming in full 3-D — `simd_quatf(from: [0,1,0], to:
+        // direction)` takes the whole vector — while the comment beside
+        // it said "the needle lies in the dial's plane, so project B onto
+        // it: a real compass only shows the component it can turn to."
+        // The code did not project. So the instrument was telling the
+        // truth and its case and its comment were both lying about it,
+        // and the needle spent its life poking through a brass lid.
+        //
+        // The orb is the honest housing: a glass ball with the needle
+        // swinging freely inside, gimbal rings for a sense of which way
+        // is which, and nothing anywhere that suggests a plane.
+        var shell = Materials.frostedGlass(
+            UIColor(white: 0.62, alpha: 1), opacity: 0.20, frost: 0.35)
+        shell.emissiveIntensity = 0.08
+        let orb = ModelEntity(mesh: .generateSphere(radius: Self.compassRadius),
+                              materials: [shell])
+        handCompass.addChild(orb)
 
-        var dialMaterial = UnlitMaterial(color: UIColor(white: 0.93, alpha: 1))
-        dialMaterial.blending = .transparent(opacity: 0.92)
-        let dial = ModelEntity(mesh: .generateCylinder(height: 0.002, radius: 0.045),
-                               materials: [dialMaterial])
-        dial.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        dial.position = [0, 0, 0.009]
-        handCompass.addChild(dial)
+        // Two rings at right angles — a gimbal. Without them a glass ball
+        // gives the eye nothing to judge the needle's direction against,
+        // and "pointing 30° up" and "pointing at you" look identical.
+        var ringMaterial = UnlitMaterial(color: UIColor(red: 0.72, green: 0.56,
+                                                        blue: 0.28, alpha: 1))
+        ringMaterial.blending = .transparent(opacity: 0.55)
+        for axis in [SIMD3<Float>(1, 0, 0), SIMD3<Float>(0, 0, 1)] {
+            let ring = ModelEntity(
+                mesh: .generateBox(
+                    size: [Self.compassRadius * 2.06, 0.0022,
+                           Self.compassRadius * 2.06],
+                    cornerRadius: Self.compassRadius),
+                materials: [ringMaterial])
+            if axis.x > 0 {
+                ring.orientation = simd_quatf(angle: .pi / 2, axis: axis)
+            }
+            handCompass.addChild(ring)
+        }
 
-        // The needle: red north, white south, on a pivot that turns to
-        // the local B — the same alignment torque as every free magnet.
+        // The needle: red north, white south, free to point ANYWHERE —
+        // the same alignment a free magnet finds, now in a case that
+        // admits it. Thicker and squarer in section than the flat blade
+        // it replaces, because a blade seen edge-on disappears, and
+        // edge-on is exactly the view a 3-D needle keeps giving you.
         let needle = Entity()
         let north = ModelEntity(
-            mesh: .generateBox(size: [0.007, 0.036, 0.003], cornerRadius: 0.0015),
+            mesh: .generateBox(size: [0.008, 0.040, 0.008], cornerRadius: 0.003),
             materials: [Materials.energized(DesignTokens.Palette.positiveUI, glow: 0.35)])
-        north.position = [0, 0.018, 0]
+        north.position = [0, 0.020, 0]
         let south = ModelEntity(
-            mesh: .generateBox(size: [0.007, 0.036, 0.003], cornerRadius: 0.0015),
+            mesh: .generateBox(size: [0.008, 0.040, 0.008], cornerRadius: 0.003),
             materials: [Materials.energized(UIColor(white: 0.9, alpha: 1),
                                             metallic: 0.6, glow: 0.0)])
-        south.position = [0, -0.018, 0]
+        south.position = [0, -0.020, 0]
         needle.addChild(north)
         needle.addChild(south)
-        needle.position = [0, 0, 0.012]
+        // A dark bead at the pivot, so the needle reads as suspended at
+        // the centre rather than as two bars floating in glass.
+        let hub = ModelEntity(
+            mesh: .generateSphere(radius: 0.007),
+            materials: [Materials.machined(UIColor(white: 0.22, alpha: 1))])
+        needle.addChild(hub)
         handCompass.addChild(needle)
         handCompassNeedle = needle
 
@@ -299,7 +344,10 @@ final class MagnetismRenderer {
         handCompassCallout = callout
         handCompass.addChild(callout.root)
 
-        Grabbable.configureTouchTarget(handCompass, collisionRadius: 0.06)
+        // Matched to the orb itself rather than a hand-typed 0.06 that
+        // outgrew it — the collider rule again.
+        Grabbable.configureTouchTarget(handCompass,
+                                       collisionRadius: Self.compassRadius * 1.08)
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Compass. Carry it around the magnets and watch the needle swing to the field."
@@ -317,8 +365,10 @@ final class MagnetismRenderer {
         let field = model.compassField
         let magnitude = simd_length(field)
         if magnitude > 1e-12 {
-            // The needle lies in the dial's plane, so project B onto it:
-            // a real compass only shows the component it can turn to.
+            // The WHOLE vector, which is what it always was — see
+            // `buildHandCompass` on the comment that used to sit here
+            // claiming a projection the code never did. The orb can show
+            // this honestly; the flat dial could not.
             let direction = SIMD3<Float>(field / magnitude)
             handCompassNeedle?.orientation = simd_quatf(from: [0, 1, 0], to: direction)
         }
@@ -406,6 +456,56 @@ final class MagnetismRenderer {
         let pivot = ModelEntity()
         pivot.addChild(entity)
         return pivot
+    }
+
+    /// The magnet as the WELL shows it, before you have one.
+    ///
+    /// Built from the same halves, the same colours, the same chrome
+    /// waist band and the same embossed pole letters as the real thing —
+    /// the point of a preview is that pulling it out is recognisably
+    /// getting the object you were looking at. It is only the selection
+    /// halo and the collider that are missing, because a preview is not
+    /// selectable and the well owns the touch target.
+    ///
+    /// Static, and free of `magnet`-derived state, so `Well` can call it
+    /// without a model.
+    static func magnetPreview() -> Entity {
+        let container = Entity()
+        let half = Float(MagnetismModel.magnetLength) / 2
+        let w: Float = 0.05
+
+        let north = ModelEntity(
+            mesh: .generateBox(size: [w, half, w], cornerRadius: 0.006),
+            materials: [Materials.energized(northColor, roughness: 0.28, glow: 0.16)])
+        north.position = [0, half / 2, 0]
+        let south = ModelEntity(
+            mesh: .generateBox(size: [w, half, w], cornerRadius: 0.006),
+            materials: [Materials.energized(southColor, roughness: 0.28, glow: 0.16)])
+        south.position = [0, -half / 2, 0]
+        container.addChild(north)
+        container.addChild(south)
+
+        for (text, y) in [("N", half / 2), ("S", -half / 2)] {
+            for zSign: Float in [1, -1] {
+                let letter = poleLetter(text)
+                letter.position = [0, y, zSign * (w / 2)]
+                if zSign < 0 {
+                    letter.orientation = simd_quatf(angle: .pi, axis: [0, 1, 0])
+                }
+                container.addChild(letter)
+            }
+        }
+
+        let band = ModelEntity(
+            mesh: .generateBox(size: [w + 0.006, 0.014, w + 0.006], cornerRadius: 0.004),
+            materials: [Materials.machined(UIColor(white: 0.86, alpha: 1))])
+        container.addChild(band)
+
+        // Lying along the bar's own axis, tipped a little toward the
+        // viewer so both poles read at a glance rather than one hiding
+        // behind the other.
+        container.orientation = simd_quatf(angle: -0.42, axis: [0, 0, 1])
+        return container
     }
 
     private func makeMagnet(_ magnet: BarMagnet) -> Entity {
@@ -498,16 +598,22 @@ final class MagnetismRenderer {
         // model it integrates — comes off this one number, so it must
         // be the length the RENDERER actually draws.
         config.magnetLength = MagnetismModel.magnetLength
-        // Twelve loops at the default strength of 6, scaling with the
-        // bead: enough to read as a field at a glance, few enough that a
-        // maxed-out magnet stays legible rather than becoming a ball of
-        // wool. These are DISTINCT loops now — the old 24 were seeded
-        // over the whole sphere and drew each curve about twice.
         config.seedsPerMagnet = 12
         config.referenceStrength = MagnetismModel.defaultStrength
         config.maxSteps = 950
         config.stepSize = 0.006
-        let traced = MagneticFieldLineTracer.trace(magnets: job.magnets, config: config)
+        // EVEN THROUGH THE ROOM, not bundled around the bar (owner,
+        // 2026-08-01). Seeds are spread through the region's own box and
+        // each candidate loop is rejected if it mostly retraces one
+        // already drawn — see `traceThroughVolume`, which also spells out
+        // what this trades away: line density no longer encodes field
+        // strength, so the legend says the picture is the field's SHAPE.
+        let traced = MagneticFieldLineTracer.traceThroughVolume(
+            magnets: job.magnets,
+            config: config,
+            center: MagnetismModel.regionCenter,
+            halfExtents: MagnetismModel.regionHalfExtents,
+            budget: 26)
         let lines = traced.map { $0.map(SIMD3<Float>.init) }
         var result = LinesResult()
         result.core = TubeMesh.buffers(lines: lines, radius: MagnetismRenderer.lineRadius)

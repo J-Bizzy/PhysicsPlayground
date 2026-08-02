@@ -125,7 +125,8 @@ struct PendulumsSpaceView: View {
             let sources = Well([
                 .init(name: "Pendulum",
                       tint: UIColor(DesignTokens.Palette.pendulumsAccent),
-                      glyph: "+",
+                      label: "Add pendulum",
+                      preview: { PendulumsRenderer.pendulumPreview() },
                       position: SIMD3(-0.85, 1.30, -0.95),
                       spawn: { point in
                           model.addPendulum(at: point)
@@ -147,9 +148,6 @@ struct PendulumsSpaceView: View {
                     .init(id: "force", label: "Force", symbol: "arrow.down.right",
                           isOn: { model.showForces },
                           toggle: { model.showForces.toggle() }),
-                    .init(id: "energy", label: "Energy bars", symbol: "chart.bar",
-                          isOn: { model.showEnergyBars },
-                          toggle: { model.showEnergyBars.toggle() }),
                     // Not a display layer, and the label says so plainly:
                     // switched off the pendulum is ideal and swings for
                     // ever, which is a statement about the physics and not
@@ -347,7 +345,6 @@ struct PendulumsSpaceView: View {
                 model.showVelocity = true
                 model.showAcceleration = true
                 model.showForces = true
-                model.showEnergyBars = true
                 model.frictionOn = true
             }
             #endif
@@ -581,16 +578,11 @@ struct PendulumInfoCard: View {
         if let pendulum = model.selected {
             let speed = simd_length(pendulum.state.velocity)
             let angle = pendulum.state.angle(length: pendulum.length)
-            let energies = pendulum.state.energies(
-                length: pendulum.length, gravity: model.gravity, mass: pendulum.mass)
             VStack(alignment: .leading, spacing: 3) {
                 Text("L \(pendulum.length, specifier: "%.2f") m   T \(pendulum.period(gravity: model.gravity), specifier: "%.2f") s")
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                 Text("θ \(angle * 180 / .pi, specifier: "%.0f")°   v \(speed, specifier: "%.2f") m/s")
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                Text("KE \(energies.kinetic, specifier: "%.2f") J   PE \(energies.potential, specifier: "%.2f") J")
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                    .foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .combine)
         }

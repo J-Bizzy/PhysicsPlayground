@@ -162,7 +162,8 @@ struct GravityLabSpaceView: View {
             // plunges. Making a planet and aiming it are one gesture.
             let sources = Well([
                 .init(name: "World", tint: UIColor(red: 0.55, green: 0.72, blue: 1, alpha: 1),
-                      glyph: "+",
+                      label: "Add world",
+                      preview: { GravityLabRenderer.worldPreview() },
                       position: SIMD3(-0.55, 0.10, 0.30),
                       spawn: { point in
                           model.addBody(at: SIMD3<Double>(point))

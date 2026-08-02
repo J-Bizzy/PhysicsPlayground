@@ -5,8 +5,7 @@
 //  Renders the pendulum lab: per pendulum a pivot collar you can hang
 //  anywhere, a taut cable, a satin steel bob (grabbable),
 //  a speed-colored motion trail, velocity/acceleration/force arrows,
-//  floating kinetic/potential energy bars, and a faint ghost of the
-//  future swing while a bob is held.
+//  and a faint ghost of the future swing while a bob is held.
 //
 //  Ticked per frame from SceneEvents.Update (the module-standard
 //  clock); per-frame work is transform writes on pooled entities.
@@ -94,16 +93,6 @@ final class PendulumsRenderer {
 
     private var visuals: [UUID: PendulumVisual] = [:]
 
-    // Energy bars: kinetic (blue) and potential (green), standing
-    // together at a fixed corner of the room. Deliberately NOT attached
-    // to a pendulum: they read the whole rig's energy, and a reading
-    // that follows one bob would claim to be about that bob.
-    private let kineticBar: ModelEntity
-    private let potentialBar: ModelEntity
-    private let energyBarsRoot = Entity()
-    private static let barsBase = SIMD3<Float>(1.25, 1.45, -1.1)
-    private static let barFullHeight: Float = 0.5
-
     // Trail: one shared pool, round-robin, colored by speed at spawn.
     private static let trailBudget = 360
     private let trailPool: EntityPool<Void>
@@ -177,23 +166,17 @@ final class PendulumsRenderer {
         // disabled ModelEntity was still being built and parented here
         // long after the beam was removed; the corpse is gone now.
 
-        // Glowing glossy columns — they read as energy, not plastic bars.
-        let kineticMaterial = Materials.energized(
-            UIColor(red: 0.25, green: 0.5, blue: 1.0, alpha: 1), roughness: 0.25, glow: 0.4)
-        let potentialMaterial = Materials.energized(
-            UIColor(red: 0.2, green: 0.8, blue: 0.35, alpha: 1), roughness: 0.25, glow: 0.4)
-        kineticBar = ModelEntity(
-            mesh: .generateBox(size: [0.05, 1, 0.05], cornerRadius: 0.01),
-            materials: [kineticMaterial])
-        potentialBar = ModelEntity(
-            mesh: .generateBox(size: [0.05, 1, 0.05], cornerRadius: 0.01),
-            materials: [potentialMaterial])
-        energyBarsRoot.position = Self.barsBase
-        kineticBar.position = [0, 0, 0]
-        potentialBar.position = [0.09, 0, 0]
-        energyBarsRoot.addChild(kineticBar)
-        energyBarsRoot.addChild(potentialBar)
-        root.addChild(energyBarsRoot)
+        // The ENERGY BARS stood here — a blue kinetic column and a green
+        // potential one, off to the right, trading height as the bob
+        // swung. Deleted at the owner's request (2026-08-01), and the
+        // whole idea with them: the flag, the switch plate, the legend
+        // rows and the notebook's energy readings.
+        //
+        // Worth stating why it is not a loss. A chart standing beside the
+        // apparatus is the one shape this app spent 200 commits arguing
+        // its way out of — it is a readout that happens to be made of
+        // geometry, and it competes with the physics for the same room.
+        // The trade IS the swing, and the swing is already on screen.
 
         let trailMesh = MeshResource.generateSphere(radius: 0.005)
         let baseMaterial = Self.trailMaterials[0]
@@ -264,7 +247,6 @@ final class PendulumsRenderer {
 
         syncPendulums(model)
         syncTrail(dt: dt, model: model)
-        syncEnergyBars(model)
         syncGhost(model)
 
         if let selected = model.selected {
@@ -346,6 +328,44 @@ final class PendulumsRenderer {
 
             visuals[pendulum.id] = visual
         }
+    }
+
+    /// The pendulum as the WELL shows it, before you have one: a steel
+    /// collar, a short length of cable, and the satin bob — the same
+    /// three parts and the same three materials the real rig is made of,
+    /// hung at a slight angle so it reads as a pendulum rather than as a
+    /// ball on a stick.
+    ///
+    /// Shorter than a real one on purpose (0.16 m of cable against a
+    /// default 0.8 m): the well is an object standing beside the rig,
+    /// and a full-length preview would be a second pendulum hanging in
+    /// the room pretending not to be one.
+    static func pendulumPreview() -> Entity {
+        let container = Entity()
+        let steel = Materials.machined(UIColor(white: 0.85, alpha: 1))
+        let cableMaterial = Materials.machined(
+            UIColor(white: 0.25, alpha: 1), roughness: 0.6)
+        let cableLength: Float = 0.16
+
+        let collar = ModelEntity(
+            mesh: .generateCylinder(height: 0.03, radius: 0.014),
+            materials: [steel])
+        container.addChild(collar)
+
+        let cable = ModelEntity(
+            mesh: .generateCylinder(height: cableLength, radius: 0.002),
+            materials: [cableMaterial])
+        cable.position = [0, -cableLength / 2, 0]
+        container.addChild(cable)
+
+        let bob = ModelEntity(mesh: .generateSphere(radius: 0.035),
+                              materials: [bobMaterial])
+        bob.position = [0, -cableLength, 0]
+        container.addChild(bob)
+
+        // Hung off vertical, the way one looks mid-swing.
+        container.orientation = simd_quatf(angle: 0.26, axis: [0, 0, 1])
+        return container
     }
 
     private func makeVisual(for pendulum: PendulumsModel.Pendulum) -> PendulumVisual {
@@ -482,28 +502,6 @@ final class PendulumsRenderer {
                 slot.entity.scale = SIMD3(repeating: max(fade, 0.15))
             }
         }
-    }
-
-    // MARK: Energy bars
-
-    private func syncEnergyBars(_ model: PendulumsModel) {
-        guard model.showEnergyBars, let pendulum = model.selected else {
-            energyBarsRoot.isEnabled = false
-            return
-        }
-        energyBarsRoot.isEnabled = true
-        let energies = pendulum.state.energies(
-            length: pendulum.length, gravity: model.gravity, mass: pendulum.mass)
-        // Normalize both bars against the current total, so the swap
-        // between them is the story; the sum is the full bar height.
-        let total = max(energies.kinetic + energies.potential, 1e-6)
-        let reference = max(total, 0.2)
-        let kineticHeight = Float(energies.kinetic / reference) * Self.barFullHeight
-        let potentialHeight = Float(energies.potential / reference) * Self.barFullHeight
-        kineticBar.scale = [1, max(kineticHeight, 0.004), 1]
-        kineticBar.position = [0, max(kineticHeight, 0.004) / 2, 0]
-        potentialBar.scale = [1, max(potentialHeight, 0.004), 1]
-        potentialBar.position = [0.09, max(potentialHeight, 0.004) / 2, 0]
     }
 
     // MARK: Ghost prediction

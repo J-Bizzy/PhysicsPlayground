@@ -152,4 +152,147 @@ public enum MagneticFieldLineTracer {
             return sinTheta * (cos(phi) * u + sin(phi) * v) + cosTheta * pole
         }
     }
+
+    // MARK: Even through the room
+
+    /// Traces loops seeded EVENLY THROUGH A VOLUME rather than off a
+    /// small sphere around each magnet.
+    ///
+    /// **This is a deliberate trade, and the thing it trades away is
+    /// real.** `trace(magnets:config:)` above seeds by equal slices of
+    /// outward flux, which is the classical encoding: line density means
+    /// field strength, and that is why the flanks are sparse and the
+    /// poles are dense. Seeding by VOLUME instead makes the picture even
+    /// across the room and breaks that encoding — density here tells you
+    /// where there was room to draw a line, not how strong the field is.
+    ///
+    /// It is still an honest picture, because every curve is a true
+    /// streamline of B and the arrowheads still carry direction. It is
+    /// just a picture of the field's SHAPE rather than of its strength,
+    /// and the module's legend has to say so. Requested by the owner on
+    /// 2026-08-01, who wanted the field to fill the room it is in.
+    ///
+    /// **Dedup is not optional here.** Seeds scattered through a volume
+    /// land on the same closed loop over and over — the naive version
+    /// draws a handful of curves many times each, at random offsets,
+    /// which is precisely the "some loops read thick and others thin for
+    /// no reason" defect the 2026-07-31 pass removed. A candidate whose
+    /// path mostly retraces one already accepted is rejected.
+    ///
+    /// - Parameters:
+    ///   - center/halfExtents: the room box to fill.
+    ///   - spacing: how close two loops may come before they count as
+    ///     the same loop.
+    ///   - budget: hard cap on returned lines.
+    public static func traceThroughVolume(
+        magnets: [BarMagnet],
+        config: Config,
+        center: SIMD3<Double>,
+        halfExtents: SIMD3<Double>,
+        spacing: Double = 0.11,
+        budget: Int = 26
+    ) -> [[SIMD3<Double>]] {
+        guard !magnets.isEmpty, budget > 0 else { return [] }
+        let length = config.magnetLength
+        let field = { (point: SIMD3<Double>) in
+            MagneticField.barVector(at: point, dueTo: magnets, length: length)
+        }
+        var streamConfig = config.streamlineConfig
+        streamConfig.stopCenters = magnets.map(\.position)
+
+        var accepted: [[SIMD3<Double>]] = []
+        /// Each accepted line's samples, kept PER LINE rather than in one
+        /// pooled set. Two reasons, and the first was a bug the tests
+        /// caught rather than a precaution:
+        ///
+        /// · Overlap is NOT symmetric. A short loop lying entirely along
+        ///   a longer one is ~100 % retraced by it, while the long one is
+        ///   only partly retraced by the short. Testing one direction let
+        ///   a curve through that was three-quarters a duplicate.
+        /// · Against a pooled set, a candidate could be "mostly covered"
+        ///   by fragments of several different loops without duplicating
+        ///   any of them, and be rejected for it.
+        ///
+        /// So each candidate is compared with each accepted line on its
+        /// own, BOTH ways, and rejected if either direction says the same
+        /// curve. Subsampled because this is an O(n·m) sweep and full
+        /// resolution buys nothing: two loops 11 cm apart are 11 cm apart
+        /// at every eighth point too.
+        var acceptedSamples: [[SIMD3<Double>]] = []
+
+        /// The fraction of `a` that runs within `spacing` of `b`.
+        func retracedFraction(_ a: [SIMD3<Double>], _ b: [SIMD3<Double>]) -> Double {
+            guard !a.isEmpty, !b.isEmpty else { return 0 }
+            var near = 0
+            for point in a {
+                var best = Double.infinity
+                for other in b {
+                    best = min(best, simd_distance(other, point))
+                    if best < spacing { break }
+                }
+                if best < spacing { near += 1 }
+            }
+            return Double(near) / Double(a.count)
+        }
+
+        for seed in volumeSeeds(center: center, halfExtents: halfExtents,
+                                count: budget * 8) {
+            if accepted.count >= budget { break }
+            // Not from inside a magnet, and not from a dead spot where
+            // the field has no direction to follow.
+            let tooClose = magnets.contains {
+                simd_distance($0.position, seed) < config.seedRadius
+            }
+            if tooClose { continue }
+            guard simd_length(field(seed)) > 1e-14 else { continue }
+
+            let forward = StreamlineTracer.streamline(
+                from: seed, sign: 1, field: field, config: streamConfig)
+            let backward = StreamlineTracer.streamline(
+                from: seed, sign: -1, field: field, config: streamConfig)
+            var line = Array(backward.reversed().dropLast())
+            line.append(contentsOf: forward)
+            guard line.count > 8 else { continue }
+
+            let samples = stride(from: 0, to: line.count, by: 8).map { line[$0] }
+            // Mostly-overlapping means the same loop. Not ALL of it,
+            // because every loop in a dipole field crowds through the
+            // poles — two genuinely different curves share that
+            // neighbourhood and diverge everywhere else.
+            let isDuplicate = acceptedSamples.contains { existing in
+                retracedFraction(samples, existing) > 0.55
+                    || retracedFraction(existing, samples) > 0.55
+            }
+            if isDuplicate { continue }
+            accepted.append(line)
+            acceptedSamples.append(samples)
+        }
+        return accepted
+    }
+
+    /// Points spread through a box with no clumping and no randomness.
+    ///
+    /// A jittered grid would need a random source, and this runs on a
+    /// worker whose output has to be reproducible for tests. The
+    /// additive-recurrence (R₃ / plastic-constant) sequence is the
+    /// standard low-discrepancy answer: deterministic, and it fills a
+    /// volume far more evenly than a lattice, which would put every seed
+    /// on a plane and draw the field in slabs.
+    public static func volumeSeeds(center: SIMD3<Double>,
+                                   halfExtents: SIMD3<Double>,
+                                   count: Int) -> [SIMD3<Double>] {
+        guard count > 0 else { return [] }
+        // Plastic constant: the real root of x³ = x + 1.
+        let plastic = 1.324717957244746
+        let a = SIMD3<Double>(1 / plastic, 1 / (plastic * plastic),
+                              1 / (plastic * plastic * plastic))
+        return (0..<count).map { index in
+            let n = Double(index) + 0.5
+            let fractional = SIMD3<Double>(
+                (a.x * n).truncatingRemainder(dividingBy: 1),
+                (a.y * n).truncatingRemainder(dividingBy: 1),
+                (a.z * n).truncatingRemainder(dividingBy: 1))
+            return center + (2 * fractional - SIMD3(repeating: 1)) * halfExtents
+        }
+    }
 }

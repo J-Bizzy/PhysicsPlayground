@@ -106,7 +106,6 @@ final class PendulumsModel {
     var showVelocity = true
     var showAcceleration = false
     var showForces = false
-    var showEnergyBars = true
 
     // MARK: Foucault — the reason this pendulum is spherical
     //
@@ -246,7 +245,7 @@ final class PendulumsModel {
         case .gravity:
             insightText = "Stronger gravity stiffens the restoring force: period shrinks as 1/√g. On the Moon this pendulum would swing in slow motion."
         case .damping:
-            insightText = "Damping drains energy every swing — watch the energy bars' total shrink and the arc decay exponentially."
+            insightText = "Damping drains energy every swing — the arc decays exponentially, and the trail cools from orange toward blue as it goes."
         }
     }
 
@@ -483,7 +482,6 @@ final class PendulumsModel {
         showVelocity = true
         showAcceleration = false
         showForces = false
-        showEnergyBars = true
         // Reset restored four of the five states the switch bank shows and
         // silently skipped this one, so an ideal pendulum stayed ideal
         // through a reset while its plate sat dark over a bench that was

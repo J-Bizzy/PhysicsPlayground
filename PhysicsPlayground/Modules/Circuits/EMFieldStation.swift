@@ -79,7 +79,8 @@ final class EMFieldStation {
         let sources = Well([
             .init(name: "Magnet",
                   tint: UIColor(DesignTokens.Palette.magnetismAccent),
-                  glyph: "N",
+                  label: "Add magnet",
+                  preview: { MagnetismRenderer.magnetPreview() },
                   // On the FAR flank (+x): the near side faces the
                   // circuit bench this apparatus is cabled to.
                   position: SIMD3<Float>(MagnetismModel.regionCenter)

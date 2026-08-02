@@ -58,7 +58,8 @@ struct MagnetismSpaceView: View {
             let sources = Well([
                 .init(name: "Magnet",
                       tint: UIColor(DesignTokens.Palette.magnetismAccent),
-                      glyph: "N",
+                      label: "Add magnet",
+                      preview: { MagnetismRenderer.magnetPreview() },
                       position: SIMD3<Float>(MagnetismModel.regionCenter)
                           + SIMD3(-0.72, -0.20, 0.34),
                       spawn: { point in model.addMagnet(at: point) }),

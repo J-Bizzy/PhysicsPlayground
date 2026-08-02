@@ -581,6 +581,24 @@ final class FieldRenderer {
         }
     }
 
+    /// A charge as the WELL shows it, before you have one — the same
+    /// sphere, the same radius and the same red/blue material the real
+    /// one wears, so pulling it out is recognisably getting this object.
+    /// No touch target and no selection halo: a preview is not
+    /// selectable, and the well owns the collider.
+    static func chargePreview(isPositive: Bool) -> Entity {
+        ModelEntity(mesh: .generateSphere(radius: chargeRadius),
+                    materials: [chargeMaterial(isPositive: isPositive)])
+    }
+
+    /// The test probe as the well shows it.
+    static func probePreview() -> Entity {
+        ModelEntity(
+            mesh: .generateSphere(radius: chargeRadius * 0.72),
+            materials: [Materials.energized(
+                DesignTokens.Palette.probePositiveUI, glow: 0.4)])
+    }
+
     private func makeChargeEntity(for charge: PointCharge) -> ModelEntity {
         let sphere = ModelEntity(
             mesh: .generateSphere(radius: Self.chargeRadius),

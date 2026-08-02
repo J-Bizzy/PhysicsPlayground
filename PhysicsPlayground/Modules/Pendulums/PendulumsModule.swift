@@ -17,7 +17,7 @@ enum PendulumsModule {
         ModuleDescriptor(
             id: id,
             title: "Pendulums",
-            blurb: "Hang a pendulum anywhere in the room, then grab the steel bob and throw it — full nonlinear swings, energy trading between bars, and five-pendulum resonance.",
+            blurb: "Hang a pendulum anywhere in the room, then grab the steel bob and throw it — full nonlinear swings, five-pendulum resonance, and a Foucault rig whose plane holds still while your room turns under it.",
             icon: "metronome.fill",
             accent: DesignTokens.Palette.pendulumsAccent,
             firstRunHint: "The bob is already swinging — grab it and throw it sideways. While you hold it, the faint line shows the swing you're about to launch. Tap a bob to select it. To your right, tap a world — the Moon stretches every swing out to two and a half times its period.",
@@ -45,26 +45,19 @@ enum PendulumsModule {
             .init("Friction", model.frictionOn ? "on" : "off"),
         ]
         if let selected = model.selected {
-            let energies = selected.state.energies(
-                length: selected.length,
-                gravity: model.gravity, mass: selected.mass)
             rows.append(.init("Length", String(format: "%.4f", selected.length), "m"))
             rows.append(.init("Mass", String(format: "%.3f", selected.mass), "kg"))
             rows.append(.init("Period 2π√(L/g)",
                               String(format: "%.4f", selected.period(gravity: model.gravity)), "s"))
             rows.append(.init("Speed",
                               String(format: "%.4f", simd_length(selected.state.velocity)), "m/s"))
-            rows.append(.init("Kinetic energy", String(format: "%.5f", energies.kinetic), "J"))
-            rows.append(.init("Potential energy", String(format: "%.5f", energies.potential), "J"))
         }
         return rows
     }
 
     static let legendItems: [LegendItem] = [
         LegendItem(swatch: .fill(DesignTokens.Palette.velocityVector),
-                   text: "Blue bar & arrow — kinetic energy and velocity; trail runs blue (slow) to orange (fast)"),
-        LegendItem(swatch: .fill(Color(red: 0.2, green: 0.8, blue: 0.35)),
-                   text: "Green bar — potential energy; watch the two bars trade while their sum holds"),
+                   text: "Blue arrow — velocity; the trail runs blue (slow) to orange (fast), so the swing colours its own speed"),
         LegendItem(swatch: .fill(Color(red: 0.95, green: 0.85, blue: 0.2)),
                    text: "Force arrows — purple gravity, yellow cable tension, red net force"),
         LegendItem(swatch: .line(.white),

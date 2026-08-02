@@ -1091,6 +1091,35 @@ final class GravityLabRenderer {
         }
     }
 
+    /// A world as the WELL shows it, before you have one.
+    ///
+    /// An Earth-textured sphere at the size a body pulled from the well
+    /// actually arrives at, using the same `CelestialTextures` map the
+    /// real planets wear — the well makes an Earth-mass world, so it
+    /// shows one.
+    static func worldPreview() -> Entity {
+        let sphere = ModelEntity(
+            mesh: .generateSphere(radius: 0.030),
+            materials: [staticMaterial(for: "Earth")])
+        // A slight tilt, so the texture's poles are not dead-on and the
+        // thing reads as a globe rather than a flat disc.
+        sphere.orientation = simd_quatf(angle: 0.35, axis: simd_normalize(SIMD3(0.3, 0, 1)))
+        return sphere
+    }
+
+    /// `material(for:)` without an instance — the well builds its
+    /// preview before any renderer exists.
+    private static func staticMaterial(for name: String) -> RealityKit.Material {
+        if let texture = CelestialTextures.texture(for: name) {
+            var material = PhysicallyBasedMaterial()
+            material.baseColor = .init(tint: .white, texture: .init(texture))
+            material.roughness = 0.7
+            material.metallic = 0.0
+            return material
+        }
+        return Materials.machined(DesignTokens.Palette.celestialUI(name))
+    }
+
     private func material(for name: String) -> RealityKit.Material {
         let texture = CelestialTextures.texture(for: name)
         if name.hasPrefix("Sun") {

@@ -152,15 +152,16 @@ final class PendulumsModelTests: XCTestCase {
 
     // MARK: The switch bank
 
-    /// Five plates, five model flags, and a reset that puts all five back
-    /// — the bank reads its lamps from the model every frame, so a reset
+    /// Every plate the bank shows, and a reset that puts them all back —
+    /// the bank reads its lamps from the model every frame, so a reset
     /// that missed one would leave a lit plate over a hidden layer.
+    /// (Energy bars were the fifth until 2026-08-01, when the whole idea
+    /// was deleted at the owner's request.)
     func testResetRestoresEveryLayerTheBankShows() {
         let model = PendulumsModel()
         model.showVelocity = false
         model.showAcceleration = true
         model.showForces = true
-        model.showEnergyBars = false
         model.frictionOn = false
         model.gravity = 1.62
         model.timeScale = 3.0
@@ -170,7 +171,6 @@ final class PendulumsModelTests: XCTestCase {
         XCTAssertTrue(model.showVelocity)
         XCTAssertFalse(model.showAcceleration)
         XCTAssertFalse(model.showForces)
-        XCTAssertTrue(model.showEnergyBars)
         XCTAssertTrue(model.frictionOn)
         XCTAssertEqual(model.gravity, 9.81, accuracy: 1e-9)
         XCTAssertEqual(model.timeScale, 1.0, accuracy: 1e-9)

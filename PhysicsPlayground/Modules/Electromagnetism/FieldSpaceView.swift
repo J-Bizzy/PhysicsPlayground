@@ -225,13 +225,19 @@ struct FieldSpaceView: View {
         // and handed straight to a drag, so the mouth and the hand have to
         // agree about where they are.
         let wells = Well([
-            .init(name: "Positive", tint: DesignTokens.Palette.positiveUI, glyph: "+",
+            .init(name: "Positive", tint: DesignTokens.Palette.positiveUI,
+                  label: "Add +",
+                  preview: { FieldRenderer.chargePreview(isPositive: true) },
                   position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 0)),
                   spawn: { model.addCharge(positive: true, at: $0) }),
-            .init(name: "Negative", tint: DesignTokens.Palette.negativeUI, glyph: "−",
+            .init(name: "Negative", tint: DesignTokens.Palette.negativeUI,
+                  label: "Add −",
+                  preview: { FieldRenderer.chargePreview(isPositive: false) },
                   position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 1)),
                   spawn: { model.addCharge(positive: false, at: $0) }),
-            .init(name: "Test charge", tint: DesignTokens.Palette.probePositiveUI, glyph: "q",
+            .init(name: "Test charge", tint: DesignTokens.Palette.probePositiveUI,
+                  label: "Test charge",
+                  preview: { FieldRenderer.probePreview() },
                   position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 2)),
                   spawn: { point in
                       model.holdProbe(at: point)

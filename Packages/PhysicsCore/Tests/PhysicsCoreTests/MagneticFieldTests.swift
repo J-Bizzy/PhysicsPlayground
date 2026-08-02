@@ -213,3 +213,132 @@ final class MagneticFieldTests: XCTestCase {
         XCTAssertLessThan(config.terminationRadius, config.seedRadius)
     }
 }
+
+/// Volume seeding: the field drawn evenly through the room it is in,
+/// rather than in a tight bundle around the bar.
+///
+/// The property that matters most here is NOT that lines appear — it is
+/// that the same closed loop is not drawn many times over. Seeds
+/// scattered through a volume land on shared loops constantly, and the
+/// naive version of this produces a handful of curves stacked on each
+/// other at random offsets: exactly the "some read thick, some thin, for
+/// no reason" defect the 2026-07-31 seeding pass removed.
+final class MagneticVolumeSeedingTests: XCTestCase {
+
+    private func magnet() -> BarMagnet {
+        BarMagnet(position: .zero, moment: SIMD3(6, 0, 0))
+    }
+
+    private var halfExtents: SIMD3<Double> { SIMD3(0.62, 0.85, 0.55) }
+
+    private func config() -> MagneticFieldLineTracer.Config {
+        var config = MagneticFieldLineTracer.Config()
+        config.magnetLength = 0.16
+        config.boundsRadius = 1.4
+        config.stepSize = 0.008
+        config.maxSteps = 700
+        return config
+    }
+
+    func testSeedsFillTheBoxWithoutClumpingOntoAPlane() {
+        let seeds = MagneticFieldLineTracer.volumeSeeds(
+            center: .zero, halfExtents: halfExtents, count: 200)
+        XCTAssertEqual(seeds.count, 200)
+
+        // Inside the box, every one of them.
+        for seed in seeds {
+            XCTAssertLessThanOrEqual(abs(seed.x), halfExtents.x + 1e-12)
+            XCTAssertLessThanOrEqual(abs(seed.y), halfExtents.y + 1e-12)
+            XCTAssertLessThanOrEqual(abs(seed.z), halfExtents.z + 1e-12)
+        }
+        // Both halves of every axis get used — a sequence that collapsed
+        // onto a plane or a diagonal would still be "inside the box".
+        for axis in 0..<3 {
+            let values = seeds.map { $0[axis] }
+            XCTAssertGreaterThan(values.filter { $0 > 0 }.count, 60, "axis \(axis)")
+            XCTAssertLessThan(values.filter { $0 > 0 }.count, 140, "axis \(axis)")
+        }
+        // Deterministic: a worker's output has to be reproducible.
+        let again = MagneticFieldLineTracer.volumeSeeds(
+            center: .zero, halfExtents: halfExtents, count: 200)
+        XCTAssertEqual(seeds, again)
+    }
+
+    func testVolumeTracingReachesFurtherOutThanFluxSeeding() {
+        let magnets = [magnet()]
+        let flux = MagneticFieldLineTracer.trace(magnets: magnets, config: config())
+        let volume = MagneticFieldLineTracer.traceThroughVolume(
+            magnets: magnets, config: config(),
+            center: .zero, halfExtents: halfExtents)
+
+        XCTAssertFalse(volume.isEmpty, "no lines at all")
+
+        // The whole point: lines that live out where the user is
+        // standing, not only in a bundle around the bar. Compare the
+        // MEDIAN distance from the magnet across every drawn point.
+        func medianRadius(_ lines: [[SIMD3<Double>]]) -> Double {
+            let radii = lines.flatMap { $0 }.map { simd_length($0) }.sorted()
+            return radii.isEmpty ? 0 : radii[radii.count / 2]
+        }
+        XCTAssertGreaterThan(medianRadius(volume), medianRadius(flux),
+                             "volume seeding did not spread the field out")
+    }
+
+    /// THE DEDUP PROPERTY. No two returned loops may be substantially the
+    /// same curve — which is what makes this different from simply
+    /// throwing more seeds at the problem.
+    func testNoTwoLoopsAreTheSameCurve() {
+        let lines = MagneticFieldLineTracer.traceThroughVolume(
+            magnets: [magnet()], config: config(),
+            center: .zero, halfExtents: halfExtents, spacing: 0.11)
+        XCTAssertGreaterThan(lines.count, 3, "too few lines to be a field")
+
+        for i in 0..<lines.count {
+            for j in (i + 1)..<lines.count {
+                let a = stride(from: 0, to: lines[i].count, by: 8).map { lines[i][$0] }
+                let b = stride(from: 0, to: lines[j].count, by: 8).map { lines[j][$0] }
+                var retraced = 0
+                for point in a {
+                    let nearest = b.reduce(Double.infinity) {
+                        min($0, simd_distance($1, point))
+                    }
+                    if nearest < 0.11 { retraced += 1 }
+                }
+                let overlap = Double(retraced) / Double(a.count)
+                XCTAssertLessThanOrEqual(
+                    overlap, 0.70,
+                    "lines \(i) and \(j) are \(Int(overlap * 100))% the same curve")
+            }
+        }
+    }
+
+    func testEveryLineIsStillATrueStreamlineOfB() {
+        let magnets = [magnet()]
+        let lines = MagneticFieldLineTracer.traceThroughVolume(
+            magnets: magnets, config: config(),
+            center: .zero, halfExtents: halfExtents)
+
+        // Evenness is a seeding choice; being a field line is not
+        // negotiable. Each step must lie along the local B.
+        for line in lines {
+            for index in stride(from: 4, to: line.count - 4, by: 17) {
+                let step = line[index + 1] - line[index]
+                guard simd_length(step) > 1e-9 else { continue }
+                let field = MagneticField.barVector(
+                    at: line[index], dueTo: magnets, length: 0.16)
+                guard simd_length(field) > 1e-13 else { continue }
+                let alignment = abs(simd_dot(simd_normalize(step),
+                                             simd_normalize(field)))
+                XCTAssertGreaterThan(alignment, 0.9,
+                                     "a drawn segment is not along B")
+            }
+        }
+    }
+
+    func testTheBudgetIsRespected() {
+        let lines = MagneticFieldLineTracer.traceThroughVolume(
+            magnets: [magnet()], config: config(),
+            center: .zero, halfExtents: halfExtents, budget: 6)
+        XCTAssertLessThanOrEqual(lines.count, 6)
+    }
+}
