@@ -76,7 +76,13 @@ struct MagnetismControlsPanel: View {
             CollapsedSection("Numbers") {
                 Text("Compass reads \(self.model.compassMicroTesla, specifier: "%.1f") µT")
                     .font(DesignTokens.TypeScale.control.monospacedDigit())
-                Text("Carry the hand compass through the field — its needle and this number follow B.")
+                Text(self.model.compassIsReadingEarth
+                     ? "Reading EARTH — you have carried it clear of the magnets. The needle points north and 65° DOWN, which is where the field actually goes."
+                     : "Reading the BENCH — the magnets here are stronger than Earth. Carry it about 30 cm clear and the needle hands over to the planet.")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Earth: 50 µT, 65° below horizontal — real values. WHICH WAY north lies in your room is a convention: visionOS gives no true heading, so north is straight ahead as you entered.")
                     .font(DesignTokens.TypeScale.footnote)
                     .foregroundStyle(.secondary)
                 // Induced EMF reads out in "The link" section above,

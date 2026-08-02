@@ -85,6 +85,14 @@ struct MagnetismSpaceView: View {
                           symbol: "location.north.circle",
                           isOn: { model.compassOn },
                           toggle: { model.compassOn.toggle() }),
+                    // The fifth: whether the room is standing on a
+                    // planet. Switching it off is the comparison — the
+                    // compasses stop knowing which way is north and go
+                    // back to reading only the bench.
+                    .init(id: "earth", label: "Earth's field",
+                          symbol: "globe",
+                          isOn: { model.earthFieldOn },
+                          toggle: { model.earthFieldOn.toggle() }),
                 ])
             renderer.root.addChild(bank.root)
             layers = bank

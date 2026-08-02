@@ -342,3 +342,80 @@ final class MagneticVolumeSeedingTests: XCTestCase {
         XCTAssertLessThanOrEqual(lines.count, 6)
     }
 }
+
+/// Earth's field — the reason a compass carried away from the bench
+/// still knows which way to point.
+final class GeomagneticFieldTests: XCTestCase {
+
+    func testTheFieldPointsNorthAndDOWN() {
+        let b = GeomagneticField.vector()
+        XCTAssertEqual(simd_length(b), GeomagneticField.referenceMagnitude,
+                       accuracy: 1e-12)
+        // North component positive along north…
+        XCTAssertGreaterThan(simd_dot(b, GeomagneticField.north), 0)
+        // …and the vertical component INTO the ground, which is the
+        // thing a flat dial can never show.
+        XCTAssertLessThan(simd_dot(b, GeomagneticField.up), 0)
+
+        // 65° below horizontal: the vertical part should be the larger.
+        let horizontal = simd_dot(b, GeomagneticField.north)
+        let vertical = -simd_dot(b, GeomagneticField.up)
+        XCTAssertEqual(atan2(vertical, horizontal) * 180 / .pi,
+                       GeomagneticField.referenceDipDegrees, accuracy: 1e-9)
+        XCTAssertGreaterThan(vertical, horizontal,
+                             "at 65° the field is mostly vertical")
+    }
+
+    func testAHorizontalFieldIsWhatZeroDipMeans() {
+        let b = GeomagneticField.vector(dipDegrees: 0)
+        XCTAssertEqual(simd_dot(b, GeomagneticField.up), 0, accuracy: 1e-18)
+    }
+
+    func testDipAtNinetyDegreesPointsStraightDown() {
+        let b = GeomagneticField.vector(dipDegrees: 90)
+        XCTAssertEqual(simd_dot(b, GeomagneticField.north), 0, accuracy: 1e-18)
+        XCTAssertEqual(-simd_dot(b, GeomagneticField.up),
+                       GeomagneticField.referenceMagnitude, accuracy: 1e-12)
+    }
+
+    /// tan I = 2 tan φ — and the consequence people find surprising:
+    /// the field is already steeper than 45° well before the latitude is.
+    func testTheDipLawIsTwoTanLatitude() {
+        XCTAssertEqual(GeomagneticField.dipDegrees(atLatitude: 0), 0, accuracy: 1e-12)
+        XCTAssertEqual(GeomagneticField.dipDegrees(atLatitude: 90), 90, accuracy: 1e-9)
+        // 45° of latitude already gives 63° of dip.
+        XCTAssertEqual(GeomagneticField.dipDegrees(atLatitude: 45), 63.43, accuracy: 0.01)
+        // Southern hemisphere tips the other way.
+        XCTAssertEqual(GeomagneticField.dipDegrees(atLatitude: -30),
+                       -GeomagneticField.dipDegrees(atLatitude: 30), accuracy: 1e-12)
+    }
+
+    /// THE NUMBER THE WHOLE FEATURE RESTS ON: a default magnet and Earth
+    /// are comparable at about arm's length, so walking a compass away
+    /// from the bench genuinely hands it over to Earth. If this drifted
+    /// far from ~0.3 m the demonstration would stop working — either the
+    /// magnets would never win, or Earth never would.
+    func testTheCrossoverIsAboutArmsLength() {
+        let r = GeomagneticField.crossoverDistance(momentMagnitude: 6.0)
+        XCTAssertEqual(r, 0.31, accuracy: 0.03)
+
+        // And it really is where the two fields are equal: check against
+        // the dipole field the app actually integrates.
+        let magnet = BarMagnet(position: .zero, moment: SIMD3(6, 0, 0))
+        let onAxis = MagneticField.vector(at: SIMD3(r, 0, 0), dueTo: magnet)
+        XCTAssertEqual(simd_length(onAxis), GeomagneticField.referenceMagnitude,
+                       accuracy: GeomagneticField.referenceMagnitude * 0.02)
+    }
+
+    /// Close in, the magnet must dominate outright; far out, Earth must.
+    func testTheMagnetWinsCloseAndEarthWinsFar() {
+        let magnet = BarMagnet(position: .zero, moment: SIMD3(6, 0, 0))
+        let earth = GeomagneticField.referenceMagnitude
+
+        let near = MagneticField.vector(at: SIMD3(0.15, 0, 0), dueTo: magnet)
+        XCTAssertGreaterThan(simd_length(near), earth * 5)
+
+        let far = MagneticField.vector(at: SIMD3(0.60, 0, 0), dueTo: magnet)
+        XCTAssertLessThan(simd_length(far), earth / 5)
+    }
+}

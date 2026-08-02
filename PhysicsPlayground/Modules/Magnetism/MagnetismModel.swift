@@ -61,6 +61,8 @@ final class MagnetismModel {
     private static let maxAngularSpeed = 3.0    // rad/s
     /// Magnets can't pass through each other — they stick at a touch.
     private static let contactDistance = magnetLength * 0.92
+    /// Rotation below this in one step is not motion, it is noise.
+    private static let restAngle = 2.0e-5   // rad
     /// How far above contact a magnet begins to slow — the cushion that
     /// turns an impact into a landing. See `softenedAtContact`.
     private static let contactBand = 0.030
@@ -152,9 +154,49 @@ final class MagnetismModel {
         compassPosition = clamped
     }
 
-    /// The field where the compass is — what the needle points along.
-    var compassField: SIMD3<Double> {
-        MagneticField.vector(at: compassPosition, dueTo: allSources)
+    // MARK: Earth's own field
+
+    /// Whether the room is standing on a planet.
+    ///
+    /// COMPASSES ONLY. Earth's field really does pull on the bar magnets
+    /// too — that is how a compass needle works, and a lone bar magnet
+    /// left alone on a bench really does creep round to north. It is
+    /// deliberately not applied to them here (owner's call, 2026-08-01):
+    /// at these strengths it is strong enough to matter, and a sandbox
+    /// where every magnet you park slowly swings north is a different
+    /// toy from the one this module is. The compasses get the whole
+    /// truth; the magnets get each other.
+    ///
+    /// The FIELD LINES are left alone for the same reason and a stronger
+    /// one: adding a uniform background to a dipole does not decorate the
+    /// picture, it changes its topology — the closed loops open out and
+    /// run off to infinity, with a pair of neutral points where the two
+    /// fields cancel. That is real and it is beautiful, but it is a
+    /// different demonstration and nobody asked for it.
+    var earthFieldOn = true
+
+    /// Earth's field in the room, T — zero when switched off.
+    var earthField: SIMD3<Double> {
+        earthFieldOn ? GeomagneticField.vector() : .zero
+    }
+
+    /// What a COMPASS feels anywhere in the room: every magnet, plus the
+    /// planet. Distinct from the field the magnets feel from each other.
+    func compassField(at point: SIMD3<Double>) -> SIMD3<Double> {
+        MagneticField.vector(at: point, dueTo: allSources) + earthField
+    }
+
+    /// The field where the hand compass is — what its needle points along.
+    var compassField: SIMD3<Double> { compassField(at: compassPosition) }
+
+    /// True when Earth is the bigger part of what the hand compass feels
+    /// — i.e. it has been carried clear of the magnets and is reading
+    /// the planet. The readout says which, because "48.3 µT" means two
+    /// completely different things on either side of that line.
+    var compassIsReadingEarth: Bool {
+        guard earthFieldOn else { return false }
+        let fromMagnets = MagneticField.vector(at: compassPosition, dueTo: allSources)
+        return simd_length(fromMagnets) < simd_length(earthField)
     }
 
     /// |B| at the compass in microtesla, for its dial label.
@@ -239,13 +281,42 @@ final class MagnetismModel {
                     next[i].position = clamp(magnets[i].position + velocity * h)
                 }
             }
-            // Turn the moment toward the local field (τ = m × B).
-            let torque = MagneticField.torque(on: magnets[i], inFieldOf: others)
+            // Turn the moment toward the local field (τ = m × B), and
+            // NEVER PAST IT.
+            //
+            // This is where the residual jitter lived. `softenedAtContact`
+            // below fixed the translational half of the same standoff and
+            // the rotational half was left alone, so a pair that had come
+            // together and stopped moving went on twitching: the torque at
+            // contact is enormous, `torqueGain` saturates it at
+            // `maxAngularSpeed`, and a fixed 3 rad/s step overshoots
+            // alignment every frame. Past alignment the torque reverses,
+            // the next step overshoots back, and the pair sits in a
+            // rotational limit cycle locked to the frame rate — visibly
+            // buzzing while apparently at rest.
+            //
+            // The fix is the honest one rather than a damping fudge: the
+            // rotation carries m onto B, so the most it can ever need is
+            // the angle between them. Clamp the step to that and an
+            // aligned pair lands exactly on alignment and stops dead,
+            // which is what real magnets do.
+            let field = MagneticField.vector(at: magnets[i].position, dueTo: others)
+            let torque = simd_cross(magnets[i].moment, field)
             let tMag = simd_length(torque)
-            if tMag > 1e-22 {
+            let fieldMag = simd_length(field)
+            let momentMag = simd_length(magnets[i].moment)
+            if tMag > 1e-22, fieldMag > 1e-18, momentMag > 1e-18 {
                 let rate = min(Self.torqueGain * tMag, Self.maxAngularSpeed)
-                let q = simd_quatd(angle: rate * h, axis: torque / tMag)
-                next[i].moment = q.act(magnets[i].moment)
+                let cosine = simd_dot(magnets[i].moment / momentMag, field / fieldMag)
+                let remaining = acos(min(max(cosine, -1), 1))
+                let stepAngle = min(rate * h, remaining)
+                // Below this the pair is aligned to well under a pixel of
+                // rotation, and stepping anyway is how numerical noise
+                // becomes visible movement.
+                if stepAngle > Self.restAngle {
+                    let q = simd_quatd(angle: stepAngle, axis: torque / tMag)
+                    next[i].moment = q.act(magnets[i].moment)
+                }
             }
         }
         magnets = separated(next)
@@ -455,6 +526,7 @@ final class MagnetismModel {
         // it. (`-magFrozen` still opens frozen — `init()` applies it
         // after this runs.)
         dynamicsOn = true
+        earthFieldOn = true
         compassPosition = Self.regionCenter + SIMD3(0.0, -0.42, 0.55)
         electromagnetOn = false
         coilCurrent = 0

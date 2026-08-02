@@ -759,8 +759,17 @@ final class MagnetismRenderer {
                 simd_distance($0.position, point) < MagnetismModel.magnetLength
             }
             let distance = simd_distance(gridPoint, eye)
-            let b = MagneticField.vector(at: point, dueTo: magnets)
+            // Through the model, so the lattice feels Earth exactly as
+            // the hand compass does — these are the same instrument at
+            // 245 places, and a grid that ignored the planet while the
+            // one in your hand obeyed it would be two different physics
+            // in one room.
+            let b = model.compassField(at: point)
             let mag = simd_length(b)
+            // The floor was 2 µT to hide needles in dead spots. Earth is
+            // 50 µT everywhere, so with it on there ARE no dead spots —
+            // which is the point — and the cull only ever fires now for
+            // needles inside a magnet or under the viewer's nose.
             if tooClose || mag < 2e-6 || distance < Self.compassNearCull {
                 needle.isEnabled = false
                 continue

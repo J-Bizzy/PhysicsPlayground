@@ -93,6 +93,9 @@ enum MagnetismModule {
                    text: "Compass needles point along the local field — and the one you can carry is a SPHERE, with its needle free to swing in any direction. A flat dial can only show the part of B lying in the dial; between two poles the field usually points out of it."),
         LegendItem(swatch: .stroke(DesignTokens.Palette.selectionHalo),
                    text: "Halo marks the selected magnet"),
+        LegendItem(
+            swatch: .symbol("globe", Color(uiColor: MagnetismRenderer.lineColor)),
+            text: "Earth's field is here too, at its real 50 µT — and a 6 A·m² bar magnet matches that at about 30 cm, so a compass carried an arm's length clear of the bench hands over to the planet. It is NOT horizontal: it runs 65° into the ground, which is why the needle tips down when it settles, and why a dip circle is a separate instrument in a real lab. Which way north lies is a convention — visionOS gives no heading — but the strength and the dip are real. Earth pulls on the compasses only, not on the bar magnets."),
     ]
 
 }
