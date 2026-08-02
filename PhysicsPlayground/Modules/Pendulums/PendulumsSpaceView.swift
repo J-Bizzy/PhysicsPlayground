@@ -56,6 +56,16 @@ struct PendulumsSpaceView: View {
     /// discrete choice, and one lone plate standing beside a bank of four
     /// is worse than one bank of five.
     @State private var layers: SpatialLayerBank?
+    /// The one standing VERB in this room: rig five pendulums whose
+    /// lengths step 4 % apart. It was a button in the window panel, and
+    /// it is the module's signature demonstration — five bobs leaving
+    /// together, drifting apart, and realigning — so it could not simply
+    /// be deleted with the panel.
+    ///
+    /// It stands under the Well because it is the same kind of act: the
+    /// well makes one pendulum, this makes five. A verb that creates
+    /// belongs beside the thing you create with.
+    @State private var actions: SpatialActionBank?
     /// "What if this were the Moon?" — the question the bench exists to
     /// ask, as three discs you tap rather than three buttons in a card.
     @State private var worldPicker = SpatialPicker(
@@ -102,6 +112,23 @@ struct PendulumsSpaceView: View {
     private static let instrumentZ: Float = -1.08
     /// Left of the swing, above the well at y = 1.30.
     private static let bankAnchor = SIMD3<Float>(-0.92, 1.58, instrumentZ)
+    /// The verb plate, hanging directly beneath the Well.
+    ///
+    /// It takes the well's OWN x and z (-0.85, -0.95) and drops 0.22 in
+    /// y, which is the whole trick: the first attempt put it on the
+    /// instrument plane at z = -1.08, 13 cm behind the well, and
+    /// perspective promptly slid it sideways until it sat tucked against
+    /// the well orb — two objects a hand's width apart in the room
+    /// reading as one smudge from where the user actually stands. Depth
+    /// separation is not visual separation. Sharing the well's depth and
+    /// separating in height is, from every viewpoint in the room.
+    ///
+    /// The drop is 0.36, not the 0.22 that looked like enough on paper.
+    /// A `Well` hangs its own nameplate at `bounds.min.y - 0.034` —
+    /// BELOW the preview object, not below the anchor — so the well's
+    /// footprint reaches far lower than its position suggests, and at
+    /// 0.22 this plate sat squarely on top of "Add pendulum".
+    private static let verbAnchor = SIMD3<Float>(-0.85, 0.94, -0.95)
     private static let worldsAnchor = SIMD3<Float>(0.80, 1.56, instrumentZ)
     private static let gravityCenter = SIMD3<Float>(0.80, 1.34, instrumentZ)
     private static let timeCenter = SIMD3<Float>(0.80, 1.14, instrumentZ)
@@ -165,6 +192,16 @@ struct PendulumsSpaceView: View {
                 ])
             renderer.root.addChild(bank.root)
             layers = bank
+
+            let verbs = SpatialActionBank(
+                accent: UIColor(DesignTokens.Palette.pendulumsAccent),
+                actions: [
+                    .init(id: "resonance", label: "Resonance ×5",
+                          symbol: "waveform.path",
+                          fire: { model.loadResonancePreset() }),
+                ])
+            renderer.root.addChild(verbs.root)
+            actions = verbs
 
             renderer.root.addChild(worldPicker.root)
             worldPicker.onSelect = { name in
@@ -243,6 +280,8 @@ struct PendulumsSpaceView: View {
                     let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
                     layers?.update(anchor: Self.bankAnchor,
                                    viewer: viewer, dt: event.deltaTime)
+                    actions?.update(anchor: Self.verbAnchor,
+                                    viewer: viewer, dt: event.deltaTime)
                     worldPicker.update(anchor: Self.worldsAnchor,
                                        viewer: viewer, dt: event.deltaTime)
                     // Nothing ticks a track by itself — the caller's duty,
@@ -296,6 +335,19 @@ struct PendulumsSpaceView: View {
                let first = model.pendulums.first {
                 ring.openID = first.id
             }
+            // NO `-penResonance`, deliberately. Every other instrument
+            // here gets an argument because its state is invisible until
+            // something sets it. The Resonance plate is the opposite: it
+            // stands lit and labelled at launch with nothing to reveal,
+            // and `reset()` already calls `loadResonancePreset()`, so the
+            // five stepped bobs ARE the opening state. An argument that
+            // fired it would change nothing on screen and photograph as
+            // proof of a mapping it never exercised — the "bead parked at
+            // its default" mistake CLAUDE.md records against the field
+            // module. The plate's tap path is covered by
+            // `SpatialActionBankTests` instead, and its placement by the
+            // launch screenshot.
+            //
             // The instruments are all pinch-operated, and the simulator
             // has no hands — so each one gets an argument that sets a
             // VALUE rather than a flag. A bead parked at its default in
@@ -499,6 +551,7 @@ struct PendulumsSpaceView: View {
                     // bob ring was open.
                     if worldPicker.handleTap(value.entity) { return }
                     if layers?.handleTap(value.entity) == true { return }
+                    if actions?.handleTap(value.entity) == true { return }
                     if bloom.handleTap(value.entity) { return }
                     // A tap on a bob selects it and toggles its control
                     // ring; a tap on anything else folds the ring away.

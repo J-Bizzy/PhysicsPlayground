@@ -1,0 +1,368 @@
+//
+//  SpatialActionBank.swift
+//  Physics Playground — Design System
+//
+//  The standing one-shot VERB. The vocabulary already had a plate for a
+//  latching state (`SpatialLayerBank`), a disc for an N-way choice
+//  (`SpatialPicker`), a rail for a quantity (`SpatialTrackControl`), a
+//  well for creation (`Well`) and a petal for a per-object action
+//  (`Bloom`). It had nothing for "do this now" that wasn't attached to
+//  an object — and when the module panels were deleted (DECISIONS.md,
+//  2026-08-01) seven capabilities came looking for exactly that. Five
+//  of them have no object to hang a petal on: clearing a bench is an
+//  action on the room, not on any part in it.
+//
+//  IT MUST NOT LOOK LIKE A LAYER BANK, and that is a correctness
+//  property rather than a style note. A layer plate LATCHES: lit means
+//  the layer is on, and the plate is a readout you can also press. An
+//  action plate is MOMENTARY: it fires and nothing about the world it
+//  reports on has a lit-or-dark answer. Standing the two side by side
+//  in the same livery is the "lying by arrangement" failure already
+//  recorded against Magnetism's top plate — the arrangement claims a
+//  shared grammar the behaviour doesn't honour. So an action plate is
+//  dark machined stock, not glass, and it FLASHES its accent for a beat
+//  when it fires rather than staying lit.
+//
+//  Destructive actions take `confirms: true` and arm instead of firing:
+//  the first tap lights the plate and swaps its nameplate to "Tap
+//  again", a timer disarms it, the second tap fires. This is not the
+//  two-pinch arming dance that was removed from Reset in July — that
+//  one guarded a RAIL against a stray gaze-pinch, and its replacement
+//  was a window `confirmationDialog`. There is no window left to put a
+//  dialog in, and Circuit Workshop's bench survives launches, so the
+//  guard has to exist somewhere. It exists here.
+//
+//  The arm timer is the one piece of state this class owns, and
+//  `disarm()` exists so `reset()` can clear it. An armed Clear plate
+//  that outlived a reset would be the same defect that has now bitten
+//  four modules in a different costume.
+//
+
+import RealityKit
+import RenderKit
+import SwiftUI
+
+/// One thing the user can do, once, by pressing a plate.
+struct SpatialAction: Identifiable {
+    let id: String
+    let label: String
+    var symbol: String?
+    /// Read every frame — a plate for an action that cannot currently
+    /// happen goes dim and stops accepting taps, the way the panel
+    /// buttons used `.disabled`.
+    var isAvailable: () -> Bool = { true }
+    /// Destructive: arm on the first tap, fire on the second.
+    var confirms: Bool = false
+    let fire: () -> Void
+
+    init(id: String, label: String, symbol: String? = nil,
+         isAvailable: @escaping () -> Bool = { true },
+         confirms: Bool = false,
+         fire: @escaping () -> Void) {
+        self.id = id
+        self.label = label
+        self.symbol = symbol
+        self.isAvailable = isAvailable
+        self.confirms = confirms
+        self.fire = fire
+    }
+}
+
+@MainActor
+final class SpatialActionBank {
+    let root = Entity()
+
+    /// How long an armed plate stays armed. Long enough to read the
+    /// nameplate and decide, short enough that walking away disarms it.
+    static let armWindow: Double = 4.0
+
+    /// How long the plate holds its accent after firing.
+    private static let flashDuration: Double = 0.25
+
+    private let accent: UIColor
+    private let layout: StackLayout
+    private var reveal: Double = 0
+
+    private struct Plate {
+        let action: SpatialAction
+        let entity: ModelEntity
+        let face: ModelEntity
+        let label: Entity
+        let armedLabel: Entity
+        var flash: Double = 0
+        var wasAvailable: Bool?
+        var wasLit: Bool?
+    }
+
+    private var plates: [Plate] = []
+
+    /// Which plate is armed, and how long it has left. Nil when none is.
+    private var armed: (id: String, remaining: Double)?
+
+    init(accent: UIColor, actions: [SpatialAction] = [],
+         layout: StackLayout = StackLayout()) {
+        self.accent = accent
+        self.layout = layout
+        root.isEnabled = false
+        setActions(actions)
+    }
+
+    func setActions(_ actions: [SpatialAction]) {
+        for plate in plates { plate.entity.removeFromParent() }
+        plates.removeAll()
+        armed = nil
+        for action in actions {
+            plates.append(makePlate(action))
+            root.addChild(plates[plates.count - 1].entity)
+        }
+        reveal = 0
+        root.isEnabled = false
+    }
+
+    var isEmpty: Bool { plates.isEmpty }
+
+    /// Whether `id` is currently armed — for tests and for a caller that
+    /// wants to show the armed state somewhere else.
+    func isArmed(_ id: String) -> Bool { armed?.id == id }
+
+    /// Clear any armed plate. `reset()` MUST call this.
+    func disarm() {
+        armed = nil
+    }
+
+    /// Per frame: hang beside `anchor`, face the viewer, run the arm
+    /// timer and the fire flash, and repaint only what changed.
+    func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?, dt: Double) {
+        reveal = FanLayout.ease(reveal, toward: plates.isEmpty ? 0 : 1, dt: dt)
+        root.isEnabled = reveal > 0.02 && !plates.isEmpty
+        guard root.isEnabled else { return }
+        root.position = anchor
+
+        // Yaw only — a bank that pitched to meet a viewer looking down
+        // on it would turn its plates edge-on.
+        if let viewer {
+            let flat = SIMD3<Float>(viewer.x - anchor.x, 0, viewer.z - anchor.z)
+            if simd_length(flat) > 1e-4 {
+                root.orientation = simd_quatf(from: [0, 0, 1],
+                                              to: simd_normalize(flat))
+            }
+        }
+
+        // The arm window. It runs down in real time, so a plate armed
+        // and forgotten is disarmed by the time a hand comes back.
+        if var current = armed {
+            current.remaining -= dt
+            armed = current.remaining <= 0 ? nil : current
+        }
+
+        for index in plates.indices {
+            let placement = layout.placement(index: index, count: plates.count,
+                                             reveal: reveal)
+            plates[index].entity.position = SIMD3<Float>(placement.offset)
+            plates[index].entity.scale = SIMD3(repeating: Float(placement.scale))
+            plates[index].entity.isEnabled = placement.isVisible
+
+            if plates[index].flash > 0 {
+                plates[index].flash = max(0, plates[index].flash - dt)
+            }
+
+            // Repaint only on change. This runs every frame for every
+            // module, and rebuilding a material 90 times a second for a
+            // value that changes on a tap is pure waste — the same rule
+            // the layer bank keeps.
+            let isArmedNow = armed?.id == plates[index].action.id
+            let available = plates[index].action.isAvailable()
+            let lit = isArmedNow || plates[index].flash > 0
+            if plates[index].wasLit != lit || plates[index].wasAvailable != available {
+                plates[index].wasLit = lit
+                plates[index].wasAvailable = available
+                plates[index].face.model?.materials = [material(lit: lit, available: available)]
+                plates[index].entity.components.set(
+                    accessibility(for: plates[index].action,
+                                  armed: isArmedNow, available: available))
+            }
+            // The nameplate swap is an isEnabled flip between two plates
+            // built once — never a mesh rebuild, which the per-frame
+            // path forbids outright.
+            plates[index].label.isEnabled = !isArmedNow
+            plates[index].armedLabel.isEnabled = isArmedNow
+        }
+    }
+
+    /// True when the tap hit one of these plates — armed it, or fired it.
+    /// A tap that lands on a plate's CHILD resolves to the plate, the
+    /// walk-up contract every station in this app keeps.
+    @discardableResult
+    func handleTap(_ entity: Entity) -> Bool {
+        guard root.isEnabled else { return false }
+        var current: Entity? = entity
+        while let candidate = current {
+            if let index = plates.firstIndex(where: { $0.entity === candidate }) {
+                return press(index: index, on: candidate)
+            }
+            if candidate === root { return false }
+            current = candidate.parent
+        }
+        return false
+    }
+
+    /// Returns true when the tap was CONSUMED — which includes arming.
+    /// An unavailable plate consumes nothing, so a tap on a dim plate
+    /// falls through to whatever is behind it rather than being eaten.
+    private func press(index: Int, on entity: Entity) -> Bool {
+        let action = plates[index].action
+        guard action.isAvailable() else { return false }
+
+        if action.confirms && armed?.id != action.id {
+            armed = (id: action.id, remaining: Self.armWindow)
+            SoundPalette.play(.pop, on: entity, volume: 0.25)
+            return true
+        }
+
+        armed = nil
+        plates[index].flash = Self.flashDuration
+        SoundPalette.play(.pop, on: entity, volume: 0.4)
+        action.fire()
+        return true
+    }
+
+    /// Dark machined stock at rest; accent while armed or flashing; and
+    /// dimmer still when the action cannot currently happen.
+    private func material(lit: Bool, available: Bool) -> UnlitMaterial {
+        let color = lit ? accent : UIColor(white: 0.34, alpha: 1)
+        var material = UnlitMaterial(color: color)
+        let opacity: Float = lit ? 0.95 : (available ? 0.55 : 0.20)
+        material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+        return material
+    }
+
+    private func accessibility(for action: SpatialAction,
+                               armed: Bool, available: Bool) -> AccessibilityComponent {
+        var component = AccessibilityComponent()
+        component.isAccessibilityElement = true
+        component.label = LocalizedStringResource(stringLiteral: action.label)
+        // The value carries the ARMED state, because a plate that is one
+        // tap from wiping a bench and a plate that is two must not read
+        // the same to someone who cannot see it light up.
+        let state = !available ? "unavailable"
+            : (armed ? "armed — tap again to confirm" : "button")
+        component.value = LocalizedStringResource(stringLiteral: state)
+        return component
+    }
+
+    private static let plateWidth: Float = 0.086
+    private static let plateHeight: Float = 0.050
+    /// Matched to `SpatialLayerBank.plateCorner` — the two hang in the
+    /// same rooms and a different radius would read as a different
+    /// design system rather than as a different KIND of control.
+    private static let plateCorner: Float = 0.020
+    private static let labelSize: CGFloat = 0.0104
+    private static let labelGap: Float = 0.008
+
+    /// How far this bank's widest label reaches from a plate's centre —
+    /// what a caller needs to keep the bank clear of its apparatus.
+    /// `FieldInstrumentLayout` asserts against it rather than guessing.
+    ///
+    /// An action that `confirms` also has to fit "Tap again", so the
+    /// caller must pass that string too — a bank sized to its resting
+    /// labels grows on arming, straight into whatever it was cleared of.
+    static func reach(forLabels labels: [String]) -> Float {
+        let widest = labels
+            .map { HubScene.namePlateWidth($0, size: labelSize) }
+            .max() ?? 0
+        return plateWidth / 2 + labelGap + widest
+    }
+
+    /// The nameplate an armed plate shows. Exposed so a caller sizing a
+    /// bank can include it in `reach(forLabels:)`.
+    static let armedLabel = "Tap again"
+
+    private func makePlate(_ action: SpatialAction) -> Plate {
+        // Machined stock, not the layer bank's frosted glass. A verb and
+        // a state must not be the same object in two colours.
+        let plate = ModelEntity(
+            mesh: .generateBox(size: [Self.plateWidth, Self.plateHeight, 0.009],
+                               cornerRadius: Self.plateCorner),
+            materials: [Materials.machined(UIColor(white: 0.24, alpha: 1))])
+        plate.name = "action-\(action.id)"
+
+        // The edge hairline, taken from the layer bank verbatim.
+        //
+        // Without it the plate photographed as a dark smudge on the
+        // furniture rather than as an instrument — machined stock has no
+        // silhouette against a bright wall, which is the whole reason
+        // the glass plates carry a lit border. Family resemblance is
+        // carried by the EDGE; the difference between a verb and a state
+        // is carried by the face material and by what the lamp does.
+        //
+        // Its radius takes the same inset the box does, or the two
+        // outlines stop being concentric — grow a rounded rectangle by a
+        // constant on every side and its corner radius grows by exactly
+        // that constant too.
+        let edge = Materials.glassEdgeInset
+        let border = ModelEntity(
+            mesh: .generateBox(
+                size: [Self.plateWidth + edge * 2,
+                       Self.plateHeight + edge * 2, 0.008],
+                cornerRadius: Self.plateCorner + edge),
+            materials: [Materials.glassEdge()])
+        border.position = [0, 0, -0.0008]
+        plate.addChild(border)
+
+        // The lamp, in the same place the layer bank puts its own, so
+        // the eye finds the state indicator without relearning where to
+        // look. What DIFFERS is the behaviour it reports.
+        let face = ModelEntity(
+            mesh: .generateBox(size: [0.011, 0.034, 0.002], cornerRadius: 0.004),
+            materials: [material(lit: false, available: action.isAvailable())])
+        face.position = [-0.032, 0, 0.006]
+        plate.addChild(face)
+
+        if let symbol = action.symbol, let texture = Bloom.symbolTexture(symbol) {
+            var iconMaterial = UnlitMaterial()
+            iconMaterial.color = .init(tint: .white, texture: .init(texture))
+            iconMaterial.blending = .transparent(opacity: .init(floatLiteral: 0.9))
+            let icon = ModelEntity(
+                mesh: .generatePlane(width: 0.024, height: 0.024),
+                materials: [iconMaterial])
+            icon.position = [-0.002, 0, 0.006]
+            plate.addChild(icon)
+        }
+
+        // Both nameplates are built ONCE and swapped by isEnabled. The
+        // alternative — regenerating the text mesh on arming — is a mesh
+        // rebuild on the interaction path, which this project bans.
+        let label = Self.namePlate(action.label, white: 0.94)
+        plate.addChild(label)
+        let armedLabel = Self.namePlate(Self.armedLabel, white: 1.0)
+        armedLabel.isEnabled = false
+        plate.addChild(armedLabel)
+
+        plate.components.set(InputTargetComponent())
+        // Collider matched to the plate, per the collider-≤-visual rule.
+        // An oversized one here would shield the apparatus the bank
+        // hangs beside — the `SpatialScaleHandle` failure, which made
+        // whole modules silently non-interactive.
+        plate.components.set(CollisionComponent(
+            shapes: [.generateBox(size: [0.092, 0.056, 0.018])]))
+        plate.components.set(HoverEffectComponent())
+        plate.components.set(accessibility(for: action, armed: false,
+                                           available: action.isAvailable()))
+        plate.isEnabled = false
+
+        return Plate(action: action, entity: plate, face: face,
+                     label: label, armedLabel: armedLabel)
+    }
+
+    /// A label placed by its own LEFT edge, so a long word starts where
+    /// the plate ends instead of straddling the icon it names — the bug
+    /// that put half of "Parallel plates" on top of its own switch.
+    private static func namePlate(_ text: String, white: CGFloat) -> Entity {
+        let width = HubScene.namePlateWidth(text, size: labelSize)
+        let plate = HubScene.namePlate(text,
+                                       accent: UIColor(white: white, alpha: 1),
+                                       size: labelSize)
+        plate.position = [plateWidth / 2 + labelGap + width / 2, 0, 0.006]
+        return plate
+    }
+}

@@ -16,6 +16,20 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-01 — The module window becomes a title bar; `makeControls` is deleted
+
+**Decision:** `ModuleDescriptor.makeControls` is removed, the six `*ControlsPanel.swift` files are deleted, and a module's window is exactly three things: the title bar, "Show in room" while the space is closed, and the first-run hint. Every readout moves into the room as a `Callout` or a RealityView attachment on the object it describes. The seven capabilities with no spatial twin get one. The legend moves to a title-bar popover. The experiment `step` strings move to the hub's focus panel and catalog row — you read the instruction at the front door, then enter.
+
+**Context:** This closes the arc the 2026-07-29 entry opened and the 2026-08-01 exit criterion narrowed. That criterion — "no `Slider`, `Picker` or `Toggle` in any module panel" — has been met by all six modules. What the panels held afterwards was 71 readout `Text`s, 13 buttons (six of them duplicating a control that already stands in the room), and four collapsed sections whose entire content was prose explaining *where a control had gone*. A surface whose content is directions to elsewhere is not a surface.
+
+**This reverses 2026-07-29's "every capability must ALSO be reachable through something discoverable and simulator-operable," and the reversal is narrower than it sounds.** That standard was written against *gaze-revealed* controls — invisible in the simulator, undiscoverable on device, "I can't even move them." That world no longer exists: `LookReveal` is gone app-wide, every ring opens by tap, every instrument stands permanently visible, every one is mouse-operable in the simulator, and every one is reachable from the CLI by a launch argument. What is removed is not the discoverable path; it is the *duplicate* of a path that now exists in the room and is better.
+
+What is genuinely given up is **XCUITest** reach — and that was never complete. XCUITest has no API for RealityKit entities, so the panel only ever proved the window's half. The replacement is the pattern this project already invented for exactly this: `handleTap` called directly against real entities, in the `StationTapTests` shape. Every control built in this change ships with one. VoiceOver reach is preserved by `AccessibilityComponent` on every plate, petal, disc and card — label and value both, the omission of which was caught when `SpatialTrackControl` first flew. VoiceOver reaches RealityKit entities; XCUITest does not. Those are different bars, and this entry claims the first.
+
+**The cost, stated plainly:** the app now has no flat control surface at all, so a regression in a spatial instrument has no fallback path. That is the trade this entry makes. `PanelControlCriterionTests` — rewritten from "no knobs in a panel" to "no panels, plus a positive anchor so the check cannot pass vacuously" — is what stops it being unmade by accident. This boundary has already been re-litigated across 212 commits once.
+
+**Consequences:** A module supplies physics and a scene, nothing else; the shell renders chrome that no module can vary. `CollapsedSection` becomes a grave (the surface was decided against, not a missing door). Every new instrument needs a debug launch argument in the same commit that adds it, because nothing automated can reach it. And the standing rule gains a clause: a control that leaves the window must arrive somewhere a person can find *without being told where it went* — if it needs a signpost, it is in the wrong place.
+
 ## 2026-08-01 — The submission sweep: gates re-verified, two open items closed
 
 **Decision:** The three App Store gates closed on 2026-07-29 are re-verified **in the shipping bundle** rather than on disk, and the two items standing in `HOMESCREEN_SPEC.md` §3 are resolved rather than carried.

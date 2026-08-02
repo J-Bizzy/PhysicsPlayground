@@ -12,7 +12,9 @@ The dependency points one way only. **PhysicsCore never imports RealityKit or Sw
 
 ## Module contract
 
-Every lab is a `ModuleDescriptor`: a catalog card, `makeControls`/`makeScene`, and shared closures (`isPaused`/`togglePause`, `reset`, `captureReadings`). The shell renders all other chrome identically by construction — a module supplies only its physics and its scene. Four files per module (`<Name>Model`, `<Name>Module`, `<Name>Renderer`, `<Name>SpaceView`), registered with one line in `ModuleCatalog.all`. Six experiences ship, grouped behind the Home Screen's two domain doors (`HubDomain`).
+Every lab is a `ModuleDescriptor`: a catalog card, `makeControls`/`makeScene`, and shared closures (`isPaused`/`togglePause`, `reset`, `captureReadings`). The shell renders all other chrome identically by construction — a module supplies only its physics and its scene.
+
+> **In flight (decided 2026-08-01, not yet landed):** `makeControls` and the six `*ControlsPanel.swift` are being deleted — the module window becomes a title bar, "Show in room", and the first-run hint. Controls and readouts move onto the apparatus. See `DECISIONS.md`. Update this section when the panels actually go. Four files per module (`<Name>Model`, `<Name>Module`, `<Name>Renderer`, `<Name>SpaceView`), registered with one line in `ModuleCatalog.all`. Six experiences ship, grouped behind the Home Screen's two domain doors (`HubDomain`).
 
 ### One apparatus per room, and the one wired pair
 
