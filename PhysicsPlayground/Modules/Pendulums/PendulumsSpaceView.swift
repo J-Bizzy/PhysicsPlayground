@@ -24,6 +24,14 @@ struct PendulumsSpaceView: View {
     /// Which bob's ring is open — shared by the tap gesture and the
     /// render loop (see RingState's header for why it's a reference).
     @State private var ring = RingState()
+    /// Which pendulum's PIVOT is open.
+    ///
+    /// A separate ring from the bob's, and a reference type for the same
+    /// reason that one is: a `@State` struct read from inside a
+    /// RealityKit closure comes back stale. Tapping a pivot and tapping a
+    /// bob are exclusive — opening either closes the other — so one
+    /// `Bloom` serves both, and what it carries depends on which is open.
+    @State private var pivotRing = RingState()
     @State private var wells: Well?
     /// `PhysicsCore.ThrowSampler` — shared with Projectiles and Gravity
     /// Lab, which each kept their own copy of this buffer.
@@ -138,6 +146,19 @@ struct PendulumsSpaceView: View {
     /// The rails face the user, not straight down the room.
     private static let instrumentNormal = SIMD3<Float>(-0.34, 0, 0.94)
 
+    /// Walks up from a tapped entity to a pivot collar, if it is one.
+    /// The renderer names them `pivot-<uuid>`.
+    private static func pivotID(of entity: Entity) -> UUID? {
+        var current: Entity? = entity
+        while let candidate = current {
+            if candidate.name.hasPrefix("pivot-") {
+                return UUID(uuidString: String(candidate.name.dropFirst(6)))
+            }
+            current = candidate.parent
+        }
+        return nil
+    }
+
     /// Identifies the floating readout above the selected bob.
     private static let infoCardID = "pendulum-info"
 
@@ -171,6 +192,18 @@ struct PendulumsSpaceView: View {
                       position: SIMD3(-0.85, 1.30, -0.95),
                       spawn: { point in
                           model.addPendulum(at: point)
+                      }),
+                // The chaotic one, as its own mouth rather than a mode
+                // on the first. They are different physics — a taut
+                // cable on a sphere versus a two-angle Lagrangian system
+                // — and the interaction law says a discrete choice gets
+                // a labelled object rather than a hidden modifier.
+                .init(name: "Double", tint: UIColor(DesignTokens.Palette.pendulumsAccent),
+                      label: "Double pendulum",
+                      preview: { PendulumsRenderer.doublePendulumPreview() },
+                      position: SIMD3(-0.85, 1.06, -0.95),
+                      spawn: { point in
+                          model.addDoublePendulum(at: point)
                       }),
             ])
             renderer.root.addChild(sources.root)
@@ -580,6 +613,15 @@ struct PendulumsSpaceView: View {
                     if worldPicker.handleTap(value.entity) { return }
                     if layers?.handleTap(value.entity) == true { return }
                     if actions?.handleTap(value.entity) == true { return }
+                    // The PIVOT, which carries exactly one control: the
+                    // bead that pays the cable out. No petals — the
+                    // pivot's other verb is "move me", and that is a
+                    // drag on the collar itself rather than a button.
+                    if let id = Self.pivotID(of: value.entity) {
+                        pivotRing.openID = pivotRing.openID == id ? nil : id
+                        ring.openID = nil
+                        return
+                    }
                     if bloom.handleTap(value.entity) { return }
                     // A tap on a bob selects it and toggles its control
                     // ring; a tap on anything else folds the ring away.
@@ -588,6 +630,7 @@ struct PendulumsSpaceView: View {
                         if let id = UUID(uuidString: candidate.name),
                            model.pendulums.contains(where: { $0.id == id }) {
                             model.select(id: id)
+                            pivotRing.openID = nil
                             if ring.openID == id {
                                 ring.openID = nil
                             } else {
@@ -609,6 +652,34 @@ struct PendulumsSpaceView: View {
     /// it, and the period tag over the pivot climbs as the square root
     /// of length while your hand is still moving.
     private func syncBloom(dt: Double) {
+        // THE PIVOT'S BEAD, and nothing else on it.
+        //
+        // Cable length is the one quantity a pivot owns: it is where the
+        // cable is paid out from, and the length is visibly the distance
+        // between this collar and the bob. Everything else about a
+        // pendulum belongs to its BOB (mass, delete) or to the collar's
+        // own drag (where it hangs), so this ring has a grip and no
+        // petals — which is the whole of what was asked for and less
+        // than a menu would have been.
+        if let pivotID = pivotRing.openID,
+           let pendulum = model.pendulums.first(where: { $0.id == pivotID }) {
+            bloom.retarget(
+                "pivot-\(pivotID)",
+                petals: [],
+                grip: .init(
+                    name: "Length",
+                    range: PendulumsModel.lengthRange,
+                    read: { model.pendulums.first(where: { $0.id == pivotID })?.length ?? 0.8 },
+                    write: { model.setLength(id: pivotID, $0) },
+                    format: { String(format: "%.2f m", $0) },
+                    radius: { 0.07 }))
+            let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
+            bloom.update(anchor: SIMD3<Float>(pendulum.pivot),
+                         viewer: viewer, revealTarget: 1, dt: dt)
+            return
+        }
+        if pivotRing.openID != nil { pivotRing.openID = nil }
+
         if let openID = ring.openID,
            !model.pendulums.contains(where: { $0.id == openID }) {
             ring.openID = nil     // deleted out from under the ring

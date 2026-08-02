@@ -22,10 +22,20 @@ final class PendulumsModelTests: XCTestCase {
     /// simulated seconds of swinging lose essentially no amplitude —
     /// the energy-exact integrator plus a severed loss term.
     func testFrictionToggleMakesThePendulumIdeal() {
+        // A SOLITARY pendulum, not the opening scene's first bob.
+        //
+        // The module opens with Newton's cradle now (2026-08-02), and a
+        // ball in a cradle is supposed to lose its swing — it hands the
+        // whole of it to the next ball along. This test is about
+        // DAMPING, so it needs a pendulum with nothing to collide with;
+        // asserting the old way would have been asserting that a cradle
+        // does not work.
         let model = PendulumsModel()
         model.frictionOn = false
-        guard let first = model.pendulums.first else {
-            return XCTFail("no pendulum in the opening scene")
+        for pendulum in model.pendulums { model.removePendulum(id: pendulum.id) }
+        guard let id = model.addPendulum(),
+              let first = model.pendulums.first(where: { $0.id == id }) else {
+            return XCTFail("could not hang a solitary pendulum")
         }
         model.setDamping(id: first.id, 1.0)   // would kill the swing fast
 
@@ -380,5 +390,101 @@ final class PendulumsModelTests: XCTestCase {
             model.addPendulum(at: SIMD3(-0.6 + Double(step) * 0.1, 2.0, -1.1))
         }
         XCTAssertEqual(model.pendulums.count, PendulumsModel.pendulumBudget)
+    }
+
+    // MARK: The cradle and the chaotic one
+
+    /// The module's cold open IS a cradle: five identical bobs, touching,
+    /// with the first drawn back.
+    @MainActor
+    func testTheModuleOpensWithNewtonsCradle() {
+        let model = PendulumsModel()
+        XCTAssertEqual(model.pendulums.count, 5)
+        XCTAssertTrue(model.pendulums.allSatisfy { $0.kind == .simple })
+
+        let masses = Set(model.pendulums.map(\.mass))
+        XCTAssertEqual(masses.count, 1, """
+            a cradle of mismatched balls does something much less tidy — \
+            equal masses swap velocities exactly, and that IS the mechanism
+            """)
+
+        // Exactly one is lifted; the rest hang plumb and touching.
+        let swinging = model.pendulums.filter { abs($0.state.position.x) > 0.01 }
+        XCTAssertEqual(swinging.count, 1)
+    }
+
+    /// One ball in, one ball out — through the real model, not through
+    /// `BobCollision` in isolation.
+    ///
+    /// Measured as peak DISPLACEMENT from plumb over the whole run, not
+    /// as a speed at some instant. My first attempt sampled speed at 1.2 s
+    /// and failed on a cradle that was working perfectly: the far ball
+    /// was at the top of its swing, which is exactly where its speed is
+    /// zero. Displacement has no such phase to get unlucky with — the
+    /// middle balls never leave plumb no matter when you look.
+    ///
+    /// This is the end-to-end version of
+    /// `BobCollisionTests.testOneBallInSendsExactlyOneBallOut`, and it
+    /// checks the two things that test cannot see: the projection onto
+    /// the line of centres, and the write-back into `state.velocity`.
+    @MainActor
+    func testTheCradlePassesTheSwingAcrossToTheFarBall() {
+        let model = PendulumsModel()
+        model.frictionOn = false
+        var peak = [Double](repeating: 0, count: model.pendulums.count)
+        for _ in 0..<Int(2.5 * 90) {
+            model.step(dt: 1.0 / 90)
+            for (index, pendulum) in model.pendulums.enumerated() {
+                peak[index] = max(peak[index], abs(pendulum.state.position.x))
+            }
+        }
+
+        let ends = max(peak[0], peak[peak.count - 1])
+        let middle = peak[1..<(peak.count - 1)].max() ?? 0
+        XCTAssertGreaterThan(ends, 0.1,
+                             "neither end ball ever swung; peaks were \(peak)")
+        XCTAssertLessThan(middle, ends * 0.25, """
+            the middle balls should barely leave plumb — the impulse passes \
+            THROUGH them. Peaks were \(peak)
+            """)
+    }
+
+    /// A double pendulum is a different rig, not a mode: it has a second
+    /// rod, a second mass, and a two-angle state the simple one has no
+    /// slot for.
+    @MainActor
+    func testADoublePendulumHangsWithBothRods() throws {
+        let model = PendulumsModel()
+        let id = try XCTUnwrap(model.addDoublePendulum())
+        let pendulum = try XCTUnwrap(model.pendulums.first { $0.id == id })
+
+        XCTAssertEqual(pendulum.kind, .double)
+        XCTAssertNotNil(pendulum.doubleState)
+        let elbow = try XCTUnwrap(pendulum.upperBobWorld)
+        let bob = try XCTUnwrap(pendulum.lowerBobWorld)
+
+        // Both rods are the length they claim to be, which is the whole
+        // constraint the Lagrangian is written under.
+        XCTAssertEqual(simd_distance(pendulum.pivot, elbow), pendulum.length,
+                       accuracy: 1e-9)
+        XCTAssertEqual(simd_distance(elbow, bob), pendulum.length2, accuracy: 1e-9)
+        XCTAssertEqual(pendulum.bobWorld, bob, "the grabbable bob is the LOWER one")
+    }
+
+    /// …and it keeps both rods rigid as it runs. A constraint that drifts
+    /// is the classic failure of integrating angles rather than positions.
+    @MainActor
+    func testTheDoublePendulumsRodsStayRigidThroughChaos() throws {
+        let model = PendulumsModel()
+        model.frictionOn = false
+        let id = try XCTUnwrap(model.addDoublePendulum())
+        for _ in 0..<(90 * 15) { model.step(dt: 1.0 / 90) }
+
+        let pendulum = try XCTUnwrap(model.pendulums.first { $0.id == id })
+        let elbow = try XCTUnwrap(pendulum.upperBobWorld)
+        let bob = try XCTUnwrap(pendulum.lowerBobWorld)
+        XCTAssertEqual(simd_distance(pendulum.pivot, elbow), pendulum.length,
+                       accuracy: 1e-9)
+        XCTAssertEqual(simd_distance(elbow, bob), pendulum.length2, accuracy: 1e-9)
     }
 }

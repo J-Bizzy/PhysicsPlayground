@@ -59,8 +59,21 @@ final class PendulumsModel {
 
     // MARK: Pendulums
 
+    /// What kind of rig this is.
+    ///
+    /// The two are genuinely different physics, not a display option: a
+    /// simple pendulum is a taut cable constrained to a sphere and
+    /// integrated by Verlet, while a double pendulum is a non-separable
+    /// two-angle system integrated by RK4 from the exact Lagrangian. They
+    /// share a pivot, a mass and a bob radius, and nothing else.
+    enum Kind: Equatable {
+        case simple
+        case double
+    }
+
     struct Pendulum: Identifiable, Equatable {
         let id: UUID
+        var kind: Kind = .simple
         var length: Double
         var mass: Double
         var damping: Double
@@ -74,8 +87,51 @@ final class PendulumsModel {
         /// tracks the hand exactly.
         var isGrabbed = false
 
+        // MARK: The double pendulum's extra half
+        //
+        // Present only when `kind == .double`. Kept as plain stored
+        // properties rather than an associated value on `Kind` so the
+        // struct stays `Equatable` and cheap to copy in the render loop.
+
+        /// The lower rod's length, m.
+        var length2: Double = 0.35
+        /// The lower bob's mass, kg.
+        var mass2: Double = 1.0
+        /// The two-angle state. Nil for a simple pendulum.
+        var doubleState: DoublePendulum?
+        /// Which vertical plane the double pendulum swings in — a unit
+        /// horizontal vector. A planar system needs a plane, and this is
+        /// it; the rig faces the user by default.
+        var planeAxis: SIMD3<Double> = SIMD3(1, 0, 0)
+
+        /// The rig `DoublePendulum` needs, assembled from this pendulum.
+        var doubleRig: DoublePendulum.Rig {
+            DoublePendulum.Rig(length1: length, length2: length2,
+                               mass1: mass, mass2: mass2, damping: damping)
+        }
+
+        /// Where the lower bob is, in world space. The planar solution
+        /// lives in (along-plane, up); this lifts it back into the room.
+        var lowerBobWorld: SIMD3<Double>? {
+            guard kind == .double, let doubleState else { return nil }
+            let planar = doubleState.lowerBob(rig: doubleRig)
+            return pivot + planeAxis * planar.x + SIMD3(0, planar.y, 0)
+        }
+
+        /// Where the UPPER bob is for a double pendulum — the elbow.
+        var upperBobWorld: SIMD3<Double>? {
+            guard kind == .double, let doubleState else { return nil }
+            let planar = doubleState.upperBob(rig: doubleRig)
+            return pivot + planeAxis * planar.x + SIMD3(0, planar.y, 0)
+        }
+
         var pivot: SIMD3<Double> { pivotPoint }
-        var bobWorld: SIMD3<Double> { pivot + state.position }
+        /// The bob a hand grabs and a readout describes. For a double
+        /// pendulum that is the LOWER bob — the one whose path is the
+        /// thing worth watching.
+        var bobWorld: SIMD3<Double> {
+            lowerBobWorld ?? (pivot + state.position)
+        }
 
         func period(gravity: Double) -> Double {
             SphericalPendulum.smallAnglePeriod(length: length, gravity: gravity)
@@ -88,6 +144,16 @@ final class PendulumsModel {
     // MARK: Global knobs
 
     var gravity = 9.81 { didSet { insight(.gravity) } }
+
+    /// How elastic a bob-on-bob collision is, 0…1.
+    ///
+    /// 1 is perfectly elastic, which is what a cradle of polished steel
+    /// very nearly is and what makes it run for minutes. It is a stored
+    /// property rather than a constant because `frictionOn` already
+    /// decides whether this rig is idealised, and a cradle that loses
+    /// energy at the contacts while its cables lose none would be
+    /// incoherent — see `step`.
+    var bobRestitution = 1.0
     var isPaused = false
     /// Time scale. Pause is separate.
     ///
@@ -283,6 +349,69 @@ final class PendulumsModel {
         return pendulum.id
     }
 
+    /// NEWTON'S CRADLE — five identical bobs hanging in a touching row,
+    /// with the first drawn back.
+    ///
+    /// This is what the module opens with, and it is the right cold-open
+    /// for the same reason it is the right desk toy: it is a question
+    /// before it is a demonstration. Everyone has seen one; almost nobody
+    /// can say why one ball leaves rather than two slower ones.
+    ///
+    /// IDENTICAL MASSES, and that is not decoration. Equal masses swap
+    /// velocities exactly in an elastic collision, which is the whole
+    /// mechanism — a cradle of mismatched balls does something much less
+    /// tidy. Zero damping, because a cradle's cables are effectively
+    /// lossless over the time anyone watches, and the only energy it
+    /// really sheds is at the contacts.
+    ///
+    /// The bobs are placed exactly one diameter apart so they start in
+    /// contact. `BobCollision.contactSlop` is what makes that survive
+    /// floating point.
+    func loadNewtonsCradle() {
+        pendulums = []
+        let count = 5
+        let radius = 0.035
+        let length = 0.55
+        for index in 0..<count {
+            let pivot = Self.defaultPivot
+                + SIMD3(Double(index) * radius * 2 - Double(count - 1) * radius, 0, 0)
+            // The first ball starts lifted; the rest hang plumb and
+            // touching. One in, one out.
+            let angle = index == 0 ? -0.55 : 0.0
+            pendulums.append(Pendulum(
+                id: UUID(), kind: .simple, length: length, mass: 0.2,
+                damping: 0, bobRadius: radius, cableThickness: 0.0016,
+                state: SphericalPendulum(length: length, angle: angle),
+                pivotPoint: pivot))
+        }
+        selectedID = nil
+        bobRestitution = 1.0
+    }
+
+    /// A double pendulum: the chaotic one.
+    @discardableResult
+    func addDoublePendulum(at point: SIMD3<Double>? = nil) -> UUID? {
+        guard pendulums.count < Self.pendulumBudget else { return nil }
+        let upper = 0.40
+        let lower = 0.32
+        var pivot = point ?? Self.defaultPivot
+        pivot.y = max(pivot.y, Self.minimumPivotHeight + upper + lower)
+        // Started well away from hanging, because a double pendulum
+        // released near the bottom just swings — the chaos this exists to
+        // show needs enough energy to carry the upper rod over the top.
+        let pendulum = Pendulum(
+            id: UUID(), kind: .double, length: upper, mass: 1.0,
+            damping: 0.01, bobRadius: 0.032, cableThickness: 0.002,
+            state: SphericalPendulum(length: upper, angle: 0),
+            pivotPoint: pivot,
+            length2: lower, mass2: 1.0,
+            doubleState: DoublePendulum(theta1: 2.2, theta2: 1.4))
+        pendulums.append(pendulum)
+        selectedID = pendulum.id
+        emitSound(.pop, at: pendulum.bobWorld, volume: 0.5)
+        return pendulum.id
+    }
+
     /// Five pendulums, lengths stepped 4% apart: they start in phase,
     /// drift, scramble, and re-align — beat frequencies teaching
     /// themselves.
@@ -419,14 +548,96 @@ final class PendulumsModel {
             accumulator -= substep
             steps += 1
             for index in pendulums.indices where !pendulums[index].isGrabbed {
-                pendulums[index].state = SphericalPendulum.step(
-                    pendulums[index].state, dt: substep,
-                    length: pendulums[index].length, gravity: gravity,
-                    mass: pendulums[index].mass,
-                    damping: frictionOn ? pendulums[index].damping : 0,
-                    angularVelocity: earthRotation)
+                switch pendulums[index].kind {
+                case .simple:
+                    pendulums[index].state = SphericalPendulum.step(
+                        pendulums[index].state, dt: substep,
+                        length: pendulums[index].length, gravity: gravity,
+                        mass: pendulums[index].mass,
+                        damping: frictionOn ? pendulums[index].damping : 0,
+                        angularVelocity: earthRotation)
+                case .double:
+                    guard var doubleState = pendulums[index].doubleState else { break }
+                    var rig = pendulums[index].doubleRig
+                    if !frictionOn { rig.damping = 0 }
+                    doubleState = DoublePendulum.step(
+                        doubleState, dt: substep, rig: rig, gravity: gravity)
+                    pendulums[index].doubleState = doubleState
+                }
             }
+            resolveBobCollisions()
             if foucaultOn { advanceFloorMarkers(dt: substep) }
+        }
+    }
+
+    // MARK: Bobs that meet
+
+    /// Elastic collisions between bobs, resolved along the line joining
+    /// their centres.
+    ///
+    /// SIMPLE PENDULUMS ONLY, and that is a physical statement rather
+    /// than a shortcut: a double pendulum's bob is on a rod whose
+    /// reaction to an impulse involves both angles at once, and applying
+    /// a 1-D exchange to one of its bobs would put energy into the system
+    /// through a constraint the exchange does not know about. A cradle is
+    /// made of simple pendulums; so is every collision worth watching
+    /// here.
+    ///
+    /// The bobs are SORTED ALONG THE LINE and swept in order, because
+    /// that ordering is the whole trick of Newton's cradle — the impulse
+    /// crosses as a compression wave, one contact at a time, and a
+    /// simultaneous solve would admit answers real cradles do not give.
+    /// `BobCollision` carries the reasoning and the exchange arithmetic;
+    /// this projects the room onto the line and writes the answer back.
+    private func resolveBobCollisions() {
+        let movable = pendulums.indices.filter {
+            pendulums[$0].kind == .simple && !pendulums[$0].isGrabbed
+        }
+        guard movable.count > 1 else { return }
+
+        // The line the bobs are strung out on: from the first pivot to
+        // the last. For a cradle that is the rail they hang from.
+        let first = pendulums[movable.first!].pivot
+        let last = pendulums[movable.last!].pivot
+        var axis = last - first
+        guard simd_length(axis) > 1e-6 else { return }
+        axis = simd_normalize(axis)
+
+        let ordered = movable.sorted {
+            simd_dot(pendulums[$0].bobWorld, axis)
+                < simd_dot(pendulums[$1].bobWorld, axis)
+        }
+
+        for _ in 0..<(4 * ordered.count) {
+            var touched = false
+            for slot in 0..<(ordered.count - 1) {
+                let i = ordered[slot], j = ordered[slot + 1]
+                let a = pendulums[i], b = pendulums[j]
+                let separation = b.bobWorld - a.bobWorld
+                let gap = simd_length(separation)
+                let contact = a.bobRadius + b.bobRadius + BobCollision.contactSlop
+                guard gap <= contact, gap > 1e-9 else { continue }
+
+                // Along the line of CENTRES, not along the rail: two bobs
+                // meeting slightly off-axis still exchange along the
+                // normal, which is what a frictionless contact does.
+                let normal = separation / gap
+                let va = simd_dot(a.state.velocity, normal)
+                let vb = simd_dot(b.state.velocity, normal)
+                guard vb - va < 0 else { continue }      // already parting
+
+                let (na, nb) = BobCollision.exchange((velocity: va, mass: a.mass),
+                                                     (velocity: vb, mass: b.mass),
+                                                     restitution: bobRestitution)
+                pendulums[i].state.velocity += normal * (na - va)
+                pendulums[j].state.velocity += normal * (nb - vb)
+                touched = true
+                if abs(na - va) > 0.05 {
+                    emitSound(.pop, at: a.bobWorld,
+                              volume: min(abs(na - va) * 0.4, 0.8))
+                }
+            }
+            if !touched { break }
         }
     }
 
@@ -496,7 +707,13 @@ final class PendulumsModel {
         resetFloorMarkers()
         insightText = ""
         accumulator = 0
-        loadResonancePreset()
+        // THE CRADLE IS THE COLD OPEN (2026-08-02), not the five-length
+        // resonance rig. Resonance is still a plate in the room, and it
+        // is the better SECOND thing to see — but a cradle asks its
+        // question before it demonstrates anything, and "why does one
+        // ball leave and not two" is a better first sentence than five
+        // bobs drifting out of phase.
+        loadNewtonsCradle()
     }
 
     init() {

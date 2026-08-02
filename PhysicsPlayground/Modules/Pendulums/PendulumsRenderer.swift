@@ -44,6 +44,12 @@ final class PendulumsRenderer {
         let pivot: ModelEntity
         let cable: ModelEntity
         let bob: ModelEntity
+        /// The double pendulum's second rod and its elbow. Built for
+        /// every rig and simply left disabled on a simple one — a
+        /// pendulum cannot change kind after it is made, so this costs
+        /// two hidden entities rather than a rebuild path.
+        let cable2: ModelEntity
+        let elbow: ModelEntity
         let velocityArrow: Arrow
         let accelerationArrow: Arrow
         let gravityArrow: Arrow
@@ -262,7 +268,8 @@ final class PendulumsRenderer {
         let liveIDs = Set(model.pendulums.map(\.id))
         for id in visuals.keys where !liveIDs.contains(id) {
             let visual = visuals[id]
-            [visual?.pivot, visual?.cable, visual?.bob].forEach { $0?.removeFromParent() }
+            [visual?.pivot, visual?.cable, visual?.bob,
+             visual?.cable2, visual?.elbow].forEach { $0?.removeFromParent() }
             [visual?.velocityArrow, visual?.accelerationArrow, visual?.gravityArrow,
              visual?.tensionArrow, visual?.netArrow].forEach { $0?.holder.removeFromParent() }
             visuals[id] = nil
@@ -275,7 +282,23 @@ final class PendulumsRenderer {
             let visual = visuals[pendulum.id] ?? makeVisual(for: pendulum)
 
             visual.pivot.position = SIMD3<Float>(pendulum.pivot)
-            syncPeriodLabel(for: pendulum, gravity: model.gravity)
+            // A PERIOD LABEL BELONGS TO A PENDULUM YOU ARE ATTENDING
+            // TO, not to every rope in the room. Newton's cradle hangs
+            // five identical bobs 7 cm apart, and five identical
+            // "T = 1.49 s" labels landed on top of each other as one
+            // unreadable smear — five copies of a number that is the
+            // same for all of them and interesting for none.
+            //
+            // So: label a pendulum when it is selected, or when it has
+            // room of its own. The resonance rig spaces its pivots 30 cm
+            // apart precisely because its five periods DIFFER and the
+            // comparison is the point, so it keeps every label.
+            let crowded = model.pendulums.contains {
+                $0.id != pendulum.id
+                    && simd_distance($0.pivot, pendulum.pivot) < 0.15
+            }
+            syncPeriodLabel(for: pendulum, gravity: model.gravity,
+                            visible: !crowded || model.selectedID == pendulum.id)
 
             // Model-owned always: during a grab the relative drag
             // writes the model, and everything — bob, cable, arrows —
@@ -295,6 +318,41 @@ final class PendulumsRenderer {
                 visual.cable.scale = SIMD3(
                     Float(pendulum.cableThickness / 0.002), length,
                     Float(pendulum.cableThickness / 0.002))
+            }
+
+            // The double pendulum's second rod: pivot → elbow → bob.
+            //
+            // The FIRST cable is re-aimed at the elbow rather than at the
+            // bob for a double rig, which is why this runs after the
+            // block above rather than replacing it: `bobWorld` is the
+            // LOWER bob for a double pendulum, so drawing pivot→bob
+            // would have cut the corner and shown one straight rod
+            // through the elbow.
+            if let elbowWorld = pendulum.upperBobWorld.map({ SIMD3<Float>($0) }) {
+                visual.elbow.isEnabled = true
+                visual.cable2.isEnabled = true
+                visual.elbow.position = elbowWorld
+
+                let upper = elbowWorld - pivotWorld
+                let upperLength = simd_length(upper)
+                if upperLength > 1e-5 {
+                    visual.cable.position = (pivotWorld + elbowWorld) / 2
+                    visual.cable.orientation =
+                        VectorFieldArrows.rotationFromYAxis(to: upper / upperLength)
+                    visual.cable.scale = SIMD3(
+                        Float(pendulum.cableThickness / 0.002), upperLength,
+                        Float(pendulum.cableThickness / 0.002))
+                }
+                let lower = bobWorld - elbowWorld
+                let lowerLength = simd_length(lower)
+                if lowerLength > 1e-5 {
+                    visual.cable2.position = (elbowWorld + bobWorld) / 2
+                    visual.cable2.orientation =
+                        VectorFieldArrows.rotationFromYAxis(to: lower / lowerLength)
+                    visual.cable2.scale = SIMD3(
+                        Float(pendulum.cableThickness / 0.002), lowerLength,
+                        Float(pendulum.cableThickness / 0.002))
+                }
             }
 
             // Vectors.
@@ -368,6 +426,38 @@ final class PendulumsRenderer {
         return container
     }
 
+    /// The double pendulum as its well mouth shows it: two rods bent at
+    /// an elbow, which is the one silhouette that distinguishes it from
+    /// the mouth above it at a glance.
+    static func doublePendulumPreview() -> Entity {
+        let root = Entity()
+        let steel = Materials.machined(UIColor(white: 0.72, alpha: 1))
+        func rod(from a: SIMD3<Float>, to b: SIMD3<Float>) -> ModelEntity {
+            let span = b - a
+            let length = simd_length(span)
+            let entity = ModelEntity(
+                mesh: .generateCylinder(height: length, radius: 0.0016),
+                materials: [steel])
+            entity.position = (a + b) / 2
+            entity.orientation = VectorFieldArrows.rotationFromYAxis(to: span / length)
+            return entity
+        }
+        let pivot = SIMD3<Float>(0, 0.030, 0)
+        let elbow = SIMD3<Float>(0.016, -0.004, 0)
+        let bob = SIMD3<Float>(-0.006, -0.034, 0)
+        root.addChild(rod(from: pivot, to: elbow))
+        root.addChild(rod(from: elbow, to: bob))
+        let elbowBall = ModelEntity(mesh: .generateSphere(radius: 0.0075),
+                                    materials: [bobMaterial])
+        elbowBall.position = elbow
+        root.addChild(elbowBall)
+        let bobBall = ModelEntity(mesh: .generateSphere(radius: 0.0105),
+                                  materials: [bobMaterial])
+        bobBall.position = bob
+        root.addChild(bobBall)
+        return root
+    }
+
     private func makeVisual(for pendulum: PendulumsModel.Pendulum) -> PendulumVisual {
         let pivot = ModelEntity(
             mesh: .generateCylinder(height: 0.03, radius: 0.014),
@@ -394,8 +484,25 @@ final class PendulumsRenderer {
         bob.components.set(accessibility)
         root.addChild(bob)
 
+        let cable2 = ModelEntity(
+            mesh: .generateCylinder(height: 1, radius: 0.002),
+            materials: [cableMaterial])
+        cable2.isEnabled = false
+        root.addChild(cable2)
+
+        // The elbow carries the UPPER mass of a double pendulum. Drawn
+        // smaller than the lower bob because the lower one is what the
+        // eye should follow — its path is the chaotic figure the whole
+        // rig exists to draw.
+        let elbow = ModelEntity(
+            mesh: .generateSphere(radius: 0.026),
+            materials: [Self.bobMaterial])
+        elbow.isEnabled = false
+        root.addChild(elbow)
+
         let visual = PendulumVisual(
             pivot: pivot, cable: cable, bob: bob,
+            cable2: cable2, elbow: elbow,
             velocityArrow: Arrow(color: VectorPalette.velocity),
             accelerationArrow: Arrow(color: VectorPalette.acceleration),
             // Gravity is a force, and the vector language says so.
@@ -410,7 +517,8 @@ final class PendulumsRenderer {
 
     // MARK: Trail
 
-    private func syncPeriodLabel(for pendulum: PendulumsModel.Pendulum, gravity: Double) {
+    private func syncPeriodLabel(for pendulum: PendulumsModel.Pendulum,
+                                 gravity: Double, visible: Bool = true) {
         let label: (holder: Entity, text: ModelEntity)
         if let existing = periodLabels[pendulum.id] {
             label = existing
@@ -425,6 +533,8 @@ final class PendulumsRenderer {
             label = (holder, text)
             periodLabels[pendulum.id] = label
         }
+        label.holder.isEnabled = visible
+        guard visible else { return }
         label.holder.position = SIMD3<Float>(pendulum.pivot) + SIMD3(0, 0.055, 0)
 
         let string = String(format: "T = %.2f s", pendulum.period(gravity: gravity))
