@@ -40,3 +40,18 @@ and restoring one may mean repairing it first. The standing example:
 `Archive/Fields/FieldsModule.swift` still calls `MagnetismSpaceView`,
 which was deleted when Magnetism became a station of the E&M world. A
 restore is a merge, not a `git mv`.
+
+## Models
+
+`Archive/Models/` holds the USDZ a cut module was drawn with — Optics,
+WindTunnel and Waves, moved here on 2026-08-01. They were still sitting
+in `PhysicsPlayground/Models/`, which is a `PBXFileSystemSynchronizedRootGroup`:
+everything under it is copied into the bundle whether or not any code
+loads it, so ~1.1 MB of geometry for three modules that do not exist was
+shipping in every build. Nothing referenced them — the only USDZ the app
+loads are `Models/Circuits/*` (`CircuitsRenderer`) and
+`Models/Kinematics/LauncherBarrel.usdz` (`KinematicsRenderer`).
+
+They are MOVED rather than deleted so the restore path above stays whole:
+bring the folder back to `PhysicsPlayground/Models/` along with the
+module's own folder.
