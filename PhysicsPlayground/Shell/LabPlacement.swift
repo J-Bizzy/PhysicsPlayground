@@ -82,6 +82,9 @@ struct LabAnchorView: View {
     @Environment(AppModel.self) private var appModel
     @State private var root = Entity()
     @State private var drag: RelativeDrag?
+    /// How far this press has moved the anchor — a press that never
+    /// moves it is a tap. See `onEnded`.
+    @State private var travelled: Float = 0
 
     var body: some View {
         RealityView { content in
@@ -110,32 +113,44 @@ struct LabAnchorView: View {
                             hand: hand)
                     }
                     guard let drag else { return }
-                    appModel.labPlacement.move(
-                        to: SIMD3<Float>(drag.position(forHand: hand)))
+                    let next = SIMD3<Float>(drag.position(forHand: hand))
+                    travelled = max(travelled,
+                                    simd_distance(next, appModel.labPlacement.offset))
+                    appModel.labPlacement.move(to: next)
                 }
-                .onEnded { _ in drag = nil }
-        )
-        // RECENTRE, which used to be a button on a strip under the
-        // module's title bar. That strip is gone with the rest of the
-        // window's furniture (DECISIONS.md, 2026-08-01), and its other
-        // button — "Done" — went with it as pure duplication: the
-        // title-bar control TOGGLES `isPlacing`, so pressing it again
-        // has always been Done.
-        //
-        // Recentre was not duplicated anywhere, so it lands on the
-        // object it acts on. The cross-hair only exists while you are
-        // placing the lab, which makes it the one affordance that is
-        // present exactly when this verb is meaningful.
-        .simultaneousGesture(
-            TapGesture()
-                .targetedToAnyEntity()
-                .onEnded { value in
-                    guard appModel.labPlacement.isPlacing,
-                          Self.isAnchor(value.entity) else { return }
-                    appModel.labPlacement.recentre()
+                // RECENTRE — a press on the cross-hair that does not move
+                // it. This used to be a button on a strip under the
+                // module's title bar, and that strip is gone with the
+                // rest of the window's furniture (DECISIONS.md,
+                // 2026-08-01).
+                //
+                // IT IS FOLDED INTO THIS DRAG RATHER THAN GIVEN ITS OWN
+                // `TapGesture`, and that is the whole point. It HAD a
+                // TapGesture, and the cost was severe and app-wide:
+                // `LabAnchorView` is a sibling of every module's scene in
+                // `PlaygroundSpaceView`, so a `.targetedToAnyEntity()`
+                // tap recogniser here competes with the one every module
+                // installs for its own instruments — and a module's
+                // `.gesture` loses to a sibling's `.simultaneousGesture`.
+                // The symptom was that no switch plate, disc or rail in
+                // ANY lab could be pressed.
+                //
+                // A press that never moves is a tap. Reusing the
+                // recogniser that is already here costs nothing and
+                // cannot contend with anything.
+                .onEnded { _ in
+                    if drag != nil, travelled < Self.tapTravel {
+                        appModel.labPlacement.recentre()
+                    }
+                    drag = nil
+                    travelled = 0
                 }
         )
     }
+
+    /// How far a press may wander and still count as a tap, metres.
+    /// A hand held still in mid-air drifts a few millimetres.
+    private static let tapTravel: Float = 0.012
 
     /// Where the anchor sits when the lab has not been moved — roughly
     /// where the apparatus lives, at a comfortable reaching height.

@@ -91,6 +91,7 @@ struct CircuitsSpaceView: View {
             // renderer was written and carried nothing; the card was in
             // the window panel's "Selected part" dropdown.
             if let card = attachments.entity(for: Self.readoutCardID) {
+                stripInput(from: card)
                 renderer.selectedAnchor.addChild(card)
             }
             renderer.viewRoot.addChild(bloom.root)

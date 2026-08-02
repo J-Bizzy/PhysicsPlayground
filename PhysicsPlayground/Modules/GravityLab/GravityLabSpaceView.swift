@@ -136,6 +136,7 @@ struct GravityLabSpaceView: View {
             // and a billboard when you walk in. Same call the creation
             // well makes, for the same reason.
             if let card = attachments.entity(for: Self.dataCardID) {
+                stripInput(from: card)
                 renderer.selectedAnchor.addChild(card)
                 renderer.compensateForRig(card)
             }

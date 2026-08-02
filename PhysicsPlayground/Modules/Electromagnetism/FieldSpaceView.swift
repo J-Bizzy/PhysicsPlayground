@@ -166,6 +166,7 @@ struct FieldSpaceView: View {
             if let card = attachments.entity(for: Self.readoutCardID) {
                 card.components.set(BillboardComponent())
                 card.position = SIMD3<Float>(Self.readoutCardAnchor)
+                stripInput(from: card)
                 renderer.root.addChild(card)
             }
             renderer.viewRoot.addChild(bloom.root)

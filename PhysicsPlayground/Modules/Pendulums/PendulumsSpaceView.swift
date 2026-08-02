@@ -32,6 +32,11 @@ struct PendulumsSpaceView: View {
     /// bob are exclusive — opening either closes the other — so one
     /// `Bloom` serves both, and what it carries depends on which is open.
     @State private var pivotRing = RingState()
+    /// The collar this press started on, and whether it has moved. A
+    /// press that never moves is a tap; see the drag's `onEnded`.
+    @State private var pressedPivot: (id: UUID, moved: Bool)?
+    /// How far a press may wander and still count as a tap, metres.
+    private static let tapTravel: Double = 0.012
     @State private var wells: Well?
     /// `PhysicsCore.ThrowSampler` — shared with Projectiles and Gravity
     /// Lab, which each kept their own copy of this buffer.
@@ -178,6 +183,7 @@ struct PendulumsSpaceView: View {
             // card it was waiting for existed too, in the window panel's
             // "Numbers" dropdown. This is the wire that was never run.
             if let card = attachments.entity(for: Self.infoCardID) {
+                stripInput(from: card)
                 renderer.infoAnchor.addChild(card)
             }
 
@@ -519,6 +525,25 @@ struct PendulumsSpaceView: View {
                             return
                         }
 
+                        // THE PIVOT COLLAR. This branch was missing
+                        // entirely: the renderer names the collar
+                        // `pivot-<uuid>` and calls
+                        // `Grabbable.configureTouchTarget` on it, saying
+                        // "a rig you cannot re-hang is furniture, not
+                        // rigging" — but nothing here ever began a drag
+                        // from one. The only `pivot-` drag in the file
+                        // came from pulling a NEW pendulum out of the
+                        // well, so re-hanging an existing rig had never
+                        // once worked. The loop below matches a BARE
+                        // uuid, which a collar's name is not.
+                        if let id = Self.pivotID(of: value.entity),
+                           let pendulum = model.pendulums.first(where: { $0.id == id }) {
+                            drag = RelativeDrag(name: "pivot-\(id.uuidString)",
+                                                target: pendulum.pivot, hand: hand)
+                            pressedPivot = (id: id, moved: false)
+                            return
+                        }
+
                         var current: Entity? = value.entity
                         while let candidate = current {
                             if let id = UUID(uuidString: candidate.name),
@@ -540,7 +565,14 @@ struct PendulumsSpaceView: View {
                     // A pivot drag re-hangs the rig; a bob drag swings it.
                     if drag?.name.hasPrefix("pivot-") == true, let drag,
                        let id = UUID(uuidString: String(drag.name.dropFirst(6))) {
-                        model.movePivot(id: id, to: drag.position(forHand: hand))
+                        let target = drag.position(forHand: hand)
+                        if var pressed = pressedPivot, pressed.id == id,
+                           let pendulum = model.pendulums.first(where: { $0.id == id }),
+                           simd_distance(target, pendulum.pivot) > Self.tapTravel {
+                            pressed.moved = true
+                            pressedPivot = pressed
+                        }
+                        model.movePivot(id: id, to: target)
                         return
                     }
                     guard let drag, let id = UUID(uuidString: drag.name) else { return }
@@ -549,6 +581,26 @@ struct PendulumsSpaceView: View {
                     handSampler.record(world, at: Date.timeIntervalSinceReferenceDate)
                 }
                 .onEnded { value in
+                    // A PRESS ON THE COLLAR THAT NEVER MOVED IT opens the
+                    // length bead. Folded into this drag rather than
+                    // given its own `TapGesture`, which is how it was
+                    // written first and which cost the collar its drag:
+                    // `DragGesture(minimumDistance: 0)` and a
+                    // `TapGesture` over the same entity are ambiguous, so
+                    // a pinch on the pivot could resolve as the tap and
+                    // the rig would refuse to be re-hung. One recogniser,
+                    // two outcomes, decided by whether the thing moved.
+                    if let pressed = pressedPivot {
+                        pressedPivot = nil
+                        if !pressed.moved {
+                            pivotRing.openID =
+                                pivotRing.openID == pressed.id ? nil : pressed.id
+                            ring.openID = nil
+                        }
+                        drag = nil
+                        bloom.endGrip()
+                        return
+                    }
                     // `bloom.endGrip()` — every other module in the app
                     // called it and this one never did. `gripDrag` then
                     // stayed non-nil forever after the first touch of a
@@ -613,15 +665,11 @@ struct PendulumsSpaceView: View {
                     if worldPicker.handleTap(value.entity) { return }
                     if layers?.handleTap(value.entity) == true { return }
                     if actions?.handleTap(value.entity) == true { return }
-                    // The PIVOT, which carries exactly one control: the
-                    // bead that pays the cable out. No petals — the
-                    // pivot's other verb is "move me", and that is a
-                    // drag on the collar itself rather than a button.
-                    if let id = Self.pivotID(of: value.entity) {
-                        pivotRing.openID = pivotRing.openID == id ? nil : id
-                        ring.openID = nil
-                        return
-                    }
+                    // NO pivot branch here. The collar's bead is opened
+                    // by a press that does not move it, inside the drag
+                    // gesture — see `onEnded`. A tap target on the collar
+                    // competed with its own drag and stopped the rig
+                    // being re-hung.
                     if bloom.handleTap(value.entity) { return }
                     // A tap on a bob selects it and toggles its control
                     // ring; a tap on anything else folds the ring away.

@@ -15,6 +15,7 @@
 //
 
 import RenderKit
+import RealityKit
 import SwiftUI
 
 enum DesignTokens {
@@ -134,4 +135,22 @@ enum DesignTokens {
         static let label: Font = .callout
         static let footnote: Font = .footnote
     }
+}
+
+/// Strips input from an attachment entity and everything under it.
+///
+/// `.allowsHitTesting(false)` governs hit testing INSIDE the SwiftUI
+/// view; it is not a promise about the RealityKit entity the attachment
+/// is hosted in, which can still carry an `InputTargetComponent` and a
+/// `CollisionComponent` sized to the card. A readout that intercepts a
+/// pinch is the `SpatialScaleHandle` failure (DECISIONS.md, 2026-07-29)
+/// — and these cards float directly over bobs, parts and planets that
+/// are all meant to be grabbed. Belt and braces, because the failure
+/// mode is invisible: the card looks right and the thing behind it
+/// silently stops responding.
+@MainActor
+func stripInput(from entity: Entity) {
+    entity.components.remove(InputTargetComponent.self)
+    entity.components.remove(CollisionComponent.self)
+    for child in entity.children { stripInput(from: child) }
 }
