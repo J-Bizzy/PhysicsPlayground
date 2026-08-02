@@ -36,7 +36,6 @@ struct ModuleHostView: View {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.openWindow) private var openWindow
     @State private var confirmingReset = false
-    @State private var showingLegend = false
     @State private var showingSensing = false
 
     var body: some View {
@@ -51,24 +50,18 @@ struct ModuleHostView: View {
                 .accessibilityLabel("All simulations")
                 .accessibilityHint("Returns to the catalog")
 
-                Menu {
-                    ForEach(ModuleCatalog.all(appModel: appModel)) { entry in
-                        Button {
-                            appModel.activeModuleID = entry.id
-                        } label: {
-                            if entry.id == module.id {
-                                Label(entry.title, systemImage: "checkmark")
-                            } else {
-                                Label(entry.title, systemImage: entry.icon)
-                            }
-                        }
-                    }
-                } label: {
-                    Image(systemName: "square.grid.3x3")
-                }
-                .accessibilityLabel("Switch simulation")
-
-                Spacer(minLength: 12)
+// NO MODULE-SWITCH MENU, and no legend button. The bar carries
+                // navigation, identity, and the things you reach for
+                // WHILE working; switching labs is neither. The
+                // chevron-left goes back to the catalog, which is where
+                // choosing belongs — the front door, which is the rule
+                // this project has now arrived at three separate times.
+                //
+                // (The palette bead does NOT carry lab switching either,
+                // despite being the obvious place to look: its four
+                // petals are pause, capture, settings and reset, and a
+                // fifth was refused on the record.)
+                                Spacer(minLength: 12)
 
                 // Center: the module's identity.
                 HStack(spacing: 10) {
@@ -155,38 +148,6 @@ struct ModuleHostView: View {
                     }
                 }
 
-                // The legend, as a POPOVER rather than a section
-                // stacked under the bar.
-                //
-                // It could not simply be deleted with the rest: colour
-                // is semantic in this app and owned by `VectorPalette`
-                // (red = positive/N-pole, blue = negative, arrow length
-                // = strength), so the legend is the key to the app's own
-                // vocabulary — and Gravity Lab's carries the load-bearing
-                // admission that Mercury's 43″/century needs GR, "which
-                // this lab does not model". Dropping that would repeat
-                // the disclosed-fiction failure the field module was
-                // pulled up on.
-                //
-                // Anchored to the bar, so the window still shows only
-                // the bar at rest, and still rendered by the SHELL from
-                // `module.legend`, so no module can restyle or forget it.
-                if !module.legend.isEmpty {
-                    Button {
-                        showingLegend.toggle()
-                    } label: {
-                        Image(systemName: "list.bullet.rectangle")
-                    }
-                    .accessibilityLabel("Key")
-                    .accessibilityHint("What the colours and shapes in this simulation mean")
-                    .popover(isPresented: $showingLegend,
-                             attachmentAnchor: .point(.bottom)) {
-                        LegendView(items: module.legend)
-                            .padding(20)
-                            .frame(maxWidth: 340)
-                    }
-                }
-
                 // Reset ASKS FIRST.
                 //
                 // It used to live on the in-space rail, where a stray
@@ -267,10 +228,13 @@ struct ModuleHostView: View {
         // screen. Five circular buttons took about 280 points before the
         // title got any, and "Wave Interference" needs about 200 more.
         //
-        // The legend's Key button makes SIX, so this went to 740. The
-        // number is load-bearing and the arithmetic is why: shave it and
-        // the module's own name is what breaks first.
-        .frame(minWidth: 740)
+        // Back down to 620 now that the module-switch menu and the Key
+        // button are gone (2026-08-02): four circular buttons take about
+        // 230 points, and the longest name — "Circuit Workshop" — needs
+        // roughly 200 more. The number is load-bearing either way, and
+        // the arithmetic is why: shave it and the module's own name is
+        // what breaks first, which is how it broke at 560.
+        .frame(minWidth: 620)
         .glassBackgroundEffect(
             in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
