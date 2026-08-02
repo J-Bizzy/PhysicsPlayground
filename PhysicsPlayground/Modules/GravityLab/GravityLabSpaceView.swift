@@ -118,12 +118,27 @@ struct GravityLabSpaceView: View {
         // shallow, tidy row — the same arithmetic, different shape.
         layout: FanLayout(span: 50 * .pi / 180, reach: 0.30,
                           verticalScale: 0.25, lift: 0, stagger: 0))
+    /// Identifies the floating readout above the selected body.
+    private static let dataCardID = "gravity-data"
+
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
-        RealityView { content in
+        RealityView { content, attachments in
             let renderer = GravityLabRenderer()
             content.add(renderer.root)
+
+            // The selected body's orbit and energy, on the body.
+            //
+            // `selectedAnchor` sits under `systemRoot`, which the scale
+            // rig drives between 0.4× and 9×, so the card has to be
+            // compensated or it is a postage stamp when you step back
+            // and a billboard when you walk in. Same call the creation
+            // well makes, for the same reason.
+            if let card = attachments.entity(for: Self.dataCardID) {
+                renderer.selectedAnchor.addChild(card)
+                renderer.compensateForRig(card)
+            }
 
             // Under `root`, NOT `viewRoot`: the scale rig reaches 9×, and
             // a control that grew to nine times its size along with the
@@ -398,6 +413,14 @@ struct GravityLabSpaceView: View {
             #endif
             renderer.tick(model)
             self.renderer = renderer
+        } attachments: {
+            Attachment(id: Self.dataCardID) {
+                GravityLabDataCard()
+                    // A readout must never intercept a pinch — this one
+                    // floats over an orrery whose every body is grabbable.
+                    .allowsHitTesting(false)
+                    .environment(model)
+            }
         }
         .simultaneousGesture(
             // A TAP MUST NOT BECOME A THROW.

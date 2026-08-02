@@ -414,6 +414,17 @@ final class CircuitsRenderer {
         if let selected = model.selectedComponent {
             selectedAnchor.isEnabled = true
             selectedAnchor.position = SIMD3<Float>(selected.position) + SIMD3(0, 0.14, 0)
+            // COUNTER-SCALED, because this anchor hangs under `viewRoot`
+            // and `viewRoot` is the zoom rig — Electron View pins it to
+            // 4× and two hands drive it to 8×. Its position must stay in
+            // the rig (the card has to ride the part it describes as the
+            // bench swells), but its SIZE must not: a readout that grew
+            // with the bench would be a wall-sized slab of text at the
+            // exact moment you got in among the electrons to read
+            // something else. Gravity Lab solves the same problem with
+            // `compensateForRig`; this module has one anchor to fix, so
+            // it fixes it here.
+            selectedAnchor.scale = SIMD3(repeating: 1 / max(benchScale, 0.001))
         } else {
             selectedAnchor.isEnabled = false
         }

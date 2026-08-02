@@ -72,6 +72,9 @@ struct CircuitsSpaceView: View {
     /// The bench's one standing verb: clear it. See `clearAnchor`.
     @State private var verbs: SpatialActionBank?
 
+    /// Identifies the floating readout above the selected part.
+    private static let readoutCardID = "circuit-readout"
+
     /// Left of the bench, mirroring the layers bank on the right.
     private static let meterAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-0.62, -0.03, 0.16)
@@ -106,9 +109,17 @@ struct CircuitsSpaceView: View {
         + SIMD3<Float>(-1.02, -0.02, 0.10)
 
     var body: some View {
-        RealityView { content in
+        RealityView { content, attachments in
             let renderer = CircuitsRenderer()
             content.add(renderer.root)
+
+            // What the selected part is doing, on the part. The anchor
+            // has been repositioned above it every frame since the
+            // renderer was written and carried nothing; the card was in
+            // the window panel's "Selected part" dropdown.
+            if let card = attachments.entity(for: Self.readoutCardID) {
+                renderer.selectedAnchor.addChild(card)
+            }
             renderer.viewRoot.addChild(bloom.root)
 
             let bank = SpatialLayerBank(
@@ -316,6 +327,15 @@ struct CircuitsSpaceView: View {
             }
             #endif
             self.renderer = renderer
+        } attachments: {
+            Attachment(id: Self.readoutCardID) {
+                CircuitsSelectedReadout()
+                    // Never intercept a pinch: this floats 14 cm above a
+                    // part whose body, terminals and end grips are all
+                    // grab targets.
+                    .allowsHitTesting(false)
+                    .environment(model)
+            }
         }
         .gesture(
             TapGesture()
