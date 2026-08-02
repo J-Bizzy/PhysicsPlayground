@@ -511,6 +511,104 @@ module's new centrepiece. Everything marked ⟳ is new or changed.
       holds a circular orbit.
 - [ ] The clock bank changes time scale and reads back which is on.
 
+## The window is a title bar (2026-08-01)
+
+The module panels are gone — `makeControls` is deleted and all six
+`*ControlsPanel.swift` with it. Everything below is unreachable by any
+automation: `simctl` has no tap verb, XCUITest has no entity API, and the
+one XCUITest that used to prove a module's controls were wired now checks
+"Show in room" instead. **A screenshot proves something rendered; only a
+hand proves it works.**
+
+### ⟳ The window itself, in every module
+
+- [ ] The window shows a title bar and nothing else — no cards, no
+      dropdowns, no scroll.
+- [ ] Below it, only two things ever appear: **Show in room** when the
+      immersive space is closed, and the **first-run hint** until you
+      dismiss it. Dismiss the hint; it stays gone on re-entry.
+- [ ] The bar does not truncate the longest name. **Circuit Workshop** is
+      the one that broke before — check it specifically, at default and
+      at the largest accessibility text size.
+- [ ] **Key** opens the legend as a popover and it closes on a tap
+      outside. Every module's legend is present and matches what is drawn.
+- [ ] **Place the lab** shows the cross-hair. Drag it — the whole
+      apparatus follows and the instruments do NOT. **Tap** the cross-hair
+      and the lab snaps home. Press the title-bar button again to finish.
+- [ ] Reset still confirms, and after a reset nothing is left armed (see
+      the Clear plates below).
+
+### ⟳ The standing verbs (`SpatialActionBank`)
+
+A verb plate is dark machined stock with a lit edge, and it FLASHES on
+fire rather than latching. It must never read as a layer-bank plate.
+
+- [ ] **Pendulums — Resonance ×5**, under the Add-pendulum well. Fires
+      five stepped bobs. Present at launch with no argument.
+- [ ] **Projectiles — Clear**, the launcher's third bloom petal beside
+      Fire and Balls. Clears the volley. Tapping it with nothing in the
+      air is a harmless no-op — it is deliberately not disabled.
+- [ ] **Electric Fields — Clear all**, above the well column. Dim when
+      there are no charges, and a tap on it while dim must fall through
+      rather than be swallowed.
+- [ ] **Circuit Workshop — Clear bench**, mirroring the coil switch on
+      the far left.
+- [ ] **Gravity Lab — Twin suns** and **Worlds**, below the clock bank.
+
+**The confirmation, on both Clear plates that have one:**
+
+- [ ] First tap ARMS: the lamp lights and the nameplate becomes
+      "Tap again". It does not clear.
+- [ ] Wait ~5 seconds without touching it — it disarms itself.
+- [ ] Arm it, then Reset from the title bar. **Nothing may still be
+      armed.** This is the defect class that has bitten four modules.
+- [ ] Arm the Circuits plate, force-quit, relaunch: the bench is still
+      there. (It persists across launches, which is why it confirms.)
+
+### ⟳ The worlds fan — ten discs, the widest in the app
+
+- [ ] Tap **Worlds** in Gravity Lab. The fan opens ABOVE the system.
+- [ ] All ten labels are readable and none overlaps its neighbour —
+      Mercury through Asteroid. This is the arrangement that smeared at
+      seven discs once before.
+- [ ] Tapping a disc adds that world and folds the fan.
+
+### ⟳ The readouts that came out of the dropdowns
+
+Each floats on the thing it describes and must never intercept a pinch.
+
+- [ ] **Pendulums** — tap a bob; the card appears above it with L, T, θ,
+      v. Grab that same bob: the card must not steal the grab.
+- [ ] **Gravity Lab** — tap a planet; its orbital elements and energies
+      appear. Now pinch with both hands and walk the system from 0.4× to
+      9×: **the card must not change size.** Reach through it to the
+      planet.
+- [ ] **Circuit Workshop** — tap a part; volts, amps and watts appear.
+      Switch on Electron View: **the card must not grow with the bench.**
+      Short a battery and confirm the red "short circuit" warning.
+- [ ] **Electric Fields** — the standing card on the left carries the
+      probe's numbers, the capacitor and B lines, and Gauss. **Switch on
+      Uniform B with a ball selected and read the 50 kT disclosure** — it
+      must be legible with the field lines drawn over it. Then pick the
+      electron and read the display-clock disclosure. Neither may be
+      missing or unreadable; a disclosed fiction that cannot be read is
+      an undisclosed one.
+
+### ⟳ The room, when it cannot be sensed
+
+- [ ] Deny world sensing (Settings › Privacy & Security › World Sensing,
+      then relaunch). A **warning triangle** appears in every module's
+      title bar; its popover names Settings and says what is lost.
+- [ ] Grant it again — the triangle goes.
+- [ ] With it denied, Settings' Recenter caption must talk about the
+      permission, not about the simulator.
+
+### ⟳ The experiment steps
+
+- [ ] On the home screen, a lab's card shows the next experiment's title
+      AND its step. Follow one to the end in the room — every control it
+      names must exist and be where it says.
+
 ## Cross-cutting
 
 - [ ] ⟳ **Every rail in the app hangs under the thing it adjusts.**
