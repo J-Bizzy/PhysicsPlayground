@@ -69,41 +69,21 @@ struct PendulumsSpaceView: View {
     /// discrete choice, and one lone plate standing beside a bank of four
     /// is worse than one bank of five.
     @State private var layers: SpatialLayerBank?
-    /// The one standing VERB in this room: rig five pendulums whose
-    /// lengths step 4 % apart. It was a button in the window panel, and
-    /// it is the module's signature demonstration — five bobs leaving
-    /// together, drifting apart, and realigning — so it could not simply
-    /// be deleted with the panel.
-    ///
-    /// It stands under the Well because it is the same kind of act: the
-    /// well makes one pendulum, this makes five. A verb that creates
-    /// belongs beside the thing you create with.
-    @State private var actions: SpatialActionBank?
-    /// "What if this were the Moon?" — the question the bench exists to
-    /// ask, as three discs you tap rather than three buttons in a card.
-    @State private var worldPicker = SpatialPicker(
-        accessibilityNoun: "World",
-        choices: SurfaceGravity.bodies.map {
-            PickerChoice(id: $0.name, label: $0.name, symbol: "globe")
-        },
-        staysOpen: true,
-        // A standing bank is a ROW, not a fan: the default 150° arc is
-        // built for a menu that unfolds and folds away, and at that span
-        // three discs spray across the swing at three different heights.
-        // Same arithmetic as Gravity Lab's clock, same shape.
-        layout: FanLayout(span: 50 * .pi / 180, reach: 0.30,
-                          verticalScale: 0.25, lift: 0, stagger: 0))
-    /// g itself, between and beyond the three worlds — 0.5 to 25 m/s²,
-    /// so you can also ask what a pendulum does somewhere that is not a
-    /// place. Gravity has no extent of its own here (the BOB's mass and
-    /// the CABLE's length do, and both are already grips), which is
-    /// exactly why it takes the app's decided form for a continuous
-    /// quantity rather than an invented one.
-    @State private var gravityTrack: SpatialTrackControl?
-    /// Time. Not chrome: a 1.6 m pendulum has a 2.5 s period, and
-    /// whether you can see the swing's shape at all is a question about
-    /// this number.
-    @State private var timeTrack: SpatialTrackControl?
+    // NO ACTION BANK, NO WORLD PICKER, NO g OR TIME RAIL (2026-08-02,
+    // at the owner's direction). "Resonance ×5" is gone, and so is the
+    // whole right-hand column: the three world discs and the two rails
+    // under them.
+    //
+    // `gravity` and `timeScale` are still real properties of the model
+    // and still reachable from the debug arguments (`-penGravity`,
+    // `-penTime`) — what has gone is their furniture, not the physics.
+    // `loadResonancePreset` also survives on the model; nothing in the
+    // room calls it now.
+    //
+    // What is left in this room: the swing, the two wells that make one,
+    // the layers bank — and Foucault's globe and spin rail, which appear
+    // only while the Earth is turning.
+
     /// The rail a drag is currently in, if any.
     @State private var activeTrack: SpatialTrackControl?
     /// Where on Earth the bench stands — a globe you touch, not a rail.
@@ -125,26 +105,6 @@ struct PendulumsSpaceView: View {
     private static let instrumentZ: Float = -1.08
     /// Left of the swing, above the well at y = 1.30.
     private static let bankAnchor = SIMD3<Float>(-0.92, 1.58, instrumentZ)
-    /// The verb plate, hanging directly beneath the Well.
-    ///
-    /// It takes the well's OWN x and z (-0.85, -0.95) and drops 0.22 in
-    /// y, which is the whole trick: the first attempt put it on the
-    /// instrument plane at z = -1.08, 13 cm behind the well, and
-    /// perspective promptly slid it sideways until it sat tucked against
-    /// the well orb — two objects a hand's width apart in the room
-    /// reading as one smudge from where the user actually stands. Depth
-    /// separation is not visual separation. Sharing the well's depth and
-    /// separating in height is, from every viewpoint in the room.
-    ///
-    /// The drop is 0.36, not the 0.22 that looked like enough on paper.
-    /// A `Well` hangs its own nameplate at `bounds.min.y - 0.034` —
-    /// BELOW the preview object, not below the anchor — so the well's
-    /// footprint reaches far lower than its position suggests, and at
-    /// 0.22 this plate sat squarely on top of "Add pendulum".
-    private static let verbAnchor = SIMD3<Float>(-0.85, 0.94, -0.95)
-    private static let worldsAnchor = SIMD3<Float>(0.80, 1.56, instrumentZ)
-    private static let gravityCenter = SIMD3<Float>(0.80, 1.34, instrumentZ)
-    private static let timeCenter = SIMD3<Float>(0.80, 1.14, instrumentZ)
     /// Foucault's two instruments, on the far side from the layer bank.
     private static let globeAnchor = SIMD3<Float>(-1.32, 1.30, instrumentZ)
     private static let spinCenter = SIMD3<Float>(-1.32, 1.08, instrumentZ)
@@ -207,7 +167,7 @@ struct PendulumsSpaceView: View {
                 .init(name: "Double", tint: UIColor(DesignTokens.Palette.pendulumsAccent),
                       label: "Double pendulum",
                       preview: { PendulumsRenderer.doublePendulumPreview() },
-                      position: SIMD3(-0.85, 1.06, -0.95),
+                      position: SIMD3(-1.10, 1.30, -0.95),
                       spawn: { point in
                           model.addDoublePendulum(at: point)
                       }),
@@ -246,56 +206,6 @@ struct PendulumsSpaceView: View {
             renderer.root.addChild(bank.root)
             layers = bank
 
-            let verbs = SpatialActionBank(
-                accent: UIColor(DesignTokens.Palette.pendulumsAccent),
-                actions: [
-                    .init(id: "resonance", label: "Resonance ×5",
-                          symbol: "waveform.path",
-                          fire: { model.loadResonancePreset() }),
-                ])
-            renderer.root.addChild(verbs.root)
-            actions = verbs
-
-            renderer.root.addChild(worldPicker.root)
-            worldPicker.onSelect = { name in
-                guard let world = SurfaceGravity.bodies
-                    .first(where: { $0.name == name }) else { return }
-                model.gravity = world.gravity
-            }
-            // The bank is a READOUT as well as a control: the lit disc is
-            // whichever world your current g matches, read from the model
-            // every frame rather than remembered from the last tap — so
-            // dragging the rail off Earth unlights Earth, and a reset
-            // lights it again.
-            worldPicker.selectedID = {
-                SurfaceGravity.bodies
-                    .first { abs($0.gravity - model.gravity) < 0.01 }?.name
-            }
-
-            let gravity = SpatialTrackControl(
-                name: "Gravity",
-                center: Self.gravityCenter,
-                normal: Self.instrumentNormal,
-                accent: UIColor(DesignTokens.Palette.pendulumsAccent),
-                range: PendulumsModel.gravityRange,
-                read: { model.gravity },
-                write: { model.gravity = $0 },
-                format: { String(format: "%.2f m/s²", $0) })
-            renderer.root.addChild(gravity.root)
-            gravityTrack = gravity
-
-            let time = SpatialTrackControl(
-                name: "Time",
-                center: Self.timeCenter,
-                normal: Self.instrumentNormal,
-                accent: UIColor(DesignTokens.Palette.pendulumsAccent),
-                range: PendulumsModel.timeScaleRange,
-                read: { model.timeScale },
-                write: { model.timeScale = $0 },
-                format: { String(format: "%.2f×", $0) })
-            renderer.root.addChild(time.root)
-            timeTrack = time
-
             let earth = LatitudeGlobe(
                 accent: UIColor(DesignTokens.Palette.pendulumsAccent))
             renderer.root.addChild(earth.root)
@@ -333,18 +243,6 @@ struct PendulumsSpaceView: View {
                     let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
                     layers?.update(anchor: Self.bankAnchor,
                                    viewer: viewer, dt: event.deltaTime)
-                    actions?.update(anchor: Self.verbAnchor,
-                                    viewer: viewer, dt: event.deltaTime)
-                    worldPicker.update(anchor: Self.worldsAnchor,
-                                       viewer: viewer, dt: event.deltaTime)
-                    // Nothing ticks a track by itself — the caller's duty,
-                    // stated on `SpatialTrackControl.refresh`. Without
-                    // these two lines the beads would keep showing the
-                    // value they were last dragged to while Reset moved
-                    // the model out from under them.
-                    gravityTrack?.refresh()
-                    timeTrack?.refresh()
-
                     // Foucault's instruments exist only while the Earth
                     // is turning — an unlit globe beside a bench that is
                     // not in a rotating frame would be a control over
@@ -496,7 +394,7 @@ struct PendulumsSpaceView: View {
                         return
                     }
                     if drag == nil {
-                        for track in [gravityTrack, timeTrack, spinTrack]
+                        for track in [spinTrack]
                             .compactMap({ $0 })
                         where track.owns(value.entity) {
                             activeTrack = track
@@ -654,7 +552,23 @@ struct PendulumsSpaceView: View {
                                   handVelocity: handSampler.velocity(at: now) ?? .zero)
                 }
         )
-        .gesture(
+        // `.simultaneousGesture`, NOT `.gesture` — this is why none of
+        // this module's side controls could be pressed.
+        //
+        // The drag above is `DragGesture(minimumDistance: 0)`, which
+        // claims a touch the instant it lands. A plain `.gesture` tap
+        // composed against an already-claimed drag never resolves, so
+        // every plate, disc and rail in the room silently stopped
+        // responding while the bobs — which are DRAGGED — went on
+        // working, which is exactly the shape of the report.
+        //
+        // Magnetism and Kinematics use `.simultaneousGesture` for both
+        // their tap and their drag and have never had this problem;
+        // Pendulums was the one module that differed. Diagnosed by
+        // comparing the modules that worked against the one that did
+        // not, after two wrong guesses at causes that were merely
+        // plausible.
+        .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
@@ -662,9 +576,7 @@ struct PendulumsSpaceView: View {
                     // fall-through that folds the ring away — otherwise
                     // tapping a switch plate would also close whatever
                     // bob ring was open.
-                    if worldPicker.handleTap(value.entity) { return }
                     if layers?.handleTap(value.entity) == true { return }
-                    if actions?.handleTap(value.entity) == true { return }
                     // NO pivot branch here. The collar's bead is opened
                     // by a press that does not move it, inside the drag
                     // gesture — see `onEnded`. A tap target on the collar

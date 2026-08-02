@@ -427,35 +427,54 @@ final class PendulumsRenderer {
     }
 
     /// The double pendulum as its well mouth shows it: two rods bent at
-    /// an elbow, which is the one silhouette that distinguishes it from
-    /// the mouth above it at a glance.
+    /// an elbow, which is the one silhouette that tells it apart from
+    /// the mouth beside it at a glance.
+    ///
+    /// Built to the SAME overall size as `pendulumPreview` — collar at
+    /// the top, 0.16 m of rod below it — because the two hang side by
+    /// side and a mouth drawn smaller reads as a lesser version of the
+    /// thing next to it rather than as a different one.
     static func doublePendulumPreview() -> Entity {
-        let root = Entity()
-        let steel = Materials.machined(UIColor(white: 0.72, alpha: 1))
+        let container = Entity()
+        let steel = Materials.machined(UIColor(white: 0.85, alpha: 1))
+        let cableMaterial = Materials.machined(
+            UIColor(white: 0.25, alpha: 1), roughness: 0.6)
+
+        let collar = ModelEntity(
+            mesh: .generateCylinder(height: 0.03, radius: 0.014),
+            materials: [steel])
+        container.addChild(collar)
+
+        // The bend is what makes it legible. Split 0.16 into 0.09 above
+        // the elbow and 0.07 below, and kick the lower rod out sideways
+        // so the joint reads as a joint rather than as a kink.
+        let pivot = SIMD3<Float>(0, -0.015, 0)
+        let elbow = pivot + SIMD3(0.030, -0.085, 0)
+        let bob = elbow + SIMD3(-0.022, -0.066, 0)
+
         func rod(from a: SIMD3<Float>, to b: SIMD3<Float>) -> ModelEntity {
             let span = b - a
             let length = simd_length(span)
             let entity = ModelEntity(
-                mesh: .generateCylinder(height: length, radius: 0.0016),
-                materials: [steel])
+                mesh: .generateCylinder(height: length, radius: 0.002),
+                materials: [cableMaterial])
             entity.position = (a + b) / 2
-            entity.orientation = VectorFieldArrows.rotationFromYAxis(to: span / length)
+            entity.orientation = VectorFieldArrows.rotationFromYAxis(
+                to: span / length)
             return entity
         }
-        let pivot = SIMD3<Float>(0, 0.030, 0)
-        let elbow = SIMD3<Float>(0.016, -0.004, 0)
-        let bob = SIMD3<Float>(-0.006, -0.034, 0)
-        root.addChild(rod(from: pivot, to: elbow))
-        root.addChild(rod(from: elbow, to: bob))
-        let elbowBall = ModelEntity(mesh: .generateSphere(radius: 0.0075),
+        container.addChild(rod(from: pivot, to: elbow))
+        container.addChild(rod(from: elbow, to: bob))
+
+        let elbowBall = ModelEntity(mesh: .generateSphere(radius: 0.017),
                                     materials: [bobMaterial])
         elbowBall.position = elbow
-        root.addChild(elbowBall)
-        let bobBall = ModelEntity(mesh: .generateSphere(radius: 0.0105),
+        container.addChild(elbowBall)
+        let bobBall = ModelEntity(mesh: .generateSphere(radius: 0.024),
                                   materials: [bobMaterial])
         bobBall.position = bob
-        root.addChild(bobBall)
-        return root
+        container.addChild(bobBall)
+        return container
     }
 
     private func makeVisual(for pendulum: PendulumsModel.Pendulum) -> PendulumVisual {

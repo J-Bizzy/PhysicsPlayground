@@ -20,7 +20,11 @@ enum PendulumsModule {
             blurb: "Hang a pendulum anywhere in the room, then grab the steel bob and throw it — full nonlinear swings, five-pendulum resonance, and a Foucault rig whose plane holds still while your room turns under it.",
             icon: "metronome.fill",
             accent: DesignTokens.Palette.pendulumsAccent,
-            firstRunHint: "The bob is already swinging — grab it and throw it sideways. While you hold it, the faint line shows the swing you're about to launch. Tap a bob to select it. To your right, tap a world — the Moon stretches every swing out to two and a half times its period.",
+            // The hint names controls that EXIST. The line it replaces
+            // ended "To your right, tap a world", and the world discs
+            // were removed on 2026-08-02 — leaving the app's one
+            // onboarding surface pointing at an empty wall.
+            firstRunHint: "Five steel balls, touching, with one drawn back — let it go and watch which of them move. Grab any bob and throw it sideways; press a pendulum's top collar for a bead that pays out its cable, or drag that collar to re-hang the whole rig.",
             legend: legendItems,
             isPaused: { appModel.pendulumsModel.isPaused },
             togglePause: { appModel.pendulumsModel.isPaused.toggle() },
