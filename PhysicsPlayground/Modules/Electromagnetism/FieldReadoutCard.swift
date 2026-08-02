@@ -44,7 +44,13 @@ struct FieldReadoutCard: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .frame(maxWidth: 300, alignment: .leading)
-        .background(.regularMaterial,
+        // THICK, not regular. A screenshot with the field lines
+        // switched on showed why: this card stands in a room whose
+        // physics is drawn as bright translucent filaments, and a
+        // regular-material panel behind them washed out to the point
+        // where the 50 kT disclosure — the paragraph that must be read —
+        // was the least legible text on screen.
+        .background(.thickMaterial,
                     in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 

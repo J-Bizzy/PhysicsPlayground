@@ -140,7 +140,15 @@ struct FieldSpaceView: View {
     /// room with nothing drawn in it and nothing grabbable. It is NOT in
     /// `FieldInstrumentLayout`, and the card's own header says why: those
     /// invariants govern colliders, and this carries none.
-    private static let readoutCardAnchor = SIMD3<Double>(-1.02, 1.72, -0.88)
+    ///
+    /// The field lines DO get drawn across it, and that is not fixable by
+    /// moving: the uniform-B lines fill the region, so any position with
+    /// a clear sightline to the apparatus also has filaments in front of
+    /// it. Pulling the card out to (-1.34, 1.60, -0.52) to escape them
+    /// put it off the edge of the view entirely — a readout nobody can
+    /// see is worse than one with a line across it. The answer was the
+    /// MATERIAL, not the position; see `FieldReadoutCard`.
+    private static let readoutCardAnchor = SIMD3<Double>(-1.08, 1.68, -0.86)
 
     var body: some View {
         RealityView { content, attachments in
