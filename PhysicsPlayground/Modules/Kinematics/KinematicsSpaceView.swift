@@ -303,6 +303,28 @@ struct KinematicsSpaceView: View {
                       tint: UIColor(white: 0.45, alpha: 1)) { [ballPicker] in
                     ballPicker.toggle()
                 },
+                // Clearing the volley, off the window panel. The
+                // launcher made every ball in the room, so the thing
+                // that unmakes them belongs on the launcher — and this
+                // is the third petal, which is the ceiling `Petal`'s own
+                // doc sets ("two or three per object, never more").
+                //
+                // UNCONDITIONAL, and that is not laziness. The panel
+                // button was `.disabled(flights.isEmpty)` and the
+                // obvious translation is to leave the petal out when
+                // there is nothing to clear — but `retarget` rebuilds
+                // ONLY when the target id changes, and this bloom's id
+                // is the constant "launcher". A conditional list would
+                // be evaluated once, on the first frame, and then never
+                // again: the petal would be permanently present or
+                // permanently absent depending on what the room happened
+                // to look like at launch. Clearing nothing is a no-op;
+                // a control that silently stops tracking its condition
+                // is a lie.
+                .init(name: "Clear", symbol: "trash.slash",
+                      tint: UIColor(white: 0.45, alpha: 1)) {
+                    model.clearFlights()
+                },
             ],
             grip: .init(
                 name: "Launch speed",

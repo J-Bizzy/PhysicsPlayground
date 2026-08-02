@@ -74,6 +74,8 @@ struct FieldSpaceView: View {
     /// What exists. Built in the make closure because every switch reads
     /// and writes the model.
     @State private var bank: SpatialLayerBank?
+    /// The module's one standing verb: clear every charge. See `install`.
+    @State private var verbs: SpatialActionBank?
     /// What you make.
     @State private var wells: Well?
 
@@ -207,6 +209,32 @@ struct FieldSpaceView: View {
         renderer.root.addChild(bank.root)
         self.bank = bank
 
+        // "Clear the field", off the window panel and onto the head of
+        // the well column — the wells made every charge in the room, so
+        // the one control that removes them all belongs with them.
+        //
+        // It CONFIRMS. The panel guarded this with `.disabled` plus a
+        // destructive button role and nothing else, which was survivable
+        // while it lived behind a window you had to look at on purpose.
+        // A plate standing in the room beside the thing it empties is one
+        // stray pinch from wiping a field somebody spent minutes
+        // arranging, and there is no window left to put a dialog in.
+        let verbs = SpatialActionBank(
+            accent: DesignTokens.Palette.negativeUI,
+            actions: [
+                .init(id: "clear", label: "Clear all", symbol: "trash.slash",
+                      // Unlike the launcher's Clear petal, this one CAN
+                      // track its condition: `SpatialActionBank` reads
+                      // `isAvailable` every frame rather than at build
+                      // time, which is the whole reason it takes a
+                      // closure instead of a Bool.
+                      isAvailable: { !model.charges.isEmpty },
+                      confirms: true,
+                      fire: { model.removeAllCharges() }),
+            ])
+        renderer.root.addChild(verbs.root)
+        self.verbs = verbs
+
         renderer.root.addChild(particles.root)
         particles.selectedID = {
             switch (model.electronMode, model.probeIsPositive) {
@@ -301,6 +329,8 @@ struct FieldSpaceView: View {
                      viewer: headInRoot, dt: dt)
         particles.update(anchor: SIMD3<Float>(FieldInstrumentLayout.particlePickerAnchor),
                          viewer: headInRoot, dt: dt)
+        verbs?.update(anchor: SIMD3<Float>(FieldInstrumentLayout.clearPlateAnchor),
+                      viewer: headInRoot, dt: dt)
         wells?.update(dt: dt)
 
         // Each rail exists exactly when its apparatus does.
@@ -408,6 +438,7 @@ struct FieldSpaceView: View {
             .onEnded { value in
                 if bloom.handleTap(value.entity) { return }
                 if bank?.handleTap(value.entity) == true { return }
+                if verbs?.handleTap(value.entity) == true { return }
                 if particles.handleTap(value.entity) { return }
 
                 for name in Self.ancestorNames(of: value.entity) {
@@ -629,6 +660,19 @@ struct FieldSpaceView: View {
             }
         } else if defaults.bool(forKey: "emRing"), let id = model.selectedChargeID {
             ring.target = .charge(id)
+        }
+
+        // `-emClear 1` ARMS the Clear plate rather than firing it.
+        //
+        // Firing would be the useless argument: the plate's resting look
+        // is already in every launch screenshot, and an empty room
+        // photographs as an empty room whether a control emptied it or
+        // nothing ever filled it. The armed state is the half that
+        // cannot otherwise be seen — the lit lamp, the nameplate swapped
+        // to "Tap again" — and it is the half that carries the whole
+        // safety argument for putting a destructive verb in the room.
+        if defaults.bool(forKey: "emClear") {
+            verbs?.arm("clear", holds: true)
         }
 
         // `-viewScale 2.5` bakes a committed scale in at launch so the

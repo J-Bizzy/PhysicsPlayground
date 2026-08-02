@@ -123,6 +123,47 @@ enum FieldInstrumentLayout {
     static let particlePickerAnchor = SIMD3<Double>(1.06, 1.15, -0.92)
     static let particlePickerHalfExtents = SIMD3<Double>(0.16, 0.07, 0.16)
 
+    /// The Clear plate, capping the well column from above.
+    ///
+    /// It is on the RIGHT because unmaking belongs with making: the wells
+    /// are where every charge in the room came from, so the one control
+    /// that removes them all stands at the head of the same column. (It
+    /// was a `Button(role: .destructive)` labelled "Clear the field" in
+    /// the window panel, and it is a `confirms` plate now — see
+    /// `SpatialActionBank`. The window's confirmationDialog died with the
+    /// panel and this module's charges are not cheap to rebuild.)
+    ///
+    /// ABOVE, not below, and the two obvious alternatives both fail on
+    /// arithmetic this file already has:
+    ///
+    /// - Below the particle bank puts its box under y ≈ 1.05, and the
+    ///   comment on `wellTopY` records what happened the last time
+    ///   something landed there: reachable by the numbers, off the bottom
+    ///   of the frame in practice.
+    /// - Level with the column, further out in x, runs past
+    ///   `maximumReach` — the wells' own near face is already only 0.14
+    ///   clear of the station wall.
+    ///
+    /// So it goes up, and the fit is genuinely tight — this is the 2 cm
+    /// of slack the file header warns about, being spent. The box lands
+    /// at x 0.89…1.15, y 1.65…1.77, z −0.98…−0.82, which clears the
+    /// station by 0.13 (margin 0.12), clears the wells by 0.04 in y
+    /// (margin 0.03), sits 1.22 from the viewer (limit 1.25) and tops out
+    /// at 1.77 (limit 1.80). Every one of those is checked by
+    /// `FieldInstrumentLayoutTests`, which iterates `standingInstruments`
+    /// — so this box is covered by all four invariants for free, and
+    /// moving it by a few centimetres in the wrong direction fails the
+    /// build rather than quietly shielding a charge.
+    ///
+    /// The label is "Clear all", not the panel's "Clear the field",
+    /// because the plate's own width plus its longest nameplate is what
+    /// sets the box: `SpatialActionBank.reach(forLabels:)` must be passed
+    /// "Tap again" as well, since an armed plate swaps its nameplate and
+    /// a bank sized only to its resting label grows on arming — straight
+    /// into whatever it was cleared of.
+    static let clearPlateAnchor = SIMD3<Double>(1.02, 1.71, -0.90)
+    static let clearPlateHalfExtents = SIMD3<Double>(0.13, 0.06, 0.08)
+
     // MARK: On the apparatus
 
     /// The ΔV rail, bolted under the capacitor and carried with it.
@@ -186,6 +227,8 @@ enum FieldInstrumentLayout {
                                   halfExtents: fieldTrackHalfExtents)),
             ("particle bank", StationBox(center: particlePickerAnchor,
                                          halfExtents: particlePickerHalfExtents)),
+            ("clear plate", StationBox(center: clearPlateAnchor,
+                                       halfExtents: clearPlateHalfExtents)),
         ]
         // The three wells share one column; as a group they are one object
         // to keep clear of everything else.

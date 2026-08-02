@@ -32,6 +32,44 @@ struct GravityLabSpaceView: View {
     /// on. A bank is a readout as well as a control, which is why this
     /// one does not fold.
     @State private var layers: SpatialLayerBank?
+    /// The module's two standing verbs — "Twin suns", and the plate that
+    /// opens the preset worlds. Both were window buttons; "Twin suns" is
+    /// also the target of an authored experiment (`gravity.binary`), so
+    /// deleting it with the panel would have broken content.
+    @State private var verbs: SpatialActionBank?
+    /// The ten preset worlds, as a fan the "Worlds" plate opens.
+    ///
+    /// A momentary fan, NOT a standing bank: the clock bank and the
+    /// layers bank stay open because they are readouts — which speed am
+    /// I running, what is drawn — and a list of things you could add
+    /// reports nothing. It folds away when it is done, the same grammar
+    /// as Projectiles' Balls petal.
+    @State private var worldPicker = SpatialPicker(
+        accessibilityNoun: "Preset world",
+        choices: GravityLabModel.Preset.allCases.map {
+            PickerChoice(id: $0.id, label: $0.displayName, symbol: "globe")
+        },
+        staysOpen: false,
+        accent: UIColor(DesignTokens.Palette.gravityAccent),
+        // TEN discs, the most any fan in this app carries, and the
+        // geometry is measured rather than inherited.
+        //
+        // A `SpatialPicker` disc is 0.026 m in radius with a 0.034 m
+        // collider, so the pitch that keeps ten of them from overlapping
+        // — colliders, not just paint, since hit-testing uses the former
+        // — is about 0.08 m. Ten discs therefore need ~0.8 m of arc, and
+        // `arc = reach × span`: 0.58 m at 120° gives 1.21 m of arc and
+        // ~0.12 m of pitch, which clears the labels too.
+        //
+        // The first attempt was 150° over 0.62 m ANCHORED ON THE CLOCK
+        // BANK'S FLANK, and a screenshot showed both halves of why that
+        // was wrong: the arc threw its far discs off the bottom-right of
+        // the frame, and its near discs climbed into the clock bank's
+        // own row. A fan this wide cannot hang off a flank — it has to
+        // open into the empty space under the system, centred, where its
+        // width is symmetric about the thing it adds to.
+        layout: FanLayout(span: 120 * .pi / 180, reach: 0.58,
+                          verticalScale: 0.22, lift: 0, stagger: 0))
     /// Newton's G, as a rail under the switch bank.
     ///
     /// The one quantity in this module with NO physical extent — it is a
@@ -129,6 +167,29 @@ struct GravityLabSpaceView: View {
                 ])
             renderer.root.addChild(bank.root)
             layers = bank
+
+            // The two verbs, under `root` like every other instrument
+            // here — the scale rig reaches 9×, and a control that grew
+            // with the solar system would put itself out of reach
+            // exactly when you had walked into the system to use it.
+            // That mistake has already been made and paid for by the
+            // well, which is why `compensateForRig` exists.
+            let systemVerbs = SpatialActionBank(
+                accent: UIColor(DesignTokens.Palette.gravityAccent),
+                actions: [
+                    .init(id: "worlds", label: "Worlds", symbol: "globe",
+                          fire: { worldPicker.toggle() }),
+                    .init(id: "binary", label: "Twin suns", symbol: "sun.max",
+                          fire: { model.makeBinary() }),
+                ])
+            renderer.root.addChild(systemVerbs.root)
+            verbs = systemVerbs
+
+            renderer.root.addChild(worldPicker.root)
+            worldPicker.onSelect = { id in
+                guard let preset = GravityLabModel.Preset(rawValue: id) else { return }
+                model.spawn(preset)
+            }
 
             let gravity = SpatialTrackControl(
                 name: "Gravity",
@@ -235,6 +296,26 @@ struct GravityLabSpaceView: View {
                             + SIMD3(-0.62, 0.06, 0),
                         viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
                         dt: event.deltaTime)
+                    // Under the clock bank, on the same flank: the clock
+                    // decides how fast the system runs, these decide what
+                    // is IN it. Both are things you do to the system as a
+                    // whole, as against the layers bank's what-is-drawn.
+                    verbs?.update(
+                        anchor: GravityLabRenderer.systemPosition
+                            + SIMD3(0.82, -0.20, 0),
+                        viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
+                        dt: event.deltaTime)
+                    // Centred ABOVE the system, not on the plate that
+                    // opens it — see the layout note on `worldPicker`.
+                    // Above rather than below because below is where the
+                    // floor grid and the orrery are: a fan 1.2 m of arc
+                    // wide needs a band with nothing in it, and in this
+                    // module that band is the sky.
+                    worldPicker.update(
+                        anchor: GravityLabRenderer.systemPosition
+                            + SIMD3(0, 0.55, 0.30),
+                        viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
+                        dt: event.deltaTime)
                     // Nothing ticks a track by itself — the caller's duty,
                     // stated on `SpatialTrackControl.refresh`.
                     gravityTrack?.refresh()
@@ -265,9 +346,20 @@ struct GravityLabSpaceView: View {
                 model.select(id: body.id)
             }
             // `-predict 1` arms a prediction at the body's current spot,
-            // so the verdict flow can be screenshot-verified.
+            // so the verdict flow can be screenshot-verified. (The
+            // control that arms it by hand is now a petal on the
+            // selected body's ring — pair this with `-gravRing 1` to
+            // photograph the petal and its effect together.)
             if UserDefaults.standard.double(forKey: "predict") > 0 {
                 model.armPrediction()
+            }
+            // `-gravWorlds 1` opens the ten-preset fan, the one control
+            // here that is invisible until something opens it. A fan
+            // this wide is also the thing most likely to be WRONG —
+            // ten discs is the most any fan in this app carries — so it
+            // needs to be photographable without a hand.
+            if UserDefaults.standard.bool(forKey: "gravWorlds") {
+                worldPicker.toggle()
             }
             // `-gravRing 1` opens the first orbiting body's control
             // ring at launch, for CLI screenshots.
@@ -436,6 +528,8 @@ struct GravityLabSpaceView: View {
                 .onEnded { value in
                     if clockPicker.handleTap(value.entity) { return }
                     if layers?.handleTap(value.entity) == true { return }
+                    if worldPicker.handleTap(value.entity) { return }
+                    if verbs?.handleTap(value.entity) == true { return }
                     if bloom.handleTap(value.entity) { return }
                     // A tap on a body toggles its control ring; the
                     // primary keeps no ring (deleting the sun deletes
@@ -521,6 +615,20 @@ struct GravityLabSpaceView: View {
         bloom.retarget(
             uuid,
             petals: isPrimary ? [] : [
+                // "Predict an orbit", off the window panel and onto the
+                // ring of the body it predicts.
+                //
+                // The panel button carried `.disabled(selection is nil
+                // or primary)`. Here that predicate is GEOMETRY: this
+                // ring only exists while a body is selected, and the
+                // `isPrimary` branch above means the Sun never gets one.
+                // A control that cannot be reached in the state where it
+                // would be meaningless is better than one that greys out
+                // — there is no disabled thing to wonder about.
+                .init(name: "Predict", symbol: "scope",
+                      tint: UIColor(DesignTokens.Palette.gravityAccent)) {
+                    model.armPrediction()
+                },
                 .init(name: "Delete", symbol: "trash",
                       tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
                     model.removeBody(id: uuid)

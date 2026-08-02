@@ -69,6 +69,8 @@ struct CircuitsSpaceView: View {
     /// wake up. (Contrast Pendulums, where a lone plate beside a bank of
     /// four would just have been a stray.)
     @State private var coilSwitch: SpatialLayerBank?
+    /// The bench's one standing verb: clear it. See `clearAnchor`.
+    @State private var verbs: SpatialActionBank?
 
     /// Left of the bench, mirroring the layers bank on the right.
     private static let meterAnchor = CircuitsRenderer.benchPivot
@@ -76,6 +78,32 @@ struct CircuitsSpaceView: View {
     /// On the way to the annex, clear of the layers bank's widest label.
     private static let coilSwitchAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(1.02, -0.02, 0.10)
+    /// The Clear plate, mirroring the coil switch across the bench.
+    ///
+    /// It went beside the TRAY first, on the reasoning that the tray is
+    /// where every part came from — the pairing Electric Fields makes
+    /// between its wells and its Clear plate. A screenshot killed that
+    /// twice over. The tray slab is not 0.63 m wide but 0.93: eleven
+    /// component kinds make six columns, so `slabWidth` is `5 * 0.15 +
+    /// 0.18`, and x = 0.42 was INSIDE it, with the slab's own glass
+    /// between the plate and the reader. And tray height is the bottom
+    /// of the frame — the plate sat half out of shot, which is
+    /// `FieldInstrumentLayout`'s "reachable by the arithmetic, invisible
+    /// in practice" in a second module.
+    ///
+    /// So it takes the free flank instead, at the coil switch's own
+    /// height and its exact mirror in x. The bench's furniture now reads
+    /// as a row at one height — meter, bench, layers, coil switch — with
+    /// this at the far end, rather than one stray plate down among the
+    /// parts.
+    ///
+    /// This is the most dangerous of the seven verbs that left the
+    /// window. Circuit Workshop's bench PERSISTS ACROSS LAUNCHES
+    /// (`CircuitsModel(restoreSaved:)`), so this plate can destroy work
+    /// from a previous session — which is why the panel guarded it with
+    /// a `confirmationDialog` and why the plate `confirms`.
+    private static let clearAnchor = CircuitsRenderer.benchPivot
+        + SIMD3<Float>(-1.02, -0.02, 0.10)
 
     var body: some View {
         RealityView { content in
@@ -130,6 +158,21 @@ struct CircuitsSpaceView: View {
             renderer.root.addChild(coil.root)
             self.coilSwitch = coil
 
+            // Clearing the bench, off the window panel. Same parenting
+            // rule as everything above: under `root`, so an 8× zoom
+            // cannot carry it away.
+            let benchVerbs = SpatialActionBank(
+                accent: UIColor(DesignTokens.Palette.circuitsAccent),
+                actions: [
+                    .init(id: "clear", label: "Clear bench",
+                          symbol: "trash.slash",
+                          isAvailable: { !model.components.isEmpty },
+                          confirms: true,
+                          fire: { model.clearBench() }),
+                ])
+            renderer.root.addChild(benchVerbs.root)
+            self.verbs = benchVerbs
+
             // The coil annex is installed from launch and ENABLED by the
             // switch: RealityKit teardown mid-gesture is the fiddly
             // path, isEnabled is the honest one. Disabled, it renders
@@ -168,6 +211,8 @@ struct CircuitsSpaceView: View {
                     meter?.update(anchor: Self.meterAnchor, viewer: viewer,
                                   armed: model.multimeterArmed,
                                   reading: model.multimeterReading)
+                    verbs?.update(anchor: Self.clearAnchor, viewer: viewer,
+                                  dt: event.deltaTime)
                     // Rendered here every frame (not via the observation
                     // loop): a steady DC circuit mutates nothing that
                     // observation reliably re-fires on, but its electrons
@@ -260,6 +305,15 @@ struct CircuitsSpaceView: View {
                let first = model.components.first {
                 ring.openID = first.id
             }
+            // `-circClear 1` ARMS the Clear plate — it does not fire it.
+            // Firing would photograph an empty bench, which looks the
+            // same as a bench nobody built on. The armed state is the
+            // half that cannot otherwise be seen, and on this bench it
+            // is the half that matters: the plate can destroy a circuit
+            // saved from a previous launch.
+            if UserDefaults.standard.bool(forKey: "circClear") {
+                benchVerbs.arm("clear", holds: true)
+            }
             #endif
             self.renderer = renderer
         }
@@ -289,6 +343,12 @@ struct CircuitsSpaceView: View {
                         return
                     }
                     if bloom.handleTap(value.entity) { return }
+                    // Ahead of `handleTap(on:)` for the same reason the
+                    // meter is: this plate stands at the end of the tray,
+                    // among template parts that spawn on a drag, and
+                    // arming it must not also register as reaching for
+                    // one of them.
+                    if verbs?.handleTap(value.entity) == true { return }
                     handleTap(on: value.entity)
                 }
         )

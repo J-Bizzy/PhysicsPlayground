@@ -48,6 +48,29 @@ final class FieldInstrumentLayoutTests: XCTestCase {
             """)
     }
 
+    /// The Clear plate's box has to cover its nameplate too — AND the
+    /// "Tap again" it swaps to when armed.
+    ///
+    /// This is the failure mode that is unique to a confirming plate: a
+    /// box sized to the resting label is correct until the moment
+    /// somebody arms it, at which point the instrument silently grows
+    /// into whatever it was carefully cleared of. Sizing on the longer of
+    /// the two makes the armed state the one that was measured.
+    func testTheClearPlatesBoxIncludesItsLabelsInBothStates() {
+        let reach = SpatialActionBank.reach(forLabels: [
+            "Clear all", SpatialActionBank.armedLabel])
+        XCTAssertLessThanOrEqual(
+            Double(reach), FieldInstrumentLayout.clearPlateHalfExtents.x,
+            """
+            The Clear plate's label reaches \(reach) m from the plate \
+            centre but its declared half-extent is \
+            \(FieldInstrumentLayout.clearPlateHalfExtents.x). Every \
+            clearance checked in this file is then measuring a plate \
+            without its name — and this one stands 0.13 m from a station \
+            wall whose proximity fallback is 0.12.
+            """)
+    }
+
     /// The particle bank's discs sit close together, so its labels have to
     /// be short enough not to run into each other. "Electron e⁻" was not,
     /// and the four names read as one smear.

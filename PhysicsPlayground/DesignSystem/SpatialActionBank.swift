@@ -125,9 +125,30 @@ final class SpatialActionBank {
     /// wants to show the armed state somewhere else.
     func isArmed(_ id: String) -> Bool { armed?.id == id }
 
-    /// Clear any armed plate. `reset()` MUST call this.
+    /// Clear any armed plate.
     func disarm() {
         armed = nil
+    }
+
+    /// Put a plate into its armed state without a tap.
+    ///
+    /// This exists for the debug launch arguments and nothing else. The
+    /// armed state is the only part of this control that is not visible
+    /// at rest, the simulator has no hands to produce it, and a plate
+    /// photographed only in its resting state proves the plate rendered
+    /// and nothing about the confirmation behind it — which is exactly
+    /// the "bead parked at its default" mistake CLAUDE.md records. It
+    /// sets the same state the first tap sets.
+    ///
+    /// `holds` defeats the arm timer, and a debug caller wants it: the
+    /// window is four seconds, a `simctl` screenshot lands twenty after
+    /// launch, and an argument whose effect has already expired by the
+    /// time the shutter opens is an argument that photographs the
+    /// resting state and calls it proof.
+    func arm(_ id: String, holds: Bool = false) {
+        guard plates.contains(where: { $0.action.id == id && $0.action.confirms })
+        else { return }
+        armed = (id: id, remaining: holds ? .infinity : Self.armWindow)
     }
 
     /// Per frame: hang beside `anchor`, face the viewer, run the arm
