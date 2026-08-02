@@ -20,7 +20,7 @@ final class CircuitsModelTests: XCTestCase {
 
     /// The multimeter reads the true potential difference across a
     /// component, and continuity through a wire.
-    func testMultimeterReadsVoltageAndContinuity() {
+    func testMultimeterReadsVoltageAndContinuity() throws {
         let model = CircuitsModel()
         model.clearBench()
         guard let battery = model.add(.battery, at: SIMD3(-0.3, 1.2, -0.9)),
@@ -35,21 +35,25 @@ final class CircuitsModelTests: XCTestCase {
         model.connectTerminals(bMinus, rB)
         model.step(dt: 1.0 / 90.0)
 
-        model.multimeterArmed = true
-        model.probeTap(rA)
-        model.probeTap(rB)
-        let reading = model.multimeterReading
-        XCTAssertNotNil(reading)
-        let expected = model.readouts[resistor]!.volts
-        XCTAssertEqual(reading!.deltaVolts, expected, accuracy: 1e-9,
+        // The reading is a FORMATTED display now, not a bag of raw
+        // numbers, because the meter has modes and each one answers a
+        // different question. The drop itself is still the solver's —
+        // asserted against `readouts` through the string the meter shows.
+        model.meterMode = .voltsDC
+        model.setProbe(.red, to: rA)
+        model.setProbe(.black, to: rB)
+        let reading = try XCTUnwrap(model.multimeterReading)
+        XCTAssertFalse(reading.fault)
+        XCTAssertEqual(reading.display,
+                       CircuitsModel.autoRange(model.readouts[resistor]!.volts,
+                                               unit: "V"),
                        "the meter reads the same drop the solver computes")
-        XCTAssertEqual(reading!.inlineAmps!, model.readouts[resistor]!.amps,
-                       accuracy: 1e-12, "probes across one part read its current")
 
         // Probes on the two ends of one WIRE: continuity.
-        model.probeTap(bPlus)
-        model.probeTap(rA)
-        XCTAssertTrue(model.multimeterReading!.continuity,
+        model.meterMode = .continuity
+        model.setProbe(.red, to: bPlus)
+        model.setProbe(.black, to: rA)
+        XCTAssertTrue(try XCTUnwrap(model.multimeterReading).beeping,
                       "wired-together terminals show continuity")
     }
 
@@ -911,5 +915,118 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertLessThan(gap, CircuitsModel.snapDistance)
         model.autoConnect(id: b)
         XCTAssertEqual(model.wires.count, 1, "close-enough terminals magnetise")
+    }
+
+    // MARK: The meter
+
+    /// A voltmeter goes ACROSS, and reads the potential difference.
+    @MainActor
+    func testVoltsModeReadsAcrossAComponent() throws {
+        let model = CircuitsModel()
+        let battery = try XCTUnwrap(model.components.first { $0.kind == .battery })
+        model.meterMode = .voltsDC
+        model.setProbe(.red, to: .init(componentID: battery.id, end: 0))
+        model.setProbe(.black, to: .init(componentID: battery.id, end: 1))
+        model.step(dt: 1.0 / 90)
+
+        let reading = try XCTUnwrap(model.multimeterReading)
+        XCTAssertFalse(reading.fault)
+        XCTAssertTrue(reading.display.hasSuffix("V"), reading.display)
+    }
+
+    /// THE ONE THAT MATTERS. An ammeter goes IN SERIES: touching one
+    /// across a component that is already carrying current puts a
+    /// near-zero resistance in parallel with it, which is a short and in
+    /// a real lab a blown fuse.
+    ///
+    /// A simulated meter that quietly printed the right current for that
+    /// placement would be teaching one of the most common mistakes in an
+    /// introductory lab. This asserts that it refuses instead.
+    @MainActor
+    func testAmpsModeRefusesToBePutAcrossALiveComponent() throws {
+        let model = CircuitsModel()
+        model.meterMode = .ampsDC
+        // The opening bench is a live loop, so its bulb is carrying.
+        let live = try XCTUnwrap(model.components.first {
+            abs(model.readouts[$0.id]?.amps ?? 0) > 1e-6
+        })
+        model.setProbe(.red, to: .init(componentID: live.id, end: 0))
+        model.setProbe(.black, to: .init(componentID: live.id, end: 1))
+
+        let reading = try XCTUnwrap(model.multimeterReading)
+        XCTAssertTrue(reading.fault, "an ammeter across a live part is a short")
+        XCTAssertEqual(reading.display, "FUSE")
+        XCTAssertTrue(reading.note.lowercased().contains("break the loop"),
+                      "the meter should say WHY: \(reading.note)")
+    }
+
+    /// An ohmmeter drives its own current, so it cannot be trusted on a
+    /// live circuit — and says so rather than printing a number.
+    ///
+    /// Built explicitly rather than leaning on the opening bench: what
+    /// this asserts is a relationship between "the source is delivering
+    /// power" and "the ohmmeter refuses", and a test that depended on
+    /// the cold-open's contents would break the next time that scene is
+    /// re-authored, for reasons having nothing to do with the meter.
+    @MainActor
+    func testOhmsModeRefusesOnALiveCircuit() throws {
+        let model = CircuitsModel(restoreSaved: false)
+        model.clearBench()
+        let battery = try XCTUnwrap(model.add(.battery))
+        let resistor = try XCTUnwrap(model.add(.resistor))
+        model.connectTerminals(.init(componentID: battery, end: 0),
+                               .init(componentID: resistor, end: 0))
+        model.connectTerminals(.init(componentID: battery, end: 1),
+                               .init(componentID: resistor, end: 1))
+        model.step(dt: 1.0 / 90)
+        XCTAssertGreaterThan(abs(model.totalSourcePower), 1e-6,
+                             "the fixture is not actually live")
+
+        model.meterMode = .ohms
+        model.setProbe(.red, to: .init(componentID: resistor, end: 0))
+        model.setProbe(.black, to: .init(componentID: resistor, end: 1))
+
+        let live = try XCTUnwrap(model.multimeterReading)
+        XCTAssertTrue(live.fault)
+        XCTAssertTrue(live.note.contains("live"), live.note)
+
+        // Open the loop and the same probes give a number.
+        for wire in model.wires { model.deleteWire(id: wire.id) }
+        model.step(dt: 1.0 / 90)
+        let dead = try XCTUnwrap(model.multimeterReading)
+        XCTAssertFalse(dead.fault, "with the source off an ohmmeter should read")
+        XCTAssertTrue(dead.display.contains("Ω"), dead.display)
+    }
+
+    /// A capacitor has no resistance to report — its opposition to
+    /// current is a REACTANCE that depends on frequency, and calling
+    /// that a resistance would be exactly the quiet simplification this
+    /// app exists not to make.
+    func testACapacitorHasNoResistanceToReport() {
+        let capacitor = CircuitsModel.Component(
+            id: UUID(), kind: .capacitor, position: .zero, value: 1e-4)
+        XCTAssertNil(CircuitsModel.resistance(of: capacitor))
+    }
+
+    /// The display auto-ranges the way a real one does.
+    func testTheDisplayAutoRanges() {
+        XCTAssertTrue(CircuitsModel.autoRange(0.0042, unit: "A").contains("mA"))
+        XCTAssertTrue(CircuitsModel.autoRange(9.0, unit: "V").contains("9.000 V"))
+        XCTAssertTrue(CircuitsModel.autoRange(4700, unit: "Ω").contains("kΩ"))
+    }
+
+    /// A probe lands on the terminal it is nearest, and only if it is
+    /// near one — a probe waved in mid-air measures nothing.
+    @MainActor
+    func testAProbeLatchesOntoTheNearestTerminalOrNothing() throws {
+        let model = CircuitsModel()
+        let component = try XCTUnwrap(model.components.first)
+        let terminal = CircuitsModel.Terminal(componentID: component.id, end: 0)
+        let position = component.terminalPosition(0)
+
+        XCTAssertEqual(model.nearestTerminal(to: position, within: 0.035), terminal)
+        XCTAssertNil(model.nearestTerminal(to: position + SIMD3(0, 5, 0),
+                                           within: 0.035),
+                     "a probe in mid-air should latch onto nothing")
     }
 }

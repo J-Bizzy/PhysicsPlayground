@@ -24,6 +24,8 @@ struct CircuitsSpaceView: View {
     @State private var wireDragFrom: CircuitsModel.Terminal?
     @State private var partDrag: RelativeDrag?
     @State private var trayDragID: UUID?
+    /// Which probe a hand is carrying, if either.
+    @State private var probeDrag: CircuitsModel.ProbeSlot?
     @State private var gripDrag: (grip: CircuitsModel.Terminal, pivot: SIMD3<Double>)?
     @Environment(AppModel.self) private var appModel
     /// Two-handed zoom on the bench. Electron View is now a FLOOR under
@@ -168,8 +170,7 @@ struct CircuitsSpaceView: View {
                         viewer: viewer,
                         dt: event.deltaTime)
                     meter?.update(anchor: Self.meterAnchor, viewer: viewer,
-                                  armed: model.multimeterArmed,
-                                  reading: model.multimeterReading)
+                                  model: model)
                     verbs?.update(anchor: Self.clearAnchor, viewer: viewer,
                                   dt: event.deltaTime)
                     // Rendered here every frame (not via the observation
@@ -258,12 +259,9 @@ struct CircuitsSpaceView: View {
                     if layers?.handleTap(value.entity) == true { return }
                     // Ahead of `handleTap(on:)`, which is what reads a
                     // TERMINAL — the meter stands among the bench's
-                    // terminals by design, and arming it must not also
-                    // count as probing whatever is behind it.
-                    if meter?.handleTap(value.entity) == true {
-                        model.multimeterArmed.toggle()
-                        return
-                    }
+                    // terminals by design, and turning its dial must not
+                    // also count as probing whatever is behind it.
+                    if meter?.handleTap(value.entity, model: model) == true { return }
                     if bloom.handleTap(value.entity) { return }
                     // Ahead of `handleTap(on:)` for the same reason the
                     // meter is: this plate stands at the end of the tray,
@@ -295,6 +293,28 @@ struct CircuitsSpaceView: View {
                             value.location3D, from: .local, to: .scene)),
                         from: nil)
                     let hand = SIMD3<Double>(handF)
+
+                    // THE PROBES, before anything else on the bench.
+                    //
+                    // They are the one thing here that is not part of the
+                    // circuit: a probe carried across a terminal must not
+                    // also start dragging that terminal's wire, and a
+                    // probe is deliberately easy to pick up, so it has to
+                    // claim its drag first.
+                    if probeDrag == nil, let meter,
+                       let slot = meter.probeSlot(for: value.entity) {
+                        probeDrag = slot
+                    }
+                    if let slot = probeDrag, let meter {
+                        let world = SIMD3<Float>(value.convert(
+                            value.location3D, from: .local, to: .scene))
+                        meter.moveProbe(
+                            slot,
+                            local: meter.root.convert(position: world, from: nil),
+                            bench: hand, model: model)
+                        return
+                    }
+
                     if bloom.updateGrip(hand: handF) { return }
                     if wireDragFrom == nil, partDrag == nil {
                         if bloom.beginGrip(value.entity, hand: handF) { return }
@@ -313,6 +333,7 @@ struct CircuitsSpaceView: View {
                     }
                 }
                 .onEnded { value in
+                    probeDrag = nil
                     bloom.endGrip()
                     defer {
                         renderer?.hideRubberBand()

@@ -848,6 +848,48 @@ final class CircuitsModel {
     private(set) var probeA: Terminal?
     private(set) var probeB: Terminal?
 
+    /// Which lead. Red is A, black is B — the convention every meter
+    /// prints on its own jacks, and the reason a voltage reads positive
+    /// when red is on the higher potential.
+    enum ProbeSlot { case red, black }
+
+    /// Parks a probe on a terminal, or lifts it off with nil.
+    ///
+    /// This is how the PROBES set the measurement now: you carry a probe
+    /// to a terminal and its tip latches on. `probeTap` below survives
+    /// for the accessibility path, where there is no hand to carry
+    /// anything with.
+    func setProbe(_ slot: ProbeSlot, to terminal: Terminal?) {
+        switch slot {
+        case .red:
+            guard probeA != terminal else { return }
+            probeA = terminal
+        case .black:
+            guard probeB != terminal else { return }
+            probeB = terminal
+        }
+        if let terminal,
+           let component = components.first(where: { $0.id == terminal.componentID }) {
+            emitSound(.pop, at: component.terminalPosition(terminal.end), volume: 0.4)
+        }
+    }
+
+    /// The terminal nearest `point`, if one is within `radius`.
+    func nearestTerminal(to point: SIMD3<Double>,
+                         within radius: Double) -> Terminal? {
+        var best: (terminal: Terminal, distance: Double)?
+        for component in components {
+            for end in 0...1 {
+                let distance = simd_distance(point, component.terminalPosition(end))
+                guard distance <= radius else { continue }
+                if best == nil || distance < best!.distance {
+                    best = (Terminal(componentID: component.id, end: end), distance)
+                }
+            }
+        }
+        return best?.terminal
+    }
+
     /// A tap while the meter is armed lands a probe (A, then B, then
     /// back to A — walk the probes around the circuit freely).
     func probeTap(_ terminal: Terminal) {
@@ -862,26 +904,180 @@ final class CircuitsModel {
         }
     }
 
-    struct MultimeterReading {
-        var deltaVolts: Double
-        /// Probes on the same electrical node.
-        var continuity: Bool
-        /// When the probes bracket exactly one component, its current.
-        var inlineAmps: Double?
+    /// What the dial is pointing at.
+    ///
+    /// Four positions, which is what a meter of this class actually has.
+    /// They are genuinely different measurements rather than four
+    /// formats of one number — and one of them, current, cannot honestly
+    /// be taken the way the other three can. See `MultimeterReading`.
+    enum MeterMode: String, CaseIterable, Codable {
+        case voltsDC
+        case ampsDC
+        case ohms
+        case continuity
+
+        var label: String {
+            switch self {
+            case .voltsDC: "V⎓"
+            case .ampsDC: "A⎓"
+            case .ohms: "Ω"
+            case .continuity: "•)))"
+            }
+        }
+
+        var longLabel: String {
+            switch self {
+            case .voltsDC: "DC volts"
+            case .ampsDC: "DC current"
+            case .ohms: "Resistance"
+            case .continuity: "Continuity"
+            }
+        }
     }
 
+    var meterMode: MeterMode = .voltsDC
+
+    struct MultimeterReading {
+        /// What the display shows, already formatted and ranged.
+        var display: String
+        /// The one line under it — a unit, or the reason there is no
+        /// number. This is where the instrument is honest about itself.
+        var note: String
+        /// Continuity mode only: whether it should be beeping.
+        var beeping: Bool = false
+        /// True when the meter is being asked to do something a real one
+        /// would object to. Drives the display's colour.
+        var fault: Bool = false
+    }
+
+    /// Everything the meter can say, by mode.
+    ///
+    /// THE AMMETER IS THE HONEST ONE, and it is the reason this is four
+    /// modes rather than one readout. A voltmeter goes ACROSS a
+    /// component and barely disturbs it; an ammeter has to go IN SERIES,
+    /// because the current it reports is the current flowing THROUGH it.
+    /// Touching an ammeter's probes across a component that is already
+    /// carrying current puts a near-zero resistance in parallel with it —
+    /// a short, and in a real lab a blown fuse. That mistake is one of
+    /// the most common in an introductory lab, and a simulated meter
+    /// that silently printed the right number for it would be teaching
+    /// the mistake.
+    ///
+    /// So: A⎓ reports a current only when the probes bracket a component
+    /// whose circuit is otherwise BROKEN — the meter completing the loop
+    /// is the meter being in series. Across a live component it says so
+    /// instead of answering.
     var multimeterReading: MultimeterReading? {
-        guard let probeA, let probeB,
-              let vA = terminalVoltages[probeA],
+        guard let probeA, let probeB else { return nil }
+        guard let vA = terminalVoltages[probeA],
               let vB = terminalVoltages[probeB] else { return nil }
-        var inline: Double?
-        if probeA.componentID == probeB.componentID, probeA.end != probeB.end {
-            inline = readouts[probeA.componentID]?.amps
+
+        let bracketsOneComponent = probeA.componentID == probeB.componentID
+            && probeA.end != probeB.end
+        let component = components.first { $0.id == probeA.componentID }
+        let amps = bracketsOneComponent ? readouts[probeA.componentID]?.amps : nil
+        let sameNode = abs(vA - vB) < 1e-3 && isProbePairConnected(probeA, probeB)
+
+        switch meterMode {
+        case .voltsDC:
+            return MultimeterReading(
+                display: Self.autoRange(vA - vB, unit: "V"),
+                note: bracketsOneComponent && component != nil
+                    ? "across the \(component!.kind.displayName)"
+                    : "between the probes")
+
+        case .ampsDC:
+            guard bracketsOneComponent, let amps, let component else {
+                return MultimeterReading(
+                    display: "— — —",
+                    note: "an ammeter goes IN SERIES: break the loop and "
+                        + "put both probes across the gap",
+                    fault: true)
+            }
+            // Current already flowing through the part the probes are
+            // across: the meter would be a short around it.
+            if abs(amps) > 1e-9 {
+                return MultimeterReading(
+                    display: "FUSE",
+                    note: "the \(component.kind.displayName) is live — probes "
+                        + "across it would short it. Break the loop first.",
+                    fault: true)
+            }
+            return MultimeterReading(
+                display: Self.autoRange(amps, unit: "A"),
+                note: "in series with the \(component.kind.displayName)")
+
+        case .ohms:
+            guard bracketsOneComponent, let component else {
+                return MultimeterReading(
+                    display: "— — —",
+                    note: "put both probes across one component",
+                    fault: true)
+            }
+            if abs(totalSourcePower) > 1e-6 {
+                return MultimeterReading(
+                    display: "— — —",
+                    note: "the circuit is live: an ohmmeter drives its own "
+                        + "current, so switch the source off first",
+                    fault: true)
+            }
+            guard let ohms = Self.resistance(of: component) else {
+                return MultimeterReading(
+                    display: "OL",
+                    note: "no resistive path across the "
+                        + "\(component.kind.displayName)")
+            }
+            return MultimeterReading(
+                display: Self.autoRange(ohms, unit: "Ω"),
+                note: "across the \(component.kind.displayName)")
+
+        case .continuity:
+            // A real meter beeps below a few tens of ohms. Same node
+            // through copper is zero, which is what a bench beeps at.
+            let ohms = bracketsOneComponent
+                ? (component.flatMap(Self.resistance) ?? .infinity) : .infinity
+            let connected = sameNode || ohms < Self.continuityThreshold
+            return MultimeterReading(
+                display: connected ? "•)))" : "OL",
+                note: connected ? "connected" : "open",
+                beeping: connected)
         }
-        return MultimeterReading(
-            deltaVolts: vA - vB,
-            continuity: abs(vA - vB) < 1e-3 && isProbePairConnected(probeA, probeB),
-            inlineAmps: inline)
+    }
+
+    /// A meter beeps below this. Real ones sit between 20 and 50 Ω.
+    nonisolated static let continuityThreshold = 50.0
+
+    /// The resistance a component presents, ohms — nil where the idea
+    /// does not apply.
+    ///
+    /// A capacitor is deliberately absent rather than infinite: its
+    /// opposition to current is a REACTANCE that depends on frequency,
+    /// and calling it a resistance would be the kind of quiet
+    /// simplification this app exists not to make.
+    nonisolated static func resistance(of component: Component) -> Double? {
+        switch component.kind {
+        case .resistor: component.value
+        case .bulb, .led, .motor: component.value
+        case .wire: wireResistance(length: component.value)
+        case .switcher: component.isClosed ? 0.001 : nil
+        case .fuse: component.failed ? nil : 0.001
+        case .battery, .acSource: nil
+        case .capacitor, .inductor: nil
+        }
+    }
+
+    /// Auto-ranging, the way a real display does it: milli, then unit,
+    /// then kilo, always three significant figures.
+    nonisolated static func autoRange(_ value: Double, unit: String) -> String {
+        let magnitude = abs(value)
+        if magnitude < 1e-9 { return "0.000 " + unit }
+        if magnitude < 0.9995 {
+            return String(format: "%.1f m%@", value * 1000, unit)
+        }
+        if magnitude < 999.5 {
+            return String(format: "%.3f %@", value, unit)
+        }
+        return String(format: "%.2f k%@", value / 1000, unit)
     }
 
     /// True when the two probes share a node through wires alone.
@@ -1282,6 +1478,7 @@ final class CircuitsModel {
         // The meter is a tool now, standing armed-or-not on the bench,
         // so it has a lamp too. Its `didSet` drops both probes.
         multimeterArmed = false
+        meterMode = .voltsDC
         isPaused = false
         seedStarterLoop()
     }
