@@ -105,9 +105,15 @@ final class MultimeterTests: XCTestCase {
     /// anchor as a parameter and write it unconditionally, from a
     /// constant the view owned — so the position was reset sixty times a
     /// second and a drag could never accumulate.
-    func testAPlacedMeterSurvivesTheRenderLoop() {
+    ///
+    /// It reads the CASE's world position, not `root.position`. `root`
+    /// stopped moving on 2026-08-03 — it holds the case and the probes
+    /// side by side and stays at the renderer's identity — so asserting
+    /// on it would now pass whether or not a drag did anything.
+    func testAPlacedMeterSurvivesTheRenderLoop() throws {
         let meter = meter()
         let model = CircuitsModel()
+        let body = try XCTUnwrap(find(Multimeter.bodyName, under: meter.root))
         let moved = Self.home + SIMD3(0.35, -0.10, 0.20)
 
         meter.place(at: moved)
@@ -116,9 +122,129 @@ final class MultimeterTests: XCTestCase {
         }
 
         XCTAssertEqual(meter.anchor, moved)
-        XCTAssertEqual(meter.root.position, moved,
+        XCTAssertEqual(simd_distance(body.position(relativeTo: nil), moved), 0,
+                       accuracy: 1e-5,
                        "the render loop moved the meter back to where the "
                        + "view thought it should be")
+    }
+
+    /// MOVING THE METER DOES NOT MOVE A PLACED PROBE.
+    ///
+    /// The second half of "these are separate objects". Turning the case
+    /// was fixed first; dragging it dragged the measurement along for
+    /// another round, because the probes still hung off the entity the
+    /// anchor was written to.
+    func testMovingTheMeterLeavesAPlacedProbeAlone() throws {
+        let meter = meter()
+        let model = CircuitsModel()
+        let probe = try XCTUnwrap(find("meter-probe-black", under: meter.root))
+
+        meter.update(viewer: SIMD3(0, 1.5, 0.6), model: model)
+        meter.moveProbe(.black, local: Self.home + SIMD3(0.10, 0, -0.04),
+                        bench: SIMD3(0, 1.2, -0.9), model: model)
+        meter.update(viewer: SIMD3(0, 1.5, 0.6), model: model)
+        let placed = probe.position(relativeTo: nil)
+
+        meter.place(at: Self.home + SIMD3(-0.4, 0.25, 0.3))
+        meter.update(viewer: SIMD3(0, 1.5, 0.6), model: model)
+
+        XCTAssertEqual(simd_distance(probe.position(relativeTo: nil), placed), 0,
+                       accuracy: 1e-5,
+                       "carrying the meter dragged a placed probe with it")
+    }
+
+    /// …and the lead still reaches, which is the thing that makes the
+    /// separation legible rather than looking like a broken parent link.
+    /// The lead is drawn jack-to-tip and scaled to span the gap, so its
+    /// length is the assertion: move the case away and it must grow.
+    func testTheLeadStretchesWhenTheMeterMovesAway() throws {
+        let meter = meter()
+        let model = CircuitsModel()
+
+        meter.update(viewer: SIMD3(0, 1.5, 0.6), model: model)
+        meter.moveProbe(.red, local: Self.home + SIMD3(0.10, 0, -0.04),
+                        bench: SIMD3(0, 1.2, -0.9), model: model)
+        meter.update(viewer: SIMD3(0, 1.5, 0.6), model: model)
+        let near = simd_distance(meter.probeTip[.red]!, meter.anchor)
+
+        meter.place(at: Self.home + SIMD3(-0.5, 0, 0))
+        meter.update(viewer: SIMD3(0, 1.5, 0.6), model: model)
+        let far = simd_distance(meter.probeTip[.red]!, meter.anchor)
+
+        XCTAssertGreaterThan(far, near + 0.3,
+                             "the gap the lead has to span did not open up")
+    }
+
+    // MARK: The probes hold still
+
+    /// A PLACED PROBE DOES NOT MOVE WHEN THE VIEWER DOES.
+    ///
+    /// The meter turns to face whoever is looking at it. The probes used
+    /// to be children of the entity that turn was applied to, so walking
+    /// round the bench swung a probe you had set on a terminal through
+    /// the same arc as the case — while the reading, latched by terminal
+    /// id rather than by position, went on claiming to measure there.
+    ///
+    /// A headset is the only thing that can walk round a bench, so this
+    /// stands in for it the only way a test can: it walks the viewer a
+    /// full circle and asks whether the probe stayed where it was put.
+    ///
+    /// IT ASKS THE ENTITY, NOT `probeTip`. The first draft of this test
+    /// asserted on the stored tip and passed against the bug it was
+    /// written to catch, because the stored tip is a coordinate in a
+    /// frame that was itself being rotated — it never changed, and the
+    /// probe moved anyway. What a wearer sees is the entity's place in
+    /// the world, so that is what a test about a wearer must read.
+    func testAPlacedProbeIgnoresTheViewer() throws {
+        let meter = meter()
+        let model = CircuitsModel()
+        let probe = try XCTUnwrap(find("meter-probe-red", under: meter.root))
+
+        meter.update(viewer: SIMD3(0, 1.5, 0.6), model: model)
+        meter.moveProbe(.red, local: SIMD3(0.08, 0.02, -0.05),
+                        bench: SIMD3(0, 1.2, -0.9), model: model)
+        meter.update(viewer: SIMD3(0, 1.5, 0.6), model: model)
+        let placed = probe.position(relativeTo: nil)
+
+        for angle in stride(from: 0.0, to: 2 * Double.pi, by: 0.4) {
+            meter.update(
+                viewer: Self.home + SIMD3(Float(cos(angle)), 0.3, Float(sin(angle))),
+                model: model)
+            XCTAssertEqual(
+                simd_distance(probe.position(relativeTo: nil), placed), 0,
+                accuracy: 1e-5,
+                "the red probe rode the case's facing round the bench "
+                + "(viewer at \(angle) rad)")
+        }
+    }
+
+    /// An UNTOUCHED probe still hangs off the instrument.
+    ///
+    /// The other half of the same decision: a probe nobody has picked up
+    /// is in its holster, and a holster is part of the case. If this
+    /// failed, turning the meter would leave two probes hanging in the
+    /// air beside it, attached to their leads at one end and to nothing
+    /// at the other.
+    func testAParkedProbeFollowsTheCase() {
+        let meter = meter()
+        let model = CircuitsModel()
+
+        meter.update(viewer: Self.home + SIMD3(0, 0.3, 1), model: model)
+        let front = meter.probeTip[.black]!
+        meter.update(viewer: Self.home + SIMD3(1, 0.3, 0), model: model)
+        let side = meter.probeTip[.black]!
+
+        XCTAssertGreaterThan(
+            simd_distance(front, side), 0.01,
+            "a probe still in its holster did not turn with the meter")
+        // Turning is not translating: it is still hanging off the case at
+        // the same distance, on the other side. Measured FROM THE ANCHOR
+        // — `probeTip` is in the renderer's frame, so its bare length is
+        // a distance from the scene origin and would change under a
+        // rotation that left the probe correctly holstered.
+        XCTAssertEqual(simd_distance(front, meter.anchor),
+                       simd_distance(side, meter.anchor), accuracy: 1e-4,
+                       "the holstered probe changed its distance from the case")
     }
 
     // MARK: Mode

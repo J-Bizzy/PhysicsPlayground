@@ -13,7 +13,7 @@
 //  SCOPE, stated honestly, because the boundary is not obvious:
 //  XCUITest can drive SwiftUI — windows, buttons, pickers, lists. It
 //  has NO API for RealityKit entities. Nothing in the immersive space
-//  is addressable: not the exhibits, not the podium, not a magnet, not
+//  is addressable: not the exhibits, not the pad, not a magnet, not
 //  a two-handed pinch. Those are covered by `StationTapTests` at the
 //  handler level and by `docs/ON_DEVICE_TESTS.md` in a headset, and
 //  they cannot be covered here. A test file that pretended otherwise

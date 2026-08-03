@@ -8,7 +8,7 @@ afternoon rediscovering it:
   launch, screenshot and terminate. That is the whole surface.
 - **XCUITest has no API for RealityKit entities.** It drives SwiftUI —
   windows, buttons, pickers, lists — and everything in an immersive
-  space is invisible to it. No exhibit, no podium, no magnet, no pinch.
+  space is invisible to it. No exhibit, no pad, no magnet, no pinch.
 
 So the automated suites cover three of four layers, and this file is the
 fourth:
@@ -57,19 +57,34 @@ pass, and are the ones worth doing first.
       pushed a step further out and landed behind the sign — which is
       why the item below failed. The panel should occlude the sign while
       focus holds, and nothing should occlude the panel.
-- [ ] **Drag an exhibit to the podium.** It should follow your hand 1:1
-      — no lurching toward the hand — the podium glows as you approach,
+- [ ] **Drag an exhibit to the pad.** It should follow your hand 1:1
+      — no lurching toward the hand — the pad glows as you approach,
       the exhibit seats itself, and a `Load …` button appears above it.
-- [ ] **The podium hint is legible** from where you naturally stand.
+- [ ] ⟳ **The pad reads as floating, not as broken.** Its column came off
+      on 2026-08-03; what is left is a plate at chest height with a ring
+      of light hanging below it. The question a screenshot cannot answer:
+      standing in a real room, does it look suspended on purpose, or does
+      it look like a pedestal that failed to draw? The ring below it is
+      the whole answer — if it is invisible against your floor, say so.
+- [ ] ⟳ **The Load button hangs over the LAB, not over the room.** It
+      grew a badge and a second line on 2026-08-03 and its lift was
+      raised to match. It must still read as that exhibit's button.
+      Check the tall exhibits — Pendulums, Circuit Workshop — where the
+      miniature reaches up toward it.
+- [ ] ⟳ **Gaze at the Load button.** `.buttonStyle(.plain)` gives up the
+      platform highlight, so it is restored by hand. If looking at the
+      button does nothing visible, the pinch has no aiming feedback at
+      all and this is a real failure, not a polish note.
+- [ ] **The pad hint is legible** from where you naturally stand.
 - [ ] **Press Load.** The lab opens.
 - [ ] ⟳ **The other way in:** look at an exhibit, press the focus
-      panel's Load button without touching the podium. **This is the
+      panel's Load button without touching the pad. **This is the
       guaranteed path and it was broken** — the button was behind a
       sign. It is now full panel width as well as unobstructed.
 - [ ] ⟳ **The utility bar:** ⚙ Settings, 📖 Lab Notebook, ℹ About. All
       three now open as **utility panels in front of you**, not wherever
       the invisible main window was last parked. Each should arrive
-      centred in view and clear of the podium.
+      centred in view and clear of the pad.
 - [ ] ⟳ **About fits its window.** No clipped line, no cut-off
       description.
 - [ ] ⟳ **Settings has no "Home title" and no "Reduce motion".** The
@@ -80,8 +95,25 @@ pass, and are the ones worth doing first.
 
 - [ ] **The loop is live on arrival.** Pinch the switch lever: the bulb
       goes out, the electron beads stop.
-- [ ] **Drag a part off the tray.** It follows your hand, and dropping
-      it with copper ends near another part connects them automatically.
+- [ ] ⟳ **Pull a part out of a rack.** The tray is gone (2026-08-03);
+      eleven parts now stand free on the two flanks, above the furniture
+      row. The part must be born AT YOUR FINGERTIPS — not at the rack,
+      then flown to your hand — and dropping it with copper ends near
+      another part connects them automatically.
+- [ ] ⟳ **Both racks are fully in frame** from where you naturally
+      stand, with every name readable. This is the item the first build
+      of the palette failed: the columns passed the reach check and sat
+      59° off axis, so "Battery" read "…ery" and "Capacitor" read
+      "Caps…". A simulator screenshot caught it; check it against a real
+      field of view, which is wider.
+- [ ] ⟳ **Fill the bench to sixteen parts, then pull a twelfth kind.**
+      The source must FADE — the refusal that says nothing came out of
+      here. The tray had no answer at all at the budget: the pinch did
+      nothing and said nothing.
+- [ ] ⟳ **Zoom the bench to 8× and look at the racks.** They must not
+      grow. The tray did: it hung off `viewRoot`, so at the two-hand
+      maximum it was eight times oversized with its centre somewhere
+      under the floor.
 - [ ] **Pinch two terminals** across a distance: a wire joins them.
 - [ ] ⟳ **Tap a part** → its control ring unfolds. Tap it again → it
       must **fold with the same animation, in place**. The fold has
@@ -112,6 +144,19 @@ Both left the panel. **Not looked at yet.**
       times and confirm no stray terminal gets selected.
 - [ ] Tap it again to disarm: face goes dark, reading clears, and
       re-arming starts from nothing probed.
+- [ ] ⟳ **Place a probe, then WALK.** The whole point of the 2026-08-03
+      split. Set the red probe on a terminal, then step round the bench
+      and turn your head. **The case must turn to face you and the probe
+      must not move at all** — the lead swings, the tip stays on the
+      terminal, the reading holds. This is the item a unit test can only
+      approximate: it moves a viewer vector, it cannot walk.
+- [ ] ⟳ **The holstered probe still hangs off the meter.** The other
+      half: with a probe untouched, turn the meter and confirm it swings
+      round with the case rather than being left behind in mid-air.
+- [ ] ⟳ **Pick the meter up with a probe placed.** The probe must STAY on
+      its terminal while the case travels, with the lead stretching
+      between them. One hand, one object at a time. Check the lead does
+      not visibly pass through the bench or a part on the way.
 - [ ] **Zoom the bench to 8×.** Neither the meter nor either bank should
       grow — they are instruments in the room, not parts on the bench.
 - [ ] **Reset from Electron View.** The bench must come back at normal
@@ -674,10 +719,10 @@ follows is only what a screenshot cannot settle.
 
 ### The hub
 
-- [ ] **Drag a lab to the podium.** The podium hint used to carry a
-      collider sitting directly in the path of that gesture: the sentence
-      "Drag a lab onto the podium to open it" was standing in the way of
-      doing it. The carry must be smooth all the way in.
+- [ ] **Drag a lab to the pad.** The hint used to carry a collider
+      sitting directly in the path of that gesture: the sentence telling
+      you to drag a lab onto the pad was standing in the way of doing it.
+      The carry must be smooth all the way in.
 - [ ] **The gyroscope bead and the modelled miniatures** at real
       passthrough contrast, in a bright room and a dim one.
 - [ ] **The wordmark.** A simulator screenshot of the machined plaque

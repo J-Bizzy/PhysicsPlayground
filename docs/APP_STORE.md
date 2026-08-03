@@ -89,7 +89,7 @@ around them. Add parallel plates, a uniform magnetic field, and a Gauss
 surface you can carry charges in and out of to see the flux jump to
 exactly Q/ε₀.
 
-Circuit Workshop — Build from a tray of real parts: batteries, resistors,
+Circuit Workshop — Build from racks of real parts: batteries, resistors,
 capacitors, inductors, motors, LEDs. Solved every frame. Probe it with a
 multimeter, then switch on Electron View and shrink into the copper to
 watch the drift velocity — which is millimetres per second, and is the

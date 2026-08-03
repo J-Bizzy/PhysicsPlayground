@@ -18,7 +18,7 @@ solver is written from scratch in Swift and tested.
 | | |
 |---|---|
 | **Electric Fields** | Pull charges out of a well and watch the field redraw. Capacitor, uniform **B**, a Gauss surface you can move charges in and out of, and a test particle that can be a ball, an electron or a positron. |
-| **Circuit Workshop** | Build circuits from a tray of real parts. Nodal analysis every frame, a multimeter you probe with, and an Electron View that shrinks you into the copper so you can watch the drift velocity — which is millimetres per second, and that is the misconception the lab exists to kill. |
+| **Circuit Workshop** | Build circuits from racks of real parts you pull out of the air. Nodal analysis every frame, a multimeter you probe with, and an Electron View that shrinks you into the copper so you can watch the drift velocity — which is millimetres per second, and that is the misconception the lab exists to kill. |
 | **Magnetism** | Bar magnets that attract, repel and align. Field lines that close on themselves, and a compass you carry. |
 | **Projectile Motion** | Throw anything. Real drag, real restitution, and bounces off *your* walls, floor and ceiling. |
 | **Pendulums** | Full nonlinear swings, a Newton's cradle to break apart, a chaotic double pendulum, and a Foucault rig whose plane holds still while your room turns under it. |

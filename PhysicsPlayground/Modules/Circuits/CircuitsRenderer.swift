@@ -117,7 +117,11 @@ final class CircuitsRenderer {
     /// The wire core, and the most scrutinised surface in the app:
     /// Electron View shrinks you into it until it is a barrel filling
     /// your view, so this is the one metal that gets looked at closely.
-    private let copperMaterial = Materials.machined(
+    /// STATIC, so `makeBody` can be too: the palette's previews are
+    /// built before any renderer exists to own a copper. It is an
+    /// immutable material built from two constants, so one shared copy
+    /// is not a shortcut — there was never anything per-instance about it.
+    private static let copperMaterial = Materials.machined(
         DesignTokens.Palette.copperUI, roughness: 0.35)
     private var glowMaterials: [UnlitMaterial] = []
 
@@ -169,7 +173,6 @@ final class CircuitsRenderer {
         audioEmitter.components.set(SpatialAudioComponent())
         viewRoot.addChild(audioEmitter)
 
-        buildTray()
     }
 
     // MARK: The bench's magnetic field
@@ -257,91 +260,24 @@ final class CircuitsRenderer {
         return simd_distance(point, segment.a + along * t)
     }
 
-    // MARK: The parts tray (grab a part and a copy lifts off it)
+    // MARK: The parts palette
 
-    /// Tray templates by entity name ("tray-<kind>"), for hiding while a
-    /// copy is being pulled off.
-    private var trayTemplates: [String: ModelEntity] = [:]
-    /// Live tray drags: template entity name → the spawned component
-    /// following the hand.
-    var trayDragIDs: [String: UUID] = [:]
-
-    func setTrayTemplateHidden(_ name: String, _ hidden: Bool) {
-        trayTemplates[name]?.components.set(OpacityComponent(opacity: hidden ? 0 : 1))
-    }
-
-    private func buildTray() {
-        let tray = Entity()
-        // Coffee-table height just below the build volume, close enough
-        // to reach without leaning.
-        tray.position = [0, 1.02, -0.85]
-        viewRoot.addChild(tray)
-
-        let kinds = CircuitsModel.ComponentKind.allCases
-        // Two balanced rows, however many parts there are.
-        let columns = (kinds.count + 1) / 2
-        let slabWidth = Float(columns - 1) * 0.15 + 0.18
-
-        var glass = PhysicallyBasedMaterial()
-        glass.baseColor = .init(tint: .white)
-        glass.roughness = 0.15
-        glass.blending = .transparent(opacity: .init(floatLiteral: 0.22))
-        let slab = ModelEntity(
-            mesh: .generateBox(size: [slabWidth, 0.015, 0.38], cornerRadius: 0.008),
-            materials: [glass]
-        )
-        tray.addChild(slab)
-
-        for (index, kind) in kinds.enumerated() {
-            let column = index % columns
-            let row = index / columns
-            let x = Float(column) * 0.15 - Float(columns - 1) * 0.075
-            // ROW SEPARATION IS A SIGHT-LINE PROBLEM, not a taste one.
-            //
-            // The tray sits at 1.02 m and is read from about eye height
-            // a metre away, so the line of sight comes down at roughly
-            // 29°. A part stands 4 cm proud of the tray, which means it
-            // hides anything within 4/tan(29°) ≈ 7 cm behind it. The rows
-            // were 12 cm apart with the labels 5 cm forward of their own
-            // parts, leaving 6.8 cm — just inside that shadow, so the
-            // front row stood squarely on the back row's names and the
-            // tray read "attery", "esistor", "Ind…". At ±8.5 cm the back
-            // labels clear the front parts by 11.8 cm. ±10 cm, in the
-            // end: the motor is a fat cylinder rather than the 4 cm the
-            // arithmetic assumed, and it was still standing on "Source".
-            let z: Float = row == 0 ? -0.10 : 0.10
-            let template = makeBody(for: CircuitsModel.Component(
-                id: UUID(), kind: kind, position: .zero, value: kind.defaultValue))
-            template.scale = SIMD3(repeating: 0.8)
-            template.position = [x, 0.05, z]
-            template.name = "tray-\(kind.rawValue)"
-            // A drag target: pulling it spawns a copy that follows the
-            // hand's displacement; the template itself never moves.
-            Grabbable.configureTouchTarget(template, collisionRadius: 0.06)
-            var accessibility = AccessibilityComponent()
-            accessibility.isAccessibilityElement = true
-            accessibility.label = LocalizedStringResource(
-                stringLiteral: "Grab a \(kind.displayName) from the tray")
-            template.components.set(accessibility)
-            tray.addChild(template)
-            trayTemplates[template.name] = template
-
-            // A small flat label on the tray surface. Near-white type at
-            // 85% opacity on a pale glass tray in a pale room was simply
-            // unreadable — every part name vanished. Dark, opaque and a
-            // little larger: the tray is the light surface, so the type
-            // on it has to be the dark one.
-            let labelMesh = MeshResource.generateText(
-                kind.displayName, extrusionDepth: 0.0006,
-                font: .systemFont(ofSize: 0.017, weight: .semibold))
-            let label = ModelEntity(
-                mesh: labelMesh,
-                materials: [UnlitMaterial(color: UIColor(white: 0.08, alpha: 1))])
-            let bounds = labelMesh.bounds
-            label.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
-            label.position = [x - (bounds.min.x + bounds.max.x) / 2, 0.009, z + 0.052]
-            tray.addChild(label)
-        }
+    /// One part, built the way the bench builds it, for a `Well` to
+    /// stand on the flank — the palette's whole supply.
+    ///
+    /// It is `makeBody` itself, not a likeness of it: `Well`'s rule is
+    /// that a preview and the object it makes must be recognisably one
+    /// thing, and the surest way to honour that is to call the same
+    /// function the renderer calls. At the part's own final size, too —
+    /// the tray shrank its templates to 0.8, so every part in this
+    /// module was a fifth smaller in the place you learned what it
+    /// looked like than in the place you used it.
+    ///
+    /// See `CircuitsPartsLayout` for where these stand and why the tray
+    /// they replace is not coming back.
+    static func partPreview(for kind: CircuitsModel.ComponentKind) -> ModelEntity {
+        makeBody(for: CircuitsModel.Component(
+            id: UUID(), kind: kind, position: .zero, value: kind.defaultValue))
     }
 
     // MARK: Render clock
@@ -891,14 +827,14 @@ final class CircuitsRenderer {
         viewRoot.addChild(holder)
 
         // The visible body, shaped per kind.
-        let body = makeBody(for: component)
+        let body = Self.makeBody(for: component)
         holder.addChild(body)
 
         // Terminals: copper spheres, tap targets for wiring.
         var terminals: [ModelEntity] = []
         let terminalMesh = MeshResource.generateSphere(radius: 0.013)
         for end in 0...1 {
-            let terminal = ModelEntity(mesh: terminalMesh, materials: [copperMaterial])
+            let terminal = ModelEntity(mesh: terminalMesh, materials: [Self.copperMaterial])
             terminal.name = "t\(end)-\(component.id.uuidString)"
             terminal.position = SIMD3(
                 Float(end == 0 ? -component.terminalHalfSpan : component.terminalHalfSpan), 0, 0)
@@ -919,7 +855,7 @@ final class CircuitsRenderer {
             if component.kind != .wire {
                 let lead = ModelEntity(
                     mesh: .generateCylinder(height: 0.045, radius: 0.0028),
-                    materials: [copperMaterial])
+                    materials: [Self.copperMaterial])
                 lead.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
                 lead.position = SIMD3(Float(end == 0 ? -0.062 : 0.062), 0, 0)
                 holder.addChild(lead)
@@ -1074,7 +1010,7 @@ final class CircuitsRenderer {
         return shell
     }
 
-    private func makeBody(for component: CircuitsModel.Component) -> ModelEntity {
+    private static func makeBody(for component: CircuitsModel.Component) -> ModelEntity {
         if let modeled = Self.modeledBody(for: component.kind) {
             return modeled
         }
@@ -1087,7 +1023,7 @@ final class CircuitsRenderer {
             // The + cap on terminal 0's side (nodeA convention).
             let cap = ModelEntity(
                 mesh: .generateCylinder(height: 0.008, radius: 0.009),
-                materials: [copperMaterial])
+                materials: [Self.copperMaterial])
             cap.position = [0, 0.059, 0]  // local +y = world −x after rotation
             body.addChild(cap)
             return body
@@ -1142,7 +1078,7 @@ final class CircuitsRenderer {
             for offset in stride(from: -0.024, through: 0.024, by: 0.012) {
                 let coil = ModelEntity(
                     mesh: .generateCylinder(height: 0.006, radius: 0.019),
-                    materials: [copperMaterial])
+                    materials: [Self.copperMaterial])
                 coil.position = [0, Float(offset), 0]
                 body.addChild(coil)
             }
@@ -1182,7 +1118,7 @@ final class CircuitsRenderer {
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             let filament = ModelEntity(
                 mesh: .generateCylinder(height: 0.055, radius: 0.0018),
-                materials: [copperMaterial])
+                materials: [Self.copperMaterial])
             body.addChild(filament)
             for sign: Float in [-1, 1] {
                 let cap = ModelEntity(
@@ -1198,7 +1134,7 @@ final class CircuitsRenderer {
             // rod along its axis to the component's live length.
             let body = ModelEntity(
                 mesh: .generateCylinder(height: Self.wireBaseLength, radius: 0.005),
-                materials: [copperMaterial])
+                materials: [Self.copperMaterial])
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             let sleeve = ModelEntity(
                 mesh: .generateCylinder(height: 0.07, radius: 0.0095),
@@ -1259,7 +1195,7 @@ final class CircuitsRenderer {
                 // live voltage colour, and the electrons ride inside.
                 entity = ModelEntity(
                     mesh: .generateCylinder(height: 1, radius: 0.0032),
-                    materials: [copperMaterial])
+                    materials: [Self.copperMaterial])
                 let jacket = ModelEntity(
                     mesh: .generateCylinder(height: 1, radius: 0.0062),
                     materials: [Self.wireJacketMaterial])

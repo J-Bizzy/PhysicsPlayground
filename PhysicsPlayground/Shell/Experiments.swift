@@ -256,7 +256,7 @@ enum ExperimentCatalog {
             return [
                 (Experiment(id: "circuits.twoBulbs", title: "Double glow",
                             detail: "Light two bulbs at once.",
-                            step: "Drag a second bulb off the tray and wire it across the battery beside the first."),
+                            step: "Pull a second bulb out of the rack on your right and wire it across the battery beside the first."),
                  { model.components.filter { $0.kind == .bulb }
                      .filter { abs(model.readouts[$0.id]?.watts ?? 0) > 0.5 }.count >= 2 }),
                 (Experiment(id: "circuits.slowpoke", title: "Slowpoke",

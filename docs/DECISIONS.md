@@ -16,6 +16,158 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-03 — Circuit Workshop's tray becomes two racks on the flanks
+
+**Decision:** The parts tray is deleted. In its place, eleven `Well`
+sources stand free on the two flanks — two blocks of six, each two
+columns wide and three rows tall, above the bench's furniture row. Left
+is what drives or interrupts a circuit (battery, AC source, switch, fuse,
+wire); right is what the current does (resistor, capacitor, inductor,
+bulb, LED, motor). Geometry lives in a new `CircuitsPartsLayout` with
+tests, the module's first.
+
+**Context:** User direction — put the parts at the sides of vision
+instead of on a workbench. It also closes the app's last hold-out against
+a decision already made everywhere else: "the glass came off"
+(2026-08-01) replaced every container with the object itself, and
+Circuits was the one module that never got that pass. Its tray was
+therefore the one surface a visitor touches first that was still built
+the old way.
+
+Two defects came out with it, neither of them the reason for the change.
+The tray hung off `viewRoot`, so it **scaled with the zoom** — at the
+two-hand maximum of 8× it was eight times oversized with its centre
+around y = −0.59 m, under the floor — while the meter, the layer bank and
+the selected-part readout all compensate for the rig and say so. And at
+the sixteen-component budget the tray's pinch **did nothing and said
+nothing**; `Well` has had a refusal fade for exactly this since it was
+written, because "a lab at its budget used to chirp and flinch and hand
+back nothing".
+
+**Consequences:** Parts are now born AT THE FINGERTIPS rather than at the
+source and flown to the hand, so making a part and moving a part are one
+gesture — the whole point of the primitive. The palette resolves by
+entity through `Well.pull` instead of by parsing a `"tray-<kind>"` prefix
+off an entity name, so a rename can no longer fail silently as a part
+nobody can make. `makeBody` and `copperMaterial` became static so a
+preview can be built before any renderer exists; the previews ARE
+`makeBody`, so what you see and what you get cannot drift.
+
+**The layout lesson, which is the transferable part.** The first build
+put the columns at |x| = 1.02, z = −0.62. It passed the reach check with
+3 cm to spare and was unusable: 59° off the forward axis, hard against
+the edge of the frame, "Battery" reading "…ery". `FieldInstrumentLayout`
+records the identical mistake at 61° and this file's own `clearAnchor`
+note calls it "reachable by the arithmetic, invisible in practice" — the
+third time in this project. **Reach and angle pull against each other:
+pulling an instrument nearer in z buys reach and spends frame.** Checking
+only the one you thought of proves nothing, so `CircuitsPartsLayout` now
+declares both and the tests assert both.
+
+## 2026-08-03 — The meter and its probes become separate objects
+
+**Decision:** `Multimeter` splits its entity graph in two. A new `chassis`
+carries the case, dial, face and nameplate, and takes BOTH of the meter's
+movements — the anchor a hand drags it to, and the yaw that turns its
+face toward whoever is reading it. `root` carries neither: it sits at the
+renderer's identity and exists only to hold the meter's two halves side
+by side, so the probes under it are expressed in a frame nothing moves. A
+probe a hand has placed is moved by nothing but another hand. A probe
+still in its holster is re-parked against the case every frame, so it
+follows the instrument wherever it goes. The lead absorbs the difference.
+
+**Context:** User report, from inside Circuit Workshop, in two rounds —
+first that the prongs moved when the wearer moved, then that they moved
+when the meter did. Both were the same defect at different depths: the
+probes were children of an entity that had a job of its own, so the tips
+inherited a movement nobody had asked for. And both were worse than a
+cosmetic drift, because the latch is by terminal id rather than by
+position: the meter went on reporting a measurement at a contact the
+probe was visibly no longer touching.
+
+The first fix moved only the yaw onto the chassis, and left the anchor on
+`root` on the reasoning that leads plugged into a meter you pick up come
+with it. That reasoning was wrong for this object — a probe is placed on
+a terminal deliberately, and tidying the instrument is not a reason to
+undo the placement. The owner's framing settles it: **treat them as
+separate objects, and let a hand alter one at a time.**
+
+**Consequences:** The rule this is an instance of: **nothing a hand can
+place may live in a frame that something else moves or turns.** Two
+frames, two jobs — where a thing is, and which way it faces — and
+anything positionable belongs to neither, it belongs to the world.
+Turning or carrying the meter now costs the jacks a transform when the
+leads are drawn, which is correct and was previously free only because it
+was wrong; the lead is the one part of the assembly that is supposed to
+change shape. Not addressed: `reset()` drops both latches but leaves the
+probes drawn wherever they were. That predates this change and now reads
+worse, because a placed probe genuinely stays placed.
+
+**A note on the tests, which is the transferable part.** The first test
+written for this passed against the bug it was written to catch. It
+asserted on `probeTip` — a coordinate expressed in the very frame that
+was being rotated, so it never changed while the probe moved anyway. Both
+new tests and the pre-existing meter-drag test now read the ENTITY's
+world position instead. Any test about what a wearer sees must read the
+scene graph, not the variable the scene graph was built from.
+
+## 2026-08-03 — The podium loses its column; the pad floats
+
+**Decision:** The gallery's docking spot is a floating plate. The 1.05 m
+graphite column under it is deleted, the plate keeps the exact height the
+column gave it, and a second, smaller ring of the champagne light hangs
+4.5 cm below it and brightens with the pool on its face. Wearer-facing
+copy says **pad**; the identifier `podium` stays throughout
+`HubSpaceView` as the name of the spot.
+
+**Context:** User direction — "get rid of the podium stand, I just want
+that little disk to be floating." It also settles an inconsistency the
+gallery had been carrying: everything else in the room floats (the two
+terraces, the wordmark, every exhibit on its puck), and the plinth was
+the one object claiming to know where the floor was. It does not know.
+`y = 0` is where the wearer happened to be standing when the immersive
+space opened, not their floor — the same error that killed the light pool
+on 2026-07-31 — so the column's foot was planted at a guess, on the one
+object the eye is asked to go to.
+
+**Consequences:** No geometry moved: `podiumTop`, the snap radius, the
+hint and the Load button are all measured from the plate's face and were
+untouched by the deletion, so the carry gesture and the `-hubDock`
+screenshot path behave exactly as before. The hover ring is doing real
+work and is not decoration — a floating slab with nothing under it reads
+as a plinth whose column failed to build, and the ring is what makes the
+suspension look chosen. Anything added under the plate later must not
+reach for the floor; only `RoomModel`'s scanned geometry knows where that
+is.
+
+## 2026-08-03 — The pad's Load button stops being the panel's button
+
+**Decision:** The button hanging over the pad is its own view
+(`HubLoadButton`), not a second instance of the focus panel's: the
+module's own SF Symbol in a disc of its accent, "LOAD MODULE" small and
+letter-spaced above the module's name at `.title2`, a trailing chevron,
+and a hairline of the accent inside the glass capsule. Roughly double the
+old height and about as wide as the plate it stands over. The focus
+panel's button is unchanged.
+
+**Context:** User direction — bigger, and better looking. Both buttons
+were `Label(…, systemImage:) / .callout / .borderedProminent`, which made
+the delightful path (carry a lab across the room and set it down) end in
+exactly the furniture of the reachable path (pinch a button on a card).
+The two buttons are not the same job: one sits in the type rhythm of six
+rows on a crowded panel, the other hangs alone in the air over a single
+object and is the payoff for the carry.
+
+**Consequences:** `.buttonStyle(.plain)` buys the custom look by giving
+up the platform's hover highlight, so the view carries
+`.contentShape(.hoverEffect, Capsule())` and `.hoverEffect()`
+explicitly. On visionOS that highlight is not decoration — it is the only
+signal that your gaze is on the button and a pinch will land, and a
+prettier button you cannot tell you are aiming at is a worse button.
+`podiumButtonLift` went 0.20 → 0.23 m for the same reason the original
+0.34 → 0.20 happened: the gap that matters is to the card's bottom edge,
+and that edge dropped when the card grew.
+
 **The five entries below were written on 2026-08-03, after this log had
 fallen twelve commits behind.** Everything in them is drawn from the
 commit messages and the code; where reasoning is reconstructed rather

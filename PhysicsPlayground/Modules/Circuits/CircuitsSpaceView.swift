@@ -29,7 +29,14 @@ struct CircuitsSpaceView: View {
     @State private var ring = RingState()
     @State private var wireDragFrom: CircuitsModel.Terminal?
     @State private var partDrag: RelativeDrag?
-    @State private var trayDragID: UUID?
+    /// The part a pull off the palette just made, so the drag that made
+    /// it can go on moving it. It outlives the `RelativeDrag`'s name,
+    /// which for a new part is the well's, not a UUID.
+    @State private var spawnedPartID: UUID?
+    /// The parts palette: two blocks of sources on the flanks, one per
+    /// component kind. See `CircuitsPartsLayout` for the geometry and
+    /// for what it replaced.
+    @State private var palette: Well?
     /// Which probe a hand is carrying, if either.
     @State private var probeDrag: CircuitsModel.ProbeSlot?
     /// Carrying the meter itself: where its case was when the hand closed
@@ -163,6 +170,45 @@ struct CircuitsSpaceView: View {
             renderer.root.addChild(benchVerbs.root)
             self.verbs = benchVerbs
 
+            // THE PARTS PALETTE, which used to be a glass tray at the
+            // bottom of the frame. Two blocks of sources on the flanks,
+            // above the furniture row — see `CircuitsPartsLayout` for
+            // the geometry and for the three things wrong with the tray.
+            //
+            // Under `root`, like every other instrument here, and unlike
+            // the tray: the tray hung off `viewRoot` and inflated to
+            // eight times its size somewhere under the floor whenever
+            // anybody used Electron View.
+            var partSpecs: [Well.Spec] = []
+            for flank in CircuitsPartsLayout.Flank.allCases {
+                let kinds = CircuitsPartsLayout.kinds(on: flank)
+                // MEASURED, not assumed. These are the renderer's own
+                // bodies at final size and they differ by a factor of
+                // three; the pitch has to come from the tallest one
+                // actually standing in this block. Building each preview
+                // once here to measure it is the cost — `Well` builds its
+                // own from the same closure, so what is measured and what
+                // is shown cannot drift.
+                let tallest = kinds.reduce(Float(0)) { tallest, kind in
+                    max(tallest, CircuitsRenderer.partPreview(for: kind)
+                        .visualBounds(relativeTo: nil).extents.y)
+                }
+                let pitch = CircuitsPartsLayout.rowPitch(tallestPart: tallest)
+                for (index, kind) in kinds.enumerated() {
+                    partSpecs.append(.init(
+                        name: kind.rawValue,
+                        tint: UIColor(DesignTokens.Palette.circuitsAccent),
+                        label: kind.displayName,
+                        preview: { CircuitsRenderer.partPreview(for: kind) },
+                        position: CircuitsPartsLayout.slot(
+                            flank, index: index, rowPitch: pitch),
+                        spawn: { model.add(kind, at: $0) }))
+                }
+            }
+            let parts = Well(partSpecs)
+            renderer.root.addChild(parts.root)
+            self.palette = parts
+
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // The lab's placement in the user's room — a pure
@@ -190,6 +236,13 @@ struct CircuitsSpaceView: View {
                         viewer: viewer,
                         dt: event.deltaTime)
                     meter?.update(viewer: viewer, model: model)
+                    // The palette's idle breath, its recoil when it gives
+                    // a part up, and its refusal fade when the bench is
+                    // at its sixteen-component budget. That last one is
+                    // new capability, not decoration: at the budget the
+                    // tray's pinch did nothing at all and said nothing
+                    // about it.
+                    palette?.update(dt: event.deltaTime)
                     verbs?.update(anchor: Self.clearAnchor, viewer: viewer,
                                   dt: event.deltaTime,
                                   resetNonce: appModel.resetNonce)
@@ -284,19 +337,22 @@ struct CircuitsSpaceView: View {
                     if meter?.handleTap(value.entity, model: model) == true { return }
                     if bloom.handleTap(value.entity) { return }
                     // Ahead of `handleTap(on:)` for the same reason the
-                    // meter is: this plate stands at the end of the tray,
-                    // among template parts that spawn on a drag, and
-                    // arming it must not also register as reaching for
-                    // one of them.
+                    // meter is. The tray this plate used to stand at the
+                    // end of is gone (2026-08-03) and the palette that
+                    // replaced it is on the far flanks, so the crowding
+                    // that made the ordering urgent has eased — but the
+                    // ordering is what makes it a RULE rather than a
+                    // distance: a verb plate is never also a reach for
+                    // the bench behind it, wherever it happens to stand.
                     if verbs?.handleTap(value.entity) == true { return }
                     handleTap(on: value.entity)
                 }
         )
         // One drag gesture, four grabs — all relative, nothing lurches
         // toward the hand: a terminal pulls a live wire; an end grip
-        // aims/stretches its part; a tray template spawns a copy that
-        // follows the hand's displacement; a part body carries the
-        // part. Tap-tap wiring still works too.
+        // aims/stretches its part; a palette source hands you a NEW part
+        // at your fingertips; a part body carries the part. Tap-tap
+        // wiring still works too.
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
@@ -382,7 +438,7 @@ struct CircuitsSpaceView: View {
                         renderer?.previewComponentID = nil
                         wireDragFrom = nil
                         partDrag = nil
-                        trayDragID = nil
+                        spawnedPartID = nil
                         gripDrag = nil
                         model.endCarry()
                     }
@@ -408,11 +464,8 @@ struct CircuitsSpaceView: View {
                     applyCircuitDrag(partDrag, hand: hand)
                     if let gripDrag {
                         model.autoConnect(id: gripDrag.grip.componentID)
-                    } else if let id = trayDragID ?? UUID(uuidString: partDrag.name) {
+                    } else if let id = spawnedPartID ?? UUID(uuidString: partDrag.name) {
                         model.autoConnect(id: id)
-                    }
-                    if trayDragID != nil {
-                        renderer.setTrayTemplateHidden(partDrag.name, false)
                     }
                 }
         )
@@ -420,7 +473,7 @@ struct CircuitsSpaceView: View {
     }
 
     /// Resolves what the pinch landed on and opens the right session:
-    /// wire (terminal), aim/stretch (grip), spawn (tray), carry (body).
+    /// wire (terminal), aim/stretch (grip), pull (palette), carry (body).
 
     /// A part's own controls. Its value has no size of its own, so the
     /// grip's honesty is the CONSEQUENCE — pull a bulb's resistance up
@@ -507,15 +560,17 @@ struct CircuitsSpaceView: View {
                 model.beginCarry(id: grip.componentID)
                 return
             }
-            if name.hasPrefix("tray-") {
-                guard let kind = CircuitsModel.ComponentKind(
-                        rawValue: String(name.dropFirst(5))) else { return }
-                let templateWorld = SIMD3<Double>(candidate.position(relativeTo: renderer.viewRoot))
-                guard let id = model.add(kind, at: templateWorld) else { return }
-                trayDragID = id
-                partDrag = RelativeDrag(name: name, target: templateWorld, hand: hand)
+            if let id = palette?.pull(candidate, at: hand) {
+                // BORN AT THE FINGERTIPS, not at the source. The tray
+                // spawned its copy at the template's own position and
+                // then dragged it to the hand, which meant every new part
+                // began with a jump across the room from a slab at knee
+                // height. A well hands it to you where your hand already
+                // is, so making a part and moving a part are the same
+                // gesture — the point of the whole primitive.
+                spawnedPartID = id
+                partDrag = RelativeDrag(name: name, target: hand, hand: hand)
                 renderer.previewComponentID = id
-                renderer.setTrayTemplateHidden(name, true)
                 return
             }
             if let id = UUID(uuidString: name),
@@ -537,7 +592,7 @@ struct CircuitsSpaceView: View {
                           grabbedEnd: gripDrag.grip.end,
                           pivot: gripDrag.pivot, hand: position)
             model.breakOverstretchedWires(id: gripDrag.grip.componentID)
-        } else if let id = trayDragID ?? UUID(uuidString: drag.name) {
+        } else if let id = spawnedPartID ?? UUID(uuidString: drag.name) {
             model.move(id: id, to: position)
             model.breakOverstretchedWires(id: id)
         }
@@ -628,11 +683,17 @@ struct CircuitsSpaceView: View {
     }
 
     /// Component bodies (named by UUID, marked by the white center knob)
-    /// are carried directly. Tray templates ("tray-<kind>") spawn a copy
-    /// on grab-begin; the copy follows the hand while the hidden template
-    /// glides back to its slot on release. End grips ("s0-"/"s1-") swing
-    /// the part around its opposite end — pinned where it was when the
-    /// pull began — and set a wire's length from the hand's reach.
+    /// are carried directly. A palette source makes a part AT THE HAND
+    /// and hands it to the same drag, so making one and moving one are
+    /// one gesture. End grips ("s0-"/"s1-") swing the part around its
+    /// opposite end — pinned where it was when the pull began — and set
+    /// a wire's length from the hand's reach.
+    ///
+    /// The palette resolves by ENTITY, through `Well.pull`, rather than
+    /// by parsing a `"tray-<kind>"` prefix off a name. Name-parsing is
+    /// how the tray did it and it is the loosest coupling in this file:
+    /// a renamed entity failed silently, as a part that simply could not
+    /// be made. `SpatialPicker` made the same move for the same reason.
 }
 
 // CircuitsSelectedReadout lives in CircuitsControlsPanel.swift —

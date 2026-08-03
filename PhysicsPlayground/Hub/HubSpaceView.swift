@@ -14,8 +14,8 @@
 //
 //  Two ways in, and the panel's "Load Module" button is the one that
 //  always works — gaze plus a pinch, nothing to aim or carry. The other
-//  is the podium: drag an exhibit to the pedestal front and centre and
-//  it stands there and turns, with Load hanging over it. The podium is
+//  is the pad: drag an exhibit onto the plate floating front and centre
+//  and it stands there and turns, with Load hanging over it. The pad is
 //  the delightful path; the button is the reachable one, so neither is
 //  load-bearing alone.
 //
@@ -123,7 +123,10 @@ struct HubSpaceView: View {
                 // What the podium is FOR, said once, quietly, where the
                 // action happens. The focus panel's Load button remains
                 // the guaranteed way in; this teaches the fun one.
-                Text("Drag a lab onto the podium to open it")
+                // "pad", not "podium": the plinth came off on 2026-08-03
+                // and copy that names a stand the wearer cannot see sends
+                // them looking for one.
+                Text("Drag a lab onto the pad to open it")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 12)
@@ -142,18 +145,7 @@ struct HubSpaceView: View {
             Attachment(id: "load") {
                 if let module = ModuleCatalog.all(appModel: appModel)
                     .first(where: { $0.id == scene.dockedModuleID }) {
-                    Button {
-                        enter(module.id)
-                    } label: {
-                        Label("Load \(module.title)", systemImage: "arrow.forward.circle.fill")
-                            .font(.callout.weight(.semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(module.accent)
-                    .glassBackgroundEffect(in: Capsule())
-                    .accessibilityHint("Opens \(module.title)")
+                    HubLoadButton(module: module) { enter(module.id) }
                 }
             }
         }
@@ -418,29 +410,48 @@ final class HubScene {
 
     // MARK: The podium — where a lab is brought to be opened
 
-    /// The plinth's own dimensions. Cap height is the terrace puck's, so
-    /// a docked exhibit sits on the cap at exactly the clearance it had
-    /// on its puck (`GalleryLayout.exhibitLift`) — the podium is a puck
-    /// on a column, not a second kind of pedestal.
+    /// The plate's own dimensions. Its thickness is the terrace puck's,
+    /// so a docked exhibit stands on it at exactly the clearance it had
+    /// on its own puck (`GalleryLayout.exhibitLift`) — the docking spot
+    /// is a puck held in the air, not a second kind of pedestal.
     ///
-    /// The column is tall (1.05 m, a museum plinth) and the plinth stands
-    /// well out from the user for one reason: how far DOWN a thing sits
-    /// in view is set by its height AND its distance, and the first pass
-    /// got the second half wrong. At 0.82 m tall and 1.05 m away it hung
+    /// THE COLUMN IS GONE (2026-08-03). A 1.05 m graphite plinth stood
+    /// under this plate, and everything else in this gallery floats: the
+    /// terraces, the wordmark, the exhibits on their pucks. One leg
+    /// touching a floor the app cannot see — y = 0 is where the user
+    /// happened to be standing when the space opened, not their floor,
+    /// the same error that killed the light pool below — made the one
+    /// object in the room that claimed to know where the ground was, and
+    /// it was the object the eye is asked to go to.
+    ///
+    /// The plate keeps the exact height the column gave it, because that
+    /// number was measured, not chosen: how far DOWN a thing sits in view
+    /// is set by its height AND its distance, and an earlier pass got the
+    /// second half wrong. At 0.82 m and 1.05 m away the docking spot hung
     /// ~26° below eye level while the terraces, no higher but twice as
-    /// far, sit at ~14° — so the pedestal and the lab standing on it fell
-    /// to the bottom of the view and its Load button floated up on its
-    /// own, attached to nothing.
-    private static let podiumColumnHeight: Float = 1.05
-    private static let podiumCapHeight: Float = GalleryLayout.puckHeight
+    /// far, sit at ~14° — so it and the lab standing on it fell to the
+    /// bottom of the view and the Load button floated up on its own,
+    /// attached to nothing. Deleting the column moved no geometry at all.
+    ///
+    /// The name `podium` outlives the plinth throughout this file. It is
+    /// the docking spot's name now, not a description of its shape; the
+    /// wearer-facing copy says "pad".
+    private static let podiumPlateHeight: Float = 1.05
+    private static let podiumPlateThickness: Float = GalleryLayout.puckHeight
     private static let podiumRadius: Float = 0.105
+    /// How far the hover ring hangs below the plate. Far enough to read
+    /// as a separate object suspending it, near enough to belong to it.
+    private static let podiumHoverGap: Float = 0.045
     /// Distance out from the user at the 2.0 m arc default; scales with it.
     private static let podiumReach: Float = 1.35
     /// How high the Load button hangs over the docked exhibit. Small on
     /// purpose: it has to read as that exhibit's button. At 0.34 m it
     /// floated up level with the user's eye, a good half-metre of empty
-    /// air above the lab it belonged to, looking like loose UI.
-    private static let podiumButtonLift: Float = 0.20
+    /// air above the lab it belonged to, looking like loose UI. It went
+    /// 0.20 → 0.23 when the button grew a badge and a second line: the
+    /// gap that matters is to the button's BOTTOM EDGE, and that edge
+    /// dropped ~1.5 cm when the card got taller.
+    private static let podiumButtonLift: Float = 0.23
     /// How near the cap counts as offering the exhibit to it. Shares no
     /// constant with the button's lift — the two were the same number by
     /// coincidence, in five places, which is how one of them silently
@@ -455,7 +466,7 @@ final class HubScene {
     /// Where the docked exhibit centres, root space.
     private(set) var podiumTop = SIMD3<Float>(
         0,
-        podiumColumnHeight + podiumCapHeight + GalleryLayout.exhibitLift,
+        podiumPlateHeight + podiumPlateThickness + GalleryLayout.exhibitLift,
         -podiumReach)
     private var podiumGlow: Entity?
     /// The exhibit standing on the podium, ready to load.
@@ -472,53 +483,63 @@ final class HubScene {
     /// first frame and the exhibit would teleport home.
     private var returningIDs: [String: Double] = [:]
 
-    /// A floor-standing pedestal, front and centre: carry a lab here
-    /// and it presents itself, with the Load button hanging above.
+    /// A floating plate, front and centre: carry a lab here and it
+    /// presents itself, with the Load button hanging above.
     private func buildPodium(distance: Float) {
-        // Reach scales with the arc so the plinth keeps its place in
+        // Reach scales with the arc so the plate keeps its place in
         // front of the crescent at every distance setting; its HEIGHT
-        // does not — a plinth stands on the floor, and the floor does
-        // not move when the gallery is pushed back.
-        let columnHeight = Self.podiumColumnHeight
-        let capTop = columnHeight + Self.podiumCapHeight
+        // does not — it hangs at a fixed height, and nothing about the
+        // gallery being pushed back changes how high a wearer's chest is.
+        let plateBottom = Self.podiumPlateHeight
+        let plateTop = plateBottom + Self.podiumPlateThickness
         podiumTop = SIMD3(0,
-                          capTop + GalleryLayout.exhibitLift,
+                          plateTop + GalleryLayout.exhibitLift,
                           -Self.podiumReach * (distance / 2.0))
 
         let graphite = Materials.graphite(Self.slabTint)
 
         let podium = Entity()
         podium.position = SIMD3(podiumTop.x, 0, podiumTop.z)
-        let column = ModelEntity(
-            mesh: .generateCylinder(height: columnHeight, radius: 0.055),
-            materials: [graphite])
-        column.position.y = columnHeight / 2
-        podium.addChild(column)
-        let cap = ModelEntity(
-            mesh: .generateCylinder(height: Self.podiumCapHeight,
+        let plate = ModelEntity(
+            mesh: .generateCylinder(height: Self.podiumPlateThickness,
                                     radius: Self.podiumRadius),
             materials: [graphite])
-        cap.position.y = columnHeight + Self.podiumCapHeight / 2
-        podium.addChild(cap)
+        plate.position.y = plateBottom + Self.podiumPlateThickness / 2
+        podium.addChild(plate)
 
         // The champagne rim — the same jeweller's line the title wears.
         var rim = UnlitMaterial(color: Self.titleRimColor)
         rim.blending = .transparent(opacity: 0.7)
-        if let ring = Self.rimTube(radius: Self.podiumRadius, y: capTop + 0.002) {
+        if let ring = Self.rimTube(radius: Self.podiumRadius, y: plateTop + 0.002) {
             ring.model?.materials = [rim]
             podium.addChild(ring)
         }
 
-        // A soft pool on the cap that brightens when an exhibit is
-        // near or docked — the podium answering the offer.
+        // A soft pool on the plate that brightens when an exhibit is
+        // near or docked — the pad answering the offer — and, hanging
+        // below the plate, a smaller ring of the same light.
+        //
+        // The ring is what makes the plate read as DELIBERATELY
+        // suspended rather than as a plinth whose column failed to
+        // build: a floating slab with nothing under it is ambiguous,
+        // and a floating slab over a second, smaller ring of light is
+        // a thing being held up. It brightens with the pool because it
+        // is the same answer to the same approach.
         let glow = Entity()
         var glowMaterial = UnlitMaterial(color: Self.titleRimColor)
         glowMaterial.blending = .transparent(opacity: 0.22)
         let pool = ModelEntity(
             mesh: .generateCylinder(height: 0.001, radius: Self.podiumRadius - 0.015),
             materials: [glowMaterial])
-        pool.position.y = capTop + 0.002
+        pool.position.y = plateTop + 0.002
         glow.addChild(pool)
+        if let hover = Self.rimTube(radius: Self.podiumRadius - 0.032,
+                                    y: plateBottom - Self.podiumHoverGap) {
+            var hoverMaterial = UnlitMaterial(color: Self.titleRimColor)
+            hoverMaterial.blending = .transparent(opacity: 0.55)
+            hover.model?.materials = [hoverMaterial]
+            glow.addChild(hover)
+        }
         glow.components.set(OpacityComponent(opacity: 0.35))
         podium.addChild(glow)
         podiumGlow = glow
@@ -1462,12 +1483,81 @@ struct HubFocusPanel: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(module.accent)
-            .accessibilityHint("Opens \(module.title) — or carry its exhibit to the podium")
+            .accessibilityHint("Opens \(module.title) — or carry its exhibit to the pad")
         }
         .padding(16)
         .frame(width: 340, alignment: .leading)
         .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .transition(.opacity)
+    }
+}
+
+/// The button that hangs over the pad while a lab stands on it.
+///
+/// It is deliberately not the focus panel's button. That one lives on a
+/// crowded card and has to sit in the type rhythm of the six rows above
+/// it; this one hangs alone in the air over a single object, and it is
+/// the payoff for having carried that object across the room — the whole
+/// reason the carry gesture exists. A bordered capsule reading "Load
+/// Pendulums" in callout was the same button both places, which made the
+/// delightful path end in the reachable path's furniture.
+///
+/// So it is built as a plaque rather than a control: the module's own
+/// symbol in a disc of its own accent, the verb small and spaced above
+/// the name, and the name at `.title2` — roughly 2× the old cap height,
+/// ~22 cm wide, which is the width of the plate it stands over. At two
+/// metres that is a target the eye lands on without hunting.
+///
+/// One thing here is load-bearing and looks cosmetic: `.contentShape`
+/// and `.hoverEffect` on the capsule. `.buttonStyle(.plain)` buys the
+/// custom look by giving up the platform's own hover highlight, and on
+/// visionOS the highlight is not decoration — it is the only feedback
+/// that says "your gaze is on this and a pinch will land". Without the
+/// pair, the prettier button is the one you cannot tell you are aiming at.
+private struct HubLoadButton: View {
+    let module: ModuleDescriptor
+    let enter: () -> Void
+
+    var body: some View {
+        Button(action: enter) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(module.accent.gradient)
+                    Image(systemName: module.icon)
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 46, height: 46)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("LOAD MODULE")
+                        .font(.caption2.weight(.semibold))
+                        .tracking(1.7)
+                        .foregroundStyle(.secondary)
+                    Text(module.title)
+                        .font(.title2.weight(.semibold))
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(module.accent)
+            }
+            .padding(.leading, 13)
+            .padding(.trailing, 20)
+            .padding(.vertical, 11)
+            // Inside the glass, not around it: the stroke is the accent
+            // catching the plate's edge, and a ring drawn outside the
+            // glass reads as a second object.
+            .overlay {
+                Capsule().strokeBorder(module.accent.opacity(0.45), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .contentShape(.hoverEffect, Capsule())
+        .hoverEffect()
+        .glassBackgroundEffect(in: Capsule())
+        .accessibilityLabel("Load \(module.title)")
+        .accessibilityHint("Opens \(module.title)")
     }
 }
 

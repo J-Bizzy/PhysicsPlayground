@@ -27,7 +27,7 @@ enum CircuitsModule {
             blurb: "A live electronics workbench: build anything from a flashlight to an RLC network, and watch voltage, current, and charge become visible.",
             icon: "powerplug.fill",
             accent: DesignTokens.Palette.circuitsAccent,
-            firstRunHint: "The loop in front of you is live — pinch the switch lever to break it. Grab parts off the tray and drop them so copper ends nearly touch: they connect themselves. Pull an orange end grip to aim or stretch a part; pinch two copper terminals to wire across a distance; the trash button removes a selected part.",
+            firstRunHint: "The loop in front of you is live — pinch the switch lever to break it. Pull parts out of the racks on either side of you and drop them so copper ends nearly touch: they connect themselves. Pull an orange end grip to aim or stretch a part; pinch two copper terminals to wire across a distance; the trash button removes a selected part.",
             legend: legend,
             isPaused: { appModel.circuitsModel.isPaused },
             togglePause: { appModel.circuitsModel.isPaused.toggle() },
