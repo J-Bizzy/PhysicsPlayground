@@ -16,6 +16,47 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-03 — Pendulums' period labels stay bespoke, and the doc-rot audit pays its debts
+
+**Decision:** Two things from the same audit. First, a divergence is
+ratified rather than fixed: Pendulums renders its per-bob period labels
+with raw `generateText` and a bespoke dictionary instead of the shared
+`RenderKit.Callout`, and it stays that way. Second, a sweep of stale
+counts and dead examples is corrected in place — the Palette header now
+admits all four petals (capture had been left out of its own file's
+story), the seven-slot arithmetic says when it was seven, HubSpaceView's
+nine-exhibit comments say six, `AppModel`'s debug example names a real
+module id instead of the merged-worlds-era `em`, and the app file's
+header stops describing a control panel that no longer exists. The five
+first-run hints that never mentioned the room-sensing prompt now do —
+Kinematics was the only module warning that visionOS would ask, and the
+ARKit dialog fires on FIRST module entry, whichever module that is.
+
+**Context:** The pre-submission audit flagged the label divergence as
+the one module bypassing a shared primitive. It is deliberate: a
+Callout is one tethered line with its own throttling, and five bobs
+each need a label that rides its bob every frame — the multi-bob case
+is what the bespoke path exists for. What it costs (Callout
+improvements do not reach this module) is accepted; what was missing
+was this paragraph. On the doc-rot: this project polices stale prose
+aggressively and still grew seven instances of it, all counts from
+earlier eras. The transferable part: every one of them was a NUMBER —
+counts rot faster than nouns, because a rename breaks the build and a
+recount breaks nothing.
+
+**Consequences:** Comments that reason from arithmetic now date the
+arithmetic ("sized when seven slots shared the 150 degrees") rather
+than silently keeping numbers a later reader will check against the
+wrong catalog. A first-run wearer in any module has been told the
+permission dialog is coming. And the Kinematics ball moves off its
+hand-typed `SimpleMaterial` onto the material canon (`energized`,
+glow 0) — the exact call-site tell the 2026-07-30 canon entry names —
+with a device check added to ON_DEVICE_TESTS.md because a material
+judgement is a passthrough judgement. Not unified: `syncBloom(dt:)`
+vs `syncBloom(renderer:dt:)` across modules — the signatures differ
+because the needs differ, and adding an unused parameter to two
+modules to make a grep tidy would be the wrong kind of consistency.
+
 ## 2026-08-03 — The archived five lose their miniatures; magInertia loses its release read
 
 **Decision:** Two removals from the pre-submission audit. The five

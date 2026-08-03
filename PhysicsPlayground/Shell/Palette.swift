@@ -11,11 +11,11 @@
 //
 //  In its place: a single bead. Pinch it and it unfolds into a ring of
 //  the labs themselves — live miniatures, the same running physics the
-//  home constellation shows, not icons of them — with pause, reset, and
-//  settings as the only petals: the two controls you reach for without
-//  breaking off what you are doing, plus the one door to the app's
-//  preferences (the bead is the only interface that exists in every
-//  lab, so the door has to live on it). Pinch a lab and
+//  home constellation shows, not icons of them — with pause, capture,
+//  reset and settings as the only petals: the three controls you reach
+//  for without breaking off what you are doing, plus the one door to
+//  the app's preferences (the bead is the only interface that exists in
+//  every lab, so the door has to live on it). Pinch a lab and
 //  the room changes. Pinch the bead again and everything folds away.
 //
 //  The bead is the app's only permanent piece of interface.
@@ -71,12 +71,13 @@ final class Palette {
 
     // Ring geometry, in metres. The labs sit on a circle you can sweep
     // with one comfortable arm movement.
-    // Seven slots across 150 degrees need room: at a 0.26 m radius the
-    // arc gives 11 cm between centres while the discs were 13 cm wide,
-    // so the ring overlapped itself into a smear. 0.40 m keeps the same
-    // clear air with the 20%-bigger slots the labels asked for — at the
-    // old 0.06 m the miniatures read as specks and their thin lines
-    // shimmered.
+    // The radius was sized when seven slots shared the 150 degrees: at
+    // 0.26 m the arc gave 11 cm between centres while the discs were
+    // 13 cm wide, so the ring overlapped itself into a smear. 0.40 m
+    // keeps the same clear air with the 20%-bigger slots the labels
+    // asked for — today's six labs ride it with room to spare — and at
+    // the old 0.06 m slot size the miniatures read as specks and their
+    // thin lines shimmered.
     private static let ringRadius: Float = 0.40
     private static let slotSize: Float = 0.072
     private static let beadRadius: Float = 0.026

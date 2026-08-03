@@ -2,12 +2,13 @@
 //  PhysicsPlaygroundApp.swift
 //  Physics Playground
 //
-//  Three scenes: a window that shows either the simulation catalog (the
-//  hub) or the active module's controls, a small settings window, and
-//  ONE shared ImmersiveSpace whose content switches with the active
-//  module. Immersion style follows the module: .mixed keeps passthrough
-//  for room-scale modules; Gravity Lab asks for .progressive, so turning
-//  the crown opens its starfield.
+//  The scenes: a main window that shows either the flat catalog (the
+//  hub) or the active module's title bar, three utility windows
+//  (Settings, the Lab Notebook, About), and ONE shared ImmersiveSpace
+//  whose content switches with the active module. Immersion style
+//  follows the module: .mixed keeps passthrough for room-scale modules;
+//  Gravity Lab asks for .progressive, so turning the crown opens its
+//  starfield.
 //
 
 import SwiftUI
@@ -26,9 +27,9 @@ struct PhysicsPlaygroundApp: App {
         // (MainWindowView adds it back for that branch).
         .windowStyle(.plain)
         .windowResizability(.contentMinSize)
-        // Tall enough for a module's control panel (its content asks for
-        // 620 pt); any shorter and the panel clips top and bottom. The
-        // hub nameplate centers itself in whatever height it gets.
+        // The height predates the panels' removal (their content asked
+        // for 620 pt); it is kept because the flat catalog uses it and
+        // the hub nameplate centers itself in whatever height it gets.
         .defaultSize(width: 560, height: 720)
 
         // The three utility windows — Settings, the Lab Notebook, About.

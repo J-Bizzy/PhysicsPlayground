@@ -32,7 +32,7 @@ enum GravityLabModule {
             // space. The 0.85 dimming shell still does the contrast work,
             // since a pale Sun has none against a lit wall.
             immersionStyle: .progressive,
-            firstRunHint: "Tap a planet: its orbit appears as a ring with a bead at each end. Pull a bead and the orbit reshapes under your hand — out to stretch it, sideways to swing it round the Sun, up to tilt it out of the plane. Distant orbits are drawn but out of arm's reach; pinch with both hands to bring them in.",
+            firstRunHint: "Tap a planet: its orbit appears as a ring with a bead at each end. Pull a bead and the orbit reshapes under your hand — out to stretch it, sideways to swing it round the Sun, up to tilt it out of the plane. Distant orbits are drawn but out of arm's reach; pinch with both hands to bring them in. visionOS will ask to use your room so the orrery can stand in it.",
             // Opens part-dimmed: a pale Sun and specks of planet have no contrast at all against a bright wall — this module is unreadable in daylight.
             preferredDimming: 0.85,
             // And the shell has to stand OUTSIDE the apparatus. The

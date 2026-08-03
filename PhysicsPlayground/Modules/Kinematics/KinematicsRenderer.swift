@@ -162,8 +162,8 @@ final class KinematicsRenderer {
         ballPool = EntityPool(budget: KinematicsModel.flightBudget) { container in
             let sphere = ModelEntity(
                 mesh: ballMesh,
-                materials: [SimpleMaterial(color: DesignTokens.Palette.projectileUI,
-                                           roughness: 0.5, isMetallic: false)]
+                materials: [Materials.energized(DesignTokens.Palette.projectileUI,
+                                                glow: 0)]
             )
             Grabbable.configureTouchTarget(sphere, collisionRadius: Self.baseBallRadius * 1.6)
             Self.setAccessibility(on: sphere, label: "Ball. Grab and throw it.")

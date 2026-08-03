@@ -29,7 +29,7 @@ enum MagnetismModule {
             blurb: "Carry bar magnets around the room; their looping field reorganises live and they attract, repel, and snap into alignment.",
             icon: "cylinder.fill",
             accent: DesignTokens.Palette.magnetismAccent,
-            firstRunHint: "Pinch a magnet and carry it. Bring two close and watch — they pull together head-to-tail, push apart N-to-N, and swing to align. Tap a magnet and its controls unfold: flip its poles to switch attraction for repulsion.",
+            firstRunHint: "Pinch a magnet and carry it. Bring two close and watch — they pull together head-to-tail, push apart N-to-N, and swing to align. Tap a magnet and its controls unfold: flip its poles to switch attraction for repulsion. visionOS will ask to use your room so the lab can stand in it.",
             // Opens part-dimmed: the looping lines ARE the module.
             preferredDimming: 0.35,
             legend: legendItems,

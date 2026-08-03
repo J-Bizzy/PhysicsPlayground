@@ -29,7 +29,7 @@ enum PendulumsModule {
             // ended "To your right, tap a world", and the world discs
             // were removed on 2026-08-02 — leaving the app's one
             // onboarding surface pointing at an empty wall.
-            firstRunHint: "Five steel balls, touching, with one drawn back — let it go and watch which of them move. Grab any bob and throw it sideways; press a pendulum's top collar for a bead that pays out its cable, or drag that collar to re-hang the whole rig.",
+            firstRunHint: "Five steel balls, touching, with one drawn back — let it go and watch which of them move. Grab any bob and throw it sideways; press a pendulum's top collar for a bead that pays out its cable, or drag that collar to re-hang the whole rig. visionOS will ask to use your room so the rig can hang in it.",
             legend: legendItems,
             isPaused: { appModel.pendulumsModel.isPaused },
             togglePause: { appModel.pendulumsModel.isPaused.toggle() },

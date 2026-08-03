@@ -305,6 +305,12 @@ rail rendered; only a hand proves it sets anything.
       17× apart in mass).
 - [ ] **Two-handed pinch does NOTHING here.** Projectiles is
       permanently excluded from scaling.
+- [ ] ⟳ **The balls read as crafted, not matte.** On 2026-08-03 they
+      moved from a hand-typed `SimpleMaterial` to the material canon
+      (`energized`, glow 0 — the polished-mechanical finish). Same
+      colour, new clearcoat: check a ball in flight and one at rest
+      against passthrough, and that the orange aim bead still reads as
+      the LIT one of the pair.
 
 ### ⟳ The instrument wall
 

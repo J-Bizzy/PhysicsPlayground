@@ -158,14 +158,11 @@ final class AppModel {
     }
 
     init() {
-        // Debug hook: `simctl launch <udid> <bundle> -openModule em`
+        // Debug hook: `simctl launch <udid> <bundle> -openModule circuits`
         // jumps straight into a module, since the simulator can't be
-        // gaze-pinched from the command line.
-        //
-        // Worlds take a second argument to say WHICH apparatus inside
-        // them to attend to: `-openModule em -focusStation field`. The
-        // stations read that themselves, next to their own debug hooks,
-        // because the valid names differ per world.
+        // gaze-pinched from the command line. Valid ids are the ones
+        // `ModuleCatalog.all` declares; anything else is refused by name
+        // below.
         #if DEBUG
         if let id = UserDefaults.standard.string(forKey: "openModule") {
             // Validate it. An id that matches nothing used to be applied

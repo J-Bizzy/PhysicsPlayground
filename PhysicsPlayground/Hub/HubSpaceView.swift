@@ -139,7 +139,7 @@ struct HubSpaceView: View {
                     // exhibit-carry drag sweeps through on its way to
                     // the podium. So the hint telling you to drag a lab
                     // onto the podium was standing in the way of doing
-                    // it. All four module cards get this right.
+                    // it. All six module cards get this right.
                     .allowsHitTesting(false)
             }
             Attachment(id: "load") {
@@ -280,12 +280,12 @@ final class HubScene {
 
     // MARK: Focus
     //
-    // Nine exhibits shouting equally is a wall of clutter with no way in.
+    // Six exhibits shouting equally is a wall of clutter with no way in.
     // A menu in a headset can do what a menu on a screen cannot: notice
     // which one you have TURNED TOWARD, and answer. The one you face
     // grows, brightens, lights an accent halo and names itself in full,
     // with a card underneath telling you what it is and how far through
-    // it you are; the other eight recede and their names drop to a
+    // it you are; the other five recede and their names drop to a
     // whisper. Nothing moves on its own — the motion is yours.
     //
     // Head direction, not eye gaze: visionOS never hands an app the
@@ -886,7 +886,7 @@ final class HubScene {
         let built = HubVignettes.make(for: module.id)
         let vignette = built.entity
         // MEASURED, then fitted to a common apparent size. Authoring
-        // nine models to a nominal size is not the same as nine models
+        // six models to a nominal size is not the same as six models
         // being the same size, and a gallery whose exhibits are wildly
         // different scales reads as an accident. Normalising from the
         // real bounds means a future model cannot break the rhythm
@@ -1290,7 +1290,7 @@ final class HubScene {
         // centre modules' panels drowned in UI. Above is the one
         // direction that is always clear: the diorama keeps the stage,
         // its story hangs over it like a gallery caption. One panel,
-        // moved, not nine built.
+        // moved, not six built.
         //
         // Above-and-BEHIND was the third, and it is what shipped, and it
         // was wrong. The door signs went up over the terraces after this
@@ -1376,7 +1376,7 @@ final class HubScene {
 /// Module button — the way in that needs no carrying.
 ///
 /// A menu of six physics simulations cannot say what any of them ARE
-/// while all nine are on screen — focus buys the room to say it.
+/// while all six are on screen — focus buys the room to say it.
 struct HubFocusPanel: View {
     let module: ModuleDescriptor
     let enter: () -> Void
