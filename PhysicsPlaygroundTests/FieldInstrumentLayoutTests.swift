@@ -35,9 +35,13 @@ final class FieldInstrumentLayoutTests: XCTestCase {
     /// the room. The bank's widest label reaches ~0.147 m from a plate's
     /// centre, which is most of its footprint.
     func testTheBanksBoxIncludesItsLabels() {
+        // The bank's ACTUAL labels. "Parallel plates" stood here after
+        // the plate was renamed to "Capacitor", so this measured a label
+        // the room does not have — longer than the real one, which is the
+        // safe direction, but still a test checking a different app.
         let reach = SpatialLayerBank.reach(forLabels: [
-            "Field lines", "Free charges", "Parallel plates",
-            "Uniform B", "Flux meter"])
+            "Field lines", "Free charges", "Capacitor",
+            "Uniform B", "Flux meter", "Open disc"])
         XCTAssertLessThanOrEqual(
             Double(reach), FieldInstrumentLayout.bankHalfExtents.x,
             """

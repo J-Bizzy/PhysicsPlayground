@@ -23,10 +23,19 @@
 //  once at launch: the petal would be permanently present or permanently
 //  absent depending on what the room looked like in frame one.
 //
-//  The launcher's Clear petal is unconditional because of this. These
+//  The launcher's Clear petal was unconditional because of this. These
 //  tests pin the behaviour that reasoning rests on, so that changing
 //  `retarget` breaks a test rather than silently un-disabling a control
 //  in another file.
+//
+//  RESOLVED 2026-08-03, and the trap is still real — the escape is that
+//  `Petal.isAvailable` is a CLOSURE rather than a `Bool`. The petal list
+//  is still evaluated once; the condition inside it is read every frame.
+//  So a petal can now track its state without anybody having to re-run
+//  `retarget`, and the reasoning above is preserved rather than
+//  contradicted. `Petal.confirms` arrived in the same change, because
+//  Projectiles' Clear was the one destructive verb in the app with no
+//  guard while the two identical standing plates both confirmed.
 //
 
 import XCTest
@@ -160,5 +169,115 @@ final class BloomPetalTests: XCTestCase {
 
         XCTAssertFalse(bloom.handleTap(petalEntity))
         XCTAssertEqual(counter.fired, [])
+    }
+
+    // MARK: Availability — the escape from the trap
+
+    /// **The whole point of `isAvailable` being a closure.** The petal
+    /// list is built once and never rebuilt for a constant id, so a
+    /// condition captured as a value would freeze at whatever it was in
+    /// frame one. Read as a closure, it tracks.
+    func testAnAvailabilityClosureIsReadEveryFrameNotOnce() throws {
+        let counter = Counter()
+        var hasFlights = false
+        let bloom = Bloom()
+        bloom.retarget("launcher", petals: [
+            .init(name: "Clear", symbol: "trash.slash", tint: .white,
+                  isAvailable: { hasFlights }) { counter.fired.append("Clear") },
+        ], grip: nil)
+        reveal(bloom)
+        let petalEntity = try entity(bloom, named: "Clear")
+
+        // Unavailable: refuses, and does NOT consume — a dim petal must
+        // not be a hole that swallows a gesture aimed past it.
+        XCTAssertFalse(bloom.handleTap(petalEntity))
+        XCTAssertEqual(counter.fired, [])
+
+        // The room changes. Nothing calls `retarget` — the id is constant.
+        hasFlights = true
+        reveal(bloom)
+
+        XCTAssertTrue(bloom.handleTap(petalEntity),
+                      "The closure must be re-read, not remembered.")
+        XCTAssertEqual(counter.fired, ["Clear"])
+    }
+
+    /// Dim, never absent. Removing a petal would shift its neighbours —
+    /// the ring's angles come from the COUNT — out from under a finger
+    /// already reaching for one.
+    func testAnUnavailablePetalDimsRatherThanDisappearing() throws {
+        let bloom = Bloom()
+        bloom.retarget("launcher", petals: [
+            .init(name: "Clear", symbol: "trash.slash", tint: .white,
+                  isAvailable: { false }) { },
+        ], grip: nil)
+        reveal(bloom)
+
+        XCTAssertTrue(hasPetal(bloom, named: "Clear"),
+                      "An unavailable petal must still be in the ring.")
+        let petalEntity = try entity(bloom, named: "Clear")
+        XCTAssertTrue(petalEntity.isEnabled)
+        let opacity = petalEntity.components[OpacityComponent.self]?.opacity
+        XCTAssertNotNil(opacity)
+        XCTAssertLessThan(opacity ?? 1, 0.9, "It must read as unavailable.")
+    }
+
+    // MARK: Confirmation
+
+    /// Two taps, one firing — the same contract `SpatialActionBank`
+    /// gives a standing verb plate.
+    func testAConfirmingPetalArmsFirstAndFiresSecond() throws {
+        let counter = Counter()
+        let bloom = Bloom()
+        bloom.retarget("launcher", petals: [
+            .init(name: "Clear", symbol: "trash.slash", tint: .white,
+                  confirms: true) { counter.fired.append("Clear") },
+        ], grip: nil)
+        reveal(bloom)
+        let petalEntity = try entity(bloom, named: "Clear")
+
+        XCTAssertTrue(bloom.handleTap(petalEntity),
+                      "Arming is a real response and must consume the tap.")
+        XCTAssertEqual(counter.fired, [], "The first tap must not fire.")
+
+        XCTAssertTrue(bloom.handleTap(petalEntity))
+        XCTAssertEqual(counter.fired, ["Clear"])
+    }
+
+    /// An armed petal walked away from disarms itself, so coming back to
+    /// an open ring minutes later is not one pinch from a wipe.
+    func testAnArmedPetalDisarmsItselfAfterTheWindow() throws {
+        let counter = Counter()
+        let bloom = Bloom()
+        bloom.retarget("launcher", petals: [
+            .init(name: "Clear", symbol: "trash.slash", tint: .white,
+                  confirms: true) { counter.fired.append("Clear") },
+        ], grip: nil)
+        reveal(bloom)
+        let petalEntity = try entity(bloom, named: "Clear")
+
+        XCTAssertTrue(bloom.handleTap(petalEntity))
+        for _ in 0..<Int(Bloom.armWindow * 90) + 10 {
+            bloom.update(anchor: .zero, viewer: [0, 0, 1],
+                         revealTarget: 1, dt: 1.0 / 90.0)
+        }
+
+        // The next tap arms again rather than firing.
+        XCTAssertTrue(bloom.handleTap(petalEntity))
+        XCTAssertEqual(counter.fired, [],
+                       "A disarmed petal must need arming again, not fire.")
+    }
+
+    /// A petal WITHOUT `confirms` still fires on the first tap. The
+    /// guard is opt-in — pause, polarity and mass are not destructive
+    /// and must not grow a second tap.
+    func testAnOrdinaryPetalStillFiresOnTheFirstTap() throws {
+        let counter = Counter()
+        let bloom = Bloom()
+        bloom.retarget("launcher", petals: [petal("Fire", counter)], grip: nil)
+        reveal(bloom)
+
+        XCTAssertTrue(bloom.handleTap(try entity(bloom, named: "Fire")))
+        XCTAssertEqual(counter.fired, ["Fire"])
     }
 }

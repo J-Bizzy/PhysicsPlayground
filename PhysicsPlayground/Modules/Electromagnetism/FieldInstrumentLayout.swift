@@ -74,8 +74,8 @@ enum FieldInstrumentLayout {
 
     // MARK: Left — what exists
 
-    /// The layers bank: five plates in a column (`StackLayout` pitch 0.066,
-    /// so 0.264 m of plates), standing off the station's −x flank.
+    /// The layers bank: SIX plates in a column (`StackLayout` pitch 0.066,
+    /// so 0.330 m of plates), standing off the station's −x flank.
     ///
     /// AT THE STATION'S OWN DEPTH (z = −0.9), not at its near edge. The
     /// first attempt put the furniture at z = −0.5, which is 61° off the
@@ -85,14 +85,29 @@ enum FieldInstrumentLayout {
     /// brings the instruments back into the same band as the apparatus
     /// they belong to. Circuits' bank sits beside its bench for exactly
     /// this reason, and says so.
-    static let bankAnchor = SIMD3<Double>(-1.05, 1.38, -0.90)
-    static let bankHalfExtents = SIMD3<Double>(0.15, 0.15, 0.15)
+    /// RAISED 1.38 → 1.42 AND WIDENED 0.15 → 0.20 ON 2026-08-03, when the
+    /// bank gained its sixth plate ("Open disc"). `StackLayout` centres a
+    /// column on its anchor, so a sixth plate grows the bank by half a
+    /// pitch in BOTH directions — 3.3 cm down, straight into the B rail's
+    /// clearance, which the old 0.15 half-extent did not even describe.
+    ///
+    /// Six plates at pitch 0.066 span 0.330 m of centres, ±0.025 for the
+    /// plate itself: 1.230…1.610 about this anchor. The declared box has
+    /// to cover that or every clearance in this file is measuring a bank
+    /// smaller than the one in the room — which is the same defect as
+    /// sizing the Clear plate's box to its resting label.
+    static let bankAnchor = SIMD3<Double>(-1.05, 1.42, -0.90)
+    static let bankHalfExtents = SIMD3<Double>(0.15, 0.20, 0.15)
 
     /// The B-strength rail, directly under the bank's bottom plate —
     /// under the very switch that summons it, so the pair reads as one
     /// instrument: turn the field on here, set its strength immediately
-    /// below. (The bank's plates span y 1.25…1.51.)
-    static let fieldTrackAnchor = SIMD3<Double>(-1.06, 1.13, -0.82)
+    /// below. (The bank's plates span y 1.23…1.61.)
+    ///
+    /// Dropped 1.13 → 1.10 with the bank's sixth plate: the two boxes
+    /// have to keep 3 cm apart, and holding the rail still while the bank
+    /// grew downward would have left 1 cm.
+    static let fieldTrackAnchor = SIMD3<Double>(-1.06, 1.10, -0.82)
     static let fieldTrackHalfExtents = SIMD3<Double>(0.16, 0.05, 0.07)
     /// Faces the user across the station's corner, so the rail runs
     /// horizontally across their view rather than edge-on.

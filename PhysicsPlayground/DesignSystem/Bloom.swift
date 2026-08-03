@@ -38,7 +38,51 @@ final class Bloom {
         let symbol: String
         let tint: UIColor
         let action: () -> Void
+
+        /// Read every frame. A petal whose condition is false goes dim
+        /// and refuses the tap — it never disappears, because a ring
+        /// whose petals come and go moves the others under your finger.
+        ///
+        /// A CLOSURE, NOT A BOOL, and that distinction has already cost
+        /// this project a bug in the other direction. A `Bloom` is
+        /// configured once when a ring opens, so a plain `Bool` would be
+        /// evaluated on that one frame and then never again — the petal
+        /// would be permanently live or permanently dim depending on
+        /// what the room happened to look like when you tapped. The note
+        /// in `KinematicsSpaceView` recording exactly that reasoning is
+        /// why its Clear petal had no condition at all.
+        var isAvailable: () -> Bool = { true }
+
+        /// Two taps: the first arms the petal and swaps its glyph to a
+        /// checkmark, the second fires. An armed petal disarms itself
+        /// after `armWindow`, so one walked away from is safe.
+        ///
+        /// For destructive verbs that cannot be undone. The same
+        /// semantics `SpatialActionBank` gives a standing plate, in the
+        /// ring — Circuits' and Electric Fields' "Clear" both confirm,
+        /// and Projectiles' identical verb did not, because a petal had
+        /// no way to say so.
+        var confirms: Bool = false
+
+        init(name: String, symbol: String, tint: UIColor,
+             isAvailable: @escaping () -> Bool = { true },
+             confirms: Bool = false,
+             action: @escaping () -> Void) {
+            self.name = name
+            self.symbol = symbol
+            self.tint = tint
+            self.isAvailable = isAvailable
+            self.confirms = confirms
+            self.action = action
+        }
     }
+
+    /// How long an armed petal stays armed — the same window a standing
+    /// verb plate uses, so the two feel like one mechanism.
+    static let armWindow: Double = SpatialActionBank.armWindow
+
+    /// The armed petal's index and how long it has been armed.
+    private var armedPetal: (index: Int, elapsed: Double)?
 
     /// A continuous quantity you pull out of the object itself.
     /// `radius` reports how far from the centre the grip should sit,
@@ -98,6 +142,8 @@ final class Bloom {
     // enabled and correct and invisible. A control that has to be
     // hunted for has failed.
     private static let petalRadius: Float = 0.030
+    /// The glyph plane's entity name, so the armed checkmark can find it.
+    private static let iconName = "bloom-petal-icon"
     private static let ringRadius: Float = 0.235
     /// The grip's track: the visible rail the bead travels, from the
     /// object's surface outward. The bead's POSITION on the rail is the
@@ -139,6 +185,10 @@ final class Bloom {
     func clearTarget() { targetID = nil }
 
     func configure(petals: [Petal], grip: Grip?) {
+        // Rebuilding the ring destroys the entity the armed index refers
+        // to, so the arm cannot survive it. `SpatialActionBank` learned
+        // the same thing — see `testSettingNewActionsDisarms`.
+        armedPetal = nil
         self.petals = petals
         self.grip = grip
         petalEntities.forEach { $0.removeFromParent() }
@@ -247,6 +297,21 @@ final class Bloom {
 
     private func layoutPetals(dt: Double) {
         let rate = Float(min(dt * 11, 1))
+
+        // An armed petal walked away from disarms itself, exactly as a
+        // standing verb plate does. Without this a ring left open with a
+        // Clear armed would still be one stray pinch from firing when the
+        // user came back to it minutes later — which is the risk the
+        // confirmation exists to remove, not to reschedule.
+        if var armed = armedPetal {
+            armed.elapsed += dt
+            if armed.elapsed >= Self.armWindow {
+                disarmPetal()
+            } else {
+                armedPetal = armed
+            }
+        }
+
         for (index, entity) in petalEntities.enumerated() {
             // Stagger: each petal trails the one before it, so the ring
             // unfurls left to right instead of blinking into being.
@@ -268,6 +333,13 @@ final class Bloom {
             let pop = 1 + 0.18 * sin(r * .pi)
             entity.scale = SIMD3(repeating: max(r, 0.001) * pop)
             entity.isEnabled = r > 0.02
+
+            // Dim, never absent. A petal that vanished when its condition
+            // went false would shift every petal beside it out from under
+            // the finger already reaching for one — the ring's layout is
+            // derived from the COUNT, so removing one moves the rest.
+            let available = index < petals.count ? petals[index].isAvailable() : true
+            entity.components.set(OpacityComponent(opacity: available ? 1 : 0.35))
         }
     }
 
@@ -347,13 +419,61 @@ final class Bloom {
         guard let index = petalEntities.firstIndex(where: { $0.name == name }) else {
             return false
         }
+        // An unavailable petal neither fires NOR consumes. Swallowing the
+        // tap would make a dim petal a hole in the room — the gesture has
+        // to fall through to whatever is behind it, which is the same rule
+        // `SpatialActionBank` follows for a dim plate.
+        guard petals[index].isAvailable() else { return false }
+
         // Acknowledge in place: a quick swell, then the action.
         let petal = petalEntities[index]
         petal.move(to: Transform(scale: SIMD3(repeating: petal.scale.x * 1.35),
                                  translation: petal.position),
                    relativeTo: root, duration: 0.09, timingFunction: .easeOut)
+
+        if petals[index].confirms, armedPetal?.index != index {
+            // First tap: arm and wait. Arming CONSUMES the tap — it is a
+            // real response, and letting it fall through would run
+            // whatever is behind the ring while the user was aiming here.
+            armedPetal = (index, 0)
+            applyArmedLook(index: index, armed: true)
+            SoundPalette.play(.pop, on: petal, volume: 0.25)
+            return true
+        }
+
+        disarmPetal()
         petals[index].action()
         return true
+    }
+
+    /// Clears any armed petal and restores its glyph.
+    func disarmPetal() {
+        guard let armed = armedPetal else { return }
+        armedPetal = nil
+        applyArmedLook(index: armed.index, armed: false)
+    }
+
+    /// Swap the glyph to a checkmark while armed, and light the casing so
+    /// the change is legible without reading the icon.
+    private func applyArmedLook(index: Int, armed: Bool) {
+        guard petalEntities.indices.contains(index) else { return }
+        let petal = petals[index]
+        let entity = petalEntities[index]
+        let symbol = armed ? "checkmark" : petal.symbol
+        if let texture = Self.symbolTexture(symbol),
+           let icon = entity.children.first(where: { $0.name == Self.iconName })
+            as? ModelEntity {
+            var material = UnlitMaterial()
+            material.color = .init(tint: .white, texture: .init(texture))
+            material.blending = .transparent(opacity: .init(floatLiteral: 1))
+            icon.model?.materials = [material]
+        }
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = LocalizedStringResource(stringLiteral: petal.name)
+        accessibility.value = LocalizedStringResource(
+            stringLiteral: armed ? "armed, tap again to confirm" : "")
+        entity.components.set(accessibility)
     }
 
     func beginGrip(_ entity: Entity, hand: SIMD3<Float>) -> Bool {
@@ -431,6 +551,10 @@ final class Bloom {
                 mesh: .generatePlane(width: petalRadius * 1.15,
                                      height: petalRadius * 1.15),
                 materials: [iconMaterial])
+            // Named so `applyArmedLook` can find it to swap in the
+            // checkmark. Without a name it would have to guess by index,
+            // which the accent rim already occupies.
+            icon.name = iconName
             icon.position = [0, 0.0045, 0]
             icon.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
             disc.addChild(icon)

@@ -321,8 +321,22 @@ struct KinematicsSpaceView: View {
                 // to look like at launch. Clearing nothing is a no-op;
                 // a control that silently stops tracking its condition
                 // is a lie.
+                // BOTH of those are expressible now (2026-08-03). The
+                // note above is why they were not: a plain `Bool` read
+                // once at configure time would freeze, so the petal had
+                // no condition at all — and, separately, no confirmation,
+                // which made this the one destructive verb in the app
+                // with no guard. Circuits' and Electric Fields' identical
+                // "Clear" are both confirming plates that track their own
+                // availability; this was one pinch.
+                //
+                // `isAvailable` is a closure, so it is read every frame
+                // and cannot freeze. `confirms` gives it the same two-tap
+                // arm the standing plates use.
                 .init(name: "Clear", symbol: "trash.slash",
-                      tint: UIColor(white: 0.45, alpha: 1)) {
+                      tint: UIColor(white: 0.45, alpha: 1),
+                      isAvailable: { !model.flights.isEmpty },
+                      confirms: true) {
                     model.clearFlights()
                 },
             ],

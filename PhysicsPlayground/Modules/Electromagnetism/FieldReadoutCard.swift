@@ -149,7 +149,14 @@ struct GaussReadout: View {
         } else {
             Text("Φ  \(PhysicsFormat.scientific(model.gaussFlux)) N·m²/C")
                 .font(DesignTokens.TypeScale.footnote.monospaced())
-            Text("Open surface: grab the disc's rim and turn it edge-on to the field, and the flux falls to zero. Cycle it to the bubble for Gauss's law.")
+            // "Cycle it to the bubble" named a gesture that did not
+            // exist — the kind had no control at all until the bank got
+            // its "Open disc" plate on 2026-08-03. This is the third
+            // time this module's copy has described an interaction it
+            // did not have, after the tilt itself and the un-tiltable
+            // disc; the rule that keeps catching it is to read the prose
+            // next to the code.
+            Text("Open surface: grab the disc's rim and turn it edge-on to the field, and the flux falls to zero. Switch Open disc off for the bubble, and Gauss's law.")
                 .font(DesignTokens.TypeScale.footnote)
                 .foregroundStyle(.secondary)
         }

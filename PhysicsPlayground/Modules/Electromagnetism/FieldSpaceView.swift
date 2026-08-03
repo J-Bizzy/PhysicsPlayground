@@ -246,6 +246,32 @@ struct FieldSpaceView: View {
                 .init(id: "gauss", label: "Flux meter", symbol: "circle.dashed",
                       isOn: { model.gaussSurfaceOn },
                       toggle: { model.gaussSurfaceOn.toggle() }),
+                // THE DOOR THAT WAS NEVER BUILT (2026-08-03).
+                //
+                // `gaussSurfaceKind` had exactly three writers — its
+                // declaration, `reset()`, and `-emGauss` — so no hand
+                // could ever produce a disc. Meanwhile `GaussGrab`
+                // implements the disc's tilt in full, `FieldRenderer`
+                // branches on the kind, and the panel had been
+                // instructing users to "tilt it edge-on to the field and
+                // the flux falls to zero" since the surface was written.
+                // The 2026-07-31 pass caught that the tilt did not exist
+                // and built it — and left the surface it tilts
+                // unreachable. Half the flux meter has been dark since.
+                //
+                // A PLATE, because this is a labelled binary and that is
+                // what the design system says a plate is for. The two
+                // kinds are two different demonstrations, not two views
+                // of one: a bubble IS Gauss's law (Q/ε₀ whatever you do
+                // with it), while a disc's flux depends on where it is
+                // and how it is turned. The label names the disc rather
+                // than the choice, because "on" has to mean something.
+                .init(id: "disc", label: "Open disc", symbol: "circle.dotted",
+                      isOn: { model.gaussSurfaceKind == .disc },
+                      toggle: {
+                          model.gaussSurfaceKind =
+                              model.gaussSurfaceKind == .disc ? .bubble : .disc
+                      }),
             ])
         renderer.root.addChild(bank.root)
         self.bank = bank
