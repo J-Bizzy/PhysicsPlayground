@@ -605,3 +605,108 @@ Each floats on the thing it describes and must never intercept a pinch.
       numbers and units.
 - [ ] **Leave and re-enter a lab**: its state survives.
 - [ ] **Leave and re-enter the hub repeatedly**: no slowdown.
+
+---
+
+## ⟳⟳ The 2026-08-03 review pass — one sitting, in this order
+
+Everything below was changed in a single review pass and **none of it has
+been seen by a person.** It is grouped so one device session covers it,
+because device sessions are the scarce thing. Work top to bottom: the
+first three are new physics and new failure modes, the rest is
+confirmation.
+
+Simulator screenshots already prove that each of these RENDERS. What
+follows is only what a screenshot cannot settle.
+
+### The one that is not finished
+
+- [ ] **`-magInertia 1` — magnets with real mass and rotational inertia.**
+      The default bench is unchanged, so run them back to back: launch
+      Magnetism normally, then again with the argument.
+  - [ ] **Set a magnet swinging in another's field and watch one needle.**
+        With inertia it must swing PAST alignment and ring back before
+        settling. Without it, it slides to alignment and stops. That
+        difference is the whole point of the change; if you cannot see it
+        in the room, the change is not worth having.
+  - [ ] **Then let two magnets touch, and keep watching.** This is the
+        known defect: a touching pair does not come to rest. It was
+        measured — the swing grows between t = 10 s and t = 300 s — and
+        the cause is `separated()` doing work against the attraction
+        every substep while the body keeps its inertia. **Judge how bad
+        it looks**, because that decides whether this is worth fixing or
+        whether the glide simply wins. DECISIONS.md 2026-08-03 has the
+        analysis.
+  - [ ] Reset returns to whichever bench the launch argument asked for,
+        not always to the glide.
+
+### New controls
+
+- [ ] **Electric Fields — the sixth plate, "Open disc".** The flux
+      meter's disc mode has been unreachable by hand since it was built:
+      `GaussGrab`'s tilt existed with no way to get a surface to tilt.
+  - [ ] Flick it: the bubble becomes a disc. Grab the disc's rim and turn
+        it EDGE-ON to the field — the flux must fall to zero. That is the
+        sentence the readout has been printing for weeks against a
+        control that did not exist.
+  - [ ] Flick it off: back to a bubble, and now moving it about must not
+        change the flux at all while the enclosed charge is unchanged.
+        Bubble = Gauss's law; disc = geometry.
+  - [ ] **The bank grew and the B rail moved down to make room.** Check
+        the whole column is still in one comfortable glance and the rail
+        does not read as part of the bank.
+
+- [ ] **Projectiles — Clear now confirms.** Its trash petal was the one
+      destructive verb in the app with no guard.
+  - [ ] With balls in the air: tap Clear once — it must ARM (glyph swaps
+        to a checkmark), not fire. Tap again to clear.
+  - [ ] Arm it and walk away for five seconds: it must disarm itself.
+  - [ ] With NO balls in the air the petal must be dim, and a tap on it
+        must fall THROUGH to whatever is behind it rather than being
+        swallowed.
+
+### The armed-plate bug, before and after
+
+- [ ] **Arm a Clear plate, then press Reset.** In Circuits and in
+      Electric Fields. The plate must come back dark and unarmed. It used
+      to survive a reset still lit and still reading "Tap again" — one
+      pinch from wiping a bench you had just restored.
+
+### The hub
+
+- [ ] **Drag a lab to the podium.** The podium hint used to carry a
+      collider sitting directly in the path of that gesture: the sentence
+      "Drag a lab onto the podium to open it" was standing in the way of
+      doing it. The carry must be smooth all the way in.
+- [ ] **The gyroscope bead and the modelled miniatures** at real
+      passthrough contrast, in a bright room and a dim one.
+- [ ] **The wordmark.** A simulator screenshot of the machined plaque
+      against a bright cream wall is very nearly illegible — it reads as
+      an embossed watermark rather than the app's nameplate. The
+      simulator's synthetic room is flat and bright in a way a real one
+      is not, so **this needs a real wall before anyone changes it.** If
+      it reads as faint on device too, that is a real finding about the
+      one piece of type every visitor sees first.
+
+### Accessibility, and the claim that was not true
+
+- [ ] **VoiceOver over a `Callout`.** Every tethered live number in the
+      app — flux, µT, catch speed, sweep area, prediction countdown — is
+      a bare text mesh with no accessibility at all. `DECISIONS.md`
+      claims VoiceOver reach "on every plate, petal, disc and card", and
+      a callout is none of those, so the claim is technically intact and
+      the coverage is not. **Expected to FAIL until Stage 7 lands** —
+      recorded here so it is not discovered as a surprise.
+- [ ] **Reduce Motion inside a lab.** It is honoured in the hub only.
+      The palette bead still breathes, the ring still fans, the enter
+      transition still swells. Also expected to fail; also not yet fixed.
+
+### Leaks — the only test for these is patience
+
+- [ ] **Enter and leave eight or ten labs in a row, then use one.**
+      Three per-module subscriptions were never cancelled and accumulated
+      one live closure per entry for the life of the process: the palette
+      bead's, the lab-placement anchor's, and the experiments watcher's.
+      Nothing should feel heavier at the tenth lab than at the first.
+- [ ] **Complete an experiment, then leave that lab and enter another.**
+      No chime should fire for the lab you left.
