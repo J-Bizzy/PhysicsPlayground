@@ -158,10 +158,32 @@ Declare the one required-reason API already in `PrivacyInfo.xcprivacy`:
 
 ## URLs
 
-- **Privacy Policy** — host `docs/PRIVACY.md`. **Required**; the app
+- **Privacy Policy** — `https://j-bizzy.github.io/PhysicsPlayground/PRIVACY.html`. **Required**; the app
   cannot be submitted without a reachable URL.
-- **Support** — host `docs/SUPPORT.md`. **Required.**
+- **Support** — `https://j-bizzy.github.io/PhysicsPlayground/SUPPORT.html`. **Required.**
 - **Marketing** — optional, skip it.
+
+Both are served by GitHub Pages from the `docs/` folder of the public
+repo `J-Bizzy/PhysicsPlayground` (its `_config.yml` and the two pages'
+front matter exist for exactly this). That repo is a **subtree split**,
+not the working repo: the local git root is the parent `VisionPro/`
+directory, which holds sibling projects that must never be published,
+so only this project's subtree goes out. To publish updates, from the
+repo root:
+
+```bash
+git subtree split --prefix=PhysicsPlayground -b public-main
+git push public public-main:main
+git branch -D public-main
+```
+
+(`public` is the remote named for `J-Bizzy/PhysicsPlayground`.)
+
+## App category
+
+`INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.education`
+is set in the app target. In App Store Connect: primary **Education**,
+secondary none.
 
 ---
 

@@ -1,3 +1,8 @@
+---
+layout: default
+title: Support — Physics Playground
+---
+
 # Support — Physics Playground
 
 **Contact:** jackson.bizzell@outlook.com

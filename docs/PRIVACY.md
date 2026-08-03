@@ -1,3 +1,8 @@
+---
+layout: default
+title: Privacy Policy — Physics Playground
+---
+
 # Privacy Policy — Physics Playground
 
 **Last updated: 1 August 2026**
