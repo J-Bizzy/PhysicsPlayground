@@ -756,13 +756,10 @@ struct PendulumInfoCard: View {
                 Text(String(format: "θ %.0f°   v %.2f m/s", degrees, speed))
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
             // A card in a ROOM, not on a panel: it has to hold its shape
             // against a sunlit wall, a dark studio, and whatever the
             // user's furniture is doing behind it.
-            .background(.regularMaterial,
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .readoutCard()
             .accessibilityElement(children: .combine)
         }
     }

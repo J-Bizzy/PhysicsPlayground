@@ -52,11 +52,11 @@ enum CircuitsModule {
             guard let readout = model.readouts[component.id] else { continue }
             let name = component.kind.displayName
             rows.append(.init("\(name) current",
-                              String(format: "%.4f", readout.amps), "A"))
+                              PhysicsFormat.metric(readout.amps, "A", decimals: 2)))
             rows.append(.init("\(name) voltage",
-                              String(format: "%.3f", readout.volts), "V"))
+                              PhysicsFormat.fixed(readout.volts, decimals: 2), "V"))
             rows.append(.init("\(name) power",
-                              String(format: "%.4f", readout.watts), "W"))
+                              PhysicsFormat.metric(readout.watts, "W", decimals: 2)))
         }
         return rows
     }

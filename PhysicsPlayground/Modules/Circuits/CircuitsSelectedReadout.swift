@@ -72,10 +72,7 @@ struct CircuitsSelectedReadout: View {
                         .foregroundStyle(.red)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(.regularMaterial,
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .readoutCard()
             .accessibilityElement(children: .combine)
         }
     }

@@ -63,17 +63,19 @@ enum ElectromagnetismModule {
         }
         if model.capacitorOn {
             rows.append(.init("Plate voltage",
-                              String(format: "%.1f", model.plateVoltage / 1000), "kV"))
+                              PhysicsFormat.metric(model.plateVoltage, "V", decimals: 1)))
             rows.append(.init("Plate gap",
-                              String(format: "%.3f", model.plateSeparation), "m"))
+                              PhysicsFormat.fixed(model.plateSeparation, decimals: 3), "m"))
             rows.append(.init("E between plates",
-                String(format: "%.0f", model.plateVoltage / model.plateSeparation), "V/m"))
+                PhysicsFormat.metric(model.plateVoltage / model.plateSeparation,
+                                     "V/m", decimals: 1)))
         }
         if model.magneticFieldOn {
-            rows.append(.init("B", String(format: "%.4g",
-                model.electronMode ? model.electronFieldTesla : model.magneticFieldTesla), "T"))
+            rows.append(.init("B", PhysicsFormat.metric(
+                model.electronMode ? model.electronFieldTesla : model.magneticFieldTesla,
+                "T", decimals: 2)))
             rows.append(.init("Cyclotron radius",
-                              String(format: "%.4f", model.cyclotronRadius), "m"))
+                              PhysicsFormat.fixed(model.cyclotronRadius, decimals: 3), "m"))
         }
         return rows
     }

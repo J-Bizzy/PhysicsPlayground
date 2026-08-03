@@ -50,11 +50,8 @@ struct GravityLabDataCard: View {
                     energyRows(readout)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
             .frame(maxWidth: 280, alignment: .leading)
-            .background(.regularMaterial,
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .readoutCard()
             .accessibilityElement(children: .combine)
         }
     }
@@ -124,8 +121,22 @@ struct GravityLabDataCard: View {
         }
     }
 
+    /// An angle, at a TENTH of a degree rather than a hundredth.
+    ///
+    /// The header above says every value is quantised so the card only
+    /// re-rasterises when a reading actually changes. At `%.2f` that was
+    /// true of Ω and ω, which barely move, and false of ν: a planet's
+    /// true anomaly crosses 0.01° in well under a frame at 20× and 100×
+    /// clock, so the string changed every single frame and the card was
+    /// rebuilt every single frame at exactly the moment the module is
+    /// working hardest.
+    ///
+    /// A hundredth of a degree is 36 milliarcseconds. Nothing on this
+    /// card is read to that precision, and `PendulumInfoCard` already
+    /// makes the same trade deliberately — the rule is to choose the
+    /// precision a reader needs, not the precision the type can hold.
     private func degrees(_ radians: Double) -> String {
-        String(format: "%.2f°", radians * 180 / .pi)
+        PhysicsFormat.angle(radians * 180 / .pi)
     }
 
     private func degeneracyNote(_ degeneracy: OrbitDegeneracy) -> String {

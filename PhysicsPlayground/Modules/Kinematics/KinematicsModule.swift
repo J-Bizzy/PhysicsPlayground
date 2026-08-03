@@ -52,16 +52,16 @@ enum KinematicsModule {
             let model = appModel.kinematicsModel
             var rows: [NotebookEntry.Reading] = [
                 .init("Projectile", model.kind.rawValue),
-                .init("Mass", String(format: "%.3f", model.projectile.mass), "kg"),
-                .init("Gravity", String(format: "%.2f", model.gravity), "m/s²"),
-                .init("Launch speed", String(format: "%.2f", model.launchSpeed), "m/s"),
-                .init("Elevation", String(format: "%.1f", model.elevationDegrees), "°"),
-                .init("Air resistance", model.airResistance ? "on" : "off"),
+                .init("Mass", PhysicsFormat.fixed(model.projectile.mass, decimals: 3), "kg"),
+                .init("Gravity", PhysicsFormat.fixed(model.gravity, decimals: 2), "m/s²"),
+                .init("Launch speed", PhysicsFormat.fixed(model.launchSpeed, decimals: 2), "m/s"),
+                .init("Elevation", PhysicsFormat.fixed(model.elevationDegrees, decimals: 1), "°"),
+                .init("Air resistance", PhysicsFormat.state(model.airResistance)),
             ]
             if let last = model.lastFlight {
-                rows.append(.init("Measured range", String(format: "%.3f", last.range), "m"))
-                rows.append(.init("Apex height", String(format: "%.3f", last.apexHeight), "m"))
-                rows.append(.init("Flight time", String(format: "%.3f", last.flightTime), "s"))
+                rows.append(.init("Measured range", PhysicsFormat.fixed(last.range, decimals: 3), "m"))
+                rows.append(.init("Apex height", PhysicsFormat.fixed(last.apexHeight, decimals: 3), "m"))
+                rows.append(.init("Flight time", PhysicsFormat.fixed(last.flightTime, decimals: 3), "s"))
                 rows.append(.init("Launched by", last.wasThrown ? "hand" : "launcher"))
             }
             // No Score row. Hoops left the surface in 6b2508c and

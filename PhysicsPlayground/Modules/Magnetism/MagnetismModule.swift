@@ -47,24 +47,31 @@ enum MagnetismModule {
         let model = appModel.magnetismModel
         var rows: [NotebookEntry.Reading] = [
             .init("Magnets", "\(model.magnets.count)"),
+            // One spelling of a magnetic field, chosen by magnitude, instead
+            // of this module hand-writing mT while Electric Fields hand-wrote
+            // µT and kT in three other places.
             .init("|B| at centre",
-                  String(format: "%.5f", model.centerFieldMilliTesla), "mT"),
-            .init("Dynamics", model.dynamicsOn ? "free" : "frozen"),
+                  PhysicsFormat.metric(model.centerFieldMilliTesla / 1000, "T",
+                                       decimals: 2)),
+            // "free"/"frozen" was this module's own spelling of a switched
+            // state; three rooms had three. `PhysicsFormat.state` is the
+            // one the notebook now reads everywhere.
+            .init("Magnets move", PhysicsFormat.state(model.dynamicsOn)),
         ]
         if let selected = model.selectedMagnet {
             rows.append(.init("Selected moment",
-                              String(format: "%.3f", selected.strength), "A·m²"))
+                              PhysicsFormat.fixed(selected.strength, decimals: 3), "A·m²"))
             let others = model.magnets.filter { $0.id != selected.id }
             if !others.isEmpty {
                 let force = MagneticField.netForce(on: selected, from: others)
                 rows.append(.init("Force on it",
-                                  String(format: "%.3e", simd_length(force)), "N"))
+                                  PhysicsFormat.scientific(simd_length(force)), "N"))
                 // U = −m·B summed over the other dipoles.
                 let energy = others.reduce(0.0) {
                     $0 + MagneticField.potentialEnergy(of: selected, in: $1)
                 }
                 rows.append(.init("Potential energy",
-                                  String(format: "%.3e", energy), "J"))
+                                  PhysicsFormat.scientific(energy), "J"))
             }
         }
         return rows

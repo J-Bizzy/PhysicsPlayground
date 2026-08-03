@@ -46,16 +46,18 @@ enum PendulumsModule {
         let model = appModel.pendulumsModel
         var rows: [NotebookEntry.Reading] = [
             .init("Pendulums", "\(model.pendulums.count)"),
-            .init("Gravity", String(format: "%.3f", model.gravity), "m/s²"),
-            .init("Friction", model.frictionOn ? "on" : "off"),
+            .init("Gravity", PhysicsFormat.fixed(model.gravity, decimals: 2), "m/s²"),
+            .init("Friction", PhysicsFormat.state(model.frictionOn)),
         ]
         if let selected = model.selected {
-            rows.append(.init("Length", String(format: "%.4f", selected.length), "m"))
-            rows.append(.init("Mass", String(format: "%.3f", selected.mass), "kg"))
+            rows.append(.init("Length", PhysicsFormat.fixed(selected.length, decimals: 3), "m"))
+            rows.append(.init("Mass", PhysicsFormat.fixed(selected.mass, decimals: 3), "kg"))
             rows.append(.init("Period 2π√(L/g)",
-                              String(format: "%.4f", selected.period(gravity: model.gravity)), "s"))
+                              PhysicsFormat.fixed(selected.period(gravity: model.gravity),
+                                                  decimals: 3), "s"))
             rows.append(.init("Speed",
-                              String(format: "%.4f", simd_length(selected.state.velocity)), "m/s"))
+                              PhysicsFormat.fixed(simd_length(selected.state.velocity),
+                                                  decimals: 3), "m/s"))
         }
         return rows
     }

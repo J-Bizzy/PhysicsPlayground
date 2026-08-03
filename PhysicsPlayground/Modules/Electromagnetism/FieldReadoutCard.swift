@@ -41,17 +41,15 @@ struct FieldReadoutCard: View {
             PhysicsStatsView()
             apparatusReadouts
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
         .frame(maxWidth: 300, alignment: .leading)
-        // THICK, not regular. A screenshot with the field lines
-        // switched on showed why: this card stands in a room whose
-        // physics is drawn as bright translucent filaments, and a
-        // regular-material panel behind them washed out to the point
-        // where the 50 kT disclosure — the paragraph that must be read —
-        // was the least legible text on screen.
-        .background(.thickMaterial,
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        // THICK, not regular, and the ONE card that departs from the
+        // house default. A screenshot with the field lines switched on
+        // showed why: this card stands in a room whose physics is drawn
+        // as bright translucent filaments, and a regular-material panel
+        // behind them washed out to the point where the 50 kT
+        // disclosure — the paragraph that must be read — was the least
+        // legible text on screen.
+        .readoutCard(material: .thickMaterial)
     }
 
     /// Each block appears only while its apparatus is standing, so the
@@ -125,12 +123,17 @@ struct FieldReadoutCard: View {
 /// disc is the contrast that makes it mean something, because its flux
 /// depends entirely on how it is turned.
 ///
-/// Both used to be set from here (a segmented picker, a radius slider).
-/// They are the surface itself now: grab its edge to resize it, and swing
-/// your hand out of the disc's plane to tilt it. That last gesture is new,
-/// and it is worth knowing that the sentence below has been printed in this
-/// panel since the disc was written while NOTHING in the app could tilt it —
-/// `gaussSurfaceNormal` had two writers, its declaration and `reset()`.
+/// The radius and the facing are the surface itself now: grab its edge to
+/// resize it, and swing your hand out of the disc's plane to tilt it. The
+/// KIND is the bank's "Open disc" plate (2026-08-03).
+///
+/// Both halves of that took two goes. The tilt sentence below was printed
+/// here since the disc was written while nothing in the app could tilt it
+/// — `gaussSurfaceNormal` had two writers, its declaration and `reset()`.
+/// That was fixed on 2026-07-31 by building the gesture, which left the
+/// disc itself unreachable for another three days: `gaussSurfaceKind` had
+/// no control at all, so the tilt had nothing to tilt. Reading the prose
+/// next to the code caught it both times.
 struct GaussReadout: View {
     @Environment(FieldModel.self) private var model
 

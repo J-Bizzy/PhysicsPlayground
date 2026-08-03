@@ -57,9 +57,9 @@ enum GravityLabModule {
                 let model = appModel.gravityLabModel
                 var rows: [NotebookEntry.Reading] = [
                     .init("Bodies", "\(model.bodies.count)"),
-                    .init("Elapsed", String(format: "%.1f", model.simulatedDays), "days"),
-                    .init("G multiplier", String(format: "%.2f", model.gMultiplier)),
-                    .init("Sun mass", String(format: "%.2f", model.sunMassMultiplier), "× real"),
+                    .init("Elapsed", PhysicsFormat.fixed(model.simulatedDays, decimals: 1), "days"),
+                    .init("G multiplier", PhysicsFormat.fixed(model.gMultiplier, decimals: 2)),
+                    .init("Sun mass", PhysicsFormat.fixed(model.sunMassMultiplier, decimals: 2), "× real"),
                 ]
                 if let body = model.selectedBody, let readout = model.readout(for: body) {
                     rows.append(.init("Selected", body.body.name))
@@ -68,24 +68,26 @@ enum GravityLabModule {
                         if let a = elements.semiMajorAxis {
                             rows.append(.init(
                                 "Semi-major axis",
-                                String(format: "%.4f", a / CelestialBody.astronomicalUnit),
+                                PhysicsFormat.fixed(a / CelestialBody.astronomicalUnit,
+                                                    decimals: 3),
                                 "AU"))
                         }
                         rows.append(.init("Eccentricity",
-                                          String(format: "%.4f", elements.eccentricity)))
+                                          PhysicsFormat.fixed(elements.eccentricity,
+                                                              decimals: 3)))
                         rows.append(.init("Inclination",
-                                          String(format: "%.2f",
-                                                 elements.inclination * 180 / .pi), "°"))
+                                          PhysicsFormat.angle(elements.inclination * 180 / .pi)))
                     }
                     rows.append(.init("Total energy",
                                       PhysicsFormat.scientific(readout.totalEnergy), "J"))
-                    rows.append(.init("Distance", String(format: "%.4f", readout.distanceAU), "AU"))
-                    rows.append(.init("Speed", String(format: "%.3f", readout.speedKmPerS), "km/s"))
+                    rows.append(.init("Distance", PhysicsFormat.fixed(readout.distanceAU, decimals: 3), "AU"))
+                    rows.append(.init("Speed", PhysicsFormat.fixed(readout.speedKmPerS, decimals: 3), "km/s"))
                     rows.append(.init("Escape speed",
-                                      String(format: "%.3f", readout.escapeSpeedKmPerS), "km/s"))
-                    rows.append(.init("Bound", readout.isBound ? "yes" : "no — unbound"))
+                                      PhysicsFormat.fixed(readout.escapeSpeedKmPerS,
+                                                          decimals: 3), "km/s"))
+                    rows.append(.init("Bound", PhysicsFormat.state(readout.isBound)))
                     if let period = readout.periodDays {
-                        rows.append(.init("Period", String(format: "%.2f", period), "days"))
+                        rows.append(.init("Period", PhysicsFormat.fixed(period, decimals: 2), "days"))
                     }
                 }
                 return rows

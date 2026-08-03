@@ -154,3 +154,46 @@ func stripInput(from entity: Entity) {
     entity.components.remove(CollisionComponent.self)
     for child in entity.children { stripInput(from: child) }
 }
+
+/// The house treatment for a floating readout card.
+///
+/// Four cards, four not-quite-matching treatments: `.regularMaterial` at
+/// radius 14 in Circuits and Gravity Lab, `.thickMaterial` at 14 in
+/// Electric Fields, `.regularMaterial` at 12 in Pendulums. Nobody chose
+/// three different cards; they were written on different days.
+///
+/// It carries `.allowsHitTesting(false)` too, because that is not a
+/// per-card decision either — a readout that intercepts a pinch is the
+/// `SpatialScaleHandle` failure, and these cards float directly over the
+/// bobs, parts and planets they describe. (The entity still needs
+/// `stripInput`; see above for why one is not the other.)
+/// THE MATERIAL IS A PARAMETER AND THE RADIUS IS NOT, which is the whole
+/// judgement in this type. Three of the four cards drifted apart by
+/// accident and are unified. The fourth — Electric Fields' — is
+/// `.thickMaterial` for a REASON that is recorded at its call site: it
+/// stands in a room whose physics is drawn as bright translucent
+/// filaments, and a screenshot showed a regular-material panel washing
+/// out until the 50 kT disclosure was the least legible text on screen.
+/// Flattening that would have undone a fix somebody found by looking.
+struct ReadoutCard: ViewModifier {
+    let material: SwiftUI.Material
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(material,
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .allowsHitTesting(false)
+    }
+}
+
+extension View {
+    /// A floating readout card, in the one treatment they all share.
+    ///
+    /// Pass a heavier material only where the room behind it demands one,
+    /// and say why at the call site.
+    func readoutCard(material: SwiftUI.Material = .regularMaterial) -> some View {
+        modifier(ReadoutCard(material: material))
+    }
+}
