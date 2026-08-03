@@ -2,11 +2,17 @@
 //  CircuitsSpaceView.swift
 //  Physics Playground — Circuits module
 //
-//  The circuit lab immersive scene. Component bodies route through
-//  RenderKit's ManipulationRouter (grab to carry anywhere); terminals,
-//  wires, and switch levers are tap targets — pinch a terminal, then
-//  another, and they're wired; pinch a wire to remove it; pinch a
-//  lever to flip it. The solver clock is SceneEvents.Update.
+//  The circuit lab immersive scene. Component bodies are carried by a
+//  `RelativeDrag` — the part moves by the hand's displacement, and the
+//  model owns where it ends up. Terminals, wires and switch levers are
+//  tap targets: pinch a terminal, then another, and they're wired;
+//  pinch a wire to remove it; pinch a lever to flip it. The solver
+//  clock is SceneEvents.Update.
+//
+//  (This said "route through RenderKit's ManipulationRouter" until
+//  2026-08-03. They never did — nothing in the app ever used the
+//  router, and it is deleted. See `Grabbable.swift` for why the system
+//  component is the wrong shape here.)
 //
 
 import PhysicsCore

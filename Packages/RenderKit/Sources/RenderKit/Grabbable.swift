@@ -2,14 +2,43 @@
 //  Grabbable.swift
 //  RenderKit
 //
-//  Everything about making entities grabbable with visionOS 26's
-//  ManipulationComponent, in one place:
+//  Making entities grabbable, the way this app decided to do it:
 //
-//  · Grabbable.configure — one call makes an entity pinch/touch-draggable
-//    (installs input-target, collision, and hover-effect components itself).
-//  · ManipulationRouter — subscribes to manipulation lifecycle events on a
-//    RealityView's content and routes them to closures keyed by entity
-//    name, so simulations write plain callbacks instead of event plumbing.
+//  · Grabbable.configureTouchTarget — input target, collider, hover
+//    effect and contact shadow. No system-owned motion.
+//  · RelativeDrag — the grabbed thing moves by the hand's DISPLACEMENT
+//    from the pinch, so it never jumps or lurches toward the hand.
+//
+//  TWO GRAVES WERE DUG OUT OF THIS FILE ON 2026-08-03, and what they
+//  were is worth keeping because the alternative they represent looks
+//  attractive every time somebody reads Apple's documentation.
+//
+//  `Grabbable.configure` wrapped visionOS 26's `ManipulationComponent`:
+//  one call, and the system carries the entity for you. `ManipulationRouter`
+//  routed its lifecycle events to per-entity callbacks. Both were public,
+//  both were written before the modules were, and NEITHER HAD A SINGLE
+//  CALLER ANYWHERE IN THE APP — while two SpaceView headers claimed their
+//  entities routed through the router, which is the doc-rot this project
+//  keeps catching.
+//
+//  They have no callers because the system component is the wrong shape
+//  for this app, not because nobody got round to adopting it. In every
+//  module the MODEL owns motion: the physics decides where a body is and
+//  the renderer follows it. A component that attracts an entity toward
+//  the hand, applies its own inertia, and writes the entity transform is
+//  a second author of the same number — which is why `configure` had to
+//  switch off `scalingBehavior`, `inertia` and `releaseBehavior` just to
+//  stop it fighting the solver. Turning off everything a component does
+//  is the signal to stop using the component.
+//
+//  `RelativeDrag` is what replaced it, and it is four lines. It also has
+//  a property the system path does not: a CONSTANT translation leaves it
+//  untouched, which is precisely why `LabPlacement.offset` and the
+//  station seats are safe (DECISIONS.md, 2026-07-30).
+//
+//  So: a grave, not a missing door. Restoring either means arguing that
+//  the system should own motion in a module whose whole claim is that
+//  the physics does.
 //
 
 import Foundation
@@ -36,25 +65,6 @@ public enum Grabbable {
         // device behaviour; the simulator has no room mesh to catch it.)
         entity.components.set(GroundingShadowComponent(castsShadow: true))
     }
-    /// Makes an entity grabbable with gaze+pinch or direct touch. The
-    /// collision shape is bigger than the visible mesh so it's easy to grab.
-    public static func configure(_ entity: Entity, collisionRadius: Float) {
-        ManipulationComponent.configureEntity(
-            entity,
-            collisionShapes: [.generateSphere(radius: collisionRadius)]
-        )
-        if var manipulation = entity.components[ManipulationComponent.self] {
-            // Stay where dropped instead of animating back to the origin,
-            // and don't let two-handed gestures resize physics objects.
-            manipulation.releaseBehavior = .stay
-            manipulation.dynamics.scalingBehavior = .none
-            // No springy settle on release: in every module the MODEL owns
-            // motion, so the system's inertia only fights it — parts should
-            // stop dead exactly where the hand leaves them.
-            manipulation.dynamics.inertia = .zero
-            entity.components.set(manipulation)
-        }
-    }
 }
 
 /// A relative drag: the grabbed thing moves by the hand's displacement
@@ -73,32 +83,5 @@ public struct RelativeDrag: Sendable {
     /// Where the target belongs for the given hand position.
     public func position(forHand hand: SIMD3<Double>) -> SIMD3<Double> {
         startTarget + (hand - startHand)
-    }
-}
-
-/// Routes manipulation events to per-entity callbacks. Positions are in
-/// scene (immersive-space) coordinates.
-@MainActor
-public final class ManipulationRouter {
-    public var onBegin: ((_ entityName: String, _ position: SIMD3<Float>) -> Void)?
-    public var onMove: ((_ entityName: String, _ position: SIMD3<Float>) -> Void)?
-    public var onEnd: ((_ entityName: String, _ position: SIMD3<Float>) -> Void)?
-
-    public init() {}
-
-    /// Subscribes to the three lifecycle events; retain the returned
-    /// subscriptions for as long as the scene lives.
-    public func subscriptions(for content: RealityViewContent) -> [EventSubscription] {
-        [
-            content.subscribe(to: ManipulationEvents.WillBegin.self) { [weak self] event in
-                self?.onBegin?(event.entity.name, event.entity.position(relativeTo: nil))
-            },
-            content.subscribe(to: ManipulationEvents.DidUpdateTransform.self) { [weak self] event in
-                self?.onMove?(event.entity.name, event.entity.position(relativeTo: nil))
-            },
-            content.subscribe(to: ManipulationEvents.WillEnd.self) { [weak self] event in
-                self?.onEnd?(event.entity.name, event.entity.position(relativeTo: nil))
-            },
-        ]
     }
 }

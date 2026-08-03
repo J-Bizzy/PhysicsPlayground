@@ -2,12 +2,14 @@
 //  PendulumsSpaceView.swift
 //  Physics Playground — Pendulums module
 //
-//  The pendulum lab immersive scene. Bobs route through the
-//  ManipulationRouter: grabbing freezes that pendulum, the bob rides
-//  the hand (cable staying taut), and release rethrows it with the
-//  hand's velocity estimated from the last tenth of a second of
-//  motion — a hard sideways throw whips it, a gentle release barely
-//  stirs it.
+//  The pendulum lab immersive scene. A bob is carried by a
+//  `RelativeDrag`: grabbing freezes that pendulum, the bob rides the
+//  hand (cable staying taut), and release rethrows it with the hand's
+//  velocity estimated from the last tenth of a second of motion — a
+//  hard sideways throw whips it, a gentle release barely stirs it.
+//
+//  (This said "route through the ManipulationRouter" until 2026-08-03.
+//  They never did; the router had no callers anywhere and is deleted.)
 //
 
 import PhysicsCore

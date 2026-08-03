@@ -363,12 +363,14 @@ final class MagnetismModel {
                                            Self.strengthRange.upperBound)
     }
 
-    func removeSelected() {
-        guard let selectedID, magnets.count > 1 else { return }
-        magnets.removeAll { $0.id == selectedID }
-        heldID = nil
-        self.selectedID = magnets.last?.id
-    }
+    // `removeSelected()` was deleted here on 2026-08-03. A GRAVE, not a
+    // missing door: it was the window panel's delete button, and the
+    // panel was deleted on 2026-08-01. Removing a magnet is the trash
+    // petal on its own ring now (`MagnetismSpaceView.syncBloom` →
+    // `removeMagnet(id:)`), which is better in the way the interaction
+    // law says — you delete the thing you are holding, not "the
+    // selection" named somewhere else. It had no caller anywhere,
+    // including tests.
 
     /// Reverses the selected magnet's poles (N↔S) — the control that turns
     /// attraction into repulsion without a twist gesture.

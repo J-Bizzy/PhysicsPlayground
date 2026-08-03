@@ -545,12 +545,11 @@ final class GravityLabModel {
         return orbiting.id
     }
 
-    func removeSelected() {
-        guard let selectedID, bodies.count > 1,
-              selectedID != primaryBody?.id else { return }
-        bodies.removeAll { $0.id == selectedID }
-        self.selectedID = primaryBody?.id
-    }
+    // `removeSelected()` was deleted here on 2026-08-03, for the same
+    // reason as Magnetism's twin: a GRAVE left by the window panel's
+    // delete button. A body is removed by the trash petal on its own
+    // ring now, which the primary is deliberately not given. No caller
+    // anywhere, tests included.
 
     /// True while the scene has the single classic Sun (the sun-mass
     /// slider and the binary button only make sense then).
