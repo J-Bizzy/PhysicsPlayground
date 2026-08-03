@@ -140,15 +140,28 @@ enum ExperimentCatalog {
     private static func pendulumExperiments(_ model: PendulumsModel)
     -> [(experiment: Experiment, isMet: () -> Bool)] {
         [
+                // The cold open, made into a thing you DO. The cradle is
+                // the first image the module shows and had no rung of its
+                // own; breaking it apart is the question it exists to ask.
+                (Experiment(id: "pendulums.cradle", title: "Break the cradle",
+                            detail: "Pull TWO balls back instead of one, and count what leaves the far end.",
+                            step: "Draw two of the five steel balls back together and let them go — two should leave, not one at double speed. Nothing counts balls; it falls out of the contacts resolving in order."),
+                 { model.pendulums.filter { $0.kind == .simple }.count >= 5
+                     && model.pendulums.contains {
+                         $0.kind == .simple && simd_length($0.state.velocity) > 0.35 } }),
                 (Experiment(id: "pendulums.orbit", title: "Around the world",
                             detail: "Throw a bob into a true 3D orbit — sideways, hard.",
                             step: "Grab a bob and throw it sideways — across the swing plane, not along it."),
                  { model.pendulums.contains {
                      abs($0.state.position.z) > 0.15 && simd_length($0.state.velocity) > 0.5 } }),
-                (Experiment(id: "pendulums.high", title: "Over the top",
-                            detail: "Get a bob swinging above its pivot.",
-                            step: "Throw a bob hard enough upward to carry it above its own pivot."),
-                 { model.pendulums.contains { $0.state.position.y > 0 } }),
+                // The chaotic cousin, which arrived on 2026-08-02 with no
+                // rung at all.
+                (Experiment(id: "pendulums.chaos", title: "Never the same twice",
+                            detail: "Set a double pendulum going hard enough to flip its elbow over.",
+                            step: "Pull a double pendulum out of the second well and throw it. Watch the elbow go over the top — from there no two releases ever repeat."),
+                 { model.pendulums.contains {
+                     $0.kind == .double && abs($0.state.position.y) > 0.02
+                         && simd_length($0.state.velocity) > 1.0 } }),
             ]
     }
 
@@ -168,6 +181,13 @@ enum ExperimentCatalog {
                         detail: "Shape the field with six or more charges at once.",
                         step: "Pull charges out of the + and − wells until six share the room, then drag them into a shape."),
              { model.charges.count >= 6 }),
+            // Gauss's law, as a thing you did rather than a thing you
+            // read. The flux meter has been in the room since it was
+            // written and had no rung.
+            (Experiment(id: "field.gauss", title: "Whatever you do to it",
+                        detail: "Enclose a charge in the bubble and watch the flux hold at Q/ε₀ however you move it.",
+                        step: "Flick Flux meter on the switch bank, then drag a charge inside the bubble. Move the bubble about: the flux must not budge while the same charge is inside."),
+             { model.gaussSurfaceOn && (model.gaussEnclosedCharge ?? 0) != 0 }),
         ]
     }
 
@@ -189,8 +209,18 @@ enum ExperimentCatalog {
                return false }),
             (Experiment(id: "magnetism.bench", title: "Full bench",
                         detail: "Get all four bar magnets into the field at once.",
-                            step: "Tap Add magnet until four are floating."),
+                        // "Tap Add magnet" until 2026-08-03. It is a
+                        // WELL, and a well is reached into — the verb was
+                        // wrong for the affordance it names.
+                        step: "Reach into the Add magnet well and pull magnets out until four are floating."),
              { model.magnets.count >= 4 }),
+            // The compass, which is the module's own stated best moment
+            // ("the experience everyone actually remembers") and had no
+            // rung of its own.
+            (Experiment(id: "magnetism.handover", title: "Hand it to the planet",
+                        detail: "Carry the compass far enough from the bench that Earth's field takes over.",
+                        step: "Pick up the compass sphere and walk it away from the magnets. Around 30 cm out a 6 A·m² bar matches Earth's 50 µT — past that the needle stops answering the bench and settles on the planet, tipping 65° into the ground."),
+             { model.compassOn && model.compassIsReadingEarth }),
         ]
     }
 
@@ -210,6 +240,16 @@ enum ExperimentCatalog {
                  { model.gravity < 2.0 && model.flights.contains {
                      $0.status == .flying && !$0.wasThrown
                  } }),
+                // THE MODULE'S SIGNATURE MOMENT, and it had no rung.
+                // Projectiles is the one bench that is 1:1 with the room —
+                // it refuses `SpatialScale` for exactly this reason — and
+                // catching a ball on your own tracked fingertips is the
+                // thing that only works because of it. Nothing pointed at
+                // it.
+                (Experiment(id: "kinematics.catch", title: "Out of the air",
+                            detail: "Catch a ball in your hand while it is still flying.",
+                            step: "Fire one gently, or throw it up, and put a hand in its way. Your real fingertips are the catcher — the readout tells you the speed and the kinetic energy you just took out of it."),
+                 { model.lastCatch != nil }),
             ]
         case "circuits":
             let model = appModel.circuitsModel

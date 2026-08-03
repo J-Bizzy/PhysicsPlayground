@@ -83,6 +83,7 @@ final class GravityLabRenderer {
             if ghostCallout == nil {
                 let callout = Callout(color: UIColor(white: 0.95, alpha: 1),
                                       textSize: 0.02, offset: SIMD3(0, 0.08, 0))
+                callout.setAccessibilityName("Prediction")
                 systemRoot.addChild(callout.root)
                 ghostCallout = callout
             }
@@ -112,6 +113,7 @@ final class GravityLabRenderer {
                 if verdictCallout == nil {
                     let callout = Callout(color: UIColor(white: 0.95, alpha: 1),
                                           textSize: 0.022, offset: SIMD3(0, 0.09, 0))
+                    callout.setAccessibilityName("Prediction result")
                     systemRoot.addChild(callout.root)
                     verdictCallout = callout
                 }
@@ -656,6 +658,7 @@ final class GravityLabRenderer {
             if label == nil {
                 let callout = Callout(color: Self.sweepGold,
                                       textSize: 0.018, offset: SIMD3(0, 0.06, 0))
+                callout.setAccessibilityName("Area swept")
                 systemRoot.addChild(callout.root)
                 label = callout
             }
@@ -722,6 +725,7 @@ final class GravityLabRenderer {
         if lookCallout == nil {
             let callout = Callout(color: UIColor(white: 0.95, alpha: 1),
                                   textSize: 0.024, offset: SIMD3(0, 0.12, 0))
+            callout.setAccessibilityName("Selected body")
             systemRoot.addChild(callout.root)
             lookCallout = callout
         }

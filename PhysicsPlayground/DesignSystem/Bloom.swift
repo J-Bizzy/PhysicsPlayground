@@ -224,6 +224,7 @@ final class Bloom {
             // stack that has to stay clear.
             let callout = Callout(color: UIColor(white: 0.97, alpha: 1),
                                   textSize: 0.019, offset: SIMD3(0, -0.046, 0))
+            callout.setAccessibilityName(grip?.name ?? "Value")
             root.addChild(callout.root)
             label = callout
         }

@@ -41,6 +41,22 @@ public final class Callout {
     private var lastText: String?
     private var lastTextTime: Double = -1
 
+    /// What VoiceOver calls this readout — the quantity, not the number.
+    ///
+    /// A `Callout` is a text MESH, and a mesh is invisible to VoiceOver
+    /// unless something says otherwise. `ARCHITECTURE.md` names the
+    /// callout as one of the app's two readout forms, and `DECISIONS.md`
+    /// claimed on 2026-08-01 that "VoiceOver reach is preserved by
+    /// `AccessibilityComponent` on every plate, petal, disc and card" —
+    /// a callout is none of those four, so the claim stayed technically
+    /// true while every tethered live number in the app went unread:
+    /// flux, µT, catch speed, sweep area, the prediction countdown, the
+    /// orbital chord.
+    ///
+    /// Fixed here rather than at the six call sites, because putting it
+    /// in the shared type is what stops it being adopted by four of them.
+    private var accessibilityName: String?
+
     /// - Parameters:
     ///   - color: accent for the dot, leader, and type. Saturated module
     ///     accents survive white walls; pale tints do not.
@@ -119,6 +135,32 @@ public final class Callout {
                           -(bounds.min.y + bounds.max.y) / 2, 0]
         labelPivot.addChild(model)
         labelEntity = model
+        publishAccessibility()
+    }
+
+    /// Names the quantity this callout reports, for VoiceOver. The VALUE
+    /// is whatever `setText` last wrote, so a caller sets this once and
+    /// the reading follows by itself.
+    public func setAccessibilityName(_ name: String) {
+        guard name != accessibilityName else { return }
+        accessibilityName = name
+        publishAccessibility()
+    }
+
+    private func publishAccessibility() {
+        // Label and value BOTH, which is the omission `SpatialTrackControl`
+        // was caught making on its first flight: a control VoiceOver can
+        // name but not read is not reachable, it is merely listed.
+        guard let text = lastText, !text.isEmpty else {
+            root.components.remove(AccessibilityComponent.self)
+            return
+        }
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = LocalizedStringResource(
+            stringLiteral: accessibilityName ?? "Reading")
+        accessibility.value = LocalizedStringResource(stringLiteral: text)
+        root.components.set(accessibility)
     }
 
     public var isEnabled: Bool {

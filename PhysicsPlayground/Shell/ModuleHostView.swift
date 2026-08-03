@@ -5,16 +5,17 @@
 //  The module's window is a TITLE BAR. Not "a title bar plus" — the bar,
 //  and two things that appear only when they have something to say.
 //
-//  Left: back to the catalog, and a jump to any module. Middle: the
-//  module's name. Right: notebook, place-the-lab, studio, the legend
-//  key, and Reset. Beneath it, and only conditionally: "Show in room"
+//  Left: back to the catalog. Middle: the module's name. Right:
+//  notebook, place-the-lab, studio, and Reset — four, since the
+//  module-switch menu and the legend key came off on 2026-08-02 (the key
+//  moved to the Lab Notebook, which already knows which module is open). Beneath it, and only conditionally: "Show in room"
 //  while the immersive space is closed, because the space is where the
 //  module lives and there would otherwise be no way back into it; and
 //  the module's one authored first-run sentence until it is dismissed.
 //
 //  EVERYTHING ELSE WENT (DECISIONS.md, 2026-08-01). `makeControls` is
 //  deleted from the module contract, the six `*ControlsPanel.swift` are
-//  gone, the legend moved into a popover on the bar, the placement strip
+//  gone, the legend moved to the notebook, the placement strip
 //  became a tap on the cross-hair it describes, and the experiment's
 //  current step moved to the hub — where you read it before you come in,
 //  rather than off a card floating in front of the apparatus it is
@@ -37,6 +38,8 @@ struct ModuleHostView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var confirmingReset = false
     @State private var showingSensing = false
+    /// Set when "Show in room" fails, so it can say so.
+    @State private var showInRoomFailed = false
 
     var body: some View {
         VStack(spacing: 14) {
@@ -47,7 +50,7 @@ struct ModuleHostView: View {
                 } label: {
                     Image(systemName: "chevron.left")
                 }
-                .accessibilityLabel("All simulations")
+                .accessibilityLabel("All labs")
                 .accessibilityHint("Returns to the catalog")
 
 // NO MODULE-SWITCH MENU, and no legend button. The bar carries
@@ -163,7 +166,7 @@ struct ModuleHostView: View {
                     Image(systemName: "arrow.counterclockwise")
                 }
                 .accessibilityLabel("Reset")
-                .accessibilityHint("Returns this simulation to its starting state")
+                .accessibilityHint("Returns this lab to its starting state")
                 .confirmationDialog("Reset \(module.title)?",
                                     isPresented: $confirmingReset,
                                     titleVisibility: .visible) {
@@ -180,7 +183,10 @@ struct ModuleHostView: View {
             if !appModel.isImmersiveSpaceOpen {
                 Button {
                     Task {
-                        _ = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
+                        showInRoomFailed = false
+                        let result = await openImmersiveSpace(
+                            id: PlaygroundSpaceView.spaceID)
+                        if case .error = result { showInRoomFailed = true }
                     }
                 } label: {
                     Label("Show in room", systemImage: "sparkles")
@@ -189,7 +195,31 @@ struct ModuleHostView: View {
                         .padding(.vertical, 4)
                 }
                 .buttonStyle(.podProminent(module.accent))
-                .accessibilityHint("Places the simulation and its control pods in your room")
+                // "and its control pods" until 2026-08-03. There are no
+                // pods — the instruments stand on the apparatus — and the
+                // dead flag behind that phrase, `controlPodsVisible`, was
+                // deleted in the same pass.
+                .accessibilityHint("Places this lab in your room")
+
+                // IT USED TO SWALLOW THE FAILURE. The result was
+                // discarded, so a space that refused to open left this
+                // window sitting there with a button that had visibly
+                // done nothing. `HubView` fixed exactly this for the
+                // gallery — banner, manual retry, never a loop — and its
+                // own comment says the auto-open "used to swallow its
+                // failure". The module window's copy still did.
+                if showInRoomFailed {
+                    HStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("Couldn't open the room.")
+                            .font(DesignTokens.TypeScale.footnote)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.regularMaterial, in: Capsule())
+                }
             }
 
             // The one-time hint: a sentence from the module, shown

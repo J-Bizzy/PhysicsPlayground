@@ -127,6 +127,27 @@ struct HubCatalogList: View {
             ModuleCatalog.all(appModel: appModel).map { ($0.id, $0) })
 
         VStack(alignment: .leading, spacing: 14) {
+            // WHERE YOU ARE, AND WHERE TO GO — the app-wide pair, wired
+            // on 2026-08-03.
+            //
+            // `ExperimentCatalog` has four public entry points and THREE
+            // OF THEM HAD NO CALLERS: `total`, `completedCount` and
+            // `nextStep`. The last one carries a doc comment arguing at
+            // length that "a tally that says '4 of 24 complete' tells you
+            // where you are and nothing about where to go — so the hub
+            // could only ever be a launcher. One concrete next step …
+            // turns it into somewhere you come back TO." The argument was
+            // written, the function was written, and the surface never
+            // was — the same "authored but dark" defect as the coach
+            // marks and `Lagrange.swift`.
+            //
+            // It goes HERE rather than into the room. The gallery's focus
+            // panel already names the next step for the module you are
+            // looking at, which is the better place for a per-module
+            // instruction. What was missing is the answer to "what next,
+            // anywhere" — and that is a question you ask of a catalog,
+            // not of one exhibit.
+            AppProgressLine()
             ForEach(HubDomain.allCases) { domain in
                 let modules = domain.moduleIDs.compactMap { byID[$0] }
                 if !modules.isEmpty {
@@ -149,6 +170,65 @@ struct HubCatalogList: View {
             }
         }
         .frame(maxWidth: 500)
+    }
+}
+
+/// The app-wide tally and the single next thing to do.
+///
+/// Deliberately ONE line of each. A tally is a score and a step is a
+/// direction, and the argument in `ExperimentCatalog.nextStep` is that
+/// the second is what makes a hub somewhere you return to. Listing every
+/// outstanding experiment would be a to-do list, which is the shape this
+/// project rejected when the experiments were "a checklist in a side pod
+/// … achievements to stumble into rather than a path through the module".
+struct AppProgressLine: View {
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        let done = ExperimentCatalog.completedCount(appModel: appModel)
+        let total = ExperimentCatalog.total(appModel: appModel)
+
+        if total > 0 {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text("\(done) of \(total) experiments")
+                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    if appModel.experiments.streak > 1 {
+                        Text("· \(appModel.experiments.streak)-day streak")
+                            .font(DesignTokens.TypeScale.footnote)
+                            .foregroundStyle(.tertiary)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                if let next = ExperimentCatalog.nextStep(appModel: appModel) {
+                    // The module's own accent, because the line is a
+                    // pointer INTO a room and the colour is how this app
+                    // says which one.
+                    Label {
+                        Text("\(next.experiment.title) — \(next.module.title)")
+                            .font(DesignTokens.TypeScale.footnote)
+                    } icon: {
+                        Image(systemName: "flask")
+                            .foregroundStyle(next.module.accent)
+                    }
+                    if !next.experiment.step.isEmpty {
+                        Text(next.experiment.step)
+                            .font(DesignTokens.TypeScale.footnote)
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    Text("Every experiment done.")
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 2)
+            .accessibilityElement(children: .combine)
+        }
     }
 }
 

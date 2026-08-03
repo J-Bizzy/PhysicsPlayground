@@ -200,6 +200,7 @@ final class MagnetismRenderer {
 
         let callout = Callout(color: UIColor(red: 0.95, green: 0.78, blue: 0.42, alpha: 1),
                               textSize: 0.024, offset: SIMD3(0, 0.09, 0))
+        callout.setAccessibilityName("Field at the compass")
         handCompassCallout = callout
         handCompass.addChild(callout.root)
 

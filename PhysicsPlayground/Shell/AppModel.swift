@@ -143,10 +143,13 @@ final class AppModel {
     /// Completed-experiment bookkeeping, shared app-wide and persisted.
     let experiments = ExperimentProgress()
 
-    /// Whether the floating control pods are shown. The pods orb
-    /// toggles this to clear the space for an unobstructed look at
-    /// the physics; the 2D window remains the full fallback.
-    var controlPodsVisible = true
+    // `controlPodsVisible` was deleted here on 2026-08-03. A GRAVE: it
+    // had zero readers anywhere in the app, and its doc comment
+    // described two things that no longer exist — "the pods orb" (gone
+    // with the four-bead rail) and "the 2D window remains the full
+    // fallback" (gone with `makeControls` on 2026-08-01). A dead flag
+    // whose comment describes a dead world is the doc-rot this project
+    // keeps catching, in its most concentrated form.
 
 
     var activeModule: ModuleDescriptor? {

@@ -70,7 +70,61 @@ final class ExperimentsTests: XCTestCase {
         // worlds moves experiments between entries but never deletes
         // one, so this floor only ever falls when a module is ARCHIVED
         // — as Wind Tunnel was on 2026-07-30, taking its two with it.
-        XCTAssertGreaterThanOrEqual(ExperimentCatalog.total(appModel: appModel), 16)
+        XCTAssertGreaterThanOrEqual(ExperimentCatalog.total(appModel: appModel), 20)
+    }
+
+    /// **EVERY MODULE OFFERS AT LEAST THREE.**
+    ///
+    /// The ladder was 16 rungs spread 5/3/2/2/2/2, and the thin end was
+    /// not a judgement — it was where nobody had been back since. Three
+    /// modules gained one on 2026-08-03, all naming work the rooms had
+    /// been able to do for weeks with no rung pointing at it: the
+    /// Newton's cradle, the double pendulum, the Gauss bubble, the hand
+    /// compass handing over to the planet.
+    ///
+    /// A floor rather than an exact count, so a module can earn a fourth
+    /// without editing a test — but a NEW module cannot ship with one.
+    @MainActor
+    func testNoModuleOffersFewerThanThreeExperiments() {
+        let appModel = AppModel()
+        for module in ModuleCatalog.all(appModel: appModel) {
+            let count = ExperimentCatalog.experiments(for: module.id,
+                                                      appModel: appModel).count
+            XCTAssertGreaterThanOrEqual(count, 3, """
+                \(module.id) offers \(count) experiment(s). Three is the \
+                floor: one is a curiosity, two is a pair, three is a path \
+                through the room.
+                """)
+        }
+    }
+
+    /// The app-wide pair the hub reads. All three of these had no caller
+    /// at all until 2026-08-03 — the argument for them was written in
+    /// `nextStep`'s own doc comment and the surface was never built.
+    @MainActor
+    func testTheAppWideProgressFiguresAgreeWithEachOther() {
+        let appModel = AppModel()
+        appModel.experiments.resetAll()
+
+        XCTAssertEqual(ExperimentCatalog.completedCount(appModel: appModel), 0)
+        let first = ExperimentCatalog.nextStep(appModel: appModel)
+        XCTAssertNotNil(first, "With nothing done there must be a next step.")
+
+        // Completing the next step must advance both figures together.
+        if let first {
+            appModel.experiments.complete(first.experiment.id)
+            XCTAssertEqual(ExperimentCatalog.completedCount(appModel: appModel), 1)
+            XCTAssertNotEqual(
+                ExperimentCatalog.nextStep(appModel: appModel)?.experiment.id,
+                first.experiment.id,
+                "`nextStep` must move on once its step is done.")
+        }
+        XCTAssertLessThanOrEqual(
+            ExperimentCatalog.completedCount(appModel: appModel),
+            ExperimentCatalog.total(appModel: appModel),
+            "More completed than exist — `completedCount` is counting "
+            + "orphaned ids from retired experiments.")
+        appModel.experiments.resetAll()
     }
 
     // MARK: The steps must describe the app that exists

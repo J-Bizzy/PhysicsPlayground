@@ -1401,6 +1401,7 @@ final class CircuitsRenderer {
         if trueSpeedCallout == nil {
             let callout = Callout(color: UIColor(red: 1.0, green: 0.95, blue: 0.6, alpha: 1),
                                   textSize: 0.02, offset: SIMD3(0, 0.11, 0))
+            callout.setAccessibilityName("Electron drift speed")
             viewRoot.addChild(callout.root)
             trueSpeedCallout = callout
         }

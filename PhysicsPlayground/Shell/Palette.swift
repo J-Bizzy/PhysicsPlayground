@@ -66,6 +66,9 @@ final class Palette {
     /// Set by the host each frame so the ring faces the reader.
     private var viewer: SIMD3<Float>?
 
+    /// The system's Reduce Motion setting, pushed in by the host.
+    var stillness = false
+
     // Ring geometry, in metres. The labs sit on a circle you can sweep
     // with one comfortable arm movement.
     // Seven slots across 150 degrees need room: at a 0.26 m radius the
@@ -206,7 +209,15 @@ final class Palette {
 
         // The bead breathes when closed and recedes when open — it has
         // handed its job to the ring, and its nameplate goes with it.
-        let breath = 1 + 0.05 * Float(sin(time * 1.6))
+        //
+        // STILL UNDER REDUCE MOTION. `DESIGN_SYSTEM.md` describes
+        // stillness as if it were app-wide; until 2026-08-03 it was read
+        // in exactly one place, `HubSpaceView`, so the bead went on
+        // breathing in every lab — on the one object that is never off
+        // screen. Unfolding is not suppressed: that is a response to a
+        // pinch, and a control that does not answer reads as broken.
+        // What stops is the idle life nobody asked for.
+        let breath = stillness ? 1 : 1 + 0.05 * Float(sin(time * 1.6))
         bead.scale = SIMD3(repeating: breath * (1 - 0.45 * openness))
         beadLabel?.components.set(OpacityComponent(opacity: 1 - openness))
 
@@ -407,6 +418,9 @@ struct PaletteView: View {
     let module: ModuleDescriptor
     @Environment(AppModel.self) private var appModel
     @Environment(\.openWindow) private var openWindow
+    /// The SYSTEM setting, not an in-app duplicate — the in-app one was
+    /// deleted on 2026-07-31 and must not come back.
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @State private var palette: Palette?
 
     var body: some View {
@@ -437,12 +451,15 @@ struct PaletteView: View {
             }
             #endif
 
+            made.stillness = systemReduceMotion
             made.subscription = content.subscribe(
                 to: SceneEvents.Update.self
             ) { [weak made] event in
                 made?.update(dt: event.deltaTime,
                              viewer: appModel.room.headPosition.map { SIMD3<Float>($0) })
             }
+        } update: { _ in
+            palette?.stillness = systemReduceMotion
         }
         .onDisappear {
             palette?.subscription?.cancel()

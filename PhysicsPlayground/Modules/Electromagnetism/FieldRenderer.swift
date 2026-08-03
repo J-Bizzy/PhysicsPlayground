@@ -202,6 +202,7 @@ final class FieldRenderer {
 
         let callout = Callout(color: FieldRenderer.gaussColor, textSize: 0.03,
                               offset: SIMD3(0, 0.16, 0))
+        callout.setAccessibilityName("Flux through the surface")
         gaussCallout = callout
         gaussRoot.addChild(callout.root)
 

@@ -418,6 +418,7 @@ final class KinematicsRenderer {
         if catchCallout == nil {
             let callout = Callout(color: DesignTokens.Palette.projectileUI,
                                   textSize: 0.026, offset: SIMD3(0, 0.14, 0))
+            callout.setAccessibilityName("Catch")
             catchCallout = callout
             root.addChild(callout.root)
         }
@@ -533,6 +534,7 @@ final class KinematicsRenderer {
         if lookCallout == nil {
             let callout = Callout(color: UIColor(DesignTokens.Palette.kinematicsAccent),
                                   textSize: 0.022, offset: SIMD3(0, 0.10, 0))
+            callout.setAccessibilityName("Ball in flight")
             root.addChild(callout.root)
             lookCallout = callout
         }
