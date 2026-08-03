@@ -635,6 +635,24 @@ final class PendulumsRenderer {
 
     // MARK: Ghost prediction
 
+    /// THE ONE PLACE THIS MODULE BUILDS A MESH ON THE FRAME PATH, and it
+    /// is a deliberate exception rather than an oversight. Recorded here
+    /// because a reader checking the rule ("mesh regeneration goes
+    /// through `GeometryPipeline`'s background worker, never inline in
+    /// the render tick" — ARCHITECTURE.md) will otherwise find this and
+    /// assume it was missed. It was measured instead:
+    ///
+    /// · It runs ONLY while a bob is held, and only every sixth frame.
+    /// · The mesh is 60 path points swept as a 3-sided tube — about 180
+    ///   vertices, which is smaller than a single field line.
+    /// · `ghostMaterial` is banked, so nothing is allocated per call.
+    ///
+    /// And the reason NOT to move it is the stronger half: this ghost is
+    /// a live preview of where the bob will go if released from where
+    /// your hand is NOW. Handing it to a background worker buys a
+    /// hitch-free frame that nobody was losing and pays for it in lag on
+    /// the one thing in the module that must track the hand exactly.
+    /// The rule exists to prevent hitches; this is not one.
     private func syncGhost(_ model: PendulumsModel) {
         guard let grabbedID, let pendulum = model.pendulums.first(where: { $0.id == grabbedID }),
               pendulum.isGrabbed else {

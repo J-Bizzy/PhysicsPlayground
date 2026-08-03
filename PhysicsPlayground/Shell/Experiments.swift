@@ -277,21 +277,38 @@ struct ExperimentCheckerView: View {
     let moduleID: String
     @Environment(AppModel.self) private var appModel
 
+    @State private var emitter = Entity()
+
     var body: some View {
         RealityView { content in
-            let emitter = Entity()
             emitter.position = [0, 1.5, -0.9]
             content.add(emitter)
-            Task { @MainActor in
-                while !Task.isCancelled {
-                    for entry in ExperimentCatalog.experiments(for: moduleID, appModel: appModel)
-                    where !appModel.experiments.completed.contains(entry.experiment.id) {
-                        if entry.isMet(), appModel.experiments.complete(entry.experiment.id) {
-                            SoundPalette.play(.chime, on: emitter, volume: 0.8)
-                        }
+        }
+        // A STRUCTURED TASK, tied to the view's lifetime.
+        //
+        // This was an unstructured `Task { }` created inside the make
+        // closure, unstored and never cancelled, holding `appModel` and
+        // its emitter strongly. `ExperimentCheckerView` is mounted per
+        // module, so every lab you entered left behind another watcher
+        // evaluating every predicate of a module you were no longer in,
+        // twice a second, for the life of the process — and each one
+        // could still fire a chime and a completion for a lab that was
+        // not on screen.
+        //
+        // `.task` cancels on disappear, which is the whole fix. The loop
+        // is otherwise unchanged: polling is right here, because these
+        // predicates read live physics state that no observation would
+        // usefully re-fire on.
+        .task(id: moduleID) {
+            while !Task.isCancelled {
+                for entry in ExperimentCatalog.experiments(for: moduleID,
+                                                           appModel: appModel)
+                where !appModel.experiments.completed.contains(entry.experiment.id) {
+                    if entry.isMet(), appModel.experiments.complete(entry.experiment.id) {
+                        SoundPalette.play(.chime, on: emitter, volume: 0.8)
                     }
-                    try? await Task.sleep(for: .milliseconds(500))
                 }
+                try? await Task.sleep(for: .milliseconds(500))
             }
         }
     }

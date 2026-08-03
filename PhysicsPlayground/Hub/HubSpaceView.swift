@@ -129,6 +129,15 @@ struct HubSpaceView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .glassBackgroundEffect(in: Capsule())
+                    // The ONE readout in the app that was missing this.
+                    // An attachment carries a collider for its content,
+                    // and this one is seated at the podium rim, 12 cm
+                    // toward the user — inside the volume the
+                    // exhibit-carry drag sweeps through on its way to
+                    // the podium. So the hint telling you to drag a lab
+                    // onto the podium was standing in the way of doing
+                    // it. All four module cards get this right.
+                    .allowsHitTesting(false)
             }
             Attachment(id: "load") {
                 if let module = ModuleCatalog.all(appModel: appModel)
@@ -761,6 +770,12 @@ final class HubScene {
         entity.position = SIMD3(podiumTop.x,
                                 podiumTop.y - GalleryLayout.exhibitLift - 0.09,
                                 podiumTop.z + 0.12)
+        // Belt AND braces, per `stripInput`'s own doc comment:
+        // `.allowsHitTesting(false)` governs the SwiftUI view's interior
+        // and is not a promise about the entity hosting it, which can
+        // still carry an input target and a collider sized to the card.
+        // This one sits in the path of the very gesture it describes.
+        stripInput(from: entity)
         root.addChild(entity)
     }
 

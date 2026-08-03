@@ -85,6 +85,12 @@ struct LabAnchorView: View {
     /// How far this press has moved the anchor — a press that never
     /// moves it is a tap. See `onEnded`.
     @State private var travelled: Float = 0
+    /// Held so it can be cancelled. Same leak as the palette bead's, in
+    /// the other piece of per-module shell chrome: this view is remounted
+    /// for every lab, and an uncancelled subscription capturing `anchor`
+    /// and `appModel` strongly accumulated one live closure per module
+    /// entry for the life of the process. See `Palette.subscription`.
+    @State private var subscription: EventSubscription?
 
     var body: some View {
         RealityView { content in
@@ -92,11 +98,18 @@ struct LabAnchorView: View {
             root = anchor
             content.add(anchor)
 
-            _ = content.subscribe(to: SceneEvents.Update.self) { _ in
+            subscription = content.subscribe(
+                to: SceneEvents.Update.self
+            ) { [weak anchor] _ in
+                guard let anchor else { return }
                 anchor.isEnabled = appModel.labPlacement.isPlacing
                 guard appModel.labPlacement.isPlacing else { return }
                 anchor.position = Self.home + appModel.labPlacement.offset
             }
+        }
+        .onDisappear {
+            subscription?.cancel()
+            subscription = nil
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)

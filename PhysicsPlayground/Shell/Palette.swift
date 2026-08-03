@@ -30,6 +30,22 @@ import simd
 final class Palette {
     let root = Entity()
 
+    /// The per-frame subscription, held here so it can be cancelled.
+    ///
+    /// THIS LEAKED UNTIL 2026-08-03, in the one object that is on screen
+    /// in every lab. `PaletteView` is remounted per module — it carries
+    /// `.id("palette-\(module.id)")` — and the subscription was created
+    /// with `_ =`, capturing the palette strongly and never cancelled.
+    /// So every module switch built another palette, another
+    /// subscription, and another closure animating an orphaned bead
+    /// forever, in the background, for the life of the process.
+    ///
+    /// `HubSpaceView` documents this exact cycle in fourteen lines of
+    /// comment and defends against it with `[weak scene]` plus an
+    /// explicit cancel — and says "every module already knew it". The
+    /// shell chrome next door did not.
+    var subscription: EventSubscription?
+
     private let bead = ModelEntity()
     /// The gyroscope inside the bead: its rotor is ticked every frame,
     /// and it is told how far the ring has unfolded so the gimbals can
@@ -421,10 +437,16 @@ struct PaletteView: View {
             }
             #endif
 
-            _ = content.subscribe(to: SceneEvents.Update.self) { event in
-                made.update(dt: event.deltaTime,
-                            viewer: appModel.room.headPosition.map { SIMD3<Float>($0) })
+            made.subscription = content.subscribe(
+                to: SceneEvents.Update.self
+            ) { [weak made] event in
+                made?.update(dt: event.deltaTime,
+                             viewer: appModel.room.headPosition.map { SIMD3<Float>($0) })
             }
+        }
+        .onDisappear {
+            palette?.subscription?.cancel()
+            palette?.subscription = nil
         }
         .simultaneousGesture(
             TapGesture()

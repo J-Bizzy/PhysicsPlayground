@@ -42,6 +42,7 @@
 //  front of the case, so it still wins the taps aimed at it.
 //
 
+import QuartzCore
 import RealityKit
 import RenderKit
 import SwiftUI
@@ -341,9 +342,32 @@ final class Multimeter {
 
     // MARK: Display
 
+    /// How often the face may redraw. A live meter reading changes in
+    /// its last digit every frame, and every change bought a fresh
+    /// `generateText` plus a material — ninety of each per second while
+    /// probing, in the module that already carries the app's heaviest
+    /// renderer.
+    ///
+    /// `Callout` solved exactly this and says why: eight updates a
+    /// second is faster than anyone can read a changing number and a
+    /// tenth of the work. A real bench meter samples a few times a
+    /// second too, so this reads as an instrument rather than a
+    /// compromise.
+    private static let minimumInterval: Double = 1.0 / 8
+    private var lastScreenTime: Double = 0
+
     private func setScreen(_ display: String, note: String, fault: Bool) {
         let colour = fault
             ? UIColor(red: 0.95, green: 0.45, blue: 0.2, alpha: 1) : accent
+        // A FAULT IS NOT RATE-LIMITED. Everything else here is a number
+        // ticking; a fault is the meter telling you it is being misused,
+        // and that has to land on the frame it happens.
+        let changed = display != lastDisplay || note != lastNote
+        if changed, fault == lastFault {
+            let now = CACurrentMediaTime()
+            guard now - lastScreenTime >= Self.minimumInterval else { return }
+            lastScreenTime = now
+        }
         if display != lastDisplay || fault != lastFault {
             lastDisplay = display
             screen.model = ModelComponent(

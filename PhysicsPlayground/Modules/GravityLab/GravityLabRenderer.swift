@@ -634,7 +634,7 @@ final class GravityLabRenderer {
         let au = CelestialBody.astronomicalUnit
 
         func show(_ entity: ModelEntity, label: inout Callout?,
-                  arc: [SIMD3<Double>], area: Double, opacity: Float) {
+                  arc: [SIMD3<Double>], area: Double, material: UnlitMaterial) {
             guard arc.count >= 2,
                   let mesh = Self.sectorMesh(
                     apex: apex,
@@ -643,8 +643,13 @@ final class GravityLabRenderer {
                 label?.isEnabled = false
                 return
             }
-            var material = UnlitMaterial(color: Self.sweepGold)
-            material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+            // The MESH genuinely changes — the sector is a different
+            // shape every time it is redrawn — but the MATERIAL never
+            // did: two fixed opacities, rebuilt from scratch on every
+            // call. That is the allocation the 2026-07-30 pass swept out
+            // of the voltage skyline and the induction filament, missed
+            // here because this one only runs at `frameCounter % 12`.
+            // Banked as two constants now.
             entity.model = ModelComponent(mesh: mesh, materials: [material])
             entity.isEnabled = true
 
@@ -662,18 +667,31 @@ final class GravityLabRenderer {
 
         if let current = model.sweepCurrentGeometry() {
             show(sweepCurrentEntity, label: &sweepCurrentLabel,
-                 arc: current.arc, area: current.area, opacity: 0.30)
+                 arc: current.arc, area: current.area,
+                 material: Self.sweepCurrentMaterial)
         } else {
             sweepCurrentEntity.isEnabled = false
             sweepCurrentLabel?.isEnabled = false
         }
         show(sweepHeldEntity, label: &sweepHeldLabel,
-             arc: model.sweepHeldArc, area: model.sweepHeldArea, opacity: 0.14)
+             arc: model.sweepHeldArc, area: model.sweepHeldArea,
+             material: Self.sweepHeldMaterial)
     }
 
     /// A triangle fan from the apex through the arc, both windings, so
     /// the sector reads from either side of the orbital plane without
     /// leaning on any face-culling API.
+    /// The sweep's two materials, built once. The accruing sector and
+    /// the held one differ only in opacity, and neither ever changes.
+    private static let sweepCurrentMaterial = sweepMaterial(opacity: 0.30)
+    private static let sweepHeldMaterial = sweepMaterial(opacity: 0.14)
+
+    private static func sweepMaterial(opacity: Float) -> UnlitMaterial {
+        var material = UnlitMaterial(color: sweepGold)
+        material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+        return material
+    }
+
     private static func sectorMesh(apex: SIMD3<Float>,
                                    arc: [SIMD3<Float>]) -> MeshResource? {
         guard arc.count >= 2 else { return nil }
