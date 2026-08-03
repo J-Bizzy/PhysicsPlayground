@@ -153,7 +153,30 @@ final class SpatialActionBank {
 
     /// Per frame: hang beside `anchor`, face the viewer, run the arm
     /// timer and the fire flash, and repaint only what changed.
-    func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?, dt: Double) {
+    /// The last `resetNonce` this bank saw. Starts at nil so the first
+    /// frame adopts whatever the app is on rather than firing a disarm.
+    private var seenResetNonce: Int?
+
+    /// - Parameter resetNonce: `AppModel.resetNonce`. When it changes,
+    ///   the bank disarms itself.
+    ///
+    ///   THIS IS `disarm()`'s ONLY PRODUCTION CALLER, and until
+    ///   2026-08-03 there was none — the method, its test, and the
+    ///   paragraph in this file's header explaining why it exists all
+    ///   shipped without anything invoking it. A module's reset reaches
+    ///   its MODEL (`ModuleDescriptor.reset` is `{ model.reset() }` in
+    ///   all six), and an armed plate is the one piece of state a module
+    ///   keeps in its SpaceView instead. So Reset came back with the lamp
+    ///   still lit and the nameplate still reading "Tap again" — one
+    ///   pinch from wiping a bench the user had just restored.
+    ///
+    ///   Taking the nonce here rather than having each SpaceView compare
+    ///   it means the rule cannot be adopted by two of three modules,
+    ///   which is how `contrastLine` and `SpatialTrackControl` both went.
+    func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?, dt: Double,
+                resetNonce: Int = 0) {
+        if let seen = seenResetNonce, seen != resetNonce { disarm() }
+        seenResetNonce = resetNonce
         reveal = FanLayout.ease(reveal, toward: plates.isEmpty ? 0 : 1, dt: dt)
         root.isEnabled = reveal > 0.02 && !plates.isEmpty
         guard root.isEnabled else { return }

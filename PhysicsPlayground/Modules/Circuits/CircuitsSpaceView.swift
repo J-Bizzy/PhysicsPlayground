@@ -178,7 +178,8 @@ struct CircuitsSpaceView: View {
                         dt: event.deltaTime)
                     meter?.update(viewer: viewer, model: model)
                     verbs?.update(anchor: Self.clearAnchor, viewer: viewer,
-                                  dt: event.deltaTime)
+                                  dt: event.deltaTime,
+                                  resetNonce: appModel.resetNonce)
                     // Rendered here every frame (not via the observation
                     // loop): a steady DC circuit mutates nothing that
                     // observation reliably re-fires on, but its electrons

@@ -167,7 +167,9 @@ struct ModuleHostView: View {
                 .confirmationDialog("Reset \(module.title)?",
                                     isPresented: $confirmingReset,
                                     titleVisibility: .visible) {
-                    Button("Reset", role: .destructive) { module.reset() }
+                    Button("Reset", role: .destructive) {
+                        appModel.resetActiveModule(module)
+                    }
                     Button("Cancel", role: .cancel) { }
                 } message: {
                     Text("Everything you have set up here goes back to how the module opened. Recorded notebook entries are kept.")

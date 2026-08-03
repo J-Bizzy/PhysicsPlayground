@@ -320,7 +320,8 @@ struct GravityLabSpaceView: View {
                         anchor: GravityLabRenderer.systemPosition
                             + SIMD3(0.82, -0.20, 0),
                         viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
-                        dt: event.deltaTime)
+                        dt: event.deltaTime,
+                        resetNonce: appModel.resetNonce)
                     // Centred ABOVE the system, not on the plate that
                     // opens it — see the layout note on `worldPicker`.
                     // Above rather than below because below is where the

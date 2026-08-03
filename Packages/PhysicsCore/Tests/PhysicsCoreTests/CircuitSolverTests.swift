@@ -151,6 +151,66 @@ final class CircuitSolverTests: XCTestCase {
         XCTAssertEqual(small.multiplier, 0)
     }
 
+    /// The band code has to READ BACK as the resistance it was given.
+    ///
+    /// The two tests above pick 4700 and 56 — both comfortably
+    /// mid-decade, which is precisely why they passed over two real bugs
+    /// for months. This one asserts the round trip instead of two chosen
+    /// examples: whatever bands come out must multiply back to the value
+    /// that went in, within the two significant figures the code carries.
+    func testEveryBandCodeReadsBackAsItsResistance() throws {
+        // Decade boundaries, sub-10 Ω values, and a sweep across the
+        // app's own rail range. 996 is the case that was wrong: it used
+        // to paint 900.
+        var values: [Double] = [1, 4.7, 9.9, 9.99, 10, 47, 99.6, 100,
+                                220, 470, 996, 1000, 4700, 47000, 9.96e9]
+        values += stride(from: 10.0, through: 4700.0, by: 7.3).map { $0 }
+
+        for ohms in values {
+            let bands = try XCTUnwrap(CircuitSolver.colorBands(ohms: ohms),
+                                      "\(ohms) Ω produced no code at all.")
+            XCTAssertTrue((0...9).contains(bands.digit1),
+                          "\(ohms) Ω: first digit \(bands.digit1) is not a band.")
+            XCTAssertTrue((0...9).contains(bands.digit2),
+                          "\(ohms) Ω: second digit \(bands.digit2) is not a band.")
+
+            let read = Double(bands.digit1 * 10 + bands.digit2)
+                * pow(10, Double(bands.multiplier))
+            // Two significant figures: the code cannot carry more, so
+            // half a unit in the last digit is the exact tolerance.
+            let tolerance = 0.5 * pow(10, Double(bands.multiplier))
+            XCTAssertEqual(read, ohms, accuracy: tolerance,
+                           """
+                           \(ohms) Ω is painted as \
+                           \(bands.digit1)-\(bands.digit2)-×10^\(bands.multiplier), \
+                           which reads back as \(read) Ω.
+                           """)
+        }
+    }
+
+    /// Below 10 Ω a real 4-band code uses the GOLD multiplier, ×0.1. The
+    /// old clamp `max(exponent - 1, 0)` could not express it, so every
+    /// resistance in this range was painted an order of magnitude high —
+    /// 4.7 Ω as 47 Ω.
+    func testASubTenOhmResistorGetsTheGoldMultiplier() throws {
+        let bands = try XCTUnwrap(CircuitSolver.colorBands(ohms: 4.7))
+        XCTAssertEqual(bands.digit1, 4)
+        XCTAssertEqual(bands.digit2, 7)
+        XCTAssertEqual(bands.multiplier, -1, "×0.1 is the gold band.")
+    }
+
+    /// Rounding to two digits can CARRY, and a carry is the next decade
+    /// rather than a three-digit mantissa. 996 normalises to 99.6, which
+    /// rounds to 100 — the old code clamped that to 9 and 0 and painted
+    /// 900 Ω on a 996 Ω resistor. Reachable in the app by dragging the
+    /// value bead, which runs 10…4700 Ω continuously.
+    func testACarryAtTheDecadeBoundaryPromotesTheExponent() throws {
+        let bands = try XCTUnwrap(CircuitSolver.colorBands(ohms: 996))
+        XCTAssertEqual(bands.digit1, 1)
+        XCTAssertEqual(bands.digit2, 0)
+        XCTAssertEqual(bands.multiplier, 2, "996 rounds to 1.0 kΩ, not 900 Ω.")
+    }
+
     /// RL charging: stepping V–R–L follows i(t) = (V/R)(1 − e^(−tR/L))
     /// to backward-Euler accuracy.
     func testInductorRLChargingCurve() {

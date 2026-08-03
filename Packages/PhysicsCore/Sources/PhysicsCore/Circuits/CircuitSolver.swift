@@ -259,13 +259,38 @@ public enum CircuitSolver {
     /// The real 4-band code for a resistance, e.g. 4700 → [yellow,
     /// violet, red] + gold tolerance. Returns band indices 0–9 for the
     /// two digits and the multiplier exponent. nil for out-of-range.
+    ///
+    /// TWO ARITHMETIC BUGS LIVED HERE UNTIL 2026-08-03, and the second
+    /// was reachable by dragging a bead.
+    ///
+    /// 1. **The decade boundary.** Rounding to two digits can carry:
+    ///    996 Ω normalises to 99.6, which rounds to **100**, and the old
+    ///    code then took `min(100 / 10, 9) = 9` and `100 % 10 = 0` —
+    ///    painting **900 Ω on a 996 Ω resistor**. The clamp hid the carry
+    ///    instead of handling it. The fix is to notice the carry and
+    ///    promote the exponent, which is what a carry means.
+    /// 2. **No gold band.** The multiplier was `max(exponent - 1, 0)`, so
+    ///    it could never go negative — but a real 4-band code uses gold
+    ///    (×0.1) for 1–9.9 Ω. Every resistance below 10 Ω was painted an
+    ///    order of magnitude high: 4.7 Ω read as 47 Ω.
+    ///
+    /// The app's own resistor rail runs 10…4700 Ω continuously
+    /// (`CircuitsModel.valueRange`), so (2) was unreachable in the
+    /// shipping app and (1) was one bead-drag away. The tests covered
+    /// 4700 and 56 — both safely mid-decade, which is why neither was
+    /// caught.
+    ///
+    /// `multiplier` is a signed power of ten: −1 is the gold band.
     public static func colorBands(ohms: Double) -> (digit1: Int, digit2: Int, multiplier: Int)? {
         guard ohms >= 1, ohms < 1e11 else { return nil }
-        let exponent = Int(floor(log10(ohms)))
-        let normalized = ohms / pow(10, Double(exponent - 1))   // 2 digits
-        let twoDigits = Int((normalized).rounded())
-        let digit1 = min(twoDigits / 10, 9)
-        let digit2 = twoDigits % 10
-        return (digit1, digit2, max(exponent - 1, 0))
+        var exponent = Int(floor(log10(ohms)))
+        var twoDigits = Int((ohms / pow(10, Double(exponent - 1))).rounded())
+        // The carry. 99.6 → 100 is not a three-digit mantissa, it is the
+        // next decade: 100 × 10^(e-1) == 10 × 10^e.
+        if twoDigits >= 100 {
+            twoDigits /= 10
+            exponent += 1
+        }
+        return (twoDigits / 10, twoDigits % 10, exponent - 1)
     }
 }

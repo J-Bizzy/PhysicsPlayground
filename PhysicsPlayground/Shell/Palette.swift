@@ -408,7 +408,7 @@ struct PaletteView: View {
             made.place(at: [0.72, 1.32, -0.95])
             made.onSelect = { id in appModel.activeModuleID = id }
             made.onPause = { module.togglePause() }
-            made.onReset = { module.reset() }
+            made.onReset = { appModel.resetActiveModule(module) }
             made.onSettings = { openWindow(id: SettingsView.windowID) }
             made.onCapture = { appModel.captureNotebookEntry() }
             content.add(made.root)

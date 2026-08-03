@@ -1121,6 +1121,24 @@ final class GravityLabModel {
         sweepBodyID = nil
         sweepWindowStart = nil
         sweepHeldArc = []
+        // THE FIFTH RESET DEFECT, and it is the same shape as the other
+        // four: `reset()` cleared everything the sweep had ACCUMULATED
+        // and never restored the flag its own switch plate shows. Turn
+        // the Kepler sweep off, press Reset, and the plate stays dark for
+        // ever — nothing else in the room contradicts it, which is
+        // exactly why this class of bug survives. Found 2026-08-03 by
+        // reading `reset()` against the bank, per the standing rule.
+        keplerSweepOn = true
+        sweepHeldArea = 0
+        sweepWindowDays = 30.0
+        // An armed prediction and its verdict callout are not layers, so
+        // they are not covered by the rule above — but a settled ghost
+        // and a verdict about a planet that no longer exists surviving
+        // into a brand-new solar system is the same failure in a
+        // different costume. `bestPredictionMissAU` deliberately stays:
+        // it is a personal best, and the Prophet experiment reads it.
+        prediction = nil
+        predictionVerdict = nil
         capturedPointName = nil
         bodies.removeAll()
         heldID = nil

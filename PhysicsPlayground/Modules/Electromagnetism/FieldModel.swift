@@ -588,6 +588,20 @@ final class FieldModel {
             charge: -Self.defaultMagnitude)
         charges = [positive, negative]
         selectedChargeID = positive.id
+        // THE SIXTH RESET DEFECT. `chargesRespond` is the "Free charges"
+        // plate on the bank, and `reset()` restored the other four and
+        // skipped this one — so switching the charges loose and pressing
+        // Reset handed back a bench still drifting under a dark lamp.
+        // Worse than the other five, because this flag has a SECOND
+        // writer: `-emFree 1` sets it at launch, so it could be on with a
+        // plate that Reset would never turn off. Found 2026-08-03.
+        chargesRespond = false
+        // The two ids a Reset can strand. `charges` is replaced wholesale
+        // above, so anything still naming a charge by id is naming one
+        // that no longer exists — a drag or an escort in flight at the
+        // moment Reset lands would go on referring to it.
+        heldChargeID = nil
+        escortedChargeID = nil
         probe = nil
         probeStatus = .none
         probeTrail = []

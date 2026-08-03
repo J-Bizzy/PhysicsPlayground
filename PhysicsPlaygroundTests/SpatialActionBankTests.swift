@@ -61,6 +61,66 @@ final class SpatialActionBankTests: XCTestCase {
                       "No plate was built for \(id).")
     }
 
+    // MARK: Reset disarms it
+
+    /// **The contract `disarm()` was written for, finally wired.**
+    ///
+    /// This file already asserted that `disarm()` clears an armed plate,
+    /// and commented the call as "what a module's reset() must call".
+    /// Nothing did — for the whole life of the class. A module's reset
+    /// reaches its model, and the armed plate lives in the SpaceView, so
+    /// an armed "Clear bench" survived Reset with its lamp lit and its
+    /// nameplate reading "Tap again": one pinch from wiping a bench the
+    /// user had just restored.
+    ///
+    /// The wiring is `AppModel.resetNonce`, passed into `update`. This
+    /// asserts the behaviour rather than the mechanism, so replacing the
+    /// nonce with something better does not have to break the test.
+    func testAResetDisarmsAnArmedPlate() throws {
+        let (bank, counter) = makeBank(confirms: true)
+        let target = try plate(bank, "clear")
+
+        XCTAssertTrue(bank.handleTap(target))
+        XCTAssertTrue(bank.isArmed("clear"), "Precondition: the plate is armed.")
+
+        // One frame at a new reset nonce — what a Reset produces.
+        bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1.0 / 90.0, resetNonce: 1)
+
+        XCTAssertFalse(bank.isArmed("clear"),
+                       "Reset must leave nothing armed.")
+        XCTAssertEqual(counter.count, 0,
+                       "Disarming is not firing — a reset must never run the verb.")
+
+        // And the plate still works afterwards: disarming must not wedge it.
+        XCTAssertTrue(bank.handleTap(target))
+        XCTAssertTrue(bank.isArmed("clear"))
+    }
+
+    /// The nonce must only act on a CHANGE. A bank ticked ninety times a
+    /// second at a constant nonce that disarmed every frame would make
+    /// the confirmation step impossible to complete — the plate would
+    /// disarm before the second tap could ever land.
+    func testAnUnchangedNonceLeavesTheArmedPlateAlone() throws {
+        let (bank, _) = makeBank(confirms: true)
+        let target = try plate(bank, "clear")
+
+        // Let the bank adopt the nonce BEFORE arming. `makeBank` opens it
+        // at the default 0, so arming and then ticking at 7 would be a
+        // genuine change — which is what the first draft of this test did,
+        // and it failed against a perfectly correct implementation.
+        bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1.0 / 90.0, resetNonce: 7)
+
+        XCTAssertTrue(bank.handleTap(target))
+        for _ in 0..<30 {
+            bank.update(anchor: .zero, viewer: [0, 0, 1],
+                        dt: 1.0 / 90.0, resetNonce: 7)
+        }
+        XCTAssertTrue(bank.isArmed("clear"),
+                      "A steady nonce must not disarm; only a change may. "
+                      + "A bank that disarmed every frame would make the "
+                      + "second tap of a confirmation impossible to land.")
+    }
+
     // MARK: Firing
 
     /// The whole point of the control, and the thing a duplicated tap

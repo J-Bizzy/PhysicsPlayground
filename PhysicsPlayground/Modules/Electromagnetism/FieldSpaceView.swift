@@ -389,7 +389,8 @@ struct FieldSpaceView: View {
         particles.update(anchor: SIMD3<Float>(FieldInstrumentLayout.particlePickerAnchor),
                          viewer: headInRoot, dt: dt)
         verbs?.update(anchor: SIMD3<Float>(FieldInstrumentLayout.clearPlateAnchor),
-                      viewer: headInRoot, dt: dt)
+                      viewer: headInRoot, dt: dt,
+                      resetNonce: appModel.resetNonce)
         wells?.update(dt: dt)
 
         // Each rail exists exactly when its apparatus does.

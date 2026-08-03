@@ -20,6 +20,20 @@ enum CircuitTextures {
     private static var pending: Set<String> = []
     private(set) static var version = 0
 
+    private static let gold: (CGFloat, CGFloat, CGFloat) = (0.82, 0.66, 0.22)
+    private static let silver: (CGFloat, CGFloat, CGFloat) = (0.75, 0.75, 0.78)
+
+    /// The multiplier band, which is the one band that can fall outside
+    /// the digit colours: gold is ×0.1 and silver ×0.01.
+    private static func multiplierColor(_ exponent: Int)
+    -> (CGFloat, CGFloat, CGFloat) {
+        switch exponent {
+        case -1: gold
+        case ..<(-1): silver
+        default: bandColors[min(exponent, 9)]
+        }
+    }
+
     /// The standard digit colors, 0–9.
     private static let bandColors: [(CGFloat, CGFloat, CGFloat)] = [
         (0.05, 0.05, 0.05),  // black
@@ -71,10 +85,18 @@ enum CircuitTextures {
             context.setFillColor(CGColor(red: color.0, green: color.1, blue: color.2, alpha: 1))
             context.fill(CGRect(x: 0, y: s * fraction - 6, width: s, height: 12))
         }
-        band(at: 0.22, color: bandColors[min(code.digit1, 9)])
-        band(at: 0.38, color: bandColors[min(code.digit2, 9)])
-        band(at: 0.54, color: bandColors[min(code.multiplier, 9)])
-        band(at: 0.78, color: (0.82, 0.66, 0.22))  // gold tolerance
+        band(at: 0.22, color: bandColors[min(max(code.digit1, 0), 9)])
+        band(at: 0.38, color: bandColors[min(max(code.digit2, 0), 9)])
+        // THE MULTIPLIER BAND CAN BE GOLD, and this line indexed an array
+        // with it. `colorBands` gained a signed multiplier on 2026-08-03
+        // so that a resistance below 10 Ω gets the ×0.1 band a real
+        // 4-band code uses — and a bare `bandColors[min(-1, 9)]` is a
+        // crash, not a wrong colour. Gold is the ×0.1 multiplier and
+        // silver the ×0.01; the app's rail stops at 10 Ω so neither is
+        // reachable today, which is exactly why this had to be handled
+        // here rather than left to the caller.
+        band(at: 0.54, color: multiplierColor(code.multiplier))
+        band(at: 0.78, color: gold)  // tolerance
 
         return context.makeImage()
     }

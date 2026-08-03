@@ -25,6 +25,34 @@ final class AppModel {
     /// hub, the modules, and the settings window all read the same one.
     let settings = AppSettings()
 
+    /// Bumped every time the user resets the active module, from either
+    /// of the two places that can do it — the title bar's Reset and the
+    /// palette bead's reset petal.
+    ///
+    /// WHY THIS EXISTS. `ModuleDescriptor.reset` is `{ model.reset() }`
+    /// in all six modules, so a reset reaches the MODEL and nothing
+    /// else. That is right for everything a module keeps on its model
+    /// and wrong for the one piece of state a module keeps in its
+    /// SpaceView: a `SpatialActionBank`'s armed plate. `disarm()` was
+    /// written for exactly this — its own header says "`disarm()` exists
+    /// so `reset()` can clear it. An armed Clear plate that outlived a
+    /// reset would be the same defect that has now bitten four modules
+    /// in a different costume" — and it had no caller anywhere in the
+    /// app, so a "Clear bench" armed and then reset came back still lit
+    /// and still reading "Tap again".
+    ///
+    /// A nonce rather than a callback because the banks already tick
+    /// every frame: a SpaceView compares this against what it last saw
+    /// and disarms on the change, which costs one integer compare and
+    /// cannot get out of sync the way a registration list can.
+    private(set) var resetNonce = 0
+
+    /// Resets the active module and tells the room about it.
+    func resetActiveModule(_ module: ModuleDescriptor) {
+        module.reset()
+        resetNonce &+= 1
+    }
+
     // MARK: Visit history — powers "New" badges and "last played".
 
     private(set) var visitedModuleIDs: Set<String> =
