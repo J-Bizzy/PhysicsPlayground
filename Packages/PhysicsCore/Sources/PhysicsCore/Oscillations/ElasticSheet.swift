@@ -152,8 +152,10 @@ public struct ElasticSheet: Sendable {
     public mutating func step(dt: Double) {
         guard dt > 0 else { return }
         // CFL for the 2-D lattice (max Laplacian eigenvalue 8/a²):
-        // c·dt/a ≤ 1/√2 for stability — take a third of that for
-        // margin. The damping term needs γ·dt ≤ 1 as well.
+        // c·dt/a ≤ 1/√2 ≈ 0.707 for stability — 0.35 is a HALF of that,
+        // not a third as this comment claimed until 2026-08-03. Still
+        // stable with room to spare; only the arithmetic in the sentence
+        // was wrong. The damping term needs γ·dt ≤ 1 as well.
         let cfl = 0.35 * spacing / max(waveSpeed, 1e-6)
         let dampLimit = damping > 1e-9 ? 0.5 / damping : .infinity
         let safe = min(cfl, dampLimit)

@@ -4,7 +4,7 @@
 //
 //  App state for room-scale projectile motion: physics space IS the room
 //  (1:1, immersive-space coordinates, the real floor at y = 0), so every
-//  number on the panels is literally true of what you're looking at.
+//  number the room shows is literally true of what you're looking at.
 //
 //  Two ways to launch:
 //    · grab any ball and THROW it — release velocity is estimated from
@@ -366,7 +366,9 @@ final class KinematicsModel {
         emitSound(.pop, at: muzzlePoint, volume: 0.8)
     }
 
-    /// Spawns a fresh ball hovering by the panel, ready to grab and throw.
+    /// Spawns a fresh ball hovering at `ballSpawnPoint`, ready to grab
+    /// and throw. (It said "by the panel" until 2026-08-03; the spawn
+    /// point is its own constant and has never been near a window.)
     func spawnBall() {
         let stagedCount = flights.filter { $0.status == .staged }.count
         let angle = Double(stagedCount) * 2.4

@@ -13,7 +13,11 @@
 //
 //    · no penetration: the surface is a streamline (tested to 1e-9),
 //    · the top of a non-spinning cylinder moves at exactly 2U,
-//    · stagnation points sit where sin θ = −Γ/(4πUa),
+//    · stagnation points sit where sin θ = +Γ/(4πUa) — the sign this
+//      file's own `stagnationAngles` and `surfaceSpeed` use, and the
+//      one its Kutta–Joukowski convention requires. The header carried
+//      a minus until 2026-08-03; the code was self-consistent and the
+//      summary was the outlier,
 //    · Bernoulli gives the surface pressure, and integrating it recovers
 //      the Kutta–Joukowski lift L' = ρUΓ and exactly zero drag —
 //      d'Alembert's paradox, which the module states rather than hides.

@@ -1020,7 +1020,7 @@ final class GravityLabModel {
         }
     }
 
-    // MARK: Readouts (all real units; the panel converts for display)
+    // MARK: Readouts (all real units; the readout card converts for display)
 
     struct Readout {
         var distanceAU: Double

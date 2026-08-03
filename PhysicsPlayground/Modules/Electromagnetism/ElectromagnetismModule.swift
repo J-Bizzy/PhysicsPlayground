@@ -107,5 +107,16 @@ enum ElectromagnetismModule {
             swatch: .symbol("arrow.up.right", DesignTokens.Palette.fieldLine),
             text: "Arrowheads ride the field lines, pointing along E"
         ),
+        // A DISCLOSED FUDGE, added 2026-08-03. `chargesRespond` moves the
+        // source charges by an overdamped mobility law — velocity ∝
+        // force, capped — rather than by F = ma. Everything the module
+        // COMPUTES is exact Coulomb; what is approximated is how the
+        // charges travel, and nothing said so. Every other fiction in
+        // this app is disclosed where it is read (the 50 kT field says so
+        // in its own readout); this one was not.
+        LegendItem(
+            swatch: .symbol("arrow.left.and.right", DesignTokens.Palette.fieldLine),
+            text: "Free charges DRIFT rather than accelerate: with the switch on, a charge's speed is set by the force on it instead of its acceleration, so the flock slides into place and settles rather than overshooting and oscillating. The field, the force and the potential are exact Coulomb; only the travel is a simplification, chosen so a pair you release finds equilibrium in front of you instead of ringing about it forever."
+        ),
     ]
 }

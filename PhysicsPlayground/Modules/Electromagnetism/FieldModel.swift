@@ -331,8 +331,12 @@ final class FieldModel {
     /// Helmholtz-coil e/m experiment. Time is compressed for display
     /// (1 s shows 0.1 µs, disclosed): the physics stays SI-exact.
     var electronMode = false
-    nonisolated static let electronCharge = 1.602176634e-19
-    nonisolated static let electronMass = 9.1093837015e-31
+    // From `PhysicsCore.Constants`, not typed here. These were the app
+    // layer's own copies of two values PhysicsCore already owned — and
+    // the electron mass was ONLY here, where the physics package could
+    // not see it at all.
+    nonisolated static let electronCharge = Constants.elementaryCharge
+    nonisolated static let electronMass = Constants.electronMass
     nonisolated static let electronLaunchSpeed = 2e6
     nonisolated static let electronTimeScale = 1e-7
     nonisolated static let electronFieldRange = 2e-5...5e-4
@@ -964,7 +968,7 @@ final class FieldModel {
         )
     }
 
-    // MARK: Selected-charge bindings for the control panels
+    // MARK: Selected-charge bindings for the charge's control ring
 
     var selectedMagnitudeMicroCoulombs: Double {
         get { selectedCharge?.magnitudeMicroCoulombs ?? 1 }

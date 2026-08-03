@@ -18,7 +18,7 @@ import simd
 
 public enum NBody {
     /// CODATA G, N·m²/kg².
-    public static let gravitationalConstant = 6.6743e-11
+    public static let gravitationalConstant = Constants.gravitational
 
     /// Minimum effective separation (m) — far smaller than any orbit we
     /// simulate, but keeps a near-overlap from producing infinite force.

@@ -3,6 +3,7 @@
 //  Physics Playground — Kinematics module
 //
 //  Catalog registration for projectile motion: descriptor, legend, and
+//  the readings this bench writes into the lab notebook.
 //
 
 import SwiftUI

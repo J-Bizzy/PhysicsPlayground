@@ -28,7 +28,7 @@ import simd
 
 public enum GaussSurface {
     /// Vacuum permittivity, F/m.
-    public static let epsilonZero = 8.8541878128e-12
+    public static let epsilonZero = Constants.vacuumPermittivity
 
     /// Electric flux through a flat circular disc, N·m²/C.
     ///

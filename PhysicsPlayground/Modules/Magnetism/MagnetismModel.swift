@@ -389,7 +389,12 @@ final class MagnetismModel {
         }
     }
 
-    // MARK: Field readout for the numbers card
+    // MARK: Field readout for the notebook
+    //
+    // This said "for the numbers card", which was the window panel's,
+    // and `centerFieldMilliTesla`'s only reader has been the lab
+    // notebook since that panel was deleted. The compass's own µT
+    // Callout is what the room shows.
 
     /// |B| in millitesla at the region centre — a live sense of the field.
     var centerFieldMilliTesla: Double {

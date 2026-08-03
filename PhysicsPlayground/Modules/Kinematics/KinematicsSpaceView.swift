@@ -2,10 +2,13 @@
 //  KinematicsSpaceView.swift
 //  Physics Playground — Kinematics module
 //
-//  The room-scale immersive scene. Manipulation events route by entity
-//  name: the launcher body (move it), the aim bead (point it), any ball
-//  (grab and THROW — release velocity comes from the hand's motion), and
-//  any hoop (place it). The flight clock is SceneEvents.Update.
+//  The room-scale immersive scene. Drags route by entity name through a
+//  `RelativeDrag`: the launcher body (move it), the aim bead (point it),
+//  any ball (grab and THROW — release velocity comes from the hand's
+//  motion), and any hoop (place it). The flight clock is
+//  SceneEvents.Update. ("Manipulation events" here named RenderKit's
+//  `ManipulationRouter`, which never had a caller and was deleted on
+//  2026-08-03.)
 //
 
 import PhysicsCore
@@ -208,9 +211,21 @@ struct KinematicsSpaceView: View {
                     // moves a body by hand DISPLACEMENT, which a constant
                     // translation leaves untouched.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // …but the control pods do NOT go with it: the user
-                    // parked them where they wanted them, and moving the
-                    // apparatus is not a request to move the controls.
+                    // …AND THE INSTRUMENTS GO WITH IT. Every bank, rail,
+                    // well and ring in this module is a child of
+                    // `renderer.root`, so they ride the same offset the
+                    // apparatus does.
+                    //
+                    // This comment said the opposite until 2026-08-03 —
+                    // "the control pods do NOT go with it: the user
+                    // parked them where they wanted them" — in all four
+                    // modules that carry it, and it was false in all
+                    // four. There are no pods; the instruments were
+                    // reparented onto the apparatus when the panels died,
+                    // and travelling with it is the RIGHT behaviour: a
+                    // rail belongs to the thing it sets. Left standing,
+                    // the sentence would eventually persuade somebody to
+                    // "fix" a counter-translation back in.
                 }
             )
 

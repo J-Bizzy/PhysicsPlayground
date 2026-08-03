@@ -4,7 +4,8 @@
 //
 //  Live physics readout anchored to the test charge: the field, potential,
 //  force, acceleration, and speed at its current position, updating every
-//  simulation frame. Shared by the in-space stats panel and the window.
+//  simulation frame. Rendered inside `FieldReadoutCard`, the standing card
+//  in the room — there is no window to share it with any more.
 //
 
 import SwiftUI

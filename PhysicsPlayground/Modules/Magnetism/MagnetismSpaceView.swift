@@ -31,7 +31,10 @@ struct MagnetismSpaceView: View {
         pivot: SIMD3<Float>(MagnetismModel.regionCenter), range: 0.5...4.0)
     /// What is drawn, and whether the magnets are free.
     ///
-    /// Four plates for the four states the panel used to hold as toggles.
+    /// FIVE plates — display lines, compass grid, hand compass, Earth's
+    /// field, and the dynamics switch. (This said "four" until
+    /// 2026-08-03, and `-magLayers 0` still reaches only four of them:
+    /// `earthFieldOn` has no argument.)
     /// The top one is not a display layer: `dynamicsOn` decides whether
     /// the magnets glide together and swing into alignment at all, which
     /// is the difference between a field diagram and a physics lab. It
@@ -117,9 +120,21 @@ struct MagnetismSpaceView: View {
                     // moves a body by hand DISPLACEMENT, which a constant
                     // translation leaves untouched.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // …but the control pods do NOT go with it: the user
-                    // parked them where they wanted them, and moving the
-                    // apparatus is not a request to move the controls.
+                    // …AND THE INSTRUMENTS GO WITH IT. Every bank, rail,
+                    // well and ring in this module is a child of
+                    // `renderer.root`, so they ride the same offset the
+                    // apparatus does.
+                    //
+                    // This comment said the opposite until 2026-08-03 —
+                    // "the control pods do NOT go with it: the user
+                    // parked them where they wanted them" — in all four
+                    // modules that carry it, and it was false in all
+                    // four. There are no pods; the instruments were
+                    // reparented onto the apparatus when the panels died,
+                    // and travelling with it is the RIGHT behaviour: a
+                    // rail belongs to the thing it sets. Left standing,
+                    // the sentence would eventually persuade somebody to
+                    // "fix" a counter-translation back in.
                 }
             )
             #if DEBUG

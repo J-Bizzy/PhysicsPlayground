@@ -3,9 +3,11 @@
 //  Physics Playground — Shell
 //
 //  The main window: the module catalog (hub) when nothing is active, or
-//  the active module hosted in the shared shell chrome. Modules only
-//  supply their panel content — the shell owns navigation, the first-run
-//  hint, the legend, the real-world panel, reset, and space lifecycle.
+//  the active module hosted in the shared shell chrome. A module supplies
+//  its physics and its scene; the shell owns navigation, the first-run
+//  hint, reset and the space lifecycle. (This listed "their panel
+//  content", "the legend" and "the real-world panel" until 2026-08-03 —
+//  the panels went on 2026-08-01 and the legend moved to the notebook.)
 //
 
 import SwiftUI

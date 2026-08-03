@@ -45,7 +45,7 @@ public enum WireField {
 
     /// The magnetic constant μ₀, T·m/A. Exact by the pre-2019 definition
     /// and still correct to ten significant figures after it.
-    public static let mu0 = 4e-7 * Double.pi
+    public static let mu0 = Constants.vacuumPermeability
 
     /// Field at `point` from a straight segment `a`→`b` carrying `current`
     /// amps, in tesla.

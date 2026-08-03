@@ -23,7 +23,9 @@ final class ElectricFieldTests: XCTestCase {
     }
 
     /// Hand-computed reference: 1 µC at 0.1 m →
-    /// E = (8.9875517923e9 × 1e-6) / 0.1² = 898755.17923 N/C.
+    /// E = (8.98755178737e9 × 1e-6) / 0.1² = 898755.178737 N/C.
+    /// (k derived from ε₀ since 2026-08-03; it read 8.9875517923e9, the
+    /// pre-2019 value, until then.)
     func testMicrocoulombFieldMatchesHandCalculation() {
         let charge = PointCharge(position: .zero, charge: 1e-6)
         let field = ElectricField.vector(at: SIMD3(0, 0.1, 0), dueTo: charge)
@@ -120,7 +122,7 @@ final class ElectricFieldTests: XCTestCase {
     // MARK: Potential
 
     /// Hand-computed reference: V = kq/r for 1 µC at 0.1 m →
-    /// (8.9875517923e9 × 1e-6) / 0.1 = 89875.517923 V.
+    /// (8.98755178737e9 × 1e-6) / 0.1 = 89875.5178737 V.
     func testPotentialMatchesHandCalculation() {
         let charge = PointCharge(position: .zero, charge: 1e-6)
         let potential = ElectricField.potential(at: SIMD3(0.1, 0, 0), dueTo: charge)

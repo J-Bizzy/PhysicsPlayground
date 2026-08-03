@@ -26,12 +26,12 @@ import Foundation
 
 public enum ChargeTransport {
     /// Coulombs.
-    public static let elementaryCharge = 1.602176634e-19
+    public static let elementaryCharge = Constants.elementaryCharge
     /// Free conduction electrons per cubic metre in copper — one per
     /// atom, from its density and molar mass.
     public static let copperElectronDensity = 8.5e28
     /// Metres per second.
-    public static let speedOfLight = 2.99792458e8
+    public static let speedOfLight = Constants.speedOfLight
 
     /// Drift speed of the charge carriers, m/s. The honest answer to
     /// "how fast do the electrons go".

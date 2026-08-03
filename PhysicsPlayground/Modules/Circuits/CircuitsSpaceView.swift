@@ -170,9 +170,16 @@ struct CircuitsSpaceView: View {
                     // moves a body by hand DISPLACEMENT, which a constant
                     // translation leaves untouched.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // (No counter-translation here: this module's pods
-                    // hang off the scene content rather than the renderer
-                    // root, so they never inherited the offset.)
+                    // …AND THE INSTRUMENTS GO WITH IT. The bank, the
+                    // meter and the verb plate are all children of
+                    // `renderer.root` (see the three `addChild` calls in
+                    // the setup above), so they ride the offset.
+                    //
+                    // This said they "hang off the scene content rather
+                    // than the renderer root, so they never inherited the
+                    // offset" until 2026-08-03. They always did. The
+                    // three sibling modules carried the same false claim
+                    // in different words.
                     model.step(dt: event.deltaTime)
                     // The bank stands beside the bench, at the bench's own
                     // depth so it sits in the same ~15 deg band as the

@@ -81,6 +81,19 @@ enum MagnetismModule {
                    text: "Compass needles point along the local field — and the one you can carry is a SPHERE, with its needle free to swing in any direction. A flat dial can only show the part of B lying in the dial; between two poles the field usually points out of it."),
         LegendItem(swatch: .stroke(DesignTokens.Palette.selectionHalo),
                    text: "Halo marks the selected magnet"),
+        // A DISCLOSED FUDGE, added 2026-08-03, and the module's largest.
+        // The FIELDS here are exact — `MagneticField` gives the true
+        // dipole B, force and torque, and `barVector` even swaps in a
+        // finite two-pole bar where a point dipole would be wrong. The
+        // MOTION is not: a magnet's speed is proportional to the force on
+        // it and its turn rate to the torque, both capped, which is a
+        // quasi-static mobility law rather than Newton's. The bars have
+        // no mass and no moment of inertia here.
+        LegendItem(
+            swatch: .symbol("arrow.triangle.2.circlepath",
+                            Color(uiColor: MagnetismRenderer.lineColor)),
+            text: "The magnets GLIDE rather than accelerate. Every field, force and torque on this bench is exact — but a magnet's speed is set by the force on it and its turn rate by the torque, so it slides into alignment and stops. A real bar magnet has mass and rotational inertia: released at an angle it would swing PAST north and ring back and forth before settling. Nothing here overshoots, and that is a simplification, not the physics."
+        ),
         LegendItem(
             swatch: .symbol("globe", Color(uiColor: MagnetismRenderer.lineColor)),
             text: "Earth's field is here too, at its real 50 µT — and a 6 A·m² bar magnet matches that at about 30 cm, so a compass carried an arm's length clear of the bench hands over to the planet. It is NOT horizontal: it runs 65° into the ground, which is why the needle tips down when it settles, and why a dip circle is a separate instrument in a real lab. Which way north lies is a convention — visionOS gives no heading — but the strength and the dip are real. Earth pulls on the compasses only, not on the bar magnets."),

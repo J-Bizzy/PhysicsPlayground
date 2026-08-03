@@ -88,11 +88,24 @@ public enum DragBody: String, CaseIterable, Sendable, Identifiable {
         case .cylinder:
             2 * radius * cylinderSpan
         case .cube:
-            // Frontal half-width r → edge 2r·(1/√2)? No: the cube is
-            // sized so its face matches the circular bodies' width —
-            // edge = 2·radius·(0.053/0.06) in the app, but physically
-            // the reference is simply edge²; use the inscribed edge.
-            (2 * radius * 0.883) * (2 * radius * 0.883)
+            // The cube's reference area is its face, edge².
+            //
+            // This read `(2·radius·0.883)²` until 2026-08-03, where
+            // 0.883 was `0.053/0.06` — A RATIO OF TWO MESH DIMENSIONS
+            // FROM THE RENDERING LAYER, the one place in this package
+            // where a visual constant reached into a physical quantity.
+            // It made the reported drag on a cube about 22 % low against
+            // its own stated reference. The comment that carried it was
+            // a piece of thinking-aloud ("…? No: …") rather than a
+            // statement, which is its own tell.
+            //
+            // `radius` here is the frontal HALF-WIDTH every body in this
+            // enum is described by, so a cube of that half-width has
+            // edge 2r and face (2r)². If the renderer wants a cube that
+            // looks the same width as a sphere, that is the renderer's
+            // scale to choose; the physics gets the cube it is told it
+            // has.
+            (2 * radius) * (2 * radius)
         case .sphere, .teardrop, .flatDisc, .cone:
             .pi * radius * radius
         case .car:

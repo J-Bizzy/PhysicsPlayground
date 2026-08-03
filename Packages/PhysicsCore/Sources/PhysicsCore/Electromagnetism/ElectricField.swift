@@ -12,7 +12,10 @@ import simd
 
 public enum ElectricField {
     /// Coulomb constant k = 1/(4πε₀) in N·m²/C².
-    public static let k = 8.9875517923e9
+    /// Derived from ε₀ rather than typed — see `Constants`. It was
+    /// 8.9875517923e9 here, the pre-2019 value, disagreeing with the
+    /// ε₀ two files away in the 10th significant figure.
+    public static let k = Constants.coulomb
 
     /// Separations below this (meters) are treated as "at the charge itself,"
     /// where the 1/r² field is singular. We return a zero vector there and let

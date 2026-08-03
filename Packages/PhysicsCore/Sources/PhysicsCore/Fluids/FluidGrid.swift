@@ -32,9 +32,16 @@
 //  Poisson equation drops those neighbours (homogeneous Neumann), which
 //  is the discrete statement of "the wall is a streamline".
 //
-//  Boundaries: +x inflow is held at the free-stream speed (Dirichlet on
-//  velocity, Neumann on pressure), −x outflow is open (p = 0), and the
-//  four side walls are free-slip — a wind tunnel's working section.
+//  Boundaries: the −x face is the INFLOW, held at the free-stream speed
+//  (Dirichlet on velocity, Neumann on pressure); the +x face is the open
+//  OUTFLOW (p = 0); the four side walls are free-slip — a wind tunnel's
+//  working section.
+//
+//  (This said the opposite until 2026-08-03: inflow at +x, outflow at
+//  −x. The code was right — `applyBoundaries` sets `u[uIndex(0, …)]` and
+//  `project` puts the p = 0 outlet at `uIndex(nx, …)` — and flow runs
+//  along +x, as the header says twenty lines above. Only the sentence
+//  was reversed.)
 //
 
 import Foundation

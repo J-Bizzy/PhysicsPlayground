@@ -24,7 +24,7 @@ import simd
 
 public enum CurrentLoop {
     /// Vacuum permeability, T·m/A.
-    public static let mu0 = 4e-7 * Double.pi
+    public static let mu0 = Constants.vacuumPermeability
 
     /// Magnetic moment magnitude of a coil: m = N·I·A, in A·m².
     public static func momentMagnitude(turns: Int, current: Double, area: Double) -> Double {

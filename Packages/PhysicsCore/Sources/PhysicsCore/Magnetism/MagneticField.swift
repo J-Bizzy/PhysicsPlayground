@@ -17,7 +17,7 @@ import simd
 
 public enum MagneticField {
     /// μ₀/4π in T·m/A.
-    public static let mu0over4pi = 1e-7
+    public static let mu0over4pi = Constants.permeabilityOver4Pi
     /// Separations below this (m) are treated as "at the dipole," where
     /// the 1/r³ field is singular — return zero and let the renderer hide it.
     public static let singularityRadius = 1e-4
