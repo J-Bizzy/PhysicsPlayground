@@ -16,6 +16,244 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+**The five entries below were written on 2026-08-03, after this log had
+fallen twelve commits behind.** Everything in them is drawn from the
+commit messages and the code; where reasoning is reconstructed rather
+than quoted it is marked *(inferred)*, and the owner should correct or
+strike those lines. The lesson is its own entry at the bottom.
+
+## 2026-08-02 — Pendulums' right-hand column comes out; g and the clock are RETIRED
+
+**Decision:** Owner's call. The "Resonance ×5" verb plate, the three
+world discs, and the two rails under them (g and the time scale) all come
+off the wall. `loadResonancePreset` is deleted outright. What is left in
+the room is the swing, the two well mouths that make one, the five-plate
+layer bank, and Foucault's globe and spin rail — which appear only while
+the Earth is turning.
+
+**Context:** The furniture came out in the same commit that fixed the
+module's dead side controls, and the cause there is worth keeping
+separately: Pendulums was the only module attaching its tap as a plain
+`.gesture` after a `DragGesture(minimumDistance: 0)`
+`.simultaneousGesture`. A zero-distance drag claims the touch the instant
+it lands, so a plain `.gesture` tap composed against it never resolves —
+every plate, disc and rail died while the bobs, which are *dragged*, went
+on working. **What settled it was the owner's observation that only ONE
+module was affected, which turned a guess into a comparison.** Two
+earlier explanations (a sibling tap recogniser, then attachment
+colliders) were wrong, were fixed on their own merits, and were not the
+cause.
+
+**Consequences, and this is the part that needed writing down.**
+`gravity` and `timeScale` are still real properties of the model and
+still driven by `-penGravity` / `-penTime`, so it is tempting to record
+this as "the physics stayed, only the furniture went". Stated that way it
+collides with the standing rule that **nothing may be reachable only from
+the CLI**. It does not actually break that rule, and the precise reason
+is the entry: these are **retired capabilities, not hidden ones.** A
+wearer is not offered g or the clock at all — this bench stands on Earth,
+at 1×, and the two arguments exist so a screenshot can put it somewhere
+else. The rule forbids a capability the user is meant to have and cannot
+reach; it does not forbid deciding they should not have one. Anyone
+restoring either must restore its rail in the same commit.
+
+`loadResonancePreset` is **a grave, not a missing door** — the
+five-length beat demonstration was decided against, not left half-built.
+Its deletion took two comments with it, and the commit says why: *"a
+comment naming a function that does not exist is the doc-rot this project
+keeps catching."* That instinct was right and did not go far enough. Six
+further places still promised "five-pendulum resonance" the next day —
+`README.md`, `docs/APP_STORE.md` (**App Store submission copy**),
+`docs/ON_DEVICE_TESTS.md` (a manual test step for a deleted control),
+`CLAUDE.md`, and `PendulumsModule.blurb`, which is also the hub exhibit's
+VoiceOver label and is therefore *read aloud*. All corrected 2026-08-03.
+**The generalisable rule: deleting a feature is not done when the code
+compiles; it is done when nothing in the repository still sells it.**
+
+## 2026-08-02 — Pendulums opens with a cradle, and gains a chaotic cousin
+
+**Decision:** Newton's cradle becomes the module's cold open, and the
+double pendulum gets its own well mouth. `PhysicsCore` gains
+`DoublePendulum` (exact Euler–Lagrange, RK4) and `BobCollision`
+(1-D elastic along the line of centres, resolved pairwise **in order**).
+
+**Context:** The cradle *asks a question before it demonstrates
+anything* — almost nobody who has seen one can say why ONE ball leaves
+rather than two slower ones. That is a better first sentence than the
+five-length resonance wave it replaces, which demonstrates beautifully
+and asks nothing. Five identical bobs, because equal masses swap
+velocities exactly and a cradle of mismatched balls does something much
+less tidy.
+
+**The "one ball out" behaviour is not written anywhere, and that is the
+whole claim.** Nothing counts balls. It falls out of resolving contacts
+pairwise in order along the line — the impulse crosses as a compression
+wave, one contact at a time. A simultaneous five-body solve conserving
+both momentum and energy *also* admits two balls leaving at reduced
+speed, which is not what real cradles do. So the ordering is the physical
+model, and the test asserts the consequence rather than the rule.
+
+**Collisions are for SIMPLE pendulums only, and that is physics rather
+than a shortcut:** a double pendulum's bob hangs on a rod whose reaction
+to an impulse involves both angles at once, so applying a 1-D exchange to
+it would inject energy through a constraint the exchange knows nothing
+about.
+
+**The double pendulum is planar, deliberately, in a module whose single
+pendulum is fully 3-D.** The planar equations are exact and therefore
+*checkable*; a 3-D double pendulum has no comparable closed form, so
+"exact" would quietly become "plausible" — and the difference between
+those two words is this project's whole claim.
+
+**Chaos defeats the obvious test**, so nothing stores a reference
+trajectory (that would pin one machine's floating point). What chaos does
+not touch is tested instead: energy conserved to a thousandth over twenty
+seconds of genuinely chaotic motion, both small-angle normal modes
+matching ω² = (2 ∓ √2)g/L, return-to-home after one slow-mode period, and
+degeneration to a simple pendulum as the lower mass vanishes. **The
+divergence test asserts AMPLIFICATION, not separation** — exponential
+growth is a statement about a ratio, and the first version asked for
+0.1 rad after twelve seconds against a Lyapunov exponent of ~0.6/s, so it
+failed on a system diverging perfectly well. A test measuring the wrong
+quantity, not a physics fault.
+
+**Consequences:** The length bead moves to the pivot collar — cable
+length is the one quantity a pivot owns, where it hangs is a drag on the
+collar itself, and mass and delete belong to the bob. Three defects were
+found by looking rather than reasoning: five identical bobs stacked five
+identical "T = 1.49 s" labels into one smear (a crowded rig labels only
+its selection now); `testFrictionToggleMakesThePendulumIdeal` swung what
+is now a cradle ball and would have been asserting that a cradle does not
+work; and a cradle test sampled speed at 1.2 s, where the far ball is at
+the top of its swing and speed is zero — peak displacement has no phase
+to get unlucky with.
+
+## 2026-08-02 — Circuits and Magnetism stop being one apparatus
+
+**Decision:** The coil annex is gone — `EMFieldStation`, `EMFeedLine`,
+the coil switch, the cable, `-emLink`, and the whole electromagnet half
+of `MagnetismModel` (`electromagnetOn`, `coilCurrent`, the dipole, the
+moment, and the induction gated entirely on it). **Neither module's
+directory mentions the other's model now, in either direction.** In its
+place, Circuits gains a **Magnetic field layer**: every wire on the bench
+carries a field.
+
+**Context:** This closes the one exception 2026-07-30 carved out of "an
+experience gets the room to itself" — the planned pair that was *wiring,
+not layout*. The annex answered "a current is a magnet" by standing a
+second apparatus in the room and cabling to it.
+
+**What replaces it makes a SMALLER and truer claim.** The new layer
+answers the same question with the bench you already built, and every
+wire has a field around it — not just one wound into a coil. That is the
+more general fact. The field is exact: `PhysicsCore.WireField` gives the
+closed-form field of a finite straight segment, and a bench is a chain of
+segments, carrying the currents the nodal solve put through them, signed
+by direction of flow. **Take the signs out and a loop's two sides would
+reinforce instead of oppose — the one error that would look plausible.**
+
+**Two rendering faults, both caught by looking.** A volume grid at a
+useful pitch is ~2,200 samples against a 260-arrow pool, and the pool
+takes the first ones handed to it — so the entire budget went to the
+lowest-x slab and the field appeared as a wall of arrows stacked against
+the left edge of the room, nowhere near a wire. And rings around each run
+beat a coarser grid: what is worth seeing is that **B circles a conductor
+and reverses when the current does**, and a sparse grid samples mostly
+empty room. The vector at each point is still the total field from every
+segment, so nearby wires visibly reinforce or cancel.
+
+**Recomputed every frame rather than change-gated**, unlike the electric
+field module's trace: a few hundred closed-form evaluations with no mesh
+work, and the field must follow a current that changes continuously as a
+capacitor fills or a switch closes. Gating on "did the circuit change"
+would freeze the arrows during exactly the moments worth watching.
+
+**Consequences:** Three experiments went (`em.powered`, `em.reach`,
+`em.faraday`) and four test files with them. `CurrentLoop` and
+`Induction` stay exactly where they are in `PhysicsCore`, with their own
+tests, having simply lost their app-side caller — the same arrangement
+the archived modules have, and deliberate rather than an oversight.
+`StationDebug.swift` is deleted as a **grave**: it existed only to stage
+the annex.
+
+## 2026-08-02 — The title bar loses two buttons; the legend key moves to the notebook
+
+**Decision:** The module-switch menu and the legend's Key popover come
+off the title bar. What remains is navigation, identity, and the things
+you reach for *while working*: notebook, place-the-lab, studio, reset.
+Four buttons, and the window frame comes back from 740 to 620 points —
+"Circuit Workshop" still does not truncate, which is the name that broke
+it at 560.
+
+**Context:** Switching labs goes back through the chevron to the catalog,
+which is where choosing belongs. **This project has now arrived at
+"choose at the front door" three separate times from three different
+directions.** Worth recording that the palette bead does *not* carry lab
+switching either, despite being the obvious place to look: its four
+petals are pause, capture, settings and reset, and a fifth was refused on
+the record (2026-07-29).
+
+**The legend could not simply go with its button, and the reason is
+specific.** Six of its entries are **disclosures**, and nothing else in
+the app carries them — Magnetism's says line density is not field
+strength and that Earth's 50 µT runs 65° into the ground; Pendulums' says
+the Foucault spin is exaggerated and the centrifugal term deliberately
+omitted; Gravity Lab's says planet sizes are exaggerated, that the
+spacetime grid is an analogy rather than a solution, and that Mercury's
+extra 43 arcseconds per century needs GR, which this lab does not model.
+The 2026-07-31 entry is explicit that dropping those turns a disclosed
+fiction into an undisclosed one.
+
+**Consequences:** The key moves to the Lab Notebook — already the app's
+reference surface, already aware of which module is open, and exactly
+where someone reading their own recorded numbers would want the key to
+them. `HOMESCREEN_SPEC.md` and `DESIGN_SYSTEM.md` described the title-bar
+popover until 2026-08-03.
+
+## 2026-08-03 — The log fell twelve commits behind, and the drift followed it
+
+**Decision:** The five entries above are written retroactively, and this
+one records why they had to be.
+
+**Context:** A review pass found `DECISIONS.md`'s newest entry was
+2026-08-01 while `HEAD` was twelve commits later. In that gap: Circuits
+and Magnetism were un-merged (reversing an architecture entry), the
+Pendulums cold open changed, the double pendulum arrived, the module's
+right-hand column and its verb plate were removed, and the legend key
+moved. **Every documentation defect the pass found traces to that gap.**
+`README.md`, `docs/APP_STORE.md`, `docs/ON_DEVICE_TESTS.md`, `CLAUDE.md`
+and a VoiceOver-read module blurb were all still selling a feature
+deleted at HEAD; `ON_DEVICE_TESTS.md` carried manual steps for three
+removed controls; a dozen plate counts, line counts and file sizes were
+wrong.
+
+**And a cited test file did not exist.** `CLAUDE.md`,
+`ON_DEVICE_TESTS.md` and the 2026-08-01 entry all named `StationTapTests`
+as the replacement for the XCUITest reach the no-panels decision gave up.
+No such file was ever in the repository — the name is from the
+merged-worlds era, undone on 2026-07-30. The *pattern* survived the undo
+and the *name* did not, and nobody noticed because the pattern was
+genuinely there under three other names. Going looking turned up the part
+that was actually missing: of the four shared types exposing
+`handleTap`, **`SpatialLayerBank` — used by all six modules, the
+most-tapped object in the app — and `SpatialPicker` had no tap test at
+all.** `SpatialTapTests` closes it.
+
+**Consequences:** The rule this project already applies to code now
+applies to itself. A decision is not landed when it compiles and not when
+it is committed, but when **nothing in the repository still describes the
+world it replaced.** The cheap check is a grep for the name of whatever
+was removed, run before the commit rather than a week after.
+
+*(Also recorded: `SpatialTapTests` passed on first write, which in this
+project is a reason to suspect a test rather than trust it. Deleting
+`guard root.isEnabled` from `SpatialLayerBank.handleTap` left it green —
+the test had hidden the bank with `setLayers([])`, which also removes
+every plate, so the tap fell through for the wrong reason. Rewritten
+against a bank that is fully built and merely unrevealed, it fails as it
+should. Same lesson as the Coriolis sign on 2026-08-01: a test that
+passes is not evidence until you have watched it fail.)*
+
 ## 2026-08-01 — The module window becomes a title bar; `makeControls` is deleted
 
 **Decision:** `ModuleDescriptor.makeControls` is removed, the six `*ControlsPanel.swift` files are deleted, and a module's window is exactly three things: the title bar, "Show in room" while the space is closed, and the first-run hint. Every readout moves into the room as a `Callout` or a RealityView attachment on the object it describes. The seven capabilities with no spatial twin get one. The legend moves to a title-bar popover. The experiment `step` strings move to the hub's focus panel and catalog row — you read the instruction at the front door, then enter.
@@ -24,7 +262,7 @@ A running log of consequential decisions — architectural, physical, or product
 
 **This reverses 2026-07-29's "every capability must ALSO be reachable through something discoverable and simulator-operable," and the reversal is narrower than it sounds.** That standard was written against *gaze-revealed* controls — invisible in the simulator, undiscoverable on device, "I can't even move them." That world no longer exists: `LookReveal` is gone app-wide, every ring opens by tap, every instrument stands permanently visible, every one is mouse-operable in the simulator, and every one is reachable from the CLI by a launch argument. What is removed is not the discoverable path; it is the *duplicate* of a path that now exists in the room and is better.
 
-What is genuinely given up is **XCUITest** reach — and that was never complete. XCUITest has no API for RealityKit entities, so the panel only ever proved the window's half. The replacement is the pattern this project already invented for exactly this: `handleTap` called directly against real entities, in the `StationTapTests` shape. Every control built in this change ships with one. VoiceOver reach is preserved by `AccessibilityComponent` on every plate, petal, disc and card — label and value both, the omission of which was caught when `SpatialTrackControl` first flew. VoiceOver reaches RealityKit entities; XCUITest does not. Those are different bars, and this entry claims the first.
+What is genuinely given up is **XCUITest** reach — and that was never complete. XCUITest has no API for RealityKit entities, so the panel only ever proved the window's half. The replacement is the pattern this project already invented for exactly this: `handleTap` called directly against real entities, in the `StationTapTests` shape. Every control built in this change ships with one. *(Corrected 2026-08-02: **there was no `StationTapTests`** — the name is from the merged-worlds era, undone on 2026-07-30, and this entry cited a file that had already ceased to exist. The pattern was real and was carried by `SpatialActionBankTests`, `BloomPetalTests` and `MultimeterTests`; the claim that every control ships with one was not — `SpatialLayerBank`, used by all six modules, and `SpatialPicker` had no tap test at all. `SpatialTapTests` closes that. See the 2026-08-02 entry.)* VoiceOver reach is preserved by `AccessibilityComponent` on every plate, petal, disc and card — label and value both, the omission of which was caught when `SpatialTrackControl` first flew. VoiceOver reaches RealityKit entities; XCUITest does not. Those are different bars, and this entry claims the first.
 
 **The cost, stated plainly:** the app now has no flat control surface at all, so a regression in a spatial instrument has no fallback path. That is the trade this entry makes. `PanelControlCriterionTests` — rewritten from "no knobs in a panel" to "no panels, plus a positive anchor so the check cannot pass vacuously" — is what stops it being unmade by accident. This boundary has already been re-litigated across 212 commits once.
 
@@ -43,7 +281,7 @@ What is genuinely given up is **XCUITest** reach — and that was never complete
 
 **Ambient volume — closed as a NON-FEATURE.** Settings ships master volume plus ambient on/off, and that is the whole honest surface: there is no gain path into the ambient loop, so a continuous slider would be a control over nothing. The app deliberately ships no dead slider. It was listed as "open work" for months when the correct entry was "decided against, for now."
 
-**`Archive/` — DECIDED TO KEEP, explicitly.** 30 files, 464 KB, tracked, and **not referenced by the Xcode project at all**: it compiles nothing and cannot affect a submission. It holds five cut modules whose physics is still live and tested in `PhysicsCore` — ~2 600 of 6 573 lines are reachable only from there, and `swift test` exercises all of them every run. That is defensible as parked work with a documented restore path and indefensible as an accident, which is why `Archive/README.md` says which it is. **Deleting it before the repo goes public remains the owner's call, not a cleanup.** One genuine grave inside it: `Waves/EmissionTrail` has zero references anywhere, including the Archive.
+**`Archive/` — DECIDED TO KEEP, explicitly.** 30 files, 464 KB, tracked, and **not referenced by the Xcode project at all**: it compiles nothing and cannot affect a submission. It holds five cut modules whose physics is still live and tested in `PhysicsCore` — ~2 600 of 6 573 lines are reachable only from there, and `swift test` exercises all of them every run. That is defensible as parked work with a documented restore path and indefensible as an accident, which is why `Archive/README.md` says which it is. **Deleting it before the repo goes public remains the owner's call, not a cleanup.** One genuine grave inside it: `Waves/EmissionTrail` has zero references anywhere, including the Archive. *(Two corrections, 2026-08-03. The figures have moved: `Archive/` is **47 files and 1.6 MB**, and PhysicsCore is **7,457 lines**, not 6,573. And the `EmissionTrail` claim was wrong when written — it is constructed twice in `PhysicsCoreTests/DoubleSlitDopplerTests.swift`, so it is tested code with no app-side caller, which is the same standing as the rest of the Archive's physics rather than a grave.)*
 
 ## 2026-08-01 — The Foucault pendulum: the physics that makes the sphere necessary
 

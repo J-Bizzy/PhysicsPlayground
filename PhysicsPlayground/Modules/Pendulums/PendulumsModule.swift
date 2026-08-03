@@ -17,7 +17,12 @@ enum PendulumsModule {
         ModuleDescriptor(
             id: id,
             title: "Pendulums",
-            blurb: "Hang a pendulum anywhere in the room, then grab the steel bob and throw it — full nonlinear swings, five-pendulum resonance, and a Foucault rig whose plane holds still while your room turns under it.",
+            // The blurb names what the bench ACTUALLY opens with. It
+            // promised "five-pendulum resonance" for a day after the
+            // plate that built it was removed — and this string is not
+            // only the catalog hook, it is the hub exhibit's VoiceOver
+            // label, so a stale one is read aloud.
+            blurb: "Hang a pendulum anywhere in the room, then grab the steel bob and throw it — a Newton's cradle to break apart, a double pendulum that never repeats itself, full nonlinear swings, and a Foucault rig whose plane holds still while your room turns under it.",
             icon: "metronome.fill",
             accent: DesignTokens.Palette.pendulumsAccent,
             // The hint names controls that EXIST. The line it replaces
@@ -37,7 +42,6 @@ enum PendulumsModule {
     }
 
     /// The readings this bench writes into the lab notebook.
-    /// Shared with the combined module that now hosts it.
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
         let model = appModel.pendulumsModel
         var rows: [NotebookEntry.Reading] = [
@@ -68,7 +72,7 @@ enum PendulumsModule {
             text: "Earth turns: the swing plane holds still against the STARS while your room rotates under it at Ω sin(latitude) — one turn per sidereal day at the pole, none at all on the equator. Markers fall as the plane sweeps past them."),
         LegendItem(
             swatch: .symbol("exclamationmark.circle", DesignTokens.Palette.pendulumsAccent),
-            text: "Earth is spun FASTER than life here so the turn is watchable — the panel quotes the true rate (11.3°/h at Paris) beside it. Gravity stays the unmodified g: the centrifugal term grows as the square of that exaggeration and is deliberately left out."),
+            text: "Earth is spun FASTER than life here so the turn is watchable — the globe quotes the true rate (11.3°/h at Paris) beside the exaggerated one, and winding the spin rail must never move it. Gravity stays the unmodified g: the centrifugal term grows as the square of that exaggeration and is deliberately left out."),
     ]
 
 }

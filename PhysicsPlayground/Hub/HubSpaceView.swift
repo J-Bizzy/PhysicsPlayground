@@ -2,7 +2,7 @@
 //  HubSpaceView.swift
 //  Physics Playground — Hub
 //
-//  The spatial menu: the GALLERY. Four floating graphite terraces arc
+//  The spatial menu: the GALLERY. Two floating graphite terraces arc
 //  around the user in a crescent — one per physics domain, each with a
 //  domain-coloured hairline along its front edge — and every module
 //  stands on its own pedestal puck as a live, shell-free miniature,
@@ -1339,7 +1339,7 @@ final class HubScene {
 /// domain chip, the one-line promise, live progress, and the Load
 /// Module button — the way in that needs no carrying.
 ///
-/// A menu of nine physics simulations cannot say what any of them ARE
+/// A menu of six physics simulations cannot say what any of them ARE
 /// while all nine are on screen — focus buys the room to say it.
 struct HubFocusPanel: View {
     let module: ModuleDescriptor

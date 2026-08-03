@@ -103,9 +103,9 @@ Projectile Motion — Throw anything. Real drag and restitution, gravity
 from zero-g to Jupiter, and bounces off your actual walls, floor and
 ceiling.
 
-Pendulums — Full nonlinear swings, five-pendulum resonance that drifts
-apart and realigns, and a Foucault rig whose plane holds still while your
-room turns underneath it.
+Pendulums — Full nonlinear swings, a Newton's cradle you can break apart
+and rebuild, a double pendulum that never repeats itself, and a Foucault
+rig whose plane holds still while your room turns underneath it.
 
 Gravity Lab — A solar system you can walk into. Tap a planet and its orbit
 becomes a ring with a bead at each end; pull one and the orbit reshapes

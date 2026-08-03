@@ -15,9 +15,9 @@ fourth:
 
 | Layer | Covered by | Runs where |
 |---|---|---|
-| Physics & geometry | `PhysicsCoreTests` (328) | `swift test`, no simulator |
+| Physics & geometry | `PhysicsCoreTests` (365) | `swift test`, no simulator |
 | Models, clamps, layout | `PhysicsPlaygroundTests` | simulator |
-| Tap *handlers* | `StationTapTests` — calls `handleTap` directly | simulator |
+| Tap *handlers* | `SpatialTapTests`, `SpatialActionBankTests`, `BloomPetalTests`, `MultimeterTests` — call `handleTap` directly | simulator |
 | Window chrome | `PhysicsPlaygroundUITests` — real taps | simulator |
 | **Spatial gesture, in the room** | **this file** | **headset only** |
 
@@ -152,7 +152,7 @@ Both left the panel. **Not looked at yet.**
 
 ### ⟳ The switch bank
 
-Four toggles left the panel; the bank stands to the right of the field
+Five toggles left the panel; the bank stands to the right of the field
 at the region's own depth. **Not looked at yet** — the simulator's shell
 crash-looped through the pass that built it.
 
@@ -169,10 +169,12 @@ crash-looped through the pass that built it.
       they resume closing.
 - [ ] The other three only change what is DRAWN — hiding the field lines
       must not nudge a magnet.
-- [ ] **Reset relights all four.** Freeze the magnets, press Reset: they
+- [ ] **Reset relights all five.** Freeze the magnets, press Reset: they
       must come back free with the top plate lit. This was genuinely
-      broken — `reset()` restored three of the four and skipped the
-      freeze, so the bench came back frozen under a lamp saying otherwise.
+      broken — `reset()` restored three of the four plates that existed
+      then and skipped the freeze, so the bench came back frozen under a
+      lamp saying otherwise. The fifth plate is Earth's field, which
+      `-magLayers 0` does NOT reach — flick that one by hand.
 
 ## Electric Fields — the app's only fully spatial module
 
@@ -312,46 +314,35 @@ launcher is carried around the room.
   - [ ] Pull one out when the lab is already full: the well should go
         **dark and NOT pop**. It used to chirp and recoil while handing
         back nothing.
-### ⟳ The four new instruments
+### ⟳ The switch bank — and the room that got emptier
 
-The panel is empty of controls now; all seven moved into the room, and
-**not one of them has ever been looked at** — the simulator was wedged on
-its boot logo for the whole pass that built them. Placement is the risk,
-not wiring: every one is at the pivot plane's depth (z ≈ −1.08) aiming for
-the ~14° band, but this project has put controls 38° below the eye line
-three times already while the arithmetic looked fine.
+**Rewritten 2026-08-02.** This section used to describe four instruments.
+The module now has one bank and the Foucault pair, because the whole
+right-hand column — the three world discs, the g rail and the time rail —
+came out at the owner's direction, along with the Resonance verb plate.
 
-- [ ] **Can you SEE all four without hunting?** Stand where you naturally
-      stand. The switch bank should be off your left shoulder, the worlds
-      bank and two rails off your right. Anything you have to look down or
-      lean for has failed, however correct its numbers are.
+**`gravity` and `timeScale` are consequently not reachable by hand.**
+They are still real properties of the model and still driven by
+`-penGravity` / `-penTime` for screenshots, but a wearer cannot change
+either one. That is a deliberate retirement, not a missing control: see
+DECISIONS.md. Do not test for furniture that was removed on purpose.
+
+- [ ] **Can you SEE the bank without hunting?** Stand where you naturally
+      stand. It should be off your left shoulder, at the pivot plane's
+      depth (z ≈ −1.08), in the ~14° band. This project has put controls
+      38° below the eye line three times while the arithmetic looked
+      fine, so this is a gate, not a formality.
 - [ ] **Nothing is inside the swing.** Let a bob swing wide, and pull one
       out to a 1.6 m cable. No instrument should be swept through.
 - [ ] **The five-plate bank.** Each plate lights when its layer is on:
-      Velocity, Acceleration, Force, Energy bars, Air resistance.
+      Velocity, Acceleration, Force, Air resistance, Earth turns.
   - [ ] Every label sits BESIDE its plate, never across it — the bug that
         made this module's neighbours unreadable on 2026-07-31.
-  - [ ] Switch Air resistance off and the swing stops decaying. It is the
-        only plate on the bank that changes the physics rather than the
-        picture, and it should feel different.
-- [ ] **The worlds bank is also a readout.** Tap Moon: g follows, the
-      swing stretches to about 2.5× its Earth period (T ∝ 1/√g), and the
-      **Moon disc lights**.
-  - [ ] Now drag the g rail slightly off 1.62. The Moon disc must go
-        **dark** — you are between worlds, and nothing should claim
-        otherwise. Drag back and it relights.
-- [ ] **The g rail is absolute.** Where you put the bead is the value —
-      start a drag from the middle of the rail and the bead must not
-      jump. Its callout should read the same number the panel does.
-- [ ] **The time rail.** 0.1× should make a fast swing legible; 5× should
-      make a 1.6 m pendulum's 2.5 s period quick. Pause still freezes it
-      independently.
-- [ ] **A drag that starts on a rail stays on that rail** — slide off the
-      end and over a bob, and the bob must not start swinging.
-- [ ] **Reset returns all of it**: five plates to their defaults, g to
-      Earth with the Earth disc lit, time to 1×.
-
-- [ ] Gravity → Moon: the swing visibly slows.
+  - [ ] Switch Air resistance off and the swing stops decaying. With
+        "Earth turns", it is one of the two plates on this bank that
+        change the physics rather than the picture, and both should feel
+        different from the three drawing plates.
+- [ ] **Reset returns all five plates to their defaults.**
 
 ### ⟳ Foucault — the module's signature moment
 
@@ -452,9 +443,12 @@ module's new centrepiece. Everything marked ⟳ is new or changed.
 
 ### The panel emptied
 
-- [ ] ⟳ **The switch bank on your left**, six plates: spacetime grid,
-      Kepler sweep, field flow, velocity, **acceleration**, force. The
-      acceleration vector has never had a control anywhere in the app.
+- [ ] ⟳ **The switch bank on your left**, seven plates: spacetime grid,
+      Kepler sweep, field flow, velocity, **acceleration**, force,
+      **Lagrange points**. The acceleration vector had never had a
+      control anywhere in the app, and the Lagrange layer opened onto
+      `Lagrange.swift`, which was fully written and tested and had never
+      had a caller outside its own tests.
 - [ ] ⟳ **The G rail under the bank.** Drag its bead: orbits speed up and
       slow down live.
 - [ ] ⟳ **Tap the SUN.** It gets a mass bead of its own — in solar
@@ -525,8 +519,11 @@ hand proves it works.**
 A verb plate is dark machined stock with a lit edge, and it FLASHES on
 fire rather than latching. It must never read as a layer-bank plate.
 
-- [ ] **Pendulums — Resonance ×5**, under the Add-pendulum well. Fires
-      five stepped bobs. Present at launch with no argument.
+(**Pendulums has no verb plate.** "Resonance ×5" stood under the
+Add-pendulum well until 2026-08-02, when it came off the wall with the
+rest of the module's right-hand furniture. Three modules carry a verb
+plate now, not four.)
+
 - [ ] **Projectiles — Clear**, the launcher's third bloom petal beside
       Fire and Balls. Clears the volley. Tapping it with nothing in the
       air is a harmless no-op — it is deliberately not disabled.

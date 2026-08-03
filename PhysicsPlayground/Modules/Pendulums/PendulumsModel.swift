@@ -655,14 +655,16 @@ final class PendulumsModel {
 
     // MARK: Reset
 
-    /// Opens on the FIVE-PENDULUM WAVE.
+    /// Opens on NEWTON'S CRADLE (2026-08-02).
     ///
-    /// It used to open with a single bob on a thread — the module's most
-    /// mesmerising exhibit was sitting behind a button called
-    /// "Resonance ×5". Five lengths stepped 4% apart leave together,
-    /// drift into a travelling wave, scramble, and re-align; it is alive
-    /// and legible from the first second, and every parameter the module
-    /// teaches (length sets period, mass doesn't) is visible in it.
+    /// The module has opened three ways. A single bob on a thread, which
+    /// showed nothing until you touched it. Then the five-length
+    /// resonance wave, which was alive from the first second and was the
+    /// right answer to that problem. Now the cradle, which is a better
+    /// answer to a different one: the wave *demonstrates*, and the
+    /// cradle *asks*. "Why does one ball leave and not two" is a
+    /// question a visitor can hold before they know anything, and it is
+    /// a better first sentence than five bobs drifting out of phase.
     func reset() {
         pendulums = []
         selectedID = nil
@@ -687,12 +689,10 @@ final class PendulumsModel {
         resetFloorMarkers()
         insightText = ""
         accumulator = 0
-        // THE CRADLE IS THE COLD OPEN (2026-08-02), not the five-length
-        // resonance rig. Resonance is still a plate in the room, and it
-        // is the better SECOND thing to see — but a cradle asks its
-        // question before it demonstrates anything, and "why does one
-        // ball leave and not two" is a better first sentence than five
-        // bobs drifting out of phase.
+        // THE CRADLE IS THE COLD OPEN (2026-08-02), and it is now the
+        // ONLY way this bench arranges itself: the "Resonance ×5" plate
+        // that used to stand the five-length rig came off the wall the
+        // same day, with the rest of the module's right-hand furniture.
         loadNewtonsCradle()
     }
 

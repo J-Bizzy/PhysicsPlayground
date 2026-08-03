@@ -58,10 +58,12 @@ struct PendulumsSpaceView: View {
     //
     // The claim that used to stand here was worse than absent: it said
     // gravity "is a dial you turn while watching the swing stretch out in
-    // front of you." There was no dial. `SpatialDial` was deleted on
+    // front of you." There was no dial — `SpatialDial` was deleted on
     // 2026-07-29 for being relative, and gravity was a `Slider` in a
-    // collapsed card three taps from the physics. It is a rail now, and
-    // the sentence is finally true.
+    // collapsed card three taps from the physics. It briefly became a
+    // rail, which made the sentence true for about a day, and then the
+    // rail came out too (see below). There is no gravity control in this
+    // module now, and no sentence anywhere should say there is.
 
     /// What is drawn, and whether the air is real. Five plates, and the
     /// fifth is not a display layer — air resistance decides whether the
@@ -77,6 +79,16 @@ struct PendulumsSpaceView: View {
     // `gravity` and `timeScale` are still real properties of the model
     // and still reachable from the debug arguments (`-penGravity`,
     // `-penTime`) — what has gone is their furniture, not the physics.
+    //
+    // SO THEY ARE RETIRED CAPABILITIES, NOT HIDDEN ONES, and that
+    // distinction is the whole of what this comment is for. The standing
+    // rule is that nothing may be reachable ONLY from the CLI, and taken
+    // at face value these two now break it. They do not, because a
+    // wearer is no longer offered them at all: this bench stands on
+    // Earth, at 1×, and the two arguments exist so a screenshot can put
+    // it somewhere else. The rule forbids a capability the user is meant
+    // to have and cannot reach; it does not forbid retiring one.
+    // Anybody restoring either must restore its rail in the same commit.
     //
     // What is left in this room: the swing, the two wells that make one,
     // the layers bank — and Foucault's globe and spin rail, which appear
