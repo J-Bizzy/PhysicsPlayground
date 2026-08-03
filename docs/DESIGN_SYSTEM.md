@@ -31,9 +31,12 @@ for, operable without being discovered, and reachable in the simulator.**
 Nothing is revealed by gaze alone, and nothing may be the only path to a
 capability.
 
-As of 2026-08-01 **all six module panels hold zero `Slider`, `Picker` or
-`Toggle`** — held by `PanelControlCriterionTests`. A panel is a readout
-surface: numbers, buttons that perform discrete actions, and prose.
+As of 2026-08-01 there are **no module panels at all.** The exit criterion
+was "no `Slider`, `Picker` or `Toggle` in a panel"; it was met by all six and
+then superseded when the panels themselves were deleted, so
+`PanelControlCriterionTests` was rewritten from "no knobs in a panel" to "no
+panel", with a positive anchor so it cannot pass vacuously. Every readout
+stands in the room.
 
 | Shape | Type | Use it for |
 |---|---|---|
@@ -101,8 +104,11 @@ banned. It is also why `contrastLine` is two passes: a near-black casing swept
 fatter than the bright core.
 
 `contrastLine` spent a long time claiming to be "used everywhere" while
-shipping in one module. **If you are adding lines to a module, this is the
-pass that is probably missing.**
+shipping in one module. It is in six call sites now (`FieldRenderer`,
+`MagnetismRenderer`, `OrbitRing`, `HubVignettes`, `LatitudeGlobe`,
+`SpatialActionBank`) and still absent from Circuits' and Projectiles'
+renderers entirely. **If you are adding lines to a module,
+this is the pass that is probably missing.**
 
 Lighting is `RenderKit/Lighting.keyLight()` — one warm key from upper front-left,
 supplementing (never replacing) the room's own image-based light.
@@ -156,6 +162,18 @@ apparatus up beside you.
   *do*, never a syllabus entry.
 - **Minimum size.** Nothing below visionOS `body`; semantic fonts via
   `DesignTokens.TypeScale` so Dynamic Type works.
+- **Numbers.** One canon: `DesignSystem/PhysicsFormat`. Fixed-point at a
+  named house precision, SI prefixes chosen by magnitude (`47.0 µT`, not
+  `0.0000470 T`), angles, scientific notation, and one spelling of a
+  switched state. **Every function quantises before formatting**, which
+  is not tidiness — an in-room readout is rasterised, so a value that is
+  not quantised to its displayed precision rebuilds its texture every
+  frame. `PhysicsFormatTests` pins that property directly.
+- **Readout cards** take `.readoutCard()`. It carries the padding, the
+  radius and `.allowsHitTesting(false)`, and takes a material only where
+  the room behind demands one — Electric Fields passes `.thickMaterial`
+  because a regular panel washed out behind bright field lines until the
+  50 kT disclosure was the least legible text on screen.
 
 ---
 
@@ -178,10 +196,16 @@ All hub motion ticks from `SceneEvents.Update` — never `RealityView`'s
 (`RoomModel.lookRay`), not eye tracking, so it works in the simulator and is
 testable.
 
-**Reduce motion** follows the **system** setting only — `scene.stillness` reads
-`accessibilityReduceMotion`. The in-app duplicate was deleted; there is no
-`reduceMotion` in `AppSettings`. Under stillness the door signs **park at a
-composed rest pose** rather than freezing mid-flight.
+**Reduce motion** follows the **system** setting only — `accessibilityReduceMotion`.
+The in-app duplicate was deleted; there is no `reduceMotion` in `AppSettings`.
+Under stillness the door signs **park at a composed rest pose** rather than
+freezing mid-flight, and the palette bead stops breathing.
+
+*(Until 2026-08-03 this paragraph described the setting as app-wide while it
+was read in exactly one file, `HubSpaceView` — so the bead, which is the one
+object never off screen, went on breathing in every lab. The bead's UNFOLD is
+deliberately not suppressed: it answers a pinch, and a control that does not
+respond reads as broken rather than as calm.)*
 
 **Emphasis is opacity, light and sound — never geometry.** A de-emphasised
 station keeps solving, keeps its colliders, and keeps its panel section; if any

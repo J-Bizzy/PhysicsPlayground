@@ -688,18 +688,37 @@ follows is only what a screenshot cannot settle.
       it reads as faint on device too, that is a real finding about the
       one piece of type every visitor sees first.
 
-### Accessibility, and the claim that was not true
+### Accessibility, and the claim that was not true (now fixed — verify)
 
 - [ ] **VoiceOver over a `Callout`.** Every tethered live number in the
-      app — flux, µT, catch speed, sweep area, prediction countdown — is
-      a bare text mesh with no accessibility at all. `DECISIONS.md`
-      claims VoiceOver reach "on every plate, petal, disc and card", and
-      a callout is none of those, so the claim is technically intact and
-      the coverage is not. **Expected to FAIL until Stage 7 lands** —
-      recorded here so it is not discovered as a surprise.
-- [ ] **Reduce Motion inside a lab.** It is honoured in the hub only.
-      The palette bead still breathes, the ring still fans, the enter
-      transition still swells. Also expected to fail; also not yet fixed.
+      app — flux, µT, catch speed, sweep area, prediction countdown — was
+      a bare text mesh with no accessibility at all until 2026-08-03.
+      `DECISIONS.md` claimed VoiceOver reach "on every plate, petal, disc
+      and card"; a callout is none of those four, so the claim stayed
+      technically true while the coverage was not there. Each one now
+      carries a NAME and a VALUE — "Field at the compass", "48.3 µT".
+      Check both are spoken, and that the value tracks as it changes.
+- [ ] **Reduce Motion inside a lab**, not just in the hub. The palette
+      bead must stop breathing. It must still UNFOLD when pinched —
+      that answers a gesture, and a control that does not respond reads
+      as broken rather than as calm.
+
+### The catalog, and the numbers
+
+- [ ] **Open the flat catalog** (it shows before the gallery is up, and
+      whenever the gallery is closed). Above the two domains there is now
+      a tally and ONE next step: "4 of 20 experiments", then the next
+      thing to do and where. Complete that experiment and check the line
+      moves on to another.
+- [ ] **Capture a notebook entry in three different labs and compare
+      them.** Every row should read in one voice: the same quantity at
+      the same precision, and a switched state spelled "on"/"off"
+      everywhere rather than "free"/"frozen" in one room and
+      "yes"/"no — unbound" in another.
+- [ ] **Gravity Lab at 100× clock, watching the data card.** The true
+      anomaly ν now reads to a tenth of a degree rather than a hundredth,
+      because at that speed a hundredth changed every frame and rebuilt
+      the card every frame. It should feel steadier, not coarser.
 
 ### Leaks — the only test for these is patience
 
