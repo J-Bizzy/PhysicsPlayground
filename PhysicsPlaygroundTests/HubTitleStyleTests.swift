@@ -2,10 +2,11 @@
 //  HubTitleStyleTests.swift
 //  Physics Playground — app tests
 //
-//  The style engine behind the home's three display texts. Whatever
-//  voice is on, the lockup math depends on the same properties: real
-//  measured extents, a buildable line, and the plaque actually
-//  speaking in capitals.
+//  The engine behind the home's three display texts. There used to be
+//  four voices and half of these tests existed to prove they really
+//  differed; the three losers are gone, and what is left to pin is the
+//  contract the lockup math actually leans on: real measured extents, a
+//  buildable line, capitals, and ONE solid.
 //
 
 import XCTest
@@ -14,76 +15,71 @@ import RealityKit
 
 final class HubTitleStyleTests: XCTestCase {
 
-    /// Every voice measures real, positive extents — the flush-width
-    /// lockup divides by these, so a zero would scale a line to
-    /// infinity and hang the sign across the room.
-    func testEveryStyleMeasuresRealExtents() {
-        for style in HubTitleStyle.allCases {
-            let extents = style.extents("Magnetism", size: 0.12)
-            XCTAssertGreaterThan(extents.x, 0.1, "\(style) has no width")
-            XCTAssertGreaterThan(extents.y, 0.03, "\(style) has no height")
-            XCTAssertGreaterThan(extents.z, 0, "\(style) has no depth at all")
-        }
+    /// Real, positive extents on every axis — the flush-width lockup
+    /// divides by the width, so a zero would scale a line to infinity
+    /// and hang the sign across the room.
+    func testTheVoiceMeasuresRealExtents() {
+        let extents = HubTitleStyle.extents("Magnetism", size: 0.12)
+        XCTAssertGreaterThan(extents.x, 0.1, "no width")
+        XCTAssertGreaterThan(extents.y, 0.03, "no height")
+        XCTAssertGreaterThan(extents.z, 0, "no depth at all")
     }
 
-    /// The depths genuinely differ — the styles are three materials AND
-    /// three geometries, not one mesh painted three ways.
-    func testTheVoicesDifferInDepth() {
-        let size: CGFloat = 0.12
-        let plaque = HubTitleStyle.plaque.extents("Energy", size: size).z
-        let poster = HubTitleStyle.poster.extents("Energy", size: size).z
-        XCTAssertGreaterThan(plaque, poster * 3,
-                             "the plaque should be milled deep and the "
-                             + "poster near-flat; they measure alike")
+    /// Milled from stock, and the depth is not incidental: the letters'
+    /// own extruded sides ARE the depth cue, which is why `line` can get
+    /// away with a single pass. Flatten this and the type loses the only
+    /// shadow it has.
+    func testTheTypeIsDeeplyExtruded() {
+        let extents = HubTitleStyle.extents("Energy", size: 0.12)
+        XCTAssertGreaterThan(extents.z, 0.12 * 0.4,
+                             "the plaque should be milled deep")
     }
 
-    /// The plaque speaks in capitals; nobody else does.
-    func testOnlyThePlaqueUppercases() {
-        XCTAssertEqual(HubTitleStyle.plaque.display("& Magnetism"), "& MAGNETISM")
-        for style in HubTitleStyle.allCases where style != .plaque {
-            XCTAssertEqual(style.display("& Magnetism"), "& Magnetism",
-                           "\(style) should leave case alone")
-        }
+    /// The plaque speaks in capitals.
+    func testTheVoiceUppercases() {
+        XCTAssertEqual(HubTitleStyle.display("& Magnetism"), "& MAGNETISM")
     }
 
-    /// Every voice builds a line, in both roles — neutral wordmark and
-    /// accented door sign — and every line has at least the letter pass.
+    /// It builds a line in both roles — neutral wordmark and accented
+    /// door sign — and both have visible width.
     @MainActor
-    func testEveryStyleBuildsBothRoles() {
-        for style in HubTitleStyle.allCases {
-            for accent in [nil, UIColor.systemGreen] {
-                let line = style.line("Mechanics", size: 0.12, accent: accent)
-                XCTAssertFalse(line.children.isEmpty,
-                               "\(style) built an empty line")
-                let width = line.visualBounds(relativeTo: line).extents.x
-                XCTAssertGreaterThan(width, 0.1,
-                                     "\(style)'s line has no visible width")
-            }
+    func testItBuildsBothRoles() {
+        for accent in [nil, UIColor.systemGreen] {
+            let line = HubTitleStyle.line("Mechanics", size: 0.12, accent: accent)
+            XCTAssertFalse(line.children.isEmpty, "built an empty line")
+            let width = line.visualBounds(relativeTo: line).extents.x
+            XCTAssertGreaterThan(width, 0.1, "the line has no visible width")
         }
     }
 
-    /// The home ships in ONE voice, pinned in code. It used to come
-    /// out of Settings, with a sentinel that hung a specimen wall and a
-    /// fallback for stale raw values; both went on 2026-07-31, when the
-    /// choice stopped being a choice. If this constant ever moves, the
-    /// wordmark and both door signs move with it — they all read
-    /// `HubTitleStyle.current`, which the hub sets from this.
-    func testTheHomeShipsInThePlaque() {
-        XCTAssertEqual(HubTitleStyle.shipping, .plaque)
-    }
-
-    /// The plaque is ONE solid, not a stack. Two meshes sharing a
-    /// volume is what made the letters look doubled and the lines look
-    /// collided: a dark copy has to sit further back than the extrusion
-    /// is deep, and this is the deepest voice in the set, so any offset
-    /// small enough to read as a shadow punched through the faces.
+    /// ONE solid, not a stack. Two meshes sharing a volume is what made
+    /// the letters look doubled and the lines look collided: a dark copy
+    /// has to sit further back than the extrusion is deep, and this type
+    /// is deep, so any offset small enough to read as a shadow punched
+    /// through the faces.
     @MainActor
-    func testThePlaqueIsASingleSolid() {
-        let line = HubTitleStyle.plaque.line("MECHANICS", size: 0.12,
-                                             accent: .systemOrange)
+    func testTheLineIsASingleSolid() {
+        let line = HubTitleStyle.line("MECHANICS", size: 0.12,
+                                      accent: .systemOrange)
         XCTAssertEqual(line.children.count, 1,
                        "the plaque grew a second pass — its own extruded "
                        + "sides are the depth cue, and a stacked copy will "
                        + "interpenetrate them")
+    }
+
+    /// An accented sign is tinted toward the stock alloy rather than
+    /// printed in the raw domain hue: the signage is metal, and metal
+    /// takes a colour by being anodised, not by being painted.
+    func testAnAccentIsPulledTowardTheAlloy() {
+        let raw = UIColor.systemGreen
+        let stock = HubTitleStyle.blend(raw, toward: UIColor(white: 0.72, alpha: 1),
+                                        by: 0.30)
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        raw.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        stock.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        XCTAssertGreaterThan(r2, r1, "the alloy should lift the dark channels")
+        XCTAssertLessThan(g2, g1, "and pull the saturated one back")
+        XCTAssertEqual(a2, a1, accuracy: 0.001, "alpha should survive a blend")
     }
 }

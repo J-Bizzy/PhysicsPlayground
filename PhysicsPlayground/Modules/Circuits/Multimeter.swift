@@ -28,10 +28,18 @@
 //
 //  A NOTE ON THE COLLIDERS, because this object stands among terminals
 //  1 cm apart. Every one here is matched to what it represents: the
-//  dial's is the dial, each probe's is its HANDLE, and the body has none
-//  at all. An oversized grab box would shield the very terminals you are
+//  dial's is the dial, each probe's is its HANDLE, and the case's is the
+//  CASE. An oversized grab box would shield the very terminals you are
 //  trying to probe — the `SpatialScaleHandle` failure, in the module
 //  where it would be hardest to notice.
+//
+//  The case had no collider at all for a while, which honoured that rule
+//  by giving up something the rule never asked for: the meter could not
+//  be picked up. A tool you cannot put where you want it is furniture.
+//  The box below is the case's own 86 × 168 × 32 mm and not a millimetre
+//  more, and the meter stands 15 cm clear of the nearest terminal, so it
+//  shields nothing. The dial keeps its own collider and protrudes 3 cm in
+//  front of the case, so it still wins the taps aimed at it.
 //
 
 import RealityKit
@@ -79,8 +87,18 @@ final class Multimeter {
     /// terminals of one component are further apart than this.
     static let snapRadius: Double = 0.035
 
-    init(accent: UIColor) {
+    /// The case's entity name, which the module's drag handler looks for.
+    static let bodyName = "meter-body"
+
+    /// True when this entity is part of the case — the handle, as opposed
+    /// to the dial you turn or a probe you carry.
+    func isBody(_ entity: Entity) -> Bool {
+        isDescendant(entity, of: body) && !isDescendant(entity, of: dial)
+    }
+
+    init(accent: UIColor, anchor: SIMD3<Float>) {
         self.accent = accent
+        self.anchor = anchor
 
         if let mesh = try? Entity.load(named: "Multimeter") {
             // STOOD UP. The Blender script builds the case in the XY
@@ -113,16 +131,34 @@ final class Multimeter {
                 mesh: .generateBox(size: [0.086, 0.168, 0.032], cornerRadius: 0.006),
                 materials: [Materials.machined(UIColor(white: 0.24, alpha: 1))]))
         }
+        // The case, as something a hand can take hold of.
+        body.name = Self.bodyName
+        body.components.set(InputTargetComponent())
+        body.components.set(CollisionComponent(shapes: [
+            .generateBox(size: [0.086, 0.168, 0.032]),
+        ]))
+        body.components.set(HoverEffectComponent())
+        var bodyAccess = AccessibilityComponent()
+        bodyAccess.isAccessibilityElement = true
+        bodyAccess.label = "Multimeter. Drag to move it."
+        body.components.set(bodyAccess)
         root.addChild(body)
 
         // The dial is its own entity so it can TURN — what the user sees
-        // rotate is this pointer riding the case's moulded dial.
+        // rotate is this pointer riding the case's moulded knob.
+        //
+        // IT HAS TO CLEAR THE KNOB. At z = 0 the pointer sat at
+        // 0.0174…0.0196 while the mesh's knob occupies 0.0155…0.0235 at
+        // the same radius — so the one moving part of this instrument was
+        // buried four millimetres inside the one static part, and the
+        // dial read as dead. Turning it worked the whole time; the mode
+        // changed, the reading changed, and nothing appeared to move.
         dial.name = "meter-dial"
         dial.position = [0, -0.020, 0.0185]
         let pointer = ModelEntity(
             mesh: .generateBox(size: [0.0038, 0.026, 0.0022], cornerRadius: 0.001),
             materials: [UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))])
-        pointer.position = [0, 0.009, 0]
+        pointer.position = [0, 0.009, 0.0072]
         dial.addChild(pointer)
         dial.components.set(InputTargetComponent())
         dial.components.set(CollisionComponent(
@@ -234,8 +270,22 @@ final class Multimeter {
 
     // MARK: Render
 
-    func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?,
-                model: CircuitsModel) {
+    /// Where the case stands, in the renderer's own (unscaled) frame.
+    ///
+    /// Owned HERE for the same reason `probeTip` is: `update` runs every
+    /// frame, so anything it writes unconditionally cannot be dragged.
+    /// The anchor used to be a `private static let` in the view and was
+    /// re-applied sixty times a second, which is why a drag on the case
+    /// would have had no visible effect even once the case had a
+    /// collider to be dragged BY.
+    private(set) var anchor: SIMD3<Float>
+
+    func place(at position: SIMD3<Float>) {
+        anchor = position
+    }
+
+    func update(viewer: SIMD3<Float>?, model: CircuitsModel) {
+        let anchor = self.anchor
         root.position = anchor
 
         // Yaw only: a meter that pitched to meet a viewer looking down on

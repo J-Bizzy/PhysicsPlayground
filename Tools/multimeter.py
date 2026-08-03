@@ -7,6 +7,8 @@ Builds the bench multimeter and its probe, and writes them as USDZ.
 
 Outputs, both under PhysicsPlayground/Models/Circuits/:
     Multimeter.usdz   body, holster, bezel, LCD, rotary dial, two jacks
+                      — the dial's KNOB and its detents, but deliberately
+                      not its pointer; see build_meter()
     MeterProbe.usdz   one probe: handle, finger guard, needle tip
 
 WHY THIS IS A SCRIPT AND NOT A .BLEND
@@ -159,6 +161,10 @@ DIAL_R = 0.024
 SCREEN_Y = 0.040
 DIAL_Y = -0.020
 JACK_Y = -0.068
+# One detent per meter mode. Must match `CircuitsModel.MeterMode`, which
+# has four cases — the dial's ticks and the app's pointer are two halves
+# of one control and they are laid out from the same arithmetic.
+MODES = 4
 ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     "PhysicsPlayground", "Models", "Circuits")
 
@@ -220,16 +226,24 @@ def build_meter():
     bevel(dial, 0.0015, segments=3, angle=60)
     parts.append(shade(dial, knob))
 
-    pointer = box("DialPointer", (0.0038, DIAL_R * 1.1, 0.0022),
-                  location=(0, DIAL_Y + DIAL_R * 0.38,
-                            BODY_D / 2 + 0.0076))
-    parts.append(shade(pointer, marks))
+    # NO POINTER HERE. There used to be one, and it was the reason the
+    # dial appeared not to work: the app turns a pointer of its own to
+    # show the selected mode, but a pointer baked into the case cannot
+    # turn, so the visible bar sat still through every mode change while
+    # the reading underneath it changed. Two pointers, one of them
+    # frozen, reads as a broken control rather than as a working one.
+    #
+    # The knob keeps its knurl and its bevel; the moving part belongs to
+    # whoever owns the state, which is `Multimeter.swift`.
 
-    # Detents around the dial: eight positions, which is what a meter of
-    # this class actually has. They are geometry rather than a texture so
-    # they catch the light as the meter turns.
-    for index in range(8):
-        angle = math.radians(-125 + index * (250 / 7))
+    # Detents around the dial: ONE PER MODE, at exactly the angles
+    # `Multimeter.update` points the pointer at. Eight of them looked
+    # like a real meter of this class and were worse than useless here —
+    # four modes spread across the same 250° arc landed two of them
+    # between printed ticks, so the dial was visibly "off" at half its
+    # settings. A detent is a promise that something clicks there.
+    for index in range(MODES):
+        angle = math.radians(-125 + index * (250 / (MODES - 1)))
         radius = DIAL_R + 0.0105
         tick = box("DialTick", (0.0026, 0.0075, 0.0014),
                    location=(radius * math.sin(angle),

@@ -26,6 +26,9 @@ struct CircuitsSpaceView: View {
     @State private var trayDragID: UUID?
     /// Which probe a hand is carrying, if either.
     @State private var probeDrag: CircuitsModel.ProbeSlot?
+    /// Carrying the meter itself: where its case was when the hand closed
+    /// on it, and where the hand was, both in the renderer's frame.
+    @State private var meterDrag: (start: SIMD3<Float>, hand: SIMD3<Float>)?
     @State private var gripDrag: (grip: CircuitsModel.Terminal, pivot: SIMD3<Double>)?
     @Environment(AppModel.self) private var appModel
     /// Two-handed zoom on the bench. Electron View is now a FLOOR under
@@ -52,7 +55,9 @@ struct CircuitsSpaceView: View {
     /// Identifies the floating readout above the selected part.
     private static let readoutCardID = "circuit-readout"
 
-    /// Left of the bench, mirroring the layers bank on the right.
+    /// Left of the bench, mirroring the layers bank on the right — where
+    /// the meter STARTS. Where it ends up is the meter's own business
+    /// once a hand has moved it (`Multimeter.anchor`).
     private static let meterAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-0.62, -0.03, 0.16)
     /// The Clear plate, on the bench's far left flank.
@@ -132,7 +137,8 @@ struct CircuitsSpaceView: View {
             // bench would put itself out of reach exactly when you had
             // zoomed in to use it.
             let multimeter = Multimeter(
-                accent: UIColor(DesignTokens.Palette.circuitsAccent))
+                accent: UIColor(DesignTokens.Palette.circuitsAccent),
+                anchor: Self.meterAnchor)
             renderer.root.addChild(multimeter.root)
             self.meter = multimeter
 
@@ -170,8 +176,7 @@ struct CircuitsSpaceView: View {
                         anchor: CircuitsRenderer.benchPivot + SIMD3(0.62, -0.06, 0.16),
                         viewer: viewer,
                         dt: event.deltaTime)
-                    meter?.update(anchor: Self.meterAnchor, viewer: viewer,
-                                  model: model)
+                    meter?.update(viewer: viewer, model: model)
                     verbs?.update(anchor: Self.clearAnchor, viewer: viewer,
                                   dt: event.deltaTime)
                     // Rendered here every frame (not via the observation
@@ -316,6 +321,27 @@ struct CircuitsSpaceView: View {
                         return
                     }
 
+                    // THE METER ITSELF, next.
+                    //
+                    // In the RENDERER's frame, not the bench's: the meter
+                    // hangs off `root` rather than `viewRoot` precisely so
+                    // an 8× Electron View cannot carry the instrument out
+                    // of reach, and converting its drag through the zoom
+                    // would undo that — the case would fly eight times as
+                    // far as the hand at full magnification.
+                    if let meter {
+                        let world = SIMD3<Float>(value.convert(
+                            value.location3D, from: .local, to: .scene))
+                        let local = renderer.root.convert(position: world, from: nil)
+                        if meterDrag == nil, meter.isBody(value.entity) {
+                            meterDrag = (meter.anchor, local)
+                        }
+                        if let drag = meterDrag {
+                            meter.place(at: drag.start + (local - drag.hand))
+                            return
+                        }
+                    }
+
                     if bloom.updateGrip(hand: handF) { return }
                     if wireDragFrom == nil, partDrag == nil {
                         if bloom.beginGrip(value.entity, hand: handF) { return }
@@ -335,6 +361,7 @@ struct CircuitsSpaceView: View {
                 }
                 .onEnded { value in
                     probeDrag = nil
+                    meterDrag = nil
                     bloom.endGrip()
                     defer {
                         renderer?.hideRubberBand()

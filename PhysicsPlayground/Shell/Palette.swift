@@ -31,6 +31,10 @@ final class Palette {
     let root = Entity()
 
     private let bead = ModelEntity()
+    /// The gyroscope inside the bead: its rotor is ticked every frame,
+    /// and it is told how far the ring has unfolded so the gimbals can
+    /// lay flat into it.
+    private var beadVignette: HubVignettes.Built?
     /// The "Labs" nameplate under the closed bead; fades as the ring
     /// opens and the slots' own labels take over.
     private var beadLabel: Entity?
@@ -190,6 +194,11 @@ final class Palette {
         bead.scale = SIMD3(repeating: breath * (1 - 0.45 * openness))
         beadLabel?.components.set(OpacityComponent(opacity: 1 - openness))
 
+        // The rotor spins whatever else is paused, and the gimbals need
+        // to know how far the ring has come to lay flat into it.
+        beadVignette?.animate(time)
+        beadVignette?.setOpenness?(openness)
+
         if let viewer {
             let flat = SIMD3<Float>(viewer.x - root.position.x, 0,
                                     viewer.z - root.position.z)
@@ -278,15 +287,6 @@ final class Palette {
     }
 
     private func buildBead() {
-        var glass = PhysicallyBasedMaterial()
-        glass.baseColor = .init(tint: UIColor(white: 0.97, alpha: 1))
-        glass.roughness = 0.12
-        glass.clearcoat = .init(floatLiteral: 1.0)
-        glass.blending = .transparent(opacity: .init(floatLiteral: 0.55))
-        glass.emissiveColor = .init(color: .white)
-        glass.emissiveIntensity = 0.3
-        bead.model = ModelComponent(
-            mesh: .generateSphere(radius: Self.beadRadius), materials: [glass])
         bead.name = "palette-bead"
         bead.components.set(InputTargetComponent())
         bead.components.set(CollisionComponent(
@@ -297,20 +297,26 @@ final class Palette {
         accessibility.label = "Labs. Pinch to open."
         bead.components.set(accessibility)
 
-        // The bead says what it IS: the module-switcher glyph floating
-        // in the glass, the house nameplate beneath — an anonymous
-        // sphere asked to be pinched on faith, and wasn't.
-        if let texture = Bloom.symbolTexture("square.grid.3x3") {
-            var iconMaterial = UnlitMaterial()
-            iconMaterial.color = .init(tint: UIColor(white: 1, alpha: 0.92),
-                                       texture: .init(texture))
-            iconMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
-            let icon = ModelEntity(
-                mesh: .generatePlane(width: 0.021, height: 0.021),
-                materials: [iconMaterial])
-            icon.position = [0, 0, 0.009]
-            bead.addChild(icon)
-        }
+        // The bead is a gyroscope, built by the same system that builds
+        // every lab's miniature — `HubVignettes.make(for: "labs")`.
+        //
+        // It was a white glass sphere with an SF Symbol grid floating
+        // inside it: iOS chrome on the one object in this app that is
+        // never not on screen. The glyph was there because an anonymous
+        // sphere asked to be pinched on faith and wasn't — but the answer
+        // to "say what you are" is to BE something, and every other
+        // object in the room is an instrument. A gyroscope belongs to no
+        // single lab, and holding still while everything turns is exactly
+        // the bead's job.
+        //
+        // Fitted the same way the ring slots are: the miniature arrives
+        // normalised to the common square and is scaled to the bead.
+        let built = HubVignettes.make(for: "labs")
+        built.entity.scale = SIMD3(
+            repeating: Self.beadRadius * 2 / (HubVignettes.frameHalf * 2))
+        bead.addChild(built.entity)
+        beadVignette = built
+
         let label = HubScene.namePlate("Labs", accent: UIColor(white: 0.95, alpha: 1),
                                        size: 0.012)
         label.position = [0, -(Self.beadRadius + 0.026), 0]

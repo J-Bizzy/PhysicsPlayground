@@ -17,9 +17,9 @@
 //  one level down.
 //
 //  The design language is inherited, not invented:
-//  · The TYPE speaks in whatever voice `HubTitleStyle.current` says —
-//    the same engine the wordmark uses, so the home's three display
-//    texts always agree. What changes per sign is the colour: the
+//  · The TYPE comes from `HubTitleStyle` — the same engine the wordmark
+//    uses, so the home's three display texts cannot disagree. What
+//    changes per sign is the colour: the
 //    letters carry the DOMAIN accent, which until now appeared only in
 //    each slab's hairline, the progress rings, and the focus chip.
 //    Signage joins that short list.
@@ -106,8 +106,8 @@ final class HubDomainTitle {
         // the common width, stack with cap-height leading, centre the
         // block on the anchor.
         let built = texts.map { text -> (entity: Entity, extents: SIMD3<Float>) in
-            (HubTitleStyle.current.line(text, size: Self.reference, accent: accent),
-             HubTitleStyle.current.extents(text, size: Self.reference))
+            (HubTitleStyle.line(text, size: Self.reference, accent: accent),
+             HubTitleStyle.extents(text, size: Self.reference))
         }
         let scales = built.map { width / max($0.extents.x, 1e-4) }
         let heights = zip(built, scales).map { $0.0.extents.y * $0.1 }
@@ -116,8 +116,8 @@ final class HubDomainTitle {
         // 10-character "Playground"), so its cap height can far exceed
         // the mean — and an average-derived gap then lets the tall line
         // collide with its neighbour. Uppercase makes it worse, which
-        // is how the plaque candidate exposed it.
-        let gap = (heights.max() ?? 0) * HubTitleStyle.current.leadingFactor
+        // is how the plaque exposed it.
+        let gap = (heights.max() ?? 0) * HubTitleStyle.leadingFactor
         let blockHeight = heights.reduce(0, +) + gap * Float(heights.count - 1)
         halfHeight = blockHeight / 2
 

@@ -324,11 +324,6 @@ final class HubScene {
         root.orientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
 
         titlePosition = SIMD3(0, arcHeight + 0.70, -(arcRadius + 0.45))
-        // Committed BEFORE anything draws: the wordmark and the two
-        // door signs are built at different moments from different
-        // files, and one of them reading the voice late is how they
-        // would come to disagree mid-rebuild.
-        HubTitleStyle.current = HubTitleStyle.shipping
         buildBubbleTitle()
         buildPodium(distance: distance)
 
@@ -687,8 +682,8 @@ final class HubScene {
         // Build at a reference size, then scale each to the common width.
         let reference: CGFloat = 0.17
         let built = lines.map { text -> (entity: Entity, extents: SIMD3<Float>) in
-            (HubTitleStyle.current.line(text, size: reference, accent: nil),
-             HubTitleStyle.current.extents(text, size: reference))
+            (HubTitleStyle.line(text, size: reference, accent: nil),
+             HubTitleStyle.extents(text, size: reference))
         }
         let scales = built.map { Self.titleWidth / max($0.extents.x, 1e-4) }
         // Cap heights AFTER scaling — a wider scale makes taller letters.
@@ -698,8 +693,8 @@ final class HubScene {
         // 10-character "Playground"), so its cap height can far exceed
         // the mean — and an average-derived gap then lets the tall line
         // collide with its neighbour. Uppercase makes it worse, which
-        // is how the plaque candidate exposed it.
-        let gap = (heights.max() ?? 0) * HubTitleStyle.current.leadingFactor
+        // is how the plaque exposed it.
+        let gap = (heights.max() ?? 0) * HubTitleStyle.leadingFactor
         let blockHeight = heights.reduce(0, +) + gap * Float(heights.count - 1)
 
         // Walk down from the top of the block, so the whole lockup ends

@@ -52,10 +52,11 @@ final class AppSettings {
     }
 
     // There is no `titleStyle` here any more either. The home speaks in
-    // the machined plaque, full stop (owner's call, 2026-07-31) —
-    // `HubTitleStyle.shipping`. The specimen wall did its job: it is how
-    // the plaque was chosen, off three candidates hanging side by side
-    // in the room. A decision that has been made is not a preference,
+    // the machined plaque, full stop (owner's call, 2026-07-31) — it is
+    // all `HubTitleStyle` knows how to draw. The specimen wall did its
+    // job: it is how the plaque was chosen, off three other candidates
+    // hanging side by side in the room. A decision that has been made is
+    // not a preference,
     // and leaving it in Settings invites every user to re-litigate the
     // app's own identity from a menu.
 
