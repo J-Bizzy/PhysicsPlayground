@@ -2,51 +2,37 @@
 //  PodButtonStyle.swift
 //  Physics Playground — DesignSystem
 //
-//  The house button styles the pods and panels share, so the controls
-//  read as one crafted set of instruments rather than stock iOS
+//  The house button styles the shell windows share, so the few flat
+//  buttons that remain read as one crafted set rather than stock iOS
 //  capsules. Two roles:
 //
 //  · .podProminent — a filled accent capsule with a soft top sheen, for
-//    the one primary action in a pod (Add, Fire, Strike…).
-//  · .podQuiet — an accent-tinted glass capsule with a hairline border,
-//    for the many secondary actions (presets, modes, remove…).
+//    a window's one primary action ("Show in room", Capture, Enter).
+//  · .podQuiet — a tinted glass capsule with a hairline border, for
+//    secondary actions (the notebook's per-row Delete…).
 //
-//  Both pick up the module's colour from the `podAccent` environment
-//  value — set once by ControlPod and the module window — so a button
-//  never has to name its own colour. The rare semantically-coloured
-//  button (red = positive charge, blue = negative) passes an explicit
-//  colour to .podProminent(_:). Destructive buttons colour themselves
+//  A caller that wants the active module's colour passes it explicitly
+//  to .podProminent(_:); with no argument the button wears the system
+//  accent. (These styles once read a `podAccent` environment value set
+//  by ControlPod — deleted with the panels on 2026-08-01. The key
+//  outlived its only writers, so every button was already rendering
+//  the default; it is gone now.) Destructive buttons colour themselves
 //  red from the button role.
 //
 
 import SwiftUI
 
-// MARK: Accent handed down to the buttons
-
-private struct PodAccentKey: EnvironmentKey {
-    static let defaultValue: Color = .accentColor
-}
-
-extension EnvironmentValues {
-    /// The tint every house button in this subtree fills or strokes with.
-    var podAccent: Color {
-        get { self[PodAccentKey.self] }
-        set { self[PodAccentKey.self] = newValue }
-    }
-}
-
 // MARK: Prominent — the one filled primary action
 
 struct PodProminentButtonStyle: ButtonStyle {
-    /// An explicit colour overrides the inherited accent (the red/blue
-    /// charge buttons); nil means "use the module's accent".
+    /// An explicit colour (the module's accent, a semantic red/blue);
+    /// nil means the system accent.
     var color: Color?
 
-    @Environment(\.podAccent) private var accent
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        let fill = color ?? accent
+        let fill = color ?? .accentColor
         configuration.label
             .font(.callout.weight(.semibold))
             .foregroundStyle(.white)
@@ -71,12 +57,11 @@ struct PodProminentButtonStyle: ButtonStyle {
 // MARK: Quiet — the many secondary actions
 
 struct PodQuietButtonStyle: ButtonStyle {
-    @Environment(\.podAccent) private var accent
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         let destructive = configuration.role == .destructive
-        let key = destructive ? Color.red : accent
+        let key = destructive ? Color.red : Color.accentColor
         configuration.label
             .font(.callout.weight(.medium))
             .foregroundStyle(destructive ? Color.red : Color.primary)
@@ -101,9 +86,9 @@ struct PodQuietButtonStyle: ButtonStyle {
 // MARK: Call-site sugar
 
 extension ButtonStyle where Self == PodProminentButtonStyle {
-    /// Filled in the module's accent.
+    /// Filled in the system accent.
     static var podProminent: PodProminentButtonStyle { .init(color: nil) }
-    /// Filled in a specific colour (the semantic charge buttons).
+    /// Filled in a specific colour (a module accent, a semantic red/blue).
     static func podProminent(_ color: Color) -> PodProminentButtonStyle { .init(color: color) }
 }
 

@@ -16,6 +16,40 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-03 — The archived five lose their miniatures; magInertia loses its release read
+
+**Decision:** Two removals from the pre-submission audit. The five
+vignette builders for archived modules (`waves`, `windTunnel`,
+`springs`, `elasticField`, `optics` — ~270 lines in `HubVignettes.swift`)
+are deleted, along with the nine colour tokens only they still
+referenced and the `podAccent` environment key nothing has written since
+the panels went. And `MagnetismModel`'s two `magInertia` reads move
+inside `#if DEBUG`, making them consistent with every other
+launch-argument read in the app.
+
+**Context:** The builders were kept so that restoring an archived module
+was genuinely one line, art included — but they were the only dead code
+compiled into the shipping binary, and `make(for:)` had no case that
+could reach them. The restore path survives in git history, which
+`Archive/README.md` now says explicitly; a restore was already "a merge,
+not a `git mv`". `podAccent` was read by both house button styles but
+written by nothing — `ControlPod`, its only writer, was deleted
+2026-08-01 — so every button was already rendering the default and the
+customization point was a fiction. The `magInertia` gating settles what
+2026-08-03's inertia entry left open for v1: the mode's touching-pair
+oscillation (it grows rather than settles) is PARKED, not fixed. A
+release build now structurally cannot reach the defective path; the
+judged-on-feel comparison the flag exists for stays available in every
+DEBUG build.
+
+**Consequences:** Restoring an archived module now starts with
+`git log -- PhysicsPlayground/Hub/HubVignettes.swift` for its miniature.
+The two button styles name `.accentColor` directly, and a future
+module-tinted button passes its colour explicitly to `.podProminent(_:)`
+— the environment route is gone, not dormant. The inertia bench's
+contact damping remains an open problem with a test hook waiting in
+`ON_DEVICE_TESTS.md`; fixing it is post-launch work.
+
 ## 2026-08-03 — Circuit Workshop's tray becomes two racks on the flanks
 
 **Decision:** The parts tray is deleted. In its place, eleven `Well`

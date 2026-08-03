@@ -31,7 +31,12 @@ the "strongly three-dimensional" test:
 Nothing here is deleted. The physics these leaned on lives in
 PhysicsCore and is still fully tested. To restore a module: move its
 folder back under `PhysicsPlayground/Modules/`, add its one line to
-`ModuleCatalog.all`, and its id to `HubDomain.moduleIDs`.
+`ModuleCatalog.all`, and its id to `HubDomain.moduleIDs` — and recover
+its hub miniature from git history: the five archived vignette builders
+were deleted from `HubVignettes.swift` on 2026-08-03 (they were the one
+piece of archive still compiled into the shipping binary), so a restore
+also means reviving the module's builder and its `make(for:)` case from
+the commit that removed them.
 
 **These are snapshots, not living code.** Nothing here compiles — the
 `Archive/` tree sits outside the Xcode synchronized root — so an

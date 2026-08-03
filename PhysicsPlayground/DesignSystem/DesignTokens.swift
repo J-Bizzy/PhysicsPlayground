@@ -76,15 +76,6 @@ enum DesignTokens {
             }
         }
 
-        // Waves
-        static let waveSourceUI: UIColor = .systemTeal
-        static let waveInvertedUI: UIColor = .systemOrange
-        static let waveSource = Color(uiColor: waveSourceUI)
-        static let waveInverted = Color(uiColor: waveInvertedUI)
-
-        // Wind tunnel
-        static let streamlineUI: UIColor = .systemMint
-
         // Circuits
         static let copperUI = UIColor(red: 0.75, green: 0.48, blue: 0.25, alpha: 1)
         static let electronUI: UIColor = .systemCyan
@@ -98,16 +89,9 @@ enum DesignTokens {
         static let electromagnetismAccent = Color.yellow
         static let kinematicsAccent = Color.orange
         static let gravityAccent = Color.indigo
-        static let wavesAccent = Color.cyan
-        static let wavesAccentUI = UIColor(Color.cyan)
         static let pendulumsAccentUI = UIColor(Color.purple)
-        static let springsAccentUI = UIColor(Color.teal)
-        static let windAccentUI = UIColor(Color.mint)
-        static let windAccent = Color.mint
         static let circuitsAccent = Color.green
         static let pendulumsAccent = Color.purple
-        static let springsAccent = Color.teal
-        static let opticsAccent = Color(red: 1.0, green: 0.42, blue: 0.38)
         static let magnetismAccent = Color(red: 0.85, green: 0.3, blue: 0.62)
     }
 

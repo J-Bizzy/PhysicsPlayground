@@ -168,7 +168,16 @@ final class MagnetismModel {
     /// recognisable thing a magnetism bench can show and which nothing
     /// without inertia can do. What does not change: the fields, forces
     /// and torques, which were always exact.
+    ///
+    /// DEBUG-only, like every other launch-argument read in the app: a
+    /// release build has no way to set the flag, and the mode carries a
+    /// known defect (a touching pair never settles — DECISIONS.md
+    /// 2026-08-03), so the glide is the only bench a wearer can reach.
+    #if DEBUG
     var inertiaOn = UserDefaults.standard.bool(forKey: "magInertia")
+    #else
+    var inertiaOn = false
+    #endif
 
     /// Per-magnet velocity and angular velocity. Empty while the glide
     /// is driving, so switching modes starts from rest rather than
@@ -541,7 +550,11 @@ final class MagnetismModel {
     /// rather than to `false`: the argument is how the alternative bench
     /// is staged for a screenshot, and a Reset that silently dropped
     /// back to the glide would photograph the wrong one.
+    #if DEBUG
     private let inertiaAtLaunch = UserDefaults.standard.bool(forKey: "magInertia")
+    #else
+    private let inertiaAtLaunch = false
+    #endif
 
     func reset() {
         // Covered by `ResetCoverageTests`, which enumerates every Bool on
