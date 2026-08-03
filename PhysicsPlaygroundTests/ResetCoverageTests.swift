@@ -181,6 +181,14 @@ final class ResetCoverageTests: XCTestCase {
                 case "showCompasses": model.showCompasses.toggle()
                 case "compassOn": model.compassOn.toggle()
                 case "earthFieldOn": model.earthFieldOn.toggle()
+                case "inertiaOn": model.inertiaOn.toggle()
+                // A `let` recording what `-magInertia` asked for at
+                // launch. Reflection cannot tell a `let` from a `var`,
+                // so it surfaces here and is named rather than skipped —
+                // an unexplained hole in this switch is how the next
+                // real flag would slip through. It is immutable, so
+                // there is nothing to flip and nothing to restore.
+                case "inertiaAtLaunch": break
                 case "isPaused": model.isPaused.toggle()
                 default:
                     XCTFail("MagnetismModel gained a flag this test cannot "

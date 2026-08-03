@@ -22,6 +22,74 @@ commit messages and the code; where reasoning is reconstructed rather
 than quoted it is marked *(inferred)*, and the owner should correct or
 strike those lines. The lesson is its own entry at the bottom.
 
+## 2026-08-03 — The magnets get mass, behind a flag, and it does not settle at contact
+
+**Decision:** `PhysicsCore.DipoleDynamics` gives a bar magnet mass and
+rotational inertia, and `MagnetismModel` gains `inertiaOn`, reached by
+`-magInertia 1`. **The overdamped glide remains the default.** Both
+benches ship at once so the owner can judge them side by side on device.
+
+**Context.** `MagneticField` has always returned the exact dipole B,
+force and torque — it even swaps in a finite two-pole bar where a point
+dipole would be wrong near the poles. The bench then moved its magnets by
+a MOBILITY law: velocity proportional to force, angular rate proportional
+to torque, both capped by two tuned gains. Exact fields, quasi-static
+motion. The consequence is one specific thing a magnetism lab is expected
+to show and this one could not: **a needle released at an angle swings
+PAST north and rings back.** Nothing without inertia can overshoot.
+
+**THE MASS IS DERIVED, NOT INVENTED**, which is what separates this from a
+second set of tuned constants. A permanent magnet's moment is its
+saturation magnetisation times its volume, so m = M_s·V fixes the volume,
+the length fixes the cross-section and radius, and the alloy's density
+fixes the mass and hence I = m(3r² + L²)/12. A magnet you make stronger
+becomes a bigger, heavier bar — and therefore slower to turn. Nothing in
+the file is free to be tuned for feel except the damping, which is stated
+as the one tunable number and is defended as what a lab does anyway
+(a needle on a jewelled pivot in oil settles in a few swings, not
+minutes).
+
+The numbers that fall out are a sanity check in themselves: the bench's
+6 A·m² magnet is a 16 cm bar, 7 mm across, weighing 45 g, with a period
+of about 3.5 s in Earth's field. Those are all plausible objects, and a
+test says so — because every relation above can hold while the derivation
+still produces something absurd.
+
+**Tests are theorem recovery.** Nothing asserts that
+`smallOscillationPeriod` returns 2π√(I/mB); a swing is integrated and its
+period measured, at three field strengths, and the 1/√B scaling is the
+real claim. Energy is conserved undamped and falls monotonically damped —
+the latter is why the drag is applied as a decay factor rather than
+−γv·dt, which at a coarse step can overshoot into negative velocity and
+pump energy back in.
+
+**AND IT DOES NOT SETTLE AT CONTACT. Stated here because it is the reason
+this is behind a flag rather than the reason it should not ship.**
+Two inertial magnets touching keep moving: the angle's variation over the
+last second GROWS from 1.28 rad at t = 10 s to 2.82 rad at t = 300 s.
+Measured, not suspected. The damping is not the culprit — at 0.9 s⁻¹ over
+five minutes any free rotation is gone many times over. The driver is the
+contact: `separated()` resolves an overlap by MOVING a magnet, which does
+work against an attraction that is enormous at that range, and the field
+pulls it straight back. `killVelocityIntoContacts` removes the closing
+velocity and does not stop the positional pump. It is the same standoff
+`softenedAtContact` was written to defeat for the glide, met again where
+a projection-based contact and a real inertia collide.
+
+So the inertial bench is honest in free field and unfinished at contact.
+`MagnetismInertiaTests` asserts what is actually true — bounded, inside
+the station, finite, with the moment's magnitude surviving any amount of
+rotation — and its name says it does not settle, so nobody reads a
+passing suite as a claim that it does.
+
+**Consequences.** Whichever bench wins, the legend gained a disclosure in
+the same pass saying the default one glides rather than accelerates,
+because that had never been said. If the inertial bench is adopted, the
+contact pump has to be fixed first and this entry is where the reason
+lives. If it is rejected, `DipoleDynamics` is tested physics with no
+app-side caller, which is the standing this project already gives
+`CurrentLoop`, `Induction` and everything in `Archive/`.
+
 ## 2026-08-02 — Pendulums' right-hand column comes out; g and the clock are RETIRED
 
 **Decision:** Owner's call. The "Resonance ×5" verb plate, the three

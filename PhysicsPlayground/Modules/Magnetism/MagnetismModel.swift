@@ -152,14 +152,148 @@ final class MagnetismModel {
     /// charges.
     var dynamicsOn = true
 
+    // MARK: Inertia — the alternative bench, behind a launch argument
+
+    /// Whether the magnets have MASS AND ROTATIONAL INERTIA.
+    ///
+    /// Off by default (the glide below), on with `-magInertia 1`, and
+    /// the two exist side by side on purpose: this reverses a decision
+    /// this file's own header records ("the magnets settle into
+    /// equilibrium instead of oscillating"), and a reversal made on
+    /// feel has to be judged on feel, in a headset, against the thing
+    /// it replaces. See DECISIONS.md.
+    ///
+    /// What changes: with inertia a needle released at an angle swings
+    /// PAST alignment and rings back, which is the single most
+    /// recognisable thing a magnetism bench can show and which nothing
+    /// without inertia can do. What does not change: the fields, forces
+    /// and torques, which were always exact.
+    var inertiaOn = UserDefaults.standard.bool(forKey: "magInertia")
+
+    /// Per-magnet velocity and angular velocity. Empty while the glide
+    /// is driving, so switching modes starts from rest rather than
+    /// inheriting a mobility "velocity" that was never one.
+    private var bodies: [UUID: DipoleBody] = [:]
+
+    /// Linear drag, 1/s. The one tunable number in the inertial path.
+    /// Air alone would take minutes to still a needle; a lab pivots it
+    /// in oil so a demonstration settles in a few swings.
+    private static let inertialDamping = 0.9
+
     func step(dt: Double) {
         guard !isPaused else { return }
         guard dynamicsOn else {
             // Frozen: no forces, but contact separation still holds so a
             // dragged magnet can't be parked inside another.
+            bodies.removeAll()
             magnets = separated(magnets)
             return
         }
+        if inertiaOn {
+            stepWithInertia(dt: dt)
+            return
+        }
+        bodies.removeAll()
+        stepOverdamped(dt: dt)
+    }
+
+    /// The inertial bench: F = ma and τ = Iα, with the exact dipole
+    /// force and torque, integrated by `PhysicsCore.DipoleDynamics`.
+    private func stepWithInertia(dt: Double) {
+        // Substepped: the torque on a magnet close to another is large,
+        // and a frame-length step through it would resolve a swing into
+        // a staircase. Four substeps at 90 Hz is 360 Hz of physics,
+        // which is comfortably inside the stiffest period the bench can
+        // produce.
+        let substeps = 4
+        let h = min(dt, 1.0 / 60.0) / Double(substeps)
+        for _ in 0..<substeps {
+            var next = magnets
+            for i in magnets.indices {
+                let id = magnets[i].id
+                guard id != heldID else {
+                    // A held magnet is the hand's, not the physics'. Its
+                    // stored motion is cleared so releasing it does not
+                    // hand back a velocity from before the grab.
+                    bodies[id] = DipoleBody()
+                    continue
+                }
+                let others = magnets.enumerated().filter { $0.offset != i }.map(\.element)
+                guard !others.isEmpty else { continue }
+
+                let force = MagneticField.netForce(on: magnets[i], from: others)
+                let field = MagneticField.vector(at: magnets[i].position, dueTo: others)
+                let torque = simd_cross(magnets[i].moment, field)
+
+                let strength = magnets[i].strength
+                var body = bodies[id] ?? DipoleBody()
+                var position = magnets[i].position
+                var moment = magnets[i].moment
+                DipoleDynamics.step(
+                    body: &body, position: &position, moment: &moment,
+                    force: force, torque: torque,
+                    mass: DipoleDynamics.mass(moment: strength),
+                    momentOfInertia: DipoleDynamics.momentOfInertia(
+                        moment: strength, length: Self.magnetLength),
+                    damping: Self.inertialDamping,
+                    dt: h)
+
+                // The station's walls are inelastic: a magnet that
+                // reaches one stops rather than bouncing off a boundary
+                // that is a display limit and not a physical object.
+                let clamped = clamp(position)
+                if clamped != position { body.velocity = .zero }
+                next[i].position = clamped
+                next[i].moment = moment
+                bodies[id] = body
+            }
+            magnets = separated(next)
+            killVelocityIntoContacts()
+        }
+        // Anything that has left the bench forgets its motion.
+        let live = Set(magnets.map(\.id))
+        bodies = bodies.filter { live.contains($0.key) }
+    }
+
+    /// Takes the APPROACHING component out of two touching magnets'
+    /// velocities — an inelastic contact.
+    ///
+    /// Without this the inertial bench reproduces, exactly, the standoff
+    /// that `softenedAtContact` was written to fix for the glide. The
+    /// dipole force at contact is enormous, so a pair that has come
+    /// together keeps accelerating INTO each other; `separated` then
+    /// hard-projects them apart every substep while the bodies retain
+    /// the inward velocity that put them there. The pair sits buzzing at
+    /// the frame rate, apparently at rest and visibly vibrating.
+    ///
+    /// Real magnets snapping together lose that energy to the click, so
+    /// this is the honest model and not a damping fudge: only the
+    /// component along the line of centres is removed, and only when
+    /// they are actually closing. Sliding across each other is untouched.
+    private func killVelocityIntoContacts() {
+        for a in magnets.indices {
+            for b in (a + 1)..<magnets.count {
+                let delta = magnets[b].position - magnets[a].position
+                let distance = simd_length(delta)
+                guard distance < Self.contactDistance, distance > 1e-9 else { continue }
+                let axis = delta / distance
+
+                let towardB = simd_dot(bodies[magnets[a].id]?.velocity ?? .zero, axis)
+                if towardB > 0, var body = bodies[magnets[a].id] {
+                    body.velocity -= axis * towardB
+                    bodies[magnets[a].id] = body
+                }
+                let towardA = simd_dot(bodies[magnets[b].id]?.velocity ?? .zero, -axis)
+                if towardA > 0, var body = bodies[magnets[b].id] {
+                    body.velocity += axis * towardA
+                    bodies[magnets[b].id] = body
+                }
+            }
+        }
+    }
+
+    /// The overdamped glide — the bench's default since it was written.
+    private func stepOverdamped(dt: Double) {
         let h = min(dt, 1.0 / 60.0)
         var next = magnets
         for i in magnets.indices where magnets[i].id != heldID {
@@ -403,7 +537,19 @@ final class MagnetismModel {
 
     // MARK: Reset
 
+    /// What `-magInertia` asked for at launch. `reset()` returns to THIS
+    /// rather than to `false`: the argument is how the alternative bench
+    /// is staged for a screenshot, and a Reset that silently dropped
+    /// back to the glide would photograph the wrong one.
+    private let inertiaAtLaunch = UserDefaults.standard.bool(forKey: "magInertia")
+
     func reset() {
+        // Covered by `ResetCoverageTests`, which enumerates every Bool on
+        // this model — so adding `inertiaOn` above obliged this line
+        // rather than relying on anybody remembering it. That is the
+        // whole point of that test.
+        inertiaOn = inertiaAtLaunch
+        bodies.removeAll()
         // ONE magnet, centred: its looping dipole field IS the opening
         // scene — clean, symmetric, readable, like the electric
         // dipole next door. (Three misaligned magnets used to glide
