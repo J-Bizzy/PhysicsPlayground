@@ -20,6 +20,10 @@ struct MagnetismSpaceView: View {
     @State private var renderer: MagnetismRenderer?
     @State private var drag: RelativeDrag?
     @State private var bloom = Bloom()
+    /// Held for coordinate conversion in `handleGrabEvents`: a raw
+    /// `SpatialEventGesture` has no `value.convert`, so the view keeps
+    /// the RealityView's own converter.
+    @State private var sceneContent: RealityViewContent?
     /// Which magnet's ring is open — shared by the tap gesture and the
     /// render loop (see RingState's header for why it's a reference).
     @State private var ring = RingState()
@@ -60,6 +64,7 @@ struct MagnetismSpaceView: View {
         RealityView { content in
             let renderer = MagnetismRenderer()
             content.add(renderer.root)
+            sceneContent = content
 
             let sources = Well([
                 .init(name: "Magnet",
@@ -201,6 +206,14 @@ struct MagnetismSpaceView: View {
                     ring.openID = nil
                 }
         )
+        // The multi-hand grab first, then the single-recogniser drag for
+        // the affordances that are one-hand by nature (the strength
+        // bead's grip, and pulling a new magnet from the well).
+        .simultaneousGesture(
+            SpatialEventGesture()
+                .onChanged { events in handleGrabEvents(events) }
+                .onEnded { events in handleGrabEvents(events) }
+        )
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
@@ -215,25 +228,122 @@ struct MagnetismSpaceView: View {
                     if drag == nil {
                         if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
                         if let id = wells?.pull(value.entity, at: hand) {
+                            // Held from birth, so the glide cannot tug a
+                            // newborn magnet out of the hand that made it.
+                            model.grab(id: id)
                             drag = RelativeDrag(name: id.uuidString,
                                                 target: hand, hand: hand)
                             return
                         }
-                        drag = beginDrag(entity: value.entity, hand: hand)
+                        // Magnets and the compass are NOT claimed here —
+                        // `handleGrabEvents` owns them, one session per
+                        // hand, which is what makes a magnet in each
+                        // hand possible at all.
                     }
                     guard let drag else { return }
-                    if drag.name == MagnetismRenderer.handCompassName {
-                        model.moveCompass(to: drag.position(forHand: hand))
-                    } else if let id = UUID(uuidString: drag.name) {
+                    if let id = UUID(uuidString: drag.name) {
                         model.move(id: id, to: drag.position(forHand: hand))
                     }
                 }
                 .onEnded { _ in
                     bloom.endGrip()
-                    model.release()
+                    // Only the well-pull's own magnet: `model.release()`
+                    // here used to drop EVERYTHING, including whatever
+                    // the other hand was holding.
+                    if let drag, let id = UUID(uuidString: drag.name) {
+                        model.release(id: id)
+                    }
                     drag = nil
                 }
         )
+    }
+
+    // MARK: The multi-hand grab
+    //
+    // `DragGesture` is a single recogniser: SwiftUI runs ONE instance
+    // per attached gesture, so the second hand's pinch is never
+    // delivered to it — which is why "grab a magnet in each hand" was
+    // impossible no matter what the model allowed (owner report,
+    // 2026-08-04, correctly suspecting it was fixable). Raw
+    // `SpatialEventGesture` events have no such limit: every pinch
+    // arrives with its own stable id and the entity it targeted, so
+    // each hand gets its own grab session. The same-object rule keeps
+    // its shape for free: a second pinch on an ALREADY-HELD object
+    // starts no session and falls through to the two-hand scale.
+
+    /// One hand's live hold: what it grabbed, and the relative drag
+    /// anchored where it grabbed it.
+    private struct GrabSession {
+        enum Target { case magnet(UUID), compass }
+        var target: Target
+        var drag: RelativeDrag
+    }
+
+    /// Live grab sessions, one per pinch id.
+    @State private var grabs: [SpatialEventCollection.Event.ID: GrabSession] = [:]
+
+    private func handleGrabEvents(_ events: SpatialEventCollection) {
+        guard let renderer, let content = sceneContent else { return }
+        for event in events {
+            guard event.phase == .active else {
+                if let ended = grabs.removeValue(forKey: event.id),
+                   case .magnet(let id) = ended.target {
+                    model.release(id: id)
+                }
+                continue
+            }
+            // Same conversion chain as the drag above: view point →
+            // world → through the scaled root into model space.
+            let world = content.convert(event.location3D,
+                                        from: .local, to: .scene)
+            let hand = renderer.displayPoint(fromWorld: world)
+
+            if let session = grabs[event.id] {
+                switch session.target {
+                case .magnet(let id):
+                    model.move(id: id, to: session.drag.position(forHand: hand))
+                case .compass:
+                    model.moveCompass(to: session.drag.position(forHand: hand))
+                }
+            } else if let session = beginGrabSession(on: event.targetedEntity,
+                                                     hand: hand) {
+                grabs[event.id] = session
+            }
+        }
+    }
+
+    /// Resolves a fresh pinch to a grab, or nil for anything that is
+    /// not a free object — banks, beads, wells and second pinches on a
+    /// held object all decline, and the other recognisers take them.
+    private func beginGrabSession(on entity: Entity?,
+                                  hand: SIMD3<Double>) -> GrabSession? {
+        var current: Entity? = entity
+        while let candidate = current {
+            if candidate.name == MagnetismRenderer.handCompassName {
+                let compassHeld = grabs.values.contains {
+                    if case .compass = $0.target { return true }
+                    return false
+                }
+                guard !compassHeld else { return nil }
+                return GrabSession(
+                    target: .compass,
+                    drag: RelativeDrag(name: candidate.name,
+                                       target: model.compassPosition, hand: hand))
+            }
+            if let id = UUID(uuidString: candidate.name),
+               let magnet = model.magnets.first(where: { $0.id == id }) {
+                // A second hand on a held magnet is the resize gesture,
+                // not a second grab.
+                guard !model.heldIDs.contains(id) else { return nil }
+                model.grab(id: id)
+                return GrabSession(
+                    target: .magnet(id),
+                    drag: RelativeDrag(name: candidate.name,
+                                       target: magnet.position, hand: hand))
+            }
+            current = candidate.parent
+        }
+        return nil
     }
 
     /// Tap a magnet and it offers exactly what a magnet offers:
@@ -279,20 +389,4 @@ struct MagnetismSpaceView: View {
                      viewer: viewer, revealTarget: 1, dt: dt)
     }
 
-    private func beginDrag(entity: Entity, hand: SIMD3<Double>) -> RelativeDrag? {
-        var current: Entity? = entity
-        while let candidate = current {
-            if candidate.name == MagnetismRenderer.handCompassName {
-                return RelativeDrag(name: candidate.name,
-                                    target: model.compassPosition, hand: hand)
-            }
-            if let id = UUID(uuidString: candidate.name),
-               let magnet = model.magnets.first(where: { $0.id == id }) {
-                model.grab(id: id)
-                return RelativeDrag(name: candidate.name, target: magnet.position, hand: hand)
-            }
-            current = candidate.parent
-        }
-        return nil
-    }
 }

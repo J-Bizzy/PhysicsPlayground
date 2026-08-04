@@ -57,15 +57,12 @@ struct HubSpaceView: View {
             scene.stillness = systemReduceMotion
             content.add(scene.root)
 
-            if let card = attachments.entity(for: "detail") {
-                // The focus panel: it rides BEHIND whichever exhibit you
-                // face — the diorama in front, its story behind it —
-                // repositioned by applyFocus whenever focus moves.
-                card.components.set(BillboardComponent())
-                card.isEnabled = false
-                scene.root.addChild(card)
-                scene.detailCard = card
-            }
+            // There is no focus PANEL any more (owner, 2026-08-04): the
+            // gaze answer is the exhibit itself — the lift, the growth,
+            // the halo — and the one way into a lab is carrying it to
+            // the pad. The panel and its full-width Load button went
+            // through three placements without earning their keep; the
+            // pad is the door.
             if let load = attachments.entity(for: "load") {
                 // The Load button hangs over the podium, shown only
                 // while an exhibit stands there.
@@ -105,12 +102,6 @@ struct HubSpaceView: View {
         } update: { _, _ in
             scene.stillness = systemReduceMotion
         } attachments: {
-            Attachment(id: "detail") {
-                if let module = ModuleCatalog.all(appModel: appModel)
-                    .first(where: { $0.id == scene.focusedModuleID }) {
-                    HubFocusPanel(module: module) { enter(module.id) }
-                }
-            }
             Attachment(id: "bar") {
                 HubUtilityBar(
                     openSettings: { openWindow(id: SettingsView.windowID) },
@@ -293,13 +284,10 @@ final class HubScene {
     var stillness = false
 
     /// Which exhibit the user is facing, published only when it CHANGES
-    /// so the detail card can re-render without SwiftUI seeing sixty
-    /// updates a second.
+    /// so nothing downstream sees sixty updates a second. (It fed a
+    /// focus PANEL until 2026-08-04; the panel is gone — the id now
+    /// only steadies the focus hysteresis.)
     private(set) var focusedModuleID: String?
-    /// Where the focused exhibit is, for the detail card to hang under.
-    private(set) var focusedAnchor: Entity?
-    /// The SwiftUI reading shelf, shown while something has focus.
-    var detailCard: Entity?
     private var exhibits: [Exhibit] = []
     private var time = 0.0
     /// The 3-D bubble title the exhibits ring, bobbing at the centre.
@@ -330,13 +318,14 @@ final class HubScene {
 
     // MARK: Focus
     //
-    // Six exhibits shouting equally is a wall of clutter with no way in.
     // A menu in a headset can do what a menu on a screen cannot: notice
     // which one you have TURNED TOWARD, and answer. The one you face
-    // grows, brightens, lights an accent halo and names itself in full,
-    // with a card underneath telling you what it is and how far through
-    // it you are; the other five recede and their names drop to a
-    // whisper. Nothing moves on its own — the motion is yours.
+    // grows, lifts, and lights an accent halo; the others recede a
+    // touch. Nothing moves on its own — the motion is yours. Every
+    // exhibit keeps its NAME at full strength all the time (owner,
+    // 2026-08-04: the fading captions made the room unreadable at a
+    // glance), and there is no panel — the answer to the gaze is the
+    // object itself, and the way in is carrying it to the pad.
     //
     // Head direction, not eye gaze: visionOS never hands an app the
     // eyes. Turning your head at something is the honest signal, and it
@@ -357,12 +346,6 @@ final class HubScene {
     /// toward the user, but a step off a pedestal reads as falling;
     /// lifting reads as the exhibit answering.)
     private static let focusedLift: Float = 0.09
-    /// Where the focus panel hangs relative to its exhibit: up, and a
-    /// step toward the user. The step has to clear the door sign, which
-    /// stands 2 cm nearer than the exhibits at roughly the panel's own
-    /// height — see the reasoning in `applyFocus`.
-    private static let focusPanelLift: Float = 0.38
-    private static let focusPanelStep: Float = 0.26
 
     // MARK: Build
 
@@ -1228,13 +1211,12 @@ final class HubScene {
             exhibit.pulser.scale = SIMD3(repeating: scale)
 
             exhibit.halo.components.set(OpacityComponent(opacity: focus))
-            // Names appear only for the lab you are FACING. Seven
-            // permanent captions floating in a room is a menu; one that
-            // materialises where you look is the same doctrine the labs
-            // themselves now follow. Without a look ray (the simulator)
-            // they all stay legible so nothing is unreachable.
-            let nameOpacity = hasLookRay ? (focus * focus) : 1
-            exhibit.namePivot.components.set(OpacityComponent(opacity: nameOpacity))
+            // Every name stays legible ALL the time (owner, 2026-08-04,
+            // reversing the materialise-on-gaze fade): a gallery whose
+            // captions vanish until you stare at them cannot be read at
+            // a glance, and the focus answer is already carried by the
+            // lift, the growth and the halo.
+            exhibit.namePivot.components.set(OpacityComponent(opacity: 1))
 
             if stillness { continue }
 
@@ -1391,56 +1373,14 @@ final class HubScene {
     }
 
     private func applyFocus(winner: String?, dt: Double) {
-        let focused = exhibits.first { $0.moduleID == winner }
-
         // Publish only on change — SwiftUI must not see this per frame.
+        // (A focus PANEL hung off this until 2026-08-04, positioned here
+        // every frame through three placements — behind the exhibit,
+        // below it, in front of the door sign. The owner cut it: the
+        // gaze answer is the exhibit's own lift and halo, and the way
+        // into a lab is the pad.)
         if winner != focusedModuleID {
             focusedModuleID = winner
-            focusedAnchor = focused?.anchor
-            detailCard?.isEnabled = focused != nil
-        }
-
-        // The panel floats ABOVE the focused exhibit, a step IN FRONT of
-        // it. Straight behind was the first attempt — the diorama is
-        // angularly larger than the panel from where the user stands, so
-        // "behind" meant "hidden". Below was the second — and the app's
-        // own window and dock live dead ahead below the arc, so the
-        // centre modules' panels drowned in UI. Above is the one
-        // direction that is always clear: the diorama keeps the stage,
-        // its story hangs over it like a gallery caption. One panel,
-        // moved, not six built.
-        //
-        // Above-and-BEHIND was the third, and it is what shipped, and it
-        // was wrong. The door signs went up over the terraces after this
-        // line was written and nothing rechecked it: a sign stands 2 cm
-        // nearer the user than its exhibits and 43 cm higher, which is
-        // to say exactly where a panel lifted 38 cm and pushed 24 cm
-        // further out lands. The middle module of each terrace had its
-        // whole panel behind a sign, and the left module had just its
-        // Load button behind one — which is why an on-device pass could
-        // find the guaranteed way into a lab simply missing. Signs do
-        // not carry colliders, so this was never a hit-testing failure:
-        // the button was there, and unhittable because it was unseeable.
-        //
-        // So the step is now TOWARD the user, and it has to be bigger
-        // than the sign's own lead over the exhibits. The panel occludes
-        // the sign for as long as focus holds, which is correct: a
-        // caption for the thing you are looking at outranks the name of
-        // the room it is in.
-        //
-        // Its PLACE is a transform write, not an observable publish, so
-        // unlike the id above it is safe to redo every frame — and it
-        // has to be. Positioning only on change is what the first podium
-        // pass did, and an exhibit carried to the podium while it was
-        // already the focus left its caption hanging over the empty puck
-        // it had just been lifted off.
-        if let focused {
-            let aim = aimPosition(of: focused)
-            let flat = SIMD3<Float>(aim.x, 0, aim.z)
-            let outward = simd_length(flat) > 1e-4
-                ? simd_normalize(flat) : SIMD3<Float>(0, 0, -1)
-            detailCard?.position = aim - outward * Self.focusPanelStep
-                + SIMD3(0, Self.focusPanelLift, 0)
         }
 
         let rate = Float(min(dt * 7, 1))
@@ -1470,7 +1410,6 @@ final class HubScene {
     func beginEnterTransition(id: String) {
         guard let exhibit = exhibits.first(where: { $0.moduleID == id }) else { return }
         SoundPalette.play(.pop, on: exhibit.anchor, volume: 0.7)
-        detailCard?.isEnabled = false
         // The exhibit swells and rises off its pedestal as the module
         // takes the stage; its terrace's hairline flares with it.
         exhibit.pulser.move(
@@ -1489,136 +1428,16 @@ final class HubScene {
     }
 }
 
-/// The panel that appears behind whichever exhibit you turn toward:
-/// domain chip, the one-line promise, live progress, and the Load
-/// Module button — the way in that needs no carrying.
-///
-/// A menu of six physics simulations cannot say what any of them ARE
-/// while all six are on screen — focus buys the room to say it.
-struct HubFocusPanel: View {
-    let module: ModuleDescriptor
-    let enter: () -> Void
-    @Environment(AppModel.self) private var appModel
+// `HubFocusPanel` stood here until 2026-08-04 — the card that appeared
+// over a focused exhibit with its promise, its progress and a Load
+// button. The owner cut it: the gaze answer is the exhibit itself, and
+// the ONE way into a lab is carrying it to the pad. Git history holds
+// the card, including the experiment-step surface it carried; the flat
+// catalog's next-step line still renders those strings.
 
-    var body: some View {
-        let domain = HubDomain.domain(for: module.id)
-        let entries = ExperimentCatalog.experiments(for: module.id, appModel: appModel)
-        let done = entries.filter {
-            appModel.experiments.completed.contains($0.experiment.id)
-        }.count
-        let visited = appModel.visitedModuleIDs.contains(module.id)
-
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 8) {
-                Text(domain.title)
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(domain.color.opacity(0.22), in: Capsule())
-                    .foregroundStyle(domain.color)
-                Spacer(minLength: 0)
-                if !visited {
-                    Text("New")
-                        .font(.caption2.weight(.bold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(module.accent.opacity(0.9), in: Capsule())
-                        .foregroundStyle(.white)
-                } else if let last = appModel.lastPlayed(module.id) {
-                    Text(last, format: .relative(presentation: .named))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-
-            Text(module.title)
-                .font(.title3.bold())
-
-            Text(HubDomain.promise(for: module.id))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 10) {
-                if !entries.isEmpty {
-                    ZStack {
-                        Circle().stroke(.tertiary, lineWidth: 3)
-                        Circle()
-                            .trim(from: 0, to: CGFloat(done) / CGFloat(entries.count))
-                            .stroke(done == entries.count ? .yellow : domain.color,
-                                    style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-                    }
-                    .frame(width: 26, height: 26)
-                    Text("\(done) of \(entries.count) experiments")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-
-            // Where to go next — the line that turns the tally from a
-            // score into a direction.
-            if let next = entries.first(where: {
-                !appModel.experiments.completed.contains($0.experiment.id)
-            }) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Label(next.experiment.title, systemImage: "flask")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    // The STEP, which had exactly one reader in the whole
-                    // app — a row under the module's title bar — and lost
-                    // it when the module window became a title bar
-                    // (DECISIONS.md, 2026-08-01). Twenty authored strings
-                    // would have gone dark, which is the "authored but
-                    // never rendered" defect this project has now caught
-                    // three times.
-                    //
-                    // The front door is the better home anyway: an
-                    // instruction telling you to go and touch something
-                    // is worth more BEFORE you walk in than on a card
-                    // floating in front of the thing it is talking about.
-                    if !next.experiment.step.isEmpty {
-                        Text(next.experiment.step)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-
-            // Full width, not tucked into the right edge. This is the
-            // GUARANTEED way into a lab — the one path that works when
-            // the carry-to-the-podium gesture does not — and a 7 cm
-            // button on a panel two metres away subtends under two
-            // degrees. Spanning the panel roughly quadruples the target
-            // and costs nothing: there is nothing else on this row.
-            Button(action: enter) {
-                Label("Load \(module.title)", systemImage: "arrow.forward")
-                    .font(.callout.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 2)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(module.accent)
-            .accessibilityHint("Opens \(module.title) — or carry its exhibit to the pad")
-        }
-        .padding(16)
-        .frame(width: 340, alignment: .leading)
-        .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .transition(.opacity)
-    }
-}
-
-/// The button that hangs over the pad while a lab stands on it.
-///
-/// It is deliberately not the focus panel's button. That one lives on a
-/// crowded card and has to sit in the type rhythm of the six rows above
-/// it; this one hangs alone in the air over a single object, and it is
-/// the payoff for having carried that object across the room — the whole
-/// reason the carry gesture exists. A bordered capsule reading "Load
-/// Pendulums" in callout was the same button both places, which made the
-/// delightful path end in the reachable path's furniture.
+/// The button that hangs over the pad while a lab stands on it — the
+/// payoff for having carried that object across the room, and since
+/// 2026-08-04 the only Load button in the gallery.
 ///
 /// So it is built as a plaque rather than a control: the module's own
 /// symbol in a disc of its own accent, the verb small and spaced above

@@ -50,41 +50,33 @@ working session:
 
 ## The home
 
-- [ ] **The gallery arrives, doesn't cut.** Launch. The whole room
+- [ Y] **The gallery arrives, doesn't cut.** Launch. The whole room
       should fade up over about a fifth of a second — terraces, signs
       and exhibits together, none arriving first.
-- [ ] **Both door signs read from the doorway**, at a glance, without
+- [ Y] **Both door signs read from the doorway**, at a glance, without
       leaning: `ELECTRICITY & MAGNETISM` in green, `MECHANICS & ENERGY`
       in bronze.
-- [ ] ⟳ **The signs' physics was redesigned** after the owner called the
-      old motion unconvincing, and neither body has been seen since:
-  - [ ] The electron rides a genuinely TILTED orbit now — on the bottom
-        of the lap it swings well out in FRONT of the plaque (real
-        parallax, ~9 cm toward you), across the top it passes solidly
-        BEHIND actual letters. It runs faster through the near pass and
-        eases over the far one, wears a soft glow, and drags a long
-        streak of a trail. It must stay exactly on its drawn track.
-  - [ ] The Mechanics ball no longer lobs over the word — it BOUNCES
-        along the rule beneath the letters, three decaying parabolic
-        hops out, then back the other way. **No frame may show it
-        touching a letter** — the apexes are capped below the baseline
-        by construction, and the room is where that claim gets checked.
-- [ ] ⟳ **Look at an exhibit.** It lifts off its puck, grows, names
-      itself, and its focus panel appears. Look away: it settles back.
-      **This was entirely dead on device** — the hub never started the
-      ARKit session, so the gaze ray never existed. It is retained now;
-      if focus still does nothing, that is a new finding, not the old
-      bug.
-- [ ] **The focus panel is IN FRONT of the door sign.** The panel
-      should occlude the sign while focus holds, and nothing should
-      occlude the panel.
-- [ ] ⟳ **The other way in:** look at an exhibit, press the focus
-      panel's Load button without touching the pad. This is the
-      guaranteed path; it needed the focus fix above to exist at all.
+- [ ] ⟳ **The signs hold still.** The kinetic bodies — the electron's
+      lap, the bouncing ball — are REMOVED at the owner's direction
+      after two redesigns failed to convince ("remove this for now, can
+      revisit later"). What remains is signage: the flush lockup, and
+      the rule's slow shimmer, parked entirely under Reduce Motion.
+      Nothing should orbit, bounce, or trail anywhere near either sign.
+- [ ] ⟳ **Look at an exhibit.** It lifts off its puck, grows, and its
+      halo lights. Look away: it settles back. **There is no panel any
+      more** — the owner cut the floating card; the gaze answer is the
+      exhibit itself, and the ONLY way into a lab is carrying it to the
+      pad. Check nothing card-shaped appears anywhere while focusing.
+- [ ] ⟳ **Every exhibit's name is ALWAYS legible** — no fading in on
+      gaze. Sweep the room: six names readable at a glance, focused or
+      not.
+- [ ] ⟳ **The two terraces are LEVEL.** Their slab tops share one
+      height now — the staggered "architecture" read as uneven. The
+      slight depth difference between them stays.
 - [ ] **Drag an exhibit to the pad.** It should follow your hand 1:1
       — no lurching toward the hand — the pad glows as you approach,
       the exhibit seats itself, and a `Load …` button appears above it.
-      ⟳ The faint white ring that used to circle each exhibit is gone;
+      The faint white ring that used to circle each exhibit is gone;
       only the accent progress arc remains.
 - [ ] **The pad reads as floating, not as broken.** A plate at chest
       height with a ring of light hanging below it: standing in a real
@@ -212,10 +204,20 @@ file). What follows is the standing script.
       petal: it must actually delete (a guard used to silently refuse),
       with no flip on the petal, and the well must hand back a fresh
       magnet afterwards.
-- [ ] ⟳ **One magnet in each hand.** Grab two different magnets at
-      once: BOTH must follow their hands and **nothing may resize**.
-      Two hands on the SAME magnet still scales the view. (This is the
-      app-wide same-object rule; test it hardest here.)
+- [ ] ⟳ **One magnet in each hand — for real this time.** The previous
+      pass could only STOP the accidental resize; the second grab never
+      existed, because SwiftUI runs one DragGesture instance and the
+      second hand's pinch was never delivered to it. Magnetism's object
+      grabs now run on raw spatial events, one session per pinch:
+  - [ ] Grab a magnet in each hand: BOTH follow their hands, the
+        physics fights neither, and nothing resizes.
+  - [ ] Bring them together and let ONE go: it snaps toward the one
+        still held, which stays pinned to your hand.
+  - [ ] The compass in one hand, a magnet in the other — walk the
+        needle around the bar you are carrying.
+  - [ ] Both hands on the SAME magnet: the two-hand resize still works.
+  - [ ] One hand pulling a NEW magnet from the well while the other
+        holds an existing one: both behave.
 
 ### The switch bank
 
@@ -528,14 +530,15 @@ file). The new well and the standing script:
 
 ## Cross-cutting
 
-- [ ] ⟳ **TWO HANDS, TWO OBJECTS, NO RESIZE — everywhere that scales**
-      (Circuits, Electric Fields, Magnetism, Gravity Lab). One object
-      in each hand: both move, nothing scales. Both hands on ONE object
-      (or on empty space): the two-hand resize still works. This is the
-      same-object rule; if resize still fires with an object in each
-      hand, the raw-pinch targeting assumption failed and the follow-up
-      is a `SpatialEventGesture` migration — report it, don't live with
-      it.
+- [ ] ⟳ **Two hands, two objects — where each module stands.**
+      MAGNETISM has the full thing: an object in each hand, both
+      moving, on the spatial-event grab (its own section above). The
+      other three scaling modules (Circuits, Electric Fields, Gravity
+      Lab) still have only the SUPPRESSION half: two hands on two
+      objects must not resize, but the second object will not move —
+      its grab needs the same spatial-event migration, which is queued
+      behind the owner confirming Magnetism's feel on device. Both
+      hands on ONE object (or empty space) resizes everywhere.
 - [ ] ⟳ **The petal flip is DEAD everywhere.** Tap petals across all
       the modules: a quick swell, facing held, never a tumble.
 - [ ] ⟳ **No invisible walls anywhere.** Carry objects to the far side

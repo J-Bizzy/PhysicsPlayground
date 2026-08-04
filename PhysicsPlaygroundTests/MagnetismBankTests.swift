@@ -244,6 +244,40 @@ final class MagnetismEarthFieldTests: XCTestCase {
         XCTAssertFalse(model.compassIsReadingEarth)
     }
 
+    /// TWO HANDS, TWO MAGNETS (owner, 2026-08-04): a magnet in each
+    /// hand must mean BOTH are the hands' — pinned against the physics
+    /// however hard they pull on each other — and letting one go frees
+    /// only that one. `heldIDs` is a set for exactly this; it was a
+    /// single id, which could never describe a second hand.
+    func testTwoMagnetsCanBeHeldAtOnceAndReleasedIndependently() {
+        let model = MagnetismModel()
+        // Two magnets close enough to pull hard.
+        guard let second = model.addMagnet(
+            at: MagnetismModel.regionCenter + SIMD3(0.30, 0, 0)),
+            let first = model.magnets.first?.id else {
+            return XCTFail("could not stage two magnets")
+        }
+
+        model.grab(id: first)
+        model.grab(id: second)
+        XCTAssertEqual(model.heldIDs, [first, second])
+
+        let held = model.magnets.map(\.position)
+        for _ in 0..<180 { model.step(dt: 1.0 / 90.0) }
+        XCTAssertEqual(model.magnets.map(\.position), held,
+                       "a held magnet moved — the physics reclaimed a hand's magnet")
+
+        // Let go of one: it glides toward the one still held.
+        model.release(id: first)
+        XCTAssertEqual(model.heldIDs, [second])
+        for _ in 0..<180 { model.step(dt: 1.0 / 90.0) }
+        let after = model.magnets
+        XCTAssertNotEqual(after.first { $0.id == first }?.position, held[0],
+                          "the released magnet stayed frozen")
+        XCTAssertEqual(after.first { $0.id == second }?.position, held[1],
+                       "releasing one hand dropped the other hand's magnet")
+    }
+
     /// The strength bead must change the PICTURE: a stronger magnet gets
     /// more loops. The budget was a fixed 26 for months, so the bead
     /// rebuilt an identical field and read as a dead control.

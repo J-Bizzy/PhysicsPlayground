@@ -63,7 +63,11 @@ final class MagnetismModel {
 
     private(set) var magnets: [BarMagnet] = []
     private(set) var selectedID: UUID?
-    private(set) var heldID: UUID?
+    /// Every magnet a hand is currently holding — a SET, because the
+    /// wearer has two hands and carrying a magnet in each is the
+    /// module's best demonstration (owner, 2026-08-04; it was a single
+    /// `heldID`, which could only ever mean one hand).
+    private(set) var heldIDs: Set<UUID> = []
 
     var isPaused = false
     var showFieldLines = true
@@ -216,7 +220,7 @@ final class MagnetismModel {
             var next = magnets
             for i in magnets.indices {
                 let id = magnets[i].id
-                guard id != heldID else {
+                guard !heldIDs.contains(id) else {
                     // A held magnet is the hand's, not the physics'. Its
                     // stored motion is cleared so releasing it does not
                     // hand back a velocity from before the grab.
@@ -301,7 +305,7 @@ final class MagnetismModel {
     private func stepOverdamped(dt: Double) {
         let h = min(dt, 1.0 / 60.0)
         var next = magnets
-        for i in magnets.indices where magnets[i].id != heldID {
+        for i in magnets.indices where !heldIDs.contains(magnets[i].id) {
             let others = magnets.enumerated().filter { $0.offset != i }.map(\.element)
             guard !others.isEmpty else { continue }
 
@@ -411,7 +415,8 @@ final class MagnetismModel {
                     guard dist < Self.contactDistance, dist > 1e-6 else { continue }
                     let push = (Self.contactDistance - dist)
                     let dir = delta / dist
-                    let aHeld = result[a].id == heldID, bHeld = result[b].id == heldID
+                    let aHeld = heldIDs.contains(result[a].id)
+                    let bHeld = heldIDs.contains(result[b].id)
                     if aHeld && !bHeld {
                         result[b].position = clamp(result[b].position + dir * push)
                     } else if bHeld && !aHeld {
@@ -448,7 +453,7 @@ final class MagnetismModel {
 
     func grab(id: UUID) {
         guard magnets.contains(where: { $0.id == id }) else { return }
-        heldID = id
+        heldIDs.insert(id)
         selectedID = id
     }
 
@@ -457,7 +462,11 @@ final class MagnetismModel {
         magnets[index].position = floored(point)
     }
 
-    func release() { heldID = nil }
+    /// One hand lets go; whatever the other hand holds stays held.
+    func release(id: UUID) { heldIDs.remove(id) }
+
+    /// Everything lets go — reset, and the legacy single-drag path.
+    func release() { heldIDs.removeAll() }
 
     func select(id: UUID) {
         guard magnets.contains(where: { $0.id == id }) else { return }
@@ -496,7 +505,7 @@ final class MagnetismModel {
         // hand back a magnet, and a Delete petal that silently refuses
         // on the last one reads as broken (2026-08-03).
         magnets.removeAll { $0.id == id }
-        if heldID == id { heldID = nil }
+        heldIDs.remove(id)
         if selectedID == id { selectedID = magnets.last?.id }
     }
 
@@ -584,7 +593,7 @@ final class MagnetismModel {
                       moment: SIMD3(Self.defaultStrength, 0, 0)),
         ]
         selectedID = magnets.last?.id
-        heldID = nil
+        heldIDs.removeAll()
         isPaused = false
         showFieldLines = true
         compassOn = true

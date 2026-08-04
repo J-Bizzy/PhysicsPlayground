@@ -46,16 +46,17 @@ enum GalleryLayout {
 
     // Authored per domain: azimuth (degrees, 0 = dead ahead, + right),
     // radial distance at the 2.0 m default, slab-top height at the
-    // 1.4 m default. Slight height and radius variation keeps the
-    // pair reading as architecture rather than a poster with a curve
-    // in it.
+    // 1.4 m default. The two slabs share ONE height (owner, 2026-08-04:
+    // the staggered tops read as uneven, not architectural); the slight
+    // radius variation stays, and carries the not-a-poster depth cue on
+    // its own.
     //
     // Two doors now, so two slots, each carrying three experiences —
     // wide enough (~1.16 m of slab) that ±28° is as close together as
     // the collision tests allow across the whole settings range.
     private static let slots: [HubDomain: (azimuth: Float, radial: Float, top: Float)] = [
-        .electricity: (azimuth: -28, radial: 1.95, top: 1.00),
-        .mechanics:   (azimuth:  28, radial: 2.05, top: 0.92),
+        .electricity: (azimuth: -28, radial: 1.95, top: 0.96),
+        .mechanics:   (azimuth:  28, radial: 2.05, top: 0.96),
     ]
 
     static let slabDepth: Float = 0.42
