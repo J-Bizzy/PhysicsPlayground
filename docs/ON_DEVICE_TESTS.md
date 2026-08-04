@@ -15,7 +15,7 @@ fourth:
 
 | Layer | Covered by | Runs where |
 |---|---|---|
-| Physics & geometry | `PhysicsCoreTests` (365) | `swift test`, no simulator |
+| Physics & geometry | `PhysicsCoreTests` (379) | `swift test`, no simulator |
 | Models, clamps, layout | `PhysicsPlaygroundTests` | simulator |
 | Tap *handlers* | `SpatialTapTests`, `SpatialActionBankTests`, `BloomPetalTests`, `MultimeterTests` — call `handleTap` directly | simulator |
 | Window chrome | `PhysicsPlaygroundUITests` — real taps | simulator |
@@ -24,8 +24,27 @@ fourth:
 Work top to bottom; each item says what CORRECT looks like, because
 "seems fine" is how a broken affordance survives a test pass.
 
-**Items marked ⟳ changed on 2026-07-31** in response to the previous
+**Items marked ⟳ changed on 2026-08-04** in response to the previous
 pass, and are the ones worth doing first.
+
+## Deferred — the owner asked to be reminded
+
+Three revisits from the 2026-08-03 pass, deliberately NOT addressed in
+the fix pass that followed it. Bring these up when planning the next
+working session:
+
+- [ ] **Circuit Workshop, whole-module improvement.** "Okay I want to
+      revisit this with you … and we will plan out how to improve this
+      system." The bug-class fixes landed; the design pass has not.
+- [ ] **Projectiles, whole-module improvement.** "It has the same UI
+      flip issue, the wall bouncing is unreliable, and it just seems
+      uninspired. we will revisit." The flip is fixed app-wide and a
+      ball well was added; the bounce reliability and the inspiration
+      are still owed.
+- [ ] **The capacitor ΔV rail.** "We will revisit this later. please
+      remind me about it because I want to improve it." The
+      cannot-switch-off bug got a fix (see the module section); the
+      improvement pass is still owed.
 
 ---
 
@@ -37,101 +56,103 @@ pass, and are the ones worth doing first.
 - [ ] **Both door signs read from the doorway**, at a glance, without
       leaning: `ELECTRICITY & MAGNETISM` in green, `MECHANICS & ENERGY`
       in bronze.
-- [ ] ⟳ **The signs move, and the letters are SOLID.** Both bodies now
-      fly in lanes measured off the finished type rather than at a
-      hardcoded depth — the previous pass caught the Mechanics ball
-      flying *inside* a glyph, which is what a 20 mm offset does against
-      55 mm of plaque extrusion.
-  - [ ] An electron laps the E&M sign. It must pass IN FRONT across the
-        bottom and BEHIND across the top, and the "behind" half must
-        actually be **hidden by letters** — the ellipse now crosses the
-        lockup instead of clearing it, so the occlusion has something to
-        occlude with.
-  - [ ] The ball lobs across the Mechanics sign and **never intersects a
-        letter**. It launches and lands on the ends of the rule, which
-        now overhangs the type — so both ends of every throw are clear
-        of the word rather than under it.
-- [ ] **Look at an exhibit.** It lifts off its puck, grows, names
+- [ ] ⟳ **The signs' physics was redesigned** after the owner called the
+      old motion unconvincing, and neither body has been seen since:
+  - [ ] The electron rides a genuinely TILTED orbit now — on the bottom
+        of the lap it swings well out in FRONT of the plaque (real
+        parallax, ~9 cm toward you), across the top it passes solidly
+        BEHIND actual letters. It runs faster through the near pass and
+        eases over the far one, wears a soft glow, and drags a long
+        streak of a trail. It must stay exactly on its drawn track.
+  - [ ] The Mechanics ball no longer lobs over the word — it BOUNCES
+        along the rule beneath the letters, three decaying parabolic
+        hops out, then back the other way. **No frame may show it
+        touching a letter** — the apexes are capped below the baseline
+        by construction, and the room is where that claim gets checked.
+- [ ] ⟳ **Look at an exhibit.** It lifts off its puck, grows, names
       itself, and its focus panel appears. Look away: it settles back.
-- [ ] ⟳ **The focus panel is IN FRONT of the door sign.** It used to be
-      pushed a step further out and landed behind the sign — which is
-      why the item below failed. The panel should occlude the sign while
-      focus holds, and nothing should occlude the panel.
+      **This was entirely dead on device** — the hub never started the
+      ARKit session, so the gaze ray never existed. It is retained now;
+      if focus still does nothing, that is a new finding, not the old
+      bug.
+- [ ] **The focus panel is IN FRONT of the door sign.** The panel
+      should occlude the sign while focus holds, and nothing should
+      occlude the panel.
+- [ ] ⟳ **The other way in:** look at an exhibit, press the focus
+      panel's Load button without touching the pad. This is the
+      guaranteed path; it needed the focus fix above to exist at all.
 - [ ] **Drag an exhibit to the pad.** It should follow your hand 1:1
       — no lurching toward the hand — the pad glows as you approach,
       the exhibit seats itself, and a `Load …` button appears above it.
-- [ ] ⟳ **The pad reads as floating, not as broken.** Its column came off
-      on 2026-08-03; what is left is a plate at chest height with a ring
-      of light hanging below it. The question a screenshot cannot answer:
-      standing in a real room, does it look suspended on purpose, or does
-      it look like a pedestal that failed to draw? The ring below it is
-      the whole answer — if it is invisible against your floor, say so.
-- [ ] ⟳ **The Load button hangs over the LAB, not over the room.** It
-      grew a badge and a second line on 2026-08-03 and its lift was
-      raised to match. It must still read as that exhibit's button.
-      Check the tall exhibits — Pendulums, Circuit Workshop — where the
-      miniature reaches up toward it.
-- [ ] ⟳ **Gaze at the Load button.** `.buttonStyle(.plain)` gives up the
-      platform highlight, so it is restored by hand. If looking at the
-      button does nothing visible, the pinch has no aiming feedback at
-      all and this is a real failure, not a polish note.
+      ⟳ The faint white ring that used to circle each exhibit is gone;
+      only the accent progress arc remains.
+- [ ] **The pad reads as floating, not as broken.** A plate at chest
+      height with a ring of light hanging below it: standing in a real
+      room, does it look suspended on purpose? If the ring is invisible
+      against your floor, say so.
+- [ ] **The Load button hangs over the LAB, not over the room**, and
+      still reads as that exhibit's button. Check the tall exhibits —
+      Pendulums, Circuit Workshop.
+- [ ] ⟳ **Gaze at the Load button.** The default hover was invisible on
+      device; the plaque now swells and highlights explicitly under the
+      gaze. If looking at it still does nothing visible, the pinch has
+      no aiming feedback and that is a real failure.
 - [ ] **The pad hint is legible** from where you naturally stand.
 - [ ] **Press Load.** The lab opens.
-- [ ] ⟳ **The other way in:** look at an exhibit, press the focus
-      panel's Load button without touching the pad. **This is the
-      guaranteed path and it was broken** — the button was behind a
-      sign. It is now full panel width as well as unobstructed.
-- [ ] ⟳ **The utility bar:** ⚙ Settings, 📖 Lab Notebook, ℹ About. All
-      three now open as **utility panels in front of you**, not wherever
-      the invisible main window was last parked. Each should arrive
-      centred in view and clear of the pad.
-- [ ] ⟳ **About fits its window.** No clipped line, no cut-off
+- [ ] ⟳ **THE GALLERY GRAB BAR** — new, replacing the Settings sliders
+      that duplicated the gallery:
+  - [ ] A slim glass bar hangs under the pad, like the bar under a
+        native window. It brightens under the gaze.
+  - [ ] Drag it: the WHOLE gallery comes — terraces, signs, wordmark,
+        pad — smoothly, with no second copy left behind and no rebuild
+        stutter.
+  - [ ] While the gallery is moved, exhibit focus, the exhibit carry
+        and the pad all still work exactly as before.
+  - [ ] Tap the bar (a press that doesn't move): the gallery glides
+        home and swings round to face you.
+  - [ ] Quit and relaunch: the gallery opens EXACTLY where you left it.
+- [ ] **The utility bar:** ⚙ Settings, 📖 Lab Notebook, ℹ About. All
+      three open as utility panels in front of you, centred in view and
+      clear of the pad.
+- [ ] **About fits its window.** No clipped line, no cut-off
       description.
-- [ ] ⟳ **Settings has no "Home title" and no "Reduce motion".** The
-      plaque is the app's voice, full stop; motion still stills for the
-      SYSTEM accessibility setting.
+- [ ] ⟳ **Settings has no "Gallery" section at all** — no distance or
+      height slider, no Recenter button. Moving the gallery is the
+      bar's job now.
 
 ## Circuit Workshop
 
+**The whole-module improvement pass is deferred** (see the top of this
+file). What follows is the standing script.
+
 - [ ] **The loop is live on arrival.** Pinch the switch lever: the bulb
       goes out, the electron beads stop.
-- [ ] ⟳ **Pull a part out of a rack.** The tray is gone (2026-08-03);
-      eleven parts now stand free on the two flanks, above the furniture
-      row. The part must be born AT YOUR FINGERTIPS — not at the rack,
-      then flown to your hand — and dropping it with copper ends near
-      another part connects them automatically.
-- [ ] ⟳ **Both racks are fully in frame** from where you naturally
-      stand, with every name readable. This is the item the first build
-      of the palette failed: the columns passed the reach check and sat
-      59° off axis, so "Battery" read "…ery" and "Capacitor" read
-      "Caps…". A simulator screenshot caught it; check it against a real
-      field of view, which is wider.
-- [ ] ⟳ **Fill the bench to sixteen parts, then pull a twelfth kind.**
+- [ ] **Pull a part out of a rack.** Eleven parts stand free on the two
+      flanks, above the furniture row. The part must be born AT YOUR
+      FINGERTIPS — not at the rack, then flown to your hand — and
+      dropping it with copper ends near another part connects them
+      automatically.
+- [ ] **Both racks are fully in frame** from where you naturally
+      stand, with every name readable against a real field of view.
+- [ ] **Fill the bench to sixteen parts, then pull a twelfth kind.**
       The source must FADE — the refusal that says nothing came out of
-      here. The tray had no answer at all at the budget: the pinch did
-      nothing and said nothing.
-- [ ] ⟳ **Zoom the bench to 8× and look at the racks.** They must not
-      grow. The tray did: it hung off `viewRoot`, so at the two-hand
-      maximum it was eight times oversized with its centre somewhere
-      under the floor.
+      here.
 - [ ] **Pinch two terminals** across a distance: a wire joins them.
-- [ ] ⟳ **Tap a part** → its control ring unfolds. Tap it again → it
-      must **fold with the same animation, in place**. The fold has
-      always existed; it ran at the scene origin at 1× scale, a metre
-      away and out of view, which is why it read as the buttons simply
-      vanishing.
-- [ ] ⟳ **Pull the value bead** on a bulb. **The rail now hangs UNDER
-      the part**, not out along its axis where the copper terminal sat on
-      top of it. Check: the bead is visible across its whole travel, the
-      number sits below the rail, and the petals are still overhead.
-- [ ] ⟳ **Pull a bead with your hand drifting up and down.** The value
-      must not wander — the drag is a projection onto the rail now, not
-      a radial distance.
-- [ ] **Two-handed pinch the bench**: it zooms. Past 4× you should be
-      standing among the drifting electrons (Electron View's floor).
-### ⟳ The meter
+- [ ] **Tap a part** → its control ring unfolds. Tap it again → it
+      must **fold with the same animation, in place**.
+      ⟳ And the petals must no longer FLIP: the tap acknowledgement was
+      tumbling every petal 90° app-wide; now it is a clean swell that
+      keeps the petal's facing. Check here and on every other ring.
+- [ ] **Pull the value bead** on a bulb. The rail hangs UNDER the part.
+      Check: the bead is visible across its whole travel, the number
+      sits below the rail, and the petals are still overhead.
+- [ ] **Pull a bead with your hand drifting up and down.** The value
+      must not wander — the drag is a projection onto the rail.
+- [ ] **Two-handed pinch the bench**: it zooms — but see the
+      cross-cutting same-object rule below: both hands on the bench (or
+      one part) resize; one part in each hand must NOT.
 
-Both left the panel. **Not looked at yet.**
+### The meter
 
 - [ ] **The multimeter stands to the LEFT of the bench**, mirroring the
       layers bank on the right. Dark casing, dark face, its name above it.
@@ -139,160 +160,144 @@ Both left the panel. **Not looked at yet.**
       confident 0.00 V.
 - [ ] Tap two terminals: **the answer appears ON THE METER**, not only in
       the window. Same number the panel prints.
-- [ ] **Arming it must not also probe whatever is behind it.** The meter
-      stands among the bench's own terminals by design, so tap it several
-      times and confirm no stray terminal gets selected.
+- [ ] **Arming it must not also probe whatever is behind it.** Tap it
+      several times and confirm no stray terminal gets selected.
 - [ ] Tap it again to disarm: face goes dark, reading clears, and
       re-arming starts from nothing probed.
-- [ ] ⟳ **Place a probe, then WALK.** The whole point of the 2026-08-03
-      split. Set the red probe on a terminal, then step round the bench
-      and turn your head. **The case must turn to face you and the probe
-      must not move at all** — the lead swings, the tip stays on the
-      terminal, the reading holds. This is the item a unit test can only
-      approximate: it moves a viewer vector, it cannot walk.
-- [ ] ⟳ **The holstered probe still hangs off the meter.** The other
-      half: with a probe untouched, turn the meter and confirm it swings
-      round with the case rather than being left behind in mid-air.
-- [ ] ⟳ **Pick the meter up with a probe placed.** The probe must STAY on
+- [ ] **Place a probe, then WALK.** Set the red probe on a terminal,
+      then step round the bench and turn your head. **The case must
+      turn to face you and the probe must not move at all** — the lead
+      swings, the tip stays on the terminal, the reading holds.
+- [ ] **The holstered probe still hangs off the meter.** With a probe
+      untouched, turn the meter and confirm it swings round with the
+      case rather than being left behind in mid-air.
+- [ ] **Pick the meter up with a probe placed.** The probe must STAY on
       its terminal while the case travels, with the lead stretching
-      between them. One hand, one object at a time. Check the lead does
-      not visibly pass through the bench or a part on the way.
+      between them. Check the lead does not visibly pass through the
+      bench or a part on the way.
 - [ ] **Zoom the bench to 8×.** Neither the meter nor either bank should
       grow — they are instruments in the room, not parts on the bench.
 - [ ] **Reset from Electron View.** The bench must come back at normal
-      size with only Electron flow lit. This was broken: `reset()`
-      restored one of the four bank states, so Reset handed back a bench
-      still swollen to 4× under three lit plates.
-
+      size with only Electron flow lit.
 - [ ] **Nothing but the bench is in the room.** No coil, no cable, no
       second apparatus — Circuit Workshop stands alone.
 
 ## Magnetism
 
-- [ ] **Nothing but the magnets is in the room.** Bar magnets, the
-      compass grid, the hand compass — no coil and no cable.
+- [ ] **Nothing but the magnets is in the room.** Bar magnets and the
+      hand compass — no coil, no cable, and ⟳ **no compass grid**: the
+      245-needle lattice came out with its bank plate. The bank is four
+      plates now.
 - [ ] Carry a magnet toward another: they pull head-to-tail, push
       N-to-N, and swing to align.
-- [ ] ⟳ **Two attracting magnets COME TO REST.** They should glide
-      together, slow as they close, and stop dead, touching. They used
-      to buzz against each other forever — a saturated force driving 8 mm
-      inward every frame against a hard separation that projected them
-      straight back out.
-- [ ] ⟳ **The field lines.** Rewritten, and there are four things to
-      look for:
+- [ ] **Two attracting magnets COME TO REST.** They should glide
+      together, slow as they close, and stop dead, touching.
+- [ ] ⟳ **The field lines fill the ROOM.** The loops used to stop at a
+      ~0.6 m box; the tracing bounds are metres wide now. Stand inside
+      the field: loops should pass around and behind you, and nothing
+      should read as a display case.
   - [ ] Loops leave the **poles** — the ends of the bar — not its
-        flanks. They used to be born 6 cm from the centre of a 16 cm
-        magnet, i.e. inside it.
-  - [ ] The near-field shape follows the BAR, not a point. The tracer
-        now integrates a pole-pair field; the point dipole it used
-        before is only valid a few bar-lengths out.
-  - [ ] Lines bunch at the poles and thin at the equator — seeds are
-        spaced by equal slices of flux now, not by equal area.
-  - [ ] **Pull the strength bead and the picture changes.** More loops
-        for a stronger magnet. This did nothing at all before: the
-        tracer integrates the normalised field, so the geometry was
-        identical at every strength.
+        flanks.
+  - [ ] The near-field shape follows the BAR, not a point.
+  - [ ] Lines bunch at the poles and thin at the equator.
+  - [ ] ⟳ **Pull the strength bead and the loop COUNT changes** — a
+        weak magnet draws visibly fewer loops, a strong one visibly
+        more. This did nothing at all before (fixed budget of 26).
 - [ ] The hand-held compass needle points along the local field as you
-      walk it around a magnet.
+      walk it around a magnet. ⟳ **Its poles now wear N and S letters**
+      — check both are legible through the glass, from either side.
+- [ ] ⟳ **Delete down to an empty room.** Tap the last magnet's Delete
+      petal: it must actually delete (a guard used to silently refuse),
+      with no flip on the petal, and the well must hand back a fresh
+      magnet afterwards.
+- [ ] ⟳ **One magnet in each hand.** Grab two different magnets at
+      once: BOTH must follow their hands and **nothing may resize**.
+      Two hands on the SAME magnet still scales the view. (This is the
+      app-wide same-object rule; test it hardest here.)
 
-### ⟳ The switch bank
-
-Five toggles left the panel; the bank stands to the right of the field
-at the region's own depth. **Not looked at yet** — the simulator's shell
-crash-looped through the pass that built it.
+### The switch bank
 
 - [ ] **Visible without hunting**, off your right shoulder, at about the
-      same glance as the magnets themselves.
+      same glance as the magnets themselves. Four plates: Magnets move,
+      Field lines, Hand compass, Earth's field.
 - [ ] Each label sits BESIDE its plate, never across it.
-- [ ] **It does not grow when you zoom.** Two-hand scale the field out to
-      4×: the magnets and their loops should swell, and the bank should
-      stay exactly where and what it is. A bank that scaled would put its
-      own plates out of reach at the moment you most wanted them.
-- [ ] **"Magnets move" is the physics switch, and should feel unlike the
-      other three.** Bring two magnets close, switch it off: they must
-      stop dead and hold, however hard they are pulling. Switch it on:
+- [ ] **It does not grow when you zoom.**
+- [ ] **"Magnets move" is the physics switch.** Bring two magnets
+      close, switch it off: they must stop dead and hold. Switch it on:
       they resume closing.
-- [ ] The other three only change what is DRAWN — hiding the field lines
-      must not nudge a magnet.
-- [ ] **Reset relights all five.** Freeze the magnets, press Reset: they
-      must come back free with the top plate lit. This was genuinely
-      broken — `reset()` restored three of the four plates that existed
-      then and skipped the freeze, so the bench came back frozen under a
-      lamp saying otherwise. The fifth plate is Earth's field, which
-      `-magLayers 0` does NOT reach — flick that one by hand.
+- [ ] The other plates only change what is DRAWN — hiding the field
+      lines must not nudge a magnet.
+- [ ] **Reset relights the bank's defaults**, and the magnets come back
+      free.
 
-## Electric Fields — the app's only fully spatial module
+## Electric Fields
 
 Every control here is an object in the room, so **this section is the
-only place most of them can be tested at all**. A screenshot proves a
-rail rendered; only a hand proves it sets anything.
+only place most of them can be tested at all.**
 
-- [ ] ⟳ **Flick each of the five bank plates** on your left. The third
-      is now labelled **"Capacitor"**, not "Parallel plates" — the old
-      name collided with the apparatus it summons *and* with the panel
-      copy calling the bank itself "the plates on your left". Each
-      apparatus should ARRIVE, and the ones that carry an instrument
-      should bring it: Capacitor puts a ΔV rail on top of the plates,
-      Uniform B puts a strength rail under the bank.
-- [ ] ⟳ **The bank, the B rail, the wells and the particle bank all
-      moved 14 cm outward.** Check every one is still comfortably in
-      reach without stepping, and still in view without turning.
-- [ ] ⟳ **Pull each of the three wells.** All three must now behave
-      alike: the new charge or probe is IN YOUR HAND and STAYS there all
-      the way in. The two charge wells used to hand you the object and
-      then yank it 30 cm inward on the next frame, because the wells
-      stand outside the station and the charge was clamped to it
-      immediately. A charge is escorted now — exempt from the walls
-      until it first gets inside them.
-- [ ] ⟳ **Drag a charge at the wall.** It still stops at the boundary,
-      but the boundary is **26 % further out** (half-width 0.62 → 0.76).
-- [ ] ⟳ **Pull the test charge out with Uniform B on and throw it
-      sideways.** It must curve into a circle — and now **draw one**: a
-      fading trail of beads marks the path behind it. Check the circle
-      visibly CLOSES on its own tail, and that electron and positron
-      wind opposite ways.
+- [ ] ⟳ **The bank is FOUR plates now** — Field lines, Free charges,
+      Capacitor, Uniform B. The flux meter, its "Open disc" plate and
+      the four-disc particle bank are all gone at the owner's direction.
+      Nothing in the room should reference them.
+- [ ] **Flick each plate.** Each apparatus should ARRIVE, and the ones
+      that carry an instrument should bring it: Capacitor puts a ΔV
+      rail on top of the plates, Uniform B puts a strength rail under
+      the bank.
+- [ ] **Pull each of the four wells.** The new charge or probe is IN
+      YOUR HAND and STAYS there all the way in.
+- [ ] ⟳ **THERE ARE NO WALLS.** Drag a charge three metres across your
+      real room: it goes exactly where your hand goes, stopped only by
+      the floor. Same for the capacitor — carry it anywhere. If
+      anything invisible stops a drag mid-air, that is the removed bug
+      returned.
+- [ ] ⟳ **And no black shadows.** The room-shaped occlusion mesh is
+      gone: no dark shapes moulded to your furniture, and no UI cut off
+      behind them. (Field lines still stop at your real walls — that is
+      the room clip, kept on purpose.)
+- [ ] **Pull the test charge out with Uniform B on and throw it
+      sideways.** It must curve into a circle and draw one — a fading
+      trail that visibly CLOSES on its own tail. ⟳ A + probe and a −
+      probe (the two test wells) wind opposite ways.
   - [ ] Grab the probe again mid-flight: the trail clears.
-- [ ] **The particle bank:** tap each of the four discs. The tapped one
-      lights, and only one is ever lit.
-- [ ] **Drag each rail's bead.** The number follows your hand while it
-      moves, the fill grows behind the bead, half way along the rail is
-      half way through the range, and dragging off the end pins rather
-      than wraps.
+- [ ] **Drag each rail's bead.** The number follows your hand, the fill
+      grows behind the bead, half way along the rail is half way through
+      the range, and dragging off the end pins rather than wraps.
 - [ ] **Drag along a rail with your hand drifting up and down.** The
       value must not wander with the drift.
 - [ ] ⟳ **Switch the Capacitor plate OFF while dragging its ΔV bead**
-      (two hands: left on the bank, right on the rail). The rail
-      vanishes, the voltage stops changing, **and your hand is released**
-      — it used to stay captured by the dead rail for the rest of the
-      gesture, so nothing else could be grabbed until you let go.
+      (two hands: left on the bank, right on the rail). This was
+      impossible on device — the second hand's pinch never reached the
+      plate. A raw-pinch path now routes a second-hand tap to the bank:
+      the plate must toggle, the rail vanishes, the voltage stops
+      changing, and your dragging hand is released. Also check a
+      NORMAL one-handed plate tap still toggles exactly once.
 - [ ] **Carry the capacitor low, then high.** Its rail stays on top of
       the plates the whole way.
-- [ ] **Grab the flux meter's rim and pull.** It resizes under your
-      fingertips, and the skin stays where your hand is.
-- [ ] **THE DISC.** Cycle the meter to the disc, grab its rim and turn it
-      edge-on to the field: **Φ must fall to zero.** Then cycle to the
-      bubble and turn it however you like: Φ holds at Q/ε₀.
-- [ ] **Grow the bubble while it is against a wall.** It must pull itself
-      back inside the region rather than pushing its skin through.
-- [ ] **Pinch a charge that is INSIDE the bubble.** The charge moves, not
-      the surface.
-- [ ] **Pinch a charge that is between the capacitor plates.** It must be
-      grabbable through the plates' 26 cm collision spheres.
+- [ ] **Pinch a charge that is between the capacitor plates.** It must
+      be grabbable through the plates' 26 cm collision spheres.
 - [ ] Drag a charge: the field lines re-trace and follow, sticking to
       your hand rather than lagging visibly.
-- [ ] ⟳ Tap a charge → ring; pull the strength bead → the sphere grows
-      and the field answers live. **The bead's rail is under the charge
-      now**, like every other rail in the app.
-- [ ] **Tap the probe → its own ring.** With a ball selected it has a
-      charge bead; switch to the electron **while the ring is open** and
-      the bead must disappear (e is a constant of nature).
-- [ ] **Two-hand pinch to 4×.** The field grows; the bank, the wells and
-      the particle bank do NOT, and stay reachable.
-- [ ] Capacitor on, plates pulled to full separation: the assembly
-      stays inside the region.
+- [ ] Tap a charge → ring; pull the strength bead → the sphere grows
+      and the field answers live. The bead's rail is under the charge.
+- [ ] **Tap the probe → its own ring**, with its charge bead.
+- [ ] **Two-hand pinch to 4×.** The field grows; the bank and the wells
+      do NOT, and stay reachable. And per the same-object rule: a
+      charge in each hand moves two charges, resizes nothing.
 
 ## Projectiles — the one that is 1:1 with your room
 
+**The whole-module improvement pass is deferred** (see the top of this
+file). The new well and the standing script:
+
+- [ ] ⟳ **THE BALL WELL** — new. On the instrument wall, under the
+      switch bank: reach in and pull a ball out.
+  - [ ] The ball is born at your fingertips and rides your hand.
+  - [ ] Let go WITHOUT moving: it hangs in the air, inert, exactly
+        where you left it.
+  - [ ] Throw it: it flies with your hand's velocity, bounces off your
+        real walls, and behaves exactly like a launcher ball.
+  - [ ] It wears whatever kind the ball fan has picked — pull one out
+        as a cannonball and feel the difference.
 - [ ] **Throw a ball at a real wall.** It must bounce where the wall
       actually is. Any offset means the display has been translated,
       which is forbidden for this bench.
@@ -301,33 +306,22 @@ rail rendered; only a hand proves it sets anything.
 - [ ] Drag the launcher anywhere; pinch its bead to aim; the predicted
       arc updates as you pull.
 - [ ] The ball fan opens off the launcher's Balls petal, and choosing a
-      ball changes the flight (a table-tennis ball and a cannonball are
-      17× apart in mass).
+      ball changes the flight.
 - [ ] **Two-handed pinch does NOTHING here.** Projectiles is
       permanently excluded from scaling.
-- [ ] ⟳ **The balls read as crafted, not matte.** On 2026-08-03 they
-      moved from a hand-typed `SimpleMaterial` to the material canon
-      (`energized`, glow 0 — the polished-mechanical finish). Same
-      colour, new clearcoat: check a ball in flight and one at rest
-      against passthrough, and that the orange aim bead still reads as
-      the LIT one of the pair.
+- [ ] **The balls read as crafted, not matte** — check a ball in flight
+      and one at rest against passthrough, and that the orange aim bead
+      still reads as the LIT one of the pair.
 
-### ⟳ The instrument wall
-
-Four controls left the panel and stand to the LEFT of the launcher, out
-of the firing line. **Not looked at yet.** The specific risk in this
-module is different from the others: balls go everywhere, and the
-launcher is carried around the room.
+### The instrument wall
 
 - [ ] **Fire a dozen shots, sweep the launcher around, throw by hand.**
-      Nothing should ever hit an instrument or pass through one.
+      Nothing should ever hit an instrument or pass through one —
+      including the new ball well.
 - [ ] **They do not ride the launcher.** Carry it across the room: the
-      instruments stay where they are. That is deliberate — a rail
-      measures your hand against its own position, so one being carried
-      would shift its mapping mid-drag.
-- [ ] **Four worlds, not three.** Zero-g is on this bank and not on
-      Pendulums'. Tap it: the shot must fly **dead straight**, no arc at
-      all. That straight line is the reason the choice exists here.
+      instruments stay where they are.
+- [ ] **Four worlds, not three.** Zero-g is on this bank. Tap it: the
+      shot must fly **dead straight**, no arc at all.
 - [ ] Tap Moon, then Jupiter: the arc stretches, then collapses. The
       matching disc lights each time, and drifting the g rail off a
       world darkens it.
@@ -336,198 +330,112 @@ launcher is carried around the room.
       wind and the flight visibly bends.
   - [ ] **Start dragging the wind bead, and while still dragging, have
         the air switched off.** The rail must go dead, not keep writing.
-        This is the case `SpatialTrackControl.isEnabled` exists for and
-        this is its first user anywhere in the app.
 - [ ] **Reset makes the room real again.** Switch Walls bounce off, press
-      Reset: walls must come back on with the plate lit. This was broken
-      — `reset()` never restored it, so Reset handed back a room balls
-      flew straight out of.
+      Reset: walls must come back on with the plate lit.
 
 ## Pendulums
 
 - [ ] Grab a bob and throw it sideways → a true 3-D orbit, not a plane.
-- [ ] ⟳ **Pull a bob's length bead.** Previously broken, three ways at
-      once: the bead rode a bob sweeping past at a metre a second, the
-      drag read radial distance from that moving anchor, and this module
-      was the only one in the app that never called `endGrip` — so after
-      the first touch, *every* later drag in the scene silently became a
-      length edit. Check: the pendulum **holds still** while the bead is
-      held, the cable pays out, the period tag climbs as √L, and letting
-      go returns the swing without throwing it.
+- [ ] ⟳ **A pendulum pulled from the well hangs STILL** — plumb, at
+      rest, until your hand swings it. It used to be born mid-swing.
+      (The Newton's cradle cold-open keeps its drawn-back first ball;
+      that is the cradle's job, not the well's.)
+- [ ] ⟳ **The cable cannot stretch.** Grab a bob and pull outward: the
+      bob stays exactly one cable-length from the pivot, steering round
+      the sphere under your hand. Only the length bead changes L.
+- [ ] **Pull a bob's length bead.** The pendulum holds still while the
+      bead is held, the cable pays out, the period tag climbs as √L,
+      and letting go returns the swing without throwing it.
   - [ ] Then grab a bob normally. It must be a bob grab, not a length
-        edit — that is the regression the missing `endGrip` caused.
-- [ ] ⟳ **Pull a pendulum out of the spawn well; it hangs where you let
-      go.** Previously broken: the pivot's floor was `0.85 m + cable`,
-      i.e. 1.65 m, which is 35 cm above the well's own mouth — so the
-      rig teleported out of your hand the instant it moved. The
-      clearance rule is now 0.30 m of air under the bob, applied at
-      birth as well as on every move.
+        edit.
+- [ ] **Pull a pendulum out of the spawn well; it hangs where you let
+      go.**
   - [ ] Pull one out when the lab is already full: the well should go
-        **dark and NOT pop**. It used to chirp and recoil while handing
-        back nothing.
-### ⟳ The switch bank — and the room that got emptier
+        **dark and NOT pop**.
+- [ ] ⟳ **There is no Foucault rig.** The feature came out whole at the
+      owner's direction: no "Earth turns" plate, no globe, no spin
+      rail, no floor markers, anywhere. The bank is FOUR plates:
+      Velocity, Acceleration, Force, Air resistance.
 
-**Rewritten 2026-08-02.** This section used to describe four instruments.
-The module now has one bank and the Foucault pair, because the whole
-right-hand column — the three world discs, the g rail and the time rail —
-came out at the owner's direction, along with the Resonance verb plate.
+### The switch bank
 
-**`gravity` and `timeScale` are consequently not reachable by hand.**
-They are still real properties of the model and still driven by
-`-penGravity` / `-penTime` for screenshots, but a wearer cannot change
-either one. That is a deliberate retirement, not a missing control: see
-DECISIONS.md. Do not test for furniture that was removed on purpose.
-
-- [ ] **Can you SEE the bank without hunting?** Stand where you naturally
-      stand. It should be off your left shoulder, at the pivot plane's
-      depth (z ≈ −1.08), in the ~14° band. This project has put controls
-      38° below the eye line three times while the arithmetic looked
-      fine, so this is a gate, not a formality.
+- [ ] **Can you SEE the bank without hunting?** Off your left shoulder,
+      at the pivot plane's depth, in the ~14° band.
 - [ ] **Nothing is inside the swing.** Let a bob swing wide, and pull one
       out to a 1.6 m cable. No instrument should be swept through.
-- [ ] **The five-plate bank.** Each plate lights when its layer is on:
-      Velocity, Acceleration, Force, Air resistance, Earth turns.
-  - [ ] Every label sits BESIDE its plate, never across it — the bug that
-        made this module's neighbours unreadable on 2026-07-31.
-  - [ ] Switch Air resistance off and the swing stops decaying. With
-        "Earth turns", it is one of the two plates on this bank that
-        change the physics rather than the picture, and both should feel
-        different from the three drawing plates.
-- [ ] **Reset returns all five plates to their defaults.**
-
-### ⟳ Foucault — the module's signature moment
-
-Flick **Earth turns** on the bank. A globe and a spin rail appear to the
-far left, and a ring of markers lies on the floor under the first pivot.
-**Everything here is new and none of it has been seen.**
-
-- [ ] **The plane holds still and the ROOM turns.** Start a clean planar
-      swing, then stand still and watch. What should read is that the
-      swing is not moving — your room is. This is the whole point, and it
-      is the one thing that cannot be checked on a screen.
-- [ ] **The markers fall, one after another**, and stay down. Come back
-      after a minute: the arc of fallen markers is how far the plane has
-      come. That record is the screenshot.
-- [ ] **The globe.** Slide a finger up its face: latitude follows the
-      finger, absolutely — touch the top and you are at the pole. The lit
-      band shrinks to nothing there and is widest at the equator.
-- [ ] **Sit the globe at the equator.** The plane must stop turning
-      entirely and no further markers fall. Ω is not zero there — it is
-      horizontal — so this is the sine law doing its job, not a special
-      case.
-- [ ] **Drag toward the pole and the turn speeds up.** Southern
-      latitudes reverse the direction.
-- [ ] **The disclosure is legible and honest.** The globe's caption
-      quotes the TRUE rate (11.3°/h at Paris, one turn in 31.8 h) while
-      the spin rail says "×3000 Earth". Wind the rail up and down: the
-      true rate must NOT move. If it does, the app is lying.
-- [ ] **Switch it off:** globe, rail and ring all disappear, and the
-      pendulum goes back to an ordinary one.
-- [ ] Reset returns it to off, Paris, ×3000, all markers standing.
+- [ ] **The four-plate bank.** Each plate lights when its layer is on.
+  - [ ] Every label sits BESIDE its plate, never across it.
+  - [ ] Switch Air resistance off and the swing stops decaying — the
+        one plate on this bank that changes the physics rather than
+        the picture.
+- [ ] **Reset returns all four plates to their defaults.**
 
 ## Gravity Lab
 
-**Rewritten on 2026-07-31 — the orbit became the object.** Nothing
-automated can pinch a bead, so this section is the only gate on the
-module's new centrepiece. Everything marked ⟳ is new or changed.
-
 ### The orbit ring
 
-- [ ] ⟳ **Tap a planet.** Two things must happen at once: its **control
+- [ ] **Tap a planet.** Two things must happen at once: its **control
       ring** unfolds (mass bead, delete petal) AND its **orbit ring**
       appears — a conic drawn around the Sun, passing through the planet,
-      with a bead at each end. Tapping used to open the control ring
-      without SELECTING, and selection is what the orbit ring, the
-      vectors, the Kepler sweep and the Predict button all key off.
-- [ ] ⟳ **Pull the far bead straight out.** The orbit stretches into an
-      ellipse; the near end stays put. The planet slides along its own
-      sightline rather than jumping.
-- [ ] ⟳ **Pull a bead sideways.** The whole ellipse swings about the Sun
-      and the other bead sweeps round to stay opposite. This is the
-      module's best single moment — on Jupiter the far bead traces a
-      2.6 m arc past your head.
-- [ ] ⟳ **Pull a bead up, out of the ecliptic.** The orbital plane tilts
-      with it. There is no inclination control anywhere; this is it.
-- [ ] ⟳ **Circle a bead** — take it round a closed loop and back. The
-      orbital plane should come back ROLLED, not where it started. That
-      is the transport rule's holonomy, and it is why two beads are
-      enough for five degrees of freedom instead of needing a third.
-- [ ] ⟳ **Drag the near bead outward past the far one.** The labels swap
-      — the bead in your hand becomes apoapsis — and **nothing may jump.**
-      The crossing happens exactly where the orbit is circular, which is
-      where the two ends are physically the same thing.
-- [ ] ⟳ **Let go, and watch.** The planet stays on the orbit you drew.
+      with a bead at each end.
+- [ ] **Pull the far bead straight out.** The orbit stretches into an
+      ellipse; the near end stays put.
+- [ ] **Pull a bead sideways.** The whole ellipse swings about the Sun
+      and the other bead sweeps round to stay opposite.
+- [ ] **Pull a bead up, out of the ecliptic.** The orbital plane tilts
+      with it.
+- [ ] **Circle a bead** — take it round a closed loop and back. The
+      orbital plane should come back ROLLED, not where it started.
+- [ ] **Drag the near bead outward past the far one.** The labels swap
+      and **nothing may jump.**
+- [ ] **Let go, and watch.** The planet stays on the orbit you drew.
       Over simulated centuries the beads should creep slowly round the
-      Sun: that is real Newtonian precession, not drift.
-- [ ] ⟳ **Watch the ring against the trail.** The ring is the orbit the
-      body would take if nothing else pulled; the trail is what actually
-      happens. They should visibly disagree — that gap is Jupiter.
-- [ ] ⟳ **A bead behind its own planet is not grabbable.** Check on a
-      near-circular orbit, where the near bead sits on the planet.
-- [ ] ⟳ **Saturn outward: the ring draws, and has no beads.** They are
-      genuinely out of arm's reach and the module does not pretend
-      otherwise. Zoom out with both hands and Jupiter's should come into
-      range.
-- [ ] ⟳ **Press Twin suns: the ring goes out.** Correct — a planet's
-      two-body ellipse about one of two equal stars describes nothing.
-- [ ] ⟳ **Grab a bead at 1× and again at 9×.** It must be the same size
-      in the room both times, and pinchable at both. Uncompensated it
-      would be 5 mm at 0.4× and a 12.6 cm sphere at 9×.
+      Sun: real Newtonian precession, not drift.
+- [ ] **Watch the ring against the trail.** They should visibly
+      disagree — that gap is Jupiter.
+- [ ] **A bead behind its own planet is not grabbable.**
+- [ ] **Saturn outward: the ring draws, and has no beads.** Zoom out
+      with both hands and Jupiter's should come into range.
+- [ ] **Press Twin suns: the ring goes out.**
+- [ ] **Grab a bead at 1× and again at 9×.** It must be the same size
+      in the room both times, and pinchable at both.
 
 ### The room-scale walk-through
 
-- [ ] ⟳ **Two-hand pinch to 9×.** All six of these were broken:
-  - [ ] The Sun lights the OUTER planets — Uranus and Neptune should
-        have a lit side facing the Sun, not be flat grey.
-  - [ ] Name labels and every callout hold their size. They used to
-        inflate ninefold.
+- [ ] **Two-hand pinch to 9×:**
+  - [ ] The Sun lights the OUTER planets.
+  - [ ] Name labels and every callout hold their size.
   - [ ] **The spawn well stays where it was and stays the size it was.**
-  - [ ] The field-flow particles fill the space around you rather than
-        clustering where the Sun used to be.
-  - [ ] The spacetime grid switches itself off past ~2.5× (it is a floor
-        3.8 m under you by then).
-  - [ ] The dimming shell is outside the orrery, not cutting through it —
-        no seam where planets change from dark-backed to wall-backed.
-- [ ] ⟳ **A scale readout appears beside the clock** once you are off 1×.
-- [ ] ⟳ **Press Reset: the view returns to 1× and untwisted**, not just
-      the bodies.
+  - [ ] The field-flow particles fill the space around you.
+  - [ ] The spacetime grid switches itself off past ~2.5×.
+  - [ ] The dimming shell is outside the orrery, not cutting through it.
+- [ ] **A scale readout appears beside the clock** once you are off 1×.
+- [ ] **Press Reset: the view returns to 1× and untwisted.**
 
 ### The panel emptied
 
-- [ ] ⟳ **The switch bank on your left**, seven plates: spacetime grid,
-      Kepler sweep, field flow, velocity, **acceleration**, force,
-      **Lagrange points**. The acceleration vector had never had a
-      control anywhere in the app, and the Lagrange layer opened onto
-      `Lagrange.swift`, which was fully written and tested and had never
-      had a caller outside its own tests.
-- [ ] ⟳ **The G rail under the bank.** Drag its bead: orbits speed up and
+- [ ] **The switch bank on your left**, seven plates: spacetime grid,
+      Kepler sweep, field flow, velocity, acceleration, force,
+      Lagrange points.
+- [ ] **The G rail under the bank.** Drag its bead: orbits speed up and
       slow down live.
-- [ ] ⟳ **Tap the SUN.** It gets a mass bead of its own — in solar
-      masses — and no delete petal. Pull it: the star inflates as the
-      cube root and every orbit responds.
-- [ ] ⟳ **The panel holds no slider, picker or toggle.** It reads: the
-      selected body's orbital elements, and its energy — with total
-      energy negative for bound and positive for escaping.
+- [ ] **Tap the SUN.** It gets a mass bead of its own — in solar
+      masses — and no delete petal.
+- [ ] **The panel holds no slider, picker or toggle.**
 
 ### The three doors
 
-- [ ] ⟳ **Reverse time.** The clock bank now has −1× and −20×. Perturb an
-      orbit, run it backwards, and it should un-perturb — this is the
-      integrator being time-symmetric, not a replay. Rewinding past a
-      MERGE must not un-merge (that information is gone).
-- [ ] ⟳ **Lagrange points.** Select Jupiter, switch the layer on: five
-      markers appear. L4 and L5 form equilateral triangles with the Sun
-      and Jupiter.
-  - [ ] Pull a world from the well and release it on L4. It should snap
-        to the rotating frame and **stay there** — that is where the
-        Trojans are. Drop one on L1 and it should slide off within days.
-  - [ ] While doing that, the markers must NOT jump to the new body: the
-        layer follows the last planet you TAPPED.
-- [ ] ⟳ **The body budget is 16.** `reset()` uses ten, so you can add six
-      worlds before anything refuses. Check the well goes dark rather
-      than popping when it does refuse.
-- [ ] ⟳ **Trails no longer hitch** when several bodies' trails rebuild at
-      once (the uploads are staggered across frames now).
+- [ ] **Reverse time.** Perturb an orbit, run it backwards, and it
+      should un-perturb. Rewinding past a MERGE must not un-merge.
+- [ ] **Lagrange points.** Select Jupiter, switch the layer on: five
+      markers appear. L4 and L5 form equilateral triangles.
+  - [ ] Drop a world on L4: it stays. Drop one on L1: it slides off
+        within days.
+  - [ ] The markers must NOT jump to the new body.
+- [ ] **The body budget is 16.** Check the well goes dark rather than
+      popping when it refuses.
+- [ ] **Trails no longer hitch** when several bodies' trails rebuild at
+      once.
 
 ### Still true from before
 
@@ -538,49 +446,34 @@ module's new centrepiece. Everything marked ⟳ is new or changed.
       holds a circular orbit.
 - [ ] The clock bank changes time scale and reads back which is on.
 
-## The window is a title bar (2026-08-01)
-
-The module panels are gone — `makeControls` is deleted and all six
-`*ControlsPanel.swift` with it. Everything below is unreachable by any
-automation: `simctl` has no tap verb, XCUITest has no entity API, and the
-one XCUITest that used to prove a module's controls were wired now checks
-"Show in room" instead. **A screenshot proves something rendered; only a
-hand proves it works.**
-
-### ⟳ The window itself, in every module
+## The window is a title bar
 
 - [ ] The window shows a title bar and nothing else — no cards, no
       dropdowns, no scroll.
 - [ ] Below it, only two things ever appear: **Show in room** when the
       immersive space is closed, and the **first-run hint** until you
       dismiss it. Dismiss the hint; it stays gone on re-entry.
-- [ ] The bar does not truncate the longest name. **Circuit Workshop** is
-      the one that broke before — check it specifically, at default and
-      at the largest accessibility text size.
+- [ ] The bar does not truncate the longest name. **Circuit Workshop**
+      at default and at the largest accessibility text size.
 - [ ] **Key** opens the legend as a popover and it closes on a tap
-      outside. Every module's legend is present and matches what is drawn.
+      outside. Every module's legend is present and matches what is
+      drawn — ⟳ including that Magnetism's no longer mentions a compass
+      grid and Electric Fields' no longer mentions the flux meter or
+      the electron.
 - [ ] **Place the lab** shows the cross-hair. Drag it — the whole
-      apparatus follows and the instruments do NOT. **Tap** the cross-hair
-      and the lab snaps home. Press the title-bar button again to finish.
-- [ ] Reset still confirms, and after a reset nothing is left armed (see
-      the Clear plates below).
+      apparatus follows and the instruments follow WITH it. **Tap** the
+      cross-hair and the lab snaps home.
+- [ ] Reset still confirms, and after a reset nothing is left armed.
 
-### ⟳ The standing verbs (`SpatialActionBank`)
+### The standing verbs (`SpatialActionBank`)
 
-A verb plate is dark machined stock with a lit edge, and it FLASHES on
-fire rather than latching. It must never read as a layer-bank plate.
-
-(**Pendulums has no verb plate.** "Resonance ×5" stood under the
-Add-pendulum well until 2026-08-02, when it came off the wall with the
-rest of the module's right-hand furniture. Three modules carry a verb
-plate now, not four.)
-
-- [ ] **Projectiles — Clear**, the launcher's third bloom petal beside
-      Fire and Balls. Clears the volley. Tapping it with nothing in the
-      air is a harmless no-op — it is deliberately not disabled.
+- [ ] **Projectiles — Clear**, the launcher's third bloom petal. With
+      balls in the air: tap once — it must ARM (glyph swaps to a
+      checkmark), not fire. Tap again to clear. Arm it and walk away
+      five seconds: it disarms itself. With NO balls it is dim, and a
+      tap falls THROUGH.
 - [ ] **Electric Fields — Clear all**, above the well column. Dim when
-      there are no charges, and a tap on it while dim must fall through
-      rather than be swallowed.
+      there are no charges, and a tap on it while dim must fall through.
 - [ ] **Circuit Workshop — Clear bench**, on the bench's far left flank.
 - [ ] **Gravity Lab — Twin suns** and **Worlds**, below the clock bank.
 
@@ -590,67 +483,63 @@ plate now, not four.)
       "Tap again". It does not clear.
 - [ ] Wait ~5 seconds without touching it — it disarms itself.
 - [ ] Arm it, then Reset from the title bar. **Nothing may still be
-      armed.** This is the defect class that has bitten four modules.
+      armed.**
 - [ ] Arm the Circuits plate, force-quit, relaunch: the bench is still
-      there. (It persists across launches, which is why it confirms.)
+      there.
 
-### ⟳ The worlds fan — ten discs, the widest in the app
+### The worlds fan — ten discs, the widest in the app
 
 - [ ] Tap **Worlds** in Gravity Lab. The fan opens ABOVE the system.
-- [ ] All ten labels are readable and none overlaps its neighbour —
-      Mercury through Asteroid. This is the arrangement that smeared at
-      seven discs once before.
+- [ ] All ten labels are readable and none overlaps its neighbour.
 - [ ] Tapping a disc adds that world and folds the fan.
 
-### ⟳ The readouts that came out of the dropdowns
-
-Each floats on the thing it describes and must never intercept a pinch.
+### The readouts that came out of the dropdowns
 
 - [ ] **Pendulums** — tap a bob; the card appears above it with L, T, θ,
       v. Grab that same bob: the card must not steal the grab.
-- [ ] **Gravity Lab** — tap a planet; its orbital elements and energies
-      appear. Now pinch with both hands and walk the system from 0.4× to
-      9×: **the card must not change size.** Reach through it to the
-      planet.
+- [ ] **Gravity Lab** — tap a planet; its elements and energies appear.
+      Pinch to 9×: **the card must not change size.**
 - [ ] **Circuit Workshop** — tap a part; volts, amps and watts appear.
-      Switch on Electron View: **the card must not grow with the bench.**
-      Short a battery and confirm the red "short circuit" warning.
+      Electron View: the card must not grow. Short a battery and
+      confirm the red "short circuit" warning.
 - [ ] **Electric Fields** — the standing card on the left carries the
-      probe's numbers, the capacitor and B lines, and Gauss. **Switch on
-      Uniform B with a ball selected and read the 50 kT disclosure** — it
-      must be legible with the field lines drawn over it. Then pick the
-      electron and read the display-clock disclosure. Neither may be
-      missing or unreadable; a disclosed fiction that cannot be read is
-      an undisclosed one.
+      probe's numbers, the capacitor and B lines. **Switch on Uniform B
+      and read the 50 kT disclosure** — it must be legible with the
+      field lines drawn over it.
 
-### ⟳ The room, when it cannot be sensed
+### The room, when it cannot be sensed
 
 - [ ] Deny world sensing (Settings › Privacy & Security › World Sensing,
       then relaunch). A **warning triangle** appears in every module's
       title bar; its popover names Settings and says what is lost.
 - [ ] Grant it again — the triangle goes.
-- [ ] With it denied, Settings' Recenter caption must talk about the
-      permission, not about the simulator.
 
-### ⟳ The experiment steps
+### The experiment steps
 
 - [ ] On the home screen, a lab's card shows the next experiment's title
       AND its step. Follow one to the end in the room — every control it
-      names must exist and be where it says.
+      names must exist and be where it says. ⟳ Electric Fields' third
+      experiment is the cyclotron circle now, not the Gauss bubble.
 
 ## Cross-cutting
 
-- [ ] ⟳ **Every rail in the app hangs under the thing it adjusts.**
-      `Bloom` is shared by eight modules, so this moved everywhere at
-      once: Circuits, Electric Fields (charge and probe), Kinematics,
-      Pendulums, Magnetism and Gravity Lab. The
-      stack is always petals / object / rail / number.
-- [ ] ⟳ **Every ring folds in place.** Same class of fix, same eight
-      modules.
+- [ ] ⟳ **TWO HANDS, TWO OBJECTS, NO RESIZE — everywhere that scales**
+      (Circuits, Electric Fields, Magnetism, Gravity Lab). One object
+      in each hand: both move, nothing scales. Both hands on ONE object
+      (or on empty space): the two-hand resize still works. This is the
+      same-object rule; if resize still fires with an object in each
+      hand, the raw-pinch targeting assumption failed and the follow-up
+      is a `SpatialEventGesture` migration — report it, don't live with
+      it.
+- [ ] ⟳ **The petal flip is DEAD everywhere.** Tap petals across all
+      the modules: a quick swell, facing held, never a tumble.
+- [ ] ⟳ **No invisible walls anywhere.** Carry objects to the far side
+      of your real room in every module that has them.
+- [ ] **Every rail in the app hangs under the thing it adjusts.**
+- [ ] **Every ring folds in place.**
 - [ ] **System Reduce Motion** (Settings ▸ Accessibility): the hub's
       idle life stills, and the door signs PARK at a composed rest pose
-      rather than freezing mid-flight. There is no in-app duplicate of
-      this switch any more.
+      — the electron at its track's side, the ball resting on the rule.
 - [ ] **Every lab's first-run hint** appears once and stays dismissed.
 - [ ] **The notebook** captures a moment from each lab with sane
       numbers and units.
@@ -659,124 +548,57 @@ Each floats on the thing it describes and must never intercept a pinch.
 
 ---
 
-## ⟳⟳ The 2026-08-03 review pass — one sitting, in this order
+## Still unseen from the 2026-08-03 review pass
 
-Everything below was changed in a single review pass and **none of it has
-been seen by a person.** It is grouped so one device session covers it,
-because device sessions are the scarce thing. Work top to bottom: the
-first three are new physics and new failure modes, the rest is
-confirmation.
-
-Simulator screenshots already prove that each of these RENDERS. What
-follows is only what a screenshot cannot settle.
+Carried forward: these were changed then and have not yet been judged
+in a room.
 
 ### The one that is not finished
 
 - [ ] **`-magInertia 1` — magnets with real mass and rotational inertia.**
-      The default bench is unchanged, so run them back to back: launch
-      Magnetism normally, then again with the argument.
+      Run the two benches back to back: launch Magnetism normally, then
+      again with the argument.
   - [ ] **Set a magnet swinging in another's field and watch one needle.**
         With inertia it must swing PAST alignment and ring back before
-        settling. Without it, it slides to alignment and stops. That
-        difference is the whole point of the change; if you cannot see it
-        in the room, the change is not worth having.
+        settling. Without it, it slides to alignment and stops.
   - [ ] **Then let two magnets touch, and keep watching.** This is the
-        known defect: a touching pair does not come to rest. It was
-        measured — the swing grows between t = 10 s and t = 300 s — and
-        the cause is `separated()` doing work against the attraction
-        every substep while the body keeps its inertia. **Judge how bad
-        it looks**, because that decides whether this is worth fixing or
+        known defect: a touching pair does not come to rest. **Judge how
+        bad it looks** — that decides whether it is worth fixing or
         whether the glide simply wins. DECISIONS.md 2026-08-03 has the
         analysis.
-  - [ ] Reset returns to whichever bench the launch argument asked for,
-        not always to the glide.
-
-### New controls
-
-- [ ] **Electric Fields — the sixth plate, "Open disc".** The flux
-      meter's disc mode has been unreachable by hand since it was built:
-      `GaussGrab`'s tilt existed with no way to get a surface to tilt.
-  - [ ] Flick it: the bubble becomes a disc. Grab the disc's rim and turn
-        it EDGE-ON to the field — the flux must fall to zero. That is the
-        sentence the readout has been printing for weeks against a
-        control that did not exist.
-  - [ ] Flick it off: back to a bubble, and now moving it about must not
-        change the flux at all while the enclosed charge is unchanged.
-        Bubble = Gauss's law; disc = geometry.
-  - [ ] **The bank grew and the B rail moved down to make room.** Check
-        the whole column is still in one comfortable glance and the rail
-        does not read as part of the bank.
-
-- [ ] **Projectiles — Clear now confirms.** Its trash petal was the one
-      destructive verb in the app with no guard.
-  - [ ] With balls in the air: tap Clear once — it must ARM (glyph swaps
-        to a checkmark), not fire. Tap again to clear.
-  - [ ] Arm it and walk away for five seconds: it must disarm itself.
-  - [ ] With NO balls in the air the petal must be dim, and a tap on it
-        must fall THROUGH to whatever is behind it rather than being
-        swallowed.
-
-### The armed-plate bug, before and after
-
-- [ ] **Arm a Clear plate, then press Reset.** In Circuits and in
-      Electric Fields. The plate must come back dark and unarmed. It used
-      to survive a reset still lit and still reading "Tap again" — one
-      pinch from wiping a bench you had just restored.
+  - [ ] Reset returns to whichever bench the launch argument asked for.
 
 ### The hub
 
-- [ ] **Drag a lab to the pad.** The hint used to carry a collider
-      sitting directly in the path of that gesture: the sentence telling
-      you to drag a lab onto the pad was standing in the way of doing it.
-      The carry must be smooth all the way in.
 - [ ] **The gyroscope bead and the modelled miniatures** at real
       passthrough contrast, in a bright room and a dim one.
-- [ ] **The wordmark.** A simulator screenshot of the machined plaque
-      against a bright cream wall is very nearly illegible — it reads as
-      an embossed watermark rather than the app's nameplate. The
-      simulator's synthetic room is flat and bright in a way a real one
-      is not, so **this needs a real wall before anyone changes it.** If
-      it reads as faint on device too, that is a real finding about the
-      one piece of type every visitor sees first.
+- [ ] **The wordmark.** If the machined plaque reads as faint against a
+      real wall too, that is a real finding about the one piece of type
+      every visitor sees first.
 
-### Accessibility, and the claim that was not true (now fixed — verify)
+### Accessibility
 
-- [ ] **VoiceOver over a `Callout`.** Every tethered live number in the
-      app — flux, µT, catch speed, sweep area, prediction countdown — was
-      a bare text mesh with no accessibility at all until 2026-08-03.
-      `DECISIONS.md` claimed VoiceOver reach "on every plate, petal, disc
-      and card"; a callout is none of those four, so the claim stayed
-      technically true while the coverage was not there. Each one now
-      carries a NAME and a VALUE — "Field at the compass", "48.3 µT".
-      Check both are spoken, and that the value tracks as it changes.
+- [ ] **VoiceOver over a `Callout`.** Every tethered live number — the
+      compass µT, catch speed, sweep area, prediction countdown —
+      carries a NAME and a VALUE. Check both are spoken, and that the
+      value tracks as it changes.
 - [ ] **Reduce Motion inside a lab**, not just in the hub. The palette
-      bead must stop breathing. It must still UNFOLD when pinched —
-      that answers a gesture, and a control that does not respond reads
-      as broken rather than as calm.
+      bead must stop breathing. It must still UNFOLD when pinched.
 
 ### The catalog, and the numbers
 
-- [ ] **Open the flat catalog** (it shows before the gallery is up, and
-      whenever the gallery is closed). Above the two domains there is now
-      a tally and ONE next step: "4 of 20 experiments", then the next
-      thing to do and where. Complete that experiment and check the line
+- [ ] **Open the flat catalog.** Above the two domains there is a tally
+      and ONE next step. Complete that experiment and check the line
       moves on to another.
 - [ ] **Capture a notebook entry in three different labs and compare
-      them.** Every row should read in one voice: the same quantity at
-      the same precision, and a switched state spelled "on"/"off"
-      everywhere rather than "free"/"frozen" in one room and
-      "yes"/"no — unbound" in another.
-- [ ] **Gravity Lab at 100× clock, watching the data card.** The true
-      anomaly ν now reads to a tenth of a degree rather than a hundredth,
-      because at that speed a hundredth changed every frame and rebuilt
-      the card every frame. It should feel steadier, not coarser.
+      them.** Every row should read in one voice.
+- [ ] **Gravity Lab at 100× clock, watching the data card.** ν reads to
+      a tenth of a degree and the card should feel steadier, not
+      coarser.
 
 ### Leaks — the only test for these is patience
 
 - [ ] **Enter and leave eight or ten labs in a row, then use one.**
-      Three per-module subscriptions were never cancelled and accumulated
-      one live closure per entry for the life of the process: the palette
-      bead's, the lab-placement anchor's, and the experiments watcher's.
       Nothing should feel heavier at the tenth lab than at the first.
 - [ ] **Complete an experiment, then leave that lab and enter another.**
       No chime should fire for the lab you left.
