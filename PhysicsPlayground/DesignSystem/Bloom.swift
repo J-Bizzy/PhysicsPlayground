@@ -428,8 +428,7 @@ final class Bloom {
 
         // Acknowledge in place: a quick swell, then the action.
         let petal = petalEntities[index]
-        petal.move(to: Transform(scale: SIMD3(repeating: petal.scale.x * 1.35),
-                                 translation: petal.position),
+        petal.move(to: Self.swellTarget(for: petal),
                    relativeTo: root, duration: 0.09, timingFunction: .easeOut)
 
         if petals[index].confirms, armedPetal?.index != index {
@@ -445,6 +444,17 @@ final class Bloom {
         disarmPetal()
         petals[index].action()
         return true
+    }
+
+    /// The acknowledge-swell's target transform. Scale and translation
+    /// grow the petal in place; the rotation MUST carry the petal's own
+    /// orientation — petals are built face-on at π/2 about X, and a
+    /// `Transform` that omits rotation defaults to identity, so the
+    /// swell used to tumble every petal 90° on tap.
+    static func swellTarget(for petal: Entity) -> Transform {
+        Transform(scale: SIMD3(repeating: petal.scale.x * 1.35),
+                  rotation: petal.orientation,
+                  translation: petal.position)
     }
 
     /// Clears any armed petal and restores its glyph.

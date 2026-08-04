@@ -160,6 +160,30 @@ final class BloomPetalTests: XCTestCase {
         XCTAssertEqual(counter.fired, ["Clear"])
     }
 
+    /// The acknowledge-swell must keep the petal's own orientation.
+    /// Petals are built face-on at π/2 about X; a target `Transform`
+    /// built without a rotation defaults to identity, which animated
+    /// every petal through a visible 90° tumble on every tap — the
+    /// "flipping" seen on Magnetism's Delete and the launcher petals.
+    func testTheSwellTargetPreservesThePetalsOrientation() throws {
+        let counter = Counter()
+        let bloom = Bloom()
+        bloom.retarget("launcher", petals: [petal("Fire", counter)], grip: nil)
+        reveal(bloom)
+
+        let petalEntity = try entity(bloom, named: "Fire")
+        let target = Bloom.swellTarget(for: petalEntity)
+
+        let dot = abs(simd_dot(target.rotation.vector,
+                               petalEntity.orientation.vector))
+        XCTAssertEqual(dot, 1, accuracy: 1e-5,
+                       "the swell's target rotation differs from the "
+                       + "petal's built orientation — the tap animation "
+                       + "will visibly tumble the petal")
+        XCTAssertGreaterThan(target.scale.x, petalEntity.scale.x,
+                             "the swell should still grow the petal")
+    }
+
     /// A folded bloom is not on screen and must claim nothing.
     func testAFoldedBloomFiresNothing() throws {
         let counter = Counter()
