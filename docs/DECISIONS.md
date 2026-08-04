@@ -16,6 +16,33 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-03 — The gallery gets a grab bar; the Settings "Gallery" section dies
+
+**Decision:** The hub gallery is moved by a native-style grab bar — a
+slim glass capsule under the pad — dragged like a visionOS window bar,
+with a tap recentring it toward the wearer. Position and yaw persist
+(`GalleryPlacement`, `hub.galleryOffset`/`hub.galleryYaw`) so the room
+opens exactly where it was left. The Settings window's whole "Gallery"
+section (distance/height sliders, Recenter) is deleted, along with
+`arcDistance`/`arcHeight`/`hubYaw`/`layoutVersion` on AppSettings.
+Placement is a per-frame transform on `HubScene.root`; `build()` is
+idempotent as insurance.
+
+**Context:** The owner found the sliders DUPLICATED the gallery: each
+commit bumped `layoutVersion`, which rebuilt the RealityView over a
+`@State` scene that survived the teardown — `build()` was additive, so
+every reposition stacked a second gallery on the first. The fix the
+owner asked for was the native one: "add some way the user can change
+its position in the actual home, just like how the AVP has a little bar
+underneath native UI … and have the program remember its position."
+
+**Consequences:** Moving the gallery never rebuilds anything, so the
+duplication bug is structurally gone. Settings shrinks again, in line
+with the no-flat-controls doctrine — a position is a spatial fact, not
+a slider. The focus math converts the look ray through the full root
+transform now (translation included), which the orientation-only
+inverse would have broken.
+
 ## 2026-08-03 — The invisible walls come down; only the simulation stays fenced
 
 **Decision:** No hand-drag in the app meets an invisible wall. Electric

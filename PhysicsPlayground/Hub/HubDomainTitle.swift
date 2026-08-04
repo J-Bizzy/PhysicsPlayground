@@ -28,14 +28,18 @@
 //    derived from their real cap height.
 //  · The MOTION follows the vignette doctrine — every animated thing
 //    in the hub does the physics of the module it stands for. E&M gets
-//    an electron riding a tilted orbit ACROSS the sign (in front at
-//    the bottom of the lap, behind at the top — the pass that sells
-//    the letters as solids). Mechanics gets a ball lobbed over the
-//    sign on a parabola, launching and landing on the overhanging ends
-//    of the rule. Cadences are signage cadences, chosen to be read
-//    at a glance — the same licence the miniatures already take; the
-//    SHAPES (an ellipse, a parabola, a trail fading along it) are the
-//    honest part.
+//    an electron on a genuinely TILTED orbit crossing the sign — a
+//    planar ellipse whose depth amplitude overshoots the letter
+//    extrusion, so the spark swings well in front on the bottom of the
+//    lap and solidly behind on the top, with real parallax — sped up
+//    through the near pass and eased over the far one, Kepler-fashion.
+//    Mechanics gets a ball BOUNCING along the rule under the letters:
+//    a chain of decaying parabolic hops, reversing at the ends — the
+//    classic mechanics demo, and non-intersection with the type is
+//    guaranteed by construction instead of hoped for (the 2026-08-03
+//    pass caught the old single lob still clipping glyphs). Cadences
+//    are signage cadences; the SHAPES (an ellipse, true parabolas, a
+//    trail fading along them) are the honest part.
 //  · The DEPTH is measured, not chosen. Both bodies fly in lanes
 //    derived from the finished letters' own visual bounds, because the
 //    letters are extruded solids whose depth changes with the voice,
@@ -134,7 +138,8 @@ final class HubDomainTitle {
         // else — every pass, every per-style offset, every per-line
         // scale, in one measurement.
         let letters = root.visualBounds(relativeTo: root)
-        let beadRadius: Float = domain == .mechanics ? 0.014 : 0.011
+        let beadRadius: Float = domain == .mechanics
+            ? Self.ballRadius : 0.011
         frontLane = letters.max.z + beadRadius + Self.laneClearance
         backLane = letters.min.z - beadRadius - Self.laneClearance
 
@@ -181,14 +186,22 @@ final class HubDomainTitle {
                 root.addChild(ModelEntity(mesh: mesh, materials: [trackMaterial]))
             }
             bead = Self.spark(radius: 0.011, color: electron)
-            trail = (0..<4).map { _ in Self.spark(radius: 0.0075, color: electron) }
+            // A soft halo riding the spark — an electron is a point of
+            // light, and a bare matte sphere read as a bead on a wire.
+            var halo = UnlitMaterial(color: electron)
+            halo.blending = .transparent(opacity: 0.22)
+            bead.addChild(ModelEntity(mesh: .generateSphere(radius: 0.02),
+                                      materials: [halo]))
+            // A LONG wake: nine exposures close together, so the lap
+            // reads as a streak of motion rather than four dots.
+            trail = (0..<9).map { _ in Self.spark(radius: 0.007, color: electron) }
         case .mechanics:
-            // The ball. No standing track — the TRAIL is the parabola,
+            // The ball. No standing track — the TRAIL is the hop chain,
             // redrawn by motion every crossing, which is the honest way
             // to show a trajectory: it exists because something flew.
             let ball = UIColor(DesignTokens.Palette.projectile)
-            bead = Self.spark(radius: 0.014, color: ball)
-            trail = (0..<5).map { _ in Self.spark(radius: 0.0085, color: ball) }
+            bead = Self.spark(radius: Self.ballRadius, color: ball)
+            trail = (0..<6).map { _ in Self.spark(radius: 0.0075, color: ball) }
         }
         root.addChild(bead)
         trail.forEach { root.addChild($0) }
@@ -225,9 +238,11 @@ final class HubDomainTitle {
 
         place(beadAt: time)
         // The wake rides the same path a beat behind, fading as it
-        // trails — five exposures of where the body just was.
+        // trails — exposures of where the body just was, packed tighter
+        // for the electron so its lap reads as a streak.
+        let lagStep = domain == .electricity ? 0.04 : 0.055
         for (index, ghost) in trail.enumerated() {
-            let lag = Double(index + 1) * 0.055
+            let lag = Double(index + 1) * lagStep
             ghost.position = Self.path(for: domain, time: time - lag,
                                        halfWidth: halfWidth,
                                        halfHeight: halfHeight, ruleY: ruleY,
@@ -256,77 +271,116 @@ final class HubDomainTitle {
     ) -> SIMD3<Float> {
         switch domain {
         case .electricity:
-            // One lap every 4.5 s, counter-clockwise as read.
-            let theta = Float(time / 4.5 * 2 * .pi)
+            // One lap every 4.5 s, counter-clockwise as read — with the
+            // Kepler cadence: fastest through the near pass at the
+            // bottom of the lap, easing over the far pass at the top.
+            // θ(u) = u + k·cos(u) is monotonic for k < 1, leaves the
+            // two poles exactly where uniform time would put them, and
+            // its rate 1 − k·sin(u) peaks at the bottom — an honest
+            // equal-areas flavour, not a tween.
+            let u = Float(time / 4.5 * 2 * .pi)
+            let theta = u + orbitSpeedShape * cos(u)
             return orbitPoint(theta: theta, halfWidth: halfWidth,
                               halfHeight: halfHeight,
                               frontLane: frontLane, backLane: backLane)
         case .mechanics:
-            // A 2.8 s lob from one end of the rule to the other, then
-            // back the other way — a ball kept in play, not a loop.
-            // The arc is a true parabola: y is quadratic in horizontal
-            // progress, apex clearing the top of the letters.
-            //
-            // It launches OUTBOARD of the type, off the overhanging
-            // ends of the rule. It used to launch at 0.92 halfWidth —
-            // under the letters — and a parabola that starts under a
-            // word 6 times wider than it is tall has no way out through
-            // the top: it would need a metre of apex over a 20 cm sign.
-            // Starting outside the word is what buys the arc its
-            // clearance at both shoulders.
-            let period = 2.8
-            let crossing = Int(floor(time / period))
-            let s = Float(time / period - floor(time / period))
+            // THE TRAVELLING BOUNCE (owner's pick, 2026-08-03): the
+            // ball crosses the rule under the letters as a chain of
+            // decaying parabolic hops, then turns round and comes back.
+            // The single over-the-top lob it replaces could not be made
+            // safe — clearing a word six times wider than it is tall
+            // needs a ~0.4 m apex over a door sign — and it clipped
+            // glyphs on device. Down here, non-intersection is true BY
+            // CONSTRUCTION: every hop's apex is capped below the
+            // letters' baseline, so there is no frame in which ball and
+            // type can meet. Each hop is a true parabola and the decay
+            // is a restitution, which is the classic mechanics demo
+            // anyway — a bouncing ball, losing a bit each bounce.
+            let crossing = Int(floor(time / crossingPeriod))
+            let s = Float(time / crossingPeriod
+                          - floor(time / crossingPeriod))
             let direction: Float = crossing.isMultiple(of: 2) ? 1 : -1
             let x = direction * (s * 2 - 1) * (halfWidth * launchReach)
-            let apex = halfHeight + 0.13 - ruleY
-            let y = ruleY + apex * 4 * s * (1 - s)
-            // The whole flight happens in the front lane, so the ball
-            // passes the letters instead of through them.
+
+            // Which hop this instant of the crossing is in. Hop heights
+            // decay geometrically; hop durations go as √h, as real
+            // bounces do.
+            var y = ruleY + ballRadius
+            var start: Float = 0
+            for (index, width) in hopFractions.enumerated() {
+                let end = start + width
+                if s <= end || index == hopFractions.count - 1 {
+                    let u = min(max((s - start) / width, 0), 1)
+                    let height = hopHeight * pow(hopDecay, Float(index))
+                    y += 4 * height * u * (1 - u)
+                    break
+                }
+                start = end
+            }
+            // The whole run happens in the front lane — below the
+            // letters anyway, but a bounce half-buried in the plaque's
+            // extrusion would still read wrong edge-on.
             return SIMD3(x, y, frontLane)
         }
     }
 
-    /// The electron's ellipse: crossing the lockup, tilted in z so the
-    /// lap passes IN FRONT across the bottom and BEHIND across the top
-    /// — the depth crossing is what makes the letters read as solids.
+    /// The electron's orbit: a planar ellipse genuinely TILTED out of
+    /// the sign — y and z both ride sin θ, so the path lies in one
+    /// slanted plane — crossing the lockup so the top of the lap passes
+    /// BEHIND real glyphs and the bottom swings well in front. The
+    /// depth amplitude deliberately overshoots the measured lanes
+    /// (`orbitDepthGain`): the spark is solidly clear of the letters
+    /// for most of the lap and sweeps through the extrusion band only
+    /// near θ = 0 and π — the far left and right, where the lockup's
+    /// two lines leave a leading gap and there is nothing to clip.
+    /// The overshoot is also the parallax: the near pass comes ~9 cm
+    /// off the plaque toward the viewer, which is what makes the orbit
+    /// read as a thing in space rather than a decal.
     ///
     /// It CROSSES the lockup on purpose. The first pass hung the ellipse
-    /// outside the type on every side (halfWidth + 0.09), which meant
-    /// the "behind" half had no letter in front of it to be hidden by:
-    /// the depth swap was real in the transform and invisible to the
-    /// eye. A semi-axis inside the block's half-width puts the spark
-    /// behind actual glyphs on the top of the lap, which is the entire
-    /// effect this orbit exists to produce.
+    /// outside the type on every side, which meant the "behind" half had
+    /// no letter in front of it to be hidden by. A semi-axis inside the
+    /// block's half-width puts the spark behind actual glyphs on the top
+    /// of the lap, which is the entire effect this orbit exists to
+    /// produce.
     nonisolated static func orbitPoint(
         theta: Float, halfWidth: Float, halfHeight: Float,
         frontLane: Float, backLane: Float
     ) -> SIMD3<Float> {
         let mid = (frontLane + backLane) / 2
         let swing = (frontLane - backLane) / 2
-        // Depth eases like a tanh, not a sine. A sine spends most of
-        // the lap part-buried in the letters and only reaches a clean
-        // lane at the two poles — the spark reads as half-sunk for most
-        // of the orbit and the crossing never resolves. Shaped this way
-        // it sits SOLIDLY behind for most of the top half and SOLIDLY
-        // in front for most of the bottom, and does its swapping at
-        // theta 0 and pi, the far left and right of the ellipse, where
-        // it is clear of the type anyway. x and y are untouched: the
-        // spark is still exactly on its drawn track.
-        let s = tanh(orbitSnap * sin(theta)) / tanh(orbitSnap)
         return SIMD3(cos(theta) * (halfWidth * orbitReach),
                      sin(theta) * (halfHeight + orbitRise),
-                     mid - s * swing)
+                     mid - sin(theta) * swing * orbitDepthGain)
     }
 
     // MARK: The numbers the two paths are cut to
 
-    /// How far the ball's launch and landing sit outboard of the type,
+    /// How far the ball's turnaround points sit outboard of the type,
     /// as a multiple of the lockup's half-width.
     nonisolated static let launchReach: Float = 1.06
     /// The rule's width as a multiple of the lockup's — wide enough that
-    /// the ball's landing points are on it, not past it.
+    /// the ball's whole run stays on it, not past it.
     nonisolated static let ruleOverhang: Float = 1.16
+    /// One left-to-right crossing of the rule, seconds.
+    nonisolated static let crossingPeriod = 3.6
+    /// The ball's radius — shared with the tests, because the hop cap
+    /// is measured to the ball's SKIN, not its centre.
+    nonisolated static let ballRadius: Float = 0.012
+    /// The first hop's height. Capped so apex + a ball radius stays
+    /// below the letters' baseline: the rule hangs 0.055 m under the
+    /// block, and 0.030 + two radii = 0.054 clears it by a millimetre
+    /// everywhere a sign can be built.
+    nonisolated static let hopHeight: Float = 0.030
+    /// Restitution between hops.
+    nonisolated static let hopDecay: Float = 0.55
+    /// Each hop's share of a crossing — durations ∝ √height, as real
+    /// bounces are, normalised to sum to 1.
+    nonisolated static let hopFractions: [Float] = {
+        let roots = (0..<3).map { sqrt(pow(hopDecay, Float($0))) }
+        let total = roots.reduce(0, +)
+        return roots.map { $0 / total }
+    }()
     /// The electron ellipse's horizontal semi-axis, as a multiple of the
     /// lockup's half-width. Inside 1, so the lap crosses the letters.
     nonisolated static let orbitReach: Float = 0.88
@@ -334,8 +388,12 @@ final class HubDomainTitle {
     /// lap has to spend real time INSIDE the letters' silhouette, and
     /// an ellipse that clears the block vertically never does.
     nonisolated static let orbitRise: Float = 0.035
-    /// How hard the depth eases between lanes. 0 would be a plain sine.
-    nonisolated static let orbitSnap: Float = 2.2
+    /// How far the depth amplitude overshoots the measured lanes. 1
+    /// would just graze them at the poles and leave the spark half-sunk
+    /// for most of the lap.
+    nonisolated static let orbitDepthGain: Float = 2.2
+    /// How hard the Kepler cadence leans — 0 is uniform speed.
+    nonisolated static let orbitSpeedShape: Float = 0.35
     /// Air between a kinetic body's skin and the letters it passes.
     nonisolated static let laneClearance: Float = 0.013
 

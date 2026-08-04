@@ -136,6 +136,10 @@ final class AppModel {
     /// Where the active module's apparatus sits in the user's room.
     /// A pure display offset, remembered per module.
     let labPlacement = LabPlacement()
+
+    /// Where the hub gallery stands — dragged by its bar, remembered
+    /// across launches.
+    let galleryPlacement = GalleryPlacement()
     var isImmersiveSpaceOpen = false
     /// Driven by the active module's descriptor; bound to the shared
     /// immersive space's style selection.

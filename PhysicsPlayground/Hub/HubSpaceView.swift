@@ -52,10 +52,8 @@ struct HubSpaceView: View {
                     }.count,
                     entries.count)
             }
-            scene.build(modules: modules, progress: progress,
-                        distance: Float(appModel.settings.arcDistance),
-                        height: Float(appModel.settings.arcHeight),
-                        yaw: appModel.settings.hubYaw)
+            scene.build(modules: modules, progress: progress)
+            scene.placement = appModel.galleryPlacement
             scene.stillness = systemReduceMotion
             content.add(scene.root)
 
@@ -149,10 +147,6 @@ struct HubSpaceView: View {
                 }
             }
         }
-        // The arc's geometry (distance, height, recenter yaw) lives in
-        // settings; bumping layoutVersion gives this view a new identity,
-        // which tears the old scene down and builds the arc fresh.
-        .id(appModel.settings.layoutVersion)
         // The hub's gaze focus reads `room.lookRay`, which only exists
         // while the ARKit session runs — and the session is
         // reference-counted. Modules retain it through their occlusion
@@ -180,22 +174,71 @@ struct HubSpaceView: View {
                     scene.hintPodium()
                 }
         )
-        // Carry a lab to the podium. The exhibit rides the hand, the
-        // podium brightens as it nears, and release either seats it
-        // (Load Module appears) or glides it home.
+        // Carry a lab to the podium — or the whole gallery by its bar.
+        // The exhibit rides the hand, the podium brightens as it nears,
+        // and release either seats it (Load Module appears) or glides
+        // it home. The bar branch comes first: a hand on the handle is
+        // moving the room, not shopping for a lab.
         .simultaneousGesture(
             DragGesture(minimumDistance: 0.015)
                 .targetedToAnyEntity()
                 .onChanged { value in
                     let world = SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene))
+                    if barDrag != nil || HubScene.isGalleryBar(value.entity) {
+                        dragGalleryBar(worldHand: world)
+                        return
+                    }
                     if !scene.isCarrying {
                         _ = scene.beginExhibitDrag(entity: value.entity, world: world)
                     }
                     scene.dragExhibit(world: world)
                 }
-                .onEnded { _ in scene.endExhibitDrag() }
+                .onEnded { _ in
+                    if barDrag != nil {
+                        endGalleryBarDrag()
+                        return
+                    }
+                    scene.endExhibitDrag()
+                }
         )
+    }
+
+    /// The gallery bar's drag session, in the LabAnchorView pattern:
+    /// a RelativeDrag on the placement offset, and a press that never
+    /// moves it folds into a tap that recentres — no second recogniser
+    /// to contend with anything.
+    @State private var barDrag: RelativeDrag?
+    @State private var barTravelled: Float = 0
+    /// How far a press may wander and still count as a tap, metres.
+    private static let barTapTravel: Float = 0.012
+
+    private func dragGalleryBar(worldHand: SIMD3<Float>) {
+        let hand = SIMD3<Double>(worldHand)
+        let placement = appModel.galleryPlacement
+        if barDrag == nil {
+            barDrag = RelativeDrag(name: HubScene.galleryBarName,
+                                   target: SIMD3<Double>(placement.offset),
+                                   hand: hand)
+        }
+        guard let barDrag else { return }
+        let next = SIMD3<Float>(barDrag.position(forHand: hand))
+        barTravelled = max(barTravelled, simd_distance(next, placement.offset))
+        placement.move(to: next)
+    }
+
+    private func endGalleryBarDrag() {
+        if barTravelled < Self.barTapTravel {
+            // A tap: home, facing the wearer if the room knows where
+            // they are looking. This is the old Settings "Recenter"
+            // verb, on the object it recentres.
+            let yaw = appModel.room.lookRay.map { ray in
+                atan2(-Float(ray.direction.x), -Float(ray.direction.z))
+            }
+            appModel.galleryPlacement.recentre(facing: yaw)
+        }
+        barDrag = nil
+        barTravelled = 0
     }
 
     /// One enter path for both the pinch and the panel's button: the
@@ -323,17 +366,34 @@ final class HubScene {
 
     // MARK: Build
 
+    /// The gallery's fixed geometry. These were Settings sliders until
+    /// 2026-08-03; the whole-room grab bar replaced them — moving the
+    /// gallery is a transform now, not a rebuild, so the geometry it
+    /// builds AT is simply the good default the sliders defaulted to.
+    private static let arcDistanceDefault: Float = 2.0
+    private static let arcHeightDefault: Float = 1.4
+
     func build(modules: [ModuleDescriptor],
-               progress: [String: (done: Int, total: Int)] = [:],
-               distance: Float = 2.0, height: Float = 1.4, yaw: Float = 0) {
+               progress: [String: (done: Int, total: Int)] = [:]) {
+        // Idempotent on purpose: `build` is additive below, and a
+        // second call on a surviving scene used to stack a second
+        // gallery on top of the first — the Settings reposition bug.
+        // Nothing triggers a rebuild any more, but the insurance is a
+        // few lines.
+        root.children.removeAll()
+        titleAnchor.children.removeAll()
+        exhibits.removeAll()
+        terraceHairlines.removeAll()
+        domainTitles.removeAll()
+
+        let distance = Self.arcDistanceDefault
         arcRadius = distance
-        arcHeight = height
-        // Recenter: the whole gallery swings about the user.
-        root.orientation = simd_quatf(angle: yaw, axis: [0, 1, 0])
+        arcHeight = Self.arcHeightDefault
 
         titlePosition = SIMD3(0, arcHeight + 0.70, -(arcRadius + 0.45))
         buildBubbleTitle()
         buildPodium(distance: distance)
+        buildGalleryBar(distance: distance)
 
         // Each terrace carries its domain's name as three-dimensional
         // signage (HubDomainTitle) — owner's call 2026-07-30, reversing
@@ -344,7 +404,7 @@ final class HubScene {
         let byID = Dictionary(uniqueKeysWithValues: modules.map { ($0.id, $0) })
         for terrace in GalleryLayout.terraces(moduleIDs: modules.map(\.id),
                                               distance: distance,
-                                              height: height) {
+                                              height: arcHeight) {
             buildTerrace(terrace)
             for (index, id) in terrace.moduleIDs.enumerated() {
                 guard let module = byID[id] else { continue }
@@ -552,6 +612,50 @@ final class HubScene {
         podiumGlow = glow
 
         root.addChild(podium)
+    }
+
+    // MARK: The gallery's grab bar
+
+    /// The whole-room move handle: a slim glass capsule hanging under
+    /// the pad, front and centre — the same affordance as the bar under
+    /// every visionOS window, for the same verb. Drag it and the whole
+    /// gallery comes; a press that never moves it recentres.
+    ///
+    /// It replaced the Settings window's "Gallery" section
+    /// (2026-08-03): distance/height sliders that repositioned by
+    /// REBUILDING, on a rebuild path that duplicated the gallery.
+    /// See `GalleryPlacement`.
+    static let galleryBarName = "gallery-handle"
+
+    private func buildGalleryBar(distance: Float) {
+        let bar = Entity()
+        bar.name = Self.galleryBarName
+        bar.position = SIMD3(0, Self.podiumPlateHeight - 0.16,
+                             -Self.podiumReach * (distance / 2.0))
+
+        var glass = PhysicallyBasedMaterial()
+        glass.baseColor = .init(tint: .white)
+        glass.roughness = 0.15
+        glass.clearcoat = .init(floatLiteral: 1.0)
+        glass.blending = .transparent(opacity: .init(floatLiteral: 0.55))
+        let capsule = ModelEntity(
+            mesh: .generateBox(width: 0.24, height: 0.011, depth: 0.011,
+                               cornerRadius: 0.0055),
+            materials: [glass])
+        bar.addChild(capsule)
+
+        Grabbable.configureTouchTarget(bar, collisionRadius: 0.09)
+        bar.components.set(HoverEffectComponent())
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = "Gallery handle. Drag it to move the whole gallery; tap it to bring the gallery home."
+        bar.components.set(accessibility)
+        root.addChild(bar)
+    }
+
+    /// True if the entity (or an ancestor) is the gallery's grab bar.
+    static func isGalleryBar(_ entity: Entity) -> Bool {
+        entity.nearestAncestor { $0.name == galleryBarName } != nil
     }
 
     private static func rimTube(radius: Float, y: Float) -> ModelEntity? {
@@ -1061,8 +1165,16 @@ final class HubScene {
     /// The exhibits hold their places on the ring; the life in them is
     /// their own physics running, plus a gentle bob — and the ANSWER to
     /// where you are looking.
+    /// The gallery's whole-room placement, applied to `root` every
+    /// frame. A transform, never a rebuild — see `GalleryPlacement`.
+    var placement: GalleryPlacement?
+
     func animate(dt: Double, lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?) {
         time += dt
+        if let placement {
+            root.position = placement.offset
+            root.orientation = simd_quatf(angle: placement.yaw, axis: [0, 1, 0])
+        }
         fadeIn(dt: dt)
         updateFocus(lookRay: lookRay, dt: dt)
 
@@ -1241,12 +1353,16 @@ final class HubScene {
         #endif
         if let lookRay {
             hasLookRay = true
-            // The whole scene may be yawed by Recenter; bring the ray
-            // into the scene's own frame so the base positions the math
-            // uses stay honest.
-            let inverse = root.orientation.inverse
-            let origin = inverse.act(SIMD3<Float>(lookRay.origin))
-            let forward = simd_normalize(inverse.act(SIMD3<Float>(lookRay.direction)))
+            // The whole scene may be moved and yawed by the grab bar;
+            // bring the ray into the scene's own frame so the base
+            // positions the math uses stay honest. `convert` carries
+            // the translation as well as the yaw — the old
+            // orientation-only inverse broke the moment the gallery
+            // could be dragged.
+            let origin = root.convert(position: SIMD3<Float>(lookRay.origin),
+                                      from: nil)
+            let forward = simd_normalize(
+                root.orientation.inverse.act(SIMD3<Float>(lookRay.direction)))
             var best = Self.focusCone
             for index in exhibits.indices {
                 let exhibit = exhibits[index]

@@ -16,8 +16,7 @@ final class AppSettingsTests: XCTestCase {
 
     private static let keys = [
         "settings.masterVolume",
-        "settings.ambientAudio", "settings.arcDistance",
-        "settings.arcHeight", "settings.seenHints",
+        "settings.ambientAudio", "settings.seenHints",
     ]
 
     private func clearKeys() {
@@ -39,8 +38,6 @@ final class AppSettingsTests: XCTestCase {
         let settings = AppSettings()
         XCTAssertEqual(settings.masterVolume, 1.0)
         XCTAssertTrue(settings.ambientAudio)
-        XCTAssertEqual(settings.arcDistance, 2.0)
-        XCTAssertEqual(settings.arcHeight, 1.4)
         XCTAssertTrue(settings.seenHints.isEmpty)
     }
 
@@ -48,8 +45,6 @@ final class AppSettingsTests: XCTestCase {
         let settings = AppSettings()
         settings.masterVolume = 0.4
         settings.ambientAudio = false
-        settings.arcDistance = 2.6
-        settings.arcHeight = 1.1
         settings.markHintSeen("circuits")
         settings.markHintSeen("waves")
 
@@ -58,8 +53,6 @@ final class AppSettingsTests: XCTestCase {
         let relaunched = AppSettings()
         XCTAssertEqual(relaunched.masterVolume, 0.4)
         XCTAssertFalse(relaunched.ambientAudio)
-        XCTAssertEqual(relaunched.arcDistance, 2.6)
-        XCTAssertEqual(relaunched.arcHeight, 1.1)
         XCTAssertTrue(relaunched.hasSeenHint("circuits"))
         XCTAssertTrue(relaunched.hasSeenHint("waves"))
         XCTAssertFalse(relaunched.hasSeenHint("pendulums"))

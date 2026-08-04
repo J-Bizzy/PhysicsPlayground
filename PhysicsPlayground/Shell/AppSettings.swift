@@ -39,39 +39,17 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(ambientAudio, forKey: "settings.ambientAudio") }
     }
 
-    // MARK: Space — the hub arc's geometry
-
-    /// How far away the exhibit arc stands, metres.
-    var arcDistance: Double {
-        didSet { UserDefaults.standard.set(arcDistance, forKey: "settings.arcDistance") }
-    }
-
-    /// How high the exhibits float, metres.
-    var arcHeight: Double {
-        didSet { UserDefaults.standard.set(arcHeight, forKey: "settings.arcHeight") }
-    }
-
-    // There is no `titleStyle` here any more either. The home speaks in
-    // the machined plaque, full stop (owner's call, 2026-07-31) — it is
-    // all `HubTitleStyle` knows how to draw. The specimen wall did its
-    // job: it is how the plaque was chosen, off three other candidates
-    // hanging side by side in the room. A decision that has been made is
-    // not a preference,
-    // and leaving it in Settings invites every user to re-litigate the
-    // app's own identity from a menu.
-
-    /// Bumped whenever the arc needs rebuilding (sliders committed,
-    /// recenter). The hub view keys its RealityView identity to this, so
-    /// changing it tears the old scene down and builds a fresh one with
-    /// the new geometry. Not persisted — it is a rebuild signal, not a
-    /// preference.
-    var layoutVersion = 0
-
-    /// A yaw applied to the whole hub scene so "Recenter" can swing the
-    /// arc round to wherever the user is now facing. Radians about Y.
-    /// Session-only: the room the app reopens into is not the room it
-    /// closed in.
-    var hubYaw: Float = 0
+    // MARK: What is NOT here any more
+    //
+    // No `titleStyle`: the home speaks in the machined plaque, full
+    // stop (owner's call, 2026-07-31). No arc geometry either — the
+    // `arcDistance`/`arcHeight` sliders, the session `hubYaw` and the
+    // `layoutVersion` rebuild signal all left on 2026-08-03, when the
+    // gallery gained its grab bar: repositioning by rebuild duplicated
+    // the whole room, and where the gallery stands is a spatial fact
+    // now, owned by `GalleryPlacement` and persisted under its own
+    // keys. A decision that has been made is not a preference, and a
+    // position is not a slider.
 
     // MARK: Onboarding
 
@@ -104,8 +82,6 @@ final class AppSettings {
         let defaults = UserDefaults.standard
         masterVolume = defaults.object(forKey: "settings.masterVolume") as? Double ?? 1.0
         ambientAudio = defaults.object(forKey: "settings.ambientAudio") as? Bool ?? true
-        arcDistance = defaults.object(forKey: "settings.arcDistance") as? Double ?? 2.0
-        arcHeight = defaults.object(forKey: "settings.arcHeight") as? Double ?? 1.4
         seenHints = Set(defaults.stringArray(forKey: "settings.seenHints") ?? [])
         // didSet does not fire during init, so hand the restored volume to
         // the sound engine here — otherwise a debug `-openModule` launch

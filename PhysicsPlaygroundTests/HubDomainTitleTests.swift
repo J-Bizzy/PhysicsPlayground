@@ -3,10 +3,12 @@
 //  Physics Playground — app tests
 //
 //  The signage over the two doors moves, and the movement claims to be
-//  physics: an electron on an ellipse, a ball on a parabola that lands
-//  where it can be lobbed back. Decoration in this app still has to
-//  tell the truth about its shapes, so the shapes are pure functions
-//  and these tests hold them.
+//  physics: an electron on a tilted orbit, a ball bouncing along the
+//  rule in decaying parabolic hops. Decoration in this app still has
+//  to tell the truth about its shapes, so the shapes are pure
+//  functions and these tests hold them — above all the one hard
+//  promise of the 2026-08-03 redesign: the ball can NEVER touch a
+//  letter, because its every apex is capped below the baseline.
 //
 
 import XCTest
@@ -52,9 +54,9 @@ final class HubDomainTitleTests: XCTestCase {
     /// The orbit is tilted in z so the lap crosses IN FRONT of the
     /// letters on one half and BEHIND on the other — the depth pass is
     /// what sells the type as solid, so it must actually happen. Both
-    /// extremes have to reach their measured lane: an amplitude smaller
-    /// than the extrusion leaves the spark buried in the glyphs, which
-    /// is exactly the bug the lanes were introduced to kill.
+    /// extremes have to reach AT LEAST their measured lane; the 2.2×
+    /// overshoot beyond it is the parallax that makes the orbit read
+    /// as a thing in space rather than a decal.
     func testTheOrbitCrossesInFrontAndBehindTheLetters() {
         let depths = (0..<64).map { step in
             HubDomainTitle.orbitPoint(theta: Float(step) / 64 * 2 * .pi,
@@ -63,10 +65,28 @@ final class HubDomainTitleTests: XCTestCase {
                                       frontLane: frontLane,
                                       backLane: backLane).z
         }
-        XCTAssertEqual(depths.min() ?? 0, backLane, accuracy: 1e-3,
+        XCTAssertLessThanOrEqual(depths.min() ?? 0, backLane,
                        "the lap never reaches the lane behind the letters")
-        XCTAssertEqual(depths.max() ?? 0, frontLane, accuracy: 1e-3,
+        XCTAssertGreaterThanOrEqual(depths.max() ?? 0, frontLane,
                        "the lap never reaches the lane in front of the letters")
+    }
+
+    /// The lap is a PLANAR ellipse — a genuinely tilted orbit, not a
+    /// flat one with a depth gimmick: z is an exact linear function of
+    /// y, which is what "one slanted plane" means.
+    func testTheOrbitLiesInOneTiltedPlane() {
+        let b = halfHeight + HubDomainTitle.orbitRise
+        let mid = (frontLane + backLane) / 2
+        let swing = (frontLane - backLane) / 2
+        for step in 0..<64 {
+            let p = HubDomainTitle.orbitPoint(
+                theta: Float(step) / 64 * 2 * .pi,
+                halfWidth: halfWidth, halfHeight: halfHeight,
+                frontLane: frontLane, backLane: backLane)
+            let expected = mid - (p.y / b) * swing * HubDomainTitle.orbitDepthGain
+            XCTAssertEqual(p.z, expected, accuracy: 1e-4,
+                           "the orbit left its plane at step \(step)")
+        }
     }
 
     /// And the lap has to actually GO somewhere the letters are, or the
@@ -87,66 +107,80 @@ final class HubDomainTitleTests: XCTestCase {
                       + "the depth crossing has nothing to sell")
     }
 
-    // MARK: The ball's lob
+    // MARK: The ball's travelling bounce
 
-    /// Launch and landing sit ON the rule, at its two ends: the arc is
-    /// a throw between two real points, not a float through space.
-    func testTheBallLaunchesAndLandsOnTheRule() {
-        let period = 2.8
+    /// The turnaround points sit ON the rule, at its two ends: the run
+    /// is a bounce between two real points, not a float through space.
+    func testTheBallTurnsRoundOnTheRule() {
+        let period = HubDomainTitle.crossingPeriod
         for crossing in 0..<4 {
             let start = path(.mechanics, Double(crossing) * period + 1e-4)
-            XCTAssertEqual(start.y, ruleY, accuracy: 1e-2,
-                           "crossing \(crossing) launches off the rule")
+            XCTAssertEqual(start.y, ruleY + HubDomainTitle.ballRadius,
+                           accuracy: 1e-2,
+                           "crossing \(crossing) starts off the rule")
             XCTAssertEqual(abs(start.x),
                            halfWidth * HubDomainTitle.launchReach, accuracy: 1e-2,
-                           "crossing \(crossing) launches from mid-air")
+                           "crossing \(crossing) starts from mid-air")
         }
     }
 
     /// …and those two ends are ON the rule but OUTBOARD of the type.
-    /// Launching from under a letter is what made the old arc
-    /// unwinnable: a parabola that starts inside a word six times wider
-    /// than it is tall cannot get out through the top.
-    func testTheBallLaunchesFromOutsideTheLettersButOntoTheRule() {
+    func testTheBallTurnsRoundOutsideTheLettersButOnTheRule() {
         let launch = halfWidth * HubDomainTitle.launchReach
         let ruleEnd = halfWidth * HubDomainTitle.ruleOverhang
         XCTAssertGreaterThan(launch, halfWidth,
-                             "the ball launches from under the letters")
+                             "the ball turns round under the letters")
         XCTAssertLessThan(launch, ruleEnd,
-                          "the ball launches off the end of the rule, into space")
+                          "the ball turns round off the end of the rule, in space")
     }
 
-    /// The ball flies in the lane in FRONT of the letters — the whole
-    /// flight, not just the apex. It flew at a hardcoded z = 0.02 until
-    /// an on-device pass caught it passing through a glyph: the plaque
-    /// voice extrudes its letters far deeper than that.
-    func testTheBallNeverEntersTheLetters() {
-        for step in 0..<200 {
-            let p = path(.mechanics, Double(step) * 0.043)
+    /// THE hard promise of the redesign, dense-sampled: at no instant
+    /// does any part of the ball enter the letters' inflated box — not
+    /// in y (every hop apex plus the ball's radius stays below the
+    /// baseline) and not in z (the whole run rides the front lane).
+    /// The old single lob could only hope for this; the bounce has it
+    /// by construction, and this holds the construction.
+    func testTheBallCanNeverTouchALetter() {
+        for step in 0..<800 {
+            let p = path(.mechanics, Double(step) * 0.0173)
+            XCTAssertLessThan(
+                p.y + HubDomainTitle.ballRadius, -halfHeight + 1e-5,
+                "the ball's skin reached the letters' baseline at step \(step)")
             XCTAssertGreaterThanOrEqual(
                 p.z, frontLane - 1e-5,
                 "the ball is inside the letter solids at step \(step)")
+            XCTAssertGreaterThanOrEqual(
+                p.y - HubDomainTitle.ballRadius, ruleY - 1e-4,
+                "the ball fell through the rule at step \(step)")
         }
     }
 
-    /// The apex clears the top of the letters — a lob that passes
-    /// THROUGH the sign it decorates is the one unforgivable frame.
-    func testTheArcClearsTheSign() {
-        let period = 2.8
-        let apex = path(.mechanics, period / 2)
-        XCTAssertGreaterThan(apex.y, halfHeight + 0.10,
-                             "the ball grazes the letters at the top of its arc")
-        // And the path truly is a parabola: symmetric about the apex.
-        let early = path(.mechanics, period * 0.25)
-        let late = path(.mechanics, period * 0.75)
-        XCTAssertEqual(early.y, late.y, accuracy: 1e-4,
-                       "the arc is not symmetric — that is not a parabola")
+    /// The hops decay like a real bounce: each apex lower than the
+    /// last, by the declared restitution.
+    func testTheHopsDecayLikeARealBounce() {
+        let period = HubDomainTitle.crossingPeriod
+        // Sample densely and take the apex within each hop's window.
+        var start: Float = 0
+        var apexes: [Float] = []
+        for width in HubDomainTitle.hopFractions {
+            let mid = start + width / 2
+            apexes.append(path(.mechanics, Double(mid) * period).y)
+            start += width
+        }
+        for index in 1..<apexes.count {
+            let rest = ruleY + HubDomainTitle.ballRadius
+            let previous = apexes[index - 1] - rest
+            let current = apexes[index] - rest
+            XCTAssertEqual(current, previous * HubDomainTitle.hopDecay,
+                           accuracy: 1e-4,
+                           "hop \(index) did not decay by the restitution")
+        }
     }
 
     /// Consecutive crossings run opposite ways — a ball kept in play
     /// between two points, not a film loop rewinding.
     func testConsecutiveCrossingsAlternateDirection() {
-        let period = 2.8
+        let period = HubDomainTitle.crossingPeriod
         let first = path(.mechanics, period * 0.1)
         let second = path(.mechanics, period * 1.1)
         XCTAssertEqual(first.x, -second.x, accuracy: 1e-3,
