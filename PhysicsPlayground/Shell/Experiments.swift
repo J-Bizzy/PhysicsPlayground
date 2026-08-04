@@ -181,13 +181,15 @@ enum ExperimentCatalog {
                         detail: "Shape the field with six or more charges at once.",
                         step: "Pull charges out of the + and − wells until six share the room, then drag them into a shape."),
              { model.charges.count >= 6 }),
-            // Gauss's law, as a thing you did rather than a thing you
-            // read. The flux meter has been in the room since it was
-            // written and had no rung.
-            (Experiment(id: "field.gauss", title: "Whatever you do to it",
-                        detail: "Enclose a charge in the bubble and watch the flux hold at Q/ε₀ however you move it.",
-                        step: "Flick Flux meter on the switch bank, then drag a charge inside the bubble. Move the bubble about: the flux must not budge while the same charge is inside."),
-             { model.gaussSurfaceOn && (model.gaussEnclosedCharge ?? 0) != 0 }),
+            // The cyclotron circle — r = mv/qB, drawn in the air. This
+            // replaced `field.gauss` on 2026-08-03 when the flux meter
+            // left the prototype; anyone who earned the old rung keeps
+            // it in their progress store, it just stops being counted.
+            (Experiment(id: "field.cyclotron", title: "Round trip",
+                        detail: "Bend the test charge into a closed circle with the uniform field.",
+                        step: "Flick Uniform B on the switch bank, pull a test charge from its well and throw it sideways. The trail curves into a circle that closes on its own tail."),
+             { model.magneticFieldOn && model.probeStatus == .running
+                 && model.probeTrail.count >= 150 }),
         ]
     }
 

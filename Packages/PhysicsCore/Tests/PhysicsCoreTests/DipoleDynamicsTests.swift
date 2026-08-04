@@ -2,9 +2,9 @@
 //  DipoleDynamicsTests.swift
 //  PhysicsCoreTests
 //
-//  Theorem recovery, in the shape `FoucaultTests` established: nothing
-//  here asserts that a formula returns what the formula says. Every test
-//  integrates a swinging magnet and measures what it did.
+//  Theorem recovery: nothing here asserts that a formula returns what
+//  the formula says. Every test integrates a swinging magnet and
+//  measures what it did.
 //
 //  The headline is the magnetometer period, T = 2π√(I/mB). It is
 //  recovered from a simulated swing at three field strengths, and

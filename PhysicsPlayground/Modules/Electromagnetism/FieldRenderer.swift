@@ -48,9 +48,6 @@ final class FieldRenderer {
     static let probePositiveColor = DesignTokens.Palette.probePositiveUI
     static let probeNegativeColor = DesignTokens.Palette.probeNegativeUI
     static let lineColor = DesignTokens.Palette.fieldLineUI
-    /// The Gauss surface's own colour — deliberately not the field's, so
-    /// the measuring instrument never reads as part of the field.
-    static let gaussColor = UIColor(red: 1.0, green: 0.84, blue: 0.35, alpha: 1)
     static let chargeRadius: Float = 0.03
 
     /// How big a charge is actually drawn right now — the Bloom's grip
@@ -152,7 +149,6 @@ final class FieldRenderer {
 
     func tick(_ model: FieldModel, room: RoomBox = .unscanned) {
         self.model = model
-        syncGaussSurface(model)
         syncProbeTrail(model)
         render(
                 charges: model.charges,
@@ -167,95 +163,6 @@ final class FieldRenderer {
                 magneticFieldOn: model.magneticFieldOn,
                 room: room
         )
-    }
-
-    // MARK: The Gauss surface — a flux meter you carry
-
-    private let gaussRoot = Entity()
-    private var gaussDisc: ModelEntity?
-    private var gaussBubble: ModelEntity?
-    private var gaussCallout: Callout?
-    private var appliedGaussRadius: Double = -1
-
-    private func buildGaussSurface() {
-        gaussRoot.name = "gauss-surface"
-        // The DISC: a thin translucent plate with a bright rim, so the
-        // orientation is unmistakable — an untinted disc read as a
-        // featureless blob when tilted.
-        var faceMaterial = UnlitMaterial(color: FieldRenderer.gaussColor)
-        faceMaterial.blending = .transparent(opacity: 0.16)
-        let disc = ModelEntity(mesh: .generateCylinder(height: 0.002, radius: 1),
-                               materials: [faceMaterial])
-        disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        gaussDisc = disc
-        gaussRoot.addChild(disc)
-
-        // The BUBBLE: a closed soap-film sphere. Faint, because the user
-        // has to see the charges and lines THROUGH it — the whole point
-        // is watching what is inside.
-        var filmMaterial = UnlitMaterial(color: FieldRenderer.gaussColor)
-        filmMaterial.blending = .transparent(opacity: 0.1)
-        let bubble = ModelEntity(mesh: .generateSphere(radius: 1),
-                                 materials: [filmMaterial])
-        gaussBubble = bubble
-        gaussRoot.addChild(bubble)
-
-        let callout = Callout(color: FieldRenderer.gaussColor, textSize: 0.03,
-                              offset: SIMD3(0, 0.16, 0))
-        callout.setAccessibilityName("Flux through the surface")
-        gaussCallout = callout
-        gaussRoot.addChild(callout.root)
-
-        Grabbable.configureTouchTarget(gaussRoot, collisionRadius: 0.1)
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Gauss surface. Carry it through the field to read the flux through it."
-        gaussRoot.components.set(accessibility)
-        viewRoot.addChild(gaussRoot)
-    }
-
-    private func syncGaussSurface(_ model: FieldModel) {
-        if gaussDisc == nil { buildGaussSurface() }
-        gaussRoot.isEnabled = model.gaussSurfaceOn
-        guard model.gaussSurfaceOn else { return }
-
-        gaussRoot.position = SIMD3<Float>(model.gaussSurfaceCenter)
-        let isBubble = model.gaussSurfaceKind == .bubble
-        gaussBubble?.isEnabled = isBubble
-        gaussDisc?.isEnabled = !isBubble
-
-        // Radius rides on the unit meshes as a scale — never regenerate
-        // a mesh on a slider.
-        if abs(model.gaussSurfaceRadius - appliedGaussRadius) > 1e-4 {
-            appliedGaussRadius = model.gaussSurfaceRadius
-            let r = Float(model.gaussSurfaceRadius)
-            gaussBubble?.scale = SIMD3(repeating: r)
-            // The disc's own mesh runs along +Y before its quarter turn,
-            // so thickness stays on Y and the face scales in X and Z.
-            gaussDisc?.scale = SIMD3(r, 1, r)
-            gaussRoot.components.set(CollisionComponent(
-                shapes: [.generateSphere(radius: max(r, 0.06))]))
-        }
-        if !isBubble {
-            let normal = simd_normalize(SIMD3<Float>(model.gaussSurfaceNormal))
-            // The disc's face normal is its local +Y after the quarter turn.
-            gaussDisc?.orientation = simd_quatf(from: [0, 1, 0], to: normal)
-        }
-
-        // The readout, tethered to the surface itself rather than parked
-        // on a distant card: flux, and for the closed bubble the enclosed
-        // charge and what Gauss says the flux therefore has to be.
-        if let enclosed = model.gaussEnclosedCharge,
-           let predicted = model.gaussPredictedFlux {
-            gaussCallout?.setText(String(
-                format: "Φ %@   Q %@\nGauss: %@",
-                PhysicsFormat.scientific(model.gaussFlux),
-                PhysicsFormat.scientific(enclosed),
-                PhysicsFormat.scientific(predicted)))
-        } else {
-            gaussCallout?.setText("Φ " + PhysicsFormat.scientific(model.gaussFlux))
-        }
-        gaussCallout?.anchor(at: SIMD3(0, Float(model.gaussSurfaceRadius), 0))
     }
 
     /// Re-syncs all visuals to the given state.

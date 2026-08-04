@@ -41,11 +41,10 @@ struct PlaygroundSpaceView: View {
                 ZStack {
                     module.makeScene()
                         .id(module.id)
-                    // Real furniture hides virtual content behind it, and
-                    // the shared room sensing stays alive while a module
+                    // The shared room sensing stays alive while a module
                     // is on screen (device-only; inert in the simulator).
-                    RoomOcclusionView()
-                        .id("occlusion")
+                    RoomSensingView()
+                        .id("room-sensing")
                     // The lab anchor: drag it to put the apparatus where
                     // you actually have room. Hidden until asked for.
                     LabAnchorView(module: module)

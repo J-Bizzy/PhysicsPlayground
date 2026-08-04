@@ -31,9 +31,9 @@ struct MagnetismSpaceView: View {
         pivot: SIMD3<Float>(MagnetismModel.regionCenter), range: 0.5...4.0)
     /// What is drawn, and whether the magnets are free.
     ///
-    /// FIVE plates — display lines, compass grid, hand compass, Earth's
-    /// field, and the dynamics switch. (This said "four" until
-    /// 2026-08-03, and `-magLayers 0` still reaches only four of them:
+    /// FOUR plates — field lines, hand compass, Earth's field, and the
+    /// dynamics switch. (The compass-grid plate came off with the grid
+    /// on 2026-08-03; `-magLayers 0` reaches three of these four —
     /// `earthFieldOn` has no argument.)
     /// The top one is not a display layer: `dynamicsOn` decides whether
     /// the magnets glide together and swing into alignment at all, which
@@ -81,9 +81,6 @@ struct MagnetismSpaceView: View {
                     .init(id: "lines", label: "Field lines", symbol: "scribble",
                           isOn: { model.showFieldLines },
                           toggle: { model.showFieldLines.toggle() }),
-                    .init(id: "compasses", label: "Compass grid", symbol: "grid",
-                          isOn: { model.showCompasses },
-                          toggle: { model.showCompasses.toggle() }),
                     .init(id: "handCompass", label: "Hand compass",
                           symbol: "location.north.circle",
                           isOn: { model.compassOn },
@@ -157,14 +154,13 @@ struct MagnetismSpaceView: View {
                 ring.openID = first.id
             }
             // `-magLayers 0` darkens every plate on the bank, so one shot
-            // shows all four lamps OFF against the four labels — the only
-            // way to check the dark state, since the scene opens with
-            // three of them already lit and the simulator has no finger
-            // to flick them with.
+            // shows the lamps OFF against the labels — the only way to
+            // check the dark state, since the scene opens with several
+            // already lit and the simulator has no finger to flick them
+            // with. (`earthFieldOn` still has no argument.)
             if UserDefaults.standard.object(forKey: "magLayers") != nil,
                !UserDefaults.standard.bool(forKey: "magLayers") {
                 model.showFieldLines = false
-                model.showCompasses = false
                 model.compassOn = false
                 model.dynamicsOn = false
             }

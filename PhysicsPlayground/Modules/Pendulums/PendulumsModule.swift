@@ -22,7 +22,7 @@ enum PendulumsModule {
             // plate that built it was removed — and this string is not
             // only the catalog hook, it is the hub exhibit's VoiceOver
             // label, so a stale one is read aloud.
-            blurb: "Hang a pendulum anywhere in the room, then grab the steel bob and throw it — a Newton's cradle to break apart, a double pendulum that never repeats itself, full nonlinear swings, and a Foucault rig whose plane holds still while your room turns under it.",
+            blurb: "Hang a pendulum anywhere in the room, then grab the steel bob and throw it — a Newton's cradle to break apart, a double pendulum that never repeats itself, and full nonlinear swings in true 3-D.",
             icon: "metronome.fill",
             accent: DesignTokens.Palette.pendulumsAccent,
             // The hint names controls that EXIST. The line it replaces
@@ -69,12 +69,6 @@ enum PendulumsModule {
                    text: "Force arrows — purple gravity, yellow cable tension, red net force"),
         LegendItem(swatch: .line(.white),
                    text: "White ghost line while holding a bob — the exact swing a release right now would launch"),
-        LegendItem(
-            swatch: .symbol("globe.europe.africa", DesignTokens.Palette.pendulumsAccent),
-            text: "Earth turns: the swing plane holds still against the STARS while your room rotates under it at Ω sin(latitude) — one turn per sidereal day at the pole, none at all on the equator. Markers fall as the plane sweeps past them."),
-        LegendItem(
-            swatch: .symbol("exclamationmark.circle", DesignTokens.Palette.pendulumsAccent),
-            text: "Earth is spun FASTER than life here so the turn is watchable — the globe quotes the true rate (11.3°/h at Paris) beside the exaggerated one, and winding the spin rail must never move it. Gravity stays the unmodified g: the centrifugal term grows as the square of that exaggeration and is deliberately left out."),
     ]
 
 }

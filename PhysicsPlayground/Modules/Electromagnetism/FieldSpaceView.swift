@@ -10,17 +10,16 @@
 //
 //  The room, left to right:
 //
-//    · A LAYERS BANK off the left flank — five plates saying what exists:
-//      field lines, free charges, the plates, the uniform B, the flux
-//      meter. Flick one and its apparatus arrives WITH its instrument
-//      attached, which is the whole delight of the arrangement.
+//    · A LAYERS BANK off the left flank — four plates saying what exists:
+//      field lines, free charges, the capacitor, the uniform B. Flick one
+//      and its apparatus arrives WITH its instrument attached, which is
+//      the whole delight of the arrangement. (The flux meter and its
+//      "Open disc" plate came out 2026-08-03, with the particle bank —
+//      see DECISIONS.md.)
 //    · A B-STRENGTH RAIL under the bank, present only while B is.
-//    · THREE WELLS on the right — pull a +, a −, or the test charge out
-//      and it is already in your hand; creating and aiming are one motion.
-//    · A PARTICLE BANK under them: + ball, − ball, electron, positron.
-//      One physically honest question — what am I firing? — in place of a
-//      polarity picker and an "electron mode" toggle that were secretly
-//      the same decision.
+//    · FOUR WELLS on the right — pull a +, a −, or a test charge of
+//      either sign out and it is already in your hand; creating and
+//      aiming are one motion.
 //    · A ΔV RAIL bolted under the capacitor, carried with it.
 //
 //  And on the objects themselves: tap a charge or the probe for its ring
@@ -53,12 +52,7 @@ import RenderKit
 final class FieldRingState {
     enum Target: Hashable {
         case charge(UUID)
-        /// The `electron` payload is not decoration. `Bloom.retarget`
-        /// early-outs on an unchanged id, so without it, switching the
-        /// particle while the probe's ring is open would leave a
-        /// "Strength" grip attached to q = e — a constant of nature
-        /// wearing a control.
-        case probe(electron: Bool)
+        case probe
     }
     var target: Target?
 }
@@ -81,49 +75,12 @@ struct FieldSpaceView: View {
     /// What you make.
     @State private var wells: Well?
 
-    /// What the test particle IS — the polarity picker and the electron
-    /// toggle, merged, because they were never independent: electron mode
-    /// rewrites q, m, the display clock AND the usable field range all at
-    /// once, which is one particle choice wearing a toggle's clothes.
-    @State private var particles = SpatialPicker(
-        accessibilityNoun: "Test particle",
-        // Labels kept SHORT because the discs are close together: at this
-        // fan's spacing (~7.5 cm) a label much over 5 cm wide runs into its
-        // neighbour's, and "Electron e⁻" did. The symbol on each disc
-        // already carries the sign, so the word only has to carry the
-        // particle.
-        choices: [
-            PickerChoice(id: "plus", label: "Ball +", symbol: "plus.circle.fill"),
-            PickerChoice(id: "minus", label: "Ball −", symbol: "minus.circle.fill"),
-            PickerChoice(id: "electron", label: "Electron", symbol: "e.circle.fill"),
-            PickerChoice(id: "positron", label: "Positron", symbol: "e.circle"),
-        ],
-        staysOpen: true,
-        accent: UIColor(DesignTokens.Palette.probePositive),
-        // A bank is a row, not a fan — the same reshaping Gravity Lab's
-        // clock bank needed, and for the same reason: a 150° arc is built
-        // for a menu that folds away, and reads as scattered debris when
-        // it never does.
-        layout: FanLayout(span: 50 * .pi / 180, reach: 0.26,
-                          verticalScale: 0.25, lift: 0, stagger: 0))
-
     /// ΔV across the plates. Bolted to the capacitor and carried with it.
     @State private var voltageTrack: SpatialTrackControl?
-    /// B strength — TWO instruments of which at most one is ever present.
-    ///
-    /// Not one rail with a switching range: `SpatialTrackControl.range` is
-    /// a stored `let`, and more importantly the two are not the same
-    /// measurement. Ball mode runs at ~50 kT, a field a thousand times the
-    /// strongest ever built, and electron mode at a tenth of a millitesla,
-    /// which is a real bench magnet. They deserve their own units, their
-    /// own labels, and — for the fictional one — the disclosure that says
-    /// so on the panel beside it.
-    @State private var ballFieldTrack: SpatialTrackControl?
-    @State private var electronFieldTrack: SpatialTrackControl?
+    /// B strength, under the bank plate that summons the field.
+    @State private var fieldTrack: SpatialTrackControl?
     /// The rail a hand is currently dragging, if any.
     @State private var activeTrack: SpatialTrackControl?
-    /// True while a hand is holding the flux meter's rim.
-    @State private var gaussRimDrag = false
 
     /// The hand's recent travel, for the throw that launches the probe.
     @State private var flick = ThrowSampler(window: 0.12)
@@ -243,35 +200,6 @@ struct FieldSpaceView: View {
                 .init(id: "bfield", label: "Uniform B", symbol: "arrow.up",
                       isOn: { model.magneticFieldOn },
                       toggle: { model.magneticFieldOn.toggle() }),
-                .init(id: "gauss", label: "Flux meter", symbol: "circle.dashed",
-                      isOn: { model.gaussSurfaceOn },
-                      toggle: { model.gaussSurfaceOn.toggle() }),
-                // THE DOOR THAT WAS NEVER BUILT (2026-08-03).
-                //
-                // `gaussSurfaceKind` had exactly three writers — its
-                // declaration, `reset()`, and `-emGauss` — so no hand
-                // could ever produce a disc. Meanwhile `GaussGrab`
-                // implements the disc's tilt in full, `FieldRenderer`
-                // branches on the kind, and the panel had been
-                // instructing users to "tilt it edge-on to the field and
-                // the flux falls to zero" since the surface was written.
-                // The 2026-07-31 pass caught that the tilt did not exist
-                // and built it — and left the surface it tilts
-                // unreachable. Half the flux meter has been dark since.
-                //
-                // A PLATE, because this is a labelled binary and that is
-                // what the design system says a plate is for. The two
-                // kinds are two different demonstrations, not two views
-                // of one: a bubble IS Gauss's law (Q/ε₀ whatever you do
-                // with it), while a disc's flux depends on where it is
-                // and how it is turned. The label names the disc rather
-                // than the choice, because "on" has to mean something.
-                .init(id: "disc", label: "Open disc", symbol: "circle.dotted",
-                      isOn: { model.gaussSurfaceKind == .disc },
-                      toggle: {
-                          model.gaussSurfaceKind =
-                              model.gaussSurfaceKind == .disc ? .bubble : .disc
-                      }),
             ])
         renderer.root.addChild(bank.root)
         self.bank = bank
@@ -302,20 +230,6 @@ struct FieldSpaceView: View {
         renderer.root.addChild(verbs.root)
         self.verbs = verbs
 
-        renderer.root.addChild(particles.root)
-        particles.selectedID = {
-            switch (model.electronMode, model.probeIsPositive) {
-            case (false, true): "plus"
-            case (false, false): "minus"
-            case (true, false): "electron"
-            case (true, true): "positron"
-            }
-        }
-        particles.onSelect = { id in
-            model.electronMode = id == "electron" || id == "positron"
-            model.probeIsPositive = id == "plus" || id == "positron"
-        }
-
         // Wells hang off `viewRoot`: a charge is born at the fingertips
         // and handed straight to a drag, so the mouth and the hand have to
         // agree about where they are.
@@ -331,13 +245,11 @@ struct FieldSpaceView: View {
                   position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 1)),
                   spawn: { model.addCharge(positive: false, at: $0) }),
             // TWO test-charge mouths, one per polarity. The probe's sign
-            // used to be set on the particle bank AFTER it existed, so
+            // used to be set on a particle bank AFTER it existed, so
             // what came out of the well was whatever the bank happened to
             // be on — the one object whose sign you could not choose
-            // while making it, in a module whose other two mouths are
-            // exactly that choice. (The bank still switches a live probe,
-            // and still chooses ball vs electron, which is a different
-            // question: what it IS rather than what sign it carries.)
+            // while making it. The bank is gone (2026-08-03); the choice
+            // lives entirely in which mouth you pull from.
             .init(name: "Test +", tint: DesignTokens.Palette.probePositiveUI,
                   label: "Test +",
                   preview: { FieldRenderer.probePreview(isPositive: true) },
@@ -373,7 +285,7 @@ struct FieldSpaceView: View {
         renderer.viewRoot.addChild(voltage.root)
         self.voltageTrack = voltage
 
-        let ball = SpatialTrackControl(
+        let field = SpatialTrackControl(
             name: "Magnetic field",
             center: SIMD3<Float>(FieldInstrumentLayout.fieldTrackAnchor),
             normal: SIMD3<Float>(FieldInstrumentLayout.fieldTrackNormal),
@@ -382,20 +294,8 @@ struct FieldSpaceView: View {
             read: { model.magneticFieldTesla },
             write: { model.magneticFieldTesla = $0 },
             format: { String(format: "%.0f kT", $0 / 1000) })
-        renderer.viewRoot.addChild(ball.root)
-        self.ballFieldTrack = ball
-
-        let electron = SpatialTrackControl(
-            name: "Magnetic field",
-            center: SIMD3<Float>(FieldInstrumentLayout.fieldTrackAnchor),
-            normal: SIMD3<Float>(FieldInstrumentLayout.fieldTrackNormal),
-            accent: DesignTokens.Palette.probeNegativeUI,
-            range: FieldModel.electronFieldRange,
-            read: { model.electronFieldTesla },
-            write: { model.electronFieldTesla = $0 },
-            format: { String(format: "%.2f mT", $0 * 1000) })
-        renderer.viewRoot.addChild(electron.root)
-        self.electronFieldTrack = electron
+        renderer.viewRoot.addChild(field.root)
+        self.fieldTrack = field
     }
 
     // MARK: Per frame
@@ -412,8 +312,6 @@ struct FieldSpaceView: View {
         }
         bank?.update(anchor: SIMD3<Float>(FieldInstrumentLayout.bankAnchor),
                      viewer: headInRoot, dt: dt)
-        particles.update(anchor: SIMD3<Float>(FieldInstrumentLayout.particlePickerAnchor),
-                         viewer: headInRoot, dt: dt)
         verbs?.update(anchor: SIMD3<Float>(FieldInstrumentLayout.clearPlateAnchor),
                       viewer: headInRoot, dt: dt,
                       resetNonce: appModel.resetNonce)
@@ -421,8 +319,7 @@ struct FieldSpaceView: View {
 
         // Each rail exists exactly when its apparatus does.
         voltageTrack?.isEnabled = model.capacitorOn
-        ballFieldTrack?.isEnabled = model.magneticFieldOn && !model.electronMode
-        electronFieldTrack?.isEnabled = model.magneticFieldOn && model.electronMode
+        fieldTrack?.isEnabled = model.magneticFieldOn
 
         if model.capacitorOn, let voltage = voltageTrack {
             voltage.root.position = SIMD3<Float>(
@@ -433,8 +330,7 @@ struct FieldSpaceView: View {
         // `refresh()` is the caller's job — the control ticks nothing of
         // its own. Without these the beads would show the last value a
         // hand dragged them to and ignore a reset or a launch argument.
-        if ballFieldTrack?.isEnabled == true { ballFieldTrack?.refresh() }
-        if electronFieldTrack?.isEnabled == true { electronFieldTrack?.refresh() }
+        if fieldTrack?.isEnabled == true { fieldTrack?.refresh() }
     }
 
     /// Keeps the ring on its object: anchored every frame so it follows a
@@ -447,10 +343,6 @@ struct FieldSpaceView: View {
             ring.target = nil
         case .probe where model.probe == nil:
             ring.target = nil
-        case .probe(let electron) where electron != model.electronMode:
-            // Same object, different particle — retarget rather than fold,
-            // so the grip can appear or vanish with it.
-            ring.target = .probe(electron: model.electronMode)
         default:
             break
         }
@@ -482,7 +374,7 @@ struct FieldSpaceView: View {
             bloom.update(anchor: SIMD3<Float>(charge.position),
                          viewer: viewer, revealTarget: 1, dt: dt)
 
-        case .probe(let electron):
+        case .probe:
             guard let probe = model.probe else { return }
             bloom.retarget(
                 ring.target,
@@ -492,11 +384,7 @@ struct FieldSpaceView: View {
                         model.removeProbe()
                     },
                 ],
-                // No grip in electron mode. An electron's charge is e —
-                // a constant of nature, not a setting — and offering a
-                // bead to change it would be the app telling a lie about
-                // the physics it is otherwise exact about.
-                grip: electron ? nil : .init(
+                grip: .init(
                     name: "Charge",
                     range: FieldModel.probeChargeRange,
                     read: { model.probeChargeMagnitude },
@@ -525,12 +413,10 @@ struct FieldSpaceView: View {
                 if bloom.handleTap(value.entity) { return }
                 if bank?.handleTap(value.entity) == true { return }
                 if verbs?.handleTap(value.entity) == true { return }
-                if particles.handleTap(value.entity) { return }
 
                 for name in Self.ancestorNames(of: value.entity) {
                     if name == FieldRenderer.probeEntityName, model.probe != nil {
-                        toggleRing(.probe(electron: model.electronMode),
-                                   on: value.entity)
+                        toggleRing(.probe, on: value.entity)
                         return
                     }
                     if let id = UUID(uuidString: name),
@@ -587,15 +473,11 @@ struct FieldSpaceView: View {
                     track.adjust(hand: hand)
                     return
                 }
-                if gaussRimDrag {
-                    adjustGaussSurface(hand: hand)
-                    return
-                }
 
                 // B — beginnings.
                 if drag == nil {
                     if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
-                    for track in [voltageTrack, ballFieldTrack, electronFieldTrack] {
+                    for track in [voltageTrack, fieldTrack] {
                         if let track, track.owns(value.entity) {
                             activeTrack = track
                             track.adjust(hand: hand)
@@ -635,7 +517,6 @@ struct FieldSpaceView: View {
                 bloom.endGrip()
                 activeTrack?.endAdjust()
                 activeTrack = nil
-                gaussRimDrag = false
                 drag = nil
                 flick.reset()
                 model.heldChargeID = nil
@@ -644,18 +525,6 @@ struct FieldSpaceView: View {
                 // exemption either way. See `FieldModel.addCharge`.
                 model.endEscort()
             }
-    }
-
-    /// The flux meter's own gesture: the surface passes through the
-    /// fingertip, and a disc turns so the fingertip is on its rim.
-    private func adjustGaussSurface(hand: SIMD3<Double>) {
-        let center = model.gaussSurfaceCenter
-        if model.gaussSurfaceKind == .disc {
-            model.setGaussNormal(GaussGrab.normal(forHand: hand, center: center,
-                                                  normal: model.gaussSurfaceNormal))
-        }
-        model.setGaussRadius(GaussGrab.radius(
-            forHand: hand, center: center, range: FieldModel.gaussRadiusRange))
     }
 
     /// Resolves what was pinched and anchors a relative-drag session.
@@ -675,25 +544,6 @@ struct FieldSpaceView: View {
                 model.holdProbe(at: target)
                 return RelativeDrag(name: name, target: target, hand: hand)
             }
-            if name == "gauss-surface" {
-                // THE SURFACE IS A CONTAINER; THE THING INSIDE IT IS THE
-                // SUBJECT. This check used to come first and win outright,
-                // so a 55 cm bubble beat everything within it — and only
-                // the 12 cm proximity fallback below rescued a charge
-                // inside one, by accident. Now the accident is a rule.
-                switch GaussGrab.classify(hand: hand, center: model.gaussSurfaceCenter,
-                                          radius: model.gaussSurfaceRadius) {
-                case .skin:
-                    gaussRimDrag = true
-                    adjustGaussSurface(hand: hand)
-                    return nil
-                case .inside:
-                    break        // fall through to whatever is in there
-                case .miss:
-                    return RelativeDrag(name: name, target: model.gaussSurfaceCenter,
-                                        hand: hand)
-                }
-            }
         }
         if let id = Self.resolveCharge(
                 names: names, hand: hand,
@@ -702,11 +552,6 @@ struct FieldSpaceView: View {
             model.select(id: id)
             return RelativeDrag(name: id.uuidString, target: charge.position, hand: hand)
         }
-        // Inside the bubble with nothing in reach: move the bubble.
-        if names.contains("gauss-surface") {
-            return RelativeDrag(name: "gauss-surface",
-                                target: model.gaussSurfaceCenter, hand: hand)
-        }
         return nil
     }
 
@@ -714,8 +559,6 @@ struct FieldSpaceView: View {
         let position = drag.position(forHand: hand)
         if drag.name == "plate-0" || drag.name == "plate-1" {
             model.movePlate(drag.name == "plate-0" ? 0 : 1, toWorld: position)
-        } else if drag.name == "gauss-surface" {
-            model.moveGaussSurface(to: position)
         } else if drag.name == FieldRenderer.probeEntityName {
             model.holdProbe(at: position)
         } else if let id = UUID(uuidString: drag.name) {
@@ -740,7 +583,7 @@ struct FieldSpaceView: View {
             switch target {
             case "probe":
                 model.dropProbe()
-                ring.target = .probe(electron: model.electronMode)
+                ring.target = .probe
             default:
                 if let id = model.selectedChargeID { ring.target = .charge(id) }
             }

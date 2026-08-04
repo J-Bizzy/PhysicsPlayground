@@ -66,11 +66,6 @@ final class MagnetismRenderer {
     private var linesPipeline: GeometryPipeline<LinesJob, LinesResult>?
     private var lastLineInputs: [BarMagnet]?
 
-    // Compass needle grid.
-    private let compassRoot = Entity()
-    private var needles: [Entity] = []
-    private nonisolated static let compassColumns = (x: 7, y: 5, z: 7)
-
     init() {
         let headMesh = MeshResource.generateCone(height: 0.02, radius: 0.0078)
         let headMaterial = UnlitMaterial(color: MagnetismRenderer.lineColor)
@@ -88,8 +83,6 @@ final class MagnetismRenderer {
         viewRoot.addChild(lineGlowEntity)
         viewRoot.addChild(linesEntity)
         viewRoot.addChild(arrowHeads.root)
-        viewRoot.addChild(compassRoot)
-        buildCompassGrid()
 
         linesPipeline = GeometryPipeline(
             compute: { Self.computeLines($0) },
@@ -109,7 +102,6 @@ final class MagnetismRenderer {
         tickSounds(model)
         syncMagnets(model)
         syncFieldLines(model)
-        syncCompasses(model, viewer: viewer.map(SIMD3<Float>.init))
         syncHandCompass(model)
     }
 
@@ -561,93 +553,9 @@ final class MagnetismRenderer {
         linesPipeline?.submit(LinesJob(magnets: sources))
     }
 
-    // MARK: Compass needle grid
-
-    private nonisolated static let gridPoints: [SIMD3<Float>] = {
-        var points: [SIMD3<Float>] = []
-        let (nx, ny, nz) = compassColumns
-        let span = Float(MagnetismModel.regionHalfExtent) * 1.7
-        let origin = SIMD3<Float>(MagnetismModel.regionCenter) - SIMD3(repeating: span / 2)
-        func step(_ n: Int) -> Float { n > 1 ? span / Float(n - 1) : 0 }
-        for i in 0..<nx { for j in 0..<ny { for k in 0..<nz {
-            points.append(origin + SIMD3(Float(i) * step(nx),
-                                         Float(j) * step(ny),
-                                         Float(k) * step(nz)))
-        } } }
-        return points
-    }()
-
-    private func buildCompassGrid() {
-        // Iron filings, not a swarm of darts.
-        //
-        // The needles were rendered at one fixed, generous size across
-        // the whole 245-point lattice, which meant the ones nearest the
-        // viewer became big opaque purple arrowheads clipping into the
-        // camera and occluding the magnets, the field lines, and each
-        // other. What a field of filings actually looks like is SMALL
-        // and MANY: each needle short, dim, and fading with distance, so
-        // the eye reads a texture with a direction rather than counting
-        // individual objects.
-        var shaftMaterial = UnlitMaterial(color: UIColor(white: 0.88, alpha: 1))
-        shaftMaterial.blending = .transparent(opacity: 0.35)
-        let headMaterial = Materials.energized(Self.lineColor, roughness: 0.18, glow: 0.45)
-        let shaftMesh = MeshResource.generateCylinder(height: 0.042, radius: 0.0016)
-        let headMesh = MeshResource.generateCone(height: 0.015, radius: 0.005)
-        for point in Self.gridPoints {
-            let needle = Entity()
-            let shaft = ModelEntity(mesh: shaftMesh, materials: [shaftMaterial])
-            let head = ModelEntity(mesh: headMesh, materials: [headMaterial])
-            head.position = [0, 0.029, 0]
-            needle.addChild(shaft)
-            needle.addChild(head)
-            needle.position = point
-            needle.isEnabled = false
-            compassRoot.addChild(needle)
-            needles.append(needle)
-        }
-    }
-
-    /// Needles this close to the viewer are hidden outright — a compass
-    /// needle 20 cm from your eye is not information, it is an obstacle.
-    private nonisolated static let compassNearCull: Float = 0.55
-
-    private func syncCompasses(_ model: MagnetismModel, viewer: SIMD3<Float>?) {
-        compassRoot.isEnabled = model.showCompasses
-        guard model.showCompasses else { return }
-        // Hide needles too close to a magnet (inside the singular near
-        // field), where the field is too weak to read, or right in the
-        // viewer's face.
-        let magnets = model.magnets
-        let eye = viewer ?? SIMD3<Float>(0, 1.5, 0)
-        for (index, needle) in needles.enumerated() {
-            let gridPoint = Self.gridPoints[index]
-            let point = SIMD3<Double>(gridPoint)
-            let tooClose = magnets.contains {
-                simd_distance($0.position, point) < MagnetismModel.magnetLength
-            }
-            let distance = simd_distance(gridPoint, eye)
-            // Through the model, so the lattice feels Earth exactly as
-            // the hand compass does — these are the same instrument at
-            // 245 places, and a grid that ignored the planet while the
-            // one in your hand obeyed it would be two different physics
-            // in one room.
-            let b = model.compassField(at: point)
-            let mag = simd_length(b)
-            // The floor was 2 µT to hide needles in dead spots. Earth is
-            // 50 µT everywhere, so with it on there ARE no dead spots —
-            // which is the point — and the cull only ever fires now for
-            // needles inside a magnet or under the viewer's nose.
-            if tooClose || mag < 2e-6 || distance < Self.compassNearCull {
-                needle.isEnabled = false
-                continue
-            }
-            needle.isEnabled = true
-            needle.orientation = simd_quatf(from: [0, 1, 0], to: SIMD3<Float>(b / mag))
-            // Near needles shrink toward nothing over the cull distance,
-            // so the grid thins out around the viewer instead of
-            // slamming into them, and never pops as they walk.
-            let fade = min(max((distance - Self.compassNearCull) / 0.45, 0), 1)
-            needle.scale = SIMD3(repeating: 0.35 + 0.65 * fade)
-        }
-    }
+    // The 245-needle compass grid stood here until 2026-08-03, when the
+    // owner cut it: with the field-line loops carrying the shape, the
+    // lattice of tiny arrows was noise, and it was the thing that grew
+    // when the strength bead moved while the loops did not. The hand
+    // compass — the same instrument, one of it, in your hand — stays.
 }

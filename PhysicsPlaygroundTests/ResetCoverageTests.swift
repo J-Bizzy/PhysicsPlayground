@@ -138,8 +138,6 @@ final class ResetCoverageTests: XCTestCase {
                 case "showLines": model.showLines.toggle()
                 case "capacitorOn": model.capacitorOn.toggle()
                 case "magneticFieldOn": model.magneticFieldOn.toggle()
-                case "gaussSurfaceOn": model.gaussSurfaceOn.toggle()
-                case "electronMode": model.electronMode.toggle()
                 case "probeIsPositive": model.probeIsPositive.toggle()
                 case "isPaused": model.isPaused.toggle()
                 default:
@@ -157,7 +155,6 @@ final class ResetCoverageTests: XCTestCase {
             flip: { model, name in
                 switch name {
                 case "frictionOn": model.frictionOn.toggle()
-                case "foucaultOn": model.foucaultOn.toggle()
                 case "showVelocity": model.showVelocity.toggle()
                 case "showAcceleration": model.showAcceleration.toggle()
                 case "showForces": model.showForces.toggle()
@@ -178,7 +175,6 @@ final class ResetCoverageTests: XCTestCase {
                 switch name {
                 case "dynamicsOn": model.dynamicsOn.toggle()
                 case "showFieldLines": model.showFieldLines.toggle()
-                case "showCompasses": model.showCompasses.toggle()
                 case "compassOn": model.compassOn.toggle()
                 case "earthFieldOn": model.earthFieldOn.toggle()
                 case "inertiaOn": model.inertiaOn.toggle()

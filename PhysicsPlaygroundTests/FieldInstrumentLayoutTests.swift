@@ -40,8 +40,7 @@ final class FieldInstrumentLayoutTests: XCTestCase {
         // the room does not have — longer than the real one, which is the
         // safe direction, but still a test checking a different app.
         let reach = SpatialLayerBank.reach(forLabels: [
-            "Field lines", "Free charges", "Capacitor",
-            "Uniform B", "Flux meter", "Open disc"])
+            "Field lines", "Free charges", "Capacitor", "Uniform B"])
         XCTAssertLessThanOrEqual(
             Double(reach), FieldInstrumentLayout.bankHalfExtents.x,
             """
@@ -75,24 +74,6 @@ final class FieldInstrumentLayoutTests: XCTestCase {
             """)
     }
 
-    /// The particle bank's discs sit close together, so its labels have to
-    /// be short enough not to run into each other. "Electron e⁻" was not,
-    /// and the four names read as one smear.
-    func testTheParticleLabelsDoNotCollide() {
-        let layout = FanLayout(span: 50 * .pi / 180, reach: 0.26,
-                               verticalScale: 0.25, lift: 0, stagger: 0)
-        let first = layout.placement(index: 0, count: 4, openness: 1).offset
-        let second = layout.placement(index: 1, count: 4, openness: 1).offset
-        let spacing = simd_distance(first, second)
-
-        for label in ["Ball +", "Ball −", "Electron", "Positron"] {
-            let width = Double(HubScene.namePlateWidth(label, size: 0.009))
-            XCTAssertLessThan(
-                width, spacing,
-                "\"\(label)\" is \(width) m wide but the discs are only \(spacing) m apart.")
-        }
-    }
-
     // MARK: Nothing stands where the physics is
 
     /// The invariant the whole layout exists to satisfy.
@@ -117,7 +98,7 @@ final class FieldInstrumentLayoutTests: XCTestCase {
     }
 
     /// Instruments must not shield each other either. The wells and the
-    /// particle bank share a column, so this is the pair that goes wrong.
+    /// Clear plate share a column, so that is the pair that goes wrong.
     func testInstrumentsDoNotOverlapEachOther() {
         let all = FieldInstrumentLayout.standingInstruments
         for i in all.indices {

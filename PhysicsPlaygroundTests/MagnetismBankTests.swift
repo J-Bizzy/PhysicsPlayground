@@ -30,7 +30,6 @@ final class MagnetismBankTests: XCTestCase {
         let model = MagnetismModel()
         model.dynamicsOn = false
         model.showFieldLines = false
-        model.showCompasses = false
         model.compassOn = false
         model.earthFieldOn = false
 
@@ -38,7 +37,6 @@ final class MagnetismBankTests: XCTestCase {
 
         XCTAssertTrue(model.dynamicsOn, "the magnets were left frozen")
         XCTAssertTrue(model.showFieldLines)
-        XCTAssertTrue(model.showCompasses)
         XCTAssertTrue(model.compassOn)
         XCTAssertTrue(model.earthFieldOn, "the planet went missing")
     }
@@ -65,8 +63,8 @@ final class MagnetismBankTests: XCTestCase {
                           "free again, they should be closing on each other")
     }
 
-    /// The three display switches must not touch the physics — a field
-    /// line you cannot see still exists, and hiding it must not move a
+    /// The display switches must not touch the physics — a field line
+    /// you cannot see still exists, and hiding it must not move a
     /// magnet. This is the converse of the test above, and together they
     /// say why the top plate needed a label of its own.
     func testHidingTheDrawnLayersLeavesThePhysicsAlone() {
@@ -74,7 +72,6 @@ final class MagnetismBankTests: XCTestCase {
             let model = MagnetismModel()
             _ = model.addMagnet(at: MagnetismModel.regionCenter + SIMD3(0.34, 0, 0))
             model.showFieldLines = drawing
-            model.showCompasses = drawing
             model.compassOn = drawing
             for _ in 0..<120 { model.step(dt: 1.0 / 90.0) }
             return model.magnets.map(\.position)

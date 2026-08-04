@@ -5,10 +5,10 @@
 //  Everything this module measures, on one card standing with the
 //  instruments instead of behind a dropdown called "Numbers".
 //
-//  It carries three things that used to be three separate places in the
-//  window panel: the probe's live physics (`PhysicsStatsView`), the
-//  apparatus readouts that appear only while their apparatus is standing,
-//  and `GaussReadout`.
+//  It carries two things that used to be separate places in the window
+//  panel: the probe's live physics (`PhysicsStatsView`), and the
+//  apparatus readouts that appear only while their apparatus is
+//  standing.
 //
 //  WHY THIS ONE IS NOT IN `FieldInstrumentLayout`, when every other piece
 //  of furniture in this module is. Those invariants exist for a specific
@@ -24,11 +24,11 @@
 //  the left flank where nothing is drawn and nothing is grabbed.
 //
 //  THE DISCLOSURES COME WITH THE NUMBERS, and that is the load-bearing
-//  part of this file. The 50 kT paragraph and the electron-clock
-//  paragraph are not commentary — DECISIONS 2026-07-31 says a migration
-//  that drops them "turns a disclosed fiction into an undisclosed one".
-//  They travel with the value they qualify, because that is who they are
-//  addressed to: the person reading the number.
+//  part of this file. The 50 kT paragraph is not commentary — DECISIONS
+//  2026-07-31 says a migration that drops it "turns a disclosed fiction
+//  into an undisclosed one". It travels with the value it qualifies,
+//  because that is who it is addressed to: the person reading the
+//  number.
 //
 
 import SwiftUI
@@ -75,93 +75,24 @@ struct FieldReadoutCard: View {
         if model.magneticFieldOn {
             Divider().opacity(0.4)
             let radius = (model.cyclotronRadius * 100).rounded()
-            if model.electronMode {
-                let millitesla = (model.electronFieldTesla * 1000 * 100).rounded() / 100
-                Text(String(format: "B %.2f mT   r = mv/qB = %.0f cm",
-                            millitesla, radius))
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                // Disclosed where it is READ. The display clock is the
-                // fiction here, and the physics is not.
-                Text("A real electron at 2×10⁶ m/s: a tenth of a millitesla bends an 11 cm circle. Display time runs 10⁷× slow; the physics is SI-exact.")
-                    .font(DesignTokens.TypeScale.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                let kilotesla = (model.magneticFieldTesla / 1000).rounded()
-                Text(String(format: "B %.0f kT   r = mv/qB = %.0f cm",
-                            kilotesla, radius))
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                // This number is a stage light, not a measurement, and it
-                // has to say so where it is READ. It followed the NUMBER
-                // out of the panel rather than the control, for the same
-                // reason it once followed the number out from under the
-                // slider that set it.
-                //
-                // 50 kT is about a thousand times the strongest steady
-                // field ever built on Earth; it takes that much to visibly
-                // bend a 0.5 g, 10 nC ball, because q/m is ~10¹¹ smaller
-                // than an electron's. The geometry stays exact either way.
-                Text("That field is fictional — about a thousand times the strongest magnet ever built. A 0.5 g ball needs it to curve at all. The circle r = mv/qB is exact regardless; pick the electron on the particle bank for a real particle in a real field.")
-                    .font(DesignTokens.TypeScale.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-
-        if model.gaussSurfaceOn {
-            Divider().opacity(0.4)
-            GaussReadout()
-        }
-    }
-}
-
-/// Gauss's law, as numbers beside the surface that is measuring them.
-///
-/// A page can state ∮E·dA = Q/ε₀; it cannot let you move the surface. The
-/// closed bubble is the demonstration — put a charge inside and the flux
-/// jumps to exactly Q/ε₀, take it out and it drops to zero — and the open
-/// disc is the contrast that makes it mean something, because its flux
-/// depends entirely on how it is turned.
-///
-/// The radius and the facing are the surface itself now: grab its edge to
-/// resize it, and swing your hand out of the disc's plane to tilt it. The
-/// KIND is the bank's "Open disc" plate (2026-08-03).
-///
-/// Both halves of that took two goes. The tilt sentence below was printed
-/// here since the disc was written while nothing in the app could tilt it
-/// — `gaussSurfaceNormal` had two writers, its declaration and `reset()`.
-/// That was fixed on 2026-07-31 by building the gesture, which left the
-/// disc itself unreachable for another three days: `gaussSurfaceKind` had
-/// no control at all, so the tilt had nothing to tilt. Reading the prose
-/// next to the code caught it both times.
-struct GaussReadout: View {
-    @Environment(FieldModel.self) private var model
-
-    var body: some View {
-        if let enclosed = model.gaussEnclosedCharge,
-           let predicted = model.gaussPredictedFlux {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Φ measured  \(PhysicsFormat.scientific(model.gaussFlux)) N·m²/C")
-                Text("Q enclosed  \(PhysicsFormat.scientific(enclosed)) C")
-                Text("Q/ε₀        \(PhysicsFormat.scientific(predicted)) N·m²/C")
-            }
-            .font(DesignTokens.TypeScale.footnote.monospaced())
-            Text("Closed surface: the flux is the enclosed charge over ε₀ and nothing else. Carry the bubble anywhere, turn it however you like — outside charges contribute exactly zero.")
+            let kilotesla = (model.magneticFieldTesla / 1000).rounded()
+            Text(String(format: "B %.0f kT   r = mv/qB = %.0f cm",
+                        kilotesla, radius))
+                .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+            // This number is a stage light, not a measurement, and it
+            // has to say so where it is READ. It followed the NUMBER
+            // out of the panel rather than the control, for the same
+            // reason it once followed the number out from under the
+            // slider that set it.
+            //
+            // 50 kT is about a thousand times the strongest steady
+            // field ever built on Earth; it takes that much to visibly
+            // bend a 0.5 g, 10 nC ball, because q/m is ~10¹¹ smaller
+            // than an electron's. The geometry stays exact either way.
+            Text("That field is fictional — about a thousand times the strongest magnet ever built. A 0.5 g ball needs it to curve at all. The circle r = mv/qB is exact regardless.")
                 .font(DesignTokens.TypeScale.footnote)
                 .foregroundStyle(.secondary)
-        } else {
-            Text("Φ  \(PhysicsFormat.scientific(model.gaussFlux)) N·m²/C")
-                .font(DesignTokens.TypeScale.footnote.monospaced())
-            // "Cycle it to the bubble" named a gesture that did not
-            // exist — the kind had no control at all until the bank got
-            // its "Open disc" plate on 2026-08-03. This is the third
-            // time this module's copy has described an interaction it
-            // did not have, after the tilt itself and the un-tiltable
-            // disc; the rule that keeps catching it is to read the prose
-            // next to the code.
-            Text("Open surface: grab the disc's rim and turn it edge-on to the field, and the flux falls to zero. Switch Open disc off for the bubble, and Gauss's law.")
-                .font(DesignTokens.TypeScale.footnote)
-                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

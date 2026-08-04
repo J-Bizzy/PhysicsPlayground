@@ -5,10 +5,10 @@
 //  Electric Fields' region clamps, asserted as containment. These
 //  invariants were born in the merged E&M world's layout tests — the
 //  world died of geometry, but the clamps it forced into existence are
-//  fixes regardless of layout: before them, `moveCharge` and
-//  `moveGaussSurface` clamped only `y`, so a charge could be dragged
-//  clear across the room. A limit nothing is near is a limit nobody
-//  tested; these keep the limits tested now that they exist.
+//  fixes regardless of layout: before them, `moveCharge` clamped only
+//  `y`, so a charge could be dragged clear across the room. A limit
+//  nothing is near is a limit nobody tested; these keep the limits
+//  tested now that they exist.
 //
 
 import XCTest
@@ -38,19 +38,6 @@ final class FieldClampTests: XCTestCase {
             region.contains(StationBox(center: model.capacitorCenter,
                                        halfExtents: half), tolerance: 1e-6),
             "the capacitor at full separation escapes the region")
-    }
-
-    /// Same for the flux meter, a 1.1 m sphere at full radius.
-    func testTheWidestGaussSurfaceStaysInsideTheRegion() {
-        let model = FieldModel()
-        model.gaussSurfaceRadius = FieldModel.gaussRadiusRange.upperBound
-        model.moveGaussSurface(to: SIMD3(-50, 1.35, -0.9))
-        XCTAssertTrue(
-            region.contains(
-                StationBox(center: model.gaussSurfaceCenter,
-                           halfExtents: SIMD3(repeating: model.gaussSurfaceRadius)),
-                tolerance: 1e-6),
-            "the Gauss surface at full radius escapes the region")
     }
 
     /// And a dragged charge, which is what a user actually does —

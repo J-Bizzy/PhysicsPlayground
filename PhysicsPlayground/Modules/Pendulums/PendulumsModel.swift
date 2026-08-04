@@ -173,127 +173,11 @@ final class PendulumsModel {
     var showAcceleration = false
     var showForces = false
 
-    // MARK: Foucault — the reason this pendulum is spherical
-    //
-    // `SphericalPendulum` has been fully 3-D since it was written, and
-    // until now nothing needed the third dimension: a planar pendulum
-    // would have rendered everything this bench showed. Foucault is the
-    // physics that makes the sphere necessary — and the one demonstration
-    // here where passthrough room-scale is load-bearing rather than
-    // decorative, because the swing plane holds still against the stars
-    // and YOUR ROOM turns underneath it.
-
-    var foucaultOn = false {
-        didSet {
-            guard foucaultOn != oldValue else { return }
-            resetFloorMarkers()
-            insightText = foucaultOn
-                ? "The swing plane is fixed against the STARS. What turns is the room — and you are standing in it."
-                : ""
-        }
-    }
-
-    /// Where on Earth this bench is standing, degrees.
-    nonisolated static let latitudeRange = -90.0...90.0
-    var latitudeDegrees = EarthRotation.sites
-        .first { $0.name == "Paris" }?.latitudeDegrees ?? 48.8462 {
-        didSet { if foucaultOn { resetFloorMarkers() } }
-    }
-
-    /// How much faster than Earth the frame is turned, for watchability.
-    ///
-    /// Earth's real rate at Paris is 11.3° per hour — correct, and far too
-    /// slow to stand and watch, so the app runs the frame faster and SAYS
-    /// SO. The physics stays exact for the Ω actually integrated: raising
-    /// this is precisely equivalent to standing on a planet that spins
-    /// faster, which is why it is honest in a way a faked rotation would
-    /// not be. Every readout quotes the true rate beside the shown one.
-    nonisolated static let spinRange = 200.0...20_000.0
-    var earthSpin = 3_000.0
-
-    /// Ω in the lab frame, rad/s — zero unless the effect is switched on,
-    /// so `SphericalPendulum.step` reduces to the ordinary pendulum bit
-    /// for bit rather than by a branch.
-    var earthRotation: SIMD3<Double> {
-        guard foucaultOn else { return .zero }
-        return EarthRotation.angularVelocity(latitudeDegrees: latitudeDegrees,
-                                             spin: earthSpin)
-    }
-
-    /// The plane's apparent turn rate here, rad/s (Ω sin φ, exaggerated).
-    var precessionRate: Double {
-        guard foucaultOn else { return 0 }
-        return EarthRotation.precessionRate(latitudeDegrees: latitudeDegrees,
-                                            spin: earthSpin)
-    }
-
-    /// The TRUE rate, degrees per hour — the number that is actually so,
-    /// quoted beside the one you can see.
-    var truePrecessionDegreesPerHour: Double {
-        EarthRotation.precessionRate(latitudeDegrees: latitudeDegrees)
-            * 3600 * 180 / .pi
-    }
-
-    /// How long the plane really takes to come back, hours. `nil` at the
-    /// equator, where it never does — an answer, not a missing number.
-    var truePrecessionHours: Double? {
-        EarthRotation.precessionPeriod(latitudeDegrees: latitudeDegrees)
-            .map { $0 / 3600 }
-    }
-
-    // MARK: The Panthéon ring
-    //
-    // Foucault's own demonstration did not ask you to watch: it left a
-    // RECORD. A ring of markers on the floor that the swing knocks over
-    // one by one, so the precession is a thing that has visibly happened
-    // rather than a motion you have to catch in the act.
-
-    nonisolated static let markerCount = 24
-    nonisolated static let markerRingRadius = 0.55
-
-    /// Which markers are still standing, by index around the ring.
-    private(set) var standingMarkers: Set<Int> = []
-    /// The plane angle the ring was laid out against, rad — markers are
-    /// knocked from where the swing STARTED, so the count is a measure of
-    /// how far it has come since.
-    private(set) var markerOriginAngle: Double = 0
-    private(set) var markersFelled = 0
-
-    private func resetFloorMarkers() {
-        standingMarkers = Set(0..<Self.markerCount)
-        markersFelled = 0
-        markerOriginAngle = currentPlaneAngle ?? 0
-    }
-
-    /// The swing plane of the pendulum that drives the ring — the first
-    /// one, since the ring is one ring and cannot follow seven bobs.
-    var currentPlaneAngle: Double? {
-        guard let first = pendulums.first else { return nil }
-        let horizontal = SIMD2(first.state.position.x, first.state.position.z)
-        guard simd_length(horizontal) > 0.02 else { return nil }
-        return EarthRotation.planeAngle(of: horizontal)
-    }
-
-    /// Fells any marker the swing plane has now swept past.
-    ///
-    /// The ring covers a HALF turn, not a whole one, because a plane is
-    /// the same plane whichever way the bob is travelling along it — the
-    /// same fold `EarthRotation.planeAngle` makes.
-    private func advanceFloorMarkers(dt: Double) {
-        guard let angle = currentPlaneAngle else { return }
-        var swept = angle - markerOriginAngle
-        while swept > .pi / 2 { swept -= .pi }
-        while swept < -.pi / 2 { swept += .pi }
-        let perMarker = Double.pi / Double(Self.markerCount)
-        let reached = Int(abs(swept) / perMarker)
-        guard reached > 0 else { return }
-        let direction = swept < 0 ? -1 : 1
-        for step in 1...reached {
-            let index = ((direction * step) % Self.markerCount
-                         + Self.markerCount) % Self.markerCount
-            if standingMarkers.remove(index) != nil { markersFelled += 1 }
-        }
-    }
+    // The Foucault section stood here — foucaultOn, latitude, the spin
+    // exaggeration and the Panthéon marker ring — until 2026-08-03, when
+    // the whole feature came out at the owner's direction. The physics
+    // (Coriolis in `SphericalPendulum.step`, the sine-law recovery
+    // tests) went with it; git history and DECISIONS.md hold both.
 
     /// The contextual one-liner shown after a parameter change.
     private(set) var insightText = ""
@@ -536,8 +420,7 @@ final class PendulumsModel {
                         pendulums[index].state, dt: substep,
                         length: pendulums[index].length, gravity: gravity,
                         mass: pendulums[index].mass,
-                        damping: frictionOn ? pendulums[index].damping : 0,
-                        angularVelocity: earthRotation)
+                        damping: frictionOn ? pendulums[index].damping : 0)
                 case .double:
                     guard var doubleState = pendulums[index].doubleState else { break }
                     var rig = pendulums[index].doubleRig
@@ -548,7 +431,6 @@ final class PendulumsModel {
                 }
             }
             resolveBobCollisions()
-            if foucaultOn { advanceFloorMarkers(dt: substep) }
         }
     }
 
@@ -683,12 +565,6 @@ final class PendulumsModel {
         // still swinging for ever. Invisible while these were toggles in a
         // collapsed card; a lit lamp is a claim, and the claim was wrong.
         frictionOn = true
-        // Checked before it shipped, per the rule the other four taught.
-        foucaultOn = false
-        latitudeDegrees = EarthRotation.sites
-            .first { $0.name == "Paris" }?.latitudeDegrees ?? 48.8462
-        earthSpin = 3_000.0
-        resetFloorMarkers()
         insightText = ""
         accumulator = 0
         // THE CRADLE IS THE COLD OPEN (2026-08-02), and it is now the

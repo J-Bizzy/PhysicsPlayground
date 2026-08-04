@@ -79,8 +79,10 @@ final class ExperimentsTests: XCTestCase {
     /// not a judgement — it was where nobody had been back since. Three
     /// modules gained one on 2026-08-03, all naming work the rooms had
     /// been able to do for weeks with no rung pointing at it: the
-    /// Newton's cradle, the double pendulum, the Gauss bubble, the hand
-    /// compass handing over to the planet.
+    /// Newton's cradle, the double pendulum, the hand compass handing
+    /// over to the planet. (Electric Fields' third rung is the cyclotron
+    /// circle — it replaced the Gauss-bubble rung when the flux meter
+    /// left the prototype the same day.)
     ///
     /// A floor rather than an exact count, so a module can earn a fourth
     /// without editing a test — but a NEW module cannot ship with one.

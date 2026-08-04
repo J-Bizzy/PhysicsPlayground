@@ -142,155 +142,16 @@ final class FieldModel {
     // MARK: Display options
     var showLines = true
 
-    // MARK: Gauss surface — the flux meter you carry
-
-    /// A surface you hold in the field and move through it, reading the
-    /// flux ∮E·dA through it live.
-    ///
-    /// This is the one idea in electrostatics that a page genuinely
-    /// cannot show, because showing it means moving a surface through a
-    /// field and watching the number respond. As a BUBBLE (closed) it is
-    /// Gauss's law itself: whatever shape the field is in and wherever
-    /// the outside charges sit, the flux is exactly Q_enclosed/ε₀ — put
-    /// a charge inside and the number jumps, take it out and it returns
-    /// to zero, and no amount of waving it about changes that.
-    var gaussSurfaceOn = false
-    enum GaussSurfaceKind: String, CaseIterable, Identifiable {
-        /// An open disc: flux depends on where and how it's tilted.
-        case disc
-        /// A closed bubble: flux is Q_enclosed/ε₀ and nothing else.
-        case bubble
-        var id: String { rawValue }
-        var displayName: String { self == .disc ? "Disc" : "Bubble" }
-    }
-    var gaussSurfaceKind: GaussSurfaceKind = .bubble
-    var gaussSurfaceCenter = SIMD3<Double>(0, 1.35, -0.55)
-    /// The disc's facing direction (ignored by the bubble).
-    var gaussSurfaceNormal = SIMD3<Double>(0, 0, 1)
-    var gaussSurfaceRadius = 0.22
-    /// Capped just under the station's half-DEPTH (0.62) so the bubble
-    /// still has somewhere to move once it is inset by its own radius.
-    /// Depth, not width: the station is wider than it is deep, and a
-    /// sphere is bounded by its tightest axis.
-    nonisolated static let gaussRadiusRange = 0.08...0.55
-
-    // Look-to-place is GONE, and the reason is worth keeping so it is not
-    // rebuilt. "The meter rides your head ray" sounds like the most
-    // headset-native idea in the module, and it rewrote
-    // `gaussSurfaceCenter` from that ray EVERY FRAME — so a hand that
-    // grabbed the meter and moved it was silently overruled on the next
-    // tick. A mode that disables direct manipulation is not an alternative
-    // to it; the interaction law prefers the hand, and this fought it. It
-    // was also unverifiable: `room.lookRay` is nil in the simulator, so no
-    // screenshot could ever show it working or failing.
-
-    func moveGaussSurface(to point: SIMD3<Double>) {
-        // Inset by the surface's own radius: the flux meter is a metre-
-        // wide sphere at full size, and a centre that is merely inside
-        // the station still puts half the bubble in the circuit bench.
-        // Moving it near a wall therefore stops early rather than
-        // shrinking it — the radius is a measurement, not a decoration.
-        gaussSurfaceCenter = Self.clampToStation(
-            point, inset: SIMD3(repeating: gaussSurfaceRadius))
-    }
-
-    /// Sets the meter's radius, then re-clamps its centre.
-    ///
-    /// The re-clamp is the whole point and it fixes a real escape.
-    /// `moveGaussSurface` insets by the radius the surface had AT THE TIME,
-    /// so a bubble parked against a wall and then GROWN pushes its own skin
-    /// straight through the station boundary — the centre is still legal
-    /// and the surface is not. `FieldClampTests` asserts the widest bubble
-    /// stays inside the region, and this was the path around it.
-    ///
-    /// It never mattered much while the only way to grow the bubble was a
-    /// slider in a panel, three taps away from the surface itself. Now the
-    /// gesture IS grabbing the skin and pulling, so a user's hand travels
-    /// outward against a wall constantly, and the escape stops being
-    /// theoretical.
-    func setGaussRadius(_ radius: Double) {
-        gaussSurfaceRadius = min(max(radius, Self.gaussRadiusRange.lowerBound),
-                                 Self.gaussRadiusRange.upperBound)
-        moveGaussSurface(to: gaussSurfaceCenter)
-    }
-
-    /// Sets the disc's facing direction. Unit, and never zero: a degenerate
-    /// normal would make the flux integral meaningless rather than merely
-    /// wrong, so a caller handing over garbage leaves the disc as it was.
-    func setGaussNormal(_ normal: SIMD3<Double>) {
-        let magnitude = simd_length(normal)
-        guard magnitude > 1e-9 else { return }
-        gaussSurfaceNormal = normal / magnitude
-    }
+    // The Gauss flux meter — the carried bubble/disc, its clamps, its
+    // memoised ∮E·dA — stood here until 2026-08-03, when the owner cut
+    // it from the prototype. The pure math (`GaussSurface`) stays in
+    // PhysicsCore with its tests; git history holds the rest.
 
     /// Clamps to `probeChargeRange`, so a hand that keeps pulling past the
     /// end of the bead's rail pins there instead of running off the scale.
     func setProbeMagnitude(_ coulombs: Double) {
         probeChargeMagnitude = min(max(coulombs, Self.probeChargeRange.lowerBound),
                                    Self.probeChargeRange.upperBound)
-    }
-
-    /// Everything the flux integral depends on. If none of it moved,
-    /// neither did the answer.
-    private struct GaussInputs: Equatable {
-        var kind: GaussSurfaceKind
-        var center: SIMD3<Double>
-        var normal: SIMD3<Double>
-        var radius: Double
-        var charges: [PointCharge]
-    }
-
-    /// Deliberately outside observation: this is a memo of a value that
-    /// is already derived from observed state, and registering writes to
-    /// it during a read would invalidate views that only read the flux.
-    @ObservationIgnored private var gaussCache: (inputs: GaussInputs, flux: Double)?
-
-    /// Live flux through the surface, N·m²/C.
-    ///
-    /// The closed bubble integrates over 900 sample points, against every
-    /// charge — and this is read once by the renderer and again by two
-    /// labels in the controls pod, EVERY FRAME, whether or not anything
-    /// moved. Memoising on the inputs makes a still surface free and
-    /// leaves a moving one costing exactly what it did before. The
-    /// physics is untouched: same integral, same sample count, same
-    /// answer, just not recomputed for a scene that did not change.
-    var gaussFlux: Double {
-        let inputs = GaussInputs(kind: gaussSurfaceKind,
-                                 center: gaussSurfaceCenter,
-                                 normal: gaussSurfaceNormal,
-                                 radius: gaussSurfaceRadius,
-                                 charges: charges)
-        if let cache = gaussCache, cache.inputs == inputs { return cache.flux }
-
-        let flux: Double
-        switch gaussSurfaceKind {
-        case .disc:
-            flux = GaussSurface.flux(
-                throughDiscAt: gaussSurfaceCenter, normal: gaussSurfaceNormal,
-                radius: gaussSurfaceRadius, charges: charges)
-        case .bubble:
-            flux = GaussSurface.flux(
-                throughSphereAt: gaussSurfaceCenter, radius: gaussSurfaceRadius,
-                charges: charges, samples: 900)
-        }
-        gaussCache = (inputs, flux)
-        return flux
-    }
-
-    /// Charge strictly inside the bubble (nil for the open disc, where
-    /// "enclosed" has no meaning).
-    var gaussEnclosedCharge: Double? {
-        guard gaussSurfaceKind == .bubble else { return nil }
-        return GaussSurface.enclosedCharge(
-            inSphereAt: gaussSurfaceCenter, radius: gaussSurfaceRadius, charges: charges)
-    }
-
-    /// What Gauss's law says the bubble's flux must be — shown beside the
-    /// measured value so the two can be watched agreeing.
-    var gaussPredictedFlux: Double? {
-        guard gaussSurfaceKind == .bubble else { return nil }
-        return GaussSurface.predictedFlux(
-            inSphereAt: gaussSurfaceCenter, radius: gaussSurfaceRadius, charges: charges)
     }
 
     // MARK: Parallel-plate capacitor
@@ -322,43 +183,25 @@ final class FieldModel {
     /// The push dropProbe gives when B is on, so there's a v to curve.
     nonisolated static let magneticLaunchSpeed = 0.35
 
-    // MARK: Electron mode
+    // Electron mode — the probe as a genuine electron/positron, with
+    // its own field range and a 10⁷× display clock — stood here until
+    // 2026-08-03, when the owner removed it with the particle bank that
+    // was its only door. The probe is always the charged ball now, and
+    // its sign comes from which well mouth it was pulled from.
 
-    /// The probe becomes a genuine electron (or positron, via the
-    /// polarity picker): q = e, m = mₑ, launched at a cathode-ray
-    /// 2×10⁶ m/s. Now REALISTIC fields curve it — a tenth of a
-    /// millitesla bends it into an 11 cm circle, exactly the classic
-    /// Helmholtz-coil e/m experiment. Time is compressed for display
-    /// (1 s shows 0.1 µs, disclosed): the physics stays SI-exact.
-    var electronMode = false
-    // From `PhysicsCore.Constants`, not typed here. These were the app
-    // layer's own copies of two values PhysicsCore already owned — and
-    // the electron mass was ONLY here, where the physics package could
-    // not see it at all.
-    nonisolated static let electronCharge = Constants.elementaryCharge
-    nonisolated static let electronMass = Constants.electronMass
-    nonisolated static let electronLaunchSpeed = 2e6
-    nonisolated static let electronTimeScale = 1e-7
-    nonisolated static let electronFieldRange = 2e-5...5e-4
-    /// Electron-mode B remembered separately from ball-mode B.
-    var electronFieldTesla = 1e-4
-
-    /// Mode-aware signed charge and mass.
+    /// Signed charge and mass of the probe.
     var probeQ: Double {
-        let magnitude = electronMode ? Self.electronCharge : probeChargeMagnitude
-        return (probeIsPositive ? 1 : -1) * magnitude
+        (probeIsPositive ? 1 : -1) * probeChargeMagnitude
     }
-    var probeM: Double { electronMode ? Self.electronMass : Self.probeMass }
-    var launchSpeed: Double {
-        electronMode ? Self.electronLaunchSpeed : Self.magneticLaunchSpeed
-    }
+    var probeM: Double { Self.probeMass }
+    var launchSpeed: Double { Self.magneticLaunchSpeed }
 
     var magneticField: SIMD3<Double> {
         guard magneticFieldOn else { return .zero }
-        return SIMD3(0, electronMode ? electronFieldTesla : magneticFieldTesla, 0)
+        return SIMD3(0, magneticFieldTesla, 0)
     }
 
-    /// Cyclotron radius at the launch speed, m (mode-aware).
+    /// Cyclotron radius at the launch speed, m.
     var cyclotronRadius: Double {
         probeM * launchSpeed / (abs(probeQ) * simd_length(magneticField).replacingZero)
     }
@@ -509,12 +352,11 @@ final class FieldModel {
         charges = []
         reset()
         // Debug hook: `simctl launch … -emMagnetic 1` opens with the
-        // uniform B field (and electron mode) already on — the toggles
-        // can't be pinched from the command line.
+        // uniform B field already on — the toggles can't be pinched
+        // from the command line.
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "emMagnetic") {
             magneticFieldOn = true
-            electronMode = true
         }
         if UserDefaults.standard.bool(forKey: "emProbe") {
             dropProbe()
@@ -537,13 +379,10 @@ final class FieldModel {
         if defaults.object(forKey: "emLines") != nil {
             showLines = defaults.bool(forKey: "emLines")
         }
-        if let shape = defaults.string(forKey: "emGauss") {
-            gaussSurfaceOn = true
-            gaussSurfaceKind = shape == "disc" ? .disc : .bubble
-        }
+        // `-emParticle plus|minus` — the probe's sign. The wells choose
+        // it by hand; the CLI cannot pull from a well.
         if let particle = defaults.string(forKey: "emParticle") {
-            electronMode = particle == "electron" || particle == "positron"
-            probeIsPositive = particle == "plus" || particle == "positron"
+            probeIsPositive = particle == "plus"
         }
         let volts = defaults.double(forKey: "emVolts")
         if volts > 0 {
@@ -552,22 +391,8 @@ final class FieldModel {
         }
         let tesla = defaults.double(forKey: "emTesla")
         if tesla > 0 {
-            if electronMode {
-                electronFieldTesla = min(max(tesla, Self.electronFieldRange.lowerBound),
-                                         Self.electronFieldRange.upperBound)
-            } else {
-                magneticFieldTesla = min(max(tesla, Self.magneticFieldRange.lowerBound),
-                                         Self.magneticFieldRange.upperBound)
-            }
-        }
-        let radius = defaults.double(forKey: "emRadius")
-        if radius > 0 { setGaussRadius(radius) }
-        // `-emTilt 90` turns the disc edge-on to the field, which is the
-        // one picture that proves the tilt gesture does anything.
-        let tilt = defaults.double(forKey: "emTilt")
-        if tilt != 0 {
-            let radians = tilt * .pi / 180
-            setGaussNormal(SIMD3(0, sin(radians), cos(radians)))
+            magneticFieldTesla = min(max(tesla, Self.magneticFieldRange.lowerBound),
+                                     Self.magneticFieldRange.upperBound)
         }
         let probeCharge = defaults.double(forKey: "emProbeCharge")
         if probeCharge > 0 { setProbeMagnitude(probeCharge) }
@@ -618,13 +443,6 @@ final class FieldModel {
         probeChargeMagnitude = Self.defaultProbeCharge
         magneticFieldOn = false
         magneticFieldTesla = 5e4
-        electronMode = false
-        electronFieldTesla = 1e-4
-        gaussSurfaceOn = false
-        gaussSurfaceKind = .bubble
-        gaussSurfaceCenter = SIMD3(0, 1.35, -0.55)
-        gaussSurfaceNormal = SIMD3(0, 0, 1)
-        gaussSurfaceRadius = 0.22
         isPaused = false
         placementIndex = 2
     }
@@ -822,7 +640,7 @@ final class FieldModel {
     func dropProbe() {
         let center = samplingRegion.center
         var state = TestChargeDynamics.ProbeState(position: center + SIMD3(0.12, 0.24, 0))
-        if magneticFieldOn || electronMode {
+        if magneticFieldOn {
             // A sideways push so there's a velocity for B to bend.
             state.velocity = SIMD3(launchSpeed, 0, 0)
         }
@@ -886,7 +704,7 @@ final class FieldModel {
     /// radius stay the same while the circle moves.
     func releaseProbe(flick: SIMD3<Double> = .zero) {
         guard probe != nil else { return }
-        if magneticFieldOn || electronMode {
+        if magneticFieldOn {
             let speed = simd_length(flick)
             // Below a slow deliberate hand, treat it as a drop rather than
             // a throw and fall back to the old sideways push — releasing
@@ -905,8 +723,7 @@ final class FieldModel {
 
         // A stalled frame (app paused, debugger…) must not become one giant
         // physics leap.
-        let frameDt = min(dt, 1.0 / 30.0)
-        let simDt = frameDt * (electronMode ? Self.electronTimeScale : 1)
+        let simDt = min(dt, 1.0 / 30.0)
         state = TestChargeDynamics.stepLorentz(
             state,
             chargeToMassRatio: probeQ / probeM,

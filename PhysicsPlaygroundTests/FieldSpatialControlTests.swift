@@ -27,31 +27,27 @@ final class FieldSpatialControlTests: XCTestCase {
 
     /// The opening state, pinned. Arriving in the module you get the
     /// dipole and its field lines and NOTHING else — no plates, no
-    /// uniform B, no flux meter, and the charges pinned where they are.
+    /// uniform B, and the charges pinned where they are.
     ///
     /// Worth a test rather than a glance now that the bank makes the whole
-    /// set visible at once: five lit plates on arrival would read as five
+    /// set visible at once: four lit plates on arrival would read as four
     /// things demanding attention, and the module's first picture should
     /// be the dipole, which is the one everybody recognises.
     func testTheModuleOpensWithFieldLinesAndNothingElse() {
         let model = FieldModel()
 
         XCTAssertTrue(model.showLines, "The field is the module; it must be on.")
-        XCTAssertFalse(model.gaussSurfaceOn, "The flux meter must not be out on arrival.")
         XCTAssertFalse(model.capacitorOn)
         XCTAssertFalse(model.magneticFieldOn)
-        XCTAssertFalse(model.electronMode)
         XCTAssertFalse(model.chargesRespond)
 
         // And a reset returns to exactly that, not to whatever was last on.
-        model.gaussSurfaceOn = true
         model.capacitorOn = true
         model.magneticFieldOn = true
         model.showLines = false
         model.reset()
 
         XCTAssertTrue(model.showLines)
-        XCTAssertFalse(model.gaussSurfaceOn)
         XCTAssertFalse(model.capacitorOn)
         XCTAssertFalse(model.magneticFieldOn)
     }
@@ -96,7 +92,6 @@ final class FieldSpatialControlTests: XCTestCase {
     func testWithoutAMagneticFieldTheProbeStartsAtRest() {
         let model = FieldModel()
         model.magneticFieldOn = false
-        model.electronMode = false
         model.holdProbe(at: FieldModel.regionCenter)
 
         model.releaseProbe(flick: SIMD3(0, 0, 2.0))
@@ -148,41 +143,21 @@ final class FieldSpatialControlTests: XCTestCase {
                        accuracy: 1e-12, "A held probe must not be moving.")
     }
 
-    // MARK: The particle bank
+    // MARK: The probe's sign
 
-    /// The four discs and the two model flags are the same fact, and the
-    /// mapping must survive a round trip in both directions — otherwise a
-    /// lit disc can disagree with the physics it claims to describe. The
-    /// positron is the case that gets dropped: it exists only as
-    /// `electronMode && probeIsPositive`, so a three-way picker deletes a
-    /// particle without anyone noticing.
-    func testEveryParticleRoundTrips() {
+    /// The two well mouths and the model flag are the same fact: the
+    /// probe's charge must carry the sign of the mouth it came from.
+    /// (The four-disc particle bank and electron mode came out on
+    /// 2026-08-03; the wells are the whole choice now.)
+    func testTheProbesSignFollowsTheFlag() {
         let model = FieldModel()
-        let cases: [(id: String, electron: Bool, positive: Bool)] = [
-            ("plus", false, true),
-            ("minus", false, false),
-            ("electron", true, false),
-            ("positron", true, true),
-        ]
-        for particle in cases {
-            model.electronMode = particle.id == "electron" || particle.id == "positron"
-            model.probeIsPositive = particle.id == "plus" || particle.id == "positron"
-
-            XCTAssertEqual(model.electronMode, particle.electron, "\(particle.id)")
-            XCTAssertEqual(model.probeIsPositive, particle.positive, "\(particle.id)")
-
-            // And the physics actually differs, which is what makes this a
-            // particle choice rather than a label.
-            XCTAssertEqual(model.probeQ > 0, particle.positive,
-                           "\(particle.id) has the wrong sign of charge.")
-            if particle.electron {
-                XCTAssertEqual(abs(model.probeQ), FieldModel.electronCharge,
-                               accuracy: FieldModel.electronCharge * 1e-9,
-                               "\(particle.id) is not carrying e.")
-                XCTAssertEqual(model.probeM, FieldModel.electronMass,
-                               accuracy: FieldModel.electronMass * 1e-9)
-            }
-        }
+        model.probeIsPositive = true
+        XCTAssertGreaterThan(model.probeQ, 0)
+        model.probeIsPositive = false
+        XCTAssertLessThan(model.probeQ, 0)
+        XCTAssertEqual(abs(model.probeQ), model.probeChargeMagnitude,
+                       accuracy: 1e-18)
+        XCTAssertEqual(model.probeM, FieldModel.probeMass, accuracy: 1e-18)
     }
 
     // MARK: The charge grip
@@ -199,32 +174,19 @@ final class FieldSpatialControlTests: XCTestCase {
 
     // MARK: Container versus subject
 
-    /// The rule the inverted hit-test encodes: a Gauss bubble is a
-    /// CONTAINER, and the thing inside it is the subject.
-    ///
-    /// The old ordering matched `"gauss-surface"` before resolving a
-    /// charge, so a 55 cm bubble beat everything within it — and a charge
-    /// inside one was only grabbable because the 12 cm proximity fallback
-    /// happened to rescue it. That accident is now a rule, and this is the
-    /// case that proves the rule still holds.
-    func testAChargeInsideTheBubbleIsGrabbableThroughIt() {
+    /// The rule the hit-test encodes: a big collider is a CONTAINER, and
+    /// the thing inside it is the subject. A pinch that lands on nothing
+    /// nameable resolves to the nearest charge within reach — which is
+    /// how a charge hiding inside the capacitor's colliders stays
+    /// grabbable.
+    func testAChargeInsideAContainerIsGrabbableThroughIt() {
         let charge = (id: UUID(), position: FieldModel.regionCenter)
         let hand = charge.position + SIMD3(0.05, 0, 0)
 
         let resolved = FieldSpaceView.resolveCharge(
-            names: ["gauss-surface", "field-root"], hand: hand, charges: [charge])
+            names: ["plate-0", "field-root"], hand: hand, charges: [charge])
 
         XCTAssertEqual(resolved, charge.id,
-                       "A pinch 5 cm from a charge resolved to the bubble around it.")
-    }
-
-    /// And the classifier agrees about which part of the surface that hand
-    /// was in, so the two halves of the rule cannot drift apart.
-    func testTheSameHandReadsAsInsideNotSkin() {
-        let center = FieldModel.regionCenter
-        XCTAssertEqual(
-            GaussGrab.classify(hand: center + SIMD3(0.05, 0, 0),
-                               center: center, radius: 0.55),
-            .inside)
+                       "A pinch 5 cm from a charge resolved to the container around it.")
     }
 }

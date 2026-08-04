@@ -93,19 +93,9 @@ struct PendulumsSpaceView: View {
     // Anybody restoring either must restore its rail in the same commit.
     //
     // What is left in this room: the swing, the two wells that make one,
-    // the layers bank — and Foucault's globe and spin rail, which appear
-    // only while the Earth is turning.
-
-    /// The rail a drag is currently in, if any.
-    @State private var activeTrack: SpatialTrackControl?
-    /// Where on Earth the bench stands — a globe you touch, not a rail.
-    @State private var globe: LatitudeGlobe?
-    /// The Panthéon ring: the precession as a record on the floor.
-    @State private var markers: MarkerRing?
-    /// How fast the frame is turned, exaggerated and disclosed.
-    @State private var spinTrack: SpatialTrackControl?
-    /// True while a drag is setting latitude on the globe.
-    @State private var turningGlobe = false
+    // and the layers bank. (Foucault's globe, spin rail and marker ring
+    // stood here until 2026-08-03, when the whole feature came out at
+    // the owner's direction — see DECISIONS.md.)
 
     // Placement. Every one of these sits at the apparatus's own DEPTH
     // (z ≈ −1.08, the pivot plane) rather than at a height picked on its
@@ -117,11 +107,6 @@ struct PendulumsSpaceView: View {
     private static let instrumentZ: Float = -1.08
     /// Left of the swing, above the well at y = 1.30.
     private static let bankAnchor = SIMD3<Float>(-0.92, 1.58, instrumentZ)
-    /// Foucault's two instruments, on the far side from the layer bank.
-    private static let globeAnchor = SIMD3<Float>(-1.32, 1.30, instrumentZ)
-    private static let spinCenter = SIMD3<Float>(-1.32, 1.08, instrumentZ)
-    /// The rails face the user, not straight down the room.
-    private static let instrumentNormal = SIMD3<Float>(-0.34, 0, 0.94)
 
     /// Walks up from a tapped entity to a pivot collar, if it is one.
     /// The renderer names them `pivot-<uuid>`.
@@ -211,45 +196,9 @@ struct PendulumsSpaceView: View {
                     .init(id: "friction", label: "Air resistance", symbol: "wind",
                           isOn: { model.frictionOn },
                           toggle: { model.frictionOn.toggle() }),
-                    // The module's deepest switch, and the only one that
-                    // changes what FRAME you are standing in rather than
-                    // what is drawn or what force is applied.
-                    .init(id: "foucault", label: "Earth turns",
-                          symbol: "globe.europe.africa",
-                          isOn: { model.foucaultOn },
-                          toggle: { model.foucaultOn.toggle() }),
                 ])
             renderer.root.addChild(bank.root)
             layers = bank
-
-            let earth = LatitudeGlobe(
-                accent: UIColor(DesignTokens.Palette.pendulumsAccent))
-            renderer.root.addChild(earth.root)
-            globe = earth
-
-            let spin = SpatialTrackControl(
-                name: "Earth spin",
-                center: Self.spinCenter,
-                normal: Self.instrumentNormal,
-                accent: UIColor(DesignTokens.Palette.pendulumsAccent),
-                range: PendulumsModel.spinRange,
-                read: { model.earthSpin },
-                write: { model.earthSpin = $0 },
-                // The rail states the EXAGGERATION, in the units it is
-                // an exaggeration of. "×3000 Earth" is a claim a reader
-                // can check against the globe's true-rate caption; a bare
-                // "3000" would be a number pretending to be a measurement.
-                format: { String(format: "×%.0f Earth", $0) })
-            renderer.root.addChild(spin.root)
-            spinTrack = spin
-
-            // NOT `ring` — that name belongs to the bob's `RingState`,
-            // and shadowing it here silently redirected `-penRing`.
-            let pantheonRing = MarkerRing(
-                accent: UIColor(DesignTokens.Palette.pendulumsAccent),
-                count: PendulumsModel.markerCount)
-            renderer.root.addChild(pantheonRing.root)
-            markers = pantheonRing
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
@@ -259,32 +208,6 @@ struct PendulumsSpaceView: View {
                     let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
                     layers?.update(anchor: Self.bankAnchor,
                                    viewer: viewer, dt: event.deltaTime)
-                    // Foucault's instruments exist only while the Earth
-                    // is turning — an unlit globe beside a bench that is
-                    // not in a rotating frame would be a control over
-                    // nothing. `isEnabled` also kills a drag in flight.
-                    globe?.root.isEnabled = model.foucaultOn
-                    markers?.root.isEnabled = model.foucaultOn
-                    spinTrack?.isEnabled = model.foucaultOn
-                    if model.foucaultOn {
-                        globe?.update(
-                            anchor: Self.globeAnchor,
-                            latitudeDegrees: model.latitudeDegrees,
-                            trueDegreesPerHour: model.truePrecessionDegreesPerHour,
-                            truePeriodHours: model.truePrecessionHours)
-                        spinTrack?.refresh()
-                        // The ring lies on the floor under the first
-                        // pendulum's pivot — the bob sweeps over it.
-                        if let first = model.pendulums.first {
-                            markers?.update(
-                                center: SIMD3<Float>(
-                                    Float(first.pivot.x), 0.002,
-                                    Float(first.pivot.z)),
-                                ringRadius: Float(PendulumsModel.markerRingRadius),
-                                standing: model.standingMarkers,
-                                originAngle: model.markerOriginAngle)
-                        }
-                    }
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
                     // moves a body by hand DISPLACEMENT, which a constant
@@ -348,27 +271,8 @@ struct PendulumsSpaceView: View {
                                       PendulumsModel.timeScaleRange.upperBound)
             }
             // `-penLayers 1` lights every plate on the bank, so one shot
-            // shows all five lamps and all five labels rather than the
+            // shows all four lamps and all four labels rather than the
             // two that happen to be on by default.
-            // `-penFoucault 48.85` stands the bench at a latitude with
-            // the Earth turning — the only way to see the globe, the
-            // spin rail or the marker ring at all, since all three are
-            // hidden until the frame is rotating. A VALUE, so a
-            // screenshot proves the sine law moved something.
-            if UserDefaults.standard.object(forKey: "penFoucault") != nil {
-                model.foucaultOn = true
-                let latitude = UserDefaults.standard.double(forKey: "penFoucault")
-                model.latitudeDegrees = min(
-                    max(latitude, PendulumsModel.latitudeRange.lowerBound),
-                    PendulumsModel.latitudeRange.upperBound)
-            }
-            // `-penSpin 20000` winds the frame up so a short screenshot
-            // run fells a visible arc of markers.
-            if UserDefaults.standard.object(forKey: "penSpin") != nil {
-                let spin = UserDefaults.standard.double(forKey: "penSpin")
-                model.earthSpin = min(max(spin, PendulumsModel.spinRange.lowerBound),
-                                      PendulumsModel.spinRange.upperBound)
-            }
             if UserDefaults.standard.bool(forKey: "penLayers") {
                 model.showVelocity = true
                 model.showAcceleration = true
@@ -399,39 +303,7 @@ struct PendulumsSpaceView: View {
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
                     if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
-                    // A gesture already in a rail may not be re-claimed: a
-                    // drag that starts on the time rail and wanders over a
-                    // bob must not start swinging the bob.
-                    if let track = activeTrack {
-                        guard track.isEnabled else {
-                            activeTrack = nil
-                            return
-                        }
-                        track.adjust(hand: hand)
-                        return
-                    }
-                    if turningGlobe {
-                        guard let globe, globe.root.isEnabled else {
-                            turningGlobe = false
-                            return
-                        }
-                        model.latitudeDegrees = globe.latitude(forHand: hand)
-                        return
-                    }
                     if drag == nil {
-                        for track in [spinTrack]
-                            .compactMap({ $0 })
-                        where track.owns(value.entity) {
-                            activeTrack = track
-                            track.adjust(hand: hand)
-                            return
-                        }
-                        if let globe, globe.root.isEnabled,
-                           globe.owns(value.entity) {
-                            turningGlobe = true
-                            model.latitudeDegrees = globe.latitude(forHand: hand)
-                            return
-                        }
                         if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) {
                             // Hold the swing still for the length edit.
                             // The bead rides the bob, and the bob was
@@ -532,15 +404,6 @@ struct PendulumsSpaceView: View {
                     // re-hanging a pivot, pulling one out of the well
                     // all silently became length edits on whatever the
                     // ring had last been open on. One missing line.
-                    if turningGlobe {
-                        turningGlobe = false
-                        return
-                    }
-                    if let track = activeTrack {
-                        track.endAdjust()
-                        activeTrack = nil
-                        return
-                    }
                     let wasGripping = bloom.isGripping
                     bloom.endGrip()
                     defer {

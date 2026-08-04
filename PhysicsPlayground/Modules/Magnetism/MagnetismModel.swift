@@ -67,19 +67,15 @@ final class MagnetismModel {
 
     var isPaused = false
     var showFieldLines = true
-    var showCompasses = true
 
     // MARK: The compass you carry
 
-    /// A single hand-held compass, separate from the lattice.
-    ///
-    /// The lattice shows the field's SHAPE; a compass in your hand is
-    /// the experience everyone actually remembers — you walk it around
-    /// a magnet and watch the needle swing. It is the same physics
-    /// (τ = m × B aligning a dipole with the local field), just at the
-    /// end of your arm instead of pinned to a grid, and it is the one
-    /// affordance in this module that only exists because you have hands
-    /// in the scene.
+    /// A single hand-held compass. (A 245-needle lattice of them —
+    /// `showCompasses` — stood alongside until 2026-08-03; the loops
+    /// carry the field's shape now, and one compass in the hand is the
+    /// experience everyone actually remembers: you walk it around a
+    /// magnet and watch the needle swing. τ = m × B aligning a dipole
+    /// with the local field, at the end of your arm.)
     var compassOn = true
     var compassPosition = MagnetismModel.regionCenter + SIMD3(0.0, -0.42, 0.55)
 
@@ -579,7 +575,6 @@ final class MagnetismModel {
         heldID = nil
         isPaused = false
         showFieldLines = true
-        showCompasses = true
         compassOn = true
         // The fourth state the switch bank shows, and reset restored the
         // other three while silently skipping this one — so freezing the

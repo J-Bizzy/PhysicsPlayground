@@ -16,6 +16,95 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-03 — The compass grid comes out; the hand compass stays
+
+**Decision:** Magnetism's 245-needle compass lattice is removed — the
+renderer's grid, the `showCompasses` flag, and the "Compass grid" bank
+plate (the bank is four plates now). The single hand-held spherical
+compass stays, and gains N/S pole letters.
+
+**Context:** The owner's on-device pass: with the field-line loops
+carrying the field's shape, the lattice read as noise — and it was the
+thing that visibly grew when the strength bead moved (more grid points
+clearing the weak-field cull) while the loop count did not, which made
+the bead look broken. The loop-count fix lands separately; the grid
+would have been noise either way.
+
+**Consequences:** The legend's "the compasses are its strength" claim
+dies with the lattice. `-magLayers 0` now reaches three of the four
+plates (`earthFieldOn` still has no argument).
+
+## 2026-08-03 — The room occluder comes off the scene; sensing stays
+
+**Decision:** The scene-reconstruction occlusion mesh — `occluder` in
+`RoomModel`, mounted by `RoomOcclusionView` — is removed. The view
+survives as `RoomSensingView`, a bare retain/release holder, because
+the ARKit session itself is load-bearing everywhere: `lookRay` (hub
+focus), hand obstacles, wall bounce, and the `bounds` every renderer
+clips against all ride it. Field-line clipping to the scanned room
+KEEPS working; only the drawn occlusion mesh goes.
+
+**Context:** On device the mesh read as "strange black shadows almost
+molding my room's shape" that cut off any UI behind them — the owner
+asked for it to go if it served no practical purpose. Its purpose was
+realism (virtual light passing behind real furniture); the cost was
+whole controls vanishing behind a couch-shaped hole.
+
+**Consequences:** Virtual content now draws over real furniture instead
+of being hidden by it. If occlusion ever returns it should be selective
+(physics objects only, never instruments), and it starts from this
+entry's history.
+
+## 2026-08-03 — Electric Fields slims: the flux meter and the particle bank come out
+
+**Decision:** Two removals from the same on-device pass, at the owner's
+direction. The Gauss flux meter leaves the prototype whole — the
+bubble/disc surface, `GaussGrab`, both bank plates ("Flux meter" and
+"Open disc"), the readout, the `-emGauss`/`-emRadius`/`-emTilt`
+arguments, and the `field.gauss` experiment (replaced by
+`field.cyclotron`, the circle the module still draws). The four-disc
+particle bank goes too, and electron/positron mode with it: the probe is
+always the 0.5 g charged ball, its sign chosen by which well mouth it
+came from. The bank drops from six plates to four. `GaussSurface` and
+its tests STAY in PhysicsCore — the math is portfolio work; only the
+app's use of it dies.
+
+**Context:** "GET RID OF THE FLUX METER, DISK AND UI BUTTON. I DO NOT
+WANT IT IN THE PROTOTYPE" and "get rid of these 4 buttons … I don't see
+the use." The electron mode existed only through those buttons, and its
+whole apparatus (a second B rail, a display clock, two disclosures)
+served a choice the owner never used.
+
+**Consequences:** The 50 kT disclosure loses its "pick the electron"
+escape clause and stands alone. `-emParticle` narrows to `plus|minus`.
+Anyone restoring the e/m demonstration starts from the 2026-08-03
+history, where the mode, its rail, its tests and its disclosures are
+all intact.
+
+## 2026-08-03 — Foucault comes out, whole
+
+**Decision:** The Foucault feature is removed entirely at the owner's
+direction, after the first on-device pass: the "Earth turns" bank plate,
+the latitude globe, the spin rail, the Panthéon marker ring, the model's
+latitude/spin/precession state, the `-penFoucault`/`-penSpin` arguments,
+and — unlike previous cuts — the physics too: `EarthRotation`, the
+Coriolis term in `SphericalPendulum.step`, and the sine-law recovery
+tests leave PhysicsCore. Pendulums' bank has four plates now.
+
+**Context:** The owner tried it in the room and did not like it
+("Get rid of this feature entirely"). This is the one removal that takes
+tested physics OUT of PhysicsCore, against the archive philosophy that
+cut modules keep their math — recorded here precisely because it is the
+exception. Git history holds all of it: the theorem-recovery suite
+(`FoucaultTests`), the honest-exaggeration design (true rate quoted
+beside a ×3000 display spin), and the marker-ring record.
+
+**Consequences:** `SphericalPendulum.step` loses its rotating-frame
+parameter and is an ordinary spherical pendulum again. The module's
+signature moment is gone; the cradle cold-open, the double pendulum and
+the true 3-D orbit carry the room. Anyone restoring the feature starts
+from the 2026-08-03 history, not from scratch.
+
 ## 2026-08-03 — Pendulums' period labels stay bespoke, and the doc-rot audit pays its debts
 
 **Decision:** Two things from the same audit. First, a divergence is

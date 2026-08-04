@@ -28,7 +28,7 @@
 //
 //  Layout in one sentence: what EXISTS is on the left (the layers bank, and
 //  the strength of the field it summons), what you MAKE is on the right
-//  (the wells, and what the test particle is).
+//  (the wells).
 //
 //  EVERY ANCHOR MOVED OUTWARD ON 2026-07-31, and none of them moved
 //  because they looked better there. The station widened from 0.62 to
@@ -74,8 +74,10 @@ enum FieldInstrumentLayout {
 
     // MARK: Left — what exists
 
-    /// The layers bank: SIX plates in a column (`StackLayout` pitch 0.066,
-    /// so 0.330 m of plates), standing off the station's −x flank.
+    /// The layers bank: FOUR plates in a column (`StackLayout` pitch
+    /// 0.066, so 0.198 m of plates), standing off the station's −x flank.
+    /// (Six until 2026-08-03, when the flux meter's two plates came out
+    /// with the meter.)
     ///
     /// AT THE STATION'S OWN DEPTH (z = −0.9), not at its near edge. The
     /// first attempt put the furniture at z = −0.5, which is 61° off the
@@ -85,17 +87,10 @@ enum FieldInstrumentLayout {
     /// brings the instruments back into the same band as the apparatus
     /// they belong to. Circuits' bank sits beside its bench for exactly
     /// this reason, and says so.
-    /// RAISED 1.38 → 1.42 AND WIDENED 0.15 → 0.20 ON 2026-08-03, when the
-    /// bank gained its sixth plate ("Open disc"). `StackLayout` centres a
-    /// column on its anchor, so a sixth plate grows the bank by half a
-    /// pitch in BOTH directions — 3.3 cm down, straight into the B rail's
-    /// clearance, which the old 0.15 half-extent did not even describe.
     ///
-    /// Six plates at pitch 0.066 span 0.330 m of centres, ±0.025 for the
-    /// plate itself: 1.230…1.610 about this anchor. The declared box has
-    /// to cover that or every clearance in this file is measuring a bank
-    /// smaller than the one in the room — which is the same defect as
-    /// sizing the Clear plate's box to its resting label.
+    /// The box stays the six-plate size deliberately: a declared box
+    /// larger than the bank only makes every clearance check stricter,
+    /// and shrinking it buys nothing.
     static let bankAnchor = SIMD3<Double>(-1.05, 1.42, -0.90)
     static let bankHalfExtents = SIMD3<Double>(0.15, 0.20, 0.15)
 
@@ -126,19 +121,18 @@ enum FieldInstrumentLayout {
     /// for" failing quietly.
     /// FOUR mouths now, not three: + charge, − charge, and one test
     /// charge of EACH sign. The probe's polarity used to be a choice made
-    /// on the particle bank after the fact, which meant the thing you
+    /// on a particle bank after the fact, which meant the thing you
     /// pulled out of the well was whatever the bank happened to be set
     /// to. Making it two mouths puts the choice in the act of creation,
-    /// the same way the ± charge mouths already did.
+    /// the same way the ± charge mouths already did. (The particle bank
+    /// itself came out on 2026-08-03 — the wells are the whole choice.)
     ///
     /// The pitch tightens from 0.11 to 0.095 to fit the fourth without
-    /// the column growing into its neighbours, and the particle bank
-    /// drops 5 cm to keep the 3 cm separation the layout test demands.
-    /// The arithmetic, since it is tight in both directions: four mouths
-    /// at 0.095 span 0.285, so the column's box is 0.1425 + a 0.06 mouth
-    /// radius = 0.2025 half-height about a centre of 1.4075 — i.e. y
-    /// 1.205…1.610. That clears the Clear plate above (1.65) by 0.04 and
-    /// the particle bank below (now topping out at 1.16) by 0.045.
+    /// the column growing into its neighbours. The arithmetic, since it
+    /// is tight: four mouths at 0.095 span 0.285, so the column's box is
+    /// 0.1425 + a 0.06 mouth radius = 0.2025 half-height about a centre
+    /// of 1.4075 — i.e. y 1.205…1.610. That clears the Clear plate above
+    /// (1.65) by 0.04.
     ///
     /// The half-extent is 0.2025 and NOT 0.21, which is the value this
     /// comment was first written beside. `testInstrumentsDoNotOverlapEachOther`
@@ -155,10 +149,6 @@ enum FieldInstrumentLayout {
     static func wellAnchor(index: Int) -> SIMD3<Double> {
         SIMD3(wellColumnX, wellTopY - Double(index) * wellPitch, wellColumnZ)
     }
-
-    /// The particle bank: four discs in a shallow row under the wells.
-    static let particlePickerAnchor = SIMD3<Double>(1.06, 1.09, -0.92)
-    static let particlePickerHalfExtents = SIMD3<Double>(0.16, 0.07, 0.16)
 
     /// The Clear plate, capping the well column from above.
     ///
@@ -262,8 +252,6 @@ enum FieldInstrumentLayout {
                                        halfExtents: bankHalfExtents)),
             ("B rail", StationBox(center: fieldTrackAnchor,
                                   halfExtents: fieldTrackHalfExtents)),
-            ("particle bank", StationBox(center: particlePickerAnchor,
-                                         halfExtents: particlePickerHalfExtents)),
             ("clear plate", StationBox(center: clearPlateAnchor,
                                        halfExtents: clearPlateHalfExtents)),
         ]

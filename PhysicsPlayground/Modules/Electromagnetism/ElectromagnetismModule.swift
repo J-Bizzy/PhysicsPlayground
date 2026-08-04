@@ -72,8 +72,7 @@ enum ElectromagnetismModule {
         }
         if model.magneticFieldOn {
             rows.append(.init("B", PhysicsFormat.metric(
-                model.electronMode ? model.electronFieldTesla : model.magneticFieldTesla,
-                "T", decimals: 2)))
+                model.magneticFieldTesla, "T", decimals: 2)))
             rows.append(.init("Cyclotron radius",
                               PhysicsFormat.fixed(model.cyclotronRadius, decimals: 3), "m"))
         }

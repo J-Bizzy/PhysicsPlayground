@@ -27,7 +27,7 @@ enum KinematicsModule {
             // bounces off are yours.
             //
             // Where the prompt actually fires decided this. `retain()` is
-            // called from `RoomOcclusionView.task`, and that view is
+            // called from `RoomSensingView.task`, and that view is
             // mounted only inside the `activeModule` branch of
             // `PlaygroundSpaceView` — so the prompt arrives as a module
             // opens, which is exactly when this window and its hint

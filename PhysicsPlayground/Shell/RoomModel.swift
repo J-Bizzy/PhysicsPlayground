@@ -16,9 +16,7 @@
 //
 //    • `bounds`     — a RoomBox every renderer clips its lines against,
 //    • `walls`      — finite rectangles the projectiles genuinely bounce off,
-//    • `obstacles`  — hands, forearms and furniture as spheres for the CFD,
-//    • `occluder`   — the reconstructed mesh, rendered with an occlusion
-//                     material so virtual light passes BEHIND real furniture.
+//    • `obstacles`  — hands, forearms and furniture as spheres for the CFD.
 //
 //  All providers are device-only and permission-gated. In the simulator
 //  every one of them is simply unsupported, so `bounds` stays at
@@ -104,10 +102,12 @@ final class RoomModel {
     }
     #endif
 
-    /// The scene-reconstruction mesh, wearing an occlusion material.
-    /// Add it to a module's scene and real furniture starts hiding
-    /// virtual content behind it.
-    let occluder = Entity()
+    // (An `occluder` entity mirrored the scene-reconstruction mesh here
+    // until 2026-08-03, wearing an occlusion material so real furniture
+    // hid virtual content. On device it read as black shadows moulded to
+    // the room that cut off anything behind them, and the owner asked
+    // for it to go. The sensing session below is untouched — lookRay,
+    // hands, planes and the obstacle field all still need it.)
 
     // MARK: Session
 
@@ -432,10 +432,8 @@ final class RoomModel {
             let anchor = update.anchor
             if update.event == .removed {
                 meshSpheres[anchor.id] = nil
-                occluder.findEntity(named: anchor.id.uuidString)?.removeFromParent()
             } else {
                 meshSpheres[anchor.id] = Self.voxelize(anchor)
-                updateOccluder(for: anchor)
             }
             rebuildObstacles()
         }
@@ -471,75 +469,20 @@ final class RoomModel {
         return spheres
     }
 
-    /// Mirrors the reconstructed mesh into `occluder` wearing an
-    /// occlusion material — this is what makes a field line vanish
-    /// behind the couch instead of painting over it.
-    private func updateOccluder(for anchor: MeshAnchor) {
-        let name = anchor.id.uuidString
-        guard let shape = Self.mesh(from: anchor.geometry) else { return }
-        if let model = occluder.findEntity(named: name) as? ModelEntity {
-            model.model = ModelComponent(mesh: shape, materials: [Materials.occlusion()])
-            model.transform = Transform(matrix: anchor.originFromAnchorTransform)
-            return
-        }
-        let model = ModelEntity(mesh: shape, materials: [Materials.occlusion()])
-        model.name = name
-        model.transform = Transform(matrix: anchor.originFromAnchorTransform)
-        occluder.addChild(model)
-    }
-
-    /// Turns a scene-reconstruction anchor's raw buffers into a mesh.
-    /// The geometry arrives as loosely-typed vertex/index buffers with
-    /// their own stride and index width, so both have to be walked by
-    /// hand rather than handed straight to RealityKit.
-    private static func mesh(from geometry: MeshAnchor.Geometry) -> MeshResource? {
-        let vertexSource = geometry.vertices
-        let faces = geometry.faces
-        guard vertexSource.count > 0, faces.count > 0,
-              faces.primitive == .triangle else { return nil }
-
-        var positions: [SIMD3<Float>] = []
-        positions.reserveCapacity(vertexSource.count)
-        let vertexBase = vertexSource.buffer.contents().advanced(by: vertexSource.offset)
-        for index in 0..<vertexSource.count {
-            let pointer = vertexBase.advanced(by: vertexSource.stride * index)
-                .assumingMemoryBound(to: (Float, Float, Float).self).pointee
-            positions.append(SIMD3(pointer.0, pointer.1, pointer.2))
-        }
-
-        let indexCount = faces.count * 3
-        var indices: [UInt32] = []
-        indices.reserveCapacity(indexCount)
-        let indexBase = faces.buffer.contents()
-        switch faces.bytesPerIndex {
-        case 2:
-            let typed = indexBase.assumingMemoryBound(to: UInt16.self)
-            for index in 0..<indexCount { indices.append(UInt32(typed[index])) }
-        case 4:
-            let typed = indexBase.assumingMemoryBound(to: UInt32.self)
-            for index in 0..<indexCount { indices.append(typed[index]) }
-        default:
-            return nil
-        }
-
-        var descriptor = MeshDescriptor(name: "room-occluder")
-        descriptor.positions = MeshBuffers.Positions(positions)
-        descriptor.primitives = .triangles(indices)
-        return try? MeshResource.generate(from: [descriptor])
-    }
 }
 
-/// Attaches the shared room occlusion mesh to a module's scene, and
-/// keeps the ARKit session alive for as long as the module is on
-/// screen. One line in each module's space view.
-struct RoomOcclusionView: View {
+/// Keeps the shared ARKit room-sensing session alive for as long as a
+/// module is on screen. One line in the module branch of
+/// `PlaygroundSpaceView`. (Named `RoomOcclusionView` until 2026-08-03,
+/// when it also mounted the room-shaped occlusion mesh; the mesh is
+/// gone, the retain/release lifecycle is the part that was always
+/// load-bearing.)
+struct RoomSensingView: View {
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
-        RealityView { content in
-            content.add(appModel.room.occluder)
-        }
-        .task { await appModel.room.retain() }
-        .onDisappear { appModel.room.release() }
+        Color.clear
+            .task { await appModel.room.retain() }
+            .onDisappear { appModel.room.release() }
     }
 }
