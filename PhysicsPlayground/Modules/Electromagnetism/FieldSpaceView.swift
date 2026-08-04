@@ -161,8 +161,45 @@ struct FieldSpaceView: View {
             }
         }
         .spatialScale(scaleRig)
+        .simultaneousGesture(secondHandTap)
         .simultaneousGesture(tap)
         .simultaneousGesture(drags)
+    }
+
+    /// The pinches currently down, for `secondHandTap`.
+    @State private var activePinchIDs: Set<SpatialEventCollection.Event.ID> = []
+
+    /// The two-handed tap the recognisers cannot see.
+    ///
+    /// "Switch the Capacitor plate OFF while dragging its ΔV bead" was
+    /// unactionable on device (owner, 2026-08-03): while one hand holds
+    /// a drag, SwiftUI never delivers the other hand's pinch to the
+    /// `TapGesture` — one recogniser, one gesture. So a passive
+    /// `SpatialEventGesture` watches the raw pinches, and a NEW pinch
+    /// that lands on the layers bank while another pinch is already
+    /// down is handed to the bank directly. Only the second-hand case:
+    /// a lone pinch stays the TapGesture's, so nothing fires twice.
+    private var secondHandTap: some Gesture {
+        SpatialEventGesture()
+            .onChanged { events in
+                for event in events {
+                    if event.phase == .active {
+                        guard !activePinchIDs.contains(event.id) else { continue }
+                        if !activePinchIDs.isEmpty,
+                           let target = event.targetedEntity {
+                            _ = bank?.handleTap(target)
+                        }
+                        activePinchIDs.insert(event.id)
+                    } else {
+                        activePinchIDs.remove(event.id)
+                    }
+                }
+            }
+            .onEnded { events in
+                for event in events where event.phase != .active {
+                    activePinchIDs.remove(event.id)
+                }
+            }
     }
 
     // MARK: Installing the instruments

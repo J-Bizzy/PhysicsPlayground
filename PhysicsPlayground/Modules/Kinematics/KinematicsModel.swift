@@ -380,6 +380,21 @@ final class KinematicsModel {
         ))
     }
 
+    /// Spawns a ball AT THE HAND — the well's spawn (owner, 2026-08-04:
+    /// the launcher used to be the only way a ball came into the room).
+    /// Staged, so it hangs inert exactly where it is born until a throw
+    /// gives it a velocity; it wears whatever kind the ball fan has
+    /// picked, so the well and the launcher agree about what a ball is.
+    @discardableResult
+    func spawnBall(at position: SIMD3<Double>) -> UUID {
+        let flight = Flight(
+            id: UUID(),
+            projectile: projectile,
+            state: ParticleDynamics.State(position: position))
+        insertFlight(flight)
+        return flight.id
+    }
+
     func clearFlights() {
         flights.removeAll()
         lastFlight = nil

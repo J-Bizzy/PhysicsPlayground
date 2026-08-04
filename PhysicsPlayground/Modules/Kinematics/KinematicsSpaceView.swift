@@ -60,6 +60,9 @@ struct KinematicsSpaceView: View {
     /// Whether the room's walls are real, and whether the air is.
     @State private var layers: SpatialLayerBank?
     @State private var activeTrack: SpatialTrackControl?
+    /// The ball well: pull one out and it is already in your hand —
+    /// the launcher stops being the only way a ball enters the room.
+    @State private var wells: Well?
 
     // Placement: an instrument wall to the LEFT of the launcher's home,
     // at its depth. This module is 1:1 with the room and balls go
@@ -150,6 +153,33 @@ struct KinematicsSpaceView: View {
             renderer.root.addChild(wind.root)
             windTrack = wind
 
+            // The ball well, on the instrument wall under the switch
+            // bank — out of the firing line with the rest of the
+            // furniture, and deliberately NOT riding the launcher. A
+            // ball pulled from it is born at the fingertips, staged and
+            // inert, and rides the same grab/hold/release path a caught
+            // ball does — so throwing it is the throw the module
+            // already knows (owner, 2026-08-04: the launcher used to be
+            // the only way to get a ball at all).
+            let sources = Well([
+                .init(name: "Ball",
+                      tint: UIColor(DesignTokens.Palette.kinematicsAccent),
+                      label: "Add ball",
+                      preview: { KinematicsRenderer.ballPreview() },
+                      position: SIMD3(-1.52, 1.06, Self.instrumentZ),
+                      spawn: { point in
+                          let id = model.spawnBall(at: point)
+                          // Already in the hand: grabbing it here is
+                          // what arms the throw sampler, so letting go
+                          // with a moving hand throws and letting go
+                          // still just hangs it in the air.
+                          model.grabBall(id: id)
+                          return id
+                      }),
+            ])
+            renderer.root.addChild(sources.root)
+            wells = sources
+
             #if DEBUG
             // `-kinBalls 1` opens the ball fan at launch, so the picker is
             // screenshot-checkable from the CLI (no hand to pinch with).
@@ -205,6 +235,7 @@ struct KinematicsSpaceView: View {
                     // there.
                     model.catchBalls(atFingertips: appModel.room.fingertips)
                     renderer?.tick(model)
+                    wells?.update(dt: event.deltaTime)
                     syncBloom(dt: event.deltaTime)
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
@@ -273,6 +304,13 @@ struct KinematicsSpaceView: View {
                             return
                         }
                         if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
+                        // Born at the fingertips, and dragged by the
+                        // same gesture that made it.
+                        if let id = wells?.pull(value.entity, at: hand) {
+                            drag = RelativeDrag(name: id.uuidString,
+                                                target: hand, hand: hand)
+                            return
+                        }
                         drag = beginDrag(entity: value.entity, hand: hand)
                     }
                     guard let drag else { return }

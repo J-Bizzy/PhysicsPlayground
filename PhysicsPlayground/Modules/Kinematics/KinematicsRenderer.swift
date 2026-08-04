@@ -622,6 +622,21 @@ final class KinematicsRenderer {
         slot.payload.model?.materials = [ballMaterial(for: projectile)]
     }
 
+    /// The ball as the WELL shows it — the basketball, the module's
+    /// default hand-thrown ball. Static and model-free so `Well` can
+    /// build the preview before any flight exists.
+    static func ballPreview() -> Entity {
+        var material = PhysicallyBasedMaterial()
+        if let texture = BallTextures.texture(for: Projectile.basketball.name) {
+            material.baseColor = .init(tint: .white, texture: .init(texture))
+        } else {
+            material.baseColor = .init(tint: DesignTokens.Palette.projectileUI)
+        }
+        material.roughness = .init(floatLiteral: 0.6)
+        return ModelEntity(mesh: .generateSphere(radius: baseBallRadius),
+                           materials: [material])
+    }
+
     private func ballMaterial(for projectile: Projectile) -> RealityKit.Material {
         if let texture = BallTextures.texture(for: projectile.name) {
             var material = PhysicallyBasedMaterial()

@@ -88,6 +88,28 @@ final class KinematicsModelTests: XCTestCase {
                        "1 m/s hand motion × boost 2 = 2 m/s release")
     }
 
+    /// The well's spawn: a ball born AT THE HAND, staged, and inert —
+    /// it hangs exactly where it was made until a throw gives it a
+    /// velocity. The launcher used to be the only way a ball entered
+    /// the room (owner, 2026-08-04).
+    func testAWellSpawnedBallIsBornAtTheHandAndHangsStill() {
+        let model = bareModel()
+        let hand = SIMD3<Double>(0.4, 1.3, -0.7)
+
+        let id = model.spawnBall(at: hand)
+        let flight = model.flights.first { $0.id == id }
+        XCTAssertEqual(flight?.status, .staged)
+        XCTAssertEqual(flight?.state.position, hand,
+                       "the ball was not born at the fingertips")
+        // It wears the fan's current kind — well and launcher agree.
+        XCTAssertEqual(flight?.projectile.name, model.projectile.name)
+
+        for _ in 0..<180 { model.step(dt: 1.0 / 90.0) }
+        XCTAssertEqual(model.flights.first { $0.id == id }?.state.position,
+                       hand,
+                       "a staged ball moved with nobody touching it")
+    }
+
     /// A grabbed-and-stationary release leaves the ball hovering (staged),
     /// not falling — no meaningful hand motion means no throw.
     func testStillReleaseLeavesBallHovering() {

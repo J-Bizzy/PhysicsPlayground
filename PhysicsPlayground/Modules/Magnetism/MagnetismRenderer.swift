@@ -181,6 +181,21 @@ final class MagnetismRenderer {
         south.position = [0, -0.020, 0]
         needle.addChild(north)
         needle.addChild(south)
+        // The poles say their names (owner, 2026-08-03): the same
+        // extruded ivory letters the bar magnets wear, scaled to the
+        // needle and doubled back-to-back so they read from either side
+        // of the orb. They ride the needle, as painted labels would —
+        // when the needle dives, so do they, which is the honest
+        // behaviour for a label on a physical part.
+        for (text, tip) in [("N", Float(0.046)), ("S", Float(-0.046))] {
+            for flip in [Float(0), .pi] {
+                let letter = Self.poleLetter(text)
+                letter.scale = SIMD3(repeating: 0.28)
+                letter.position = [0, tip, 0]
+                letter.orientation = simd_quatf(angle: flip, axis: [0, 1, 0])
+                needle.addChild(letter)
+            }
+        }
         // A dark bead at the pivot, so the needle reads as suspended at
         // the centre rather than as two bars floating in glass.
         let hub = ModelEntity(
