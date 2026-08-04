@@ -153,6 +153,12 @@ struct HubSpaceView: View {
         // settings; bumping layoutVersion gives this view a new identity,
         // which tears the old scene down and builds the arc fresh.
         .id(appModel.settings.layoutVersion)
+        // The hub's gaze focus reads `room.lookRay`, which only exists
+        // while the ARKit session runs — and the session is
+        // reference-counted. Modules retain it through their occlusion
+        // view; the hub has to retain it itself, or `lookRay` is nil
+        // here forever and no exhibit ever focuses on device.
+        .task { await appModel.room.retain() }
         // Entering a module replaces this view, and an EventSubscription
         // is not tied to the view that made it — left alone it keeps
         // calling `animate` on a hub that is no longer on screen, for
@@ -161,6 +167,7 @@ struct HubSpaceView: View {
         .onDisappear {
             scene.subscription?.cancel()
             scene.subscription = nil
+            appModel.room.release()
         }
         .gesture(
             TapGesture()
@@ -909,10 +916,9 @@ final class HubScene {
         namePivot.addChild(name)
         pulser.addChild(namePivot)
 
-        // The module's own progress, worn as a ring around the exhibit:
-        // a faint track, the domain-coloured arc of what is done, and a
-        // gold band once everything is — the reward lives on the home
-        // screen itself.
+        // The module's own progress, worn as an arc behind the exhibit:
+        // the domain-coloured arc of what is done, and a gold band once
+        // everything is — the reward lives on the home screen itself.
         if progress.total > 0 {
             let ring = Self.progressRing(
                 done: progress.done, total: progress.total,
@@ -927,9 +933,11 @@ final class HubScene {
             basePosition: basePosition, animate: built.animate))
     }
 
-    /// A thin circular track with the completed fraction drawn over it.
-    /// Billboarded behind the miniature, so it reads as a dial without
-    /// ever framing the model.
+    /// The completed fraction drawn as an arc behind the miniature,
+    /// billboarded so it reads as a dial without ever framing the model.
+    /// There is deliberately no full-circle track under it: the faint
+    /// white ring read as a halo AROUND every exhibit rather than as a
+    /// dial, and came off at the owner's direction (2026-08-03).
     private static func progressRing(done: Int, total: Int,
                                      accent: UIColor) -> Entity {
         let ring = Entity()
@@ -947,12 +955,6 @@ final class HubScene {
             }
         }
 
-        if let track = TubeMesh.tube(lines: [circlePoints(fraction: 1, z: z)],
-                                     radius: 0.0016, sides: 4) {
-            var faint = UnlitMaterial(color: UIColor(white: 0.9, alpha: 1))
-            faint.blending = .transparent(opacity: 0.16)
-            ring.addChild(ModelEntity(mesh: track, materials: [faint]))
-        }
         let fraction = Float(done) / Float(total)
         if fraction > 0.01,
            let arc = TubeMesh.tube(lines: [circlePoints(fraction: fraction,
@@ -1508,12 +1510,14 @@ struct HubFocusPanel: View {
 /// ~22 cm wide, which is the width of the plate it stands over. At two
 /// metres that is a target the eye lands on without hunting.
 ///
-/// One thing here is load-bearing and looks cosmetic: `.contentShape`
-/// and `.hoverEffect` on the capsule. `.buttonStyle(.plain)` buys the
+/// One thing here is load-bearing and looks cosmetic: the custom
+/// `.hoverEffect` on the capsule. `.buttonStyle(.plain)` buys the
 /// custom look by giving up the platform's own hover highlight, and on
 /// visionOS the highlight is not decoration — it is the only feedback
-/// that says "your gaze is on this and a pinch will land". Without the
-/// pair, the prettier button is the one you cannot tell you are aiming at.
+/// that says "your gaze is on this and a pinch will land". The bare
+/// default `.hoverEffect()` turned out to be invisible over this glass
+/// on device (2026-08-03), so the effect is explicit: the plaque swells
+/// and brightens under the gaze, unmistakably.
 private struct HubLoadButton: View {
     let module: ModuleDescriptor
     let enter: () -> Void
@@ -1554,7 +1558,12 @@ private struct HubLoadButton: View {
         }
         .buttonStyle(.plain)
         .contentShape(.hoverEffect, Capsule())
-        .hoverEffect()
+        .hoverEffect(.highlight)
+        .hoverEffect { effect, isActive, _ in
+            effect.animation(.easeOut(duration: 0.15)) {
+                $0.scaleEffect(isActive ? 1.06 : 1)
+            }
+        }
         .glassBackgroundEffect(in: Capsule())
         .accessibilityLabel("Load \(module.title)")
         .accessibilityHint("Opens \(module.title)")
