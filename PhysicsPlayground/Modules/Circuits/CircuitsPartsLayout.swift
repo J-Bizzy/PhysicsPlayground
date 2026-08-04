@@ -95,9 +95,10 @@ enum CircuitsPartsLayout {
     ///
     /// Both sit INSIDE `buildHalfExtents.x`, which looks like a
     /// violation of "keep clear of the physics" and is in fact the
-    /// module's existing practice: the layers bank stands at x = 0.62
-    /// and the meter starts at −0.62, both inside the same 0.70 wall,
-    /// and both ship. The bench's parts do not fill their box — the box
+    /// module's existing practice: the layers bank stands at x = −0.62
+    /// and the meter starts at 0.62 (handed 2026-08-04 — buttons on the
+    /// left in every module), both inside the same 0.70 wall, and both
+    /// ship. The bench's parts do not fill their box — the box
     /// is a clamp on where a part MAY be dropped, not a description of
     /// where parts are — and the palette clears the row those two stand
     /// in vertically instead. A column far enough out to clear the box

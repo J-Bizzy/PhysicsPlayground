@@ -43,7 +43,10 @@ struct MagnetismSpaceView: View {
     /// the simulation" has to admit the difference somewhere.
     @State private var layers: SpatialLayerBank?
 
-    /// Beside the magnets, at the region's own depth.
+    /// Beside the magnets, at the region's own depth — on the LEFT,
+    /// like every other module's switch bank (owner, 2026-08-04: the
+    /// side buttons live on the left everywhere; this was the one bank
+    /// off the right shoulder).
     ///
     /// NOT under `viewRoot`: the scale rig reaches 4×, and a switch bank
     /// that grew fourfold with the field would push its own plates out of
@@ -51,7 +54,7 @@ struct MagnetismSpaceView: View {
     /// well and the blooms belong to the field and DO scale with it; an
     /// instrument belongs to the room.
     private static let bankAnchor = SIMD3<Float>(MagnetismModel.regionCenter)
-        + SIMD3(0.80, 0.10, 0.08)
+        + SIMD3(-0.80, 0.10, 0.08)
 
     var body: some View {
         RealityView { content in

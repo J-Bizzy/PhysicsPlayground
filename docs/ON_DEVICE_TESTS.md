@@ -154,8 +154,10 @@ file). What follows is the standing script.
 
 ### The meter
 
-- [ ] **The multimeter stands to the LEFT of the bench**, mirroring the
-      layers bank on the right. Dark casing, dark face, its name above it.
+- [ ] ⟳ **The multimeter stands to the RIGHT of the bench**, mirroring
+      the layers bank on the left — the two swapped flanks on
+      2026-08-04 so the buttons sit on the left in every module. Dark
+      casing, dark face, its name above it.
 - [ ] **Tap it: the face lights** and reads "tap two terminals" — not a
       confident 0.00 V.
 - [ ] Tap two terminals: **the answer appears ON THE METER**, not only in
@@ -217,9 +219,12 @@ file). What follows is the standing script.
 
 ### The switch bank
 
-- [ ] **Visible without hunting**, off your right shoulder, at about the
-      same glance as the magnets themselves. Four plates: Magnets move,
-      Field lines, Hand compass, Earth's field.
+- [ ] ⟳ **Visible without hunting**, off your LEFT shoulder now — every
+      module's switch bank stands on the left as of 2026-08-04 — at
+      about the same glance as the magnets themselves. Four plates:
+      Magnets move, Field lines, Hand compass, Earth's field. Check it
+      does not crowd the Add-magnet well, which shares that flank lower
+      down.
 - [ ] Each label sits BESIDE its plate, never across it.
 - [ ] **It does not grow when you zoom.**
 - [ ] **"Magnets move" is the physics switch.** Bring two magnets
@@ -535,6 +540,10 @@ file). The new well and the standing script:
       the modules: a quick swell, facing held, never a tumble.
 - [ ] ⟳ **No invisible walls anywhere.** Carry objects to the far side
       of your real room in every module that has them.
+- [ ] ⟳ **Every module's switch bank is on your LEFT** (2026-08-04).
+      Walk all six rooms: the layer plates are always off the left
+      shoulder, so the hand that learns one module has learned them
+      all. Magnetism and Circuit Workshop are the two that moved.
 - [ ] **Every rail in the app hangs under the thing it adjusts.**
 - [ ] **Every ring folds in place.**
 - [ ] **System Reduce Motion** (Settings ▸ Accessibility): the hub's

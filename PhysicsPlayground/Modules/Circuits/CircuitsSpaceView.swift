@@ -68,11 +68,15 @@ struct CircuitsSpaceView: View {
     /// Identifies the floating readout above the selected part.
     private static let readoutCardID = "circuit-readout"
 
-    /// Left of the bench, mirroring the layers bank on the right — where
-    /// the meter STARTS. Where it ends up is the meter's own business
-    /// once a hand has moved it (`Multimeter.anchor`).
+    /// Right of the bench, mirroring the layers bank on the left —
+    /// where the meter STARTS. Where it ends up is the meter's own
+    /// business once a hand has moved it (`Multimeter.anchor`). The
+    /// two swapped flanks on 2026-08-04: the owner wants the side
+    /// BUTTONS on the left in every module, and this bench was one of
+    /// two that kept its bank off the right shoulder. The mirror
+    /// layout survives, just handed.
     private static let meterAnchor = CircuitsRenderer.benchPivot
-        + SIMD3<Float>(-0.62, -0.03, 0.16)
+        + SIMD3<Float>(0.62, -0.03, 0.16)
     /// The Clear plate, on the bench's far left flank.
     ///
     /// It went beside the TRAY first, on the reasoning that the tray is
@@ -86,10 +90,11 @@ struct CircuitsSpaceView: View {
     /// `FieldInstrumentLayout`'s "reachable by the arithmetic, invisible
     /// in practice" in a second module.
     ///
-    /// So it takes the free flank instead, at the furniture's own
-    /// height. The bench's furniture now reads as a row at one height —
-    /// meter, bench, layers — with this at the far end, rather than one
-    /// stray plate down among the parts.
+    /// So it takes the far end of the buttons flank instead, at the
+    /// furniture's own height. The bench's furniture reads as a row at
+    /// one height — layers, bench, meter since the 2026-08-04 handing —
+    /// with this beyond the bank, rather than one stray plate down
+    /// among the parts.
     ///
     /// This is the most dangerous of the seven verbs that left the
     /// window. Circuit Workshop's bench PERSISTS ACROSS LAUNCHES
@@ -229,10 +234,11 @@ struct CircuitsSpaceView: View {
                     model.step(dt: event.deltaTime)
                     // The bank stands beside the bench, at the bench's own
                     // depth so it sits in the same ~15 deg band as the
-                    // apparatus rather than dropping out of view.
+                    // apparatus rather than dropping out of view — on the
+                    // LEFT, like every module's bank (2026-08-04).
                     let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
                     layers?.update(
-                        anchor: CircuitsRenderer.benchPivot + SIMD3(0.62, -0.06, 0.16),
+                        anchor: CircuitsRenderer.benchPivot + SIMD3(-0.62, -0.06, 0.16),
                         viewer: viewer,
                         dt: event.deltaTime)
                     meter?.update(viewer: viewer, model: model)
