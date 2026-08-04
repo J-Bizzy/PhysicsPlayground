@@ -247,6 +247,25 @@ final class MagnetismEarthFieldTests: XCTestCase {
         XCTAssertFalse(model.compassIsReadingEarth)
     }
 
+    /// The Delete petal must work all the way down to an empty room —
+    /// a guard used to keep the last magnet alive, so the tap did
+    /// nothing and the petal's swell read as a glitch (2026-08-03).
+    func testTheLastMagnetCanBeDeletedAndTheRoomRefilled() {
+        let model = MagnetismModel()
+        XCTAssertEqual(model.magnets.count, 1)
+        let last = model.magnets[0].id
+
+        model.removeMagnet(id: last)
+        XCTAssertTrue(model.magnets.isEmpty,
+                      "the last magnet refused to delete")
+        XCTAssertNil(model.selectedID)
+
+        // An empty bench must still step and still take a new magnet.
+        for _ in 0..<90 { model.step(dt: 1.0 / 90.0) }
+        XCTAssertNotNil(model.addMagnet(at: MagnetismModel.regionCenter))
+        XCTAssertEqual(model.magnets.count, 1)
+    }
+
     /// COMPASSES ONLY. A lone magnet must not creep round to north —
     /// that was the owner's call, and it is the difference between this
     /// sandbox and a different one.

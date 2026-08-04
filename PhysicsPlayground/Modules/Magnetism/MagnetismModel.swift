@@ -484,7 +484,9 @@ final class MagnetismModel {
     }
 
     func removeMagnet(id: UUID) {
-        guard magnets.count > 1 else { return }
+        // Deleting down to an empty room is allowed: the well can always
+        // hand back a magnet, and a Delete petal that silently refuses
+        // on the last one reads as broken (2026-08-03).
         magnets.removeAll { $0.id == id }
         if heldID == id { heldID = nil }
         if selectedID == id { selectedID = magnets.last?.id }
