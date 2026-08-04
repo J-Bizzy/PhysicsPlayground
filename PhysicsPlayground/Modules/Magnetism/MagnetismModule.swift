@@ -83,7 +83,7 @@ enum MagnetismModule {
         LegendItem(swatch: .fill(DesignTokens.Palette.negative),
                    text: "South pole (blue)"),
         LegendItem(swatch: .line(Color(uiColor: MagnetismRenderer.lineColor)),
-                   text: "Field lines — closed loops running N to S outside the magnet, seeded evenly THROUGH the room so the field fills the space it is in. Every curve is a true streamline of B; but because the lines are spread by volume rather than by flux, how many you see somewhere is not how strong the field is there — this is the field's shape, and the compasses are its strength."),
+                   text: "Field lines — closed loops running N to S outside the magnet, seeded THROUGH the room so the field fills the space you stand in. Every curve is a true streamline of B, and a stronger magnet sends out more of them; within one picture the lines are spread by volume, so exact local density is the field's shape rather than a flux count."),
         LegendItem(swatch: .symbol("location.north.fill", Color(uiColor: MagnetismRenderer.lineColor)),
                    text: "The hand compass points along the local field — and it is a SPHERE, with its needle free to swing in any direction. A flat dial can only show the part of B lying in the dial; between two poles the field usually points out of it."),
         LegendItem(swatch: .stroke(DesignTokens.Palette.selectionHalo),

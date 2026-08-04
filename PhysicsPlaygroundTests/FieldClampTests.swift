@@ -2,13 +2,15 @@
 //  FieldClampTests.swift
 //  Physics Playground — app tests
 //
-//  Electric Fields' region clamps, asserted as containment. These
-//  invariants were born in the merged E&M world's layout tests — the
-//  world died of geometry, but the clamps it forced into existence are
-//  fixes regardless of layout: before them, `moveCharge` clamped only
-//  `y`, so a charge could be dragged clear across the room. A limit
-//  nothing is near is a limit nobody tested; these keep the limits
-//  tested now that they exist.
+//  What survives of the station's clamps, and what must NOT come back.
+//
+//  The drag walls born in the merged E&M world — `clampToStation` on
+//  every `moveCharge`/`movePlate`, plus the escort that exempted a
+//  freshly-pulled charge — came out on 2026-08-03 at the owner's
+//  direction: this is a room-scale app, and an invisible box that stops
+//  a carried charge mid-air reads as broken. These tests pin the new
+//  contract from both sides: a hand meets no wall but the floor, and
+//  the FREE simulation still cannot run to infinity.
 //
 
 import XCTest
@@ -19,107 +21,89 @@ import simd
 @MainActor
 final class FieldClampTests: XCTestCase {
 
-    /// The region every clamp answers to, in the model's own frame.
-    private var region: StationBox {
-        StationBox(center: FieldModel.regionCenter,
-                   halfExtents: FieldModel.regionHalfExtents)
-    }
+    // MARK: A hand meets no walls
 
-    /// The capacitor is up to a metre wide at full separation, and its
-    /// clamp is inset by its own half-size — so even wide open, shoved
-    /// hard at a wall, the plates stay inside.
-    func testTheWidestCapacitorStaysInsideTheRegion() {
-        let model = FieldModel()
-        model.plateSeparation = FieldModel.plateSeparationRange.upperBound
-        model.movePlate(1, toWorld: SIMD3(50, 1.35, -0.9))
-        let half = SIMD3(model.plateSeparation / 2,
-                         FieldModel.plateSize / 2, FieldModel.plateSize / 2)
-        XCTAssertTrue(
-            region.contains(StationBox(center: model.capacitorCenter,
-                                       halfExtents: half), tolerance: 1e-6),
-            "the capacitor at full separation escapes the region")
-    }
-
-    /// And a dragged charge, which is what a user actually does —
-    /// inset by its contact radius, so the SPHERE stays inside rather
-    /// than merely its centre.
-    func testADraggedChargeCannotLeaveTheRegion() {
+    /// Drag a charge three metres out: it must BE three metres out.
+    /// This is the assertion that fails if anyone rebuilds the wall.
+    func testADraggedChargeGoesExactlyWhereTheHandGoes() {
         let model = FieldModel()
         guard let id = model.charges.first?.id else {
             return XCTFail("a fresh field model should open with charges")
         }
-        model.moveCharge(id: id, to: SIMD3(-50, 90, 50))
-        guard let moved = model.charges.first(where: { $0.id == id }) else {
-            return XCTFail("the charge vanished")
-        }
-        XCTAssertTrue(
-            region.contains(
-                StationBox(center: moved.position,
-                           halfExtents: SIMD3(repeating: FieldModel.chargeContact)),
-                tolerance: 1e-6),
-            "a charge dragged at the room escapes the region")
+        let far = FieldModel.regionCenter + SIMD3(3.0, 0.4, 2.5)
+        model.moveCharge(id: id, to: far)
+        XCTAssertEqual(model.charges.first(where: { $0.id == id })?.position,
+                       far,
+                       "an invisible wall intercepted the hand — the drag "
+                       + "walls were removed on 2026-08-03 and must not return")
     }
 
-    // MARK: The escort — a charge pulled from a well outside the walls
+    /// Same for the capacitor: carry it across the room and it comes.
+    /// Only the floor holds (the plates are half a metre tall).
+    func testTheCapacitorFollowsTheHandAnywhereAboveTheFloor() {
+        let model = FieldModel()
+        model.capacitorOn = true
+        let far = SIMD3(2.4, 1.1, -2.8)
+        model.movePlate(1, toWorld: SIMD3(far.x + model.plateSeparation / 2,
+                                          far.y, far.z))
+        XCTAssertEqual(model.capacitorCenter.y, far.y, accuracy: 1e-9)
+        XCTAssertEqual(model.capacitorCenter.z, far.z, accuracy: 1e-9)
 
-    /// The wells stand outside the station by construction, so a charge
-    /// is born somewhere it is not allowed to stay. It must follow the
-    /// hand from there rather than being clamped home on the next frame,
-    /// which is what made pulling one out feel broken next to the test
-    /// charge, whose well-pull has no clamp at all.
-    func testAChargeFromAWellFollowsTheHandBackIn() {
+        model.movePlate(1, toWorld: SIMD3(0.2, -2.0, -0.9))
+        XCTAssertEqual(model.capacitorCenter.y,
+                       FieldModel.plateSize / 2 + 0.15, accuracy: 1e-9,
+                       "the plates sank through the floor")
+    }
+
+    /// A charge born at a well is born at the fingertips and follows
+    /// the hand exactly — the escort mechanism is gone because there
+    /// are no walls to be exempt from.
+    func testAChargeFromAWellStaysWithTheHand() {
         let model = FieldModel()
         model.removeAllCharges()
         let wellMouth = FieldInstrumentLayout.wellAnchor(index: 0)
-        XCTAssertFalse(region.contains(wellMouth),
-                       "this test is meaningless if the well is inside the "
-                       + "station — check the layout, not the clamp")
 
         let id = model.addCharge(positive: true, at: wellMouth)
         XCTAssertEqual(model.charges.first(where: { $0.id == id })?.position,
                        wellMouth,
                        "the charge was not born at the fingertips")
 
-        // Still outside: it tracks the hand exactly.
-        let stillOutside = wellMouth + SIMD3(-0.05, 0, 0)
-        model.moveCharge(id: id, to: stillOutside)
+        let outward = wellMouth + SIMD3(0.4, 0.1, 0.3)
+        model.moveCharge(id: id, to: outward)
         XCTAssertEqual(model.charges.first(where: { $0.id == id })?.position,
-                       stillOutside,
+                       outward,
                        "the charge was yanked out of the hand that made it")
     }
 
-    /// …and once it has arrived, the walls are real again. The exemption
-    /// is a one-way door, or a charge could be pulled from a well and
-    /// then carried anywhere in the room forever.
-    func testTheEscortEndsWhenTheChargeGetsHome() {
+    // MARK: The free simulation still cannot escape
+
+    /// A mutually repelling pair left to drift for minutes must settle
+    /// inside the room-scale safety box — the ONLY bound the module
+    /// keeps, and it binds the simulation, never the hand.
+    func testFreeChargesNeverLeaveTheSafetyBox() {
         let model = FieldModel()
-        model.removeAllCharges()
-        let id = model.addCharge(positive: true,
-                                 at: FieldInstrumentLayout.wellAnchor(index: 1))
+        // Two positives shove each other apart forever.
+        guard let first = model.charges.first?.id else {
+            return XCTFail("a fresh field model should open with charges")
+        }
+        if let negative = model.charges.first(where: { !$0.isPositive }) {
+            model.removeCharge(id: negative.id)
+        }
+        model.addCharge(positive: true,
+                        at: FieldModel.regionCenter + SIMD3(0.1, 0, 0))
+        _ = first
+        model.chargesRespond = true
 
-        // Carry it to the middle of the station.
-        model.moveCharge(id: id, to: FieldModel.regionCenter)
-        XCTAssertNil(model.escortedChargeID, "the escort outstayed its welcome")
+        for _ in 0..<18_000 { model.stepFreeCharges(dt: 1.0 / 90.0) }   // 200 s
 
-        // Now push it back out: the wall holds.
-        model.moveCharge(id: id, to: SIMD3(9, 1.35, -0.9))
-        let position = model.charges.first(where: { $0.id == id })!.position
-        XCTAssertTrue(region.contains(position),
-                      "the charge left the station after coming home")
+        let box = StationBox(center: FieldModel.regionCenter,
+                             halfExtents: FieldModel.safetyHalfExtents)
+        for charge in model.charges {
+            XCTAssertTrue(box.contains(charge.position),
+                          "a free charge drifted out of the safety box "
+                          + "to \(charge.position)")
+            XCTAssertGreaterThanOrEqual(charge.position.y,
+                                        FieldModel.floorClearance - 1e-9)
+        }
     }
-
-    /// Letting go outside the station carries the charge in rather than
-    /// stranding it in the furniture.
-    func testReleasingOutsideTheStationBringsTheChargeHome() {
-        let model = FieldModel()
-        model.removeAllCharges()
-        let id = model.addCharge(positive: false,
-                                 at: FieldInstrumentLayout.wellAnchor(index: 0))
-        model.endEscort()
-        let position = model.charges.first(where: { $0.id == id })!.position
-        XCTAssertTrue(region.contains(position),
-                      "a charge dropped at the well stayed at the well")
-        XCTAssertNil(model.escortedChargeID)
-    }
-
 }

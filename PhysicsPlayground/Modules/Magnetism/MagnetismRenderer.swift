@@ -69,7 +69,7 @@ final class MagnetismRenderer {
     init() {
         let headMesh = MeshResource.generateCone(height: 0.02, radius: 0.0078)
         let headMaterial = UnlitMaterial(color: MagnetismRenderer.lineColor)
-        arrowHeads = EntityPool(budget: 300) { container in
+        arrowHeads = EntityPool(budget: 600) { container in
             let head = ModelEntity(mesh: headMesh, materials: [headMaterial])
             container.addChild(head)
             return head
@@ -443,17 +443,31 @@ final class MagnetismRenderer {
     }
 
     /// Arc-length spacing of the direction arrowheads riding each loop.
-    private nonisolated static let arrowSpacing = 0.26
+    /// Widened 0.26 → 0.42 with the room-scale bounds: loops are metres
+    /// long now, and the head pool has to cover them all.
+    private nonisolated static let arrowSpacing = 0.42
     /// No arrowheads this close to a magnet, where loops bunch tightly.
     private nonisolated static let arrowExclusion = 0.14
+
+    /// How many loops a bench this strong deserves. Monotonic in the
+    /// strongest magnet's |m|, so the strength bead visibly changes the
+    /// picture — the fixed budget of 26 did not, which read as a dead
+    /// control (owner, 2026-08-03). Clamped so a weak bench still draws
+    /// a legible field and a strong one does not drown the frame.
+    nonisolated static func lineBudget(forStrength strength: Double) -> Int {
+        let scaled = 26.0 * strength / MagnetismModel.defaultStrength
+        return Int(min(max(scaled, 12), 48).rounded())
+    }
 
     private nonisolated static func computeLines(_ job: LinesJob) -> LinesResult {
         var config = MagneticFieldLineTracer.Config()
         config.boundsCenter = MagnetismModel.regionCenter
-        // Let each loop run far enough to close — the full curvy dipole
-        // pattern, not a few short arcs. The 6 mm step is what makes the
-        // loops read as drawn curves instead of chained segments.
-        config.boundsRadius = MagnetismModel.regionHalfExtent * 1.9
+        // ROOM-SCALE (owner, 2026-08-03): the loops used to be confined
+        // to a ~0.6 m box, which read as a field in a display case. The
+        // tracing bounds now span metres so the user stands inside the
+        // field; the coarser step keeps the longer far-field loops cheap
+        // while near loops still read as drawn curves.
+        config.boundsRadius = 3.5
         // The bar the lines belong to. Everything the tracer does with
         // geometry — where seeds sit, where loops close, which field
         // model it integrates — comes off this one number, so it must
@@ -461,20 +475,20 @@ final class MagnetismRenderer {
         config.magnetLength = MagnetismModel.magnetLength
         config.seedsPerMagnet = 12
         config.referenceStrength = MagnetismModel.defaultStrength
-        config.maxSteps = 950
-        config.stepSize = 0.006
+        config.maxSteps = 2400
+        config.stepSize = 0.008
         // EVEN THROUGH THE ROOM, not bundled around the bar (owner,
-        // 2026-08-01). Seeds are spread through the region's own box and
+        // 2026-08-01). Seeds are spread through a room-scale box and
         // each candidate loop is rejected if it mostly retraces one
-        // already drawn — see `traceThroughVolume`, which also spells out
-        // what this trades away: line density no longer encodes field
-        // strength, so the legend says the picture is the field's SHAPE.
+        // already drawn — see `traceThroughVolume`.
+        let strongest = job.magnets.map(\.strength).max()
+            ?? MagnetismModel.defaultStrength
         let traced = MagneticFieldLineTracer.traceThroughVolume(
             magnets: job.magnets,
             config: config,
             center: MagnetismModel.regionCenter,
-            halfExtents: MagnetismModel.regionHalfExtents,
-            budget: 26)
+            halfExtents: SIMD3(2.2, 1.2, 2.2),
+            budget: lineBudget(forStrength: strongest))
         let lines = traced.map { $0.map(SIMD3<Float>.init) }
         var result = LinesResult()
         result.core = TubeMesh.buffers(lines: lines, radius: MagnetismRenderer.lineRadius)

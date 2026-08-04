@@ -26,17 +26,17 @@ final class MagnetismModel {
     // MARK: Region (immersive-space coordinates)
 
     nonisolated static let regionCenter = SIMD3<Double>(0, 1.35, -0.7)
-    /// Isotropic reach, used for what the region DRAWS — the field-line
-    /// tracing radius and the compass grid's span.
+    /// Isotropic reach of the region's nominal home — where reset lays
+    /// the bench out and where the instruments take their bearings.
     nonisolated static let regionHalfExtent = 0.72
-    /// Per-axis bounds for the CLAMP. Height matches the old cube, but
-    /// depth stops 15 cm in FRONT of the user instead of 15 cm behind
-    /// their head: the cube ran to z = +0.15, so a free cluster that
-    /// glided forward ended up floating at the user's ear, looming over
-    /// the control pods at enormous parallax. Magnets wander — that is
-    /// the module working — but they wander in the room, not in your
-    /// face.
-    nonisolated static let regionHalfExtents = SIMD3<Double>(0.62, 0.85, 0.55)
+    /// The physics SAFETY bounds — room-scale, not a wall a hand ever
+    /// meets. The old drag clamp (0.62 × 0.85 × 0.55) came out on
+    /// 2026-08-03 at the owner's direction: this is a room-scale app,
+    /// and an invisible box that stops a carried magnet mid-air reads as
+    /// broken. What remains binds only the FREE simulation, so a gliding
+    /// or flicked magnet settles somewhere in the room rather than
+    /// sailing off to infinity.
+    nonisolated static let safetyHalfExtents = SIMD3<Double>(2.6, 1.6, 2.6)
     nonisolated static let regionFloor = 0.35
     /// Visual length of a bar magnet (m); also the touching distance.
     nonisolated static let magnetLength = 0.16
@@ -426,10 +426,20 @@ final class MagnetismModel {
         return result
     }
 
+    /// The FREE simulation's safety bound — never applied to a hand.
+    /// Room-scale, so it only ever fires on a magnet that has drifted
+    /// or been flicked far across the room.
     private func clamp(_ p: SIMD3<Double>) -> SIMD3<Double> {
         var c = simd_clamp(p,
-                           Self.regionCenter - Self.regionHalfExtents,
-                           Self.regionCenter + Self.regionHalfExtents)
+                           Self.regionCenter - Self.safetyHalfExtents,
+                           Self.regionCenter + Self.safetyHalfExtents)
+        c.y = max(c.y, Self.regionFloor)
+        return c
+    }
+
+    /// A hand meets no walls (owner, 2026-08-03) — only the floor.
+    private func floored(_ p: SIMD3<Double>) -> SIMD3<Double> {
+        var c = p
         c.y = max(c.y, Self.regionFloor)
         return c
     }
@@ -444,7 +454,7 @@ final class MagnetismModel {
 
     func move(id: UUID, to point: SIMD3<Double>) {
         guard let index = magnets.firstIndex(where: { $0.id == id }) else { return }
-        magnets[index].position = clamp(point)
+        magnets[index].position = floored(point)
     }
 
     func release() { heldID = nil }
@@ -472,7 +482,9 @@ final class MagnetismModel {
     @discardableResult
     func addMagnet(at position: SIMD3<Double>) -> UUID? {
         guard magnets.count < Self.magnetBudget else { return nil }
-        let magnet = BarMagnet(position: clamp(position),
+        // Born at the fingertips: the well stands wherever it stands,
+        // and a hand meets no walls.
+        let magnet = BarMagnet(position: floored(position),
                                moment: SIMD3(Self.defaultStrength, 0, 0))
         magnets.append(magnet)
         selectedID = magnet.id

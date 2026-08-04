@@ -16,6 +16,31 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-03 — The invisible walls come down; only the simulation stays fenced
+
+**Decision:** No hand-drag in the app meets an invisible wall. Electric
+Fields' `clampToStation` comes off `moveCharge` and `movePlate`, and the
+escort mechanism dies with it; Magnetism's drag clamp likewise. The one
+boundary a hand still meets is the real floor. What survives is a
+room-scale SAFETY box per module (~2.6 m half-extents) applied only to
+the free simulation — drifting charges, gliding magnets — so nothing
+integrates off to infinity. This supersedes the ARCHITECTURE.md
+paragraph that said the clamps were "kept on purpose"; that paragraph
+now records the split.
+
+**Context:** The owner, on device: "I'm not a fan of these invisible
+walls. Please remove them in all modules … this is a full roomscale
+application; I want the user to feel like they are in the physics
+itself." The walls were born when three stations shared one room; the
+merged world was undone on 2026-07-30 and the walls kept enforcing
+clearance from neighbours that no longer exist.
+
+**Consequences:** A charge or capacitor can be carried anywhere in the
+room. `regionHalfExtents` survives only as the nominal layout volume
+that instrument clearance is measured against. `FieldClampTests` now
+pins the ABSENCE of walls (a 3 m drag must land 3 m out) as well as the
+safety box, so rebuilding a wall fails the build.
+
 ## 2026-08-03 — The compass grid comes out; the hand compass stays
 
 **Decision:** Magnetism's 245-needle compass lattice is removed — the

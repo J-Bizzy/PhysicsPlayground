@@ -39,60 +39,35 @@ final class FieldModel {
     /// Sample points never go below this height (no arrows in the floor).
     nonisolated static let regionFloor = 0.05
 
-    /// How far anything belonging to this apparatus may get from
-    /// `regionCenter` — the station's walls.
+    /// The station's NOMINAL volume — where reset lays the dipole out
+    /// and where the instruments take their clearance bearings
+    /// (`FieldInstrumentLayout` keeps every collider `stationMargin`
+    /// clear of this box, which is what makes pinch contention
+    /// geometrically impossible).
     ///
-    /// This bench had no lateral limit at all until it became the
-    /// middle seat of the E&M world: `moveCharge` and
-    /// `moveGaussSurface` clamped only `y`, so a charge could be
-    /// dragged to the far side of the room. Alone in a room that cost
-    /// nothing. With a circuit bench 1.4 m to the left and a magnetic
-    /// field 1.33 m to the right, an unclamped drag ends up inside a
-    /// neighbour's apparatus, which is the exact silent failure
-    /// co-presence exists to make impossible.
-    ///
-    /// Containment is enforced by `FieldClampTests` — the widest
-    /// capacitor, the largest Gauss sphere, and a dragged charge all
-    /// stay inside, inset by their own half-size.
-    ///
-    /// WIDENED 0.62 → 0.76 on 2026-07-31, on the report that the wall
-    /// arrives too soon. The original number was sized for a room this
-    /// bench no longer lives in: it was cut to fit between a circuit
-    /// bench 1.4 m to the left and a magnetic field 1.33 m to the
-    /// right, and that merged world was undone the next day (see
-    /// `ElectromagnetismModule`). Nothing has stood beside this station
-    /// since, and the clamp went on enforcing clearance from neighbours
-    /// that do not exist.
-    ///
-    /// What DOES still bind is this module's own furniture: every
-    /// instrument has to stay `FieldInstrumentLayout.stationMargin`
-    /// clear of these walls, so widening the station meant moving the
-    /// bank, the B rail, the wells and the particle bank outward with
-    /// it — which in turn runs into `maximumReach`. 0.76 is where those
-    /// two constraints meet with a couple of centimetres to spare, and
-    /// `FieldInstrumentLayoutTests` holds both ends of it. It is not
-    /// rounder than that for a reason: the first attempt at 0.78 left
-    /// the wells' clearance sitting exactly ON the margin, where it
-    /// failed by one part in 10^16 of floating-point error. An invariant
-    /// that holds only to the last bit is not being satisfied, it is
-    /// being grazed.
-    ///
-    /// Depth did not grow with width, and the asymmetry is deliberate.
-    /// The box is centred 0.9 m ahead, so growing z pushes the NEAR
-    /// wall toward the user's chest as fast as it pushes the far one
-    /// away — at this width the near face would sit 14 cm off the user,
-    /// and a charge you can drag into your own face is not more freedom.
+    /// IT IS NOT A WALL ANY MORE. The drag clamps born in the merged
+    /// E&M world — `clampToStation` on every `moveCharge` and
+    /// `movePlate`, plus the escort mechanism that exempted a
+    /// freshly-pulled charge until it first came inside — came out on
+    /// 2026-08-03 at the owner's direction: this is a room-scale app,
+    /// and an invisible box that stops a carried charge mid-air reads
+    /// as broken. A hand meets only the floor now. What survives is a
+    /// room-scale SAFETY bound on the free simulation, so a drifting
+    /// charge settles in the room instead of sailing to infinity.
+    /// The superseding entry is in DECISIONS.md, 2026-08-03.
     nonisolated static let regionHalfExtents = SIMD3<Double>(0.76, 1.20, 0.62)
 
-    /// Clamps a point into the station, keeping `inset` of clearance on
-    /// every side so a thing WITH SIZE — a plate, a Gauss sphere —
-    /// stays inside rather than merely having its centre inside.
-    nonisolated static func clampToStation(
-        _ point: SIMD3<Double>, inset: SIMD3<Double> = .zero
+    /// The free simulation's safety bounds — room-scale, never applied
+    /// to a hand.
+    nonisolated static let safetyHalfExtents = SIMD3<Double>(2.6, 1.6, 2.6)
+
+    /// Clamps a FREE-drifting point into the room-scale safety box.
+    nonisolated static func clampToRoomSafety(
+        _ point: SIMD3<Double>
     ) -> SIMD3<Double> {
-        let half = simd_max(regionHalfExtents - simd_abs(inset),
-                            SIMD3(repeating: 0.01))
-        var clamped = simd_clamp(point, regionCenter - half, regionCenter + half)
+        var clamped = simd_clamp(point,
+                                 regionCenter - safetyHalfExtents,
+                                 regionCenter + safetyHalfExtents)
         clamped.y = max(clamped.y, floorClearance)
         return clamped
     }
@@ -221,17 +196,13 @@ final class FieldModel {
         plateSeparation = separation
         var center = capacitorCenter
         center.x = index == 0 ? fixedX - separation / 2 : fixedX + separation / 2
+        // The floor is the one boundary a hand still meets: the plates
+        // are half a metre tall and must not sink into it. The station
+        // walls came off the drag paths on 2026-08-03 — carry the
+        // capacitor anywhere in the room.
         center.y = max(world.y, Self.plateSize / 2 + 0.15)
         center.z = world.z
-        // The assembly is separation wide in x and a plate tall and deep
-        // in y/z, so it is clamped by its own half-size. At the widest
-        // gap (1.0 m against a 1.24 m station) that leaves the capacitor
-        // roughly centred, which is where a capacitor belongs — but the
-        // full separation range survives, which is the range that
-        // teaches E = V/d.
-        capacitorCenter = Self.clampToStation(
-            center,
-            inset: SIMD3(separation / 2, Self.plateSize / 2, Self.plateSize / 2))
+        capacitorCenter = center
     }
 
     /// The uniform field between the plates (zero outside them).
@@ -281,12 +252,11 @@ final class FieldModel {
         // Keep the flock from wandering off: drift stays within the
         // region the arrows sample, centred on the charges themselves.
         let centroid = charges.map(\.position).reduce(.zero, +) / Double(charges.count)
-        // Narrowed from regionExtent * 0.55 (0.715) when this bench
-        // became the middle seat of a three-station world: a flock that
-        // may spread 1.43 m does not fit a 1.24 m station. The station
-        // is 1.52 m wide now, but still 1.24 m deep — and a flock is
-        // bounded by a radius, so it is the depth that sets this.
-        let bound = 0.55
+        // Cohesion, not a wall: the flock stays a flock rather than a
+        // mutually-repelling pair racing to opposite ends of the room.
+        // Widened 0.55 → 0.85 when the station walls came off the drag
+        // paths (2026-08-03) — the room is the arena now.
+        let bound = 0.85
 
         var next = charges.map(\.position)
         for j in charges.indices {
@@ -313,11 +283,10 @@ final class FieldModel {
                                   centroid + SIMD3(repeating: bound))
             // The centroid-relative bound keeps the FLOCK together; it
             // does not keep the flock in the room, because the centroid
-            // drifts with it. The station clamp is what stops a mutually
-            // repelling pair walking into the circuit bench over a
-            // minute of drift.
-            next[j] = Self.clampToStation(
-                position, inset: SIMD3(repeating: Self.chargeContact))
+            // drifts with it. The room-scale safety box is what stops a
+            // mutually repelling pair drifting away forever — it is
+            // metres out, so no hand or eye ever meets it.
+            next[j] = Self.clampToRoomSafety(position)
         }
 
         // Contact: spheres can touch but never interpenetrate (which also
@@ -425,12 +394,11 @@ final class FieldModel {
         // writer: `-emFree 1` sets it at launch, so it could be on with a
         // plate that Reset would never turn off. Found 2026-08-03.
         chargesRespond = false
-        // The two ids a Reset can strand. `charges` is replaced wholesale
+        // An id a Reset can strand. `charges` is replaced wholesale
         // above, so anything still naming a charge by id is naming one
-        // that no longer exists — a drag or an escort in flight at the
-        // moment Reset lands would go on referring to it.
+        // that no longer exists — a drag in flight at the moment Reset
+        // lands would go on referring to it.
         heldChargeID = nil
-        escortedChargeID = nil
         probe = nil
         probeStatus = .none
         probeTrail = []
@@ -527,7 +495,11 @@ final class FieldModel {
     // pod floats somewhere else and has to be told what it is pointing
     // at. A Bloom IS on the object, so it says which one.
 
-    /// Spawns a charge at a given point.
+    /// Spawns a charge at a given point — at the fingertips, exactly.
+    /// (An "escort" mechanism lived here while the station had drag
+    /// walls: a charge born at a well outside them was exempt until it
+    /// first came inside. The walls came off on 2026-08-03 and the
+    /// escort went with them — there is nothing to be exempt from.)
     @discardableResult
     func addCharge(positive: Bool, at position: SIMD3<Double>) -> UUID {
         var clamped = position
@@ -537,31 +509,8 @@ final class FieldModel {
             charge: (positive ? 1 : -1) * Self.defaultMagnitude)
         charges.append(charge)
         selectedChargeID = charge.id
-        // The wells stand OUTSIDE the station, by construction — they are
-        // instruments, and instruments are kept a margin clear of the
-        // physics. So a charge born at the well's mouth is born somewhere
-        // it is not allowed to stay, and until now `moveCharge` enforced
-        // that on the very next frame: the charge appeared under your
-        // fingers exactly as promised, then teleported a foot inward and
-        // sat pinned against the wall while your hand was still out at
-        // the well. The test charge next door had no such clamp and so
-        // felt, in the user's words, flawless.
-        //
-        // It is escorted instead. A charge that starts outside the
-        // station is exempt from the walls until it first crosses INTO
-        // them, at which point the exemption is spent and the walls hold
-        // for good. Coming home is a one-way door.
-        if Self.clampToStation(clamped,
-                               inset: SIMD3(repeating: Self.chargeContact)) != clamped {
-            escortedChargeID = charge.id
-        }
         return charge.id
     }
-
-    /// The one charge currently exempt from the station walls: pulled
-    /// from a well outside them, and not yet carried inside. See
-    /// `addCharge`.
-    private(set) var escortedChargeID: UUID?
 
     func removeCharge(id: UUID) {
         charges.removeAll { $0.id == id }
@@ -595,37 +544,14 @@ final class FieldModel {
         selectedChargeID = nil
     }
 
+    /// A dragged charge follows the hand exactly. The floor is the only
+    /// boundary — the room-scale app has no invisible walls
+    /// (owner, 2026-08-03).
     func moveCharge(id: UUID, to position: SIMD3<Double>) {
         guard let index = charges.firstIndex(where: { $0.id == id }) else { return }
-        // Inset by the charge's own contact radius so the sphere stays
-        // inside its station, not just its centre.
-        let inside = Self.clampToStation(
-            position, inset: SIMD3(repeating: Self.chargeContact))
-        if id == escortedChargeID {
-            if inside == position {
-                // It has arrived. From here the walls are real.
-                escortedChargeID = nil
-            } else {
-                charges[index].position = position
-                return
-            }
-        }
-        charges[index].position = inside
-    }
-
-    /// Ends any escort — the hand let go, so wherever the charge is now
-    /// is where it lives, and the walls apply from the next move on.
-    /// A charge released outside the station is carried home rather than
-    /// left stranded in the furniture.
-    func endEscort() {
-        guard let id = escortedChargeID,
-              let index = charges.firstIndex(where: { $0.id == id }) else {
-            escortedChargeID = nil
-            return
-        }
-        charges[index].position = Self.clampToStation(
-            charges[index].position, inset: SIMD3(repeating: Self.chargeContact))
-        escortedChargeID = nil
+        var next = position
+        next.y = max(next.y, Self.floorClearance)
+        charges[index].position = next
     }
 
     func select(id: UUID) {

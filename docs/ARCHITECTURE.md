@@ -20,7 +20,7 @@ Every lab is a `ModuleDescriptor`: a catalog card, `makeScene`, and shared closu
 
 **An experience gets the room to itself.** The app tried the alternative — merged "worlds" standing two and three benches in one room with a focus mechanic deciding which was attended to — and undid it for geometry, with the measurement recorded in `DECISIONS.md` (2026-07-30): every bench ended a step out of reach, and the orrery proved impossible outright. Domain grouping lives at the front door now, not in the room. No module reaches into another's model.
 
-Model-level clamps back every declared footprint (`CircuitsModel.buildHalfExtents`, `FieldModel.regionHalfExtents` — held by `CircuitsModelTests` and `FieldClampTests`). The merged worlds forced these into existence and they are kept on purpose: a charge that could be dragged across the room was a bug with or without a neighbour.
+Model-level bounds are split by WHO they bind (2026-08-03, superseding the merged-worlds-era drag clamps — see DECISIONS.md). A hand meets no invisible wall: drags in Electric Fields and Magnetism obey the hand exactly, floored only by the real floor. What remains clamped is the FREE simulation — room-scale safety boxes (`FieldModel.safetyHalfExtents`, `MagnetismModel.safetyHalfExtents`) that keep drifting charges and gliding magnets from sailing to infinity, held by `FieldClampTests` and `MagnetismInertiaTests`. The nominal region boxes (`FieldModel.regionHalfExtents`, `CircuitsModel.buildHalfExtents`) survive as layout references — instrument clearance is still measured against them.
 
 ## Conventions
 

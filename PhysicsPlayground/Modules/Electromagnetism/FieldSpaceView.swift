@@ -520,10 +520,6 @@ struct FieldSpaceView: View {
                 drag = nil
                 flick.reset()
                 model.heldChargeID = nil
-                // A charge pulled from a well is exempt from the station
-                // walls until it gets inside them; letting go spends the
-                // exemption either way. See `FieldModel.addCharge`.
-                model.endEscort()
             }
     }
 

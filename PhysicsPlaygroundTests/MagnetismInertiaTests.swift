@@ -138,7 +138,8 @@ final class MagnetismInertiaTests: XCTestCase {
     /// thing to watch on device.
     ///
     /// This test asserts what IS true: it may not settle, but it must not
-    /// run away. Bounded, in the station, finite. If somebody fixes the
+    /// run away. Bounded by the room-scale SAFETY box (the old drag
+    /// walls came out on 2026-08-03), finite. If somebody fixes the
     /// contact, this test should be replaced by a settling one.
     func testTheInertialBenchIsBoundedEvenWhereItDoesNotSettle() {
         let model = MagnetismModel()
@@ -157,11 +158,11 @@ final class MagnetismInertiaTests: XCTestCase {
                               "A magnet's position went non-finite.")
                 let offset = simd_abs(magnet.position - MagnetismModel.regionCenter)
                 XCTAssertLessThanOrEqual(
-                    offset.x, MagnetismModel.regionHalfExtents.x + 1e-6)
+                    offset.x, MagnetismModel.safetyHalfExtents.x + 1e-6)
                 XCTAssertLessThanOrEqual(
-                    offset.y, MagnetismModel.regionHalfExtents.y + 1e-6)
+                    offset.y, MagnetismModel.safetyHalfExtents.y + 1e-6)
                 XCTAssertLessThanOrEqual(
-                    offset.z, MagnetismModel.regionHalfExtents.z + 1e-6)
+                    offset.z, MagnetismModel.safetyHalfExtents.z + 1e-6)
                 // The moment's LENGTH is a property of the magnet and must
                 // survive any amount of rotation — `DipoleDynamics.step`
                 // renormalises for exactly this reason.

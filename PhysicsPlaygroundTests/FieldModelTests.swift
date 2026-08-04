@@ -81,21 +81,18 @@ final class FieldModelTests: XCTestCase {
                        "magnitude set, sign kept from birth")
     }
 
-    /// Dragged at the floor, a charge stops with its SURFACE resting on
-    /// the station's floor rather than its centre — the clamp insets by
-    /// the charge's contact radius, so the sphere no longer sinks
-    /// half-way through the boundary the way it used to.
+    /// Dragged at the floor, a charge stops at the floor clearance —
+    /// the one boundary a hand still meets after the station walls came
+    /// off the drag paths (2026-08-03).
     func testMoveChargeClampsAboveFloor() {
         let model = FieldModel()
         let id = model.charges[0].id
         model.moveCharge(id: id, to: SIMD3(0.2, -0.5, -1.0))
-        let floor = FieldModel.regionCenter.y - FieldModel.regionHalfExtents.y
         XCTAssertEqual(model.charges[0].position.y,
-                       floor + FieldModel.chargeContact, accuracy: 1e-9)
-        XCTAssertGreaterThanOrEqual(model.charges[0].position.y,
-                                    FieldModel.floorClearance)
-        // Laterally it is well inside the station, so it is untouched.
+                       FieldModel.floorClearance, accuracy: 1e-9)
+        // Laterally the hand is obeyed exactly.
         XCTAssertEqual(model.charges[0].position.x, 0.2, accuracy: 1e-9)
+        XCTAssertEqual(model.charges[0].position.z, -1.0, accuracy: 1e-9)
     }
 
     func testMoveChargeMovesOnlyTheTarget() {

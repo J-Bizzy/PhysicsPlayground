@@ -244,6 +244,31 @@ final class MagnetismEarthFieldTests: XCTestCase {
         XCTAssertFalse(model.compassIsReadingEarth)
     }
 
+    /// The strength bead must change the PICTURE: a stronger magnet gets
+    /// more loops. The budget was a fixed 26 for months, so the bead
+    /// rebuilt an identical field and read as a dead control.
+    func testTheLineBudgetGrowsWithStrength() {
+        let range = MagnetismModel.strengthRange
+        let weak = MagnetismRenderer.lineBudget(forStrength: range.lowerBound)
+        let stock = MagnetismRenderer.lineBudget(
+            forStrength: MagnetismModel.defaultStrength)
+        let strong = MagnetismRenderer.lineBudget(forStrength: range.upperBound)
+
+        XCTAssertLessThan(weak, stock, "a weak magnet should draw fewer loops")
+        XCTAssertLessThan(stock, strong, "a strong magnet should draw more loops")
+        // And the whole range stays drawable — never zero, never a flood.
+        var previous = 0
+        for strength in stride(from: range.lowerBound,
+                               through: range.upperBound, by: 0.5) {
+            let budget = MagnetismRenderer.lineBudget(forStrength: strength)
+            XCTAssertGreaterThanOrEqual(budget, previous,
+                                        "the budget is not monotonic in strength")
+            XCTAssertGreaterThan(budget, 0)
+            XCTAssertLessThanOrEqual(budget, 48)
+            previous = budget
+        }
+    }
+
     /// The Delete petal must work all the way down to an empty room —
     /// a guard used to keep the last magnet alive, so the tap did
     /// nothing and the petal's swell read as a glitch (2026-08-03).
