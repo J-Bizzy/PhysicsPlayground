@@ -472,17 +472,19 @@ final class PendulumsModel {
         selectedID = id
     }
 
-    /// The bob follows the hand exactly; only the physics state's
-    /// direction is stored (cable drawn pivot→hand by the renderer).
+    /// The bob follows the hand's DIRECTION, at the cable's length. The
+    /// cable is inextensible: it used to pay out to wherever the hand
+    /// went and snap back on release, which read as a stretchy string
+    /// (owner, 2026-08-03). Now the hand steers the bob around the
+    /// sphere and only the length bead changes L.
     func moveGrabbed(id: UUID, toWorld hand: SIMD3<Double>) {
         guard let index = pendulums.firstIndex(where: { $0.id == id }),
               pendulums[index].isGrabbed else { return }
         let offset = hand - pendulums[index].pivot
         let distance = simd_length(offset)
         guard distance > 1e-6 else { return }
-        // Store the true hand offset (may exceed L while held taut-plus;
-        // the sim clamps back to the sphere on release).
-        pendulums[index].state.position = offset
+        pendulums[index].state.position =
+            (offset / distance) * pendulums[index].length
         pendulums[index].state.velocity = .zero
     }
 

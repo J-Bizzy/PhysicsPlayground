@@ -169,7 +169,11 @@ struct PendulumsSpaceView: View {
                       preview: { PendulumsRenderer.pendulumPreview() },
                       position: SIMD3(-0.85, 1.30, -0.95),
                       spawn: { point in
-                          model.addPendulum(at: point)
+                          // Born hanging plumb, at rest. The default
+                          // draw-back is for the cradle cold-open; a
+                          // pendulum pulled out by hand must hold still
+                          // until the hand swings it (owner, 2026-08-03).
+                          model.addPendulum(angle: 0, at: point)
                       }),
                 // The chaotic one, as its own mouth rather than a mode
                 // on the first. They are different physics — a taut

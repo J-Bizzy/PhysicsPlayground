@@ -69,6 +69,55 @@ final class PendulumsModelTests: XCTestCase {
                           "heavy damping now applies and eats the swing")
     }
 
+    // MARK: Hand-spawned pendulums start still; cables do not stretch
+
+    /// A pendulum pulled from the well hangs plumb and at rest until a
+    /// hand swings it — the drawn-back birth is the cradle cold-open's,
+    /// not the well's (owner, 2026-08-03).
+    func testAHandSpawnedPendulumHangsStillUntilSwung() {
+        let model = PendulumsModel()
+        for pendulum in model.pendulums { model.removePendulum(id: pendulum.id) }
+        guard let id = model.addPendulum(angle: 0),
+              let index = model.pendulums.firstIndex(where: { $0.id == id }) else {
+            return XCTFail("could not hang a pendulum")
+        }
+
+        for _ in 0..<450 { model.step(dt: 1.0 / 90.0) }
+        let state = model.pendulums[index].state
+        XCTAssertEqual(simd_length(state.velocity), 0, accuracy: 1e-9,
+                       "a plumb pendulum found a velocity from nowhere")
+        XCTAssertEqual(state.position.x, 0, accuracy: 1e-9)
+        XCTAssertEqual(state.position.z, 0, accuracy: 1e-9)
+    }
+
+    /// The cable is inextensible under the hand: however far the hand
+    /// pulls, the bob stays exactly L from the pivot. Only the length
+    /// bead changes L.
+    func testGrabbingABobNeverStretchesTheCable() {
+        let model = PendulumsModel()
+        for pendulum in model.pendulums { model.removePendulum(id: pendulum.id) }
+        guard let id = model.addPendulum(),
+              let first = model.pendulums.first(where: { $0.id == id }) else {
+            return XCTFail("could not hang a pendulum")
+        }
+
+        model.beginGrab(id: id)
+        // Pull to twice the cable length, then to a tenth of it: the
+        // stored bob must sit on the sphere both times.
+        for reach in [2.0, 0.1, 5.0] {
+            let hand = first.pivot + SIMD3(0.3, -0.5, 0.2) * (first.length * reach)
+            model.moveGrabbed(id: id, toWorld: hand)
+            let held = model.pendulums.first { $0.id == id }!
+            XCTAssertEqual(simd_length(held.state.position), held.length,
+                           accuracy: 1e-9,
+                           "the cable stretched to \(reach)× under the hand")
+        }
+        model.release(id: id, handVelocity: .zero)
+        let released = model.pendulums.first { $0.id == id }!
+        XCTAssertEqual(simd_length(released.state.position), released.length,
+                       accuracy: 1e-9)
+    }
+
     // MARK: The worlds bank — which disc lights
 
     /// The standing bank of worlds is a READOUT as well as a control, and
