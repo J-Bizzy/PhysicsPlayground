@@ -60,6 +60,17 @@ final class KinematicsRenderer {
     private let bead: ModelEntity
     private let arcEntity = ModelEntity()
     private let arcMaterial: UnlitMaterial
+    /// The arc's near-black casing, swept fatter and drawn beneath the
+    /// core. The predicted arc is a pale line in the one module that
+    /// shares the real room 1:1 — over a cream wall it had almost no
+    /// luminance contrast. Same two-pass treatment as the field modules.
+    private let arcCasingEntity = ModelEntity()
+    private let arcCasingMaterial =
+        Materials.contrastLine(DesignTokens.Palette.predictedArcUI).casing
+    /// Core radius of the predicted-arc tube; the casing is swept from
+    /// it. `nonisolated` because the pipeline's compute closure reads it
+    /// off the main actor.
+    private nonisolated static let arcRadius: Float = 0.004
 
     private let ballPool: EntityPool<ModelEntity>
     private var ballMaterialKeys: [String] = []
@@ -82,7 +93,7 @@ final class KinematicsRenderer {
     private let ringMaterial: PhysicallyBasedMaterial
     private let ringFlashMaterial: PhysicallyBasedMaterial
 
-    private var arcPipeline: GeometryPipeline<[SIMD3<Float>], TubeBuffers>?
+    private var arcPipeline: GeometryPipeline<[SIMD3<Float>], ArcTube>?
 
     // Spatial flight numbers: the pod's headline stats living IN the
     // room — peak height floats at the arc's apex (with a drop line
@@ -151,10 +162,11 @@ final class KinematicsRenderer {
         Self.setAccessibility(on: bead, label: "Aim bead. Drag to point the launcher.")
         root.addChild(bead)
 
-        // Predicted arc.
+        // Predicted arc. Casing first, core second: darkness under light.
         var arcMaterial = UnlitMaterial(color: DesignTokens.Palette.predictedArcUI)
         arcMaterial.blending = .transparent(opacity: 0.5)
         self.arcMaterial = arcMaterial
+        root.addChild(arcCasingEntity)
         root.addChild(arcEntity)
 
         // Balls: unit sphere scaled per projectile, grabbable for throwing.
@@ -257,7 +269,13 @@ final class KinematicsRenderer {
         BallTextures.warmUp()
 
         arcPipeline = GeometryPipeline(
-            compute: { points in TubeMesh.buffers(lines: [points], radius: 0.004) },
+            compute: { points in
+                ArcTube(
+                    core: TubeMesh.buffers(lines: [points], radius: Self.arcRadius),
+                    casing: TubeMesh.buffers(
+                        lines: [points],
+                        radius: Materials.casingRadius(forCore: Self.arcRadius)))
+            },
             apply: { [weak self] in self?.applyArc($0) }
         )
 
@@ -396,11 +414,24 @@ final class KinematicsRenderer {
         setAnnotation(protractorText, to: "\(Int((elevation * 180 / .pi).rounded()))°")
     }
 
-    private func applyArc(_ buffers: TubeBuffers) {
-        if let mesh = TubeMesh.mesh(from: buffers) {
+    /// Both passes of the arc, built off-thread together so the casing
+    /// can never lag a frame behind the line it underwrites.
+    private nonisolated struct ArcTube: Sendable {
+        var core = TubeBuffers()
+        var casing = TubeBuffers()
+    }
+
+    private func applyArc(_ tube: ArcTube) {
+        if let mesh = TubeMesh.mesh(from: tube.core) {
             arcEntity.model = ModelComponent(mesh: mesh, materials: [arcMaterial])
         } else {
             arcEntity.model = nil
+        }
+        if let casingMesh = TubeMesh.mesh(from: tube.casing) {
+            arcCasingEntity.model = ModelComponent(mesh: casingMesh,
+                                                   materials: [arcCasingMaterial])
+        } else {
+            arcCasingEntity.model = nil
         }
     }
 

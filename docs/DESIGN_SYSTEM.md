@@ -104,10 +104,16 @@ banned. It is also why `contrastLine` is two passes: a near-black casing swept
 fatter than the bright core.
 
 `contrastLine` spent a long time claiming to be "used everywhere" while
-shipping in one module. It is in six call sites now (`FieldRenderer`,
-`MagnetismRenderer`, `OrbitRing`, `HubVignettes`, `LatitudeGlobe`,
-`SpatialActionBank`) and still absent from Circuits' and Projectiles'
-renderers entirely. **If you are adding lines to a module,
+shipping in one module. Its call sites as of 2026-08-05: `FieldRenderer`,
+`MagnetismRenderer`, `OrbitRing`, `HubVignettes`, `SpatialActionBank`,
+and `KinematicsRenderer` (the predicted arc — a pale line in the one
+module that shares the real room 1:1, cased at last). `LatitudeGlobe`
+left the list when Foucault did (2026-08-03). Circuits is deliberately
+NOT a call site, and the reason belongs here rather than as an absence:
+its only lines are the wires, which carry their own near-black
+insulating jacket (the same darkness-under-light move under another
+name), its bench field is arrows on rings rather than traced tubes, and
+the voltage skyline is towers. **If you are adding lines to a module,
 this is the pass that is probably missing.**
 
 Lighting is `RenderKit/Lighting.keyLight()` — one warm key from upper front-left,
