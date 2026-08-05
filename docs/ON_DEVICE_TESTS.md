@@ -539,6 +539,15 @@ file). The new well and the standing script:
       reads as detached or the shadows read as dirt on the floor,
       revert the commit (`git log --oneline -- 
       PhysicsPlayground/DesignSystem/SpatialLayerBank.swift` finds it).
+- [ ] **The pickup pulse (2026-08-05, its own commit for easy
+      revert).** Grab a charge, a circuit part, a bob, a ball, a
+      planet: a soft white glow blooms around it and dies in a quarter
+      second — light, not a scale pop. One flash per grab, never a
+      strobe while carrying. Magnetism deliberately has none yet (its
+      renderer has no grab signal; the magnets glide under a mobility
+      law), and the hoops and launcher wait on this verdict. Under
+      Reduce Motion there must be NO flash at all. If it reads as
+      lag or flicker rather than acknowledgement, revert the commit.
 - [ ] **State changes FADE now (2026-08-05).** Select a magnet, a
       charge, a circuit part: the halo arrives over ~0.15 s instead of
       popping. Flip a bank plate: the lamp cross-fades. Toggle the

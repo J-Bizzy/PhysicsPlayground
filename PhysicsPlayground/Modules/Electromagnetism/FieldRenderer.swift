@@ -36,6 +36,9 @@ final class FieldRenderer {
     /// While the system is driving an entity mid-drag, we must not write its
     /// position from the model, or the two would fight and jitter.
     var manipulatingChargeID: UUID?
+    /// The charge already acknowledged with a pickup pulse — one flash
+    /// per grab, not one per frame.
+    private var pulsedGrabID: UUID?
     var isManipulatingProbe = false
 
     /// Entity name for the probe (charges use their UUID string).
@@ -180,6 +183,14 @@ final class FieldRenderer {
         room: RoomBox = .unscanned
     ) {
         // Cheap path — runs every render.
+        if let id = manipulatingChargeID {
+            if pulsedGrabID != id, let entity = chargeEntities[id] {
+                pulsedGrabID = id
+                PickupPulse.flash(on: entity)
+            }
+        } else {
+            pulsedGrabID = nil
+        }
         syncChargeEntities(charges, selectedID: selectedID)
         syncProbeEntity(probe, isPositive: probeIsPositive)
         syncPlates(on: capacitorOn, center: capacitorCenter, separation: plateSeparation)

@@ -28,6 +28,9 @@ final class CircuitsRenderer {
     var subscriptions: [EventSubscription] = []
 
     var manipulatingComponentID: UUID?
+    /// The part already acknowledged with a pickup pulse — one flash per
+    /// grab, not one per frame.
+    private var pulsedGrabID: UUID?
 
     /// Parent for the selected component's readout attachment.
     let selectedAnchor = Entity()
@@ -433,6 +436,14 @@ final class CircuitsRenderer {
     }
 
     private func render(_ model: CircuitsModel, dt: Double) {
+        if let id = manipulatingComponentID {
+            if pulsedGrabID != id, let holder = visuals[id]?.holder {
+                pulsedGrabID = id
+                PickupPulse.flash(on: holder)
+            }
+        } else {
+            pulsedGrabID = nil
+        }
         if appliedResistorTextureVersion != CircuitTextures.version {
             appliedResistorTextureVersion = CircuitTextures.version
             for id in visuals.keys { visuals[id]?.resistorCodeKey = "" }

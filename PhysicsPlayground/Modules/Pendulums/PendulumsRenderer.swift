@@ -28,6 +28,9 @@ final class PendulumsRenderer {
 
     /// The pendulum whose bob a hand is holding (system-dragged).
     var grabbedID: UUID?
+    /// The bob already acknowledged with a pickup pulse — one flash per
+    /// grab, not one per frame.
+    private var pulsedGrabID: UUID?
 
     /// Grabbing starts a new experiment: the old swing's trail would
     /// hang in the air behind the hand, so it clears on grab.
@@ -278,9 +281,14 @@ final class PendulumsRenderer {
             periodKeys[id] = nil
         }
 
+        if grabbedID == nil { pulsedGrabID = nil }
         for pendulum in model.pendulums {
             let visual = visuals[pendulum.id] ?? makeVisual(for: pendulum)
 
+            if pendulum.id == grabbedID, pulsedGrabID != pendulum.id {
+                pulsedGrabID = pendulum.id
+                PickupPulse.flash(on: visual.bob)
+            }
             visual.pivot.position = SIMD3<Float>(pendulum.pivot)
             // A PERIOD LABEL BELONGS TO A PENDULUM YOU ARE ATTENDING
             // TO, not to every rope in the room. Newton's cradle hangs

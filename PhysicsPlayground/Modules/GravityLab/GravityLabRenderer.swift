@@ -32,6 +32,9 @@ final class GravityLabRenderer {
 
     /// Set by the space view's router while the hand owns a body.
     var manipulatingBodyID: UUID?
+    /// The body already acknowledged with a pickup pulse — one flash per
+    /// grab, not one per frame.
+    private var pulsedGrabID: UUID?
 
     /// Where the system center sits in the room.
     static let systemPosition = SIMD3<Float>(0, 1.25, -1.2)
@@ -1083,6 +1086,10 @@ final class GravityLabRenderer {
 
             if orbiting.id == manipulatingBodyID {
                 // Hand owns the sphere: leave transforms alone.
+                if pulsedGrabID != orbiting.id {
+                    pulsedGrabID = orbiting.id
+                    PickupPulse.flash(on: slot.entity)
+                }
             } else {
                 slot.entity.position = SIMD3<Float>(orbiting.body.position) * scale
                 slot.payload.position = .zero
@@ -1092,6 +1099,7 @@ final class GravityLabRenderer {
             bodyPool.slots[index].entity.isEnabled = false
             if index < bodyLabels.count { bodyLabels[index].isEnabled = false }
         }
+        if manipulatingBodyID == nil { pulsedGrabID = nil }
 
         if let primary = model.primaryBody {
             sunLight.position = SIMD3<Float>(primary.body.position) * scale

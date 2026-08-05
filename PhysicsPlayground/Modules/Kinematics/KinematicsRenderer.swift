@@ -49,6 +49,9 @@ final class KinematicsRenderer {
     var isManipulatingBead = false
     var manipulatingBallID: UUID?
     var manipulatingRingID: UUID?
+    /// The ball already acknowledged with a pickup pulse — one flash per
+    /// grab, not one per frame.
+    private var pulsedGrabID: UUID?
 
     private static let barrelLength = Float(KinematicsModel.barrelLength)
     static let beadDistance: Float = 0.42
@@ -598,6 +601,10 @@ final class KinematicsRenderer {
 
             if flight.id == manipulatingBallID {
                 // Hand owns the sphere; leave both transforms alone.
+                if pulsedGrabID != flight.id {
+                    pulsedGrabID = flight.id
+                    PickupPulse.flash(on: slot.entity)
+                }
             } else {
                 slot.entity.position = SIMD3<Float>(flight.state.position)
                 // Undo any offset the manipulation system left on the child.
