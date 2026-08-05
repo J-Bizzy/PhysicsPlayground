@@ -53,7 +53,7 @@ final class SpatialLayerBank {
     private let layout: StackLayout
     private var reveal: Double = 0
     private var plates: [(layer: LayerSwitch, entity: ModelEntity,
-                          face: ModelEntity, wasOn: Bool?)] = []
+                          face: ModelEntity, paint: SIMD4<Float>?)] = []
 
     init(accent: UIColor, layers: [LayerSwitch] = [],
          layout: StackLayout = StackLayout()) {
@@ -102,13 +102,20 @@ final class SpatialLayerBank {
             plates[index].entity.scale = SIMD3(repeating: Float(placement.scale))
             plates[index].entity.isEnabled = placement.isVisible
 
-            // Repaint only on change: this runs every frame for every
-            // module, and rebuilding a material 90 times a second for a
-            // value that changes on a tap is pure waste.
+            // The lamp EASES between its lit and dark paint rather than
+            // snapping, and still repaints only while moving: `approach`
+            // returns the target exactly once settled, so a resting lamp
+            // rebuilds nothing — the same 90-times-a-second discipline
+            // the instant repaint kept.
             let on = plates[index].layer.isOn()
-            if plates[index].wasOn != on {
-                plates[index].wasOn = on
-                plates[index].face.model?.materials = [material(on: on)]
+            let target = Fade.paint(on ? accent : UIColor(white: 0.30, alpha: 1),
+                                    opacity: on ? 0.95 : 0.42)
+            let painted = plates[index].paint
+            let next = painted.map { Fade.approach($0, toward: target, dt: dt) }
+                ?? target
+            if next != painted {
+                plates[index].paint = next
+                plates[index].face.model?.materials = [Fade.unlit(next)]
             }
         }
     }

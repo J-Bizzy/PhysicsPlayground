@@ -469,7 +469,9 @@ final class FieldRenderer {
                 chargeSignVerticals[charge.id]?.isEnabled = charge.isPositive
                 setAccessibilityLabel(on: entity, for: charge)
             }
-            chargeHalos[charge.id]?.isEnabled = (charge.id == selectedID)
+            if let halo = chargeHalos[charge.id] {
+                Fade.tick(halo, visible: charge.id == selectedID)
+            }
         }
         for (id, entity) in chargeEntities where !seen.contains(id) {
             entity.removeFromParent()

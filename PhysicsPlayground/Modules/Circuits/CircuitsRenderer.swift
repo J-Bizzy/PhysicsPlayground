@@ -656,7 +656,7 @@ final class CircuitsRenderer {
                     visual.holder.orientation = simd_quatf(from: [1, 0, 0], to: target)
                 }
             }
-            visual.halo.isEnabled = component.id == model.selectedID
+            Fade.tick(visual.halo, visible: component.id == model.selectedID)
 
             // Terminals and end grips ride the ends of the (possibly
             // stretched) span; a grip the hand is pulling is

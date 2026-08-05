@@ -92,6 +92,9 @@ final class SpatialActionBank {
         var flash: Double = 0
         var wasAvailable: Bool?
         var wasLit: Bool?
+        /// The lamp's last painted (r, g, b, opacity) — eased toward its
+        /// target by `Fade.approach`, nil until the first paint.
+        var paint: SIMD4<Float>?
     }
 
     private var plates: [Plate] = []
@@ -210,17 +213,26 @@ final class SpatialActionBank {
                 plates[index].flash = max(0, plates[index].flash - dt)
             }
 
-            // Repaint only on change. This runs every frame for every
-            // module, and rebuilding a material 90 times a second for a
-            // value that changes on a tap is pure waste — the same rule
-            // the layer bank keeps.
+            // The lamp eases between its states and still repaints only
+            // while moving — `approach` returns the target exactly once
+            // settled, so a resting lamp rebuilds nothing. Accessibility
+            // keeps the change-gated path: VoiceOver wants the state, not
+            // the ease.
             let isArmedNow = armed?.id == plates[index].action.id
             let available = plates[index].action.isAvailable()
             let lit = isArmedNow || plates[index].flash > 0
+            let target = Fade.paint(lit ? accent : UIColor(white: 0.34, alpha: 1),
+                                    opacity: lit ? 0.95 : (available ? 0.55 : 0.20))
+            let painted = plates[index].paint
+            let next = painted.map { Fade.approach($0, toward: target, dt: dt) }
+                ?? target
+            if next != painted {
+                plates[index].paint = next
+                plates[index].face.model?.materials = [Fade.unlit(next)]
+            }
             if plates[index].wasLit != lit || plates[index].wasAvailable != available {
                 plates[index].wasLit = lit
                 plates[index].wasAvailable = available
-                plates[index].face.model?.materials = [material(lit: lit, available: available)]
                 plates[index].entity.components.set(
                     accessibility(for: plates[index].action,
                                   armed: isArmedNow, available: available))

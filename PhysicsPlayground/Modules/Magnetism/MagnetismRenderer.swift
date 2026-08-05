@@ -308,7 +308,9 @@ final class MagnetismRenderer {
             // Orient the bar's +Y along the moment (S→N).
             entity.orientation = simd_quatf(
                 from: [0, 1, 0], to: SIMD3<Float>(magnet.axis))
-            magnetHalos[magnet.id]?.isEnabled = magnet.id == model.selectedID
+            if let halo = magnetHalos[magnet.id] {
+                Fade.tick(halo, visible: magnet.id == model.selectedID)
+            }
         }
     }
 

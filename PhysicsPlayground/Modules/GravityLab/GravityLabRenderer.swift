@@ -1317,9 +1317,9 @@ final class GravityLabRenderer {
         guard let selected = model.selectedBody,
               let readout = model.readout(for: selected),
               selected.id != manipulatingBodyID else {
-            velocityArrow.container.isEnabled = false
-            accelerationArrow.container.isEnabled = false
-            forceArrow.container.isEnabled = false
+            Fade.tick(velocityArrow.container, visible: false)
+            Fade.tick(accelerationArrow.container, visible: false)
+            Fade.tick(forceArrow.container, visible: false)
             return
         }
         let origin = SIMD3<Float>(selected.body.position) * scale
@@ -1351,11 +1351,11 @@ final class GravityLabRenderer {
     ) {
         let magnitude = simd_length(direction)
         guard visible, magnitude > 1e-12, length.isFinite else {
-            arrow.container.isEnabled = false
+            Fade.tick(arrow.container, visible: false)
             return
         }
         let l = Float(min(max(length, 0.02), 0.3))
-        arrow.container.isEnabled = true
+        Fade.tick(arrow.container, visible: true)
         arrow.container.position = origin
         arrow.container.orientation = VectorFieldArrows.rotationFromYAxis(
             to: SIMD3<Float>(direction / magnitude))

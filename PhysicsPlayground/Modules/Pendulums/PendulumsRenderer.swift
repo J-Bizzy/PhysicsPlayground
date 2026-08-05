@@ -358,7 +358,7 @@ final class PendulumsRenderer {
             // Vectors.
             let origin = bobWorld
             let velocity = pendulum.state.velocity
-            visual.velocityArrow.holder.isEnabled = model.showVelocity
+            Fade.tick(visual.velocityArrow.holder, visible: model.showVelocity)
             if model.showVelocity {
                 visual.velocityArrow.update(origin: origin, vector: velocity, reference: 0.5)
             }
@@ -369,15 +369,15 @@ final class PendulumsRenderer {
             let tensionForce = -direction * tensionMagnitude
             let netForce = gravityForce + tensionForce
                 - pendulum.damping * velocity
-            visual.accelerationArrow.holder.isEnabled = model.showAcceleration
+            Fade.tick(visual.accelerationArrow.holder, visible: model.showAcceleration)
             if model.showAcceleration {
                 visual.accelerationArrow.update(
                     origin: origin, vector: netForce / pendulum.mass, reference: 2)
             }
             let showForces = model.showForces
-            visual.gravityArrow.holder.isEnabled = showForces
-            visual.tensionArrow.holder.isEnabled = showForces
-            visual.netArrow.holder.isEnabled = showForces
+            Fade.tick(visual.gravityArrow.holder, visible: showForces)
+            Fade.tick(visual.tensionArrow.holder, visible: showForces)
+            Fade.tick(visual.netArrow.holder, visible: showForces)
             if showForces {
                 visual.gravityArrow.update(origin: origin, vector: gravityForce, reference: 5)
                 visual.tensionArrow.update(origin: origin, vector: tensionForce, reference: 5)
