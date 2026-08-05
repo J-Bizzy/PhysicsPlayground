@@ -38,7 +38,7 @@ struct SettingsView: View {
                 Text("Settings")
                     .font(DesignTokens.TypeScale.cardTitle)
 
-                section("Sound") {
+                PanelSection("Sound") {
                     row("Effects volume") {
                         Slider(value: $settings.masterVolume, in: 0...1)
                     }
@@ -46,19 +46,19 @@ struct SettingsView: View {
                         .font(DesignTokens.TypeScale.control)
                 }
 
-                section("Onboarding") {
+                PanelSection("Onboarding") {
                     Button("Show hints again") {
                         settings.resetOnboardingTips()
                     }
-                    .font(DesignTokens.TypeScale.control)
+                    .buttonStyle(.podQuiet)
                     caption("Every module's first-run hint appears once more.")
                 }
 
-                section("Progress") {
+                PanelSection("Progress") {
                     Button("Reset experiment progress…", role: .destructive) {
                         confirmingProgressReset = true
                     }
-                    .font(DesignTokens.TypeScale.control)
+                    .buttonStyle(.podQuiet)
                     caption("Clears every completed experiment and the streak. "
                             + "There is no undo.")
                 }
@@ -82,17 +82,6 @@ struct SettingsView: View {
     }
 
     // MARK: Rows
-
-    @ViewBuilder
-    private func section(_ title: String,
-                         @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Panel.rowSpacing) {
-            Text(title)
-                .font(DesignTokens.TypeScale.sectionHeader)
-                .foregroundStyle(.secondary)
-            content()
-        }
-    }
 
     @ViewBuilder
     private func row(_ label: String,

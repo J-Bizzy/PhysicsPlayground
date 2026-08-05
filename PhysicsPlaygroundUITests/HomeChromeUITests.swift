@@ -107,4 +107,20 @@ final class HomeChromeUITests: XCTestCase {
         XCTAssertFalse(app.buttons["lab.gravitylab"].exists,
                        "the module opened but the catalog is still up behind it")
     }
+
+    /// The settings window's two actions exist as named, pressable
+    /// buttons. The window restyled onto the house button styles on
+    /// 2026-08-05; a style is applied to a `Button`, so if either row
+    /// ever degrades into styled text this stops finding it — the same
+    /// "drawn is not wired" gap the tap test above exists for.
+    func testTheSettingsWindowShowsItsActions() {
+        app.terminate()
+        app.launchArguments += ["-settingsOpen", "1"]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["Show hints again"].waitForExistence(timeout: 20),
+                      "the settings window never showed its onboarding action")
+        XCTAssertTrue(app.buttons["Reset experiment progress…"].exists,
+                      "the destructive progress reset is missing from settings")
+    }
 }

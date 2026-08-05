@@ -45,6 +45,7 @@ struct HubView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .background(.regularMaterial, in: Capsule())
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
                 Button {
@@ -110,9 +111,11 @@ struct HubView: View {
     }
 
     private func openGallery() async {
-        openFailed = false
+        withAnimation(.easeOut(duration: 0.2)) { openFailed = false }
         let result = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
-        if case .error = result { openFailed = true }
+        if case .error = result {
+            withAnimation(.easeOut(duration: 0.2)) { openFailed = true }
+        }
     }
 }
 

@@ -183,10 +183,16 @@ struct ModuleHostView: View {
             if !appModel.isImmersiveSpaceOpen {
                 Button {
                     Task {
-                        showInRoomFailed = false
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showInRoomFailed = false
+                        }
                         let result = await openImmersiveSpace(
                             id: PlaygroundSpaceView.spaceID)
-                        if case .error = result { showInRoomFailed = true }
+                        if case .error = result {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                showInRoomFailed = true
+                            }
+                        }
                     }
                 } label: {
                     Label("Show in room", systemImage: "sparkles")
@@ -219,6 +225,7 @@ struct ModuleHostView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(.regularMaterial, in: Capsule())
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
 

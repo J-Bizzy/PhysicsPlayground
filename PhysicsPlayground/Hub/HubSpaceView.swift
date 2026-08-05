@@ -1523,6 +1523,7 @@ private struct HubUtilityBar: View {
                     .font(.title3)
             }
             .accessibilityLabel("Settings")
+            .accessibilityHint("Sound, hints and progress")
 
             Button(action: openNotebook) {
                 Image(systemName: "book.closed.fill")
@@ -1536,6 +1537,7 @@ private struct HubUtilityBar: View {
                     .font(.title3)
             }
             .accessibilityLabel("About Physics Playground")
+            .accessibilityHint("Credits and version")
         }
         .buttonStyle(.borderless)
         .padding(.horizontal, 16)

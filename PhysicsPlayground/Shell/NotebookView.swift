@@ -159,8 +159,7 @@ private struct NotebookEntryCard: View {
                         Label("Delete", systemImage: "trash")
                             .font(DesignTokens.TypeScale.footnote)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.red)
+                    .buttonStyle(.podQuiet)
                     .padding(.top, 4)
                 }
                 .padding(.top, 8)
