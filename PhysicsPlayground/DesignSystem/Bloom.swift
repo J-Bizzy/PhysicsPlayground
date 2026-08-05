@@ -543,6 +543,7 @@ final class Bloom {
             materials: [casing()])
         disc.name = "bloom-\(petal.name)"
         disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+        disc.components.set(GroundingShadowComponent(castsShadow: true))
 
         // A thin accent rim carries the meaning (red = destructive)
         // without staining the glyph.
@@ -656,6 +657,7 @@ final class Bloom {
         bead.components.set(CollisionComponent(
             shapes: [.generateSphere(radius: 0.016)]))
         bead.components.set(HoverEffectComponent())
+        bead.components.set(GroundingShadowComponent(castsShadow: true))
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Pull to change"

@@ -133,6 +133,13 @@ final class Well {
         return nil
     }
 
+    private static func applyGroundingShadow(_ entity: Entity) {
+        if entity is ModelEntity {
+            entity.components.set(GroundingShadowComponent(castsShadow: true))
+        }
+        for child in entity.children { applyGroundingShadow(child) }
+    }
+
     private static func makeSource(_ spec: Spec) -> (source: Entity, preview: Entity) {
         let source = Entity()
         source.name = "well-\(spec.name)"
@@ -141,7 +148,12 @@ final class Well {
         // A pivot sits between it and the source so the breath can scale
         // the model without touching the label beneath.
         let preview = Entity()
-        preview.addChild(spec.preview())
+        let model = spec.preview()
+        // The preview is caller-supplied and arbitrarily nested, so the
+        // contact shadow is applied to every model in it — the component
+        // renders per mesh, not per subtree.
+        applyGroundingShadow(model)
+        preview.addChild(model)
         source.addChild(preview)
 
         // The name, below the object and NOT breathing with it.

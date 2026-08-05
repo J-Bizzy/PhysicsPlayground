@@ -178,6 +178,9 @@ final class SpatialLayerBank {
                                cornerRadius: Self.plateCorner),
             materials: [Materials.frostedGlass()])
         plate.name = "layer-\(layer.id)"
+        // The contact shadow every grabbable already casts, so a floating
+        // plate reads as present in the room rather than pasted onto it.
+        plate.components.set(GroundingShadowComponent(castsShadow: true))
 
         // The edge hairline: a slightly larger pane behind this one, so
         // its border shows all the way round. This is the part that

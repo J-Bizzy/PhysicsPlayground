@@ -530,6 +530,21 @@ file). The new well and the standing script:
 
 ## Cross-cutting
 
+- [ ] **Grounding shadows under the floating controls (2026-08-05,
+      shipped as its own commit for easy revert).** Bank plates, picker
+      discs, Bloom petals and grips, and the wells' preview models now
+      cast the same contact shadow every grabbable already did. Judge
+      in a BRIGHT room and a DIM one: the intent is "present in the
+      room, not pasted on" — if a plate hanging in mid-air instead
+      reads as detached or the shadows read as dirt on the floor,
+      revert the commit (`git log --oneline -- 
+      PhysicsPlayground/DesignSystem/SpatialLayerBank.swift` finds it).
+- [ ] **State changes FADE now (2026-08-05).** Select a magnet, a
+      charge, a circuit part: the halo arrives over ~0.15 s instead of
+      popping. Flip a bank plate: the lamp cross-fades. Toggle the
+      vector layers in Pendulums and Gravity Lab: arrows fade in and
+      out. With the system Reduce Motion on, ALL of these must snap —
+      the fade honours the switch by disappearing.
 - [ ] ⟳ **Two hands, two objects — where each module stands.**
       MAGNETISM has the full thing: an object in each hand, both
       moving, on the spatial-event grab (its own section above). The

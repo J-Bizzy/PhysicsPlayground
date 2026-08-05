@@ -209,6 +209,7 @@ final class SpatialPicker {
             materials: [Materials.frostedGlass()])
         disc.name = "picker-\(choice.id)"
         disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+        disc.components.set(GroundingShadowComponent(castsShadow: true))
 
         // The glass edge, proud of the face all the way round. It sits
         // UNDER the selection ring below, which is brighter and coloured

@@ -341,6 +341,9 @@ final class SpatialActionBank {
                                cornerRadius: Self.plateCorner),
             materials: [Materials.machined(UIColor(white: 0.24, alpha: 1))])
         plate.name = "action-\(action.id)"
+        // Same contact shadow the layer bank's plates carry — presence,
+        // not decoration.
+        plate.components.set(GroundingShadowComponent(castsShadow: true))
 
         // The edge hairline, taken from the layer bank verbatim.
         //
