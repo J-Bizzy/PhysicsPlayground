@@ -306,14 +306,15 @@ final class SpatialActionBank {
         return component
     }
 
-    private static let plateWidth: Float = 0.086
-    private static let plateHeight: Float = 0.050
-    /// Matched to `SpatialLayerBank.plateCorner` — the two hang in the
-    /// same rooms and a different radius would read as a different
-    /// design system rather than as a different KIND of control.
-    private static let plateCorner: Float = 0.020
-    private static let labelSize: CGFloat = 0.0104
-    private static let labelGap: Float = 0.008
+    /// Plate geometry comes from `PlateStyle` — the two banks hang in
+    /// the same rooms, and a different silhouette would read as a
+    /// different design system rather than as a different KIND of
+    /// control. The material is where a verb differs from a state.
+    private static let plateWidth = PlateStyle.width
+    private static let plateHeight = PlateStyle.height
+    private static let plateCorner = PlateStyle.corner
+    private static let labelSize = PlateStyle.labelSize
+    private static let labelGap = PlateStyle.labelGap
 
     /// How far this bank's widest label reaches from a plate's centre —
     /// what a caller needs to keep the bank clear of its apparatus.
@@ -337,7 +338,8 @@ final class SpatialActionBank {
         // Machined stock, not the layer bank's frosted glass. A verb and
         // a state must not be the same object in two colours.
         let plate = ModelEntity(
-            mesh: .generateBox(size: [Self.plateWidth, Self.plateHeight, 0.009],
+            mesh: .generateBox(size: [Self.plateWidth, Self.plateHeight,
+                                      PlateStyle.depth],
                                cornerRadius: Self.plateCorner),
             materials: [Materials.machined(UIColor(white: 0.24, alpha: 1))])
         plate.name = "action-\(action.id)"
@@ -362,7 +364,7 @@ final class SpatialActionBank {
         let border = ModelEntity(
             mesh: .generateBox(
                 size: [Self.plateWidth + edge * 2,
-                       Self.plateHeight + edge * 2, 0.008],
+                       Self.plateHeight + edge * 2, PlateStyle.edgeDepth],
                 cornerRadius: Self.plateCorner + edge),
             materials: [Materials.glassEdge()])
         border.position = [0, 0, -0.0008]
@@ -374,7 +376,7 @@ final class SpatialActionBank {
         let face = ModelEntity(
             mesh: .generateBox(size: [0.011, 0.034, 0.002], cornerRadius: 0.004),
             materials: [material(lit: false, available: action.isAvailable())])
-        face.position = [-0.032, 0, 0.006]
+        face.position = [-0.032, 0, PlateStyle.faceLift]
         plate.addChild(face)
 
         if let symbol = action.symbol, let texture = Bloom.symbolTexture(symbol) {
@@ -384,7 +386,7 @@ final class SpatialActionBank {
             let icon = ModelEntity(
                 mesh: .generatePlane(width: 0.024, height: 0.024),
                 materials: [iconMaterial])
-            icon.position = [-0.002, 0, 0.006]
+            icon.position = [-0.002, 0, PlateStyle.faceLift]
             plate.addChild(icon)
         }
 

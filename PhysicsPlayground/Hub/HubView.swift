@@ -24,7 +24,7 @@ struct HubView: View {
             if !appModel.isImmersiveSpaceOpen {
                 VStack(spacing: 5) {
                     Text("Physics Playground")
-                        .font(.system(.largeTitle, design: .rounded).weight(.heavy))
+                        .font(DesignTokens.TypeScale.wordmark())
                     Text("Room-scale physics labs, in your actual room.")
                         .font(DesignTokens.TypeScale.label)
                         .foregroundStyle(.secondary)

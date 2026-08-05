@@ -99,7 +99,10 @@ enum DesignTokens {
 
     enum Panel {
         static let cornerRadius: CGFloat = 20
-        static let hintCornerRadius: CGFloat = 16
+        // `hintCornerRadius` (16) was deleted 2026-08-05: minted for a
+        // hint card that never adopted it, read by nothing. A token with
+        // no callers is unreachable choice, and this project deletes
+        // unreachable choice (the HubTitleStyle enum went the same way).
         static let padding: CGFloat = 20
         // Tightened for a more condensed window/pod rhythm (card interiors
         // keep their padding; only the gaps between blocks shrink).
@@ -118,6 +121,17 @@ enum DesignTokens {
         static let control: Font = .body
         static let label: Font = .callout
         static let footnote: Font = .footnote
+
+        /// The flat-window wordmark voice: rounded and heavy, at
+        /// whatever text style the surface calls for. One function so
+        /// the home window and the About card cannot drift apart —
+        /// they had (largeTitle vs title2 was fine; the design could
+        /// have diverged silently). The IN-SPACE wordmark is a separate,
+        /// ratified voice: the machined plaque (`HubTitleStyle`), which
+        /// is geometry, not a Font.
+        static func wordmark(_ style: Font.TextStyle = .largeTitle) -> Font {
+            .system(style, design: .rounded).weight(.heavy)
+        }
     }
 }
 

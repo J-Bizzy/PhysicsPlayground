@@ -109,8 +109,16 @@ final class PendulumsRenderer {
     private var trailBirths: [Double] = []
     private var trailClock = 0.0
     private var trailSpawnAccumulator = 0.0
+    /// Tension's yellow — RATIFIED module-local vocabulary, not drift.
+    /// `VectorPalette`'s header names this exact colour as the example:
+    /// per-module DECOMPOSITIONS keep their own colours, and only the
+    /// three cross-module arrows (velocity, acceleration, net force)
+    /// belong to the shared palette.
+    static let tensionYellow = UIColor(red: 0.95, green: 0.85, blue: 0.2, alpha: 1)
+
     private static let trailMaterials: [UnlitMaterial] = {
-        // Blue (slow) → orange (fast).
+        // Blue (slow) → orange (fast). Ratified local vocabulary, like
+        // the tension yellow above — a trail ramp belongs to its module.
         let colors = [
             UIColor(red: 0.25, green: 0.45, blue: 1.0, alpha: 1),
             UIColor(red: 0.3, green: 0.75, blue: 0.95, alpha: 1),
@@ -534,7 +542,7 @@ final class PendulumsRenderer {
             accelerationArrow: Arrow(color: VectorPalette.acceleration),
             // Gravity is a force, and the vector language says so.
             gravityArrow: Arrow(color: DesignTokens.Palette.forceVectorUI),
-            tensionArrow: Arrow(color: UIColor(red: 0.95, green: 0.85, blue: 0.2, alpha: 1)),
+            tensionArrow: Arrow(color: Self.tensionYellow),
             netArrow: Arrow(color: VectorPalette.force))
         [visual.velocityArrow, visual.accelerationArrow, visual.gravityArrow,
          visual.tensionArrow, visual.netArrow].forEach { root.addChild($0.holder) }

@@ -142,22 +142,15 @@ final class SpatialLayerBank {
         return material
     }
 
-    /// The switch plate's own width. The label is placed relative to it,
-    /// so the two must not be able to disagree.
-    private static let plateWidth: Float = 0.086
-    private static let plateHeight: Float = 0.050
-    /// Corner radius of a switch plate.
-    ///
-    /// 0.020 of a 0.050-tall plate — 80 % of the way to a full lozenge,
-    /// which is where visionOS's own panels sit. It was 0.010, a radius
-    /// that reads as "a box with the sharpness taken off" rather than as
-    /// a rounded rectangle, and the difference is the single loudest
-    /// signal of whether a surface belongs to the platform. Anything
-    /// above 0.025 IS a lozenge: the flat top and bottom disappear and
-    /// the plate stops being a plate.
-    private static let plateCorner: Float = 0.020
-    private static let labelSize: CGFloat = 0.0104
-    private static let labelGap: Float = 0.008
+    /// Plate geometry comes from `PlateStyle` — one silhouette for both
+    /// banks; the lozenge derivation and the drift story live there.
+    /// The label is placed relative to the width, so the two must not
+    /// be able to disagree.
+    private static let plateWidth = PlateStyle.width
+    private static let plateHeight = PlateStyle.height
+    private static let plateCorner = PlateStyle.corner
+    private static let labelSize = PlateStyle.labelSize
+    private static let labelGap = PlateStyle.labelGap
 
     /// How far this bank's widest label reaches from a plate's centre —
     /// what a caller needs to keep the bank clear of its apparatus.
@@ -174,7 +167,8 @@ final class SpatialLayerBank {
         // a lit wall — the plate still reads as one object when every
         // layer on it is switched off.
         let plate = ModelEntity(
-            mesh: .generateBox(size: [Self.plateWidth, Self.plateHeight, 0.007],
+            mesh: .generateBox(size: [Self.plateWidth, Self.plateHeight,
+                                      PlateStyle.depth],
                                cornerRadius: Self.plateCorner),
             materials: [Materials.frostedGlass()])
         plate.name = "layer-\(layer.id)"
@@ -197,7 +191,7 @@ final class SpatialLayerBank {
         let border = ModelEntity(
             mesh: .generateBox(
                 size: [Self.plateWidth + edge * 2,
-                       Self.plateHeight + edge * 2, 0.006],
+                       Self.plateHeight + edge * 2, PlateStyle.edgeDepth],
                 cornerRadius: Self.plateCorner + edge),
             materials: [Materials.glassEdge()])
         border.position = [0, 0, -0.0008]
@@ -207,7 +201,7 @@ final class SpatialLayerBank {
         let face = ModelEntity(
             mesh: .generateBox(size: [0.011, 0.034, 0.002], cornerRadius: 0.004),
             materials: [material(on: layer.isOn())])
-        face.position = [-0.032, 0, 0.005]
+        face.position = [-0.032, 0, PlateStyle.faceLift]
         plate.addChild(face)
 
         if let symbol = layer.symbol, let texture = Bloom.symbolTexture(symbol) {
@@ -217,7 +211,7 @@ final class SpatialLayerBank {
             let icon = ModelEntity(
                 mesh: .generatePlane(width: 0.024, height: 0.024),
                 materials: [iconMaterial])
-            icon.position = [-0.002, 0, 0.005]
+            icon.position = [-0.002, 0, PlateStyle.faceLift]
             plate.addChild(icon)
         }
 

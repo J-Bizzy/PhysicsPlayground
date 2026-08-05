@@ -38,6 +38,10 @@ final class MagnetismRenderer {
     static let northColor = DesignTokens.Palette.positiveUI
     static let southColor = DesignTokens.Palette.negativeUI
     static let lineColor = UIColor(red: 0.72, green: 0.6, blue: 1.0, alpha: 1)
+    /// The hand compass's readout gold — module-local vocabulary, like
+    /// Pendulums' tension yellow (see `VectorPalette`'s header): a
+    /// per-module decomposition keeps its own colours.
+    static let compassGold = UIColor(red: 0.95, green: 0.78, blue: 0.42, alpha: 1)
 
     private var magnetEntities: [UUID: Entity] = [:]
     private var magnetHalos: [UUID: Entity] = [:]
@@ -205,7 +209,7 @@ final class MagnetismRenderer {
         handCompass.addChild(needle)
         handCompassNeedle = needle
 
-        let callout = Callout(color: UIColor(red: 0.95, green: 0.78, blue: 0.42, alpha: 1),
+        let callout = Callout(color: Self.compassGold,
                               textSize: 0.024, offset: SIMD3(0, 0.09, 0))
         callout.setAccessibilityName("Field at the compass")
         handCompassCallout = callout

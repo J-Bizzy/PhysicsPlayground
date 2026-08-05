@@ -32,12 +32,18 @@ struct AboutView: View {
         // window that was not.
         ScrollView {
             VStack(spacing: 14) {
+            // The hero wears the app's two domain accents — the same
+            // green and orange that name the doors — instead of the
+            // stock secondary grey it launched with.
             Image(systemName: "atom")
                 .font(.system(size: 40))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LinearGradient(
+                    colors: [HubDomain.electricity.color,
+                             HubDomain.mechanics.color],
+                    startPoint: .topLeading, endPoint: .bottomTrailing))
 
             Text("Physics Playground")
-                .font(.system(.title2, design: .rounded).weight(.heavy))
+                .font(DesignTokens.TypeScale.wordmark(.title2))
 
             Text("Room-scale physics labs. Real constants, exact solutions.")
                 .font(.callout)
