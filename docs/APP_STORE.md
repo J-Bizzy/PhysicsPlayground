@@ -72,9 +72,9 @@ THE PHYSICS IS REAL
 No physics engine, no approximations for convenience. Every solver is
 written from scratch in SI units with real constants, and uses the exact
 closed-form solution wherever one exists: Kepler orbits from true orbital
-elements, nodal analysis for circuits, the Foucault sine law, r = mv/qB
-for a charge in a magnetic field. Nearly 350 tests run against the
-physics alone.
+elements, nodal analysis for circuits, the exact dipole field between
+two bar magnets, r = mv/qB for a charge in a magnetic field. Nearly 350
+tests run against the physics alone.
 
 Where something has to be deliberately unphysical for you to see it, the
 app says so on screen, next to the number. The magnetic field that visibly
@@ -85,9 +85,9 @@ teaching the wrong thing.
 THE SIX LABS
 
 Electric Fields — Pull charges out of a well and watch the field redraw
-around them. Add parallel plates, a uniform magnetic field, and a Gauss
-surface you can carry charges in and out of to see the flux jump to
-exactly Q/ε₀.
+around them. Add parallel plates you carry by hand, switch on a uniform
+magnetic field, and send a charged ball circling through it — the
+cyclotron radius, drawn at full size in your room.
 
 Circuit Workshop — Build from racks of real parts: batteries, resistors,
 capacitors, inductors, motors, LEDs. Solved every frame. Probe it with a
@@ -104,8 +104,8 @@ from zero-g to Jupiter, and bounces off your actual walls, floor and
 ceiling.
 
 Pendulums — Full nonlinear swings, a Newton's cradle you can break apart
-and rebuild, a double pendulum that never repeats itself, and a Foucault
-rig whose plane holds still while your room turns underneath it.
+and rebuild, a double pendulum that never repeats itself, and a true
+3-D orbit you throw a bob into above your own floor.
 
 Gravity Lab — A solar system you can walk into. Tap a planet and its orbit
 becomes a ring with a bead at each end; pull one and the orbit reshapes
@@ -220,9 +220,9 @@ The first two do almost all the work; most people never swipe past three.
 |---|---|---|
 | 1 | **Projectile Motion** — staged volley, walls on | The best single frame the app produces. Arcs sweep the whole room and visibly bounce off the shelf and wall; `9.81 m/s²`, `1.9 m` and `5.0 m/s` are all legible; the world discs and the ball fan show it is an instrument and not a toy. It is the only shot that carries "in your room" AND "real physics" at once. |
 | 2 | **Circuit Workshop — Electron View** | The most surprising image in the app: you are standing among copper conductors two metres thick with the electron bands crawling along them, under a glowing bulb reading `24 Ω`. Nothing else looks like this, which is exactly what a second screenshot is for. |
-| 3 | **Electric Fields — lines + Gauss bubble + B** | The densest "this is real physics" frame — field lines filling the room, the flux readout, the standing instrument card. Slightly busy, which is why it is third rather than first. |
+| 3 | **Electric Fields — lines + capacitor + B** | The densest "this is real physics" frame — field lines filling the room, the carried capacitor plates with their sign glyphs, the uniform B switched on. (Reframed 2026-08-05: the flux instrument this slot was built around left the app on 2026-08-03 — DECISIONS.md has the story.) Slightly busy, which is why it is third rather than first. |
 | 4 | **Gravity Lab — binary star** | Conceptually the best story (two suns, every orbit reshaped) and the weakest *simulator* frame: the orrery sits low, so two-thirds of the image is black. **Shoot this one on device**, standing closer and looking down. |
-| 5 | **Pendulums — Foucault** | Depth, for the person who has already decided to look. |
+| 5 | **Gravity Lab — the orbit ring** | Depth, for the person who has already decided to look: Earth's orbit as a ring in the room, apoapsis pulled out to 2.2× under a hand. The module's documented centrepiece. (Reframed 2026-08-05: the previous subject left the app on 2026-08-03 — DECISIONS.md has the story. If two Gravity frames read as repetitive against shot 4, the alternate is Magnetism's room-filling field lines — `-openModule magnetism`, defaults.) |
 | 6 | **Home Screen** | Shows the scope — six labs behind two coloured doors, under the wordmark. A closer, not an opener: it is the least *spatial* frame, because nothing in it is an experiment. |
 
 ## Staging commands
@@ -248,9 +248,9 @@ shot () {   # shot <name> <args...>
 
 shot 1-throws    -openModule kinematics     -kinBalls 1 -kinWalls 1
 shot 2-circuits  -openModule circuits       -electronView 1
-shot 3-fields    -openModule electrostatics -emGauss bubble -emMagnetic 1
+shot 3-fields    -openModule electrostatics -emCap 1 -emMagnetic 1 -emVolts 90 -emTesla 0.6
 shot 4-gravity   -openModule gravitylab     -gravBinary 1
-shot 5-foucault  -openModule pendulums      -penFoucault 48.85 -penSpin 20000
+shot 5-orbitring -openModule gravitylab     -selectBody Earth -gravRing 1 -apsisDrag far,2.2
 shot 6-home                                 # no arguments at all
 ```
 
