@@ -36,7 +36,7 @@ final class CircuitsRenderer {
         let holder: Entity
         let body: ModelEntity
         var terminals: [ModelEntity]
-        let label: ModelEntity
+        let label: BackedLabel
         let halo: ModelEntity
         var glow: ModelEntity?
         var filament: ModelEntity?
@@ -64,10 +64,8 @@ final class CircuitsRenderer {
     private var towers: [ModelEntity] = []
     private var towerCaps: [ModelEntity] = []
     private var towerThreads: [ModelEntity] = []
-    private var towerLabels: [ModelEntity] = []
+    private var towerLabels: [BackedLabel] = []
     private var towerLabelPivots: [Entity] = []
-    private var towerLabelCache: [String: MeshResource] = [:]
-    private var towerLabelKeys: [String] = []
     /// The colour step each tower is currently wearing, so an unchanged
     /// potential costs no material write.
     private var towerBuckets: [Int] = []
@@ -584,16 +582,8 @@ final class CircuitsRenderer {
             let pivot = towerLabelPivots[index]
             pivot.isEnabled = true
             pivot.position = base + SIMD3(0, height + (height >= 0 ? 0.05 : -0.06), 0)
-            let text = String(format: "%.1f V", node.voltage)
-            if towerLabelKeys[index] != text || colorMoved {
-                towerLabelKeys[index] = text
-                let mesh = towerLabelMesh(text)
-                towerLabels[index].model = ModelComponent(
-                    mesh: mesh,
-                    materials: [UnlitMaterial(color: Self.skylineTint(bucket))])
-                let bounds = mesh.bounds
-                towerLabels[index].position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
-            }
+            towerLabels[index].setText(String(format: "%.1f V", node.voltage),
+                                       color: Self.skylineTint(bucket))
         }
     }
 
@@ -615,25 +605,14 @@ final class CircuitsRenderer {
         skylineRoot.addChild(thread)
         towerThreads.append(thread)
 
-        let label = ModelEntity()
+        let label = BackedLabel(size: 0.03)
         let pivot = Entity()
         pivot.components.set(BillboardComponent())
         skylineRoot.addChild(pivot)
-        pivot.addChild(label)
+        pivot.addChild(label.root)
         towerLabels.append(label)
         towerLabelPivots.append(pivot)
-        towerLabelKeys.append("")
         towerBuckets.append(-1)
-    }
-
-    private func towerLabelMesh(_ text: String) -> MeshResource {
-        if let cached = towerLabelCache[text] { return cached }
-        if towerLabelCache.count > 200 { towerLabelCache.removeAll() }
-        let mesh = MeshResource.generateText(
-            text, extrusionDepth: 0.001,
-            font: .systemFont(ofSize: 0.03, weight: .semibold))
-        towerLabelCache[text] = mesh
-        return mesh
     }
 
     // MARK: Components
@@ -703,11 +682,11 @@ final class CircuitsRenderer {
                 }
             }
 
-            // Live label.
+            // Live label. `BackedLabel` self-gates on unchanged text.
             let text = labelText(for: component)
             if visual.labelText != text {
                 visual.labelText = text
-                setLabel(visual.label, text: text)
+                visual.label.setText(text, color: UIColor(white: 0.95, alpha: 1))
             }
 
             switch component.kind {
@@ -794,21 +773,6 @@ final class CircuitsRenderer {
                 ? String(format: "%.2f m", component.value)
                 : String(format: "%.0f cm", component.value * 100)
         }
-    }
-
-    private func setLabel(_ label: ModelEntity, text: String) {
-        guard !text.isEmpty else {
-            label.model = nil
-            return
-        }
-        let mesh = MeshResource.generateText(
-            text, extrusionDepth: 0.001,
-            font: .systemFont(ofSize: 0.02, weight: .medium))
-        label.model = ModelComponent(
-            mesh: mesh,
-            materials: [UnlitMaterial(color: UIColor(white: 0.95, alpha: 0.9))])
-        let bounds = mesh.bounds
-        label.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
     }
 
     private func makeVisual(for component: CircuitsModel.Component) -> ComponentVisual {
@@ -899,12 +863,13 @@ final class CircuitsRenderer {
         let halo = SelectionHalo.make(mesh: .generateSphere(radius: 0.085))
         holder.addChild(halo)
 
-        // Value label beneath, billboarded.
-        let label = ModelEntity()
+        // Value label beneath, billboarded, over the house dark backing
+        // so the number survives whatever wall stands behind the bench.
+        let label = BackedLabel(size: 0.02)
         let labelPivot = Entity()
         labelPivot.position = [0, -0.065, 0]
         labelPivot.components.set(BillboardComponent())
-        labelPivot.addChild(label)
+        labelPivot.addChild(label.root)
         holder.addChild(labelPivot)
 
         var visual = ComponentVisual(

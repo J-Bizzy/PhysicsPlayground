@@ -41,6 +41,13 @@ public final class Callout {
     private var lastText: String?
     private var lastTextTime: Double = -1
 
+    /// Whether the text wears the house dark backing plate
+    /// (`BackedLabel.backing`). OFF by default: the backing rollout is
+    /// staged module by module and judged on device — a room full of
+    /// pills is the failure mode being checked for. Takes effect on the
+    /// next text change.
+    public var showsBacking = false
+
     /// What VoiceOver calls this readout — the quantity, not the number.
     ///
     /// A `Callout` is a text MESH, and a mesh is invisible to VoiceOver
@@ -133,6 +140,9 @@ public final class Callout {
         let bounds = mesh.bounds
         model.position = [-(bounds.min.x + bounds.max.x) / 2,
                           -(bounds.min.y + bounds.max.y) / 2, 0]
+        if showsBacking {
+            model.addChild(BackedLabel.backing(behind: bounds, size: textSize))
+        }
         labelPivot.addChild(model)
         labelEntity = model
         publishAccessibility()
