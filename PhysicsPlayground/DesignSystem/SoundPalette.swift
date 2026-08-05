@@ -130,73 +130,90 @@ enum SoundPalette {
         // Versioned name: synthesis is cached to disk, so a redesign of
         // the soundscape must write a NEW file or every existing install
         // keeps playing the old one forever.
-        // Versioned name: the file is cached on disk, so a new synthesis
-        // recipe must write to a NEW name or the old sound plays forever.
-        let url = directory.appendingPathComponent("ambient-lab-3.wav")
+        let url = directory.appendingPathComponent("ambient-lab-4.wav")
         if !FileManager.default.fileExists(atPath: url.path) {
             try wavData(samples: synthesizeAmbient()).write(to: url)
         }
         return url
     }
 
-    /// The house soundscape: a 24-second seamless loop that reads as a
-    /// quiet planetarium rather than a server room. Three layers:
+    /// The house soundscape, fourth recipe: a 36-second seamless drift
+    /// that reads as a planetarium after closing.
     ///
-    ///  · a warm open-fifth drone (A2·E3·A3·E4 over a 55 Hz sub), each
-    ///    voice doubled a fraction of a hertz apart so the pairs beat
-    ///    slowly and the chord shimmers instead of standing still;
-    ///  · a slow breath — the whole bed swells and relaxes on a 12 s
-    ///    cycle, with airy filtered noise that breathes along;
-    ///  · four soft chime partials spaced through the loop (A5 E5 C#6 B5),
-    ///    barely there, so the room occasionally glints.
+    /// What changed from the third, and why. ETHEREAL is voicing:
+    /// the previous pad was a full A-major chord, and a major third is
+    /// SWEET — resolved, earthbound. This one is suspended: open fifths
+    /// and a ninth (A·E·B) with no third anywhere, octaves whispering
+    /// above, so the chord floats without ever landing. SOOTHING is
+    /// tempo: the loop is half again as long, every swell is slower,
+    /// the top voices are quieter and surface rarely, and the one
+    /// communal breath takes the whole 36 seconds. Three far-away bell
+    /// glints cross the loop — sparse enough to be noticed maybe once
+    /// a minute, never awaited.
     ///
-    /// The last 1.2 s crossfades into the first so the seam vanishes.
+    /// Still PURELY TONAL (the filtered-noise "air" of recipe two read
+    /// as static over spatial audio), and still mathematically seamless:
+    /// every sustained frequency, detune and swell is quantised to a
+    /// whole number of cycles per loop. The glints are enveloped to
+    /// silence well inside the loop, so they need no quantising.
     private static func synthesizeAmbient() -> [Float] {
-        // An ethereal pad, nothing else. The old room tone carried a
-        // filtered-noise "air" layer that read as static over spatial
-        // audio; this is PURELY TONAL — a widely voiced A-major chord
-        // of gently detuned sine pairs whose beats and swells drift
-        // against each other, glassy on top, warm underneath.
-        //
-        // Every frequency — voices, detunes, tremolos — is quantised to
-        // a whole number of cycles per loop, so the loop point is
-        // mathematically seamless and needs no crossfade.
-        let loop = 24.0
+        let loop = 36.0
         let grid = { (frequency: Double) in (frequency * loop).rounded() / loop }
 
-        // A2 E3 A3 C#4 E4 A4 C#5 E5: wide, open, major — glassy up top.
+        // A1 sub, then A2 E3 A3 B3 E4 B4 E5 A5 — fifths, ninths,
+        // octaves. No third: suspended, open, glassy.
         let voices: [(frequency: Double, amplitude: Double)] = [
-            (grid(110.0), 0.17),
-            (grid(164.81), 0.15),
-            (grid(220.0), 0.13),
-            (grid(277.18), 0.10),
-            (grid(329.63), 0.09),
-            (grid(440.0), 0.06),
-            (grid(554.37), 0.035),
+            (grid(55.0), 0.10),
+            (grid(110.0), 0.16),
+            (grid(164.81), 0.14),
+            (grid(220.0), 0.12),
+            (grid(246.94), 0.08),
+            (grid(329.63), 0.07),
+            (grid(493.88), 0.04),
             (grid(659.26), 0.025),
+            (grid(880.0), 0.015),
+        ]
+
+        // The glints: three soft bells far off in the dark, each an
+        // octave-ish pair with a slightly inharmonic partial (what makes
+        // a bell a bell and not an organ). Attack eased so there is no
+        // click; tails die out before the loop ends.
+        let glints: [(at: Double, frequency: Double, amplitude: Double)] = [
+            (6.0, 1318.51, 0.020),   // E6
+            (17.5, 880.0, 0.016),    // A5
+            (28.0, 987.77, 0.018),   // B5
         ]
 
         return render(duration: loop) { t, _ in
             var pad = 0.0
             for (index, voice) in voices.enumerated() {
-                // Each voice is a detuned pair; the pair's beat completes
-                // a whole number of cycles per loop (1, 2, 3… beats),
-                // so the shimmer never repeats twice the same way inside
-                // one pass yet loops exactly.
+                // Detuned pairs whose beats complete 1, 2, 3… whole
+                // cycles per loop — the shimmer never repeats the same
+                // way twice inside one pass yet loops exactly.
                 let detune = Double(index + 1) / loop
                 let pair = 0.5 * (sin(2 * .pi * voice.frequency * t)
                     + sin(2 * .pi * (voice.frequency + detune) * t + 0.7))
-                // Slow independent swells, each on its own whole-cycle
-                // period and phase — voices surface and sink in turn,
-                // which is the "alive" in the pad.
-                let cycles = Double((index % 3) + 2)
-                let swell = 0.72 + 0.28 * sin(2 * .pi * cycles * t / loop
-                                              + Double(index) * 1.9)
+                // Slow independent swells — 36, 18 and 12 second
+                // periods, so voices surface and sink in turn. The high
+                // voices ride the slowest swells: glass should drift,
+                // not flicker.
+                let cycles = Double((index % 3) + 1)
+                let swell = 0.68 + 0.32 * sin(2 * .pi * cycles * t / loop
+                                              + Double(index) * 2.1)
                 pad += voice.amplitude * pair * swell
             }
-            // One long communal breath over the loop.
-            let breath = 1 + 0.08 * sin(2 * .pi * t / loop)
-            return pad * breath
+            // One long communal breath across the whole loop.
+            let breath = 1 + 0.06 * sin(2 * .pi * t / loop)
+
+            var bells = 0.0
+            for glint in glints where t >= glint.at {
+                let age = t - glint.at
+                let envelope = (1 - exp(-age * 9)) * exp(-age * 0.9)
+                bells += glint.amplitude * envelope
+                    * (sin(2 * .pi * glint.frequency * age)
+                        + 0.35 * sin(2 * .pi * glint.frequency * 2.41 * age))
+            }
+            return pad * breath + bells
         }
     }
 
