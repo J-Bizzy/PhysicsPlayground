@@ -331,14 +331,9 @@ final class OrbitRing {
         // is: this is the handle, not the surface the handle sits on.
         // A dark translucent pea 14 mm across, two metres away, against
         // a starfield, would be a target you could not find.
-        var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: UIColor(white: 0.98, alpha: 1))
-        material.roughness = 0.16
-        material.metallic = 0.0
-        material.emissiveColor = .init(color: accent)
-        material.emissiveIntensity = 0.55
-        let bead = ModelEntity(mesh: .generateSphere(radius: beadRadius),
-                               materials: [material])
+        let bead = ModelEntity(
+            mesh: .generateSphere(radius: beadRadius),
+            materials: [Materials.grip(emissive: accent, glow: 0.55)])
         bead.name = name
         // Collider EQUALS the visual radius. See the file header.
         bead.components.set(CollisionComponent(

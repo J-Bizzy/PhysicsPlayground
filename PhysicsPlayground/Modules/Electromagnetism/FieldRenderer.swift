@@ -328,21 +328,12 @@ final class FieldRenderer {
                 material.blending = .transparent(opacity: .init(floatLiteral: 0.35))
                 let plate = ModelEntity(mesh: mesh, materials: [material])
                 plate.name = isPositive ? "plate-0" : "plate-1"
-                // The plates wear the same sign glyphs as the charges.
-                let signPivot = Entity()
-                signPivot.components.set(BillboardComponent())
+                // The plates wear the same sign glyphs as the charges —
+                // the shared builder, with the bar length the plate's
+                // own scale asks for rather than a sphere's.
+                let signPivot = Self.signGlyph(isPositive: isPositive,
+                                               radius: 0, barLength: 0.05)
                 signPivot.position = [0, Float(FieldModel.plateSize) * 0.28, 0]
-                let strokeMaterial = UnlitMaterial(color: UIColor(white: 1, alpha: 0.9))
-                let horizontal = ModelEntity(
-                    mesh: .generateBox(size: [0.05, 0.011, 0.004], cornerRadius: 0.002),
-                    materials: [strokeMaterial])
-                signPivot.addChild(horizontal)
-                if isPositive {
-                    let vertical = ModelEntity(
-                        mesh: .generateBox(size: [0.011, 0.05, 0.004], cornerRadius: 0.002),
-                        materials: [strokeMaterial])
-                    signPivot.addChild(vertical)
-                }
                 plate.addChild(signPivot)
                 Grabbable.configureTouchTarget(plate, collisionRadius: 0.26)
                 var accessibility = AccessibilityComponent()
@@ -503,25 +494,38 @@ final class FieldRenderer {
     /// convention has to be learned, and the well is the first place
     /// anyone meets one of these. The charge you pull out has a + on it;
     /// the mouth you pull it from now says so before you commit.
-    static func signGlyph(isPositive: Bool, radius: Float) -> Entity {
+    static func signGlyph(isPositive: Bool, radius: Float,
+                          barLength: Float? = nil) -> Entity {
+        let (pivot, vertical) = signGlyphParts(radius: radius, barLength: barLength)
+        vertical.isEnabled = isPositive
+        return pivot
+    }
+
+    /// The same glyph with the vertical stroke handed back, for a sign
+    /// whose polarity changes LIVE (the probe): hide the vertical to
+    /// make a minus. Both strokes always exist — a glyph that rebuilt
+    /// itself on every flip would be a new entity mid-pinch.
+    /// - `barLength`: overrides the radius-derived stroke length for a
+    ///   glyph that sits on something whose size is not a sphere's (the
+    ///   capacitor plates).
+    static func signGlyphParts(radius: Float, barLength: Float? = nil)
+    -> (pivot: Entity, vertical: ModelEntity) {
         let pivot = Entity()
         pivot.components.set(BillboardComponent())
         let stroke = UnlitMaterial(color: UIColor(white: 1.0, alpha: 1))
-        let bar = min(radius * 0.9, 0.015)
+        let bar = barLength ?? min(radius * 0.9, 0.015)
         let thickness = max(bar * 0.27, 0.0025)
         let horizontal = ModelEntity(
             mesh: .generateBox(size: [bar, thickness, 0.002], cornerRadius: 0.001),
             materials: [stroke])
         horizontal.position = [0, 0, radius * 1.2]
         pivot.addChild(horizontal)
-        if isPositive {
-            let vertical = ModelEntity(
-                mesh: .generateBox(size: [thickness, bar, 0.002], cornerRadius: 0.001),
-                materials: [stroke])
-            vertical.position = [0, 0, radius * 1.2]
-            pivot.addChild(vertical)
-        }
-        return pivot
+        let vertical = ModelEntity(
+            mesh: .generateBox(size: [thickness, bar, 0.002], cornerRadius: 0.001),
+            materials: [stroke])
+        vertical.position = [0, 0, radius * 1.2]
+        pivot.addChild(vertical)
+        return (pivot, vertical)
     }
 
     /// How big a mouth's preview is, which is NOT `chargeRadius`.
@@ -570,14 +574,9 @@ final class FieldRenderer {
         Grabbable.configureTouchTarget(sphere, collisionRadius: Self.chargeRadius * 1.8)
         setAccessibilityLabel(on: sphere, for: charge)
 
-        // Translucent halo shown on the selected charge (the one the sliders edit).
-        var haloMaterial = UnlitMaterial(color: DesignTokens.Palette.selectionHaloUI)
-        haloMaterial.blending = .transparent(opacity: 0.25)
-        let halo = ModelEntity(
-            mesh: .generateSphere(radius: Self.chargeRadius * 1.35),
-            materials: [haloMaterial]
-        )
-        halo.isEnabled = false
+        // Translucent halo shown on the selected charge.
+        let halo = SelectionHalo.make(
+            mesh: .generateSphere(radius: Self.chargeRadius * 1.35))
         sphere.addChild(halo)
 
         // The sign glyph: a billboarded + (or −, with the vertical stroke
@@ -737,20 +736,10 @@ final class FieldRenderer {
         sphere.name = Self.probeEntityName
         Grabbable.configureTouchTarget(sphere, collisionRadius: max(Self.probeRadius * 2.4, 0.06))
 
-        // Same sign glyph the source charges wear, scaled to probe size.
-        let signPivot = Entity()
-        signPivot.components.set(BillboardComponent())
-        let strokeMaterial = UnlitMaterial(color: UIColor(white: 1.0, alpha: 1))
-        let horizontal = ModelEntity(
-            mesh: .generateBox(size: [0.015, 0.004, 0.002], cornerRadius: 0.001),
-            materials: [strokeMaterial])
-        horizontal.position = [0, 0, Self.probeRadius * 1.2]
-        let vertical = ModelEntity(
-            mesh: .generateBox(size: [0.004, 0.015, 0.002], cornerRadius: 0.001),
-            materials: [strokeMaterial])
-        vertical.position = [0, 0, Self.probeRadius * 1.2]
-        signPivot.addChild(horizontal)
-        signPivot.addChild(vertical)
+        // Same sign glyph the source charges wear, scaled to probe size —
+        // the shared parts builder, so the vertical stroke can be hidden
+        // live when the probe's polarity flips.
+        let (signPivot, vertical) = Self.signGlyphParts(radius: Self.probeRadius)
         sphere.addChild(signPivot)
         probeSignVertical = vertical
 

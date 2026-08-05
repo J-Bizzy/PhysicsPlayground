@@ -896,12 +896,7 @@ final class CircuitsRenderer {
         holder.addChild(knob)
 
         // Selection halo.
-        var haloMaterial = UnlitMaterial(
-            color: DesignTokens.Palette.selectionHaloUI)
-        haloMaterial.blending = .transparent(opacity: 0.18)
-        let halo = ModelEntity(
-            mesh: .generateSphere(radius: 0.085), materials: [haloMaterial])
-        halo.isEnabled = false
+        let halo = SelectionHalo.make(mesh: .generateSphere(radius: 0.085))
         holder.addChild(halo)
 
         // Value label beneath, billboarded.

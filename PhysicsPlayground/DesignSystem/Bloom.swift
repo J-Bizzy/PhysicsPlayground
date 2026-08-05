@@ -643,14 +643,11 @@ final class Bloom {
         // translucent pea is a worse target than a lit one, and the
         // glass language is for the surfaces a control sits ON, not for
         // the handle itself.
-        var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: UIColor(white: 0.98, alpha: 1))
-        material.roughness = 0.15
-        material.metallic = 0.0
-        material.emissiveColor = .init(color: UIColor(white: 1, alpha: 1))
-        material.emissiveIntensity = 0.35
-        let bead = ModelEntity(mesh: .generateSphere(radius: 0.014),
-                               materials: [material])
+        let bead = ModelEntity(
+            mesh: .generateSphere(radius: 0.014),
+            materials: [Materials.grip(roughness: 0.15,
+                                       emissive: UIColor(white: 1, alpha: 1),
+                                       glow: 0.35)])
         bead.name = "bloom-grip"
         bead.components.set(InputTargetComponent())
         // Barely larger than the bead itself: this collider competes

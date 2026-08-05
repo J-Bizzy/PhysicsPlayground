@@ -118,6 +118,35 @@ public enum Materials {
         return material
     }
 
+    /// A value bead or pull grip: the handle ITSELF, bright and solid —
+    /// never glass. The glass language is for the surfaces a control
+    /// sits on; the thing a finger is hunting for on a rail a
+    /// centimetre thick has to be lit. Three controls each hand-rolled
+    /// this before it was a recipe (the rail's bead, the Bloom's grip,
+    /// the orbit ring's apsis beads), agreeing on everything but their
+    /// emissive — so the emissive is the parameter and the rest is the
+    /// recipe. The full clearcoat is the one unification: a handle is a
+    /// polished thing.
+    /// - `emissive`/`glow`: the bead's own light. The rail's bead has
+    ///   none (its accent tint carries the identity); the Bloom's grip
+    ///   glows white; an apsis bead glows in its ring's accent.
+    public static func grip(_ tint: UIColor = UIColor(white: 0.98, alpha: 1),
+                            roughness: Float = 0.16,
+                            emissive: UIColor? = nil,
+                            glow: Float = 0) -> PhysicallyBasedMaterial {
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: tint)
+        material.roughness = .init(floatLiteral: roughness)
+        material.metallic = .init(floatLiteral: 0)
+        material.clearcoat = .init(floatLiteral: 1.0)
+        material.clearcoatRoughness = .init(floatLiteral: 0.12)
+        if let emissive, glow > 0 {
+            material.emissiveColor = .init(color: emissive)
+            material.emissiveIntensity = glow
+        }
+        return material
+    }
+
     // MARK: Glass — the platform's own surface, for the app's own controls
 
     /// Frosted glass, for the instruments the user operates: switch

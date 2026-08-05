@@ -111,13 +111,10 @@ public final class SpatialTrackControl {
             root.addChild(tick)
         }
 
-        // The bead: the value, as an object.
-        var beadMaterial = PhysicallyBasedMaterial()
-        beadMaterial.baseColor = .init(tint: accent)
-        beadMaterial.roughness = 0.18
-        beadMaterial.clearcoat = .init(floatLiteral: 1.0)
+        // The bead: the value, as an object, in the shared grip recipe.
         bead.model = ModelComponent(mesh: .generateSphere(radius: 0.016),
-                                    materials: [beadMaterial])
+                                    materials: [Materials.grip(accent,
+                                                               roughness: 0.18)])
         root.addChild(bead)
 
         let textPivot = Entity()

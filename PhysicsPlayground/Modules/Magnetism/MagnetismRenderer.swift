@@ -422,12 +422,8 @@ final class MagnetismRenderer {
         container.addChild(band)
 
         // Selection halo (a soft box shell), hidden until selected.
-        var haloMaterial = UnlitMaterial(color: DesignTokens.Palette.selectionHaloUI)
-        haloMaterial.blending = .transparent(opacity: 0.22)
-        let halo = ModelEntity(
-            mesh: .generateBox(size: [w + 0.03, half * 2 + 0.03, w + 0.03], cornerRadius: 0.012),
-            materials: [haloMaterial])
-        halo.isEnabled = false
+        let halo = SelectionHalo.make(mesh: .generateBox(
+            size: [w + 0.03, half * 2 + 0.03, w + 0.03], cornerRadius: 0.012))
         container.addChild(halo)
         magnetHalos[magnet.id] = halo
 
