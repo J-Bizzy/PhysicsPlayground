@@ -866,9 +866,9 @@ final class CircuitsRenderer {
         // swings around its other end (wires also take their length from
         // the pull). Separate from the copper terminals so quick pinches
         // there still arm tap-tap wiring.
-        let gripMaterial = SimpleMaterial(
-            color: UIColor(red: 0.9, green: 0.45, blue: 0.15, alpha: 1),
-            roughness: 0.5, isMetallic: false)
+        let gripMaterial = Materials.energized(
+            UIColor(red: 0.9, green: 0.45, blue: 0.15, alpha: 1),
+            roughness: 0.4, glow: 0.2)
         var stretchHandles: [ModelEntity] = []
         for end in 0...1 {
             let grip = ModelEntity(
@@ -1030,8 +1030,8 @@ final class CircuitsRenderer {
         case .resistor:
             let body = ModelEntity(
                 mesh: .generateCylinder(height: 0.075, radius: 0.016),
-                materials: [SimpleMaterial(color: UIColor(red: 0.85, green: 0.72, blue: 0.55, alpha: 1),
-                                           roughness: 0.6, isMetallic: false)])
+                materials: [Materials.machined(UIColor(red: 0.85, green: 0.72, blue: 0.55, alpha: 1),
+                                               roughness: 0.6)])
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             return body
         case .bulb:
@@ -1046,8 +1046,8 @@ final class CircuitsRenderer {
         case .capacitor:
             let body = ModelEntity(
                 mesh: .generateCylinder(height: 0.06, radius: 0.02),
-                materials: [SimpleMaterial(color: UIColor(red: 0.12, green: 0.2, blue: 0.45, alpha: 1),
-                                           roughness: 0.4, isMetallic: false)])
+                materials: [Materials.machined(UIColor(red: 0.12, green: 0.2, blue: 0.45, alpha: 1),
+                                               roughness: 0.4)])
             let stripe = ModelEntity(
                 mesh: .generateBox(size: [0.006, 0.06, 0.041]),
                 materials: [UnlitMaterial(color: UIColor(white: 0.9, alpha: 1))])
@@ -1057,8 +1057,7 @@ final class CircuitsRenderer {
         case .switcher:
             return ModelEntity(
                 mesh: .generateBox(size: [0.075, 0.016, 0.032], cornerRadius: 0.004),
-                materials: [SimpleMaterial(color: UIColor(white: 0.25, alpha: 1),
-                                           roughness: 0.6, isMetallic: false)])
+                materials: [Materials.graphite(UIColor(white: 0.25, alpha: 1))])
         case .acSource:
             let body = ModelEntity(
                 mesh: .generateCylinder(height: 0.02, radius: 0.032),
@@ -1072,8 +1071,8 @@ final class CircuitsRenderer {
         case .inductor:
             let body = ModelEntity(
                 mesh: .generateCylinder(height: 0.07, radius: 0.014),
-                materials: [SimpleMaterial(color: UIColor(white: 0.35, alpha: 1),
-                                           roughness: 0.6, isMetallic: false)])
+                materials: [Materials.machined(UIColor(white: 0.35, alpha: 1),
+                                               roughness: 0.6)])
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             for offset in stride(from: -0.024, through: 0.024, by: 0.012) {
                 let coil = ModelEntity(
@@ -1138,8 +1137,8 @@ final class CircuitsRenderer {
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             let sleeve = ModelEntity(
                 mesh: .generateCylinder(height: 0.07, radius: 0.0095),
-                materials: [SimpleMaterial(color: UIColor(red: 0.9, green: 0.45, blue: 0.15, alpha: 1),
-                                           roughness: 0.7, isMetallic: false)])
+                materials: [Materials.machined(UIColor(red: 0.9, green: 0.45, blue: 0.15, alpha: 1),
+                                               roughness: 0.7)])
             body.addChild(sleeve)
             return body
         }

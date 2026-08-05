@@ -261,7 +261,7 @@ final class GravityLabRenderer {
         bodyPool = EntityPool(budget: GravityLabModel.bodyBudget) { container in
             let sphere = ModelEntity(
                 mesh: bodyMesh,
-                materials: [SimpleMaterial(color: .white, roughness: 0.6, isMetallic: false)]
+                materials: [Materials.machined(.white, roughness: 0.6)]
             )
             Grabbable.configureTouchTarget(sphere, collisionRadius: Self.baseBodyRadius * 1.5)
             var accessibility = AccessibilityComponent()
@@ -1159,8 +1159,8 @@ final class GravityLabRenderer {
             material.metallic = 0.0
             return material
         }
-        return SimpleMaterial(
-            color: DesignTokens.Palette.celestialUI(name), roughness: 0.55, isMetallic: false)
+        return Materials.machined(
+            DesignTokens.Palette.celestialUI(name), roughness: 0.55)
     }
 
     // MARK: Trails (vertex math on the pipeline worker)

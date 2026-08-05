@@ -652,7 +652,7 @@ final class KinematicsRenderer {
         case Projectile.basketball.name: DesignTokens.Palette.projectileUI
         default: .systemTeal
         }
-        return SimpleMaterial(color: color, roughness: 0.5, isMetallic: false)
+        return Materials.energized(color, roughness: 0.5, glow: 0)
     }
 
     // MARK: Hoops
