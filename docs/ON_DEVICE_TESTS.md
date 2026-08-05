@@ -530,6 +530,22 @@ file). The new well and the standing script:
 
 ## Cross-cutting
 
+- [ ] **The room tone, fourth recipe (2026-08-05).** Switch "Lab room
+      tone" on and stand in any module for two minutes. It should read
+      as a planetarium after closing — suspended and floating (no
+      major-third sweetness anywhere), with a far-off bell glint maybe
+      once a minute. If a glint repeats often enough to be awaited, or
+      any voice draws attention to itself, the amplitudes in
+      `synthesizeAmbient` are the dials (and a new recipe needs a NEW
+      cached filename — currently `ambient-lab-4.wav`).
+- [ ] **Studio Mode's new night (2026-08-05).** Toggle the moon-stars
+      button in any module. The sky should carry a faint galactic band
+      arcing overhead — one continuous river, never discrete dots — a
+      few halo stars, and stars in two colour temperatures. The floor
+      has a champagne-lit centre pool; the stage rings are champagne
+      within, cool blue far out, each over a soft glow. Judge that the
+      band and pool stay BENEATH the physics: this is a venue, and a
+      venue that competes with the exhibits has failed.
 - [ ] **Grounding shadows under the floating controls (2026-08-05,
       shipped as its own commit for easy revert).** Bank plates, picker
       discs, Bloom petals and grips, and the wells' preview models now
