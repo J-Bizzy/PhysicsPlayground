@@ -35,7 +35,11 @@ working session:
 
 - [ ] **Circuit Workshop, whole-module improvement.** "Okay I want to
       revisit this with you … and we will plan out how to improve this
-      system." The bug-class fixes landed; the design pass has not.
+      system." The bug-class fixes landed, and **the design pass now
+      has its review**: `docs/CIRCUITS_DESIGN_REVIEW.md` (2026-08-06)
+      — eleven numbered proposals, C1–C11, sized S/M/L, written to be
+      reacted to per-number in the headset. No code changed with it;
+      the owner picks, then the work is planned.
 - [ ] **Projectiles, whole-module improvement.** "It has the same UI
       flip issue, the wall bouncing is unreliable, and it just seems
       uninspired. we will revisit." The flip is fixed app-wide and a
