@@ -477,6 +477,7 @@ struct FieldSpaceView: View {
     private func toggleRing(_ target: FieldRingState.Target, on entity: Entity) {
         if ring.target == target {
             ring.target = nil
+            SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
         } else {
             ring.target = target
             SoundPalette.play(.pop, on: entity, volume: 0.35)

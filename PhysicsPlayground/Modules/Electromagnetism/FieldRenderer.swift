@@ -39,6 +39,8 @@ final class FieldRenderer {
     /// The charge already acknowledged with a pickup pulse — one flash
     /// per grab, not one per frame.
     private var pulsedGrabID: UUID?
+    /// Where the release tick plays from when the grab ends.
+    private weak var pulsedGrabEntity: Entity?
     var isManipulatingProbe = false
 
     /// Entity name for the probe (charges use their UUID string).
@@ -186,10 +188,16 @@ final class FieldRenderer {
         if let id = manipulatingChargeID {
             if pulsedGrabID != id, let entity = chargeEntities[id] {
                 pulsedGrabID = id
+                pulsedGrabEntity = entity
                 PickupPulse.flash(on: entity)
+                SoundPalette.play(.grabTick, on: entity, volume: 0.2)
             }
         } else {
+            if pulsedGrabID != nil, let entity = pulsedGrabEntity {
+                SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
+            }
             pulsedGrabID = nil
+            pulsedGrabEntity = nil
         }
         syncChargeEntities(charges, selectedID: selectedID)
         syncProbeEntity(probe, isPositive: probeIsPositive)

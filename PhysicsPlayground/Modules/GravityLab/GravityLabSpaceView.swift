@@ -607,6 +607,8 @@ struct GravityLabSpaceView: View {
                             }
                             if ring.openID == body.id {
                                 ring.openID = nil
+                                SoundPalette.play(.releaseTick, on: value.entity,
+                                                  volume: 0.3)
                             } else {
                                 ring.openID = body.id
                                 SoundPalette.play(.pop, on: value.entity, volume: 0.35)
@@ -614,6 +616,9 @@ struct GravityLabSpaceView: View {
                             return
                         }
                         current = candidate.parent
+                    }
+                    if ring.openID != nil {
+                        SoundPalette.play(.releaseTick, on: value.entity, volume: 0.3)
                     }
                     ring.openID = nil
                 }

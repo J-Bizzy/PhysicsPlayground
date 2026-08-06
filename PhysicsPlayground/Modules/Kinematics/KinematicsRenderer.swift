@@ -52,6 +52,12 @@ final class KinematicsRenderer {
     /// The ball already acknowledged with a pickup pulse — one flash per
     /// grab, not one per frame.
     private var pulsedGrabID: UUID?
+    /// Where the release tick plays from when the grab ends. In this
+    /// module it coexists with the model's throw-whoosh: the whoosh
+    /// fires only on a THROWN release, the tick covers setting a ball
+    /// down — the device check judges whether they stack acceptably on
+    /// a throw.
+    private weak var pulsedGrabEntity: Entity?
 
     private static let barrelLength = Float(KinematicsModel.barrelLength)
     static let beadDistance: Float = 0.42
@@ -571,6 +577,13 @@ final class KinematicsRenderer {
     }
 
     private func syncFlights(_ flights: [KinematicsModel.Flight]) {
+        if manipulatingBallID == nil {
+            if pulsedGrabID != nil, let entity = pulsedGrabEntity {
+                SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
+            }
+            pulsedGrabID = nil
+            pulsedGrabEntity = nil
+        }
         for (index, slot) in ballPool.slots.enumerated() {
             guard index < flights.count else {
                 slot.entity.isEnabled = false
@@ -593,7 +606,9 @@ final class KinematicsRenderer {
                 // Hand owns the sphere; leave both transforms alone.
                 if pulsedGrabID != flight.id {
                     pulsedGrabID = flight.id
+                    pulsedGrabEntity = slot.entity
                     PickupPulse.flash(on: slot.entity)
+                    SoundPalette.play(.grabTick, on: slot.entity, volume: 0.2)
                 }
             } else {
                 slot.entity.position = SIMD3<Float>(flight.state.position)

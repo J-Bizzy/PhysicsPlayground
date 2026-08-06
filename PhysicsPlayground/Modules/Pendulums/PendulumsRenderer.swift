@@ -31,6 +31,8 @@ final class PendulumsRenderer {
     /// The bob already acknowledged with a pickup pulse — one flash per
     /// grab, not one per frame.
     private var pulsedGrabID: UUID?
+    /// Where the release tick plays from when the grab ends.
+    private weak var pulsedGrabEntity: Entity?
 
     /// Grabbing starts a new experiment: the old swing's trail would
     /// hang in the air behind the hand, so it clears on grab.
@@ -289,13 +291,21 @@ final class PendulumsRenderer {
             periodKeys[id] = nil
         }
 
-        if grabbedID == nil { pulsedGrabID = nil }
+        if grabbedID == nil {
+            if pulsedGrabID != nil, let entity = pulsedGrabEntity {
+                SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
+            }
+            pulsedGrabID = nil
+            pulsedGrabEntity = nil
+        }
         for pendulum in model.pendulums {
             let visual = visuals[pendulum.id] ?? makeVisual(for: pendulum)
 
             if pendulum.id == grabbedID, pulsedGrabID != pendulum.id {
                 pulsedGrabID = pendulum.id
+                pulsedGrabEntity = visual.bob
                 PickupPulse.flash(on: visual.bob)
+                SoundPalette.play(.grabTick, on: visual.bob, volume: 0.2)
             }
             visual.pivot.position = SIMD3<Float>(pendulum.pivot)
             // A PERIOD LABEL BELONGS TO A PENDULUM YOU ARE ATTENDING

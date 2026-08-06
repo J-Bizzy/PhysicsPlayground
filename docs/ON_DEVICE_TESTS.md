@@ -576,6 +576,15 @@ file). The new well and the standing script:
       reads as detached or the shadows read as dirt on the floor,
       revert the commit (`git log --oneline -- 
       PhysicsPlayground/DesignSystem/SpatialLayerBank.swift` finds it).
+- [ ] **The grab answers in sound now too (2026-08-06, its own commit
+      for easy revert).** Grab any body: a short bright tick with the
+      pulse. Set it down: a lower, softer answer. Close a control ring
+      (tap the object again, or tap empty space): the same soft tick —
+      the unfold pops, so the fold answering was the missing half.
+      Judge three things: the ticks stay QUIET (acknowledgement, not
+      percussion); a Projectiles THROW does not stack the release tick
+      and the whoosh unpleasantly; and master volume at zero silences
+      every one of them.
 - [ ] **The pickup pulse (2026-08-05, its own commit for easy
       revert).** Grab a charge, a circuit part, a bob, a ball, a
       planet: a soft white glow blooms around it and dies in a quarter

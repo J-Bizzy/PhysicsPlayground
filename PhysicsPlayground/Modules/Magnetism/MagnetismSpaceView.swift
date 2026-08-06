@@ -195,6 +195,8 @@ struct MagnetismSpaceView: View {
                            model.magnets.contains(where: { $0.id == id }) {
                             if ring.openID == id {
                                 ring.openID = nil
+                                SoundPalette.play(.releaseTick, on: value.entity,
+                                                  volume: 0.3)
                             } else {
                                 ring.openID = id
                                 SoundPalette.play(.pop, on: value.entity, volume: 0.35)
@@ -202,6 +204,11 @@ struct MagnetismSpaceView: View {
                             return
                         }
                         current = candidate.parent
+                    }
+                    // Folding by tapping elsewhere answers too — the
+                    // unfold pops, so a silent fold read as broken.
+                    if ring.openID != nil {
+                        SoundPalette.play(.releaseTick, on: value.entity, volume: 0.3)
                     }
                     ring.openID = nil
                 }

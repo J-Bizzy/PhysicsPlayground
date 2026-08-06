@@ -35,6 +35,8 @@ final class GravityLabRenderer {
     /// The body already acknowledged with a pickup pulse — one flash per
     /// grab, not one per frame.
     private var pulsedGrabID: UUID?
+    /// Where the release tick plays from when the grab ends.
+    private weak var pulsedGrabEntity: Entity?
 
     /// Where the system center sits in the room.
     static let systemPosition = SIMD3<Float>(0, 1.25, -1.2)
@@ -1091,7 +1093,9 @@ final class GravityLabRenderer {
                 // Hand owns the sphere: leave transforms alone.
                 if pulsedGrabID != orbiting.id {
                     pulsedGrabID = orbiting.id
+                    pulsedGrabEntity = slot.entity
                     PickupPulse.flash(on: slot.entity)
+                    SoundPalette.play(.grabTick, on: slot.entity, volume: 0.2)
                 }
             } else {
                 slot.entity.position = SIMD3<Float>(orbiting.body.position) * scale
@@ -1102,7 +1106,13 @@ final class GravityLabRenderer {
             bodyPool.slots[index].entity.isEnabled = false
             if index < bodyLabels.count { bodyLabels[index].isEnabled = false }
         }
-        if manipulatingBodyID == nil { pulsedGrabID = nil }
+        if manipulatingBodyID == nil {
+            if pulsedGrabID != nil, let entity = pulsedGrabEntity {
+                SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
+            }
+            pulsedGrabID = nil
+            pulsedGrabEntity = nil
+        }
 
         if let primary = model.primaryBody {
             sunLight.position = SIMD3<Float>(primary.body.position) * scale

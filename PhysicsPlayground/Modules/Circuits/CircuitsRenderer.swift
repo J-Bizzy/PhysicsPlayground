@@ -31,6 +31,8 @@ final class CircuitsRenderer {
     /// The part already acknowledged with a pickup pulse — one flash per
     /// grab, not one per frame.
     private var pulsedGrabID: UUID?
+    /// Where the release tick plays from when the grab ends.
+    private weak var pulsedGrabEntity: Entity?
 
     /// Parent for the selected component's readout attachment.
     let selectedAnchor = Entity()
@@ -439,10 +441,16 @@ final class CircuitsRenderer {
         if let id = manipulatingComponentID {
             if pulsedGrabID != id, let holder = visuals[id]?.holder {
                 pulsedGrabID = id
+                pulsedGrabEntity = holder
                 PickupPulse.flash(on: holder)
+                SoundPalette.play(.grabTick, on: holder, volume: 0.2)
             }
         } else {
+            if pulsedGrabID != nil, let entity = pulsedGrabEntity {
+                SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
+            }
             pulsedGrabID = nil
+            pulsedGrabEntity = nil
         }
         if appliedResistorTextureVersion != CircuitTextures.version {
             appliedResistorTextureVersion = CircuitTextures.version

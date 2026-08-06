@@ -481,6 +481,8 @@ struct PendulumsSpaceView: View {
                             pivotRing.openID = nil
                             if ring.openID == id {
                                 ring.openID = nil
+                                SoundPalette.play(.releaseTick, on: value.entity,
+                                                  volume: 0.3)
                             } else {
                                 ring.openID = id
                                 SoundPalette.play(.pop, on: value.entity, volume: 0.35)
@@ -488,6 +490,9 @@ struct PendulumsSpaceView: View {
                             return
                         }
                         current = candidate.parent
+                    }
+                    if ring.openID != nil {
+                        SoundPalette.play(.releaseTick, on: value.entity, volume: 0.3)
                     }
                     ring.openID = nil
                 }

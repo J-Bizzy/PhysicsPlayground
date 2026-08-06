@@ -670,6 +670,7 @@ struct CircuitsSpaceView: View {
                model.components.contains(where: { $0.id == id }) {
                 if ring.openID == id {
                     ring.openID = nil
+                    SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
                 } else {
                     ring.openID = id
                     SoundPalette.play(.pop, on: entity, volume: 0.35)
@@ -677,6 +678,9 @@ struct CircuitsSpaceView: View {
                 return
             }
             current = candidate.parent
+        }
+        if ring.openID != nil {
+            SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
         }
         ring.openID = nil
     }

@@ -34,6 +34,12 @@ struct SpatialSoundEvent: Equatable {
 enum SoundPalette {
     enum Sound: String, CaseIterable {
         case pop, whoosh, thud, chime, boom
+        /// The grab acknowledgement (2026-08-06): a short bright pluck,
+        /// quieter and quicker than `pop` — the audio half of the
+        /// pickup pulse. Its gentler sibling `releaseTick` answers a
+        /// set-down, and closes a control ring (open keeps its pop, so
+        /// the pair reads as unfold/fold rather than two unfolds).
+        case grabTick, releaseTick
     }
 
     private static var resources: [Sound: AudioFileResource] = [:]
@@ -328,6 +334,20 @@ enum SoundPalette {
                 let noise = Double.random(in: -1...1)
                 lowPassed += 0.05 * (noise - lowPassed)
                 return (sin(2 * .pi * 55 * t) + 1.6 * lowPassed) * exp(-t * 7)
+            }
+        case .grabTick:
+            // A short bright pluck: 1200 → 900 Hz over 40 ms, gone
+            // before the hand has finished closing.
+            return render(duration: 0.04) { t, _ in
+                let frequency = 1200 - 7500 * t
+                return sin(2 * .pi * max(frequency, 900) * t) * exp(-t * 70)
+            }
+        case .releaseTick:
+            // The set-down: lower, softer, slightly longer — an answer,
+            // not an echo.
+            return render(duration: 0.055) { t, _ in
+                let frequency = 900 - 3600 * t
+                return sin(2 * .pi * max(frequency, 700) * t) * exp(-t * 55)
             }
         }
     }
