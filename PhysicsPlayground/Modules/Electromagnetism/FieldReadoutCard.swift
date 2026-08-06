@@ -60,8 +60,7 @@ struct FieldReadoutCard: View {
         if model.capacitorOn {
             Divider().opacity(0.4)
             let kilovolts = (model.plateVoltage / 1000).rounded()
-            let gradient = ((model.plateVoltage / model.plateSeparation / 1000)
-                            * 10).rounded() / 10
+            let gradient = model.plateFieldkVPerM
             let centimetres = (model.plateSeparation * 100).rounded()
             Text(String(format: "ΔV %.0f kV   E = V/d = %.1f kV/m   d = %.0f cm",
                         kilovolts, gradient, centimetres))

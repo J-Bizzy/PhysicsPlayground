@@ -47,6 +47,17 @@ public final class SpatialTrackControl {
     private let read: () -> Double
     private let write: (Double) -> Void
     private let format: (Double) -> String
+    /// A second, quieter line under the rail — for a rail whose value
+    /// DERIVES something the apparatus teaches (the ΔV rail's E = V/d).
+    /// Re-evaluated every refresh, because the derived quantity can
+    /// move without the value moving (drag a plate: d changes, V does
+    /// not). Most rails pass nothing.
+    private let subtitle: ((Double) -> String)?
+    private var subtitleLabel: BackedLabel?
+    /// What VoiceOver last heard — value plus subtitle, merged, so the
+    /// spoken reading never drops the derived line when only the value
+    /// changed.
+    private var lastSpokenValue = ""
 
     private let bead = ModelEntity()
     private let filled = ModelEntity()
@@ -69,13 +80,15 @@ public final class SpatialTrackControl {
                 layout: TrackLayout = TrackLayout(),
                 read: @escaping () -> Double,
                 write: @escaping (Double) -> Void,
-                format: @escaping (Double) -> String) {
+                format: @escaping (Double) -> String,
+                subtitle: ((Double) -> String)? = nil) {
         self.name = name
         self.layout = layout
         self.range = range
         self.read = read
         self.write = write
         self.format = format
+        self.subtitle = subtitle
         self.valueMaterial = UnlitMaterial(color: accent)
 
         root.name = name
@@ -125,6 +138,19 @@ public final class SpatialTrackControl {
         textPivot.position = [0, 0.040, 0]
         textPivot.addChild(valueText)
         root.addChild(textPivot)
+
+        // The derived line hangs UNDER the rail — the space beneath an
+        // instrument that itself hangs under its apparatus is the one
+        // direction guaranteed clear of both.
+        if subtitle != nil {
+            let pivot = Entity()
+            pivot.components.set(BillboardComponent())
+            pivot.position = [0, -0.036, 0]
+            let label = BackedLabel(size: 0.02)
+            pivot.addChild(label.root)
+            root.addChild(pivot)
+            subtitleLabel = label
+        }
 
         // Whole-track target: grabbing anywhere on the rail is a legitimate
         // way to set a value, and hunting for a 1.6 cm bead is not.
@@ -223,6 +249,20 @@ public final class SpatialTrackControl {
         filled.position = [-length / 2 + travelled / 2, 0, 0]
 
         setLabel(format(read()))
+
+        if let subtitle {
+            let text = subtitle(read())
+            subtitleLabel?.setText(text, color: UIColor(white: 0.95, alpha: 1))
+            // VoiceOver speaks both quantities, and keeps speaking both
+            // when only one of them moved.
+            let spoken = "\(lastLabel), \(text)"
+            if spoken != lastSpokenValue,
+               var accessibility = root.components[AccessibilityComponent.self] {
+                lastSpokenValue = spoken
+                accessibility.value = LocalizedStringResource(stringLiteral: spoken)
+                root.components.set(accessibility)
+            }
+        }
     }
 
     /// Rewrites the value text, and only when it has actually changed —

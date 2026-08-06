@@ -317,8 +317,15 @@ struct FieldSpaceView: View {
             accent: DesignTokens.Palette.positiveUI,
             range: FieldModel.plateVoltageRange,
             read: { model.plateVoltage },
-            write: { model.plateVoltage = $0 },
-            format: { String(format: "%.0f kV", $0 / 1000) })
+            // Snapped to 500 V so the bead lands on honest values.
+            write: { model.setPlateVoltage($0) },
+            format: { String(format: "%.0f kV", $0 / 1000) },
+            // E = V/d, live under the rail — the physics this apparatus
+            // teaches, previously visible only on the card across the
+            // room. Follows a plate drag (d) as well as the bead (V).
+            subtitle: { _ in
+                String(format: "E = %.1f kV/m", model.plateFieldkVPerM)
+            })
         renderer.viewRoot.addChild(voltage.root)
         self.voltageTrack = voltage
 

@@ -48,8 +48,13 @@ working session:
       INSPIRATION half is still owed.
 - [ ] **The capacitor ΔV rail.** "We will revisit this later. please
       remind me about it because I want to improve it." The
-      cannot-switch-off bug got a fix (see the module section); the
-      improvement pass is still owed.
+      cannot-switch-off bug got a fix (see the module section), and
+      **the improvement pass landed 2026-08-06**: a live E = V/d line
+      hangs under the rail (it follows a PLATE drag as well as the
+      bead — pull a plate and watch E fall while ΔV holds), writes
+      snap to 500 V so the bead lands on honest values, and VoiceOver
+      speaks both quantities. Judge in the room: `-emCap 1
+      -emVolts 30000`, then drag a plate and watch the E line follow.
 
 ---
 

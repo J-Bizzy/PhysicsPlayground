@@ -145,6 +145,23 @@ final class FieldModel {
     nonisolated static let plateVoltageRange = 2_000.0...40_000.0
     nonisolated static let plateSeparationRange = 0.15...1.0
 
+    /// The gap's uniform field strength in kV/m, quantised to the tenth
+    /// every surface displays — ONE arithmetic for the ΔV rail's E line
+    /// and the readout card, so the two can never disagree.
+    var plateFieldkVPerM: Double {
+        ((plateVoltage / plateSeparation / 1000) * 10).rounded() / 10
+    }
+
+    /// Sets ΔV snapped to 500 V steps, clamped to the range. The rail
+    /// writes through this so the displayed "%.0f kV" can never
+    /// disagree with the model by sub-display noise — the bead lands on
+    /// honest values (2026-08-06, the ΔV rail improvement pass).
+    func setPlateVoltage(_ volts: Double) {
+        let clamped = min(max(volts, Self.plateVoltageRange.lowerBound),
+                          Self.plateVoltageRange.upperBound)
+        plateVoltage = (clamped / 500).rounded() * 500
+    }
+
     // MARK: Magnetic field
 
     /// A uniform B pointing straight UP fills the region; the probe

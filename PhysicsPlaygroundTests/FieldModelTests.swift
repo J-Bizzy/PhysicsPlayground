@@ -299,6 +299,37 @@ final class FieldModelTests: XCTestCase {
         XCTAssertTrue(model.showLines)
     }
 
+    /// The ΔV rail writes through a 500 V snap (2026-08-06): the
+    /// displayed "%.0f kV" can never disagree with the model by
+    /// sub-display noise, and reaching past the range clamps first.
+    func testPlateVoltageWritesSnapTo500VoltSteps() {
+        let model = FieldModel()
+        model.setPlateVoltage(17_263)
+        XCTAssertEqual(model.plateVoltage, 17_500, accuracy: 1e-9)
+        model.setPlateVoltage(17_249)
+        XCTAssertEqual(model.plateVoltage, 17_000, accuracy: 1e-9)
+        model.setPlateVoltage(999_999)
+        XCTAssertEqual(model.plateVoltage, 40_000, accuracy: 1e-9,
+                       "clamped to the range's top, which is itself on-grid")
+        model.setPlateVoltage(-5)
+        XCTAssertEqual(model.plateVoltage, 2_000, accuracy: 1e-9)
+    }
+
+    /// One arithmetic for E = V/d everywhere it is shown: the helper
+    /// equals V/d to the displayed tenth across the separation range.
+    func testPlateFieldReadsVOverDToTheDisplayedTenth() {
+        let model = FieldModel()
+        for (volts, separation) in [(2_000.0, 0.15), (20_000.0, 0.44),
+                                    (40_000.0, 1.0), (13_500.0, 0.62)] {
+            model.plateVoltage = volts
+            model.plateSeparation = separation
+            let exact = volts / separation / 1000
+            XCTAssertEqual(model.plateFieldkVPerM, (exact * 10).rounded() / 10,
+                           accuracy: 1e-9,
+                           "\(volts) V over \(separation) m")
+        }
+    }
+
     /// The capacitor accelerates the probe at exactly a = qV/(d·m).
     func testCapacitorDrift() {
         // Capacitor: no point charges, plates on, probe at the center.
