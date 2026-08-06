@@ -36,6 +36,16 @@ public enum RoomWalls {
             self.halfU = halfU
             self.halfV = halfV
         }
+
+        /// The same wall expressed in a frame shifted by `delta` — for a
+        /// caller whose simulation runs in a translated copy of world
+        /// space (a lab the user has relocated). Pure translation: the
+        /// normal and in-plane axes are directions and do not move.
+        public func translated(by delta: SIMD3<Double>) -> Wall {
+            var wall = self
+            wall.center += delta
+            return wall
+        }
     }
 
     public struct Hit: Sendable {
@@ -45,6 +55,11 @@ public enum RoomWalls {
         public var velocity: SIMD3<Double>
         /// How fast it hit, along the wall normal (for sound volume).
         public var impactSpeed: Double
+        /// How far along the step's segment the contact happened, 0…1 —
+        /// what a caller needs to SPEND THE REST OF THE FRAME along the
+        /// reflected velocity instead of freezing the ball at the wall
+        /// (which deadened every fast bounce by up to a frame's travel).
+        public var t: Double
     }
 
     /// The four vertical rectangles and the ceiling of an axis-aligned
@@ -93,11 +108,17 @@ public enum RoomWalls {
                 side = s1 >= 0 ? 1 : -1
             }
             let face = side * wall.normal
-            let into = simd_dot(velocity, face)
-            guard into < 0 else { continue }  // moving away, not striking
 
             let p0 = s0 * side - radius
             let p1 = s1 * side - radius
+            // Approach is a POSITION claim, not a velocity one: the
+            // chord must close on the face. The old guard read the
+            // END-OF-FRAME velocity, so a graze where gravity flipped
+            // v·n inside the step — a ball topping out just under the
+            // ceiling — skipped the strike its own chord had made, and
+            // the next step started past the plane. The velocity's job
+            // is only to build the reflection, below.
+            guard p1 < p0 - 1e-12 else { continue }
 
             let t: Double
             let contact: SIMD3<Double>
@@ -109,11 +130,13 @@ public enum RoomWalls {
                 // the next step walks through from the inside.
                 t = max(p0, 0) / max(p0 - p1, 1e-12)
                 contact = previous + t * (current - previous)
-            } else if p0 < 0, p0 > -radius, p1 < p0 {
+            } else if p0 < 0 {
                 // Started already inside the ball-radius shell (a spawn
                 // near the wall, or numeric residue from a prior bounce)
                 // and burrowing deeper: reflect immediately, pushed back
                 // to the surface — nothing may tunnel through quietly.
+                // (`p0 ≥ -radius` always holds by construction: the side
+                // classification puts `|s0|` at 0 or more.)
                 t = 0
                 contact = current + face * (radius - s1 * side)
             } else {
@@ -123,8 +146,13 @@ public enum RoomWalls {
                   abs(simd_dot(contact - wall.center, wall.vAxis)) <= wall.halfV + radius
             else { continue }
 
+            // Clamped at zero: on a graze the frame-end velocity may
+            // already point away, and reflecting a receding component
+            // would push the ball INTO the wall.
+            let into = min(simd_dot(velocity, face), 0)
             let bounced = velocity - (1 + restitution) * into * face
-            let hit = Hit(position: contact, velocity: bounced, impactSpeed: -into)
+            let hit = Hit(position: contact, velocity: bounced,
+                          impactSpeed: -into, t: t)
             if best == nil || t < best!.t {
                 best = (t, hit)
             }

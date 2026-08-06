@@ -124,4 +124,82 @@ final class RoomWallsTests: XCTestCase {
         XCTAssertEqual(hit!.position.x, 1.45, accuracy: 1e-9,
                        "stopped at the nearer wall")
     }
+
+    // MARK: The 2026-08-06 reliability pass
+
+    /// A ceiling graze: the chord crosses the plane inside the step but
+    /// gravity has already flipped v·n by the frame's end. The old
+    /// guard read that END-OF-FRAME velocity and skipped the strike its
+    /// own chord had made — the next step then started past the plane,
+    /// which is the tunnel every "the bouncing is unreliable" report
+    /// begins with. Approach is a position claim now.
+    func testGrazeWhoseVelocityFlippedMidFrameStillStrikes() {
+        let ceiling = RoomWalls.Wall(
+            center: SIMD3(0, 3, 0), normal: SIMD3(0, -1, 0),
+            uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 0, 1),
+            halfU: 3, halfV: 3)
+        // Rose through y = 3 during the step; end velocity already falls.
+        let hit = RoomWalls.strike(
+            previous: SIMD3(0, 2.90, 0), current: SIMD3(0, 3.02, 0),
+            velocity: SIMD3(1, -0.2, 0), radius: 0.05, restitution: 0.6,
+            walls: [ceiling])
+        XCTAssertNotNil(hit, "the chord crossed; the graze must strike")
+        XCTAssertLessThanOrEqual(hit!.position.y, 3 - 0.05 + 1e-9,
+                                 "contact leaves the ball on the room side")
+        // The reflection clamps a receding normal component at zero:
+        // nothing may ADD speed into the wall it is leaving.
+        XCTAssertEqual(hit!.velocity.y, -0.2, accuracy: 1e-12)
+        XCTAssertEqual(hit!.impactSpeed, 0, accuracy: 1e-12)
+    }
+
+    /// Hand-throw speeds against real frame rates: whenever the chord
+    /// reaches the wall, the strike lands and the ball never ends past
+    /// the plane — the sweep that pins "reliable" as arithmetic.
+    func testFastCrossingsNeverEndPastThePlane() {
+        let radius = 0.05
+        for speed in [1.0, 5.0, 12.0, 30.0] {
+            for dt in [1.0 / 240, 1.0 / 90, 1.0 / 30] {
+                let previous = SIMD3(1.0, 1.5, 0.0)
+                let velocity = SIMD3(speed, 0, 0)
+                let current = previous + velocity * dt
+                guard current.x >= 2 - radius else { continue }  // never reached
+                let hit = RoomWalls.strike(
+                    previous: previous, current: current,
+                    velocity: velocity, radius: radius, restitution: 0.7,
+                    walls: [wall])
+                XCTAssertNotNil(hit, "\(speed) m/s at dt \(dt) tunnelled")
+                XCTAssertLessThanOrEqual(hit!.position.x, 2 - radius + 1e-9,
+                                         "\(speed) m/s at dt \(dt) ended past the plane")
+                XCTAssertEqual(hit!.velocity.x, -0.7 * speed, accuracy: 1e-9,
+                               "|v_n'| = e·|v_n| exactly")
+            }
+        }
+    }
+
+    /// `Hit.t` is the fraction of the step spent reaching the wall —
+    /// what the model uses to spend the REST of the frame along the
+    /// reflection instead of freezing the ball at contact.
+    func testHitReportsTheStepFractionConsumed() {
+        let hit = RoomWalls.strike(
+            previous: SIMD3(1.75, 1.5, 0), current: SIMD3(2.15, 1.5, 0),
+            velocity: SIMD3(4, 0, 0), radius: 0.05, restitution: 1,
+            walls: [wall])
+        XCTAssertNotNil(hit)
+        // Contact surface at x = 1.95: half the 0.4 m chord.
+        XCTAssertEqual(hit!.t, 0.5, accuracy: 1e-9)
+    }
+
+    /// A wall translated into a shifted frame strikes where the frame
+    /// says, not where the world does — the lab-relocation case.
+    func testTranslatedWallStrikesInItsOwnFrame() {
+        let shifted = wall.translated(by: SIMD3(-1, 0, 0))   // plane now at x = 1
+        XCTAssertEqual(shifted.center.x, 1, accuracy: 1e-12)
+        XCTAssertEqual(shifted.normal, wall.normal, "directions do not translate")
+        let hit = RoomWalls.strike(
+            previous: SIMD3(0.5, 1.5, 0), current: SIMD3(1.1, 1.5, 0),
+            velocity: SIMD3(3, 0, 0), radius: 0.05, restitution: 0.5,
+            walls: [shifted])
+        XCTAssertNotNil(hit)
+        XCTAssertEqual(hit!.position.x, 0.95, accuracy: 1e-9)
+    }
 }

@@ -44,6 +44,13 @@ public struct RoomBox: Equatable, Sendable {
             && point.z >= low.z && point.z <= high.z
     }
 
+    /// The same box expressed in a frame shifted by `delta` — for a
+    /// caller whose simulation runs in a translated copy of world space
+    /// (a lab the user has relocated with the anchor).
+    public func translated(by delta: SIMD3<Double>) -> RoomBox {
+        RoomBox(center: center + delta, halfExtents: halfExtents)
+    }
+
     /// Shrinks (or grows, with a negative inset) the box on every side.
     /// Never collapses past a millimetre so clipping stays well-defined.
     public func inset(by amount: Double) -> RoomBox {
