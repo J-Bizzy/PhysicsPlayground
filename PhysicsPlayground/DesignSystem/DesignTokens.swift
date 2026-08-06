@@ -44,8 +44,18 @@ enum DesignTokens {
         static let projectile = Color(uiColor: projectileUI)
         static let predictedArc = Color(uiColor: predictedArcUI)
         static let target = Color(uiColor: targetUI)
-        /// The bright end of the arrow-strength ramp (see VectorFieldArrows).
-        static let arrowStrong = Color.yellow
+        // `arrowStrong` (Color.yellow) was deleted 2026-08-06: zero call
+        // sites — VectorFieldArrows owns its own ramp and never read
+        // this. A token nobody reads is unreachable choice, and this
+        // project deletes unreachable choice (hintCornerRadius went the
+        // same way).
+
+        /// Completion gold — the colour of DONE, everywhere it is said:
+        /// the in-space progress ring's full band and the flat catalog's
+        /// "N of N experiments" line. One value, two surfaces, so the
+        /// two claims of completeness cannot drift apart.
+        static let completionGoldUI = UIColor(red: 1.0, green: 0.84, blue: 0.25, alpha: 1)
+        static let completionGold = Color(uiColor: completionGoldUI)
 
         // Gravity Lab
         // Aliases of RenderKit's VectorPalette — the one canon for the
@@ -85,12 +95,24 @@ enum DesignTokens {
         /// prevent — an unowned hue on a physics object.
         static let motorAccentUI = UIColor(red: 0.2, green: 0.85, blue: 0.75, alpha: 1)
 
-        // Module accent colors, one per catalog entry.
-        static let electromagnetismAccent = Color.yellow
-        static let kinematicsAccent = Color.orange
+        // Module accent colors, one per catalog entry — and the ONE
+        // authority for the two domain hues (2026-08-06). Circuits and
+        // Projectiles used to wear stock `Color.green`/`.orange` while
+        // their domain doors wore #30D158/#FF9F0A — two greens and two
+        // oranges defined independently, near enough to read as the
+        // same colour badly printed. The accents adopted the richer
+        // door values and `HubDomain.color` reads them from here.
+        // (`HubTitleStyle.ivory`/`.champagne` stay where they are: the
+        // in-space brand voice is deliberately OUTSIDE this accent
+        // system — signage, not wayfinding.)
+        /// Named for the module id ("electrostatics"), not the domain —
+        /// it was `electromagnetismAccent = .yellow`, a stock colour
+        /// wearing its neighbour module's subject as a name.
+        static let electrostaticsAccent = Color(red: 1.0, green: 0.84, blue: 0.04) // #FFD60A
+        static let kinematicsAccent = Color(red: 1.00, green: 0.62, blue: 0.04)    // #FF9F0A, the Mechanics door
         static let gravityAccent = Color.indigo
         static let pendulumsAccentUI = UIColor(Color.purple)
-        static let circuitsAccent = Color.green
+        static let circuitsAccent = Color(red: 0.19, green: 0.82, blue: 0.35)      // #30D158, the E&M door
         static let pendulumsAccent = Color.purple
         static let magnetismAccent = Color(red: 0.85, green: 0.3, blue: 0.62)
     }

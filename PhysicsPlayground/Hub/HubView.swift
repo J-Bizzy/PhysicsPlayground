@@ -265,7 +265,8 @@ private struct HubCatalogRow: View {
                         Text("\(done) of \(entries.count) experiments")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(done == entries.count
-                                             ? Color.yellow : Color.secondary)
+                                             ? DesignTokens.Palette.completionGold
+                                             : Color.secondary)
                     }
                 }
                 Spacer(minLength: 0)

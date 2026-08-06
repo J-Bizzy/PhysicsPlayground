@@ -122,6 +122,11 @@ enum HubTitleStyle {
 
     // MARK: Shared tones
 
+    /// Deliberately OUTSIDE `DesignTokens.Palette`'s accent system,
+    /// which became the one authority for module and domain hues on
+    /// 2026-08-06: these two are the in-space brand voice — signage,
+    /// not wayfinding — and folding them into the accent table would
+    /// invite exactly the borrowing it exists to prevent.
     /// The wordmark's neutral letters and its champagne — the same two
     /// tones the home has always spoken its neutral role in, so the
     /// podium rim and the title rule (also champagne) keep matching.

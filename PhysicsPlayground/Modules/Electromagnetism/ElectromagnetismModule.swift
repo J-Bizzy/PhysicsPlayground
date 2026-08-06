@@ -27,7 +27,7 @@ enum ElectromagnetismModule {
             shortTitle: "Fields",
             blurb: "Place charges, trace the field lines they make, and ride a test charge through Coulomb's law.",
             icon: "bolt.fill",
-            accent: DesignTokens.Palette.electromagnetismAccent,
+            accent: DesignTokens.Palette.electrostaticsAccent,
             firstRunHint: "Pull a charge out of the wells on your right — it is in your hand the moment it exists. Drag it anywhere and the field follows; tap it and its controls unfold around it. The switches on your left decide what else is in the room. visionOS will ask to use your room so the lab can stand in it.",
             // Opens part-dimmed: field lines are thin glowing filaments —
             // they need something to glow against.

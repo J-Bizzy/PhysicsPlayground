@@ -1030,7 +1030,7 @@ final class HubScene {
         let ring = Entity()
         let radius: Float = 0.15
         let z: Float = -0.10
-        let gold = UIColor(red: 1.0, green: 0.84, blue: 0.25, alpha: 1)
+        let gold = DesignTokens.Palette.completionGoldUI
         let complete = done == total
 
         func circlePoints(fraction: Float, z: Float) -> [SIMD3<Float>] {

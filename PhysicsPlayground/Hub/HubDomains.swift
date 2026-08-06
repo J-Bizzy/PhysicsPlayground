@@ -35,10 +35,14 @@ enum HubDomain: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The door hues live in `DesignTokens.Palette` (2026-08-06) — the
+    /// domain and its flagship module wear the SAME colour now, where
+    /// they used to be two independently-typed near-matches (#30D158
+    /// beside stock `.green`, #FF9F0A beside stock `.orange`).
     var color: Color {
         switch self {
-        case .electricity: Color(red: 0.19, green: 0.82, blue: 0.35) // #30D158
-        case .mechanics: Color(red: 1.00, green: 0.62, blue: 0.04)   // #FF9F0A
+        case .electricity: DesignTokens.Palette.circuitsAccent
+        case .mechanics: DesignTokens.Palette.kinematicsAccent
         }
     }
 
