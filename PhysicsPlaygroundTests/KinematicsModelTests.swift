@@ -142,6 +142,41 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertFalse(summary.wasThrown)
     }
 
+    /// The reliability claim, as arithmetic (2026-08-06): at hand-throw
+    /// speeds and real frame times, a ball never spends a frame past a
+    /// wall — the WALL contains it, not the safety box behind it. The
+    /// box is parked far away so a tunnel would be caught red-handed
+    /// as a position beyond the plane, not silently clamped.
+    func testFastFlightsNeverEndAFramePastAWall() {
+        for speed in [4.0, 8.0, 12.0] {
+            for dt in [1.0 / 90.0, 1.0 / 30.0] {
+                let model = bareModel()
+                let wallX = 2.0
+                model.roomWalls = [RoomWalls.Wall(
+                    center: SIMD3(wallX, 1.5, 0), normal: SIMD3(-1, 0, 0),
+                    uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0),
+                    halfU: 50, halfV: 50)]
+                model.launchSpeed = speed
+                model.setAim(elevationDegrees: 10, azimuthDegrees: 0)
+                model.fire()
+
+                let radius = model.flights[0].projectile.diameter / 2
+                var reach = -Double.infinity
+                for _ in 0..<Int(6.0 / dt) where model.flights[0].status == .flying {
+                    model.step(dt: dt)
+                    reach = max(reach, model.flights[0].state.position.x)
+                    XCTAssertLessThanOrEqual(
+                        model.flights[0].state.position.x, wallX - radius + 1e-6,
+                        "\(speed) m/s at dt \(dt): a frame ended past the wall")
+                }
+                // The invariant means nothing if the ball never got
+                // there — floor bounces alone must not pass this test.
+                XCTAssertGreaterThan(reach, wallX - radius - 0.3,
+                                     "\(speed) m/s at dt \(dt): never reached the wall")
+            }
+        }
+    }
+
     /// A ball fired down through a hoop scores exactly once; one that
     /// misses the rim scores nothing.
     func testBallThroughHoopScoresOnceAndMissesDoNot() {

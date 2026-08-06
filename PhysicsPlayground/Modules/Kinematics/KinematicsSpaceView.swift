@@ -218,6 +218,16 @@ struct KinematicsSpaceView: View {
                     // module used to run a second plane-detection session
                     // of its own, for the same planes the shell was
                     // already tracking.
+                    // Everything the room hands the model is TRANSLATED
+                    // INTO MODULE SPACE first. The model's coordinates
+                    // render under `renderer.root`, which carries the
+                    // lab-placement offset — so a wall fed in raw world
+                    // coordinates is correct only while the lab has
+                    // never been moved, and wrong by exactly the offset
+                    // after the anchor relocates it. "Bounces at the
+                    // wall sometimes, a step past it other times" was
+                    // this line, not the physics.
+                    let placement = SIMD3<Double>(appModel.labPlacement.offset)
                     if appModel.room.hasScannedRoom {
                         // Detected walls backed by the room's boundary
                         // box, so a ball ALWAYS bounces at the room's
@@ -225,15 +235,19 @@ struct KinematicsSpaceView: View {
                         // the ceiling. The bounds also feed the
                         // containment clamp: no escape, ever.
                         model.roomWalls = appModel.room.collisionWalls
+                            .map { $0.translated(by: -placement) }
                         model.roomBounds = appModel.room.bounds
+                            .translated(by: -placement)
                     }
                     model.step(dt: event.deltaTime)
                     // A ball that reaches an open hand is caught: the
                     // one moment in the module where the simulation
                     // reaches back to you. Device-only — the simulator
                     // reports no fingertips, so this is simply inert
-                    // there.
-                    model.catchBalls(atFingertips: appModel.room.fingertips)
+                    // there. Fingertips arrive in world space and cross
+                    // into module space like the walls do.
+                    model.catchBalls(atFingertips:
+                        appModel.room.fingertips.map { $0 - placement })
                     renderer?.tick(model)
                     wells?.update(dt: event.deltaTime)
                     syncBloom(dt: event.deltaTime)

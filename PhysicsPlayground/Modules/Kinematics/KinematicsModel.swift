@@ -128,12 +128,25 @@ final class KinematicsModel {
         // Close enough (1.4 m) that the welcome shot actually reaches
         // it before landing.
         #if DEBUG
-        if UserDefaults.standard.bool(forKey: "kinWalls") {
+        let kinWalls = UserDefaults.standard.integer(forKey: "kinWalls")
+        if kinWalls > 0 {
             roomWalls = [RoomWalls.Wall(
                 center: SIMD3(1.4, 1.5, -0.9), normal: SIMD3(1, 0, 0),
                 uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0),
                 halfU: 2.5, halfV: 1.5)]
             fire()
+            if kinWalls >= 2 {
+                // `-kinWalls 2`: also a hand-throw-speed ball straight
+                // at the wall — the fast regime the 2026-08-06
+                // reliability fixes exist for, photographed rather than
+                // trusted. A screenshot of only the gentle welcome shot
+                // proves nothing about tunnelling.
+                let savedSpeed = launchSpeed
+                launchSpeed = 12
+                setAim(elevationDegrees: 12, azimuthDegrees: 0)
+                fire()
+                launchSpeed = savedSpeed
+            }
         }
         #endif
     }
@@ -612,18 +625,31 @@ final class KinematicsModel {
             flight.nextDotTime += Self.dotInterval
         }
 
-        // Wall contact: the real room pushes back (when enabled).
-        if respectRoomWalls, !roomWalls.isEmpty,
-           let hit = RoomWalls.strike(
-               previous: previous.position, current: flight.state.position,
-               velocity: flight.state.velocity,
-               radius: flight.projectile.diameter / 2,
-               restitution: flight.projectile.restitution,
-               walls: roomWalls) {
-            flight.bounces += 1
-            emitSound(.thud, at: hit.position, volume: min(hit.impactSpeed / 6, 1))
-            flight.state = ParticleDynamics.State(
-                position: hit.position, velocity: hit.velocity)
+        // Wall contact: the real room pushes back (when enabled). The
+        // frame does not end at the wall — the fraction of the step
+        // left after contact is spent along the reflection, and struck
+        // again if it reaches another wall (a corner can genuinely take
+        // two bounces in one frame). Bounded, because a pathological
+        // wedge must cost frames, never hang one.
+        if respectRoomWalls, !roomWalls.isEmpty {
+            var segmentStart = previous.position
+            var timeLeft = dt
+            for _ in 0..<3 {
+                guard let hit = RoomWalls.strike(
+                    previous: segmentStart, current: flight.state.position,
+                    velocity: flight.state.velocity,
+                    radius: flight.projectile.diameter / 2,
+                    restitution: flight.projectile.restitution,
+                    walls: roomWalls) else { break }
+                flight.bounces += 1
+                emitSound(.thud, at: hit.position, volume: min(hit.impactSpeed / 6, 1))
+                timeLeft *= (1 - hit.t)
+                flight.state = ParticleDynamics.State(
+                    position: hit.position + hit.velocity * timeLeft,
+                    velocity: hit.velocity)
+                segmentStart = hit.position
+                if timeLeft <= 1e-6 { break }
+            }
         }
         contain(&flight)
 
