@@ -51,6 +51,9 @@ public final class SpatialTrackControl {
     private let bead = ModelEntity()
     private let filled = ModelEntity()
     private let valueText = ModelEntity()
+    /// The dark plate behind the value — rebuilt with the label, sized
+    /// to the glyph run it backs.
+    private var valueBacking: ModelEntity?
     private let valueMaterial: UnlitMaterial
     private var labelCache: [String: MeshResource] = [:]
     private var lastLabel = ""
@@ -253,6 +256,17 @@ public final class SpatialTrackControl {
         valueText.model = ModelComponent(mesh: mesh, materials: [valueMaterial])
         let bounds = mesh.bounds
         valueText.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
+
+        // The house dark plate behind the number (2026-08-06) — this is
+        // the value under EVERY rail in the app, and it was accent type
+        // floating naked over passthrough. A sibling of the glyphs,
+        // lifted to the run's vertical centre, because the text is
+        // x-centred only (its baseline rides the pivot).
+        valueBacking?.removeFromParent()
+        let plate = BackedLabel.backing(behind: bounds, size: 0.028)
+        plate.position.y = (bounds.min.y + bounds.max.y) / 2
+        valueText.parent?.addChild(plate)
+        valueBacking = plate
     }
 
     /// A quaternion whose local +Z maps to `normal`, +Y kept upright, so the

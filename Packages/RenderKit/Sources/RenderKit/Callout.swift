@@ -42,11 +42,14 @@ public final class Callout {
     private var lastTextTime: Double = -1
 
     /// Whether the text wears the house dark backing plate
-    /// (`BackedLabel.backing`). OFF by default: the backing rollout is
-    /// staged module by module and judged on device — a room full of
-    /// pills is the failure mode being checked for. Takes effect on the
-    /// next text change.
-    public var showsBacking = false
+    /// (`BackedLabel.backing`). ON by default as of 2026-08-06: the
+    /// staged rollout's first module (Circuits) passed its screenshot
+    /// verdict, and every callout in the app is a live number floating
+    /// over passthrough — the exact case the plate exists for. The
+    /// property survives as an opt-out for a future bespoke case.
+    /// Takes effect on the next text change.
+    public var showsBacking = true
+    private var backingEntity: ModelEntity?
 
     /// What VoiceOver calls this readout — the quantity, not the number.
     ///
@@ -128,8 +131,10 @@ public final class Callout {
         lastTextTime = now
         lastText = text
         labelEntity?.removeFromParent()
+        backingEntity?.removeFromParent()
         guard !text.isEmpty else {
             labelEntity = nil
+            backingEntity = nil
             return
         }
         let mesh = Self.textMesh(text, size: textSize)
@@ -141,7 +146,16 @@ public final class Callout {
         model.position = [-(bounds.min.x + bounds.max.x) / 2,
                           -(bounds.min.y + bounds.max.y) / 2, 0]
         if showsBacking {
-            model.addChild(BackedLabel.backing(behind: bounds, size: textSize))
+            // A SIBLING of the centred glyphs, never a child: the model
+            // above is shifted to centre its run on the pivot, so a
+            // plate parented to it would land at pivot-minus-centre —
+            // off the text by exactly the centring shift. (Latent from
+            // the flag's first landing; caught when the default flipped.)
+            let plate = BackedLabel.backing(behind: bounds, size: textSize)
+            labelPivot.addChild(plate)
+            backingEntity = plate
+        } else {
+            backingEntity = nil
         }
         labelPivot.addChild(model)
         labelEntity = model

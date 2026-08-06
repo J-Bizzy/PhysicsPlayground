@@ -64,4 +64,78 @@ final class BackedLabelTests: XCTestCase {
         XCTAssertTrue(label.root.children.isEmpty,
                       "an empty reading leaves no orphaned plate floating in the room")
     }
+
+    // MARK: The 2026-08-06 rollout
+
+    /// The Callout's plate must sit ON the glyph run. The first wiring
+    /// parented the plate to the CENTRE-SHIFTED glyph model, so it
+    /// landed at pivot-minus-centre — off the text by exactly the
+    /// centring shift. Latent while the flag was off; pinned here the
+    /// day the default flipped.
+    func testCalloutBackingSitsOnTheGlyphRun() throws {
+        let callout = Callout(color: .white)
+        callout.setText("12.5 µT")
+
+        let pivot = try XCTUnwrap(callout.root.children.first {
+            $0.components[BillboardComponent.self] != nil
+        }, "the callout lost its billboarded label pivot")
+        let models = pivot.children.compactMap { $0 as? ModelEntity }
+        XCTAssertEqual(models.count, 2, "a backed callout is a plate and its glyphs")
+        guard models.count == 2 else { return }
+        let plate = models[0]
+        let glyphs = models[1]
+
+        let bounds = try XCTUnwrap(glyphs.model).mesh.bounds
+        // The glyph run's centre, in pivot space, must be the pivot…
+        XCTAssertEqual(glyphs.position.x + (bounds.min.x + bounds.max.x) / 2, 0,
+                       accuracy: 1e-5)
+        XCTAssertEqual(glyphs.position.y + (bounds.min.y + bounds.max.y) / 2, 0,
+                       accuracy: 1e-5)
+        // …and the plate must sit exactly there, not off by the shift.
+        XCTAssertEqual(plate.position.x, 0, accuracy: 1e-5,
+                       "the plate is off the text by the centring shift — "
+                       + "it was parented to the shifted glyph model again")
+        XCTAssertEqual(plate.position.y, 0, accuracy: 1e-5)
+    }
+
+    /// The rail's value plate is replaced across value changes, never
+    /// accumulated — a rail that is dragged all day must not stack a
+    /// hundred plates behind its number.
+    func testRailValuePlateIsReplacedNotAccumulated() {
+        let box = ValueBox()
+        let track = SpatialTrackControl(
+            name: "Test", center: .zero, normal: [0, 0, 1], accent: .white,
+            range: 0...100, layout: TrackLayout(length: 0.26),
+            read: { box.value }, write: { box.value = $0 },
+            format: { String(format: "%.0f", $0) })
+
+        func plateCount() -> Int {
+            var count = 0
+            func walk(_ entity: Entity) {
+                if let model = entity as? ModelEntity,
+                   model.model?.mesh.bounds.extents.z ?? 1 < 0.001,
+                   model.components[CollisionComponent.self] == nil,
+                   entity.name.isEmpty {
+                    count += 1
+                }
+                entity.children.forEach(walk)
+            }
+            walk(track.root)
+            return count
+        }
+
+        track.refresh()
+        let first = plateCount()
+        XCTAssertGreaterThan(first, 0, "the rail's number never got its plate")
+        for value in [10.0, 55.0, 90.0] {
+            box.value = value
+            track.refresh()
+        }
+        XCTAssertEqual(plateCount(), first,
+                       "value changes accumulated plates instead of replacing one")
+    }
+
+    private final class ValueBox {
+        var value: Double = 20
+    }
 }
