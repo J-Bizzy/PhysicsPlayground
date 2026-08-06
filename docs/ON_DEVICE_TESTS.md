@@ -39,8 +39,13 @@ working session:
 - [ ] **Projectiles, whole-module improvement.** "It has the same UI
       flip issue, the wall bouncing is unreliable, and it just seems
       uninspired. we will revisit." The flip is fixed app-wide and a
-      ball well was added; the bounce reliability and the inspiration
-      are still owed.
+      ball well was added; **the bounce reliability landed 2026-08-06**
+      (three distinct defects: walls fed in world space so bounces went
+      wrong by exactly the anchor offset after relocating the lab; a
+      graze whose v·n flipped mid-frame skipped its own strike; the
+      post-bounce remainder of the frame was discarded, deadening fast
+      bounces). The check is below in the module section. The
+      INSPIRATION half is still owed.
 - [ ] **The capacitor ΔV rail.** "We will revisit this later. please
       remind me about it because I want to improve it." The
       cannot-switch-off bug got a fix (see the module section); the
@@ -295,6 +300,17 @@ only place most of them can be tested at all.**
 
 **The whole-module improvement pass is deferred** (see the top of this
 file). The new well and the standing script:
+
+- [ ] **THE BOUNCE IS RELIABLE NOW (2026-08-06) — beat on it.** Ten
+      hard overhand throws at a real wall: ten bounces AT the wall,
+      zero balls through it or frozen against it (fast bounces used to
+      die at contact because the frame's remainder was discarded).
+- [ ] **Throw AFTER relocating the lab with the anchor.** This is the
+      exact defect: the walls were fed in world space while the lab
+      rendered offset, so after a move every bounce happened a step
+      away from the real wall. Move the lab a metre, throw at every
+      wall, and confirm contact visibly AT the surface. Catching a
+      ball also had the offset — catch one after moving the lab too.
 
 - [ ] ⟳ **THE BALL WELL** — new. On the instrument wall, under the
       switch bank: reach in and pull a ball out.
