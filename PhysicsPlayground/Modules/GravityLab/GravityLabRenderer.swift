@@ -349,16 +349,16 @@ final class GravityLabRenderer {
         markerMaterial.blending = .transparent(opacity: 0.85)
         for name in ["L1", "L2", "L3", "L4", "L5"] {
             let marker = ModelEntity(mesh: markerMesh, materials: [markerMaterial])
-            let labelMesh = MeshResource.generateText(
-                name, extrusionDepth: 0.001, font: .systemFont(ofSize: 0.02, weight: .semibold))
-            let label = ModelEntity(
-                mesh: labelMesh,
-                materials: [UnlitMaterial(color: DesignTokens.Palette.targetUI)])
-            let bounds = labelMesh.bounds
-            label.position = [-(bounds.min.x + bounds.max.x) / 2, 0.016, 0]
+            // The house dark plate behind the name (2026-08-06); the
+            // pivot lifts to where the run's centre sat when the text
+            // was baseline-anchored.
+            let label = BackedLabel(size: 0.02)
+            label.setText(name, color: DesignTokens.Palette.targetUI)
+            lagrangeLabels.append(label)
             let labelPivot = Entity()
             labelPivot.components.set(BillboardComponent())
-            labelPivot.addChild(label)
+            labelPivot.position = [0, 0.024, 0]
+            labelPivot.addChild(label.root)
             marker.addChild(labelPivot)
             marker.isEnabled = false
             var accessibility = AccessibilityComponent()
@@ -388,6 +388,9 @@ final class GravityLabRenderer {
     }
 
     private var lagrangeMarkers: [ModelEntity] = []
+    /// Retains the markers' BackedLabels (the entity graph holds only
+    /// their roots).
+    private var lagrangeLabels: [BackedLabel] = []
 
     // MARK: The orbit ring — the selected body's conic, as an object
     //

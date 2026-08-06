@@ -85,7 +85,8 @@ final class KinematicsRenderer {
 
     private struct RingSlot {
         let tube: ModelEntity
-        let scoreText: Entity
+        /// The score over the hoop, on the house dark plate.
+        let scoreLabel: BackedLabel
         var appliedID: UUID?
         var appliedScore = -1
         var flashUntil = 0.0
@@ -105,16 +106,17 @@ final class KinematicsRenderer {
     // the elevation where the aiming happens. All change-gated with the
     // arc; text meshes cached per rendered string.
     private let apexMarker = Entity()
-    private var apexText: ModelEntity!
+    private var apexLabel: BackedLabel!
     private var apexDropLine: ModelEntity!
     private let landingMarker = Entity()
-    private var landingText: ModelEntity!
+    private var landingLabel: BackedLabel!
     private let protractorRoot = Entity()
     private var protractorNeedleHolder: Entity!
     private var protractorTextPivot: Entity!
-    private var protractorText: ModelEntity!
-    private var annotationMeshCache: [String: MeshResource] = [:]
-    private let annotationMaterial = UnlitMaterial(color: UIColor(white: 1, alpha: 0.92))
+    private var protractorLabel: BackedLabel!
+    /// The flight numbers' white — passed to each BackedLabel, whose
+    /// plate now carries the contrast the 0.92 alpha used to gesture at.
+    private static let annotationWhite = UIColor(white: 1, alpha: 1)
 
     // Change detection: the arc tube only rebuilds when these differ.
     private struct ArcInputs: Equatable {
@@ -259,11 +261,13 @@ final class KinematicsRenderer {
             return tube
         }
         for slot in ringPool.slots {
-            let text = Entity()
-            text.position = [0, 0.3, 0]
-            text.components.set(BillboardComponent())
-            slot.entity.addChild(text)
-            ringSlots.append(RingSlot(tube: slot.payload, scoreText: text))
+            let pivot = Entity()
+            pivot.position = [0, 0.3, 0]
+            pivot.components.set(BillboardComponent())
+            slot.entity.addChild(pivot)
+            let label = BackedLabel(size: 0.12)
+            pivot.addChild(label.root)
+            ringSlots.append(RingSlot(tube: slot.payload, scoreLabel: label))
         }
         root.addChild(ringPool.root)
 
@@ -297,8 +301,8 @@ final class KinematicsRenderer {
         let apexPivot = Entity()
         apexPivot.components.set(BillboardComponent())
         apexPivot.position = [0, 0.055, 0]
-        apexText = ModelEntity()
-        apexPivot.addChild(apexText)
+        apexLabel = BackedLabel(size: 0.042)
+        apexPivot.addChild(apexLabel.root)
         apexMarker.addChild(apexPivot)
         apexMarker.isEnabled = false
         root.addChild(apexMarker)
@@ -325,8 +329,8 @@ final class KinematicsRenderer {
         let landingPivot = Entity()
         landingPivot.components.set(BillboardComponent())
         landingPivot.position = [0, 0.075, 0]
-        landingText = ModelEntity()
-        landingPivot.addChild(landingText)
+        landingLabel = BackedLabel(size: 0.042)
+        landingPivot.addChild(landingLabel.root)
         landingMarker.addChild(landingPivot)
         landingMarker.isEnabled = false
         root.addChild(landingMarker)
@@ -355,27 +359,10 @@ final class KinematicsRenderer {
         protractorRoot.addChild(protractorNeedleHolder)
         protractorTextPivot = Entity()
         protractorTextPivot.components.set(BillboardComponent())
-        protractorText = ModelEntity()
-        protractorTextPivot.addChild(protractorText)
+        protractorLabel = BackedLabel(size: 0.042)
+        protractorTextPivot.addChild(protractorLabel.root)
         protractorRoot.addChild(protractorTextPivot)
         root.addChild(protractorRoot)
-    }
-
-    private func annotationMesh(_ string: String) -> MeshResource {
-        if let cached = annotationMeshCache[string] { return cached }
-        if annotationMeshCache.count > 300 { annotationMeshCache.removeAll() }
-        let mesh = MeshResource.generateText(
-            string, extrusionDepth: 0.002,
-            font: .systemFont(ofSize: 0.042, weight: .semibold))
-        annotationMeshCache[string] = mesh
-        return mesh
-    }
-
-    private func setAnnotation(_ entity: ModelEntity, to string: String) {
-        let mesh = annotationMesh(string)
-        entity.model = ModelComponent(mesh: mesh, materials: [annotationMaterial])
-        let bounds = mesh.bounds
-        entity.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
     }
 
     private func updateFlightAnnotations(
@@ -385,7 +372,8 @@ final class KinematicsRenderer {
         if let apex = trajectory.points.max(by: { $0.y < $1.y }), apex.y > 0.3 {
             apexMarker.isEnabled = true
             apexMarker.position = SIMD3<Float>(apex)
-            setAnnotation(apexText, to: String(format: "%.1f m", trajectory.apexHeight))
+            apexLabel.setText(String(format: "%.1f m", trajectory.apexHeight),
+                              color: Self.annotationWhite)
             apexDropLine.isEnabled = true
             apexDropLine.position = SIMD3(Float(apex.x), Float(apex.y) / 2, Float(apex.z))
             apexDropLine.scale = SIMD3(1, Float(apex.y), 1)
@@ -398,8 +386,9 @@ final class KinematicsRenderer {
         if trajectory.landed, let landing = trajectory.landingPoint {
             landingMarker.isEnabled = true
             landingMarker.position = SIMD3(Float(landing.x), 0.004, Float(landing.z))
-            setAnnotation(landingText, to: String(
-                format: "%.1f m · %.1f s", trajectory.range, trajectory.flightTime))
+            landingLabel.setText(String(
+                format: "%.1f m · %.1f s", trajectory.range, trajectory.flightTime),
+                color: Self.annotationWhite)
         } else {
             landingMarker.isEnabled = false
         }
@@ -414,7 +403,8 @@ final class KinematicsRenderer {
             angle: Float(elevation), axis: [0, 0, 1])
         protractorTextPivot.position = [
             Float(cos(elevation)) * 0.235, Float(sin(elevation)) * 0.235, 0]
-        setAnnotation(protractorText, to: "\(Int((elevation * 180 / .pi).rounded()))°")
+        protractorLabel.setText("\(Int((elevation * 180 / .pi).rounded()))°",
+                                color: Self.annotationWhite)
     }
 
     /// Both passes of the arc, built off-thread together so the casing
@@ -722,7 +712,9 @@ final class KinematicsRenderer {
                     ringSlots[index].flashUntil = now + 0.45
                 }
                 ringSlots[index].appliedScore = ring.score
-                setScoreText(ringSlots[index].scoreText, score: ring.score)
+                ringSlots[index].scoreLabel.setText(
+                    ring.score > 0 ? "\(ring.score)" : "",
+                    color: DesignTokens.Palette.targetUI)
             }
             let flashing = now < ringSlots[index].flashUntil
             if ringSlots[index].appliedFlashing != flashing {
@@ -731,21 +723,6 @@ final class KinematicsRenderer {
                     [flashing ? ringFlashMaterial : ringMaterial]
             }
         }
-    }
-
-    private func setScoreText(_ entity: Entity, score: Int) {
-        entity.children.removeAll()
-        guard score > 0 else { return }
-        let mesh = MeshResource.generateText(
-            "\(score)",
-            extrusionDepth: 0.004,
-            font: .systemFont(ofSize: 0.12, weight: .bold)
-        )
-        let text = ModelEntity(mesh: mesh, materials: [UnlitMaterial(color: DesignTokens.Palette.targetUI)])
-        // generateText's origin is the baseline start; center it.
-        let bounds = mesh.bounds
-        text.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
-        entity.addChild(text)
     }
 
     // MARK: Helpers
