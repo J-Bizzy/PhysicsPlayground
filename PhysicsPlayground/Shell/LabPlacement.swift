@@ -205,6 +205,12 @@ struct LabAnchorView: View {
         }
 
         Grabbable.configureTouchTarget(anchor, collisionRadius: 0.1)
+        // The default gaze highlight was found invisible on device (the
+        // Load button's lesson, HubSpaceView) — a placement tool you
+        // cannot tell you are aiming at gets carried by accident or not
+        // at all. An explicit bright highlight says the pinch will land.
+        anchor.components.set(HoverEffectComponent(.highlight(.init(
+            color: accent, strength: 0.6))))
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Lab anchor. Drag it to move the whole experiment to where you have room."

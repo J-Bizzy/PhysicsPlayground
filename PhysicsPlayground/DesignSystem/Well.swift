@@ -64,8 +64,11 @@ final class Well {
     /// should just be readable.
     private var previews: [Entity] = []
     private var dip: [Float] = []
-    /// A brief dark pulse when a pull is refused — the lab is at its
-    /// object budget and nothing came out.
+    /// The refusal fade when a pull comes up empty — the lab is at its
+    /// object budget and nothing came out, so the preview dims briefly
+    /// instead of popping. (This comment said "dark pulse" long after
+    /// the pulse became a fade — the doc-rot this project keeps
+    /// catching.)
     private var refusal: [Float] = []
     private var time: Double = 0
 

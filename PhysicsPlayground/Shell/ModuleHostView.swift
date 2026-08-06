@@ -36,6 +36,8 @@ struct ModuleHostView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.openWindow) private var openWindow
+    /// The icon tile scales with the type it frames.
+    @ScaledMetric(relativeTo: .headline) private var iconTile = 30.0
     @State private var confirmingReset = false
     @State private var showingSensing = false
     /// Set when "Show in room" fails, so it can say so.
@@ -75,7 +77,10 @@ struct ModuleHostView: View {
                         // Type at all.
                         .font(.headline)
                         .foregroundStyle(module.accent)
-                        .frame(width: 30, height: 30)
+                        // The tile scales WITH the glyph — a fixed
+                        // 30-point frame around a semantic font let an
+                        // accessibility text size overflow its own tile.
+                        .frame(width: iconTile, height: iconTile)
                         .background(module.accent.opacity(0.18),
                                     in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                         .accessibilityHidden(true)
@@ -253,7 +258,15 @@ struct ModuleHostView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Dismiss hint")
                 }
-                .padding(.horizontal, 8)
+                // The same quiet glass the failure banner above wears —
+                // this was the last bare element in the title bar, a
+                // naked HStack pretending it wasn't chrome.
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.regularMaterial,
+                            in: RoundedRectangle(cornerRadius: 12,
+                                                 style: .continuous))
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
         }

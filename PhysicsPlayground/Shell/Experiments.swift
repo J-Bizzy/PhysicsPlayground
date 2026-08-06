@@ -342,9 +342,14 @@ struct ExperimentCheckerView: View {
         // predicates read live physics state that no observation would
         // usefully re-fire on.
         .task(id: moduleID) {
+            // Built ONCE per module: the entries are constant and their
+            // predicates are closures that read live state at call time
+            // — rebuilding the whole array (and every closure in it)
+            // twice a second was allocation on a timer for nothing.
+            let entries = ExperimentCatalog.experiments(for: moduleID,
+                                                        appModel: appModel)
             while !Task.isCancelled {
-                for entry in ExperimentCatalog.experiments(for: moduleID,
-                                                           appModel: appModel)
+                for entry in entries
                 where !appModel.experiments.completed.contains(entry.experiment.id) {
                     if entry.isMet(), appModel.experiments.complete(entry.experiment.id) {
                         SoundPalette.play(.chime, on: emitter, volume: 0.8)

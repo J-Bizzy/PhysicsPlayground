@@ -458,12 +458,20 @@ enum HubVignettes {
         // whole reason this module exists is that the field points
         // somewhere.
         let headMesh = MeshResource.generateCone(height: 0.0072, radius: 0.0030)
-        let headMaterial = Materials.contrastLine(
-            DesignTokens.Palette.fieldLineUI).core
+        // The casing cone rides just behind its core, slightly fatter —
+        // the same two-pass darkness every line got, because a bare
+        // bright cone washes out on a lit wall exactly the way the
+        // lines used to.
+        let casingMesh = MeshResource.generateCone(height: 0.0086, radius: 0.0040)
+        let (casingMaterial, headMaterial) = Materials.contrastLine(
+            DesignTokens.Palette.fieldLineUI)
         var riders: [(head: ModelEntity, path: [SIMD3<Float>], offset: Float)] = []
         for (index, path) in paths.enumerated() where index % 2 == 0 {
             for slot in 0..<2 {
                 let head = ModelEntity(mesh: headMesh, materials: [headMaterial])
+                let casing = ModelEntity(mesh: casingMesh, materials: [casingMaterial])
+                casing.position.y = -0.0004
+                head.addChild(casing)
                 frame.addChild(head)
                 riders.append((head, path, Float(slot) / 2))
             }

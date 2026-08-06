@@ -251,7 +251,7 @@ private struct HubCatalogRow: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: module.icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(module.accent)
                     .frame(width: 28, height: 28)
                     .background(module.accent.opacity(0.18),

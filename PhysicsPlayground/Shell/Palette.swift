@@ -119,6 +119,7 @@ final class Palette {
                 materials: [backing])
             disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
             disc.position.z = -Self.slotSize * 0.55
+            disc.components.set(GroundingShadowComponent(castsShadow: true))
             holder.addChild(disc)
             if let rim = Self.rimRing(radius: Self.slotSize * 0.78,
                                       color: spec.accent) {
@@ -239,7 +240,22 @@ final class Palette {
         layoutRing(dt: dt)
     }
 
+    /// Whether the folded (openness == 0) layout has been applied, so a
+    /// closed, settled palette writes no transforms at all per frame.
+    private var appliedFoldedLayout = false
+
     private func layoutRing(dt: Double) {
+        // Early out when folded and settled — this used to write
+        // positions, scales and isEnabled for every slot and petal,
+        // ninety times a second, to hold a closed fan closed. The zero
+        // state must still be applied ONCE, or a palette that opens in
+        // frame one shows a fan nobody laid out.
+        if openness == 0 {
+            if appliedFoldedLayout { return }
+            appliedFoldedLayout = true
+        } else {
+            appliedFoldedLayout = false
+        }
         let count = max(slots.count, 1)
         // A fan opening UPWARD from the bead — 150 degrees, so even the
         // outermost slots stay above it. Two hundred degrees swept the
@@ -320,6 +336,9 @@ final class Palette {
         bead.components.set(CollisionComponent(
             shapes: [.generateSphere(radius: Self.beadRadius * 1.8)]))
         bead.components.set(HoverEffectComponent())
+        // The one permanent object in every lab missed the 2026-08-05
+        // grounding-shadow pass; presence, not decoration.
+        bead.components.set(GroundingShadowComponent(castsShadow: true))
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Labs. Pinch to open."
@@ -379,6 +398,7 @@ final class Palette {
             materials: [casing])
         disc.name = "palette-\(name)"
         disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+        disc.components.set(GroundingShadowComponent(castsShadow: true))
         if let texture = Bloom.symbolTexture(symbol) {
             var iconMaterial = UnlitMaterial()
             iconMaterial.color = .init(tint: .white, texture: .init(texture))

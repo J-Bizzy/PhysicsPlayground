@@ -1463,7 +1463,9 @@ private struct HubLoadButton: View {
                 ZStack {
                     Circle().fill(module.accent.gradient)
                     Image(systemName: module.icon)
-                        .font(.system(size: 19, weight: .semibold))
+                        // Semantic, so the glyph scales with Dynamic
+                        // Type instead of rattling inside a fixed disc.
+                        .font(.title3.weight(.semibold))
                         .foregroundStyle(.white)
                 }
                 .frame(width: 46, height: 46)
@@ -1478,7 +1480,7 @@ private struct HubLoadButton: View {
                 }
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.subheadline.weight(.bold))
                     .foregroundStyle(module.accent)
             }
             .padding(.leading, 13)
