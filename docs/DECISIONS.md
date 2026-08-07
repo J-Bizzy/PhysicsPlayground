@@ -16,6 +16,102 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-07 — The Time Capsule: pause becomes a place you can walk around in
+
+**Decision:** Every module continuously records the last 30 seconds of
+its own state. Pausing unfolds a **Time Rail** in front of the
+apparatus whose bead is "seconds ago"; dragging it restores the whole
+room to a recorded instant, three plates step one physics tick at a
+time and resume, and un-pausing runs forward FROM the scrubbed instant,
+discarding the future it replaced. The mechanism is **recorded
+snapshots**, never reverse integration.
+
+**Context:** The owner asked for one feature that lifts the whole app
+rather than a seventh module — something a user would pay for that
+genuinely needs the headset's space. Three candidates were weighed (a
+spatial graphing instrument, a universal measurement kit, this); the
+owner chose this one. It earns the room in a way a flat scrubber never
+could: the recorded past is not a timeline widget, it is the experiment
+standing still while you walk into it. Everything it needs already
+existed — `FrozenVectors` sculpts velocity and force onto paused
+bodies, `captureReadings` reads live model state, `SpatialTrackControl`
+is a bead on a rail, `TubeMesh` draws walkable paths — so the feature
+is mostly the act of connecting them.
+
+**Why snapshots and not reverse integration.** Gravity Lab already runs
+time backwards: Verlet is time-symmetric and its clock picker includes
+−1× and −20×. It was tempting to generalise that. It does not
+generalise. Magnetism's glide and Electric Fields' drift are
+overdamped, pendulum and circuit damping are dissipative, and every
+module crosses discrete events — bounces, merges, an LED burning out —
+that destroy the information a backward step would need. Recording is
+the only mechanism that is uniform across six benches, and it is also
+the honest one: **a restored snapshot is exact recorded state, not a
+re-derivation.** The only re-simulation anywhere in the feature is the
+forward run after resume, and the truncation discloses it.
+
+**Recording at the full physics rate (~90 Hz), not decimated.** The
+alternative was 30 Hz with interpolation between frames, which is
+cheaper and wrong. A 12 m/s ball moves 13 cm per 90 Hz tick and 40 cm
+per 30 Hz snapshot, so frame-stepping through a wall contact — the
+thing the feature is for — would land on either side of the event and
+never on it. And interpolation cannot be defined for most of what is
+stored: circuit transients, entity-set changes, `status` enums, a
+merge. Full-rate recording deletes the question. Scrub resolution IS
+the tick, and every restored state is one that genuinely occurred.
+Memory, measured from the structs: 2–4 KB per frame worst case, 2700
+frames, so ~7–11 MB for the heaviest module and 2–5 MB typically, one
+module recording at a time. The two unbounded arrays in the app —
+Gravity Lab's orbit trails and Electric Fields' probe trail — are
+excluded from snapshots and rebuilt from the capsule instead, which is
+both cheaper and more honest than storing a growing copy per frame.
+
+**The snapshot is the experiment, not the observer.** Dynamical state,
+entity sets and physics clocks go in; display layers, bank flags,
+selections and anything a hand is holding stay out — scrubbing must not
+flip a layer the user just lit, and must never drag a magnet out of a
+hand. One module breaks the rule and says so: Electric Fields'
+`capacitorOn`, `magneticFieldOn` and `chargesRespond` are not display
+layers, they decide the field the recorded motion happened in, and a
+cyclotron circle scrubbed back into a room with B switched off would
+be a lie about what you watched.
+
+**This is not the retired time-scale rail.** 2026-08-02 retired
+Pendulums' g and clock with "this bench stands on Earth, at 1×", and
+that entry is still in force. Scrubbing operates only while paused,
+only over the recorded past, in units of seconds-ago; it never changes
+how fast physics runs. A wearer still cannot ask Pendulums for 0.5×.
+Gravity Lab's picker and the rail answer different questions — how time
+runs versus what already happened — and the capsule simply records
+wall-clock frames of whatever the picker produced, at any sign or
+scale.
+
+**The coverage lesson, applied before the defect rather than after.**
+Six modules have shipped a `reset()` that forgot a flag, and each fix
+was a test LISTING the flags somebody had thought of — the same act of
+attention that missed them. A forgotten snapshot field is that defect's
+next costume: invisible until a scrub quietly lies. So the guard is
+behavioural, not a list. `TimeCapsuleRoundTripTests` restores to
+mid-window and re-steps with the identical dt sequence; any dynamical
+field missing from a snapshot makes the replay diverge measurably.
+That is what caught Pendulums' substep `accumulator` (drop it and every
+restore re-enters the swing up to 1.4 ms out of phase) and what keeps
+Magnetism's angular-velocity map in, without which a scrubbed inertial
+needle comes back at rest and the overshoot the mode exists to show
+disappears exactly when you look at it.
+
+**Consequences.** `ModuleDescriptor` gains a non-optional `timeScrub`,
+so a seventh module cannot forget to answer for it. Every module's
+pause petal now routes through `togglePauseRespectingScrub`. Circuits'
+save-to-disk is gated on not being scrubbed, or a rewind you were only
+inspecting would become the bench you find next launch. Renderers get a
+`scrubNonce` to reseed presentation caches across a discontinuous
+state jump. And the rail's placement was got wrong three times in a
+row by reasoning about it — the fix came from logging `visualBounds`
+and discovering the control had been in the room, enabled and opaque,
+below the frame, the whole time. **APP_STORE.md is deliberately
+untouched: nothing is sold before it has been judged on device.**
+
 ## 2026-08-03 — The gallery gets a grab bar; the Settings "Gallery" section dies
 
 **Decision:** The hub gallery is moved by a native-style grab bar — a

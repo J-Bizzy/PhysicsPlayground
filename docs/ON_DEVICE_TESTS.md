@@ -555,6 +555,57 @@ file). The new well and the standing script:
 
 ## Cross-cutting
 
+### The Time Capsule (2026-08-07) — new, and none of it is verifiable from the CLI
+
+Every lab records its last 30 seconds. Pause and the Time Rail unfolds
+in front of the apparatus; the bead is "seconds ago".
+
+- [ ] **The scrub itself.** In Projectiles, throw a ball, let it bounce,
+      then pinch the palette's pause petal. The rail should fade in
+      below the physics with the bead at the right-hand end ("now") over
+      a subtitle counting what is recorded. Drag the bead left: the
+      whole room should run backwards — the ball retraces its arc and
+      the bounce un-happens — landing on recorded frames, never sliding
+      between them.
+- [ ] **Walk into the frozen instant.** Scrub to mid-flight and walk
+      around the ball. The velocity and force arrows should be sculpted
+      on it at THAT instant, and the recorded path should hang in the
+      air as a tube you can put your head through.
+- [ ] **Frame-step a bounce.** Park the bead just before a wall contact
+      and tap "Back a frame" / "Ahead a frame" repeatedly. Each tap is
+      one physics tick — the ball should visibly cross the wall's
+      surface over two or three taps, not jump past it.
+- [ ] **Resume from the past.** Scrub back, then tap "Resume here" (or
+      the pause petal). The room should run forward again FROM that
+      instant and the rail's recorded length should shrink to match —
+      the future you rejected is gone, not replayed.
+- [ ] **Sculpt, then resume.** While scrubbed, drag a ball somewhere
+      else and resume: the run continues from the state you edited.
+      Scrub again and the recording re-asserts itself, discarding the
+      edit. Both are intended; judge whether the second surprises you.
+- [ ] **Scrub with a magnet in your hand.** In Magnetism, hold a magnet,
+      pause, and scrub. The held magnet must NOT be dragged out of your
+      fingers by the restore — everything else in the room rewinds
+      around it.
+- [ ] **The LED un-blows.** In Circuits, wire an LED to burn out, then
+      scrub back past the failure: it should light again, and blow again
+      on resume. Also confirm that quitting while scrubbed and relaunching
+      gives you the bench you BUILT, not the one you rewound to.
+- [ ] **Gravity Lab's two clocks.** Set the time picker to −1× or 20×,
+      let it run, then pause and scrub. The picker sets how time runs;
+      the rail asks what already happened. Changing the picker while
+      scrubbed should take effect only on resume. Judge whether the two
+      ever read as fighting each other.
+- [ ] **Capture a scrubbed instant.** With the room frozen in its past,
+      tap the notebook petal. The entry should record the physics of the
+      instant on screen, not of the live present.
+- [ ] **The rail's placement.** It stands at chest height in front of
+      the apparatus. It was placed against the simulator's fixed
+      viewport, which is not a wearer's head — judge whether it lands
+      where you would look after pausing, and whether it ever gets
+      between you and the physics. (It exists only while paused, so it
+      should never obstruct a live grab.)
+
 - [ ] **The room tone, fourth recipe (2026-08-05).** Switch "Lab room
       tone" on and stand in any module for two minutes. It should read
       as a planetarium after closing — suspended and floating (no
