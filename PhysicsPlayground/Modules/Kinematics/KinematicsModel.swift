@@ -168,6 +168,13 @@ final class KinematicsModel {
     var timeScale = 1.0
     var isPaused = false
 
+    // MARK: Time Capsule
+
+    @ObservationIgnored var capsule = TimeCapsule<CapsuleSnapshot>()
+    @ObservationIgnored var capsuleClock = 0.0
+    var scrubTime: Double?
+    var scrubNonce = 0
+
     // MARK: Launcher
 
     var launcherPosition = KinematicsModel.launcherHome
@@ -578,6 +585,10 @@ final class KinematicsModel {
     func step(dt: Double) {
         guard !isPaused else { return }
         let frameDt = min(dt, 1.0 / 30.0) * timeScale
+        // Record AFTER the step: the capsule's newest frame is always the
+        // state the room is showing, so pause-then-scrub starts from
+        // exactly what the eye just saw.
+        defer { recordCapsuleFrame(dt: frameDt) }
         stepRings(dt: frameDt)
         guard flights.contains(where: { $0.status == .flying || $0.status == .rolling }) else { return }
 
@@ -817,6 +828,7 @@ final class KinematicsModel {
         lastCatch = nil
         catchingEnabled = true
         aimDirection = Self.direction(elevationDegrees: 45, azimuthDegrees: 0)
+        clearCapsule()
 
         // The welcome scene: one shot already in the air, from the
         // launcher's own muzzle — every ball in this module is born at
@@ -833,4 +845,82 @@ final class KinematicsModel {
     /// keeps the whole parabola — apex included — inside the space the
     /// user can actually see.
     nonisolated static let roomFittingSpeed = (9.81 * 2.5).squareRoot()
+}
+
+// MARK: - Time Capsule
+
+extension KinematicsModel: TimeCapsuleRecording {
+    /// The experiment, not the observer: flights, hoops, the launcher's
+    /// aim and the environment the recorded motion happened under.
+    /// Excluded: `respectRoomWalls`/`roomWalls` (the live room feeds
+    /// them), `hoopsOrbit`/`throwBoost`/`catchingEnabled`/`timeScale`
+    /// (settings), streaks (personal bests survive rewinds), sounds.
+    struct CapsuleSnapshot: Equatable {
+        var flights: [Flight]
+        var rings: [Ring]
+        var lastFlight: FlightSummary?
+        var lastCatch: Catch?
+        var launcherPosition: SIMD3<Double>
+        var aimDirection: SIMD3<Double>
+        var launchSpeed: Double
+        var gravity: Double
+        var airResistance: Bool
+        var windSpeed: Double
+        var windDirectionDegrees: Double
+        var kind: ProjectileKind
+        var customMass: Double
+        var customDiameter: Double
+    }
+
+    func captureCapsuleSnapshot() -> CapsuleSnapshot {
+        CapsuleSnapshot(
+            flights: flights,
+            rings: rings,
+            lastFlight: lastFlight,
+            lastCatch: lastCatch,
+            launcherPosition: launcherPosition,
+            aimDirection: aimDirection,
+            launchSpeed: launchSpeed,
+            gravity: gravity,
+            airResistance: airResistance,
+            windSpeed: windSpeed,
+            windDirectionDegrees: windDirectionDegrees,
+            kind: kind,
+            customMass: customMass,
+            customDiameter: customDiameter
+        )
+    }
+
+    func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
+        var restored = snapshot.flights
+        // The past hand is gone: a ball that was held THEN comes back
+        // staged, hovering where the hand had it.
+        for index in restored.indices where restored[index].status == .held {
+            restored[index].status = .staged
+        }
+        // The present hand wins: a ball held RIGHT NOW is never moved by
+        // a restore — its live state replaces (or joins) the snapshot's.
+        if let heldID = heldFlightID,
+           let live = flights.first(where: { $0.id == heldID }) {
+            if let index = restored.firstIndex(where: { $0.id == heldID }) {
+                restored[index] = live
+            } else {
+                restored.append(live)
+            }
+        }
+        flights = restored
+        rings = snapshot.rings
+        lastFlight = snapshot.lastFlight
+        lastCatch = snapshot.lastCatch
+        launcherPosition = snapshot.launcherPosition
+        aimDirection = snapshot.aimDirection
+        launchSpeed = snapshot.launchSpeed
+        gravity = snapshot.gravity
+        airResistance = snapshot.airResistance
+        windSpeed = snapshot.windSpeed
+        windDirectionDegrees = snapshot.windDirectionDegrees
+        kind = snapshot.kind
+        customMass = snapshot.customMass
+        customDiameter = snapshot.customDiameter
+    }
 }
