@@ -45,28 +45,62 @@ enum SoundPalette {
     private static var resources: [Sound: AudioFileResource] = [:]
     private static var warmed = false
 
+    /// Every WAV this palette needs, once they exist on disk.
+    private nonisolated struct CachedSounds: Sendable {
+        var oneShots: [Sound: URL] = [:]
+        var ambient: URL?
+        var fanHum: URL?
+        var resonanceTone: URL?
+    }
+
     /// Synthesize (if needed) and load every sound. Call once, early.
+    ///
+    /// THE SYNTHESIS RUNS OFF THE MAIN THREAD and must keep doing so.
+    /// This enum is `@MainActor`, so an unstructured `Task {}` inside it
+    /// INHERITS the main actor, and `writeIfNeeded` and friends are
+    /// synchronous — which meant that until 2026-08-07 first launch
+    /// rendered ~40 s of audio (36 s of it the ambient pad, every sample
+    /// summing nine detuned voice pairs, then a 3.2 MB `Data` built two
+    /// bytes at a time) on the main thread while the home screen was
+    /// trying to draw. Invisible on a warm simulator, because the files
+    /// are already on disk; a multi-second stall on a cold install and
+    /// after any purge of Caches.
+    ///
+    /// The sample math is pure `[Float]` arithmetic over `Sendable`
+    /// values and reads no actor state, so it is `nonisolated` and runs
+    /// detached. Only the `AudioFileResource` loads and the property
+    /// writes come back here.
     static func warmUp() {
         guard !warmed else { return }
         warmed = true
         Task {
-            for sound in Sound.allCases {
-                guard let url = try? writeIfNeeded(sound) else { continue }
+            let cached = await Task.detached(priority: .utility) { () -> CachedSounds in
+                var cached = CachedSounds()
+                for sound in Sound.allCases {
+                    cached.oneShots[sound] = try? writeIfNeeded(sound)
+                }
+                cached.ambient = try? writeAmbientIfNeeded()
+                cached.fanHum = try? writeFanHumIfNeeded()
+                cached.resonanceTone = try? writeResonanceToneIfNeeded()
+                return cached
+            }.value
+
+            for (sound, url) in cached.oneShots {
                 if let resource = try? await AudioFileResource(contentsOf: url) {
                     resources[sound] = resource
                 }
             }
-            if let url = try? writeAmbientIfNeeded() {
+            if let url = cached.ambient {
                 ambientResource = try? await AudioFileResource(
                     contentsOf: url,
                     configuration: .init(shouldLoop: true))
             }
-            if let url = try? writeFanHumIfNeeded() {
+            if let url = cached.fanHum {
                 fanHumResource = try? await AudioFileResource(
                     contentsOf: url,
                     configuration: .init(shouldLoop: true))
             }
-            if let url = try? writeResonanceToneIfNeeded() {
+            if let url = cached.resonanceTone {
                 resonanceToneResource = try? await AudioFileResource(
                     contentsOf: url,
                     configuration: .init(shouldLoop: true))
@@ -74,12 +108,29 @@ enum SoundPalette {
         }
     }
 
+    /// The cache directory every `write…IfNeeded` writes into.
+    ///
+    /// CACHE FILENAMES CARRY A VERSION SUFFIX, all four of them as of
+    /// 2026-08-07. Synthesis is cached to disk and only ever written
+    /// when the file is absent, so editing a recipe without renaming its
+    /// file changes nothing for anyone who has already launched the app.
+    /// `ambient-lab-4.wav` had followed that rule since it was written;
+    /// the pops, the fan hum and the resonance tone had not, so three of
+    /// the four recipes were uneditable in practice and the comment
+    /// stating the rule was a rule we followed once.
+    private nonisolated static func soundsDirectory() throws -> URL {
+        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("PhysicsPlaygroundSounds", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
     // MARK: Resonance tone (elastic-field drumhead)
 
     private static var resonanceToneResource: AudioFileResource?
     /// The base pitch (Hz) the tone is synthesized at; the caller shifts
     /// it with the controller's `speed` to sing the swept drive.
-    static let resonanceToneBaseHz = 220.0
+    nonisolated static let resonanceToneBaseHz = 220.0
 
     /// Starts the looping resonance tone on `entity`, silent to begin
     /// with. The caller sets the controller's `gain` from how hard the
@@ -93,11 +144,8 @@ enum SoundPalette {
         return controller
     }
 
-    private static func writeResonanceToneIfNeeded() throws -> URL {
-        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("PhysicsPlaygroundSounds", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent("resonance-tone.wav")
+    private nonisolated static func writeResonanceToneIfNeeded() throws -> URL {
+        let url = try soundsDirectory().appendingPathComponent("resonance-tone-1.wav")
         if !FileManager.default.fileExists(atPath: url.path) {
             try wavData(samples: synthesizeResonanceTone()).write(to: url)
         }
@@ -107,7 +155,7 @@ enum SoundPalette {
     /// A 1-second seamless loop of a warm drum-like tone: a 220 Hz
     /// fundamental with a couple of soft harmonics (all integer cycles in
     /// one second, so the loop seam vanishes).
-    private static func synthesizeResonanceTone() -> [Float] {
+    private nonisolated static func synthesizeResonanceTone() -> [Float] {
         render(duration: 1.0) { t, _ in
             let f = resonanceToneBaseHz
             return 0.7 * sin(2 * .pi * f * t)
@@ -129,14 +177,8 @@ enum SoundPalette {
         return entity.playAudio(ambientResource)
     }
 
-    private static func writeAmbientIfNeeded() throws -> URL {
-        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("PhysicsPlaygroundSounds", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        // Versioned name: synthesis is cached to disk, so a redesign of
-        // the soundscape must write a NEW file or every existing install
-        // keeps playing the old one forever.
-        let url = directory.appendingPathComponent("ambient-lab-4.wav")
+    private nonisolated static func writeAmbientIfNeeded() throws -> URL {
+        let url = try soundsDirectory().appendingPathComponent("ambient-lab-4.wav")
         if !FileManager.default.fileExists(atPath: url.path) {
             try wavData(samples: synthesizeAmbient()).write(to: url)
         }
@@ -162,7 +204,7 @@ enum SoundPalette {
     /// every sustained frequency, detune and swell is quantised to a
     /// whole number of cycles per loop. The glints are enveloped to
     /// silence well inside the loop, so they need no quantising.
-    private static func synthesizeAmbient() -> [Float] {
+    private nonisolated static func synthesizeAmbient() -> [Float] {
         let loop = 36.0
         let grid = { (frequency: Double) in (frequency * loop).rounded() / loop }
 
@@ -235,11 +277,8 @@ enum SoundPalette {
         return entity.playAudio(fanHumResource)
     }
 
-    private static func writeFanHumIfNeeded() throws -> URL {
-        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("PhysicsPlaygroundSounds", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent("fan-hum.wav")
+    private nonisolated static func writeFanHumIfNeeded() throws -> URL {
+        let url = try soundsDirectory().appendingPathComponent("fan-hum-1.wav")
         if !FileManager.default.fileExists(atPath: url.path) {
             try wavData(samples: synthesizeFanHum()).write(to: url)
         }
@@ -250,7 +289,7 @@ enum SoundPalette {
     /// pulsed at the blade-pass rate over a motor hum. Every periodic
     /// component is an integer number of cycles in 3 s, and the noise
     /// bed is crossfaded, so the seam vanishes.
-    private static func synthesizeFanHum() -> [Float] {
+    private nonisolated static func synthesizeFanHum() -> [Float] {
         var lowPassed = 0.0
         var samples = render(duration: 3.0) { t, _ in
             let noise = Double.random(in: -1...1)
@@ -286,20 +325,17 @@ enum SoundPalette {
 
     // MARK: Synthesis
 
-    private static let sampleRate = 44_100.0
+    private nonisolated static let sampleRate = 44_100.0
 
-    private static func writeIfNeeded(_ sound: Sound) throws -> URL {
-        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("PhysicsPlaygroundSounds", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent("\(sound.rawValue).wav")
+    private nonisolated static func writeIfNeeded(_ sound: Sound) throws -> URL {
+        let url = try soundsDirectory().appendingPathComponent("\(sound.rawValue)-1.wav")
         if !FileManager.default.fileExists(atPath: url.path) {
             try wavData(samples: synthesize(sound)).write(to: url)
         }
         return url
     }
 
-    private static func synthesize(_ sound: Sound) -> [Float] {
+    private nonisolated static func synthesize(_ sound: Sound) -> [Float] {
         switch sound {
         case .pop:
             // A quick downward pluck: 700 → 320 Hz over 0.1 s.
@@ -352,7 +388,7 @@ enum SoundPalette {
         }
     }
 
-    private static func render(duration: Double, _ sample: (Double, Double) -> Double) -> [Float] {
+    private nonisolated static func render(duration: Double, _ sample: (Double, Double) -> Double) -> [Float] {
         let count = Int(duration * sampleRate)
         var peak = 1e-6
         var raw = [Double](repeating: 0, count: count)
@@ -365,9 +401,12 @@ enum SoundPalette {
     }
 
     /// Minimal mono 16-bit PCM WAV container.
-    private static func wavData(samples: [Float]) -> Data {
-        var data = Data()
+    private nonisolated static func wavData(samples: [Float]) -> Data {
         let dataSize = samples.count * 2
+        // The ambient pad is 36 s at 44.1 kHz — a 3.2 MB `Data` grown
+        // two bytes at a time is a few dozen reallocations and copies.
+        var data = Data()
+        data.reserveCapacity(44 + dataSize)
 
         func append(_ string: String) { data.append(string.data(using: .ascii)!) }
         func append32(_ value: UInt32) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }

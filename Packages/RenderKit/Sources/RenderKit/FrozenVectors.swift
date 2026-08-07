@@ -156,7 +156,8 @@ public final class FrozenVectors {
             let length = (minLength + (maxLength - minLength) * clamped) * reveal
 
             arrow.container.position = sample.position
-            arrow.container.orientation = simd_quatf(
+            // A frozen gravity arrow points exactly straight down.
+            arrow.container.orientation = rotation(
                 from: [0, 1, 0], to: sample.direction / lengthUnit)
             arrow.shaft.scale = [1, length, 1]
             arrow.shaft.position = [0, length / 2, 0]

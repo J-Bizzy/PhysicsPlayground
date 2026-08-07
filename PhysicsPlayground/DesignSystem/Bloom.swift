@@ -189,6 +189,15 @@ final class Bloom {
         // to, so the arm cannot survive it. `SpatialActionBank` learned
         // the same thing — see `testSettingNewActionsDisarms`.
         armedPetal = nil
+        // NOR CAN THE GRIP DRAG, for exactly the same reason, and this
+        // line was missing while the paragraph above reasoned carefully
+        // about the petal beside it. `gripDrag` holds
+        // `(startHand, startValue)` captured against the OLD grip, so a
+        // selection that changes mid-drag — tap another body, another
+        // charge, another part — carried the previous object's starting
+        // value into the new object's range and wrote it there on the
+        // next frame of the same drag.
+        gripDrag = nil
         self.petals = petals
         self.grip = grip
         petalEntities.forEach { $0.removeFromParent() }
@@ -282,13 +291,8 @@ final class Bloom {
         lastScale = scale
 
         // Face the viewer without rolling — the ring stays level.
-        if let heldViewer {
-            let toViewer = heldViewer - self.anchor
-            let flat = SIMD3<Float>(toViewer.x, 0, toViewer.z)
-            if simd_length(flat) > 1e-4 {
-                root.orientation = simd_quatf(from: [0, 0, 1],
-                                              to: simd_normalize(flat))
-            }
+        if let heldViewer, let facing = yaw(facing: heldViewer, from: self.anchor) {
+            root.orientation = facing
         }
         railAxis = root.orientation.act(SIMD3<Float>(1, 0, 0))
 

@@ -73,6 +73,10 @@ final class OrbitRing {
     private var pendingBucket: Int?
     private var pipeline: GeometryPipeline<RingJob, RingResult>?
 
+    /// Abandons any ring rebuild in flight. See
+    /// `GravityLabRenderer.teardown`.
+    func teardown() { pipeline?.cancel() }
+
     /// Whether each bead was a target last frame, for the reach
     /// hysteresis. Without it a bead sitting exactly at arm's length
     /// blinks in and out with the user's breathing.

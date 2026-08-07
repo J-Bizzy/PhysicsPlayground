@@ -41,6 +41,23 @@ final class KinematicsRenderer {
     private var lookCallout: Callout?
     var subscriptions: [EventSubscription] = []
 
+    /// Called from the SpaceView's `onDisappear`, and the reason it has
+    /// to be called explicitly is that neither of the things it releases
+    /// is tied to this object's lifetime.
+    ///
+    /// An `EventSubscription` outlives the view that made it — cancelled
+    /// nowhere, it keeps calling into a renderer for a scene that is no
+    /// longer on screen and holds the whole entity graph alive behind
+    /// it. And a `GeometryPipeline` job in flight ran to completion and
+    /// then uploaded a mesh and enabled an entity in a scene being torn
+    /// down (see `GeometryPipeline.cancel`).
+    func teardown() {
+        subscriptions.forEach { $0.cancel() }
+        subscriptions = []
+        arcPipeline?.cancel()
+        pathPipeline?.cancel()
+    }
+
     static let launcherName = "launcher"
     static let aimBeadName = "aimBead"
 
@@ -161,7 +178,9 @@ final class KinematicsRenderer {
         launcherBase = ModelEntity(
             mesh: .generateSphere(radius: 0.05), materials: [launcherMaterial])
         launcherBase.name = Self.launcherName
-        Grabbable.configureTouchTarget(launcherBase, collisionRadius: 0.09)
+        // 0.09 until 2026-08-07, on a 0.05 m ball. The launcher stands
+        // among the things you throw.
+        Grabbable.configureTouchTarget(launcherBase, collisionRadius: 0.062)
         Self.setAccessibility(on: launcherBase, label: "Launcher. Drag to move it anywhere in the room.")
         root.addChild(launcherBase)
 
@@ -185,7 +204,7 @@ final class KinematicsRenderer {
             materials: [Materials.energized(DesignTokens.Palette.projectileUI, glow: 0.4)]
         )
         bead.name = Self.aimBeadName
-        Grabbable.configureTouchTarget(bead, collisionRadius: 0.06)
+        Grabbable.configureTouchTarget(bead, collisionRadius: 0.048)
         Self.setAccessibility(on: bead, label: "Aim bead. Drag to point the launcher.")
         root.addChild(bead)
 
@@ -213,7 +232,10 @@ final class KinematicsRenderer {
                 materials: [Materials.energized(DesignTokens.Palette.projectileUI,
                                                 glow: 0)]
             )
-            Grabbable.configureTouchTarget(sphere, collisionRadius: Self.baseBallRadius * 1.6)
+            // The factor survives the per-ball scale, so 1.6× on a
+            // basketball was a 0.19 m target hanging in the flight path
+            // of every other ball in the room.
+            Grabbable.configureTouchTarget(sphere, collisionRadius: Self.baseBallRadius * 1.15)
             Self.setAccessibility(on: sphere, label: "Ball. Grab and throw it.")
             container.addChild(sphere)
             return sphere
@@ -279,7 +301,7 @@ final class KinematicsRenderer {
             // colliders hug the torus instead.
             let rim = (0..<8).map { index -> ShapeResource in
                 let angle = Float(index) / 8 * 2 * .pi
-                return ShapeResource.generateSphere(radius: 0.05)
+                return ShapeResource.generateSphere(radius: 0.032)
                     .offsetBy(translation: [
                         cos(angle) * Float(KinematicsModel.ringRadius),
                         0,

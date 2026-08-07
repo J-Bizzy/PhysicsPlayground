@@ -99,6 +99,82 @@ public struct FanLayout: Sendable {
                          isVisible: progress > 0.02)
     }
 
+    /// The closest any two ADJACENT items come, centre to centre, at
+    /// full openness. Below the width of an item's touch target, the two
+    /// cannot be aimed at separately however clearly they read.
+    ///
+    /// Adjacent is the only pair worth measuring: the fan is convex, so
+    /// nothing further apart in index is closer in space.
+    public func minimumAdjacentSpacing(count: Int) -> Double {
+        guard count > 1 else { return .infinity }
+        let offsets = (0..<count).map {
+            placement(index: $0, count: count, openness: 1).offset
+        }
+        return zip(offsets, offsets.dropFirst())
+            .map { simd_distance($0, $1) }
+            .min() ?? .infinity
+    }
+
+    /// The narrowest fan that keeps `count` items whose touch targets are
+    /// `itemSpan` metres across from overlapping.
+    ///
+    /// WHY THIS EXISTS RATHER THAN A HAND-TYPED SPAN. Gravity Lab's clock
+    /// bank was tuned by eye and by screenshot for FOUR discs — "four
+    /// discs at ±75° and ±25°", says the comment that is still there —
+    /// and then the time scales grew to six on 2026-08-07. The layout
+    /// did not, because a hand-typed span has no idea how many things
+    /// are being laid out. End-pair centres landed 0.0494 m apart
+    /// against a 0.068 m target: aim at 1×, hit −1×, and the solar
+    /// system runs backwards.
+    ///
+    /// A span derived FROM the count cannot drift out of step with it.
+    /// Add a seventh scale and the bank widens; take one away and it
+    /// tightens. The one thing it will not do is silently overlap.
+    ///
+    /// Widening the arc is tried first, up to `maxSpan`, because that
+    /// keeps the fan the same distance from the hand. Past that there is
+    /// nowhere left to go but outward, so `reach` grows instead — six
+    /// targets 68 mm across simply do not fit in a 25 cm row, and no
+    /// choice of angle makes them.
+    public static func spread(count: Int,
+                              itemSpan: Double,
+                              reach: Double,
+                              verticalScale: Double = 0.8,
+                              lift: Double = 0.06,
+                              stagger: Double = 0.045,
+                              clearance: Double = 0.1,
+                              maxSpan: Double = 150 * .pi / 180) -> FanLayout {
+        func layout(span: Double, reach: Double) -> FanLayout {
+            FanLayout(span: span, reach: reach, verticalScale: verticalScale,
+                      lift: lift, stagger: stagger)
+        }
+        guard count > 1, itemSpan > 0 else {
+            return layout(span: maxSpan, reach: reach)
+        }
+        let required = itemSpan * (1 + clearance)
+
+        // Spacing grows with span over the range a fan can legally
+        // occupy, so bisection settles on the narrowest one that fits.
+        var low = 0.0, high = maxSpan
+        if layout(span: high, reach: reach).minimumAdjacentSpacing(count: count) < required {
+            // Even the widest legal arc is too tight — push it outward
+            // by exactly the shortfall.
+            let widest = layout(span: high, reach: reach)
+            let spacing = widest.minimumAdjacentSpacing(count: count)
+            guard spacing > 0 else { return widest }
+            return layout(span: high, reach: reach * required / spacing)
+        }
+        for _ in 0..<40 {
+            let mid = (low + high) / 2
+            if layout(span: mid, reach: reach).minimumAdjacentSpacing(count: count) < required {
+                low = mid
+            } else {
+                high = mid
+            }
+        }
+        return layout(span: high, reach: reach)
+    }
+
     /// Eases overall openness toward its target, frame-rate independent.
     /// Snaps when close enough so a fan never sits fractionally open.
     public static func ease(_ openness: Double, toward target: Double,

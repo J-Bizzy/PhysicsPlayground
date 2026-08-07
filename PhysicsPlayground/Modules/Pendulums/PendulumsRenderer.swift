@@ -26,6 +26,21 @@ final class PendulumsRenderer {
     private let frozenVectors = FrozenVectors(budget: 16)
     var subscriptions: [EventSubscription] = []
 
+    /// Called from the SpaceView's `onDisappear`, and the reason it has
+    /// to be called explicitly is that neither of the things it releases
+    /// is tied to this object's lifetime.
+    ///
+    /// An `EventSubscription` outlives the view that made it — cancelled
+    /// nowhere, it keeps calling into a renderer for a scene that is no
+    /// longer on screen and holds the whole entity graph alive behind
+    /// it. And a `GeometryPipeline` job in flight ran to completion and
+    /// then uploaded a mesh and enabled an entity in a scene being torn
+    /// down (see `GeometryPipeline.cancel`).
+    func teardown() {
+        subscriptions.forEach { $0.cancel() }
+        subscriptions = []
+    }
+
     /// The pendulum whose bob a hand is holding (system-dragged).
     var grabbedID: UUID?
     /// The bob already acknowledged with a pickup pulse — one flash per
@@ -510,7 +525,11 @@ final class PendulumsRenderer {
         // The collar is grabbable: a rig you cannot re-hang is
         // furniture, not rigging.
         pivot.name = "pivot-\(pendulum.id.uuidString)"
-        Grabbable.configureTouchTarget(pivot, collisionRadius: 0.05)
+        // 0.05 until 2026-08-07, on a collar 0.028 across: collars in a
+        // cradle stand 0.07 m apart, so each one's target reached past
+        // both its neighbours' centres and the middle of a cradle could
+        // not be re-hung.
+        Grabbable.configureTouchTarget(pivot, collisionRadius: 0.028)
         root.addChild(pivot)
 
         let cable = ModelEntity(
@@ -522,7 +541,11 @@ final class PendulumsRenderer {
             mesh: .generateSphere(radius: 0.035),
             materials: [Self.bobMaterial])
         bob.name = pendulum.id.uuidString
-        Grabbable.configureTouchTarget(bob, collisionRadius: 0.075)
+        // 0.075 until 2026-08-07, on a ball of radius 0.035. Cradle bobs
+        // touch — they are 0.07 m apart — so a 0.075 target enclosed
+        // BOTH neighbours' centres and the ball you pinched was decided
+        // by hit order rather than by aim.
+        Grabbable.configureTouchTarget(bob, collisionRadius: 0.048)
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Pendulum bob. Grab it, carry it, and throw it."

@@ -152,6 +152,10 @@ struct HubSpaceView: View {
         .onDisappear {
             scene.subscription?.cancel()
             scene.subscription = nil
+            // An exhibit still in the hand when the gallery goes away.
+            // Nothing else clears the carry: without this it survives in
+            // `scene` and every later drag re-targets the same exhibit.
+            scene.cancelExhibitDrag()
             appModel.room.release()
         }
         .gesture(
@@ -214,7 +218,11 @@ struct HubSpaceView: View {
         }
         guard let barDrag else { return }
         let next = SIMD3<Float>(barDrag.position(forHand: hand))
-        barTravelled = max(barTravelled, simd_distance(next, placement.offset))
+        // Against the DRAG'S OWN START — see `RelativeDrag.travel`. This
+        // measured against `placement.offset`, which the next line
+        // overwrites, so moving the whole gallery at a human speed was
+        // read as a tap and snapped it home again.
+        barTravelled = max(barTravelled, Float(barDrag.travel(forHand: hand)))
         placement.move(to: next)
     }
 
@@ -627,8 +635,9 @@ final class HubScene {
             materials: [glass])
         bar.addChild(capsule)
 
-        Grabbable.configureTouchTarget(bar, collisionRadius: 0.09)
-        bar.components.set(HoverEffectComponent())
+        // A HANDLE IS A BAR. A 0.09 m sphere on a capsule 11 mm thick
+        // put an 18 cm ball in front of the podium the handle stands at.
+        Grabbable.configureTouchTarget(bar, matchingVisualBoundsOf: bar)
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Gallery handle. Drag it to move the whole gallery; tap it to bring the gallery home."
@@ -677,6 +686,15 @@ final class HubScene {
         // The podium brightens as the offer approaches.
         let near = simd_distance(exhibit.anchor.position, podiumTop) < Self.podiumSnapRadius
         podiumGlow?.components.set(OpacityComponent(opacity: near ? 1.0 : 0.35))
+    }
+
+    /// Abandons a carry that will never receive its `onEnded` — the
+    /// gallery closing under the hand. The exhibit glides home rather
+    /// than being seated, because nobody chose to seat it.
+    func cancelExhibitDrag() {
+        guard draggingID != nil else { return }
+        draggingID = nil
+        dragOffset = nil
     }
 
     func endExhibitDrag() {
@@ -955,12 +973,12 @@ final class HubScene {
         let anchor = Entity()
         anchor.name = module.id
         anchor.position = basePosition
-        // Invisible gaze/pinch target wrapping the whole miniature; the
-        // hover highlight lights the miniature itself — no shell.
-        anchor.components.set(InputTargetComponent())
-        anchor.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: 0.19)]))
-        anchor.components.set(HoverEffectComponent())
+        // The gaze/pinch target is set at the BOTTOM of this function,
+        // once the miniature, the name plate and the progress ring
+        // exist, and is measured from them. It was a 0.19 m sphere —
+        // 0.38 m across against a puck pitch of 0.36 — so every
+        // exhibit's target reached 2 cm into both of its neighbours' and
+        // which one you were aiming at was decided by hit order.
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = LocalizedStringResource(
@@ -1013,6 +1031,24 @@ final class HubScene {
             ring.components.set(BillboardComponent())
             pulser.addChild(ring)
         }
+
+        // Measured now that there is something to measure: the
+        // miniature, its name plate and its progress arc, plus the
+        // house reach. Narrower than the 0.36 m puck pitch, so no
+        // exhibit can take a pinch aimed at the one beside it.
+        //
+        // Set directly rather than through `Grabbable`, which would also
+        // hang a grounding shadow off every exhibit. The gallery's
+        // lighting is composed; six new contact shadows is a visual
+        // change and this is not the pass for one.
+        let reach = Grabbable.reach
+        let exhibitBounds = pulser.visualBounds(relativeTo: anchor)
+        anchor.components.set(InputTargetComponent())
+        anchor.components.set(CollisionComponent(shapes: [
+            .generateBox(size: exhibitBounds.extents + SIMD3<Float>(repeating: 2 * reach))
+                .offsetBy(translation: exhibitBounds.center),
+        ]))
+        anchor.components.set(HoverEffectComponent())
 
         exhibits.append(Exhibit(
             moduleID: module.id, anchor: anchor, pulser: pulser,

@@ -237,6 +237,10 @@ final class RoomModel {
         // asking first turns that into an ordinary early return.
         let authorization = await session.requestAuthorization(
             for: providers.flatMap { type(of: $0).requiredAuthorizations })
+        // THE AWAIT ABOVE IS SECONDS LONG on first launch — it is the
+        // system permission sheet — and the user can leave the lab while
+        // it is up. If everybody has gone, start nothing.
+        guard clients > 0 else { return }
         // Run with whatever was GRANTED. This used to be all-or-nothing:
         // one denied permission killed the entire sensing layer — no
         // walls, no look ray, no hands — silently, which read as every
@@ -263,6 +267,19 @@ final class RoomModel {
         }
         sensing = .fine
         isRunning = true
+        // …and again after `run`. This is the window the leak lived in:
+        // `release()` used to be guarded on `isRunning`, which is still
+        // false all the way down to this line, so leaving during the
+        // start did nothing at all — and then the three consumer tasks
+        // below spawned with `clients == 0`. Plane detection, hand
+        // tracking and scene reconstruction then ran for the lifetime of
+        // the process, with the sensing indicator lit and nobody reading
+        // any of it. Trivial to hit: it is the first launch, where the
+        // permission sheet holds the start open for seconds.
+        guard clients > 0 else {
+            stopNow()
+            return
+        }
         #if DEBUG
         forceSensingForDebug()
         #endif
@@ -279,7 +296,14 @@ final class RoomModel {
 
     func release() {
         clients = max(0, clients - 1)
-        guard clients == 0, isRunning else { return }
+        // NOT guarded on `isRunning`, and that was the bug. A release
+        // that arrives while `retain` is still awaiting authorization
+        // sees `isRunning == false` and used to return, leaving nothing
+        // to take the session down. The linger task is the right answer
+        // either way: two seconds later the start has resolved one way
+        // or the other, and `stopNow` stops a session that ran and
+        // no-ops on one that never did.
+        guard clients == 0 else { return }
         shutdown?.cancel()
         shutdown = Task { [weak self] in
             try? await Task.sleep(for: .seconds(Self.lingerSeconds))
@@ -288,7 +312,8 @@ final class RoomModel {
         }
     }
 
-    /// Actually takes the sensors down. Only the linger task calls this.
+    /// Actually takes the sensors down. Called by the linger task, and
+    /// by `retain` itself when the last client leaves during a start.
     private func stopNow() {
         guard clients == 0, isRunning else { return }
         tasks.forEach { $0.cancel() }

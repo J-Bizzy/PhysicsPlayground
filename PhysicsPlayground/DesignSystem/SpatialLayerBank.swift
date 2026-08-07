@@ -87,12 +87,8 @@ final class SpatialLayerBank {
 
         // Yaw only. A bank that pitched to meet a viewer looking down on it
         // would turn its plates edge-on.
-        if let viewer {
-            let flat = SIMD3<Float>(viewer.x - anchor.x, 0, viewer.z - anchor.z)
-            if simd_length(flat) > 1e-4 {
-                root.orientation = simd_quatf(from: [0, 0, 1],
-                                              to: simd_normalize(flat))
-            }
+        if let viewer, let facing = yaw(facing: viewer, from: anchor) {
+            root.orientation = facing
         }
 
         for index in plates.indices {

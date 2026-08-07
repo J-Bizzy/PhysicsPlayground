@@ -71,8 +71,28 @@ struct PlaygroundSpaceView: View {
                     .id("hub")
             }
         }
-        .onAppear { appModel.isImmersiveSpaceOpen = true }
-        .onDisappear { appModel.isImmersiveSpaceOpen = false }
+        // THE FLAG HANGS OFF A STABLE LEAF, NOT OFF THE `Group`.
+        //
+        // A `Group` does not wrap its children in a container view — it
+        // applies each modifier to EVERY child individually. So this pair
+        // was one `onAppear`/`onDisappear` per child, and the child count
+        // changes with state: entering a dimmed module (Gravity Lab
+        // dims 0.85, Electric Fields and Magnetism 0.35) removes
+        // `HubSpaceView` and adds `RoomDimmerView` plus the module
+        // `ZStack`. SwiftUI does not order those callbacks, so when the
+        // removal lands last the flag reads FALSE with the space open —
+        // and `ModuleHostView` then offers "Show in room" for a lab that
+        // is already in the room, which fails with "Couldn't open the
+        // room."
+        //
+        // One always-present zero-size leaf has exactly one appear and
+        // one disappear, whatever the branch above does.
+        .background {
+            Color.clear
+                .frame(width: 0, height: 0)
+                .onAppear { appModel.isImmersiveSpaceOpen = true }
+                .onDisappear { appModel.isImmersiveSpaceOpen = false }
+        }
     }
 }
 

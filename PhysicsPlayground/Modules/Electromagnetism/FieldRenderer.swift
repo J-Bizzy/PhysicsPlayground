@@ -33,6 +33,22 @@ final class FieldRenderer {
     /// Event subscriptions, owned here so they live as long as the scene.
     var subscriptions: [EventSubscription] = []
 
+    /// Called from the SpaceView's `onDisappear`, and the reason it has
+    /// to be called explicitly is that neither of the things it releases
+    /// is tied to this object's lifetime.
+    ///
+    /// An `EventSubscription` outlives the view that made it — cancelled
+    /// nowhere, it keeps calling into a renderer for a scene that is no
+    /// longer on screen and holds the whole entity graph alive behind
+    /// it. And a `GeometryPipeline` job in flight ran to completion and
+    /// then uploaded a mesh and enabled an entity in a scene being torn
+    /// down (see `GeometryPipeline.cancel`).
+    func teardown() {
+        subscriptions.forEach { $0.cancel() }
+        subscriptions = []
+        geometryPipeline?.cancel()
+    }
+
     /// While the system is driving an entity mid-drag, we must not write its
     /// position from the model, or the two would fight and jitter.
     var manipulatingChargeID: UUID?
@@ -354,7 +370,16 @@ final class FieldRenderer {
                                                radius: 0, barLength: 0.05)
                 signPivot.position = [0, Float(FieldModel.plateSize) * 0.28, 0]
                 plate.addChild(signPivot)
-                Grabbable.configureTouchTarget(plate, collisionRadius: 0.26)
+                // THE PLATE IS A SLAB, NOT A BALL. This was a 0.26 m
+                // sphere — 0.52 m across on an object 12 mm thick — so
+                // the two plates' colliders overlapped through the
+                // entire interior of the capacitor and every charge, the
+                // probe and the test particle inside the field volume
+                // became unpinchable. `resolveCharge` papered over it
+                // for DRAGS; the tap chain had no fallback at all, so a
+                // charge between the plates could not be deleted or
+                // re-valued.
+                Grabbable.configureTouchTarget(plate, matchingVisualBoundsOf: plate)
                 var accessibility = AccessibilityComponent()
                 accessibility.isAccessibilityElement = true
                 accessibility.label = "Capacitor plate. Drag along the field axis to change the gap; carry it to move the capacitor."

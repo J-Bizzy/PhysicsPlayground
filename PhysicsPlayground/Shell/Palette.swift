@@ -228,13 +228,8 @@ final class Palette {
         beadVignette?.animate(time)
         beadVignette?.setOpenness?(openness)
 
-        if let viewer {
-            let flat = SIMD3<Float>(viewer.x - root.position.x, 0,
-                                    viewer.z - root.position.z)
-            if simd_length(flat) > 1e-4 {
-                root.orientation = simd_quatf(from: [0, 0, 1],
-                                              to: simd_normalize(flat))
-            }
+        if let viewer, let facing = yaw(facing: viewer, from: root.position) {
+            root.orientation = facing
         }
 
         layoutRing(dt: dt)

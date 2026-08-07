@@ -30,6 +30,25 @@ final class GravityLabRenderer {
     let root = Entity()
     var subscriptions: [EventSubscription] = []
 
+    /// Called from the SpaceView's `onDisappear`, and the reason it has
+    /// to be called explicitly is that neither of the things it releases
+    /// is tied to this object's lifetime.
+    ///
+    /// An `EventSubscription` outlives the view that made it — cancelled
+    /// nowhere, it keeps calling into a renderer for a scene that is no
+    /// longer on screen and holds the whole entity graph alive behind
+    /// it. And a `GeometryPipeline` job in flight ran to completion and
+    /// then uploaded a mesh and enabled an entity in a scene being torn
+    /// down (see `GeometryPipeline.cancel`).
+    func teardown() {
+        subscriptions.forEach { $0.cancel() }
+        subscriptions = []
+        trailPipeline?.cancel()
+        predictionPipeline?.cancel()
+        gridPipeline?.cancel()
+        orbitRing.teardown()
+    }
+
     /// Set by the space view's router while the hand owns a body.
     var manipulatingBodyID: UUID?
     /// The body already acknowledged with a pickup pulse — one flash per
@@ -268,7 +287,11 @@ final class GravityLabRenderer {
                 mesh: bodyMesh,
                 materials: [Materials.machined(.white, roughness: 0.6)]
             )
-            Grabbable.configureTouchTarget(sphere, collisionRadius: Self.baseBodyRadius * 1.5)
+            // 1.5× until 2026-08-07. The factor survives the per-body
+            // scale, so it was 1.5× at every size — and an apsis bead
+            // drawn in the 1.0–1.5 r annulus around a planet was visible,
+            // hover-lit and completely unpinchable.
+            Grabbable.configureTouchTarget(sphere, collisionRadius: Self.baseBodyRadius * 1.15)
             var accessibility = AccessibilityComponent()
             accessibility.isAccessibilityElement = true
             accessibility.label = "Celestial body. Grab to move it; throw it to set a new orbit."

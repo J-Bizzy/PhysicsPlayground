@@ -20,6 +20,17 @@ struct KinematicsSpaceView: View {
     @Environment(KinematicsModel.self) private var model
     @State private var renderer: KinematicsRenderer?
     @State private var drag: RelativeDrag?
+    /// The ball this press landed on, held until it has moved far
+    /// enough to be a catch. See `PressLatch`, and the drag's
+    /// `onChanged`.
+    @State private var pressedBall = PressLatch<BallPress>()
+
+    /// A press on a ball in flight — identity only. Where the ball IS
+    /// is read at promotion, not here; see `PressLatch`'s header.
+    struct BallPress: Sendable {
+        let id: UUID
+        let name: String
+    }
     @State private var bloom = Bloom()
     /// Which ball you are throwing, chosen in the room instead of from a
     /// menu on a card. A golf ball and a table-tennis ball are 17× apart
@@ -277,6 +288,19 @@ struct KinematicsSpaceView: View {
             renderer.tick(model)
             self.renderer = renderer
         }
+        // Leaving the lab must not leave anything running or held.
+        //
+        // `teardown` cancels the renderer's event subscriptions and any
+        // geometry job in flight (see `GeometryPipeline.cancel`), and the
+        // drag state is cleared because NOTHING ELSE CAN CLEAR IT: an
+        // in-flight grab that never receives its `onEnded` — the space
+        // closing under it is the ordinary way that happens — otherwise
+        // strands the object wherever the hand left it and re-targets
+        // every later drag at the same one, with no exit but leaving.
+        .onDisappear {
+            renderer?.teardown()
+            drag = nil
+        }
         .task {
             // Plane detection: device-only, quietly absent in the sim.
         }
@@ -325,12 +349,52 @@ struct KinematicsSpaceView: View {
                                                 target: hand, hand: hand)
                             return
                         }
-                        drag = beginDrag(entity: value.entity, hand: hand)
+                        // A TAP ON A FLYING BALL MUST NOT CATCH IT.
+                        //
+                        // This recogniser is `minimumDistance: 0`, so it
+                        // fires on a bare press, and for a ball in
+                        // flight the whole path runs: `grabBall` freezes
+                        // it, `apply` holds it exactly where it was, and
+                        // `onEnded` releases it with no hand motion to
+                        // throw it. The ball stopped dead in mid-air and
+                        // hung there — losing its strobe trail and its
+                        // flight record — because you looked at it and
+                        // pinched. Gravity Lab already carried the same
+                        // diagnosis about tapping a planet.
+                        //
+                        // Only the ball needs this. The launcher, the aim
+                        // bead and a hoop are positional: a press that
+                        // does not move moves them by zero.
+                        if let press = flightPress(on: value.entity) {
+                            pressedBall.press(press, at: hand)
+                        } else {
+                            drag = beginDrag(entity: value.entity, hand: hand)
+                        }
+                    }
+
+                    // The promotion, once the hand has actually carried
+                    // the ball. The drag pairs where the ball is NOW
+                    // with where the hand is now, so the catch does not
+                    // move the ball at all — the same behaviour Gravity
+                    // Lab gets from its `minimumDistance`.
+                    if drag == nil, pressedBall.isPending {
+                        guard let caught = pressedBall.promote(hand: hand),
+                              let flight = model.flights.first(where: {
+                                  $0.id == caught.id
+                              })
+                        else { return }
+                        model.grabBall(id: caught.id)
+                        drag = RelativeDrag(name: caught.name,
+                                            target: flight.state.position,
+                                            hand: hand)
                     }
                     guard let drag else { return }
                     apply(drag: drag, hand: hand)
                 }
                 .onEnded { value in
+                    // A ball press that never became a carry is a tap,
+                    // and a tap on a ball does nothing to the ball.
+                    pressedBall.cancel()
                     if let track = activeTrack {
                         track.endAdjust()
                         activeTrack = nil
@@ -458,19 +522,32 @@ struct KinematicsSpaceView: View {
                     + Double(KinematicsRenderer.beadDistance) * model.aimDirection
                 return RelativeDrag(name: candidate.name, target: target, hand: hand)
             default:
-                if let id = UUID(uuidString: candidate.name) {
-                    if let ring = model.rings.first(where: { $0.id == id }) {
-                        return RelativeDrag(name: candidate.name,
-                                            target: ring.position, hand: hand)
-                    }
-                    if let flight = model.flights.first(where: { $0.id == id }) {
-                        model.grabBall(id: id)
-                        return RelativeDrag(name: candidate.name,
-                                            target: flight.state.position, hand: hand)
-                    }
+                if let id = UUID(uuidString: candidate.name),
+                   let ring = model.rings.first(where: { $0.id == id }) {
+                    return RelativeDrag(name: candidate.name,
+                                        target: ring.position, hand: hand)
                 }
+                // NO flight branch. A ball is claimed by `flightPress`
+                // and promoted only once the hand has moved — see the
+                // drag's `onChanged`.
                 current = candidate.parent
             }
+        }
+        return nil
+    }
+
+    /// A press that landed on a ball in flight, or nil. Resolves the
+    /// same way `beginDrag` does — up the parent chain to the named
+    /// object — but takes no action, because taking action is exactly
+    /// what a tap must not do here.
+    private func flightPress(on entity: Entity) -> BallPress? {
+        var current: Entity? = entity
+        while let candidate = current {
+            if let id = UUID(uuidString: candidate.name),
+               model.flights.contains(where: { $0.id == id }) {
+                return BallPress(id: id, name: candidate.name)
+            }
+            current = candidate.parent
         }
         return nil
     }

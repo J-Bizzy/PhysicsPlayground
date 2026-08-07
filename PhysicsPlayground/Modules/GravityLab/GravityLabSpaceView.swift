@@ -54,10 +54,11 @@ struct GravityLabSpaceView: View {
         // TEN discs, the most any fan in this app carries, and the
         // geometry is measured rather than inherited.
         //
-        // A `SpatialPicker` disc is 0.026 m in radius with a 0.034 m
-        // collider, so the pitch that keeps ten of them from overlapping
-        // — colliders, not just paint, since hit-testing uses the former
-        // — is about 0.08 m. Ten discs therefore need ~0.8 m of arc, and
+        // A `SpatialPicker` disc is 0.026 m in radius and its touch
+        // target `SpatialPicker.colliderSpan` is 0.068 m across, so the
+        // pitch that keeps ten of them from overlapping — colliders, not
+        // just paint, since hit-testing uses the former — is about
+        // 0.08 m. Ten discs therefore need ~0.8 m of arc, and
         // `arc = reach × span`: 0.58 m at 120° gives 1.21 m of arc and
         // ~0.12 m of pitch, which clears the labels too.
         //
@@ -94,8 +95,10 @@ struct GravityLabSpaceView: View {
     /// knees and the Kepler sectors sweeping underfoot like floor tiles.
     @State private var scaleRig = SpatialScaleRig(
         pivot: GravityLabRenderer.systemPosition, range: 0.4...9.0)
-    /// The clock: 1× / 5× / 20× / 100×, standing beside the system as a
-    /// permanent bank rather than hiding behind a pinch.
+    /// The clock: −20× / −1× / 1× / 5× / 20× / 100×, standing beside the
+    /// system as a permanent bank rather than hiding behind a pinch.
+    /// (Six since 2026-08-07 — the two reverse scales were added and
+    /// this comment still said four until the fan was re-derived.)
     ///
     /// This one looks like display chrome and is not. At 1× an Earth year
     /// takes about two minutes, so the speed is what decides whether an
@@ -111,13 +114,24 @@ struct GravityLabSpaceView: View {
         staysOpen: true,
         // A bank is a ROW, not a fan. The default 150° arc is built for a
         // menu that unfolds and folds away, and a screenshot showed why it
-        // is wrong here: four discs at ±75° and ±25° spray across the
-        // orrery at four different heights, reading as scattered debris
-        // rather than as one instrument. Narrowing the span to 50° and
-        // flattening the vertical squash to 0.25 lays them out as a
-        // shallow, tidy row — the same arithmetic, different shape.
-        layout: FanLayout(span: 50 * .pi / 180, reach: 0.30,
-                          verticalScale: 0.25, lift: 0, stagger: 0))
+        // is wrong here: discs at ±75° and ±25° spray across the orrery
+        // at four different heights, reading as scattered debris rather
+        // than as one instrument. Flattening the vertical squash to 0.25
+        // lays them out as a shallow, tidy row.
+        //
+        // THE SPAN IS DERIVED, NOT TYPED, and that is the fix for
+        // 2026-08-07. It was 50°, hand-tuned against FOUR discs and
+        // reasoned about as four in the comment that used to sit here.
+        // `timeScales` then grew to six and nothing widened: end-pair
+        // centres sat 0.0494 m apart against a 0.068 m touch target, so
+        // aiming at 1× could select −1× and run the solar system
+        // backwards. Asking `FanLayout` for a span that fits the count
+        // means the next scale added to the array widens the bank
+        // instead of jamming it.
+        layout: FanLayout.spread(
+            count: GravityLabModel.timeScales.count,
+            itemSpan: Double(SpatialPicker.colliderSpan),
+            reach: 0.34, verticalScale: 0.25, lift: 0, stagger: 0))
     /// Identifies the floating readout above the selected body.
     private static let dataCardID = "gravity-data"
 
@@ -433,6 +447,19 @@ struct GravityLabSpaceView: View {
                     .allowsHitTesting(false)
                     .environment(model)
             }
+        }
+        // Leaving the lab must not leave anything running or held.
+        //
+        // `teardown` cancels the renderer's event subscriptions and any
+        // geometry job in flight (see `GeometryPipeline.cancel`), and the
+        // drag state is cleared because NOTHING ELSE CAN CLEAR IT: an
+        // in-flight grab that never receives its `onEnded` — the space
+        // closing under it is the ordinary way that happens — otherwise
+        // strands the object wherever the hand left it and re-targets
+        // every later drag at the same one, with no exit but leaving.
+        .onDisappear {
+            renderer?.teardown()
+            drag = nil
         }
         .simultaneousGesture(
             // A TAP MUST NOT BECOME A THROW.

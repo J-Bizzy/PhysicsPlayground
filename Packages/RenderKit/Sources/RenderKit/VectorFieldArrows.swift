@@ -104,13 +104,12 @@ public final class VectorFieldArrows {
     }
 
     /// Rotation taking the arrow's rest axis (+Y) to `direction`.
-    /// simd_quatf(from:to:) is undefined for exactly opposite vectors, so the
-    /// antiparallel case gets an explicit 180° flip.
+    ///
+    /// The antiparallel guard this used to carry alone now lives in
+    /// `RenderKit.rotation(from:to:)`, because twelve other sites needed
+    /// it and re-made the same mistake instead. Kept as a name for the
+    /// arrows' own rest axis.
     public static func rotationFromYAxis(to direction: SIMD3<Float>) -> simd_quatf {
-        let up = SIMD3<Float>(0, 1, 0)
-        if simd_dot(up, direction) < -0.9999 {
-            return simd_quatf(angle: .pi, axis: [1, 0, 0])
-        }
-        return simd_quatf(from: up, to: direction)
+        rotation(from: [0, 1, 0], to: direction)
     }
 }

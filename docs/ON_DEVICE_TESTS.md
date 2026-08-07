@@ -555,6 +555,75 @@ file). The new well and the standing script:
 
 ## Cross-cutting
 
+### Phase 0 of the 2026-08-07 audit arc — mostly invisible, four things that are not
+
+Everything in this pass is mechanical and covered by tests EXCEPT the
+five items here, which are gestures or placement and therefore cannot
+be. The first is a visible change and wants judging, not just checking.
+
+- [ ] **⟳ Gravity Lab's clock bank is now about 40 cm wide, not 25.**
+      `-openModule gravitylab`. Six speeds — −20×, −1×, 1×, 5×, 20×,
+      100× — and their touch targets are 68 mm across, so they do not
+      fit in the old row at any angle: the end pair used to sit 49 mm
+      apart, which is why aiming at 1× could select −1× and run the
+      solar system backwards. The span is now derived from the count
+      (`FanLayout.spread`), so this widens again if a seventh speed is
+      ever added. **What CORRECT looks like:** still one shallow, tidy
+      row reading as a single instrument, symmetric about the system,
+      not spraying across the orrery, and not colliding with the layers
+      bank or the worlds fan when that opens. **Then actually aim at
+      each disc in turn and confirm you get the one you looked at** —
+      that is the defect, and it is invisible in a screenshot.
+
+- [ ] **A tap on a pendulum bob no longer stops the room.**
+      `-openModule pendulums`. Set the cradle swinging, wait for trails,
+      then gaze at one bob and pinch WITHOUT moving your hand. Correct:
+      its control ring opens and **the swing carries on** with every
+      trail in the room intact. The old behaviour stopped that pendulum
+      dead and wiped every trail. Then pinch and actually carry a bob —
+      it must still grab, and must not jump to your fingertips at the
+      moment it is picked up.
+
+- [ ] **A tap on a ball in flight no longer catches it.**
+      `-openModule kinematics -kinBalls 1`. Fire a ball and pinch it
+      mid-flight without moving. Correct: nothing happens to the ball —
+      it keeps flying, keeps its strobe trail. The old behaviour froze
+      it in mid-air permanently. Then pinch and carry one: it must still
+      be catchable, and again must not jump to the hand.
+
+- [ ] **Carrying a lab at a normal speed makes it stay put.**
+      Open any lab, summon the placement puck, and move the apparatus
+      60–80 cm at an unhurried pace — the speed you would actually use
+      to put something beside your sofa. Correct: it stays where you
+      left it. Before this pass only a drag faster than about 1.1 m/s
+      registered as a drag at all; anything slower was read as a tap and
+      snapped the lab home the instant you released. The same test on
+      the gallery's grab bar in the hub.
+
+- [ ] **Two hands on two different magnets no longer resizes the bench.**
+      `-openModule magnetism`. Grab one magnet in each hand and move
+      them apart. Correct: two independent carries, and the bench's
+      scale is exactly where it started when you let go. The
+      suppression existed; it committed the partial swell it was
+      suppressing.
+
+- [ ] **A hand that vanishes mid-pinch does not disable two-hand zoom.**
+      Any lab. Start a two-hand pinch and then drop one hand out of the
+      tracking volume — behind your back, or below the field of view —
+      rather than releasing it. Correct: within about half a second the
+      rig forgets that pinch, and two-hand zoom works on the next try.
+      It used to be dead for the rest of the module session with nothing
+      on screen to say why. In Magnetism, the same test with a magnet in
+      the vanishing hand: the magnet must be released, not held forever.
+
+- [ ] **The capacitor's interior is reachable again.** `-openModule
+      electrostatics -emCap 1`. Put a charge between the plates and try
+      to tap it to open its ring, and to drag it. Both used to fail —
+      each plate carried a 52 cm collision sphere, so the two overlapped
+      through the whole interior and swallowed every pinch. The plates
+      themselves must still be draggable along the field axis.
+
+
 ### The Time Capsule (2026-08-07) — new, and none of it is verifiable from the CLI
 
 **Switch it on first: Settings → Time Capsule → "Record the last 30

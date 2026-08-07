@@ -27,6 +27,21 @@ final class CircuitsRenderer {
     let root = Entity()
     var subscriptions: [EventSubscription] = []
 
+    /// Called from the SpaceView's `onDisappear`, and the reason it has
+    /// to be called explicitly is that neither of the things it releases
+    /// is tied to this object's lifetime.
+    ///
+    /// An `EventSubscription` outlives the view that made it — cancelled
+    /// nowhere, it keeps calling into a renderer for a scene that is no
+    /// longer on screen and holds the whole entity graph alive behind
+    /// it. And a `GeometryPipeline` job in flight ran to completion and
+    /// then uploaded a mesh and enabled an entity in a scene being torn
+    /// down (see `GeometryPipeline.cancel`).
+    func teardown() {
+        subscriptions.forEach { $0.cancel() }
+        subscriptions = []
+    }
+
     var manipulatingComponentID: UUID?
     /// The part already acknowledged with a pickup pulse — one flash per
     /// grab, not one per frame.
@@ -672,7 +687,9 @@ final class CircuitsRenderer {
                 let target = simd_normalize(SIMD3<Float>(component.axis))
                 let current = visual.holder.orientation.act([1, 0, 0])
                 if simd_dot(current, target) < 0.99995 {
-                    visual.holder.orientation = simd_quatf(from: [1, 0, 0], to: target)
+                    // A part dragged end-for-end has axis exactly
+                    // [-1,0,0]; the flip has to keep it the right way up.
+                    visual.holder.orientation = rotation(from: [1, 0, 0], to: target)
                 }
             }
             Fade.tick(visual.halo, visible: component.id == model.selectedID)
@@ -821,9 +838,13 @@ final class CircuitsRenderer {
             terminal.name = "t\(end)-\(component.id.uuidString)"
             terminal.position = SIMD3(
                 Float(end == 0 ? -component.terminalHalfSpan : component.terminalHalfSpan), 0, 0)
+            // 0.042 until 2026-08-07, on a 0.013 m bead. It reached
+            // past the end grip at 0.115, and on a short wire the two
+            // terminals' targets interpenetrated — so which end you
+            // wired was decided by hit order.
             terminal.components.set(InputTargetComponent())
             terminal.components.set(CollisionComponent(
-                shapes: [.generateSphere(radius: 0.042)]))
+                shapes: [.generateSphere(radius: 0.026)]))
             terminal.components.set(HoverEffectComponent())
             var terminalAccessibility = AccessibilityComponent()
             terminalAccessibility.isAccessibilityElement = true
@@ -859,7 +880,7 @@ final class CircuitsRenderer {
             grip.name = "s\(end)-\(component.id.uuidString)"
             let half = Float(component.terminalHalfSpan + CircuitsModel.endGripOffset)
             grip.position = SIMD3(end == 0 ? -half : half, 0, 0)
-            Grabbable.configureTouchTarget(grip, collisionRadius: 0.03)
+            Grabbable.configureTouchTarget(grip, collisionRadius: 0.026)
             var gripAccessibility = AccessibilityComponent()
             gripAccessibility.isAccessibilityElement = true
             gripAccessibility.label = LocalizedStringResource(stringLiteral:
@@ -934,7 +955,7 @@ final class CircuitsRenderer {
                 let blade = ModelEntity(
                     mesh: .generateBox(size: [0.005, 0.05, 0.004], cornerRadius: 0.002),
                     materials: [UnlitMaterial(color: accent)])
-                blade.orientation = simd_quatf(from: [0, 1, 0], to: axis)
+                blade.orientation = rotation(from: [0, 1, 0], to: axis)
                 rotor.addChild(blade)
             }
             holder.addChild(rotor)
@@ -945,9 +966,6 @@ final class CircuitsRenderer {
             let pivot = ModelEntity()
             pivot.name = "k-\(component.id.uuidString)"
             pivot.position = [-0.028, 0.008, 0]
-            pivot.components.set(InputTargetComponent())
-            pivot.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.045)]))
-            pivot.components.set(HoverEffectComponent())
             var leverAccessibility = AccessibilityComponent()
             leverAccessibility.isAccessibilityElement = true
             leverAccessibility.label = "Switch lever. Pinch to open or close the circuit."
@@ -957,6 +975,21 @@ final class CircuitsRenderer {
                 materials: [Materials.machined(UIColor(white: 0.75, alpha: 1), roughness: 0.3)])
             arm.position = [0.028, 0.006, 0]
             pivot.addChild(arm)
+            // THE ARM IS A BLADE. A 0.045 m sphere on a lever 8 mm
+            // thick bulged 4 cm below the switch body and took the
+            // pinches meant for the terminals underneath it. Measured
+            // after the arm exists, so the target is the lever — and
+            // set directly rather than through `Grabbable`, because
+            // this pivot is not a carried object and wants no
+            // grounding shadow of its own.
+            let leverBounds = pivot.visualBounds(relativeTo: pivot)
+            pivot.components.set(InputTargetComponent())
+            pivot.components.set(CollisionComponent(shapes: [
+                .generateBox(size: leverBounds.extents
+                             + SIMD3<Float>(repeating: 2 * Grabbable.reach))
+                    .offsetBy(translation: leverBounds.center),
+            ]))
+            pivot.components.set(HoverEffectComponent())
             body.addChild(pivot)
             visual.lever = pivot
         default:

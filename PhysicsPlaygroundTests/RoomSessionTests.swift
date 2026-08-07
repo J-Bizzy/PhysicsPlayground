@@ -119,6 +119,45 @@ final class RoomSessionTests: XCTestCase {
         room.release()
     }
 
+    /// LEAVING DURING A START MUST STILL TAKE THE SESSION DOWN.
+    ///
+    /// `release()` was guarded on `isRunning`, which stays false for the
+    /// whole of `retain()` — including the seconds the system permission
+    /// sheet is up on first launch. Leave the lab in that window and the
+    /// release no-oped; `retain` then finished and spawned plane
+    /// detection, hand tracking and scene reconstruction with zero
+    /// clients, and they ran for the lifetime of the process with the
+    /// sensing indicator lit and nobody reading them.
+    ///
+    /// WHAT THIS TEST CAN AND CANNOT SEE. The simulator supports few
+    /// enough providers that `retain()` usually returns before it ever
+    /// reaches `requestAuthorization`, so the seconds-long window itself
+    /// is device-only and is on the on-device script. What is checkable
+    /// everywhere is the bookkeeping the fix rests on: a release that
+    /// arrives before its retain has settled still brings the count to
+    /// zero and leaves nothing pinned open. Under the old guard the
+    /// count went to zero too — and no shutdown was ever scheduled.
+    @MainActor
+    func testReleasingDuringAStartLeavesNothingPinnedOpen() async {
+        let room = RoomModel()
+
+        let starting = Task { await room.retain() }
+        // Interleave: the release lands while the retain is in flight.
+        await Task.yield()
+        room.release()
+        await starting.value
+
+        XCTAssertEqual(room.clientCount, 0,
+                       "the release did not balance its retain")
+        XCTAssertFalse(room.hasClients)
+
+        try? await Task.sleep(for: .seconds(RoomModel.testLingerSeconds + 0.6))
+        XCTAssertFalse(room.isRunning,
+                       "the session outlived its last client — this is the leak: "
+                       + "sensors running for the process lifetime with nobody "
+                       + "reading them")
+    }
+
     /// The cases are distinct on purpose, and this is the reason: the
     /// worst version of this feature is one message with a variable in
     /// it, telling a simulator user to go and grant a permission they

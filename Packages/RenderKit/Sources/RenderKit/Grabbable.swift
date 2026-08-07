@@ -48,6 +48,20 @@ import simd
 
 @MainActor
 public enum Grabbable {
+    /// The one allowance a touch target gets over the thing it stands
+    /// for: 15 mm of reach on each side. Stated once here and asserted
+    /// by `ColliderCriterionTests`, which measures every collider in
+    /// every built scene against its entity's own visual bounds.
+    ///
+    /// The sphere overload below is why the rule kept being broken. For
+    /// most of this app's life it was the ONLY overload, so every author
+    /// with a plate, a bar or a cylinder to make grabbable had to pick a
+    /// radius that enclosed it — which for a 0.5 m plate 12 mm thick
+    /// means a 0.26 m ball, and that ball shielded every charge inside
+    /// the capacitor from every pinch. Reach for `box:` or
+    /// `matchingVisualBoundsOf:` unless the thing really is a ball.
+    public static let reach: Float = 0.015
+
     /// Makes an entity a gesture target WITHOUT the system
     /// ManipulationComponent — no attraction toward the hand, no
     /// system-owned motion. Pair with a DragGesture and RelativeDrag:
@@ -55,9 +69,46 @@ public enum Grabbable {
     /// (ticking per frame) moves the entity and everything attached
     /// to it as one body.
     public static func configureTouchTarget(_ entity: Entity, collisionRadius: Float) {
+        apply(.generateSphere(radius: collisionRadius), to: entity)
+    }
+
+    /// A box target, for the things that are not balls — plates, bars,
+    /// slabs, cylinders. `size` is the full extent on each axis.
+    public static func configureTouchTarget(_ entity: Entity,
+                                            box size: SIMD3<Float>,
+                                            offset: SIMD3<Float> = .zero) {
+        apply(.generateBox(size: size).offsetBy(translation: offset), to: entity)
+    }
+
+    /// A box target measured from what is actually drawn, plus `padding`
+    /// of reach on every side.
+    ///
+    /// MEASURE, rather than assume: the caller building the miniature is
+    /// rarely the caller sizing the target, and a magnet is not a
+    /// sphere. `source` is usually the entity itself, but may be one
+    /// child of it when the rest — a hanging name plate, a callout — is
+    /// decoration the target should not swell to cover.
+    /// (`Well.makeSource` has done exactly this by hand since the wells
+    /// shipped; this is that pattern, named.)
+    public static func configureTouchTarget(_ entity: Entity,
+                                            matchingVisualBoundsOf source: Entity,
+                                            padding: Float = reach) {
+        let bounds = source.visualBounds(relativeTo: entity)
+        let extents = bounds.extents
+        guard extents.x.isFinite, extents.y.isFinite, extents.z.isFinite,
+              simd_length(extents) > 1e-6 else {
+            // Nothing drawn yet — a sphere of the padding is the most
+            // honest target available, and it cannot shield anything.
+            return configureTouchTarget(entity, collisionRadius: max(padding, 1e-3))
+        }
+        configureTouchTarget(entity,
+                             box: extents + SIMD3<Float>(repeating: 2 * padding),
+                             offset: bounds.center)
+    }
+
+    private static func apply(_ shape: ShapeResource, to entity: Entity) {
         entity.components.set(InputTargetComponent())
-        entity.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: collisionRadius)]))
+        entity.components.set(CollisionComponent(shapes: [shape]))
         entity.components.set(HoverEffectComponent())
         // Ground it: a soft contact shadow onto the real surfaces below,
         // so the floating object feels present in the room rather than
@@ -83,5 +134,26 @@ public struct RelativeDrag: Sendable {
     /// Where the target belongs for the given hand position.
     public func position(forHand hand: SIMD3<Double>) -> SIMD3<Double> {
         startTarget + (hand - startHand)
+    }
+
+    /// How far the target has been carried from where THIS DRAG picked
+    /// it up — the quantity a press-versus-drag discriminator needs.
+    ///
+    /// It lives here because both call sites got it wrong in the same
+    /// way, and the mistake is easy to make in three lines of gesture
+    /// handler. `LabAnchorView` and the gallery bar each wrote
+    ///
+    ///     travelled = max(travelled, distance(next, placement.offset))
+    ///     placement.move(to: next)
+    ///
+    /// which measures against a reference the very next line overwrites.
+    /// The number tested against the 12 mm tap threshold was therefore
+    /// ONE FRAME's hand displacement, so only a drag faster than about
+    /// 1.08 m/s ever registered: carry a lab 60 cm at a normal 0.3 m/s
+    /// and `onEnded` took the tap branch and recentred it, discarding
+    /// the whole placement. Measured against `startTarget`, which
+    /// nothing overwrites, the same test means what it says.
+    public func travel(forHand hand: SIMD3<Double>) -> Double {
+        simd_distance(position(forHand: hand), startTarget)
     }
 }

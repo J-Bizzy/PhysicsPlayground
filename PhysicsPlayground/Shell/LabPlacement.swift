@@ -127,8 +127,12 @@ struct LabAnchorView: View {
                     }
                     guard let drag else { return }
                     let next = SIMD3<Float>(drag.position(forHand: hand))
-                    travelled = max(travelled,
-                                    simd_distance(next, appModel.labPlacement.offset))
+                    // Against the DRAG'S OWN START. See
+                    // `RelativeDrag.travel(forHand:)`: measuring against
+                    // `labPlacement.offset` measured against a value the
+                    // next line overwrote, so a normal-speed placement
+                    // drag read as a tap and recentred itself.
+                    travelled = max(travelled, Float(drag.travel(forHand: hand)))
                     appModel.labPlacement.move(to: next)
                 }
                 // RECENTRE — a press on the cross-hair that does not move
@@ -178,7 +182,11 @@ struct LabAnchorView: View {
         return false
     }
 
-    private static func makeAnchor(accent: UIColor) -> Entity {
+    /// Internal rather than private only so `ColliderCriterionTests`
+    /// can build the puck and measure it — the criterion has to reach
+    /// every grabbable in the app, and this one is the object a whole
+    /// lab is carried by.
+    static func makeAnchor(accent: UIColor) -> Entity {
         let anchor = Entity()
         anchor.name = "lab-anchor"
         anchor.position = home
@@ -199,12 +207,16 @@ struct LabAnchorView: View {
             let bar = ModelEntity(
                 mesh: .generateBox(size: [0.13, 0.004, 0.007], cornerRadius: 0.002),
                 materials: [Materials.energized(accent, glow: 0.5)])
-            bar.orientation = simd_quatf(from: [1, 0, 0], to: axis)
+            // The first bar aims [1,0,0] at itself — the parallel end of
+            // the degenerate domain, and no more defined than the other.
+            bar.orientation = rotation(from: [1, 0, 0], to: axis)
             bar.position.y = 0.011
             anchor.addChild(bar)
         }
 
-        Grabbable.configureTouchTarget(anchor, collisionRadius: 0.1)
+        // A PUCK IS A DISC. A 0.1 m sphere stood 0.1 m proud of a
+        // handle 16 mm thick, in the middle of the apparatus it places.
+        Grabbable.configureTouchTarget(anchor, matchingVisualBoundsOf: anchor)
         // The default gaze highlight was found invisible on device (the
         // Load button's lesson, HubSpaceView) — a placement tool you
         // cannot tell you are aiming at gets carried by accident or not

@@ -1103,7 +1103,7 @@ enum HubVignettes {
                 offset.x * sin(precession) + offset.z * cos(precession))
             let drop = sqrt(max(1 - simd_length_squared(offset), 0.05))
             let direction = simd_normalize(SIMD3(offset.x, -drop, offset.z))
-            orbiter.orientation = simd_quatf(from: [0, -1, 0], to: direction)
+            orbiter.orientation = rotation(from: [0, -1, 0], to: direction)
         }
     }
 

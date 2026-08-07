@@ -37,6 +37,21 @@ struct PendulumsSpaceView: View {
     /// The collar this press started on, and whether it has moved. A
     /// press that never moves is a tap; see the drag's `onEnded`.
     @State private var pressedPivot: (id: UUID, moved: Bool)?
+    /// The bob this press landed on, before it has moved far enough to
+    /// be a grab. Held rather than grabbed, so a TAP on a bob does not
+    /// stop the pendulum and wipe the room's trails — see the drag's
+    /// `onChanged`. The collar above has always worked this way; the bob
+    /// did not until 2026-08-07.
+    @State private var pressedBob = PressLatch<BobPress>()
+
+    /// A press on a bob — identity only. Where the bob IS is read at
+    /// promotion: it is still swinging, at around a metre a second, so
+    /// its position at press time is stale by more than the threshold
+    /// by the time the threshold is crossed. See `PressLatch`.
+    struct BobPress: Sendable {
+        let id: UUID
+        let name: String
+    }
     /// How far a press may wander and still count as a tap, metres.
     private static let tapTravel: Double = 0.012
     @State private var wells: Well?
@@ -296,6 +311,19 @@ struct PendulumsSpaceView: View {
                     .environment(model)
             }
         }
+        // Leaving the lab must not leave anything running or held.
+        //
+        // `teardown` cancels the renderer's event subscriptions and any
+        // geometry job in flight (see `GeometryPipeline.cancel`), and the
+        // drag state is cleared because NOTHING ELSE CAN CLEAR IT: an
+        // in-flight grab that never receives its `onEnded` — the space
+        // closing under it is the ordinary way that happens — otherwise
+        // strands the object wherever the hand left it and re-targets
+        // every later drag at the same one, with no exit but leaving.
+        .onDisappear {
+            renderer?.teardown()
+            drag = nil
+        }
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
@@ -339,23 +367,57 @@ struct PendulumsSpaceView: View {
                             return
                         }
 
+                        // THE BOB GETS THE COLLAR'S DISCRIMINATOR TOO.
+                        //
+                        // The collar three branches up is careful that a
+                        // press which never moves is not a drag. The bob
+                        // was not, and it is on the same
+                        // `minimumDistance: 0` recogniser — so a TAP on a
+                        // bob ran the whole grab path: `clearTrail()`
+                        // wiped every trail in the room, `beginGrab`
+                        // zeroed the swing, and `onEnded` released it
+                        // with a hand velocity of essentially nothing.
+                        // Tap a swinging pendulum to open its ring — the
+                        // documented way to open it — and it stopped
+                        // dead and took the room's traces with it.
+                        //
+                        // The press is only RECORDED here. It is promoted
+                        // to a grab below, once the hand has actually
+                        // moved, and the grab is anchored back at the
+                        // press so nothing jumps.
                         var current: Entity? = value.entity
                         while let candidate = current {
                             if let id = UUID(uuidString: candidate.name),
-                               let pendulum = model.pendulums.first(where: { $0.id == id }) {
-                                renderer?.grabbedID = id
-                                renderer?.clearTrail()
-                                model.beginGrab(id: id)
-                                drag = RelativeDrag(
-                                    name: candidate.name,
-                                    target: pendulum.bobWorld, hand: hand)
-                                handSampler.reset()
-                                handSampler.record(pendulum.bobWorld,
-                                                   at: Date.timeIntervalSinceReferenceDate)
+                               model.pendulums.contains(where: { $0.id == id }) {
+                                pressedBob.press(
+                                    BobPress(id: id, name: candidate.name),
+                                    at: hand)
                                 break
                             }
                             current = candidate.parent
                         }
+                    }
+
+                    // The promotion. `tapTravel` is the same threshold
+                    // the collar uses — under a finger's width. The bob's
+                    // position is read HERE, at the instant of the grab,
+                    // because it has gone on swinging throughout the
+                    // press.
+                    if drag == nil, pressedBob.isPending {
+                        guard let grabbed = pressedBob.promote(hand: hand),
+                              let pendulum = model.pendulums.first(where: {
+                                  $0.id == grabbed.id
+                              })
+                        else { return }
+                        let bobWorld = pendulum.bobWorld
+                        renderer?.grabbedID = grabbed.id
+                        renderer?.clearTrail()
+                        model.beginGrab(id: grabbed.id)
+                        drag = RelativeDrag(name: grabbed.name,
+                                            target: bobWorld, hand: hand)
+                        handSampler.reset()
+                        handSampler.record(bobWorld,
+                                           at: Date.timeIntervalSinceReferenceDate)
                     }
                     // A pivot drag re-hangs the rig; a bob drag swings it.
                     if drag?.name.hasPrefix("pivot-") == true, let drag,
@@ -376,6 +438,10 @@ struct PendulumsSpaceView: View {
                     handSampler.record(world, at: Date.timeIntervalSinceReferenceDate)
                 }
                 .onEnded { value in
+                    // A bob press that never became a grab is a tap,
+                    // and the tap recogniser below owns it.
+                    pressedBob.cancel()
+
                     // A PRESS ON THE COLLAR THAT NEVER MOVED IT opens the
                     // length bead. Folded into this drag rather than
                     // given its own `TapGesture`, which is how it was

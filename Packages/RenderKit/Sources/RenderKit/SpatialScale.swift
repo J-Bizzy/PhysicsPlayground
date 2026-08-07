@@ -17,6 +17,7 @@
 //  numbers in metres therefore need no changes at all.
 //
 
+import QuartzCore
 import RealityKit
 import SwiftUI
 import simd
@@ -78,11 +79,34 @@ public final class SpatialScaleRig {
         liveTurn = gestureStartTurn + radians
     }
 
+    /// COMMITS the in-flight gesture: whatever the hands did becomes the
+    /// new view. Call this when a gesture genuinely finishes.
     public func endGesture() {
         guard isGesturing else { return }
         isGesturing = false
         scale = liveScale
         turn = liveTurn
+    }
+
+    /// ABANDONS the in-flight gesture, restoring the view to where it
+    /// stood when the hands closed.
+    ///
+    /// The two are not interchangeable and were used as if they were.
+    /// `SpatialScaleModifier` suppresses the rig while the pinch ledger
+    /// says the hands are on two different objects — the same-object
+    /// rule — and it did that by calling `endGesture()`, which is the
+    /// COMMIT. `MagnifyGesture` fires before the ledger has resolved
+    /// both owners, so grabbing two magnets landed a frame or two of
+    /// partial swell and then committed it: the bench was left
+    /// permanently scaled by exactly the gesture the rule exists to
+    /// suppress.
+    public func cancelGesture() {
+        guard isGesturing else { return }
+        isGesturing = false
+        liveScale = gestureStartScale
+        liveTurn = gestureStartTurn
+        scale = gestureStartScale
+        turn = gestureStartTurn
     }
 
     /// Snaps back to 1× / no turn. Wired to the module's reset.
@@ -130,27 +154,54 @@ public final class SpatialScaleRig {
 /// live pinch to its owning object.
 @MainActor
 public final class PinchLedger {
-    private var owners: [SpatialEventCollection.Event.ID: Entity] = [:]
+    /// How long an unmentioned pinch stays on the books.
+    ///
+    /// THE LEDGER ONLY EVER LEARNED, NEVER FORGOT. An entry was removed
+    /// by an event naming its own id, so a hand that left the tracking
+    /// volume mid-pinch — walked out of frame, dropped behind the body,
+    /// occluded by the apparatus — left its owner in the dictionary
+    /// permanently. From that moment `allowsScale` was false for the
+    /// rest of the module session and two-hand zoom silently stopped
+    /// working, with nothing on screen to say why and no way back but
+    /// leaving the space. `clear()` existed for this and had no callers.
+    ///
+    /// Half a second is far longer than the gap between frames of a live
+    /// pinch and far shorter than a user notices.
+    public static let staleAfter: Double = 0.5
+
+    private var owners: [SpatialEventCollection.Event.ID: (owner: Entity, seen: Double)] = [:]
 
     public init() {}
 
-    public func update(_ events: SpatialEventCollection) {
+    /// `now` is injectable so the expiry can be tested; production
+    /// callers use the media clock.
+    public func update(_ events: SpatialEventCollection,
+                       now: Double = CACurrentMediaTime()) {
         for event in events {
             if event.phase == .active, let target = event.targetedEntity {
-                owners[event.id] = Self.owner(of: target)
+                owners[event.id] = (Self.owner(of: target), now)
             } else {
                 owners[event.id] = nil
             }
         }
+        expire(now: now)
     }
 
     public func clear() { owners.removeAll() }
 
+    private func expire(now: Double) {
+        owners = owners.filter { now - $0.value.seen < Self.staleAfter }
+    }
+
     /// Whether a two-hand scale may run: true while the live pinches
     /// rest on at most one distinct object (or on nothing nameable).
-    public var allowsScale: Bool {
-        Self.distinctOwnerCount(of: Array(owners.values)) < 2
+    public func allowsScale(now: Double = CACurrentMediaTime()) -> Bool {
+        expire(now: now)
+        return Self.distinctOwnerCount(of: owners.values.map(\.owner)) < 2
     }
+
+    /// The same question, asked at the current instant.
+    public var allowsScale: Bool { allowsScale() }
 
     /// A pinch lands on whatever collider was hit — a glyph, a halo, a
     /// terminal — so it is walked up to the nearest NAMED ancestor,
@@ -260,20 +311,25 @@ public struct SpatialScaleModifier: ViewModifier {
                 MagnifyGesture()
                     .targetedToAnyEntity()
                     .onChanged { value in
+                        // CANCEL, not end — `endGesture` would commit the
+                        // partial swell this guard exists to reject.
                         guard ledger.allowsScale else {
-                            rig.endGesture()
+                            rig.cancelGesture()
                             return
                         }
                         rig.updateMagnification(Float(value.magnification))
                     }
-                    .onEnded { _ in rig.endGesture() }
+                    .onEnded { _ in
+                        rig.endGesture()
+                        ledger.clear()
+                    }
             )
             .simultaneousGesture(
                 RotateGesture3D(constrainedToAxis: .y)
                     .targetedToAnyEntity()
                     .onChanged { value in
                         guard ledger.allowsScale else {
-                            rig.endGesture()
+                            rig.cancelGesture()
                             return
                         }
                         // The rotation arrives as a 3-D rotation about Y;
@@ -283,7 +339,10 @@ public struct SpatialScaleModifier: ViewModifier {
                         let sign: Float = rotation.axis.y < 0 ? -1 : 1
                         rig.updateRotation(radians: angle * sign)
                     }
-                    .onEnded { _ in rig.endGesture() }
+                    .onEnded { _ in
+                        rig.endGesture()
+                        ledger.clear()
+                    }
             )
     }
 }

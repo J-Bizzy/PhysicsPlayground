@@ -10,6 +10,7 @@
 //
 
 import PhysicsCore
+import QuartzCore
 import SwiftUI
 import RealityKit
 import RenderKit
@@ -107,6 +108,12 @@ struct MagnetismSpaceView: View {
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
+                    // PER FRAME, not per event, and that distinction is
+                    // the whole point: a hand that leaves the tracking
+                    // volume mid-carry stops SENDING events, so an
+                    // expiry driven by `handleGrabEvents` would never
+                    // run for exactly the pinch it exists to forget.
+                    expireStaleGrabs(now: CACurrentMediaTime())
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
                     wells?.update(dt: event.deltaTime)
                     layers?.update(
@@ -175,6 +182,26 @@ struct MagnetismSpaceView: View {
             #endif
             renderer.tick(model, viewer: appModel.room.headPosition)
             self.renderer = renderer
+        }
+        // Leaving the lab must not leave anything running or held.
+        //
+        // `teardown` cancels the renderer's event subscriptions and any
+        // geometry job in flight (see `GeometryPipeline.cancel`), and the
+        // drag state is cleared because NOTHING ELSE CAN CLEAR IT: an
+        // in-flight grab that never receives its `onEnded` — the space
+        // closing under it is the ordinary way that happens — otherwise
+        // strands the object wherever the hand left it and re-targets
+        // every later drag at the same one, with no exit but leaving.
+        .onDisappear {
+            renderer?.teardown()
+            drag = nil
+            // Released, not merely forgotten: a magnet left `held` is
+            // frozen out of the dynamics, and the model outlives this
+            // view — it would still be frozen on the way back in.
+            for session in grabs.values {
+                if case .magnet(let id) = session.target { model.release(id: id) }
+            }
+            grabs.removeAll()
         }
         .spatialScale(scaleRig)
         .simultaneousGesture(
@@ -284,6 +311,27 @@ struct MagnetismSpaceView: View {
         enum Target { case magnet(UUID), compass }
         var target: Target
         var drag: RelativeDrag
+        /// When this pinch was last heard from. See `expireStaleGrabs`.
+        var lastSeen: Double
+    }
+
+    /// How long a grab survives without being mentioned by an event.
+    /// The same number, for the same reason, as `PinchLedger.staleAfter`.
+    private static let grabStaleAfter: Double = 0.5
+
+    /// Releases grabs whose pinch stopped reporting.
+    ///
+    /// `grabs` is keyed by spatial-event id and was only ever emptied by
+    /// an event NAMING that id. A hand that leaves the tracking volume
+    /// mid-carry — walked out of frame, dropped to the side, occluded by
+    /// the bench — sends no such event, so its magnet stayed held
+    /// forever: frozen out of the dynamics, following nothing, and
+    /// re-grabbed by every later pinch that resolved to the same id.
+    private func expireStaleGrabs(now: Double) {
+        for (id, session) in grabs where now - session.lastSeen >= Self.grabStaleAfter {
+            grabs.removeValue(forKey: id)
+            if case .magnet(let magnetID) = session.target { model.release(id: magnetID) }
+        }
     }
 
     /// Live grab sessions, one per pinch id.
@@ -291,6 +339,12 @@ struct MagnetismSpaceView: View {
 
     private func handleGrabEvents(_ events: SpatialEventCollection) {
         guard let renderer, let content = sceneContent else { return }
+        let now = CACurrentMediaTime()
+        // Also here, so a pinch that ends while others continue is
+        // forgotten this frame rather than next. The per-frame call in
+        // the update subscription is the one that covers a hand which
+        // stops reporting altogether.
+        defer { expireStaleGrabs(now: now) }
         for event in events {
             guard event.phase == .active else {
                 if let ended = grabs.removeValue(forKey: event.id),
@@ -306,6 +360,7 @@ struct MagnetismSpaceView: View {
             let hand = renderer.displayPoint(fromWorld: world)
 
             if let session = grabs[event.id] {
+                grabs[event.id]?.lastSeen = now
                 switch session.target {
                 case .magnet(let id):
                     model.move(id: id, to: session.drag.position(forHand: hand))
@@ -313,7 +368,7 @@ struct MagnetismSpaceView: View {
                     model.moveCompass(to: session.drag.position(forHand: hand))
                 }
             } else if let session = beginGrabSession(on: event.targetedEntity,
-                                                     hand: hand) {
+                                                     hand: hand, now: now) {
                 grabs[event.id] = session
             }
         }
@@ -322,8 +377,8 @@ struct MagnetismSpaceView: View {
     /// Resolves a fresh pinch to a grab, or nil for anything that is
     /// not a free object — banks, beads, wells and second pinches on a
     /// held object all decline, and the other recognisers take them.
-    private func beginGrabSession(on entity: Entity?,
-                                  hand: SIMD3<Double>) -> GrabSession? {
+    private func beginGrabSession(on entity: Entity?, hand: SIMD3<Double>,
+                                  now: Double) -> GrabSession? {
         var current: Entity? = entity
         while let candidate = current {
             if candidate.name == MagnetismRenderer.handCompassName {
@@ -335,7 +390,8 @@ struct MagnetismSpaceView: View {
                 return GrabSession(
                     target: .compass,
                     drag: RelativeDrag(name: candidate.name,
-                                       target: model.compassPosition, hand: hand))
+                                       target: model.compassPosition, hand: hand),
+                    lastSeen: now)
             }
             if let id = UUID(uuidString: candidate.name),
                let magnet = model.magnets.first(where: { $0.id == id }) {
@@ -346,7 +402,8 @@ struct MagnetismSpaceView: View {
                 return GrabSession(
                     target: .magnet(id),
                     drag: RelativeDrag(name: candidate.name,
-                                       target: magnet.position, hand: hand))
+                                       target: magnet.position, hand: hand),
+                    lastSeen: now)
             }
             current = candidate.parent
         }

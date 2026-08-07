@@ -340,12 +340,8 @@ final class Multimeter {
 
         // Yaw only: a meter that pitched to meet a viewer looking down on
         // it would turn its own face edge-on.
-        if let viewer {
-            let flat = SIMD3<Float>(viewer.x - anchor.x, 0, viewer.z - anchor.z)
-            if simd_length(flat) > 1e-4 {
-                chassis.orientation = simd_quatf(from: [0, 0, 1],
-                                                 to: simd_normalize(flat))
-            }
+        if let viewer, let facing = yaw(facing: viewer, from: anchor) {
+            chassis.orientation = facing
         }
 
         // The dial POINTS at the selected mode, over the same 250° arc

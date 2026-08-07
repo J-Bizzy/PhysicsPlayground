@@ -203,8 +203,10 @@ public final class Callout {
         let rod = ModelEntity(
             mesh: .generateCylinder(height: length, radius: 0.0011),
             materials: [material])
-        // generateCylinder runs along +Y; aim it down the offset.
-        rod.orientation = simd_quatf(from: [0, 1, 0], to: offset / length)
+        // generateCylinder runs along +Y; aim it down the offset. Every
+        // Bloom grip hangs its callout straight down, which is exactly
+        // the antiparallel case `rotation(from:to:)` exists for.
+        rod.orientation = rotation(from: [0, 1, 0], to: offset / length)
         rod.position = offset / 2
         leader.addChild(rod)
     }

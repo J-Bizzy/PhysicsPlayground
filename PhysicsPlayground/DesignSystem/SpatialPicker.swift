@@ -48,6 +48,19 @@ struct PickerChoice: Identifiable, Equatable {
 
 @MainActor
 final class SpatialPicker {
+    /// The lateral span of one disc's TOUCH TARGET, and therefore the
+    /// number a fan has to space its discs by.
+    ///
+    /// The disc's face is 0.052 m across; the target is deliberately
+    /// wider, because a fan is something you reach for. Two discs
+    /// closer together than this cannot be aimed at separately, no
+    /// matter how clearly they read — which is exactly what happened
+    /// when Gravity Lab's clock grew from four scales to six and
+    /// `FanLayoutTests` checked the clearance against the 0.052 m FACE
+    /// instead. Named here so the layout and its test can never again
+    /// disagree with the collider about how big a disc is.
+    static let colliderSpan: Float = 0.068
+
     let root = Entity()
     private(set) var isOpen = false
     /// Called with the chosen `PickerChoice.id`.
@@ -149,12 +162,8 @@ final class SpatialPicker {
 
         // Yaw only — a fan that pitched to face a viewer looking down at
         // it would tip its discs edge-on to the room.
-        if let viewer {
-            let flat = SIMD3<Float>(viewer.x - anchor.x, 0, viewer.z - anchor.z)
-            if simd_length(flat) > 1e-4 {
-                root.orientation = simd_quatf(from: [0, 0, 1],
-                                              to: simd_normalize(flat))
-            }
+        if let viewer, let facing = yaw(facing: viewer, from: anchor) {
+            root.orientation = facing
         }
 
         let current = selectedID?()
@@ -249,10 +258,16 @@ final class SpatialPicker {
         disc.addChild(label)
 
         disc.components.set(InputTargetComponent())
-        // Collider matched to the visual, per the collider-≤-visual rule:
-        // an oversized one here would shield whatever the fan hangs over.
-        disc.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: 0.034)]))
+        // A DISC IS FLAT, and this was a ball. The lateral 0.068 m is
+        // deliberate reach over a 0.052 m face — it is also the number
+        // `FanLayout` must space these by, and the one `FanLayoutTests`
+        // failed to use. But the same radius applied VERTICALLY made a
+        // 68 mm-thick slab out of a disc 10.5 mm thick, hanging 3 cm
+        // above and below the fan over whatever the fan was drawn in
+        // front of.
+        disc.components.set(CollisionComponent(shapes: [
+            .generateBox(size: [Self.colliderSpan, 0.038, Self.colliderSpan]),
+        ]))
         disc.components.set(HoverEffectComponent())
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true

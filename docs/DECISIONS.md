@@ -16,6 +16,96 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-07 — The collider rule, the fan span and the press-vs-tap all stop being matters of attention
+
+**Decision:** The Phase 0 pass of the 2026-08-07 audit arc. Nine
+load-bearing defects, none of them a design change, and three of them
+converted from things a careful author had to remember into things a
+test enforces:
+
+- **`RenderKit.rotation(from:to:)`** is now the only way this app builds
+  a rotation between two vectors, at all thirteen sites. The
+  antiparallel guard existed at `VectorFieldArrows:107` and had never
+  been shared. The seven viewer-facing instruments do not use it at
+  all — they use `yaw(facing:from:)`, because turning to face a reader
+  is one degree of freedom and `atan2` is exact.
+- **`ColliderCriterionTests`** walks every `CollisionComponent` in a
+  scene built from each of the six modules, the gallery, the design
+  system's primitives and the placement puck, and fails any shape
+  larger than its entity's own visual bounds by more than
+  `max(×1.15, +30 mm)`. It found violations in every module and the
+  gallery; the worst was a 0.52 m sphere on a 12 mm capacitor plate,
+  which made every charge inside the capacitor unpinchable.
+  `Grabbable` gained `box:` and `matchingVisualBoundsOf:` overloads,
+  because sphere-only was what forced the rule to be broken.
+- **`FanLayout.spread(count:itemSpan:reach:…)`** derives a fan's span
+  from how many things are in it and how wide their touch targets are.
+  Gravity Lab's clock bank was hand-tuned for four discs and its array
+  grew to six.
+- **`PressLatch`** holds a press until it has travelled 12 mm, and
+  Pendulums and Projectiles route their destructive branches through
+  it.
+
+Also: `SoundPalette` synthesis moved off the main actor and all four
+cache filenames versioned; `RelativeDrag.travel(forHand:)` replacing two
+copies of a drag-distance measurement that measured one frame;
+`SpatialScaleRig.cancelGesture()` distinguished from the commit;
+`PinchLedger` and Magnetism's grab table expiring entries after 0.5 s;
+`GeometryPipeline.cancel()` and a `teardown()` on all six renderers;
+`Bloom.configure` clearing `gripDrag`; `isImmersiveSpaceOpen` moved off
+a `Group`; and `RoomModel.release()` no longer guarded on `isRunning`.
+
+**Context:** Every one of these had shipped, and most had shipped
+_twice_. The pattern is the same one `ResetCoverageTests` was written
+for and it is worth naming again: **a test that lists the cases somebody
+thought of is the same act of attention that missed them.**
+`FanLayoutTests` is the clearest example — it checked disc clearance
+against 0.052 m (the painted face, not the 0.068 m collider) and only
+ever tested `FanLayout()`, which is the one layout in the app that no
+module uses. It was thorough-looking and covered nothing that shipped.
+Its ceiling of nine items turned out to be *right* — that is exactly
+where the default arc runs out of room, and why Gravity Lab's ten-world
+fan carries a bespoke layout — but the number was written in bare, with
+no reasoning beside it and nothing to hit if a tenth choice were added
+to a picker using the default. It is derived now.
+
+**One correction to the audit.** `AUDIT_2026-08-07.md` P0-1 says the
+undefined quaternions produce "either a NaN transform or an arbitrary
+orientation". Measured on this platform, neither: `simd_quatf(from:to:)`
+resolves both degenerate ends deterministically and maps `a` to `b`
+correctly. There is no NaN anywhere in the app, and for the
+rotationally symmetric geometry at most of the sites the roll it picks
+is invisible. Two things remain true, and are what the change is for:
+the behaviour is UNSPECIFIED and being relied on at thirteen sites, and
+at one site the roll is visible and wrong — a circuit part dragged
+end-for-end came out upside down rather than turned around.
+`RotationTests` pins that case, and its header records the correction so
+the next reader does not go looking for the NaN.
+
+**Consequences:** Three rules are now mechanical rather than
+remembered. A collider larger than its object fails the build; a fan
+that outgrows its span widens instead of jamming; a `nonisolated`
+synthesis path cannot be dragged back onto the main actor without
+someone noticing. Two new shared primitives — `PressLatch` and
+`rotation(from:to:)` — are the answer whenever the same problem appears
+again, and the third module to need the press discriminator will not
+hand-roll a third copy. `Grabbable.configureTouchTarget(_:collisionRadius:)`
+survives for things that really are balls, but its doc comment now says
+so and names the plate that proved it.
+
+**Not yet done, and deliberately.** The stale-drag watchdog reaches the
+two event-id-keyed tables (`PinchLedger`, Magnetism's `grabs`) where a
+vanished hand leaves no trace. The `DragGesture`-driven carries in the
+hub and Projectiles are cleared on `onDisappear` instead, because those
+recognisers do deliver `onEnded`; if a stranded carry is ever seen on
+device, they need the same treatment.
+
+**One visible change hides in this pass** and needs a screenshot before
+it is trusted: Gravity Lab's clock bank widens from about 0.25 m to
+about 0.40 m, because six touch targets 68 mm across do not fit in
+0.25 m at any angle. Placement is the thing this project has got wrong
+three times with the arithmetic looking fine each time.
+
 ## 2026-08-07 — The Time Capsule ships OFF, and the reel turns because tape is coming off it
 
 **Decision:** Owner's call, two parts. (1) `AppSettings.timeCapsule` is

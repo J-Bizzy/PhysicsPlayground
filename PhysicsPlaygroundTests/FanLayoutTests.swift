@@ -8,12 +8,155 @@
 //  show up on device: a fan that overlaps itself, opens through the floor,
 //  or divides by a zero item count.
 //
+//  THIS FILE LET A DEVICE-ONLY FAILURE SHIP, on 2026-08-07, and the
+//  three reasons are worth naming because each is a way a test can look
+//  thorough and cover nothing:
+//
+//  1. IT MEASURED THE WRONG THING. `testNeighboursAreSeparatedAtFullOpen`
+//     cleared 0.052 m — the disc's painted FACE. Hit-testing uses the
+//     COLLIDER, which is 0.068 m across. Every gap between 0.052 and
+//     0.068 read as fine here and was unaimable in the room.
+//  2. IT ONLY EVER TESTED `FanLayout()`. Not one of the layouts a module
+//     actually ships was ever passed through it, and the default is the
+//     only layout in the app that nobody uses. Gravity Lab's clock bank
+//     carried a 50° span hand-tuned for four discs while its array grew
+//     to six; the arithmetic was fine, and no test looked at it.
+//  3. ITS CEILING OF NINE WAS SILENT. Nine is not arbitrary — it is
+//     exactly where the default arc runs out of room, which is why
+//     Gravity Lab's ten-world fan carries a bespoke layout. But the test
+//     said only `for count in 2...9`, so the wall was a magic number
+//     with no explanation and nothing to hit if a tenth choice were
+//     added to a picker using the default. It is derived and named
+//     below now.
+//
+//  So `testEveryShippedFanClearsItsColliders` is the load-bearing test
+//  here now: it walks the layouts the app really builds, at the counts
+//  it really builds them with, against the collider width the picker
+//  really uses. The generic tests below still earn their place — they
+//  cover the degenerate counts a module can reach by deleting content —
+//  but they are no longer the whole story.
+//
 
 import XCTest
 import simd
 import RenderKit
+@testable import PhysicsPlayground
 
 final class FanLayoutTests: XCTestCase {
+
+    // MARK: The criterion — what the modules actually build
+
+    /// Every fan the app ships, at the count it ships it with.
+    ///
+    /// Named here rather than reached through the views because a
+    /// `SpatialPicker` lives in a `@State` inside a `View`; this is the
+    /// same arithmetic the view hands it, and the pairing is what
+    /// `testEveryShippedFanClearsItsColliders` is checking. If a module
+    /// gains a picker, add it — and note that the two DERIVED entries
+    /// cannot go wrong when their content grows, which is the whole
+    /// argument for `FanLayout.spread`.
+    @MainActor
+    private var shippedFans: [(name: String, count: Int, layout: FanLayout)] {
+        [
+            ("GravityLab clock speed",
+             GravityLabModel.timeScales.count,
+             FanLayout.spread(count: GravityLabModel.timeScales.count,
+                              itemSpan: Double(SpatialPicker.colliderSpan),
+                              reach: 0.34, verticalScale: 0.25,
+                              lift: 0, stagger: 0)),
+            ("GravityLab worlds",
+             GravityLabModel.Preset.allCases.count,
+             FanLayout(span: 120 * .pi / 180, reach: 0.58,
+                       verticalScale: 0.22, lift: 0, stagger: 0)),
+            ("Projectiles worlds",
+             KinematicsModel.gravityPresets.count,
+             FanLayout(span: 54 * .pi / 180, reach: 0.32,
+                       verticalScale: 0.25, lift: 0, stagger: 0)),
+        ]
+    }
+
+    /// A fan whose discs are closer together than a disc's touch target
+    /// is wide cannot be aimed at, however tidily it reads.
+    @MainActor
+    func testEveryShippedFanClearsItsColliders() {
+        let target = Double(SpatialPicker.colliderSpan)
+        for fan in shippedFans {
+            let spacing = fan.layout.minimumAdjacentSpacing(count: fan.count)
+            XCTAssertGreaterThan(
+                spacing, target,
+                String(format: "%@ puts %d discs %.4f m apart against a %.3f m "
+                       + "touch target — adjacent discs cannot be told apart "
+                       + "by a pinch.", fan.name, fan.count, spacing, target))
+        }
+    }
+
+    /// …and must still be reachable. A fan wide enough to clear its own
+    /// colliders is no use if it opens across the room.
+    @MainActor
+    func testEveryShippedFanStaysWithinReach() {
+        for fan in shippedFans {
+            for index in 0..<fan.count {
+                let offset = fan.layout.placement(index: index, count: fan.count,
+                                                  openness: 1).offset
+                XCTAssertLessThan(simd_length(offset), 0.70,
+                                  "\(fan.name) item \(index) opens out of reach")
+                XCTAssertGreaterThanOrEqual(offset.y, 0,
+                                            "\(fan.name) item \(index) opens downward")
+            }
+        }
+    }
+
+    // MARK: The derivation
+
+    /// `spread` must fit any count it is handed, not just the ones we
+    /// happen to ship — that is the point of deriving it. The failure it
+    /// exists to prevent is a content array growing past a hand-typed
+    /// span.
+    func testSpreadFitsEveryCountFromTwoToTwentyFour() {
+        let itemSpan = 0.068
+        for count in 2...24 {
+            let layout = FanLayout.spread(count: count, itemSpan: itemSpan,
+                                          reach: 0.34, verticalScale: 0.25,
+                                          lift: 0, stagger: 0)
+            XCTAssertGreaterThan(
+                layout.minimumAdjacentSpacing(count: count), itemSpan,
+                "spread(count: \(count)) still overlaps")
+        }
+    }
+
+    /// It must also be TIGHT. A derivation that answers every question
+    /// with the widest legal fan has not derived anything.
+    func testSpreadStaysAsNarrowAsTheCountAllows() {
+        let itemSpan = 0.068
+        let four = FanLayout.spread(count: 4, itemSpan: itemSpan, reach: 0.34,
+                                    verticalScale: 0.25, lift: 0, stagger: 0)
+        let eight = FanLayout.spread(count: 8, itemSpan: itemSpan, reach: 0.34,
+                                     verticalScale: 0.25, lift: 0, stagger: 0)
+        XCTAssertLessThan(four.span, eight.span,
+                          "fewer discs must not ask for a wider arc")
+        XCTAssertLessThan(four.span, 150 * .pi / 180,
+                          "four discs do not need the whole default arc")
+    }
+
+    /// Past the widest legal arc there is nowhere to go but outward, and
+    /// it must actually go there rather than quietly overlapping.
+    func testSpreadReachesOutwardWhenTheArcRunsOut() {
+        let itemSpan = 0.12
+        let crowded = FanLayout.spread(count: 20, itemSpan: itemSpan, reach: 0.30,
+                                       verticalScale: 0.25, lift: 0, stagger: 0)
+        XCTAssertGreaterThan(crowded.reach, 0.30,
+                             "the arc was maxed out and the reach did not grow")
+        XCTAssertGreaterThan(crowded.minimumAdjacentSpacing(count: 20), itemSpan)
+    }
+
+    func testSpreadIsFiniteForDegenerateCounts() {
+        for count in [0, 1] {
+            let layout = FanLayout.spread(count: count, itemSpan: 0.068, reach: 0.3)
+            XCTAssertTrue(layout.span.isFinite && layout.reach.isFinite)
+            let placement = layout.placement(index: 0, count: count, openness: 1)
+            XCTAssertTrue(placement.offset.x.isFinite && placement.offset.y.isFinite)
+        }
+    }
 
     // MARK: Opening and closing
 
@@ -82,20 +225,45 @@ final class FanLayoutTests: XCTestCase {
     /// Neighbouring items must not land on top of each other, or the fan
     /// becomes an unreadable pile — the exact failure that made the old
     /// palette ring go from a 0.26 m radius to 0.40 m.
-    func testNeighboursAreSeparatedAtFullOpen() {
+    ///
+    /// MEASURED AGAINST THE COLLIDER, not the painted face. This test
+    /// cleared 0.052 m — the disc's visual diameter — until 2026-08-07,
+    /// and a pinch does not land on paint.
+    ///
+    /// The default 150° / 0.27 m arc holds NINE discs and no more. The
+    /// capacity is derived here rather than written in as a loop bound,
+    /// because the number is a real property of the geometry and the
+    /// reason Gravity Lab's ten-world fan carries a bespoke layout — and
+    /// because a bound with no explanation is indistinguishable from
+    /// somebody having stopped counting.
+    @MainActor
+    func testTheDefaultArcHoldsNineDiscsAndSaysSo() {
         let fan = FanLayout()
-        // Disc radius is 0.026 m, so centres need to clear ~0.052 m.
-        let discDiameter = 0.052
-        for count in 2...9 {
-            let offsets = (0..<count).map {
-                fan.placement(index: $0, count: count, openness: 1).offset
+        let target = Double(SpatialPicker.colliderSpan)
+
+        let capacity = (2...40).last { count in
+            (2...count).allSatisfy {
+                fan.minimumAdjacentSpacing(count: $0) > target
             }
-            for (a, b) in zip(offsets, offsets.dropFirst()) {
-                XCTAssertGreaterThan(
-                    simd_distance(a, b), discDiameter,
-                    "with \(count) items, neighbours overlap")
-            }
-        }
+        } ?? 0
+
+        XCTAssertEqual(
+            capacity, 9,
+            "The default arc now holds \(capacity) discs, not 9. That is not "
+            + "automatically wrong — but Gravity Lab's ten-world fan exists "
+            + "BECAUSE the answer was 9, so if this has moved, check whether "
+            + "that layout is still needed and whether anything else was tuned "
+            + "around the old number.")
+
+        // …and the next one along is where it fails, which is the whole
+        // job of `spread`.
+        XCTAssertLessThan(fan.minimumAdjacentSpacing(count: capacity + 1), target)
+        let spread = FanLayout.spread(count: capacity + 1, itemSpan: target,
+                                      reach: fan.reach,
+                                      verticalScale: fan.verticalScale,
+                                      lift: fan.lift, stagger: fan.stagger)
+        XCTAssertGreaterThan(spread.minimumAdjacentSpacing(count: capacity + 1), target,
+                             "past the default's capacity, `spread` must cope")
     }
 
     /// Every item sits within reach — a picker you have to walk to is not

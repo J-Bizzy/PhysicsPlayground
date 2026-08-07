@@ -35,6 +35,22 @@ final class MagnetismRenderer {
 
     var subscriptions: [EventSubscription] = []
 
+    /// Called from the SpaceView's `onDisappear`, and the reason it has
+    /// to be called explicitly is that neither of the things it releases
+    /// is tied to this object's lifetime.
+    ///
+    /// An `EventSubscription` outlives the view that made it — cancelled
+    /// nowhere, it keeps calling into a renderer for a scene that is no
+    /// longer on screen and holds the whole entity graph alive behind
+    /// it. And a `GeometryPipeline` job in flight ran to completion and
+    /// then uploaded a mesh and enabled an entity in a scene being torn
+    /// down (see `GeometryPipeline.cancel`).
+    func teardown() {
+        subscriptions.forEach { $0.cancel() }
+        subscriptions = []
+        linesPipeline?.cancel()
+    }
+
     static let northColor = DesignTokens.Palette.positiveUI
     static let southColor = DesignTokens.Palette.negativeUI
     static let lineColor = UIColor(red: 0.72, green: 0.6, blue: 1.0, alpha: 1)
@@ -135,7 +151,7 @@ final class MagnetismRenderer {
         // of the dial.
         //
         // A CURIOUS DETAIL FOUND WHILE CHANGING IT: the needle was
-        // already aiming in full 3-D — `simd_quatf(from: [0,1,0], to:
+        // already aiming in full 3-D — `rotation(from: [0,1,0], to:
         // direction)` takes the whole vector — while the comment beside
         // it said "the needle lies in the dial's plane, so project B onto
         // it: a real compass only shows the component it can turn to."
@@ -253,7 +269,9 @@ final class MagnetismRenderer {
             // claiming a projection the code never did. The orb can show
             // this honestly; the flat dial could not.
             let direction = SIMD3<Float>(field / magnitude)
-            handCompassNeedle?.orientation = simd_quatf(from: [0, 1, 0], to: direction)
+            // Under a south pole the field points straight down, which
+            // is the antiparallel case.
+            handCompassNeedle?.orientation = rotation(from: [0, 1, 0], to: direction)
         }
         handCompassCallout?.setText(String(format: "%.1f µT", model.compassMicroTesla))
         handCompassCallout?.anchor(at: SIMD3(0, 0.05, 0))
@@ -433,7 +451,13 @@ final class MagnetismRenderer {
         container.addChild(halo)
         magnetHalos[magnet.id] = halo
 
-        Grabbable.configureTouchTarget(container, collisionRadius: half * 1.6)
+        // A BAR IS NOT A BALL. `half * 1.6` = 0.128 m enclosed the long
+        // axis and then applied that radius sideways too, so two magnets
+        // at `contactDistance` 0.147 m shielded each other broadside and
+        // the near one took every pinch. The halo built just above is
+        // the magnet's own silhouette, so measuring from it costs
+        // nothing and follows any future change to the bar.
+        Grabbable.configureTouchTarget(container, matchingVisualBoundsOf: container)
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Bar magnet. Grab it and carry it — nearby magnets attract, repel, and swing to align."

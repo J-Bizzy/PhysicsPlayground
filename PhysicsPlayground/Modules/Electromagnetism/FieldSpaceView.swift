@@ -159,6 +159,19 @@ struct FieldSpaceView: View {
                     .environment(model)
             }
         }
+        // Leaving the lab must not leave anything running or held.
+        //
+        // `teardown` cancels the renderer's event subscriptions and any
+        // geometry job in flight (see `GeometryPipeline.cancel`), and the
+        // drag state is cleared because NOTHING ELSE CAN CLEAR IT: an
+        // in-flight grab that never receives its `onEnded` — the space
+        // closing under it is the ordinary way that happens — otherwise
+        // strands the object wherever the hand left it and re-targets
+        // every later drag at the same one, with no exit but leaving.
+        .onDisappear {
+            renderer?.teardown()
+            drag = nil
+        }
         .spatialScale(scaleRig)
         .simultaneousGesture(secondHandTap)
         .simultaneousGesture(tap)
