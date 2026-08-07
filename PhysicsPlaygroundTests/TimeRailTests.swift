@@ -25,8 +25,17 @@ final class TimeRailTests: XCTestCase {
 
     /// The real kinematics descriptor, with its model paused on ~2 s of
     /// recording — the state the rail exists for.
+    override func tearDown() {
+        TimeCapsuleSettings.isEnabled = false
+        super.tearDown()
+    }
+
     private func makeRecordedModule() -> (ModuleDescriptor, KinematicsModel, AppModel) {
         let appModel = AppModel()
+        // AFTER `AppModel()`, never before: constructing it builds
+        // `AppSettings`, which pushes the stored answer (off) into the
+        // recording gate. Enabling first would be silently undone.
+        TimeCapsuleSettings.isEnabled = true
         let module = ModuleCatalog.all(appModel: appModel)
             .first { $0.id == KinematicsModule.id }!
         let model = appModel.kinematicsModel
@@ -265,6 +274,111 @@ final class TimeRailTests: XCTestCase {
         XCTAssertFalse(rail.isOpen, "The next pause should open on the reel")
     }
 
+    /// With the capsule switched off, a pause is just a pause: no reel,
+    /// no rail, nothing new in the room at all.
+    func testNoReelWhenTheFeatureIsOff() {
+        let appModel = AppModel()
+        TimeCapsuleSettings.isEnabled = false
+        let module = ModuleCatalog.all(appModel: appModel)
+            .first { $0.id == KinematicsModule.id }!
+        let model = appModel.kinematicsModel
+        model.roomWalls = []
+        model.roomBounds = RoomBox(center: SIMD3(0, 50, 0),
+                                   halfExtents: SIMD3(100, 50, 100))
+        for _ in 0..<180 { model.step(dt: dt) }
+        model.isPaused = true
+
+        let rail = TimeRail(module: module)
+        settle(rail)
+        XCTAssertFalse(rail.isVisible,
+                       "The reel appeared for a feature that is switched off")
+    }
+
+    /// The reel arrives still turning — recording stopped at the instant
+    /// of the pause, so a reel already at rest would be one that had
+    /// never been running. It coasts down to a stop on its own.
+    func testTheReelCoastsToAStopOnArrival() throws {
+        let (module, _, _) = makeRecordedModule()
+        let rail = TimeRail(module: module)
+        let spindle = try XCTUnwrap(reel(rail).children.first)
+
+        // A few frames in, it has turned.
+        for _ in 0..<4 {
+            rail.update(dt: 1.0 / 90.0, viewer: [0, 1.6, 1], placement: .zero)
+        }
+        let early = spindle.orientation.angle
+        XCTAssertGreaterThan(early, 0.01, "The reel arrived already at rest")
+
+        // …and then stops, rather than turning for ever.
+        settle(rail)
+        let settled = spindle.orientation.angle
+        settle(rail)
+        XCTAssertEqual(spindle.orientation.angle, settled, accuracy: 1e-5,
+                       "The reel never stopped coasting")
+    }
+
+    /// Reduce Motion suppresses the coast, which is decoration. The DRAW
+    /// is not suppressed — it answers a pinch, and a control that does
+    /// not answer reads as broken.
+    func testReduceMotionStillsTheCoastButNotTheDraw() throws {
+        let (module, _, _) = makeRecordedModule()
+        let rail = TimeRail(module: module)
+        rail.stillness = true
+        let spindle = try XCTUnwrap(reel(rail).children.first)
+
+        for _ in 0..<4 {
+            rail.update(dt: 1.0 / 90.0, viewer: [0, 1.6, 1], placement: .zero)
+        }
+        XCTAssertEqual(spindle.orientation.angle, 0, accuracy: 1e-6,
+                       "The reel coasted under Reduce Motion")
+
+        settle(rail)
+        rail.setOpen(true)
+        settle(rail)
+        XCTAssertTrue(rail.isDrawnOut, "Reduce Motion swallowed the draw")
+    }
+
+    /// Drawing the tape out TURNS the reel, by arc ÷ radius — a third of
+    /// a metre off a 38 mm spool is very nearly a turn and a half. A reel
+    /// that stayed still while its tape ran out would be the one part of
+    /// this instrument that lied.
+    func testDrawingTheTapeTurnsTheReel() throws {
+        let (module, _, _) = makeRecordedModule()
+        let rail = TimeRail(module: module)
+        rail.stillness = true          // isolate the draw from the coast
+        settle(rail)
+        let spindle = try XCTUnwrap(reel(rail).children.first)
+        XCTAssertEqual(spindle.orientation.angle, 0, accuracy: 1e-6)
+
+        rail.setOpen(true)
+        settle(rail)
+        // Compared as a QUATERNION, not as `.angle`. A third of a metre
+        // over a 38 mm spool is 8.95 rad — more than a full turn — and
+        // `simd_quatf.angle` wraps into [0, π], so it reads that back as
+        // 3.62 and a naive assertion fails a reel that is turning
+        // exactly right. (It did.)
+        assertTurned(spindle, by: -TimeRail.railLength / TimeRail.tapeRadius,
+                     "The reel did not turn by the tape it gave up")
+
+        // Winding in returns it exactly, so open/close leaves no drift.
+        rail.setOpen(false)
+        settle(rail)
+        assertTurned(spindle, by: 0, "Winding in left the reel adrift")
+    }
+
+    /// Asserts a spindle carries a rotation of `angle` about Z. Two
+    /// quaternions describe the same rotation when |q₁ · q₂| is 1, which
+    /// is wrap-proof in a way comparing angles is not.
+    private func assertTurned(_ entity: Entity, by angle: Float,
+                              _ message: String,
+                              file: StaticString = #filePath,
+                              line: UInt = #line) {
+        let expected = simd_quatf(angle: angle, axis: [0, 0, 1])
+        let alignment = abs(simd_dot(entity.orientation.vector, expected.vector))
+        XCTAssertEqual(alignment, 1, accuracy: 1e-3, message,
+                       file: file, line: line)
+    }
+
     /// The closed reel is a READOUT, not just a lid: it turns with the
     /// scrub, so how far back you are is legible from the object itself.
     func testTheReelTurnsWithTheScrub() throws {
@@ -318,6 +432,7 @@ final class TimeRailTests: XCTestCase {
     /// still be a second.
     func testCapsuleClockIsWallClockSecondsEverywhere() {
         let appModel = AppModel()
+        TimeCapsuleSettings.isEnabled = true      // after AppModel, per above
         let gravity = appModel.gravityLabModel
         gravity.clearCapsule()
         gravity.timeScale = 100

@@ -64,6 +64,23 @@ final class TimeRail {
     /// fast enough that a small drag visibly moves it, slow enough that
     /// the ports never strobe.
     static let radiansPerSecond: Float = 0.9
+    /// The rail's length, which is also the length of tape drawn off the
+    /// reel when it opens.
+    static let railLength: Float = 0.34
+    /// The radius the tape is wound at — `TAPE_RADIUS` in
+    /// `Tools/timereel.py`. Shared with the asset by hand, which is
+    /// tolerable for one number and is why it is named in both places:
+    /// the reel must turn by arc ÷ radius as the tape comes off it, and
+    /// a reel that stayed still while a third of a metre unwound from it
+    /// would be the one part of this instrument that lied.
+    static let tapeRadius: Float = 0.038
+    /// How fast the reel is still turning when it arrives, rad/s, and
+    /// the time constant it dies away over. The recording stopped at the
+    /// instant of the pause, so the reel coasts down rather than
+    /// appearing already at rest — about a third of a turn, over
+    /// roughly a second.
+    static let coastSpeed: Float = 6.0
+    static let coastTau: Float = 0.35
 
     private let controls: TimeScrubControls
     private let isPaused: () -> Bool
@@ -91,6 +108,20 @@ final class TimeRail {
     /// True once the rail is out far enough to be operated. A drag part
     /// way through the draw would read a mapping that is still moving.
     var isDrawnOut: Bool { openness > 0.98 }
+    /// The eased draw, which is also how much tape is off the reel.
+    private var drawn: Float = 0
+
+    /// The spin the reel still has when it arrives, and the angle that
+    /// spin has carried it through so far.
+    private var coastVelocity: Float = 0
+    private var coastAngle: Float = 0
+    private var wasPresent = false
+
+    /// The system's Reduce Motion setting, pushed in by the host — the
+    /// same switch the palette bead reads. It stops the coast, which is
+    /// decorative, and leaves the draw alone, which is an answer to a
+    /// pinch and would read as broken if it did not happen.
+    var stillness = false
 
     var subscription: EventSubscription?
 
@@ -109,7 +140,7 @@ final class TimeRail {
             normal: [0, 0, 1],
             accent: accent,
             range: Self.range,
-            layout: TrackLayout(length: 0.34),
+            layout: TrackLayout(length: Double(Self.railLength)),
             read: {
                 guard let time = scrub.scrubTime(), let span = scrub.span()
                 else { return 0 }
@@ -144,7 +175,7 @@ final class TimeRail {
                     scrub.resume()
                 },
             ])
-        plates.root.position = [0.34 / 2 + 0.11, 0, 0]
+        plates.root.position = [Self.railLength / 2 + 0.11, 0, 0]
         root.addChild(plates.root)
 
         buildReel(accent: accent)
@@ -222,6 +253,15 @@ final class TimeRail {
         }
 
         let target: Float = wantsPresence ? 1 : 0
+        // The reel arrives coasting. Recording stopped at the instant of
+        // the pause, so a reel already at rest would be a reel that had
+        // never been turning — the spin-down is the object agreeing with
+        // what just happened.
+        if wantsPresence, !wasPresent {
+            coastVelocity = stillness ? 0 : -Self.coastSpeed
+            coastAngle = 0
+        }
+        wasPresent = wantsPresence
         if visibility != target {
             let rate = Float(min(dt * 6, 1))
             visibility += (target - visibility) * rate
@@ -242,13 +282,25 @@ final class TimeRail {
             applyOpenness()
         }
 
-        // The reel turns with the scrub: wound at "now", unwinding as the
-        // bead goes back. The closed object is a readout too, which is
-        // the same law every control here obeys — where the bead sits IS
-        // the value.
-        let secondsBack = Float(secondsScrubbedBack)
+        // The reel turns for three reasons, and each of them is a true
+        // statement about the recording rather than an effect:
+        //
+        //   · the tape drawn off it — arc ÷ radius, so a third of a
+        //     metre over a 38 mm spool is very nearly a turn and a half,
+        //     and the draw animation spins the reel exactly as much as
+        //     pulling that tape really would;
+        //   · the scrub, unwinding further the further back you go, so
+        //     the closed object is a readout and not a lid;
+        //   · the coast it arrived with, dying away.
+        if coastVelocity != 0 {
+            coastAngle += coastVelocity * Float(dt)
+            coastVelocity *= exp(-Float(dt) / Self.coastTau)
+            if abs(coastVelocity) < 0.02 { coastVelocity = 0 }
+        }
+        let fromDraw = -(Self.railLength * drawn) / Self.tapeRadius
+        let fromScrub = Float(secondsScrubbedBack) * Self.radiansPerSecond
         spindle.orientation = simd_quatf(
-            angle: secondsBack * Self.radiansPerSecond, axis: [0, 0, 1])
+            angle: fromDraw + fromScrub + coastAngle, axis: [0, 0, 1])
 
         guard openness > 0.02 else { return }
         track.refresh()
@@ -269,9 +321,11 @@ final class TimeRail {
     /// from behind the reel to their places and fade up as they go.
     private func applyOpenness() {
         let eased = openness * openness * (3 - 2 * openness)
+        drawn = eased
         let from = Self.reelOffset.x
         track.root.position.x = from + (0 - from) * eased
-        plates.root.position.x = from + ((0.34 / 2 + 0.11) - from) * eased
+        plates.root.position.x =
+            from + ((Self.railLength / 2 + 0.11) - from) * eased
         track.root.components.set(OpacityComponent(opacity: eased))
         plates.root.components.set(OpacityComponent(opacity: eased))
         let out = eased > 0.02
@@ -347,6 +401,9 @@ final class TimeRail {
 struct TimeRailView: View {
     let module: ModuleDescriptor
     @Environment(AppModel.self) private var appModel
+    /// The SYSTEM setting, not an in-app duplicate — the same one the
+    /// palette bead reads.
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @State private var rail: TimeRail?
 
     var body: some View {
@@ -354,6 +411,7 @@ struct TimeRailView: View {
             let made = TimeRail(module: module)
             content.add(made.root)
             rail = made
+            made.stillness = systemReduceMotion
 
             made.subscription = content.subscribe(
                 to: SceneEvents.Update.self
@@ -397,6 +455,9 @@ struct TimeRailView: View {
                 }
             }
             #endif
+        }
+        update: { _ in
+            rail?.stillness = systemReduceMotion
         }
         .onDisappear {
             rail?.subscription?.cancel()

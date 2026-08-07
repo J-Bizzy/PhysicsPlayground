@@ -22,6 +22,20 @@
 import Foundation
 import PhysicsCore
 
+/// The one place that answers "is the Time Capsule switched on?".
+///
+/// A `@MainActor` global rather than a reference to `AppSettings`,
+/// because the six models are the things that have to ask and none of
+/// them knows the shell exists — a model reaching up to the app object
+/// to find out whether to record would invert the layering the whole
+/// project is built on. `AppSettings.timeCapsule` is the writer; this is
+/// the reader.
+@MainActor
+enum TimeCapsuleSettings {
+    /// Off by default — see `AppSettings.timeCapsule` for why.
+    static var isEnabled = false
+}
+
 @MainActor
 protocol TimeCapsuleRecording: AnyObject {
     associatedtype CapsuleSnapshot: Equatable
@@ -57,7 +71,18 @@ extension TimeCapsuleRecording {
 
     /// Call at the end of every successful (unpaused) step with the same
     /// dt the physics just advanced by.
+    ///
+    /// Switched off, this is the cheapest possible no-op: no snapshot is
+    /// taken, so a lab with the capsule off costs exactly what it cost
+    /// before the feature existed. The buffer is dropped on the way out
+    /// rather than left sitting on the model, because holding several
+    /// megabytes of a recording the user has switched off is the same
+    /// mistake in slower motion.
     func recordCapsuleFrame(dt: Double) {
+        guard TimeCapsuleSettings.isEnabled else {
+            if !capsule.isEmpty { clearCapsule() }
+            return
+        }
         capsuleClock += dt
         capsule.record(captureCapsuleSnapshot(), at: capsuleClock)
     }

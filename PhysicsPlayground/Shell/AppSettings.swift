@@ -39,6 +39,32 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(ambientAudio, forKey: "settings.ambientAudio") }
     }
 
+    // MARK: Time Capsule
+
+    /// Whether every lab records its last thirty seconds, so a pause can
+    /// be scrubbed. **Off by default** (owner's call, 2026-08-07).
+    ///
+    /// A default is a claim about what the app IS, and by default this
+    /// one is six physics labs where pause means the room holds still.
+    /// The capsule is a second, larger idea on top of that — a machine
+    /// for interrogating a moment — and someone meeting the app for the
+    /// first time should meet the labs.
+    ///
+    /// It gates the RECORDING, not just the reel, and that is the whole
+    /// reason it is a setting rather than a preference about furniture:
+    /// switched off, no model snapshots itself, so the several megabytes
+    /// and the per-frame copy are not spent on a capability nobody asked
+    /// for. `TimeCapsuleRecording.isRecordingEnabled` reads this, and
+    /// turning it off drops whatever was already recorded — a capsule
+    /// that survived being switched off would be a recording made after
+    /// the user said stop.
+    var timeCapsule: Bool {
+        didSet {
+            UserDefaults.standard.set(timeCapsule, forKey: "settings.timeCapsule")
+            TimeCapsuleSettings.isEnabled = timeCapsule
+        }
+    }
+
     // MARK: What is NOT here any more
     //
     // No `titleStyle`: the home speaks in the machined plaque, full
@@ -82,7 +108,24 @@ final class AppSettings {
         let defaults = UserDefaults.standard
         masterVolume = defaults.object(forKey: "settings.masterVolume") as? Double ?? 1.0
         ambientAudio = defaults.object(forKey: "settings.ambientAudio") as? Bool ?? true
+        var capsule = defaults.object(forKey: "settings.timeCapsule") as? Bool ?? false
+        #if DEBUG
+        // `-timeCapsule 1` switches the feature on for a launch without
+        // writing the preference. The toggle is a hand's reach away in
+        // Settings and the simulator has no hand — and every other Time
+        // Capsule argument is inert without this one, since with the
+        // feature off there is by design nothing recorded to scrub.
+        if defaults.object(forKey: "timeCapsule") != nil {
+            capsule = defaults.bool(forKey: "timeCapsule")
+        }
+        #endif
+        timeCapsule = capsule
         seenHints = Set(defaults.stringArray(forKey: "settings.seenHints") ?? [])
+        // Same reason as the volume below: `didSet` does not fire during
+        // init, so the restored answer has to be handed to the recording
+        // gate by hand or every model would record until Settings was
+        // opened.
+        TimeCapsuleSettings.isEnabled = timeCapsule
         // didSet does not fire during init, so hand the restored volume to
         // the sound engine here — otherwise a debug `-openModule` launch
         // (which skips the hub) would play at full volume regardless.

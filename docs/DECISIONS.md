@@ -16,6 +16,57 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-07 — The Time Capsule ships OFF, and the reel turns because tape is coming off it
+
+**Decision:** Owner's call, two parts. (1) `AppSettings.timeCapsule` is
+a Settings toggle that defaults to **off**, and it gates the RECORDING
+rather than the reel. (2) The reel is animated by the three things that
+are actually happening to it: the tape drawn off it, the scrub, and the
+spin it still has when it arrives.
+
+**Why off by default.** A default is a claim about what the app IS, and
+by default this one is six physics labs where pause means the room
+holds still. The capsule is a second and larger idea layered on that —
+a machine for interrogating a moment — and someone meeting the app for
+the first time should meet the labs. Being a setting also makes the
+cost honest: several megabytes per lab and a struct copy every physics
+frame is a real price, and a price is a thing a user should be able to
+decline.
+
+**It gates recording, not furniture, and that is the whole point.** A
+toggle that only hid the reel would have left every model snapshotting
+itself sixty to ninety times a second on behalf of a feature switched
+off — the expensive half still running, invisibly. So
+`TimeCapsuleSettings.isEnabled` is read inside `recordCapsuleFrame`,
+which becomes a no-op that also DROPS whatever was already recorded:
+a capsule surviving the switch would be a recording kept after the user
+said stop. `TimeCapsuleRoundTripTests` asserts both halves, and the
+suites now have to switch the feature on the way a user would — which
+is the friction that stops the default drifting back silently.
+
+**Why the reel's motion is derived rather than authored.** It would
+have been easy to give the reel an idle spin, and it would have been a
+lie: nothing is being recorded while the room is paused. Instead it
+turns by arc ÷ radius as the tape comes off it — 0.34 m over a 38 mm
+spool, so nearly a turn and a half during the draw, and winding it back
+in returns it exactly. It turns further as you scrub. And it arrives
+still coasting, because the recording stopped at the instant of the
+pause and a reel already at rest would be one that had never been
+running. Every frame of that is a statement about the recording; none
+of it is decoration, which is why only the coast is suppressed under
+Reduce Motion and the draw is not.
+
+**Consequences.** `-timeCapsule 1` joins the launch arguments, and
+every other Time Capsule argument is inert without it — with the
+feature off there is by design nothing to scrub. The tape radius is now
+named in two places (`Tools/timereel.py` and `TimeRail`), which is a
+duplication accepted knowingly and commented in both: the reel must
+turn by the tape it gives up, and one shared number is cheaper than a
+mechanism. One test defect worth recording: `simd_quatf.angle` wraps
+into [0, π], so an assertion on a rotation larger than a turn failed a
+reel that was turning exactly right — rotations are compared as
+quaternions now.
+
 ## 2026-08-07 — The rail goes back on its reel
 
 **Decision:** Owner's call, the same day the Time Capsule shipped. The

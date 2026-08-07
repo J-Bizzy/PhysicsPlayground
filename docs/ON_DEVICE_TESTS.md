@@ -557,9 +557,23 @@ file). The new well and the standing script:
 
 ### The Time Capsule (2026-08-07) — new, and none of it is verifiable from the CLI
 
-Every lab records its last 30 seconds. Pause and a REEL appears in front
-of the apparatus with the recording wound on it; pinch the reel and the
-rail draws out like tape, its bead reading "seconds ago".
+**Switch it on first: Settings → Time Capsule → "Record the last 30
+seconds". It ships OFF.** Then every lab records its last 30 seconds:
+pause and a REEL appears in front of the apparatus with the recording
+wound on it; pinch the reel and the rail draws out like tape, its bead
+reading "seconds ago".
+
+- [ ] **Off is genuinely off.** Before touching the setting, pause any
+      lab. Nothing new should appear — no reel, no rail — and the pause
+      should feel exactly as it did before this feature existed. Then
+      switch it on, run a lab for a few seconds and pause again: the
+      reel should be there. Switch it off while a recording exists and
+      the reel should go with it.
+- [ ] **The coast-down.** Watch the reel at the moment it arrives. The
+      recording stopped when you paused, so it should come in still
+      turning and wind down to rest over about a second, not appear
+      already stopped. Under Reduce Motion it should arrive at rest —
+      but the DRAW must still animate, because that answers a pinch.
 
 - [ ] **The reel is all a pause shows.** In Projectiles, throw a ball,
       let it bounce, then pinch the palette's pause petal. What should
@@ -567,11 +581,16 @@ rail draws out like tape, its bead reading "seconds ago".
       nameplate — NOT the rail. Judge whether it reads as an object
       worth pinching, and whether at 96 mm it is big enough to hit and
       small enough not to be furniture.
-- [ ] **The draw.** Pinch the reel. The rail should come out of it to
-      the right, sliding and fading up together, with the plates
-      following. Pinch the reel again and it should wind back in.
-      Judge the speed: the whole draw is about a third of a second, and
-      it should read as tape being pulled, not as a panel appearing.
+- [ ] **The draw, and the reel turning with it.** Pinch the reel. The
+      rail should come out of it to the right, sliding and fading up
+      together, with the plates following — AND the reel should spin as
+      it gives the tape up, very nearly a turn and a half (it is arc ÷
+      radius, computed from the same numbers the model was built with,
+      so it should look like a consequence rather than a flourish).
+      Pinch again and it should wind back in, returning to exactly
+      where it started. Judge the speed: the whole draw is about a third
+      of a second, and it should read as tape being pulled, not as a
+      panel appearing.
 - [ ] **The scrub itself.** With the tape out, drag the bead left: the
       whole room should run backwards — the ball retraces its arc and
       the bounce un-happens — landing on recorded frames, never sliding

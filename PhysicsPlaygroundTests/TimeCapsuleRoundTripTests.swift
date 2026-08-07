@@ -23,6 +23,21 @@ import simd
 @MainActor
 final class TimeCapsuleRoundTripTests: XCTestCase {
 
+    // The capsule ships OFF (`AppSettings.timeCapsule`), so every test
+    // about recording has to switch it on the way a user would. That is
+    // not boilerplate to route around — `testNothingIsRecordedWhenTheFeatureIsOff`
+    // below asserts the other half, and these two together are what stop
+    // the default drifting silently.
+    override func setUp() {
+        super.setUp()
+        TimeCapsuleSettings.isEnabled = true
+    }
+
+    override func tearDown() {
+        TimeCapsuleSettings.isEnabled = false
+        super.tearDown()
+    }
+
     /// A bare, deterministic bench: no welcome scene, no real room, no
     /// walls — pure floor physics under a fixed clock.
     private func bareModel() -> KinematicsModel {
@@ -373,6 +388,43 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
         for _ in 0..<30 { circuits.step(dt: dt) }
         circuits.reset()
         XCTAssertNil(circuits.capsuleSpan)
+    }
+
+    // MARK: The feature ships off
+
+    /// Switched off, a lab costs exactly what it cost before the capsule
+    /// existed: no snapshot is taken, nothing accumulates, and there is
+    /// nothing to scrub. This is the half of the default that a setting
+    /// which only hid the reel would have got wrong — the several
+    /// megabytes and the per-frame copy would have gone on being spent.
+    func testNothingIsRecordedWhenTheFeatureIsOff() {
+        TimeCapsuleSettings.isEnabled = false
+        let model = bareModel()
+        model.fire()
+        for _ in 0..<120 { model.step(dt: dt) }
+
+        XCTAssertNil(model.capsuleSpan)
+        XCTAssertTrue(model.capsule.isEmpty)
+        // And the scrub verbs are inert rather than crashing.
+        model.isPaused = true
+        model.scrub(toOffset: 1)
+        model.stepScrub(frames: -1)
+        XCTAssertNil(model.scrubTime)
+    }
+
+    /// Switching it off mid-session drops what was already recorded. A
+    /// capsule that survived being switched off would be a recording
+    /// kept after the user said stop.
+    func testSwitchingOffDropsTheRecording() {
+        let model = bareModel()
+        model.fire()
+        for _ in 0..<90 { model.step(dt: dt) }
+        XCTAssertNotNil(model.capsuleSpan)
+
+        TimeCapsuleSettings.isEnabled = false
+        model.step(dt: dt)
+        XCTAssertNil(model.capsuleSpan)
+        XCTAssertTrue(model.capsule.isEmpty)
     }
 
     /// Every restore bumps the scrub nonce — the signal renderers use to
