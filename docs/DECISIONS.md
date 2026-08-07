@@ -129,6 +129,51 @@ because the list is the argument for reviewing a mechanical pass at all:
   background distributes over children exactly like any other modifier.
   It is a sibling inside a `ZStack` now.
 
+**AND FOUR MORE IN THE FIX ITSELF**, found by reviewing the review's
+fixes. The pattern is now the entry's real subject:
+
+- The per-instance collider was installed on `slot.entity` — the pool's
+  bare CONTAINER — when the input target lives on `slot.payload`, the
+  sphere under it. So the fix set an inert collider on an entity nothing
+  hit-tests and left the real target at its authored 1.15× at every
+  scale. It achieved *nothing*, and the criterion could not see it,
+  because a fixed 1.15× rides the 1.15 proportional margin exactly at
+  every scale.
+- Sixteen rim colliders on the hoop still left a 22 mm hole between
+  every pair. The count is derived from the radius now (a 0.034 m sphere
+  spans 17° of a 0.23 m ring, so ≥ 22 are needed): twenty-four.
+- `sensing = .fine` after the new `stopNow()` was a no-op writing the
+  value that was already there, under a comment claiming it fixed
+  something. Removed, and what `.fine` actually means when a session is
+  deliberately stopped is now written down instead.
+- The exhibit target lost the name plate. The obvious repair — union it
+  back in — was tried and `testGalleryExhibitTargetsDoNotOverlapEachOther`
+  rejected it in one run: the plate carries the module TITLE, which is
+  wider than the 0.36 m puck pitch on its own. The plate stays out, and
+  the reasoning is at the site so nobody helpfully restores it.
+
+Two soft spots were closed in passing: both press latches are cancelled
+in `onDisappear` (a pending press now sticks, since `press` refuses to
+overwrite one, so a dropped `onEnded` would let the next gesture promote
+a stale anchor), and the collider criterion now REPORTS colliders it
+could not measure because their instrument was folded away, instead of
+passing them silently — the flat 30 mm allowance is in metres, so at a
+world scale of 0.001 it becomes 30 m and checks nothing.
+
+**THE LESSON, stated plainly, because it cost two rounds.** Every defect
+above was in code written specifically to fix the defect before it, and
+every one of them shipped behind a green suite. Two failure shapes did
+the damage, and both are worth recognising on sight: **a test that
+models the intended call sequence tests the intention** (the latch
+pressed once and promoted many times; the handler presses and promotes
+in alternation, which never crosses the threshold), and **a derived
+value cannot be checked against what it was derived from** (a box built
+from an entity's bounds satisfies a test measuring it against those
+bounds, whatever the bounds contain). The answer to the second is a
+criterion that asks the question the RULE is about rather than the one
+the code already answers — which is why the overlap test earns its
+place and caught the name-plate attempt on the first run.
+
 **Not yet done, and deliberately.** The stale-drag watchdog reaches the
 two event-id-keyed tables (`PinchLedger`, Magnetism's `grabs`) where a
 vanished hand leaves no trace. The `DragGesture`-driven carries in the

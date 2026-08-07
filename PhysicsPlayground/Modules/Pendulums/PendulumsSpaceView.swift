@@ -323,6 +323,11 @@ struct PendulumsSpaceView: View {
         .onDisappear {
             renderer?.teardown()
             drag = nil
+            // A pending press now STICKS — `press` refuses to overwrite
+            // one — so an `onEnded` that never arrives would otherwise
+            // let the next gesture promote it on frame one, against a
+            // stale anchor, and grab the object you pressed last time.
+            pressedBob.cancel()
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)

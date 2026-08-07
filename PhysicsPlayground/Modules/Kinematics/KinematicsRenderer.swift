@@ -302,15 +302,16 @@ final class KinematicsRenderer {
             // banned bigger-than-the-visual collider. Small colliders
             // hug the torus instead.
             //
-            // SIXTEEN of them, not eight. The count and the radius are
-            // one decision, and halving the radius to satisfy the
-            // collider rule (0.05 → 0.034, since the tube is only 0.04
-            // across) without doubling the count would have left
-            // 11 cm of every 17.6 cm of rim with no collider at all —
-            // a hoop that ignores two thirds of the places you try to
-            // grab it. At sixteen the centres are 0.090 m apart and
-            // each sphere spans 0.068, so the gaps are hairlines.
-            let rimCount = 16
+            // TWENTY-FOUR of them, not eight, and the count follows
+            // from the radius rather than being guessed. The collider
+            // rule caps a sphere on a tube 0.04 m across at 0.034 m
+            // radius, and a sphere of radius r on a ring of radius R
+            // covers 2·asin(r/2R) of arc — 16.96° here. So full
+            // coverage needs 360/16.96 ≈ 22 spheres, and eight left
+            // 11 cm of every 17.6 cm of rim untargetable while sixteen
+            // still left a 22 mm hole between every pair. Dragging the
+            // hoop is the only way to place it.
+            let rimCount = 24
             let rim = (0..<rimCount).map { index -> ShapeResource in
                 let angle = Float(index) / Float(rimCount) * 2 * .pi
                 return ShapeResource.generateSphere(radius: 0.034)
@@ -711,9 +712,13 @@ final class KinematicsRenderer {
             // `Grabbable.sphereTargetRadius`. Change-gated: this
             // allocates, and a slot's projectile changes only when a
             // new ball is fired into it.
+            // On `slot.payload` — the sphere that carries the input
+            // target and the ball's UUID — not on the bare container
+            // `slot.entity`. See the twin of this comment in
+            // `GravityLabRenderer`.
             if abs((ballColliderScales[index] ?? -1) - ballScale) > 1e-4 {
                 ballColliderScales[index] = ballScale
-                slot.entity.components.set(CollisionComponent(shapes: [
+                slot.payload.components.set(CollisionComponent(shapes: [
                     .generateSphere(radius: Grabbable.sphereTargetRadius(
                         baseRadius: Self.baseBallRadius, scale: ballScale)),
                 ]))

@@ -1052,6 +1052,22 @@ final class HubScene {
         // The vignette is normalised to `exhibitSize` (0.24 m), so the
         // target is 0.27 m and clears the pitch with 9 cm to spare.
         //
+        // THE NAME PLATE IS DELIBERATELY OUTSIDE THE TARGET, and this
+        // is the one place that decision is written down, because it
+        // looks like an oversight and it is not.
+        //
+        // Both earlier versions of this collider happened to contain
+        // the plate, so leaving it out is a real narrowing and the
+        // obvious repair is to union it back in. That was tried, and
+        // `testGalleryExhibitTargetsDoNotOverlapEachOther` failed
+        // immediately: the plate carries the module's TITLE at 0.030 m
+        // ("Circuit Workshop", "Electric Fields"), which is wider than
+        // the 0.36 m puck pitch all by itself. A target containing it
+        // necessarily reaches into both neighbours, which is the exact
+        // defect this whole change exists to remove. The plate is a
+        // caption, and captions of adjacent exhibits are allowed to sit
+        // near each other; touch targets are not.
+        //
         // Set directly rather than through `Grabbable`, which would also
         // hang a grounding shadow off every exhibit. The gallery's
         // lighting is composed; six new contact shadows is a visual

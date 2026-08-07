@@ -277,13 +277,15 @@ final class RoomModel {
         // any of it. Trivial to hit: it is the first launch, where the
         // permission sheet holds the start open for seconds.
         guard clients > 0 else {
+            // `sensing` is already `.fine` from two lines up, and that
+            // is the right answer rather than an oversight: `.fine`
+            // means "nothing to tell the user", and a session taken
+            // down because nobody wants it is not a fault to report.
+            // The same is true of the ordinary linger teardown. (An
+            // earlier version of this branch re-assigned `.fine` here
+            // with a comment claiming it was fixing something; it was
+            // writing the value that was already there.)
             stopNow()
-            // `sensing` was set to `.fine` two lines up. The invariant
-            // this file states — `.fine` iff we are actually running —
-            // has to survive the teardown, or the title bar reports
-            // healthy sensing with no session behind it until the next
-            // retain.
-            sensing = .fine
             return
         }
         #if DEBUG

@@ -70,8 +70,13 @@ final class ColliderCriterionTests: XCTestCase {
 
     /// Walks `root` and measures every collider against the visual
     /// bounds of the entity that carries it.
+    /// Colliders skipped because their entity was folded away when the
+    /// scene was measured. Reported, never silently dropped.
+    private var unmeasured: [String] = []
+
     private func violations(under root: Entity, label: String) -> [Violation] {
         var found: [Violation] = []
+        unmeasured = []
 
         func walk(_ entity: Entity, path: String) {
             if let collision = entity.components[CollisionComponent.self] {
@@ -90,6 +95,28 @@ final class ColliderCriterionTests: XCTestCase {
                 let worldScale = entity.scale(relativeTo: nil)
                 let visual = entity.visualBounds(relativeTo: entity)
                 let visualExtents = visual.extents * worldScale
+
+                // A FOLDED INSTRUMENT IS NOT MEASURABLE, AND SAYING SO
+                // OUT LOUD IS THE POINT.
+                //
+                // The flat 30 mm allowance is in metres, so at a world
+                // scale of 0.001 — which is exactly what
+                // `FanLayout.placement` and `Bloom.layoutPetals` write
+                // for a closed fan — it becomes a local allowance of
+                // 30 m and the check passes whatever the collider is.
+                // Every scene below is deliberately ticked open before
+                // it is measured, so nothing currently hides here; this
+                // records the hole rather than leaving a future caller
+                // to measure a folded scene and read the silence as a
+                // pass.
+                if simd_reduce_min(worldScale) < 0.05 {
+                    unmeasured.append(path)
+                    for child in entity.children {
+                        let name = child.name.isEmpty ? "·" : child.name
+                        walk(child, path: "\(path)/\(name)")
+                    }
+                    return
+                }
                 // An entity with no mesh anywhere beneath it has nothing
                 // to be measured against. That is its own smell, but it
                 // is not this test's smell — a pure trigger volume is a
@@ -131,6 +158,13 @@ final class ColliderCriterionTests: XCTestCase {
     private func assertCollidersFit(_ root: Entity, _ label: String,
                                     file: StaticString = #filePath, line: UInt = #line) {
         let found = violations(under: root, label: label)
+        XCTAssertTrue(
+            unmeasured.isEmpty,
+            "\(unmeasured.count) collider(s) in \(label) were folded away when "
+            + "the scene was measured, so nothing was checked: "
+            + "\(unmeasured.joined(separator: ", ")). Tick the instrument open "
+            + "before asserting, or this test is reporting a pass it did not "
+            + "earn.", file: file, line: line)
         guard !found.isEmpty else { return }
         let report = found
             .sorted { $0.collider / max($0.allowed, 1e-6) > $1.collider / max($1.allowed, 1e-6) }

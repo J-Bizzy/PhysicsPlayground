@@ -1118,9 +1118,20 @@ final class GravityLabRenderer {
             // see `Grabbable.sphereTargetRadius`. Change-gated: this
             // allocates a `ShapeResource`, and a body's display radius
             // only moves on a merge or a preset change.
+            //
+            // ON `slot.payload`, NOT `slot.entity`. The pool is two
+            // levels: `slot.entity` is the bare container this scale is
+            // written to, and `slot.payload` is the sphere under it that
+            // carries the mesh, the `InputTargetComponent` and the
+            // body's UUID name — so the sphere is what a pinch hits and
+            // what the gesture handlers resolve. Setting this on the
+            // container put an inert collider on an entity with no input
+            // target, left the real one at its authored 1.15×, and
+            // achieved exactly nothing; the criterion could not see it
+            // because a fixed 1.15× rides its 1.15 margin at every scale.
             if abs((bodyColliderScales[index] ?? -1) - bodyScale) > 1e-4 {
                 bodyColliderScales[index] = bodyScale
-                slot.entity.components.set(CollisionComponent(shapes: [
+                slot.payload.components.set(CollisionComponent(shapes: [
                     .generateSphere(radius: Grabbable.sphereTargetRadius(
                         baseRadius: Self.baseBodyRadius, scale: bodyScale)),
                 ]))
