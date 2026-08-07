@@ -106,6 +106,30 @@ public enum Grabbable {
                              offset: bounds.center)
     }
 
+    /// The LOCAL radius a sphere target needs on an entity that is
+    /// scaled per instance, so that its reach in the ROOM is the same
+    /// whatever size the instance is.
+    ///
+    /// Pooled objects — Gravity Lab's bodies, Projectiles' balls — are
+    /// one authored mesh of `baseRadius` on an entity whose scale is set
+    /// per instance, from about 0.26× for a comet to well over 2× for a
+    /// star. A single authored factor therefore means completely
+    /// different things at the two ends: ×1.5 is 6 mm of reach on the
+    /// comet and 5 cm of shielding on the star, and ×1.15 — which is
+    /// what this app briefly shipped — is 2 mm on the comet, which is
+    /// no target at all.
+    ///
+    /// The fix is to ask for the same answer the collider criterion
+    /// asks for, in metres: 15% of the object, or 15 mm of reach,
+    /// whichever is kinder. Divided by the scale, because the entity
+    /// will multiply it back.
+    public static func sphereTargetRadius(baseRadius: Float, scale: Float) -> Float {
+        guard scale > 1e-4 else { return baseRadius }
+        // A hair under the flat allowance, so a target sized to exactly
+        // the criterion's boundary cannot fail it on a rounding bit.
+        return max(baseRadius * 1.14, baseRadius + (reach * 0.98) / scale)
+    }
+
     private static func apply(_ shape: ShapeResource, to entity: Entity) {
         entity.components.set(InputTargetComponent())
         entity.components.set(CollisionComponent(shapes: [shape]))

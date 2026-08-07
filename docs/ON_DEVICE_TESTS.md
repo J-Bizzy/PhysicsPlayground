@@ -575,6 +575,17 @@ be. The first is a visible change and wants judging, not just checking.
       each disc in turn and confirm you get the one you looked at** —
       that is the defect, and it is invisible in a screenshot.
 
+- [ ] **⟳⟳ FIRST: can you grab a bob and a ball AT ALL?** This is the
+      one to do before anything else. The press-versus-tap fix shipped
+      broken for one commit — the latch re-armed on every frame, so the
+      threshold was never crossed and neither object could be picked up
+      at any speed. Fixed, and `PressLatchTests` now drives the real
+      frame sequence rather than the intended one, but the wiring itself
+      is headset-only. `-openModule pendulums`: pinch a bob and carry it
+      somewhere. `-openModule kinematics -kinBalls 1`: pinch a resting
+      ball and carry it. Both must follow the hand, and must not jump to
+      your fingertips at the moment they are picked up.
+
 - [ ] **A tap on a pendulum bob no longer stops the room.**
       `-openModule pendulums`. Set the cradle swinging, wait for trails,
       then gaze at one bob and pinch WITHOUT moving your hand. Correct:
@@ -615,6 +626,22 @@ be. The first is a visible change and wants judging, not just checking.
       It used to be dead for the rest of the module session with nothing
       on screen to say why. In Magnetism, the same test with a magnet in
       the vanishing hand: the magnet must be released, not held forever.
+
+- [ ] **Small planets and small balls are still easy to grab.** Their
+      targets are now sized per instance so the REACH is constant in the
+      room rather than scaling with the object — a comet had dropped to
+      about 2 mm of margin. `-openModule gravitylab -gravWorlds 1` and
+      pick a preset with a comet or a moon; `-openModule kinematics` and
+      fire a table-tennis ball. Both should feel no harder to grab than
+      a planet or a basketball. The other half of the same change: a
+      big body's target should no longer swallow the apsis bead sitting
+      just outside it.
+
+- [ ] **The hoop can be grabbed anywhere on its rim.**
+      `-openModule kinematics -kinBalls 1`. The rim carries sixteen
+      small colliders now rather than eight; try to drag the hoop from
+      several different points around the ring, including between the
+      compass points. It should catch every time.
 
 - [ ] **The capacitor's interior is reachable again.** `-openModule
       electrostatics -emCap 1`. Put a charge between the plates and try

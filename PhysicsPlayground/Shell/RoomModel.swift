@@ -278,6 +278,12 @@ final class RoomModel {
         // permission sheet holds the start open for seconds.
         guard clients > 0 else {
             stopNow()
+            // `sensing` was set to `.fine` two lines up. The invariant
+            // this file states — `.fine` iff we are actually running —
+            // has to survive the teardown, or the title bar reports
+            // healthy sensing with no session behind it until the next
+            // retain.
+            sensing = .fine
             return
         }
         #if DEBUG

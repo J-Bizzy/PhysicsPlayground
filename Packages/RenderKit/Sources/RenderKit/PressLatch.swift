@@ -75,7 +75,29 @@ public struct PressLatch<Payload>: Sendable where Payload: Sendable {
 
     /// Records a press. Takes no action on the pressed object — taking
     /// action is exactly what a tap must not do.
+    ///
+    /// THE FIRST PRESS WINS, and a second one while it is still pending
+    /// is IGNORED rather than replacing it. That guard belongs here
+    /// rather than at the call sites, because both call sites got it
+    /// wrong and the resulting failure is total and silent.
+    ///
+    /// A `targetedToAnyEntity` gesture reports the same entity on every
+    /// frame, so a handler shaped
+    ///
+    ///     if drag == nil {
+    ///         if let press = press(on: value.entity) { latch.press(press, at: hand) }
+    ///     }
+    ///     if drag == nil, latch.isPending { … latch.promote(hand: hand) … }
+    ///
+    /// re-presses before every promote. `pending.hand` becomes the
+    /// CURRENT hand, `promote` measures a distance of exactly zero, and
+    /// `drag` is never assigned — so the outer guard stays true and the
+    /// cycle repeats for the life of the gesture. The threshold is
+    /// never crossed at any speed, and the object simply cannot be
+    /// picked up. Shipped for one commit on 2026-08-07 in both
+    /// Pendulums and Projectiles.
     public mutating func press(_ payload: Payload, at hand: SIMD3<Double>) {
+        guard pending == nil else { return }
         pending = (payload, hand)
     }
 

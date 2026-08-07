@@ -89,6 +89,51 @@ final class PressLatchTests: XCTestCase {
         XCTAssertFalse(latch.isPending)
     }
 
+    /// THE SEQUENCE THE VIEWS ACTUALLY EXECUTE, which is not the one
+    /// above, and the difference shipped a total failure.
+    ///
+    /// A `targetedToAnyEntity` gesture reports the same entity every
+    /// frame, and the handler's press branch sits inside `if drag == nil`
+    /// — which stays true until a promotion assigns `drag`. So the real
+    /// order is press, promote, press, promote, … with the press FIRST
+    /// each time. The version above presses once and then only promotes,
+    /// which models what the author believed the handler did; it passed
+    /// against a latch that re-anchored on every press, and the bob and
+    /// the ball were both un-grabbable at any speed.
+    ///
+    /// This is the same lesson as everything else in this arc: a test
+    /// that models the intended call sequence tests the intention.
+    func testPressingEveryFrameStillPromotes() {
+        var latch = PressLatch<String>()
+
+        var promotions = 0
+        for frame in 0...45 {
+            let hand = start + SIMD3(0.2 * Double(frame) / 90, 0, 0)
+            // Exactly the handler's shape: press, then promote, every
+            // frame, for as long as nothing has claimed the drag.
+            if promotions == 0 { latch.press("bob", at: hand) }
+            if latch.promote(hand: hand) != nil { promotions += 1 }
+        }
+
+        XCTAssertEqual(promotions, 1,
+                       "re-pressing before each promote resets the anchor, so "
+                       + "the threshold is never crossed and the object cannot "
+                       + "be picked up at all")
+    }
+
+    /// The same thing said as a property, so it holds however a caller
+    /// interleaves the two calls: a press while one is already pending
+    /// must not move the anchor.
+    func testASecondPressDoesNotRestartTheFirst() {
+        var latch = PressLatch<String>()
+        latch.press("first", at: start)
+        latch.press("second", at: start + SIMD3(0.5, 0, 0))
+
+        XCTAssertEqual(latch.promote(hand: start + SIMD3(0.02, 0, 0)), "first",
+                       "the second press replaced the first — the anchor moves "
+                       + "with the hand and the threshold recedes ahead of it")
+    }
+
     /// THE PICKUP MUST NOT MOVE THE OBJECT. The caller pairs the
     /// object's position at the promotion instant with the hand at the
     /// promotion instant, and the drag that comes out holds it exactly

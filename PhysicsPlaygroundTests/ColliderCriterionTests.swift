@@ -75,8 +75,21 @@ final class ColliderCriterionTests: XCTestCase {
 
         func walk(_ entity: Entity, path: String) {
             if let collision = entity.components[CollisionComponent.self] {
+                // IN WORLD METRES, not in the entity's own frame.
+                //
+                // Shielding is a property of the room, and the two
+                // differ wherever an entity is scaled — which is exactly
+                // where the pooled objects live. Gravity Lab's bodies
+                // and Projectiles' balls carry ONE authored collider on
+                // a sphere whose scale is set per instance, from 0.26×
+                // for a comet to 2×+ for a star. Measured locally, a
+                // single factor looks identical at every size; measured
+                // in the room, the same factor is 2 mm of reach on the
+                // comet and 10 cm of shielding on the star. The flat
+                // 30 mm allowance only means anything in metres.
+                let worldScale = entity.scale(relativeTo: nil)
                 let visual = entity.visualBounds(relativeTo: entity)
-                let visualExtents = visual.extents
+                let visualExtents = visual.extents * worldScale
                 // An entity with no mesh anywhere beneath it has nothing
                 // to be measured against. That is its own smell, but it
                 // is not this test's smell — a pure trigger volume is a
@@ -87,7 +100,7 @@ final class ColliderCriterionTests: XCTestCase {
 
                 if hasVisual {
                     for shape in collision.shapes {
-                        let extents = shape.bounds.extents
+                        let extents = shape.bounds.extents * worldScale
                         for (axis, v, c) in [("x", visualExtents.x, extents.x),
                                              ("y", visualExtents.y, extents.y),
                                              ("z", visualExtents.z, extents.z)] {
@@ -238,6 +251,60 @@ final class ColliderCriterionTests: XCTestCase {
         let scene = HubScene()
         scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
         assertCollidersFit(scene.root, "Gallery")
+    }
+
+    /// THE QUESTION THE RULE IS ACTUALLY ABOUT: does this collider
+    /// shield the thing next to it?
+    ///
+    /// Everything above measures a collider against its OWN entity, and
+    /// that has a blind spot which is not theoretical — it shipped.
+    /// `Grabbable.configureTouchTarget(_:matchingVisualBoundsOf:)`
+    /// derives a box from an entity's visual bounds, so a test that
+    /// measures that box against those same bounds passes by
+    /// construction, whatever the bounds happen to contain. The gallery
+    /// exhibit measured `pulser`, which contains the focus glow — a
+    /// 0.40 m pool of light on the puck — and produced a 0.43 m target
+    /// against a 0.36 m pitch: WIDER than the 0.19 m sphere it replaced,
+    /// with every self-measuring assertion green.
+    ///
+    /// Six exhibits in a row, 0.36 m apart, is the one place in the app
+    /// where identical grabbables stand at a known pitch, so it is the
+    /// one place this can be asked directly. Overlap here means the
+    /// exhibit you get is decided by hit order rather than by aim.
+    func testGalleryExhibitTargetsDoNotOverlapEachOther() {
+        let scene = HubScene()
+        scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
+
+        // Each exhibit's target, as a world-space box.
+        var targets: [(id: String, min: SIMD3<Float>, max: SIMD3<Float>)] = []
+        for exhibit in scene.root.children {
+            guard let collision = exhibit.components[CollisionComponent.self],
+                  let shape = collision.shapes.first,
+                  !exhibit.name.isEmpty,
+                  ModuleCatalog.all(appModel: AppModel())
+                      .contains(where: { $0.id == exhibit.name })
+            else { continue }
+            let centre = exhibit.position(relativeTo: nil) + shape.bounds.center
+            let half = shape.bounds.extents / 2
+            targets.append((exhibit.name, centre - half, centre + half))
+        }
+
+        XCTAssertEqual(targets.count, 6,
+                       "expected six exhibits with targets; found \(targets.count) — "
+                       + "if the gallery changed shape this test is measuring "
+                       + "the wrong thing")
+
+        for (index, a) in targets.enumerated() {
+            for b in targets[(index + 1)...] {
+                let overlaps = a.min.x < b.max.x && b.min.x < a.max.x
+                    && a.min.y < b.max.y && b.min.y < a.max.y
+                    && a.min.z < b.max.z && b.min.z < a.max.z
+                XCTAssertFalse(
+                    overlaps,
+                    "\(a.id) and \(b.id) have overlapping touch targets — "
+                    + "which one a pinch selects is decided by hit order")
+            }
+        }
     }
 
     /// The placement puck is the object you move a whole lab with, and

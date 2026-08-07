@@ -18,76 +18,90 @@ struct PlaygroundSpaceView: View {
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
-        Group {
-            // Studio Mode's dark gallery sits behind whatever is active —
-            // hub ring or module — and survives switches between them.
-            if appModel.studioMode {
-                StudioEnvironmentView()
-                    .id("studio")
-            } else if appModel.roomDimming > 0.01 {
-                // The middle setting: the room stays, but a dark shell
-                // gives the physics its contrast back.
-                RoomDimmerView(
-                    level: appModel.roomDimming,
-                    radius: appModel.activeModule?.preferredDimmingRadius
-                        ?? RoomDimmerView.defaultRadius)
-                    // Keyed on the radius as well as on being the dimmer:
-                    // the shell's mesh is built once in `make`, so a
-                    // module that wants a different one needs a new view
-                    // identity to get it.
-                    .id("dimmer-\(appModel.activeModule?.preferredDimmingRadius ?? 0)")
-            }
-            if let module = appModel.activeModule {
-                ZStack {
-                    module.makeScene()
-                        .id(module.id)
-                    // The shared room sensing stays alive while a module
-                    // is on screen (device-only; inert in the simulator).
-                    RoomSensingView()
-                        .id("room-sensing")
-                    // The lab anchor: drag it to put the apparatus where
-                    // you actually have room. Hidden until asked for.
-                    LabAnchorView(module: module)
-                        .id("lab-anchor-\(module.id)")
-                    // ONE bead, in the slot where RealityView content
-                    // provably renders. Pinch it and the labs unfold.
-                    PaletteView(module: module)
-                        .id("palette-\(module.id)")
-                    // The Time Capsule's rail: folded away until the
-                    // module is paused with a recording worth scrubbing.
-                    TimeRailView(module: module)
-                        .id("time-rail-\(module.id)")
-                    // The experiments watcher: notices when the physics
-                    // reaches a goal and chimes exactly once.
-                    ExperimentCheckerView(moduleID: module.id)
-                        .id("experiments-\(module.id)")
-                    // Quiet lab room tone under every module (not the hub);
-                    // no per-module id, so it runs seamlessly across switches.
-                    AmbientLabAudioView()
-                        .id("ambient")
+        // A ZSTACK AROUND THE GROUP, so the flag at the bottom has a
+        // stable sibling to hang off. See the comment down there.
+        ZStack {
+            Group {
+                // Studio Mode's dark gallery sits behind whatever is active —
+                // hub ring or module — and survives switches between them.
+                if appModel.studioMode {
+                    StudioEnvironmentView()
+                        .id("studio")
+                } else if appModel.roomDimming > 0.01 {
+                    // The middle setting: the room stays, but a dark shell
+                    // gives the physics its contrast back.
+                    RoomDimmerView(
+                        level: appModel.roomDimming,
+                        radius: appModel.activeModule?.preferredDimmingRadius
+                            ?? RoomDimmerView.defaultRadius)
+                        // Keyed on the radius as well as on being the dimmer:
+                        // the shell's mesh is built once in `make`, so a
+                        // module that wants a different one needs a new view
+                        // identity to get it.
+                        .id("dimmer-\(appModel.activeModule?.preferredDimmingRadius ?? 0)")
                 }
-            } else {
-                HubSpaceView()
-                    .id("hub")
+                if let module = appModel.activeModule {
+                    ZStack {
+                        module.makeScene()
+                            .id(module.id)
+                        // The shared room sensing stays alive while a module
+                        // is on screen (device-only; inert in the simulator).
+                        RoomSensingView()
+                            .id("room-sensing")
+                        // The lab anchor: drag it to put the apparatus where
+                        // you actually have room. Hidden until asked for.
+                        LabAnchorView(module: module)
+                            .id("lab-anchor-\(module.id)")
+                        // ONE bead, in the slot where RealityView content
+                        // provably renders. Pinch it and the labs unfold.
+                        PaletteView(module: module)
+                            .id("palette-\(module.id)")
+                        // The Time Capsule's rail: folded away until the
+                        // module is paused with a recording worth scrubbing.
+                        TimeRailView(module: module)
+                            .id("time-rail-\(module.id)")
+                        // The experiments watcher: notices when the physics
+                        // reaches a goal and chimes exactly once.
+                        ExperimentCheckerView(moduleID: module.id)
+                            .id("experiments-\(module.id)")
+                        // Quiet lab room tone under every module (not the hub);
+                        // no per-module id, so it runs seamlessly across switches.
+                        AmbientLabAudioView()
+                            .id("ambient")
+                    }
+                } else {
+                    HubSpaceView()
+                        .id("hub")
+                }
             }
-        }
-        // THE FLAG HANGS OFF A STABLE LEAF, NOT OFF THE `Group`.
-        //
-        // A `Group` does not wrap its children in a container view — it
-        // applies each modifier to EVERY child individually. So this pair
-        // was one `onAppear`/`onDisappear` per child, and the child count
-        // changes with state: entering a dimmed module (Gravity Lab
-        // dims 0.85, Electric Fields and Magnetism 0.35) removes
-        // `HubSpaceView` and adds `RoomDimmerView` plus the module
-        // `ZStack`. SwiftUI does not order those callbacks, so when the
-        // removal lands last the flag reads FALSE with the space open —
-        // and `ModuleHostView` then offers "Show in room" for a lab that
-        // is already in the room, which fails with "Couldn't open the
-        // room."
-        //
-        // One always-present zero-size leaf has exactly one appear and
-        // one disappear, whatever the branch above does.
-        .background {
+
+            // THE FLAG HANGS OFF A STABLE LEAF THAT IS A SIBLING OF THE
+            // `Group`, NOT A MODIFIER ON IT.
+            //
+            // A `Group` does not wrap its children in a container view
+            // — it applies each modifier to EVERY child individually. So
+            // this pair was one `onAppear`/`onDisappear` per child, and
+            // the child count changes with state: entering a dimmed
+            // module (Gravity Lab dims 0.85, Electric Fields and
+            // Magnetism 0.35) removes `HubSpaceView` and adds
+            // `RoomDimmerView` plus the module `ZStack`. SwiftUI does
+            // not order those callbacks, so when the removal lands last
+            // the flag reads FALSE with the space open — and
+            // `ModuleHostView` then offers "Show in room" for a lab that
+            // is already in the room, which fails with "Couldn't open
+            // the room."
+            //
+            // MOVING IT TO `.background` ON THE SAME `Group` DOES NOT
+            // FIX THAT, and the first attempt at this did exactly that.
+            // A background is a modifier like any other, so it
+            // distributes over the children too: one leaf per PRESENT
+            // child rather than one leaf, and the dimmer branch coming
+            // and going still fires a spurious `onDisappear`. The fix
+            // has to be a SIBLING, not a modifier.
+            //
+            // Inside this `ZStack` the leaf is a sibling of the whole
+            // `Group`, so it exists exactly once for as long as this
+            // view does, whatever the branches inside do.
             Color.clear
                 .frame(width: 0, height: 0)
                 .onAppear { appModel.isImmersiveSpaceOpen = true }

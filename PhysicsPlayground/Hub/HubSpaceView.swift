@@ -1032,17 +1032,32 @@ final class HubScene {
             pulser.addChild(ring)
         }
 
-        // Measured now that there is something to measure: the
-        // miniature, its name plate and its progress arc, plus the
-        // house reach. Narrower than the 0.36 m puck pitch, so no
-        // exhibit can take a pinch aimed at the one beside it.
+        // MEASURED FROM THE MINIATURE, and from nothing else.
+        //
+        // The obvious move is to measure `pulser`, which is everything
+        // this exhibit draws — and it is wrong, because one of the
+        // things it draws is the focus glow, whose outer disc is 0.40 m
+        // ACROSS (`focusGlow`, three cylinders at r = 0.085 / 0.135 /
+        // 0.200). That is a pool of light on the puck, not part of the
+        // object, and against a 0.36 m puck pitch a target measured
+        // from it reaches 3.5 cm past both neighbours' centres — worse
+        // than the 0.19 m sphere this replaced, which reached 1 cm past.
+        // `ColliderCriterionTests` cannot catch that: a collider derived
+        // from an entity's own bounds satisfies a test that measures it
+        // against those bounds, by construction. What catches it is
+        // `testGalleryExhibitTargetsDoNotOverlapEachOther`, which asks
+        // the question the rule is actually about — does this shield
+        // its neighbour.
+        //
+        // The vignette is normalised to `exhibitSize` (0.24 m), so the
+        // target is 0.27 m and clears the pitch with 9 cm to spare.
         //
         // Set directly rather than through `Grabbable`, which would also
         // hang a grounding shadow off every exhibit. The gallery's
         // lighting is composed; six new contact shadows is a visual
         // change and this is not the pass for one.
         let reach = Grabbable.reach
-        let exhibitBounds = pulser.visualBounds(relativeTo: anchor)
+        let exhibitBounds = vignette.visualBounds(relativeTo: anchor)
         anchor.components.set(InputTargetComponent())
         anchor.components.set(CollisionComponent(shapes: [
             .generateBox(size: exhibitBounds.extents + SIMD3<Float>(repeating: 2 * reach))

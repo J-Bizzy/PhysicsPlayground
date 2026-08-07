@@ -93,6 +93,42 @@ hand-roll a third copy. `Grabbable.configureTouchTarget(_:collisionRadius:)`
 survives for things that really are balls, but its doc comment now says
 so and names the plate that proved it.
 
+**FIVE DEFECTS IN THIS PASS WERE FOUND BY REVIEWING IT, not by the
+tests, and one of them was worse than anything it fixed.** Recorded
+because the list is the argument for reviewing a mechanical pass at all:
+
+- `PressLatch` **re-armed on every frame**, because both call sites sit
+  inside `if drag == nil` and a targeted gesture reports the same entity
+  every frame. The anchor moved with the hand, the threshold was never
+  crossed, and a pendulum bob and a ball in flight became *impossible to
+  grab at any speed* — the central interaction of two modules, dead. The
+  test passed because it pressed once and then only promoted: it modelled
+  the sequence the author believed the handler ran. `press` now ignores a
+  press while one is pending, and `testPressingEveryFrameStillPromotes`
+  drives the real order.
+- The gallery exhibit's target was measured from `pulser`, which contains
+  the **0.40 m focus glow**, so the "fix" produced a 0.43 m target against
+  a 0.36 m pitch — WIDER than the 0.19 m sphere it replaced. The collider
+  criterion passed it *by construction*: a box derived from an entity's
+  bounds trivially satisfies a test that measures it against those bounds.
+  The answer is a criterion that question cannot dodge —
+  `testGalleryExhibitTargetsDoNotOverlapEachOther` asks whether neighbours
+  shield each other, which is what the rule was always about.
+- The criterion measured **local extents on entities that are scaled per
+  instance**. Gravity Lab's bodies and Projectiles' balls carry one
+  authored collider on a sphere scaled from 0.26× to over 2×, so a single
+  factor meant 2 mm of reach on a comet and 10 cm of shielding on a star,
+  and the local measurement could see neither. It measures world metres
+  now, and `Grabbable.sphereTargetRadius` sizes those two pools per
+  instance so reach is constant in the room.
+- The hoop's rim colliders shrank without the count growing, leaving
+  **11 cm of every 17.6 cm of rim with no collider**. Sixteen now, not
+  eight.
+- `isImmersiveSpaceOpen` moved from `.onAppear` on a `Group` to
+  `.background` on the same `Group` — which is **the same bug**, because a
+  background distributes over children exactly like any other modifier.
+  It is a sibling inside a `ZStack` now.
+
 **Not yet done, and deliberately.** The stale-drag watchdog reaches the
 two event-id-keyed tables (`PinchLedger`, Magnetism's `grabs`) where a
 vanished hand leaves no trace. The `DragGesture`-driven carries in the

@@ -177,6 +177,8 @@ final class GravityLabRenderer {
 
     private let bodyPool: EntityPool<ModelEntity>
     private var bodyMaterialKeys: [String]
+    /// The scale each pooled body's touch target was last sized for.
+    private var bodyColliderScales: [Int: Float] = [:]
     private var bodyNames: [String]
     private static let baseBodyRadius: Float = 0.05
 
@@ -1109,8 +1111,20 @@ final class GravityLabRenderer {
             bodyLabels[index].isEnabled = true
             bodyLabels[index].position = SIMD3<Float>(orbiting.body.position) * scale
                 + SIMD3(0, Float(orbiting.displayRadius) + 0.028, 0)
-            slot.entity.scale = SIMD3<Float>(
-                repeating: Float(orbiting.displayRadius) / Self.baseBodyRadius)
+            let bodyScale = Float(orbiting.displayRadius) / Self.baseBodyRadius
+            slot.entity.scale = SIMD3<Float>(repeating: bodyScale)
+            // The target is re-sized WITH the body, so its reach in the
+            // room stays constant instead of scaling with the planet —
+            // see `Grabbable.sphereTargetRadius`. Change-gated: this
+            // allocates a `ShapeResource`, and a body's display radius
+            // only moves on a merge or a preset change.
+            if abs((bodyColliderScales[index] ?? -1) - bodyScale) > 1e-4 {
+                bodyColliderScales[index] = bodyScale
+                slot.entity.components.set(CollisionComponent(shapes: [
+                    .generateSphere(radius: Grabbable.sphereTargetRadius(
+                        baseRadius: Self.baseBodyRadius, scale: bodyScale)),
+                ]))
+            }
 
             if orbiting.id == manipulatingBodyID {
                 // Hand owns the sphere: leave transforms alone.

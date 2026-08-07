@@ -100,6 +100,8 @@ final class KinematicsRenderer {
 
     private let ballPool: EntityPool<ModelEntity>
     private var ballMaterialKeys: [String] = []
+    /// The scale each pooled ball's touch target was last sized for.
+    private var ballColliderScales: [Int: Float] = [:]
     private var appliedTextureVersion = -1
     private let audioEmitter = Entity()
     private var lastSoundID = 0
@@ -297,11 +299,21 @@ final class KinematicsRenderer {
             Grabbable.configureTouchTarget(tube, collisionRadius: 0.05)
             // A ring is grabbed by its RIM. One fat sphere in the
             // middle swallowed every pinch through the opening — the
-            // banned bigger-than-the-visual collider. Eight small
-            // colliders hug the torus instead.
-            let rim = (0..<8).map { index -> ShapeResource in
-                let angle = Float(index) / 8 * 2 * .pi
-                return ShapeResource.generateSphere(radius: 0.032)
+            // banned bigger-than-the-visual collider. Small colliders
+            // hug the torus instead.
+            //
+            // SIXTEEN of them, not eight. The count and the radius are
+            // one decision, and halving the radius to satisfy the
+            // collider rule (0.05 → 0.034, since the tube is only 0.04
+            // across) without doubling the count would have left
+            // 11 cm of every 17.6 cm of rim with no collider at all —
+            // a hoop that ignores two thirds of the places you try to
+            // grab it. At sixteen the centres are 0.090 m apart and
+            // each sphere spans 0.068, so the gaps are hairlines.
+            let rimCount = 16
+            let rim = (0..<rimCount).map { index -> ShapeResource in
+                let angle = Float(index) / Float(rimCount) * 2 * .pi
+                return ShapeResource.generateSphere(radius: 0.034)
                     .offsetBy(translation: [
                         cos(angle) * Float(KinematicsModel.ringRadius),
                         0,
@@ -692,7 +704,20 @@ final class KinematicsRenderer {
             applyBallMaterial(for: flight.projectile, at: index, slot: slot)
 
             let radius = max(Float(flight.projectile.diameter / 2), 0.008)
-            slot.entity.scale = SIMD3<Float>(repeating: radius / Self.baseBallRadius)
+            let ballScale = radius / Self.baseBallRadius
+            slot.entity.scale = SIMD3<Float>(repeating: ballScale)
+            // Re-sized with the ball, so a table-tennis ball keeps the
+            // same reach as a basketball instead of 3 mm of it — see
+            // `Grabbable.sphereTargetRadius`. Change-gated: this
+            // allocates, and a slot's projectile changes only when a
+            // new ball is fired into it.
+            if abs((ballColliderScales[index] ?? -1) - ballScale) > 1e-4 {
+                ballColliderScales[index] = ballScale
+                slot.entity.components.set(CollisionComponent(shapes: [
+                    .generateSphere(radius: Grabbable.sphereTargetRadius(
+                        baseRadius: Self.baseBallRadius, scale: ballScale)),
+                ]))
+            }
 
             if flight.id == manipulatingBallID {
                 // Hand owns the sphere; leave both transforms alone.
