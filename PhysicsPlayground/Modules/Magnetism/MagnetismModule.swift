@@ -39,6 +39,7 @@ enum MagnetismModule {
                 AnyView(MagnetismSpaceView().environment(appModel.magnetismModel))
             },
             captureReadings: { readings(appModel: appModel) },
+            timeScrub: .inert,
             reset: { appModel.magnetismModel.reset() }
         )
     }

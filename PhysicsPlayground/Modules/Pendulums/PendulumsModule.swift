@@ -37,6 +37,7 @@ enum PendulumsModule {
                 AnyView(PendulumsSpaceView().environment(appModel.pendulumsModel))
             },
             captureReadings: { readings(appModel: appModel) },
+            timeScrub: .inert,
             reset: { appModel.pendulumsModel.reset() }
         )
     }

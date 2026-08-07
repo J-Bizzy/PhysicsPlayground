@@ -92,6 +92,7 @@ enum GravityLabModule {
                 }
                 return rows
             },
+            timeScrub: .inert,
             reset: {
                 appModel.gravityLabModel.reset()
             }

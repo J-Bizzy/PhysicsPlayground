@@ -56,8 +56,37 @@ struct ModuleDescriptor: Identifiable {
     /// moment in this module. Read live from the module's model, so a
     /// captured row is exactly what the physics said at that instant.
     var captureReadings: () -> [NotebookEntry.Reading] = { [] }
+    /// The Time Capsule: scrubbing the module's recorded past while
+    /// paused. Wired to the model's `TimeCapsuleRecording` conformance;
+    /// `.inert` only while a module has not adopted it yet — the shared
+    /// Time Rail shows nothing over an inert capsule.
+    let timeScrub: TimeScrubControls
     /// Returns the module's model to its freshly-entered state.
     let reset: () -> Void
+}
+
+/// The descriptor's window onto a module's Time Capsule — the same
+/// closure pattern as `isPaused`/`togglePause`, so the shell's Time Rail
+/// serves every module without knowing any model type.
+struct TimeScrubControls {
+    /// The recorded window (capsule clock), nil while nothing is recorded.
+    let span: () -> ClosedRange<Double>?
+    /// nil = live; non-nil = frozen at this recorded capsule time.
+    let scrubTime: () -> Double?
+    /// Scrub to `seconds` behind the newest recorded frame (≥ 0), pausing
+    /// first if the module was live. Clamped to the recording.
+    let scrub: (Double) -> Void
+    /// Step by whole recorded physics ticks (negative = earlier).
+    let stepFrames: (Int) -> Void
+    /// Un-pause FROM the scrubbed instant, truncating the rejected future.
+    let resume: () -> Void
+
+    /// A module that has not adopted `TimeCapsuleRecording` yet. Every
+    /// call is a no-op and `span` stays nil, so the Time Rail never
+    /// appears — replaced module by module as the capsule rolls out.
+    static let inert = TimeScrubControls(
+        span: { nil }, scrubTime: { nil }, scrub: { _ in },
+        stepFrames: { _ in }, resume: {})
 }
 
 /// One row of a module's legend. The swatch shapes match how the concept

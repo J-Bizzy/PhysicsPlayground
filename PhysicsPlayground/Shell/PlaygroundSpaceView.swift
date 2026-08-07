@@ -53,6 +53,10 @@ struct PlaygroundSpaceView: View {
                     // provably renders. Pinch it and the labs unfold.
                     PaletteView(module: module)
                         .id("palette-\(module.id)")
+                    // The Time Capsule's rail: folded away until the
+                    // module is paused with a recording worth scrubbing.
+                    TimeRailView(module: module)
+                        .id("time-rail-\(module.id)")
                     // The experiments watcher: notices when the physics
                     // reaches a goal and chimes exactly once.
                     ExperimentCheckerView(moduleID: module.id)

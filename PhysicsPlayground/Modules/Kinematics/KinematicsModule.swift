@@ -37,11 +37,15 @@ enum KinematicsModule {
             firstRunHint: "Grab any ball and throw it — physics takes over the instant you let go. For precise launches, drag the launcher anywhere and pinch its orange bead to aim. Balls bounce off your real walls and floor, so visionOS will ask to use your room.",
             legend: legend,
             isPaused: { appModel.kinematicsModel.isPaused },
-            togglePause: { appModel.kinematicsModel.isPaused.toggle() },
+            // Through the capsule, not a bare toggle: un-pausing from a
+            // scrubbed instant resumes FROM it, truncating the rejected
+            // future.
+            togglePause: { appModel.kinematicsModel.togglePauseRespectingScrub() },
             makeScene: {
                 AnyView(KinematicsSpaceView().environment(appModel.kinematicsModel))
             },
             captureReadings: { readings(appModel: appModel) },
+            timeScrub: .init(model: appModel.kinematicsModel),
             reset: { appModel.kinematicsModel.reset() }
         )
     }

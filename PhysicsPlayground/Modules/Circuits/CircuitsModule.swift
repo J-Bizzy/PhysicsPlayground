@@ -38,6 +38,7 @@ enum CircuitsModule {
                 )
             },
             captureReadings: { readings(appModel: appModel) },
+            timeScrub: .inert,
             reset: { appModel.circuitsModel.reset() }
         )
     }

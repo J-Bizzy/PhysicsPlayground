@@ -115,3 +115,18 @@ extension TimeCapsuleRecording {
         scrubTime = nil
     }
 }
+
+extension TimeScrubControls {
+    /// One line per module: the descriptor's scrub contract, wired
+    /// straight to an adopting model. The model is retained by AppModel
+    /// for the app's life, so the strong captures here match every other
+    /// descriptor closure.
+    init<Model: TimeCapsuleRecording>(model: Model) {
+        self.init(
+            span: { model.capsuleSpan },
+            scrubTime: { model.scrubTime },
+            scrub: { model.scrub(toOffset: $0) },
+            stepFrames: { model.stepScrub(frames: $0) },
+            resume: { model.commitScrubAndResume() })
+    }
+}

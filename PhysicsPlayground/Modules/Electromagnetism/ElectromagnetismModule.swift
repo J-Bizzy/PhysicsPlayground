@@ -39,6 +39,7 @@ enum ElectromagnetismModule {
                 AnyView(FieldSpaceView().environment(appModel.electromagnetismModel))
             },
             captureReadings: { readings(appModel: appModel) },
+            timeScrub: .inert,
             reset: { appModel.electromagnetismModel.reset() }
         )
     }
