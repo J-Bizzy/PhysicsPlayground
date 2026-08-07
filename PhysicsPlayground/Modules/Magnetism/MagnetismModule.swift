@@ -34,12 +34,12 @@ enum MagnetismModule {
             preferredDimming: 0.35,
             legend: legendItems,
             isPaused: { appModel.magnetismModel.isPaused },
-            togglePause: { appModel.magnetismModel.isPaused.toggle() },
+            togglePause: { appModel.magnetismModel.togglePauseRespectingScrub() },
             makeScene: {
                 AnyView(MagnetismSpaceView().environment(appModel.magnetismModel))
             },
             captureReadings: { readings(appModel: appModel) },
-            timeScrub: .inert,
+            timeScrub: .init(model: appModel.magnetismModel),
             reset: { appModel.magnetismModel.reset() }
         )
     }

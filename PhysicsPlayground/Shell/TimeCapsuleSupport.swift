@@ -69,8 +69,13 @@ extension TimeCapsuleRecording {
         isPaused = true
         let target = span.upperBound - max(0, seconds)
         guard let frame = capsule.frame(at: target) else { return }
-        restoreCapsuleSnapshot(frame.snapshot)
+        // `scrubTime` is set BEFORE the restore, not after: a model that
+        // rebuilds derived state from the capsule — Gravity Lab's orbit
+        // trails, Electric Fields' probe trail — needs to know which
+        // instant it is being restored to WHILE restoring. Set after,
+        // those rebuilds read nil and quietly produce nothing.
         scrubTime = frame.time
+        restoreCapsuleSnapshot(frame.snapshot)
         scrubNonce &+= 1
     }
 
@@ -81,8 +86,8 @@ extension TimeCapsuleRecording {
         isPaused = true
         let origin = scrubTime ?? capsule.span!.upperBound
         guard let frame = capsule.frame(steppedFrom: origin, by: frames) else { return }
-        restoreCapsuleSnapshot(frame.snapshot)
         scrubTime = frame.time
+        restoreCapsuleSnapshot(frame.snapshot)
         scrubNonce &+= 1
     }
 

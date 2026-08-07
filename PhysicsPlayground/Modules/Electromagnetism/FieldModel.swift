@@ -255,6 +255,13 @@ final class FieldModel {
     /// never the drift, while everything else reacts to it live.
     var heldChargeID: UUID?
 
+    // MARK: Time Capsule
+
+    @ObservationIgnored var capsule = TimeCapsule<CapsuleSnapshot>()
+    @ObservationIgnored var capsuleClock = 0.0
+    var scrubTime: Double?
+    var scrubNonce = 0
+
     nonisolated static let chargeDriftGain = 3.0     // m/s per newton, overdamped
     nonisolated static let chargeMaxSpeed = 0.4      // m/s cap
     /// Two charge spheres touch at this centre distance (m); the drift
@@ -430,6 +437,7 @@ final class FieldModel {
         magneticFieldTesla = 5e4
         isPaused = false
         placementIndex = 2
+        clearCapsule()
     }
 
     var selectedCharge: PointCharge? {
@@ -606,6 +614,8 @@ final class FieldModel {
     /// round tells you it went round. Watching it draw the circle tells
     /// you the circle is a circle — that it closes, that its radius is
     /// constant, that reversing the charge reverses the winding.
+    /// Settable from the capsule extension, which rebuilds it on a
+    /// scrub — otherwise the model alone appends to it.
     private(set) var probeTrail: [SIMD3<Double>] = []
     /// A point is laid down every this far along the path, so the trail
     /// samples DISTANCE rather than frames — a fast probe does not draw a
@@ -660,6 +670,18 @@ final class FieldModel {
 
     /// Advances the simulation by one frame. Substepped velocity Verlet, so
     /// accuracy doesn't ride on the display frame rate.
+    /// One frame of this bench: the probe, then the free charges, then
+    /// the recording. The two steppers each guard their own conditions
+    /// and are still called directly by tests; this is the frame entry
+    /// point, and the only place that records — the capsule must get one
+    /// frame per rendered frame whether or not either stepper had work.
+    func step(dt: Double) {
+        guard !isPaused else { return }
+        defer { recordCapsuleFrame(dt: min(dt, 1.0 / 30.0)) }
+        stepProbe(dt: dt)
+        stepFreeCharges(dt: dt)
+    }
+
     func stepProbe(dt: Double) {
         guard !isPaused, probeStatus == .running, var state = probe,
               !charges.isEmpty || capacitorOn || magneticFieldOn else { return }
@@ -742,4 +764,111 @@ final class FieldModel {
         }
     }
 
+}
+
+// MARK: - Time Capsule
+
+extension FieldModel: TimeCapsuleRecording {
+    /// The charges, the probe, and — the exception to the standing rule —
+    /// the apparatus flags that CHANGE THE PHYSICS.
+    ///
+    /// Everywhere else the snapshot excludes what the observer chose. On
+    /// this bench `capacitorOn`, `magneticFieldOn` and `chargesRespond`
+    /// are not display layers: they decide the field the recorded motion
+    /// happened in. A cyclotron circle scrubbed back into a room whose B
+    /// is switched off would be a lie about what you watched, so they
+    /// ride along with the plate geometry that sets E = V/d. `showLines`
+    /// stays out, because a field line is drawn, not felt.
+    ///
+    /// `probeTrail` stays out and is rebuilt from the capsule, the way
+    /// Gravity Lab's orbit trails are.
+    struct CapsuleSnapshot: Equatable {
+        var charges: [PointCharge]
+        var probe: TestChargeDynamics.ProbeState?
+        var probeStatus: ProbeStatus
+        var probeIsPositive: Bool
+        var probeChargeMagnitude: Double
+        var chargesRespond: Bool
+        var capacitorOn: Bool
+        var plateVoltage: Double
+        var plateSeparation: Double
+        var capacitorCenter: SIMD3<Double>
+        var magneticFieldOn: Bool
+        var magneticFieldTesla: Double
+    }
+
+    func captureCapsuleSnapshot() -> CapsuleSnapshot {
+        CapsuleSnapshot(
+            charges: charges, probe: probe, probeStatus: probeStatus,
+            probeIsPositive: probeIsPositive,
+            probeChargeMagnitude: probeChargeMagnitude,
+            chargesRespond: chargesRespond, capacitorOn: capacitorOn,
+            plateVoltage: plateVoltage, plateSeparation: plateSeparation,
+            capacitorCenter: capacitorCenter,
+            magneticFieldOn: magneticFieldOn,
+            magneticFieldTesla: magneticFieldTesla)
+    }
+
+    func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
+        var restored = snapshot.charges
+        // The hand's charge is the hand's: a restore never drags it out
+        // of the fingers holding it.
+        if let heldChargeID,
+           let live = charges.first(where: { $0.id == heldChargeID }) {
+            if let index = restored.firstIndex(where: { $0.id == heldChargeID }) {
+                restored[index] = live
+            } else {
+                restored.append(live)
+            }
+        }
+        charges = restored
+        probe = snapshot.probe
+        probeStatus = snapshot.probeStatus
+        probeIsPositive = snapshot.probeIsPositive
+        probeChargeMagnitude = snapshot.probeChargeMagnitude
+        chargesRespond = snapshot.chargesRespond
+        capacitorOn = snapshot.capacitorOn
+        plateVoltage = snapshot.plateVoltage
+        plateSeparation = snapshot.plateSeparation
+        capacitorCenter = snapshot.capacitorCenter
+        magneticFieldOn = snapshot.magneticFieldOn
+        magneticFieldTesla = snapshot.magneticFieldTesla
+        probeTrail = recordedProbeTrail(upTo: scrubTime)
+        if let selectedChargeID,
+           !charges.contains(where: { $0.id == selectedChargeID }) {
+            self.selectedChargeID = nil
+        }
+    }
+
+    /// The probe's recorded path, rebuilt under the live spacing and
+    /// length rules — the trail a scrubbed room shows IS the recording.
+    private func recordedProbeTrail(upTo time: Double?) -> [SIMD3<Double>] {
+        guard let time, let span = capsule.span else { return [] }
+        var trail: [SIMD3<Double>] = []
+        for frame in capsule.frames(in: span.lowerBound...time) {
+            guard let probe = frame.snapshot.probe else { continue }
+            if let last = trail.last,
+               simd_distance(last, probe.position) < Self.probeTrailSpacing {
+                continue
+            }
+            trail.append(probe.position)
+        }
+        if trail.count > Self.probeTrailLength {
+            trail.removeFirst(trail.count - Self.probeTrailLength)
+        }
+        return trail
+    }
+
+    /// The probe's recorded flight, for the walkable tube.
+    func capsuleRecordedPaths(stride: Int = 4) -> [[SIMD3<Float>]] {
+        guard scrubTime != nil, let span = capsule.span else { return [] }
+        var path: [SIMD3<Float>] = []
+        for frame in capsule.frames(in: span, stride: stride) {
+            guard let probe = frame.snapshot.probe else { continue }
+            let point = SIMD3<Float>(probe.position)
+            if let last = path.last, simd_distance(last, point) < 0.004 { continue }
+            path.append(point)
+        }
+        return path.count >= 2 ? [path] : []
+    }
 }

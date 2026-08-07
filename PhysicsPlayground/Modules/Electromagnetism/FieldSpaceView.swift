@@ -133,8 +133,7 @@ struct FieldSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
-                    model.stepProbe(dt: event.deltaTime)
-                    model.stepFreeCharges(dt: event.deltaTime)
+                    model.step(dt: event.deltaTime)
                     if let renderer {
                         syncInstruments(renderer: renderer, dt: event.deltaTime)
                         syncBloom(renderer: renderer, dt: event.deltaTime)

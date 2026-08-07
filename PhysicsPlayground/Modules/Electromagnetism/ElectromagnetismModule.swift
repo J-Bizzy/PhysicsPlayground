@@ -34,12 +34,12 @@ enum ElectromagnetismModule {
             preferredDimming: 0.35,
             legend: legendItems,
             isPaused: { appModel.electromagnetismModel.isPaused },
-            togglePause: { appModel.electromagnetismModel.isPaused.toggle() },
+            togglePause: { appModel.electromagnetismModel.togglePauseRespectingScrub() },
             makeScene: {
                 AnyView(FieldSpaceView().environment(appModel.electromagnetismModel))
             },
             captureReadings: { readings(appModel: appModel) },
-            timeScrub: .inert,
+            timeScrub: .init(model: appModel.electromagnetismModel),
             reset: { appModel.electromagnetismModel.reset() }
         )
     }

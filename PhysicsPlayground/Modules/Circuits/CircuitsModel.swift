@@ -635,7 +635,24 @@ final class CircuitsModel {
 
     // MARK: The solve (every frame)
 
+    /// One frame of the wearer's experience: solve, then record.
+    ///
+    /// This model is the odd one out twice over. Its solve runs every
+    /// frame even while paused, so a frozen bench still shows honest
+    /// readouts — so only unpaused frames belong in the recording. And
+    /// it solves ONCE IMMEDIATELY whenever the bench changes (seeding,
+    /// restoring a saved bench, loading a demo), so the first frame is
+    /// never dark; those priming solves call `solve` directly and are
+    /// deliberately not recorded, because nobody watched them happen.
     func step(dt: Double) {
+        let isRecordingFrame = !isPaused
+        solve(dt: dt)
+        if isRecordingFrame {
+            recordCapsuleFrame(dt: min(max(dt, 1e-4), 1.0 / 30.0))
+        }
+    }
+
+    private func solve(dt: Double) {
         guard !components.isEmpty else {
             readouts = [:]
             wireFlows = [:]
@@ -1104,6 +1121,13 @@ final class CircuitsModel {
 
     /// The AC sources' shared clock.
     private(set) var simTime = 0.0
+
+    // MARK: Time Capsule
+
+    @ObservationIgnored var capsule = TimeCapsule<CapsuleSnapshot>()
+    @ObservationIgnored var capsuleClock = 0.0
+    var scrubTime: Double?
+    var scrubNonce = 0
     /// Live node voltages by terminal, for the voltage-gradient wires.
     private(set) var terminalVoltages: [Terminal: Double] = [:]
     private(set) var voltageSpan: (min: Double, max: Double) = (0, 0)
@@ -1196,6 +1220,11 @@ final class CircuitsModel {
 
     /// Immediate save (internal so tests can force it).
     func persistNow() {
+        // Never save a scrubbed bench. While the room is frozen in its
+        // own past, `components` and `wires` hold a RECORDED topology —
+        // saving it would let a rewind you were only inspecting become
+        // the bench you find on next launch.
+        guard scrubTime == nil else { return }
         let bench = SavedBench(components: components, wires: wires)
         if let data = try? JSONEncoder().encode(bench) {
             UserDefaults.standard.set(data, forKey: Self.saveKey)
@@ -1215,7 +1244,7 @@ final class CircuitsModel {
         }
         selectedID = nil
         pendingTerminal = nil
-        step(dt: 1.0 / 90.0)
+        solve(dt: 1.0 / 90.0)
         return true
     }
 
@@ -1370,7 +1399,7 @@ final class CircuitsModel {
             insightText = "A dead short: nothing limits the current but the battery's own 50 mΩ — about 150 A, the red warning, and in real life a very hot battery. Add a bulb into the loop to tame it."
         }
         selectedID = components.first?.id
-        step(dt: 1.0 / 90.0)
+        solve(dt: 1.0 / 90.0)
     }
 
     // MARK: The bench's own magnetic field
@@ -1480,6 +1509,7 @@ final class CircuitsModel {
         multimeterArmed = false
         meterMode = .voltsDC
         isPaused = false
+        clearCapsule()
         seedStarterLoop()
     }
 
@@ -1513,7 +1543,7 @@ final class CircuitsModel {
                  to: Terminal(componentID: battery.id, end: 0)),
         ]
         // Solve once immediately so the bulb opens lit, not one frame dark.
-        step(dt: 1.0 / 90.0)
+        solve(dt: 1.0 / 90.0)
     }
 
     /// `restoreSaved` re-opens the user's last bench (AppModel passes
@@ -1523,6 +1553,48 @@ final class CircuitsModel {
         refreshSlotNames()
         if restoreSaved, restoreSavedBench() {
             insightText = ""
+        }
+    }
+}
+
+// MARK: - Time Capsule
+
+extension CircuitsModel: TimeCapsuleRecording {
+    /// The bench and its transients. `Component` already carries
+    /// `capacitorVoltage`, `inductorCurrent`, `motorSpeed`, `failed` and
+    /// `isClosed`, so snapshotting the array snapshots every integrated
+    /// quantity on the bench — and because it snapshots the WIRES too, a
+    /// scrub across a mid-window rewiring restores the old topology. The
+    /// per-frame solve then re-derives every readout for it, which is
+    /// why nothing here stores a result.
+    ///
+    /// A blown LED un-blows when you scrub before its failure and blows
+    /// again on resume. That is the demonstration, not a bug.
+    ///
+    /// Out: `pendingTerminal` and the meter's arming — an instrument's
+    /// state is the observer's, and the meter re-reads the restored
+    /// circuit anyway.
+    struct CapsuleSnapshot: Equatable {
+        var components: [Component]
+        var wires: [Wire]
+        var simTime: Double
+    }
+
+    func captureCapsuleSnapshot() -> CapsuleSnapshot {
+        CapsuleSnapshot(components: components, wires: wires, simTime: simTime)
+    }
+
+    func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
+        components = snapshot.components
+        wires = snapshot.wires
+        simTime = snapshot.simTime
+        // The scope is a strip chart of the past, and it is monotone in
+        // simTime — so scrubbing back cuts the future off it rather than
+        // leaving a trace that runs past the instant on screen.
+        scopeSamples.removeAll { $0.time > snapshot.simTime }
+        if let selectedID, !components.contains(where: { $0.id == selectedID }) {
+            self.selectedID = nil
+            pendingTerminal = nil
         }
     }
 }

@@ -172,19 +172,39 @@ final class TimeRailTests: XCTestCase {
         XCTAssertFalse(rail.handleDrag(entity: rail.root, handWorld: .zero))
     }
 
-    /// Every module's descriptor carries a scrub contract; the five that
-    /// have not adopted the capsule yet are inert (nil span), so the rail
-    /// never appears over them.
-    func testUnadoptedModulesAreInert() {
+    /// ALL SIX modules answer the scrub contract — the rail is shell
+    /// chrome, and a lab where pause did nothing but freeze would be the
+    /// one place the feature was missing. A fresh model has recorded
+    /// nothing, so every span starts nil and the rail stays folded.
+    func testEveryModuleAnswersTheScrubContract() {
         let appModel = AppModel()
-        for module in ModuleCatalog.all(appModel: appModel)
-        where module.id != KinematicsModule.id {
+        let modules = ModuleCatalog.all(appModel: appModel)
+        XCTAssertEqual(modules.count, 6)
+        for module in modules {
             XCTAssertNil(module.timeScrub.span(),
-                         "\(module.id) reports a span with no adoption")
-            // No-ops must actually be no-ops.
+                         "\(module.id) reports a recording before anything ran")
+            XCTAssertNil(module.timeScrub.scrubTime())
+            // Scrubbing an empty capsule is a no-op, not a crash and not
+            // a fabricated instant.
             module.timeScrub.scrub(1)
             module.timeScrub.stepFrames(-1)
-            XCTAssertNil(module.timeScrub.scrubTime())
+            XCTAssertNil(module.timeScrub.scrubTime(),
+                         "\(module.id) invented a scrub instant with nothing recorded")
         }
+    }
+
+    /// The rail's unit is seconds of the WEARER's life, on every bench.
+    /// Gravity Lab is the one that could get this wrong — its own clock
+    /// runs in days at up to 100× — so a second of recording there must
+    /// still be a second.
+    func testCapsuleClockIsWallClockSecondsEverywhere() {
+        let appModel = AppModel()
+        let gravity = appModel.gravityLabModel
+        gravity.clearCapsule()
+        gravity.timeScale = 100
+        for _ in 0..<90 { gravity.step(dt: dt) }
+        let span = try! XCTUnwrap(gravity.capsuleSpan)
+        XCTAssertEqual(span.upperBound - span.lowerBound, 89 * dt, accuracy: 1e-9,
+                       "Gravity Lab's capsule clock is not wall-clock seconds")
     }
 }

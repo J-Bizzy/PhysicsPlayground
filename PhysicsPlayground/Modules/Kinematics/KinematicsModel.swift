@@ -587,8 +587,10 @@ final class KinematicsModel {
         let frameDt = min(dt, 1.0 / 30.0) * timeScale
         // Record AFTER the step: the capsule's newest frame is always the
         // state the room is showing, so pause-then-scrub starts from
-        // exactly what the eye just saw.
-        defer { recordCapsuleFrame(dt: frameDt) }
+        // exactly what the eye just saw. In WALL-CLOCK seconds, not
+        // simulated ones — the rail's unit is seconds of the wearer's
+        // life, and it must mean the same thing on every bench.
+        defer { recordCapsuleFrame(dt: min(dt, 1.0 / 30.0)) }
         stepRings(dt: frameDt)
         guard flights.contains(where: { $0.status == .flying || $0.status == .rolling }) else { return }
 

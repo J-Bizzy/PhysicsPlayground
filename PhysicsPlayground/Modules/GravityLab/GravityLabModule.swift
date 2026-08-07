@@ -46,7 +46,7 @@ enum GravityLabModule {
             preferredDimmingRadius: 16,
             legend: legend,
             isPaused: { appModel.gravityLabModel.isPaused },
-            togglePause: { appModel.gravityLabModel.isPaused.toggle() },
+            togglePause: { appModel.gravityLabModel.togglePauseRespectingScrub() },
             makeScene: {
                 AnyView(
                     GravityLabSpaceView()
@@ -92,7 +92,7 @@ enum GravityLabModule {
                 }
                 return rows
             },
-            timeScrub: .inert,
+            timeScrub: .init(model: appModel.gravityLabModel),
             reset: {
                 appModel.gravityLabModel.reset()
             }

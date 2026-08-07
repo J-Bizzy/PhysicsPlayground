@@ -184,6 +184,13 @@ final class MagnetismModel {
     /// inheriting a mobility "velocity" that was never one.
     private var bodies: [UUID: DipoleBody] = [:]
 
+    // MARK: Time Capsule
+
+    @ObservationIgnored var capsule = TimeCapsule<CapsuleSnapshot>()
+    @ObservationIgnored var capsuleClock = 0.0
+    var scrubTime: Double?
+    var scrubNonce = 0
+
     /// Linear drag, 1/s. The one tunable number in the inertial path.
     /// Air alone would take minutes to still a needle; a lab pivots it
     /// in oil so a demonstration settles in a few swings.
@@ -191,6 +198,7 @@ final class MagnetismModel {
 
     func step(dt: Double) {
         guard !isPaused else { return }
+        defer { recordCapsuleFrame(dt: min(dt, 1.0 / 30.0)) }
         guard dynamicsOn else {
             // Frozen: no forces, but contact separation still holds so a
             // dragged magnet can't be parked inside another.
@@ -609,6 +617,7 @@ final class MagnetismModel {
         dynamicsOn = true
         earthFieldOn = true
         compassPosition = Self.regionCenter + SIMD3(0.0, -0.42, 0.55)
+        clearCapsule()
     }
 
     init() {
@@ -619,5 +628,55 @@ final class MagnetismModel {
             dynamicsOn = false
         }
         #endif
+    }
+}
+
+// MARK: - Time Capsule
+
+extension MagnetismModel: TimeCapsuleRecording {
+    /// The magnets, their motion, and where the compass was standing.
+    ///
+    /// `bodies` is in the snapshot and that is the whole point of it on
+    /// this bench: it carries the linear and angular velocities of the
+    /// INERTIAL regime, and a needle restored without them comes back at
+    /// rest — the overshoot-and-ring that the inertial mode exists to
+    /// show would vanish the moment you scrubbed to look at it. Out:
+    /// `inertiaOn`, `dynamicsOn`, `earthFieldOn`, `showFieldLines`,
+    /// `compassOn` and the selection — the bank's states, not the bench's.
+    struct CapsuleSnapshot: Equatable {
+        var magnets: [BarMagnet]
+        var bodies: [UUID: DipoleBody]
+        var compassPosition: SIMD3<Double>
+    }
+
+    func captureCapsuleSnapshot() -> CapsuleSnapshot {
+        CapsuleSnapshot(magnets: magnets, bodies: bodies,
+                        compassPosition: compassPosition)
+    }
+
+    func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
+        // Whatever a hand is holding right now stays exactly where the
+        // hand has it — nothing may move a held magnet, including the
+        // past.
+        var restored = snapshot.magnets
+        for index in restored.indices where heldIDs.contains(restored[index].id) {
+            if let live = magnets.first(where: { $0.id == restored[index].id }) {
+                restored[index] = live
+            }
+        }
+        for held in heldIDs where !restored.contains(where: { $0.id == held }) {
+            if let live = magnets.first(where: { $0.id == held }) {
+                restored.append(live)
+            }
+        }
+        magnets = restored
+        bodies = snapshot.bodies
+        // A held magnet's stored motion is the hand's business, not the
+        // recording's — the same clearing `stepWithInertia` does.
+        for held in heldIDs { bodies[held] = DipoleBody() }
+        compassPosition = snapshot.compassPosition
+        if let selectedID, !magnets.contains(where: { $0.id == selectedID }) {
+            self.selectedID = nil
+        }
     }
 }

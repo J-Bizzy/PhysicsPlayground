@@ -232,6 +232,149 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
         XCTAssertLessThan(simd_distance(start, model.muzzlePoint), 0.1)
     }
 
+    // MARK: The other five benches
+    //
+    // Same two claims per module, and the replay test is the one that
+    // earns its keep: it is what would have caught Pendulums' substep
+    // `accumulator` or Magnetism's `bodies` velocity map being left out
+    // of a snapshot, neither of which any round-trip check would notice.
+
+    func testPendulumsRoundTripAndReplay() {
+        let model = PendulumsModel()
+        model.clearCapsule()
+        for _ in 0..<120 { model.step(dt: dt) }
+
+        let snapshot = model.captureCapsuleSnapshot()
+        for _ in 0..<60 { model.step(dt: dt) }
+        model.restoreCapsuleSnapshot(snapshot)
+        XCTAssertEqual(model.captureCapsuleSnapshot(), snapshot)
+
+        // Replay: the recorded frames must come back frame for frame.
+        model.isPaused = true
+        model.scrub(toOffset: 0.4)
+        let scrubbed = try! XCTUnwrap(model.scrubTime)
+        let recorded = model.capsule.frames(in: scrubbed...(scrubbed + 31 * dt))
+        model.commitScrubAndResume()
+        for frame in recorded.dropFirst() {
+            model.step(dt: dt)
+            for (live, original) in zip(model.pendulums, frame.snapshot.pendulums) {
+                XCTAssertLessThan(
+                    simd_distance(live.bobWorld, original.bobWorld), 1e-9,
+                    "Pendulums replay diverged — a dynamical field is missing from CapsuleSnapshot")
+            }
+        }
+    }
+
+    func testGravityLabRoundTripAndTrailRebuild() {
+        let model = GravityLabModel()
+        model.clearCapsule()
+        for _ in 0..<120 { model.step(dt: dt) }
+
+        let snapshot = model.captureCapsuleSnapshot()
+        for _ in 0..<60 { model.step(dt: dt) }
+        model.restoreCapsuleSnapshot(snapshot)
+        XCTAssertEqual(model.captureCapsuleSnapshot(), snapshot)
+
+        // Trails are excluded from the snapshot and rebuilt from the
+        // capsule, so a scrubbed body still trails its recorded path.
+        model.isPaused = true
+        model.scrub(toOffset: 0.5)
+        let trailed = model.bodies.filter { !$0.trail.isEmpty }
+        XCTAssertFalse(trailed.isEmpty,
+                       "A scrubbed sky should show the recorded trails")
+    }
+
+    func testMagnetismRoundTripKeepsInertialMotion() {
+        let model = MagnetismModel()
+        model.inertiaOn = true
+        model.addMagnet()
+        model.clearCapsule()
+        for _ in 0..<120 { model.step(dt: dt) }
+
+        let snapshot = model.captureCapsuleSnapshot()
+        for _ in 0..<60 { model.step(dt: dt) }
+        model.restoreCapsuleSnapshot(snapshot)
+        XCTAssertEqual(model.captureCapsuleSnapshot(), snapshot)
+        // The velocity map is the point: without it a restored needle
+        // comes back at rest and never rings.
+        XCTAssertEqual(model.captureCapsuleSnapshot().bodies, snapshot.bodies)
+    }
+
+    func testFieldRoundTripAndProbeTrailRebuild() {
+        let model = FieldModel()
+        model.dropProbe()
+        model.clearCapsule()
+        for _ in 0..<120 { model.step(dt: dt) }
+
+        let snapshot = model.captureCapsuleSnapshot()
+        for _ in 0..<60 { model.step(dt: dt) }
+        model.restoreCapsuleSnapshot(snapshot)
+        XCTAssertEqual(model.captureCapsuleSnapshot(), snapshot)
+    }
+
+    /// Circuits scrubs its transients AND its topology: a rewire inside
+    /// the window comes back with the bench that was there at the time.
+    func testCircuitsRestoresTopologyAndTransients() {
+        let model = CircuitsModel()
+        model.clearCapsule()
+        for _ in 0..<90 { model.step(dt: dt) }
+        let before = model.components.count
+
+        let snapshot = model.captureCapsuleSnapshot()
+        _ = model.add(.resistor)
+        for _ in 0..<60 { model.step(dt: dt) }
+        XCTAssertEqual(model.components.count, before + 1)
+
+        model.restoreCapsuleSnapshot(snapshot)
+        XCTAssertEqual(model.components.count, before)
+        XCTAssertEqual(model.captureCapsuleSnapshot(), snapshot)
+    }
+
+    /// A scrubbed bench must never be written to disk: a rewind you were
+    /// only inspecting must not become the bench you find next launch.
+    func testCircuitsDoesNotPersistWhileScrubbed() {
+        let model = CircuitsModel()
+        model.clearCapsule()
+        for _ in 0..<90 { model.step(dt: dt) }
+        model.isPaused = true
+        model.scrub(toOffset: 0.3)
+
+        let key = CircuitsModel.saveKey
+        let saved = UserDefaults.standard.data(forKey: key)
+        model.persistNow()
+        XCTAssertEqual(UserDefaults.standard.data(forKey: key), saved,
+                       "A scrubbed bench was written to disk")
+    }
+
+    /// Every module's reset empties its capsule — a fresh bench must not
+    /// carry the old bench's past.
+    func testResetClearsEveryCapsule() {
+        let pendulums = PendulumsModel()
+        for _ in 0..<30 { pendulums.step(dt: dt) }
+        pendulums.reset()
+        XCTAssertNil(pendulums.capsuleSpan)
+
+        let gravity = GravityLabModel()
+        for _ in 0..<30 { gravity.step(dt: dt) }
+        gravity.reset()
+        XCTAssertNil(gravity.capsuleSpan)
+
+        let magnetism = MagnetismModel()
+        for _ in 0..<30 { magnetism.step(dt: dt) }
+        magnetism.reset()
+        XCTAssertNil(magnetism.capsuleSpan)
+
+        let field = FieldModel()
+        for _ in 0..<30 { field.step(dt: dt) }
+        field.reset()
+        XCTAssertNil(field.capsuleSpan)
+
+        let circuits = CircuitsModel()
+        for _ in 0..<30 { circuits.step(dt: dt) }
+        circuits.reset()
+        XCTAssertNil(circuits.capsuleSpan)
+    }
+
     /// Every restore bumps the scrub nonce — the signal renderers use to
     /// reseed presentation caches after a discontinuous state jump.
     func testScrubBumpsNonce() {

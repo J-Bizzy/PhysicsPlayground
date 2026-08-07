@@ -290,6 +290,13 @@ final class GravityLabModel {
     /// Total simulated time, in days (shown on the time panel).
     private(set) var simulatedDays = 0.0
 
+    // MARK: Time Capsule
+
+    @ObservationIgnored var capsule = TimeCapsule<CapsuleSnapshot>()
+    @ObservationIgnored var capsuleClock = 0.0
+    var scrubTime: Double?
+    var scrubNonce = 0
+
     // The CUSTOM PLANET BUILDER stood here — a distance, a mass exponent
     // and a speed factor, plus `spawnCustom()` to assemble them. It is a
     // GRAVE, not a missing door: it was three sliders in a panel section
@@ -939,7 +946,17 @@ final class GravityLabModel {
     /// Advances the system by one rendered frame of simulated time, in
     /// Verlet substeps small enough to stay stable at 100×.
     func step(dt: Double) {
-        guard !isPaused, bodies.count > 1 else { return }
+        guard !isPaused else { return }
+        // Recorded even when the guard below stops the physics: a room
+        // that has just merged down to one body still has a present, and
+        // scrubbing across that moment must find frames on both sides.
+        // WALL-CLOCK seconds, not sim days. The rail's unit is "seconds
+        // ago" — seconds of the wearer's life — so the capsule clock is
+        // the same on every bench regardless of what its own clock is
+        // doing. At 100× a scrub of one second rewinds a century of sky,
+        // which is exactly right: it rewinds the second you watched.
+        defer { recordCapsuleFrame(dt: min(dt, 1.0 / 30.0)) }
+        guard bodies.count > 1 else { return }
         let simDt = min(dt, 1.0 / 30.0) * timeScale * Self.daysPerSecond * 86_400
         // MAGNITUDE, not the signed value. Running time backwards makes
         // `simDt` negative, and `ceil` of a negative number is <= 0, so
@@ -1188,5 +1205,92 @@ final class GravityLabModel {
             gravitationalConstant: effectiveG),
             displayRadius: Self.displayRadius(for: .comet))
         selectedID = bodies.first(where: { $0.body.name == "Earth" })?.id
+        clearCapsule()
+    }
+}
+
+// MARK: - Time Capsule
+
+extension GravityLabModel: TimeCapsuleRecording {
+    /// The sky, in sim units, plus the clock it was read against.
+    ///
+    /// TRAILS ARE NOT IN THE SNAPSHOT. They are the one unbounded array
+    /// on this model, and storing a growing copy of one per body per
+    /// recorded frame is the memory trap the whole design was built to
+    /// avoid. They are rebuilt from the capsule instead, by the same 8 mm
+    /// spacing rule `appendTrailPoints` applies live — so a scrubbed
+    /// trail is not a reconstruction of the recording, it IS the
+    /// recording. Out: `timeScale` (the live clock keeps setting how time
+    /// runs; the capsule only records what it produced), the display
+    /// layers, and `bestPredictionMissAU`, which is a personal best.
+    struct CapsuleSnapshot: Equatable {
+        struct Body: Equatable {
+            var id: UUID
+            var body: CelestialBody
+            var displayRadius: Double
+        }
+        var bodies: [Body]
+        var simulatedDays: Double
+        var sunMassMultiplier: Double
+        var gMultiplier: Double
+        var prediction: Prediction?
+        var predictionVerdict: PredictionVerdict?
+    }
+
+    func captureCapsuleSnapshot() -> CapsuleSnapshot {
+        CapsuleSnapshot(
+            bodies: bodies.map {
+                .init(id: $0.id, body: $0.body, displayRadius: $0.displayRadius)
+            },
+            simulatedDays: simulatedDays,
+            sunMassMultiplier: sunMassMultiplier,
+            gMultiplier: gMultiplier,
+            prediction: prediction,
+            predictionVerdict: predictionVerdict)
+    }
+
+    func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
+        bodies = snapshot.bodies.map { recorded in
+            var restored = OrbitingBody(id: recorded.id, body: recorded.body,
+                                        displayRadius: recorded.displayRadius)
+            // A body in a hand keeps the hand's position: `heldID` means
+            // "attracts everything but does not move", and a restore must
+            // not move it either.
+            if recorded.id == heldBodyID,
+               let live = bodies.first(where: { $0.id == recorded.id }) {
+                restored.body = live.body
+            }
+            restored.trail = recordedTrail(for: recorded.id, upTo: scrubTime)
+            restored.lastTrailPosition = restored.trail.last
+            return restored
+        }
+        simulatedDays = snapshot.simulatedDays
+        sunMassMultiplier = snapshot.sunMassMultiplier
+        gMultiplier = snapshot.gMultiplier
+        prediction = snapshot.prediction
+        predictionVerdict = snapshot.predictionVerdict
+        if let selectedID, !bodies.contains(where: { $0.id == selectedID }) {
+            self.selectedID = nil
+        }
+    }
+
+    /// One body's trail, rebuilt from the recorded frames up to `time`,
+    /// under the live spacing and length rules.
+    private func recordedTrail(for id: UUID, upTo time: Double?) -> [SIMD3<Double>] {
+        guard let time, let span = capsule.span else { return [] }
+        let spacing = 0.008 * displayToSim
+        var trail: [SIMD3<Double>] = []
+        for frame in capsule.frames(in: span.lowerBound...time) {
+            guard let body = frame.snapshot.bodies.first(where: { $0.id == id })
+            else { continue }
+            let position = body.body.position
+            if let last = trail.last, simd_distance(last, position) < spacing {
+                continue
+            }
+            trail.append(position)
+        }
+        let cap = trailLength.points
+        if trail.count > cap { trail.removeFirst(trail.count - cap) }
+        return trail
     }
 }

@@ -32,12 +32,12 @@ enum PendulumsModule {
             firstRunHint: "Five steel balls, touching, with one drawn back — let it go and watch which of them move. Grab any bob and throw it sideways; press a pendulum's top collar for a bead that pays out its cable, or drag that collar to re-hang the whole rig. visionOS will ask to use your room so the rig can hang in it.",
             legend: legendItems,
             isPaused: { appModel.pendulumsModel.isPaused },
-            togglePause: { appModel.pendulumsModel.isPaused.toggle() },
+            togglePause: { appModel.pendulumsModel.togglePauseRespectingScrub() },
             makeScene: {
                 AnyView(PendulumsSpaceView().environment(appModel.pendulumsModel))
             },
             captureReadings: { readings(appModel: appModel) },
-            timeScrub: .inert,
+            timeScrub: .init(model: appModel.pendulumsModel),
             reset: { appModel.pendulumsModel.reset() }
         )
     }

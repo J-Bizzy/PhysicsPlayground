@@ -164,6 +164,13 @@ final class PendulumsModel {
     nonisolated static let timeScaleRange = 0.1...5.0
     var timeScale = 1.0
 
+    // MARK: Time Capsule
+
+    @ObservationIgnored var capsule = TimeCapsule<CapsuleSnapshot>()
+    @ObservationIgnored var capsuleClock = 0.0
+    var scrubTime: Double?
+    var scrubNonce = 0
+
     enum TrailMode: String, CaseIterable, Identifiable {
         case off, short, long, infinite
         var id: String { rawValue }
@@ -407,6 +414,9 @@ final class PendulumsModel {
 
     func step(dt: Double) {
         guard !isPaused, timeScale > 0 else { return }
+        // Wall-clock seconds — the capsule clock is the wearer's, not
+        // the simulation's, on every bench.
+        defer { recordCapsuleFrame(dt: min(dt, 0.1)) }
         accumulator += min(dt, 0.1) * timeScale
         let substep = Self.substep
         var steps = 0
@@ -567,6 +577,7 @@ final class PendulumsModel {
         frictionOn = true
         insightText = ""
         accumulator = 0
+        clearCapsule()
         // THE CRADLE IS THE COLD OPEN (2026-08-02), and it is now the
         // ONLY way this bench arranges itself: the "Resonance ×5" plate
         // that used to stand the five-length rig came off the wall the
@@ -576,5 +587,67 @@ final class PendulumsModel {
 
     init() {
         reset()
+    }
+}
+
+// MARK: - Time Capsule
+
+extension PendulumsModel: TimeCapsuleRecording {
+    /// The rigs and the gravity they swung under. `accumulator` rides
+    /// along because it is genuine physics state: it is the unspent
+    /// remainder of the fixed substep, and a restore that dropped it
+    /// would re-enter the swing up to one substep out of phase — exactly
+    /// the class of error this project refuses to accept as "close
+    /// enough". Out: `frictionOn`, `trailMode`, the vector layers and
+    /// selection (what the observer chose, not what the bench did).
+    struct CapsuleSnapshot: Equatable {
+        var pendulums: [Pendulum]
+        var accumulator: Double
+        var gravity: Double
+        var bobRestitution: Double
+    }
+
+    func captureCapsuleSnapshot() -> CapsuleSnapshot {
+        CapsuleSnapshot(pendulums: pendulums, accumulator: accumulator,
+                        gravity: gravity, bobRestitution: bobRestitution)
+    }
+
+    func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
+        // A bob in a hand is not moved by a restore: the hand wins, and
+        // a bob that was grabbed THEN comes back released, since the
+        // past hand is gone.
+        var restored = snapshot.pendulums
+        for index in restored.indices {
+            let id = restored[index].id
+            if let live = pendulums.first(where: { $0.id == id }), live.isGrabbed {
+                restored[index] = live
+            } else {
+                restored[index].isGrabbed = false
+            }
+        }
+        pendulums = restored
+        accumulator = snapshot.accumulator
+        gravity = snapshot.gravity
+        bobRestitution = snapshot.bobRestitution
+        if let selectedID, !pendulums.contains(where: { $0.id == selectedID }) {
+            self.selectedID = nil
+        }
+    }
+
+    /// The bobs' recorded paths, for the walkable tube — the 3-D swing
+    /// traced out in the room. The lower bob is the one worth watching
+    /// on a double pendulum, which is what `bobWorld` already means.
+    func capsuleRecordedPaths(stride: Int = 4) -> [[SIMD3<Float>]] {
+        guard scrubTime != nil, let span = capsule.span else { return [] }
+        var paths: [UUID: [SIMD3<Float>]] = [:]
+        for frame in capsule.frames(in: span, stride: stride) {
+            for pendulum in frame.snapshot.pendulums {
+                let point = SIMD3<Float>(pendulum.bobWorld)
+                if let last = paths[pendulum.id]?.last,
+                   simd_distance(last, point) < 0.004 { continue }
+                paths[pendulum.id, default: []].append(point)
+            }
+        }
+        return paths.values.filter { $0.count >= 2 }
     }
 }

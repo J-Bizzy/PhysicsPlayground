@@ -30,7 +30,7 @@ enum CircuitsModule {
             firstRunHint: "The loop in front of you is live — pinch the switch lever to break it. Pull parts out of the racks on either side of you and drop them so copper ends nearly touch: they connect themselves. Pull an orange end grip to aim or stretch a part; pinch two copper terminals to wire across a distance; the trash button removes a selected part. visionOS will ask to use your room so the bench can stand in it.",
             legend: legend,
             isPaused: { appModel.circuitsModel.isPaused },
-            togglePause: { appModel.circuitsModel.isPaused.toggle() },
+            togglePause: { appModel.circuitsModel.togglePauseRespectingScrub() },
             makeScene: {
                 AnyView(
                     CircuitsSpaceView()
@@ -38,7 +38,7 @@ enum CircuitsModule {
                 )
             },
             captureReadings: { readings(appModel: appModel) },
-            timeScrub: .inert,
+            timeScrub: .init(model: appModel.circuitsModel),
             reset: { appModel.circuitsModel.reset() }
         )
     }
