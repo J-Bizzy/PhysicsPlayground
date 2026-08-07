@@ -557,16 +557,30 @@ file). The new well and the standing script:
 
 ### The Time Capsule (2026-08-07) — new, and none of it is verifiable from the CLI
 
-Every lab records its last 30 seconds. Pause and the Time Rail unfolds
-in front of the apparatus; the bead is "seconds ago".
+Every lab records its last 30 seconds. Pause and a REEL appears in front
+of the apparatus with the recording wound on it; pinch the reel and the
+rail draws out like tape, its bead reading "seconds ago".
 
-- [ ] **The scrub itself.** In Projectiles, throw a ball, let it bounce,
-      then pinch the palette's pause petal. The rail should fade in
-      below the physics with the bead at the right-hand end ("now") over
-      a subtitle counting what is recorded. Drag the bead left: the
+- [ ] **The reel is all a pause shows.** In Projectiles, throw a ball,
+      let it bounce, then pinch the palette's pause petal. What should
+      arrive is one small machined reel under a "Time capsule"
+      nameplate — NOT the rail. Judge whether it reads as an object
+      worth pinching, and whether at 96 mm it is big enough to hit and
+      small enough not to be furniture.
+- [ ] **The draw.** Pinch the reel. The rail should come out of it to
+      the right, sliding and fading up together, with the plates
+      following. Pinch the reel again and it should wind back in.
+      Judge the speed: the whole draw is about a third of a second, and
+      it should read as tape being pulled, not as a panel appearing.
+- [ ] **The scrub itself.** With the tape out, drag the bead left: the
       whole room should run backwards — the ball retraces its arc and
       the bounce un-happens — landing on recorded frames, never sliding
       between them.
+- [ ] **The reel is a readout.** While scrubbing, watch the reel rather
+      than the bead: it should turn as the tape runs out, about 52° a
+      second of recording, and its three ports make the rotation
+      legible. Check the nameplate stays upright while it does (it
+      rolled over onto its side in the first build).
 - [ ] **Walk into the frozen instant.** Scrub to mid-flight and walk
       around the ball. The velocity and force arrows should be sculpted
       on it at THAT instant, and the recorded path should hang in the
@@ -599,12 +613,14 @@ in front of the apparatus; the bead is "seconds ago".
 - [ ] **Capture a scrubbed instant.** With the room frozen in its past,
       tap the notebook petal. The entry should record the physics of the
       instant on screen, not of the live present.
-- [ ] **The rail's placement.** It stands at chest height in front of
-      the apparatus. It was placed against the simulator's fixed
-      viewport, which is not a wearer's head — judge whether it lands
-      where you would look after pausing, and whether it ever gets
-      between you and the physics. (It exists only while paused, so it
-      should never obstruct a live grab.)
+- [ ] **The rail's placement.** The reel stands at chest height in front
+      of the apparatus and the rail draws out to its right. Both were
+      placed against the simulator's fixed viewport, which is not a
+      wearer's head — judge whether the reel lands where you would look
+      after pausing, whether the drawn-out rail is comfortably reachable
+      from where the reel is, and whether either ever gets between you
+      and the physics. (They exist only while paused, so neither should
+      obstruct a live grab.)
 
 - [ ] **The room tone, fourth recipe (2026-08-05).** Switch "Lab room
       tone" on and stand in any module for two minutes. It should read

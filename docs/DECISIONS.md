@@ -16,6 +16,52 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-07 — The rail goes back on its reel
+
+**Decision:** Owner's call, the same day the Time Capsule shipped. The
+Time Rail no longer unfolds by itself on pause. What a pause puts in
+the room is a modelled **reel** — 96 mm, three ports, the recording
+wound between its flanges — under a "Time capsule" nameplate. A pinch
+draws the rail out of it like tape; a second pinch winds it in. The
+tape winds itself back in whenever the instrument leaves, so every
+pause opens on the reel.
+
+**Context:** The owner's words were that they did not want the feature
+"always visible". The first build made pause mean *a 34 cm rail, a
+value plate, a subtitle and three verb plates arrive, in every lab,
+every time* — an instrument permanently occupying the room on behalf of
+a capability most pauses do not use. That is the panel mistake in a new
+costume: not a flat surface this time, but the same failure to make a
+capability ask before it takes the room.
+
+**Why a reel and not a lid, a drawer or a button.** A container would
+have solved the visibility problem and taught nothing. A reel is not a
+box the feature hides in — it IS the feature, stated as an object: the
+last thirty seconds are wound on it, and the rail is that tape drawn
+out. Nothing has to label what the control does, the draw animation is
+the metaphor explaining itself, and — the part that made it the right
+answer rather than a nice one — **the reel turns as you scrub.** The
+closed object is a readout. That is the same law every other control
+here obeys: where the bead sits IS the value.
+
+**Consequences.** `Tools/timereel.py` joins the checked-in Blender
+scripts, so the asset is a reviewable diff rather than a binary
+somebody once made. The reel is a MOUNT with a spinning child, because
+the first build hung the nameplate on the spinning part and scrubbing
+a second rolled the words onto their side. A drag is refused until the
+tape is fully out, since mid-draw the rail's root is still sliding and
+the mapping under a hand would be moving. `-scrubBack` now draws the
+tape out as well as scrubbing — the simulator has no finger to pinch
+the reel with, and the standing rule is that an argument reaches a
+control a hand could also reach; photographing the reel CLOSED needs no
+argument at all, because that is what a pause looks like.
+
+**What this costs.** One more pinch before the rail is usable. Accepted
+knowingly: the alternative was a permanent instrument, and the reel is
+discoverable in the way this app has decided things should be — it is
+an object, it wears its name, and it is the only new thing in the room
+when you pause.
+
 ## 2026-08-07 — The Time Capsule: pause becomes a place you can walk around in
 
 **Decision:** Every module continuously records the last 30 seconds of

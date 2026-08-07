@@ -54,15 +54,43 @@ final class TimeRail {
     /// stays folded until there is at least this much to scrub.
     static let minimumSpan = 0.5
 
+    /// Where the reel is mounted, relative to `root` — to the LEFT of
+    /// where the rail lies, because the rail is tape drawn off it.
+    /// Everything else keeps the coordinates it always had, so the OPEN
+    /// assembly stands exactly where the always-on rail used to.
+    static let reelOffset = SIMD3<Float>(-0.24, 0, 0)
+    /// How far the reel turns per second of recording scrubbed. About
+    /// 52° a second, so the full 30 s window is four and a bit turns —
+    /// fast enough that a small drag visibly moves it, slow enough that
+    /// the ports never strobe.
+    static let radiansPerSecond: Float = 0.9
+
     private let controls: TimeScrubControls
     private let isPaused: () -> Bool
     private let track: SpatialTrackControl
     private let plates: SpatialActionBank
+    /// The reel's MOUNT: where it hangs, what a pinch lands on, and what
+    /// carries its nameplate. It never turns.
+    private let reel = Entity()
+    /// The part that spins. Separated from the mount because the first
+    /// build hung the nameplate on the spinning entity, and scrubbing
+    /// back a second rolled the words over onto their side.
+    private let spindle = Entity()
 
     /// 0 folded, 1 out. An opacity ramp, never a scale: scaling a track
     /// stretches the rail without stretching the range it maps.
     private var visibility: Float = 0
     var isVisible: Bool { visibility > 0.02 }
+
+    /// Whether the tape has been drawn off the reel. The reel is what is
+    /// on screen while paused; the rail is what a pinch asks for.
+    private(set) var isOpen = false
+    /// 0 wound, 1 drawn out. Separate from `visibility`, which is the
+    /// whole instrument arriving and leaving.
+    private var openness: Float = 0
+    /// True once the rail is out far enough to be operated. A drag part
+    /// way through the draw would read a mapping that is still moving.
+    var isDrawnOut: Bool { openness > 0.98 }
 
     var subscription: EventSubscription?
 
@@ -119,8 +147,56 @@ final class TimeRail {
         plates.root.position = [0.34 / 2 + 0.11, 0, 0]
         root.addChild(plates.root)
 
+        buildReel(accent: accent)
+
         root.position = Self.home
         setVisibility(0)
+        applyOpenness()
+    }
+
+    /// The reel: the modelled object the recording is wound on, and the
+    /// only thing on screen until it is pinched.
+    ///
+    /// `TimeReel.usdz`, built by `Tools/timereel.py`. If the asset ever
+    /// fails to load the reel is still a real, tappable object — a
+    /// machined disc of the same size — because a control that silently
+    /// becomes nothing is worse than a plain one.
+    private func buildReel(accent: UIColor) {
+        reel.name = "time-reel"
+        if let loaded = try? Entity.load(named: "TimeReel") {
+            spindle.addChild(loaded)
+        } else {
+            let fallback = ModelEntity(
+                mesh: .generateCylinder(height: 0.020, radius: 0.048),
+                materials: [Materials.machined(UIColor(white: 0.31, alpha: 1))])
+            fallback.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+            spindle.addChild(fallback)
+        }
+        reel.addChild(spindle)
+        reel.position = Self.reelOffset
+        reel.components.set(InputTargetComponent())
+        // Sized to the reel and no larger, per the standing rule: an
+        // input collider bigger than the thing it represents is the
+        // invisible-scale-plate failure again.
+        reel.components.set(CollisionComponent(
+            shapes: [.generateSphere(radius: 0.052)]))
+        reel.components.set(HoverEffectComponent())
+        reel.components.set(GroundingShadowComponent(castsShadow: true))
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = "Time capsule. Pinch to draw out the recording."
+        reel.components.set(accessibility)
+
+        // The house nameplate under it, the same treatment the palette
+        // bead wears: an unlabelled disc asks to be pinched on faith,
+        // and the bead learned that lesson already.
+        let plate = HubScene.namePlate("Time capsule",
+                                       accent: UIColor(white: 0.95, alpha: 1),
+                                       size: 0.011)
+        plate.position = [0, -0.072, 0]
+        reel.addChild(plate)
+
+        root.addChild(reel)
     }
 
     /// Whether the rail should be out: paused, with a recording worth
@@ -152,27 +228,95 @@ final class TimeRail {
             if abs(visibility - target) < 0.01 { visibility = target }
             setVisibility(visibility)
         }
+        // The tape winds itself back in when the instrument leaves, so
+        // the next pause opens on a reel rather than on whatever the
+        // last one was left showing.
+        if !wantsPresence, isOpen { isOpen = false }
         guard isVisible else { return }
 
+        let drawTarget: Float = isOpen ? 1 : 0
+        if openness != drawTarget {
+            let rate = Float(min(dt * 5, 1))
+            openness += (drawTarget - openness) * rate
+            if abs(openness - drawTarget) < 0.005 { openness = drawTarget }
+            applyOpenness()
+        }
+
+        // The reel turns with the scrub: wound at "now", unwinding as the
+        // bead goes back. The closed object is a readout too, which is
+        // the same law every control here obeys — where the bead sits IS
+        // the value.
+        let secondsBack = Float(secondsScrubbedBack)
+        spindle.orientation = simd_quatf(
+            angle: secondsBack * Self.radiansPerSecond, axis: [0, 0, 1])
+
+        guard openness > 0.02 else { return }
         track.refresh()
         // The plates lay themselves out relative to their own root; the
         // rail already faces the viewer, so they inherit its yaw.
         plates.update(anchor: plates.root.position, viewer: nil, dt: dt)
     }
 
+    /// How far back the scrub currently stands, in seconds. Zero while
+    /// live — the reel is fully wound.
+    private var secondsScrubbedBack: Double {
+        guard let time = controls.scrubTime(), let span = controls.span()
+        else { return 0 }
+        return span.upperBound - time
+    }
+
+    /// Draws the tape out, or winds it in: the rail and its plates slide
+    /// from behind the reel to their places and fade up as they go.
+    private func applyOpenness() {
+        let eased = openness * openness * (3 - 2 * openness)
+        let from = Self.reelOffset.x
+        track.root.position.x = from + (0 - from) * eased
+        plates.root.position.x = from + ((0.34 / 2 + 0.11) - from) * eased
+        track.root.components.set(OpacityComponent(opacity: eased))
+        plates.root.components.set(OpacityComponent(opacity: eased))
+        let out = eased > 0.02
+        track.isEnabled = out && isVisible
+        if !out { plates.root.isEnabled = false }
+    }
+
     private func setVisibility(_ value: Float) {
         root.components.set(OpacityComponent(opacity: value))
         let enabled = value > 0.02
         root.isEnabled = enabled
-        track.isEnabled = enabled
+        track.isEnabled = enabled && openness > 0.02
     }
 
     // MARK: Input routing (the mounting view's gestures land here)
 
-    /// True when the tap hit one of the rail's plates.
+    /// True when the tap hit the reel (which draws the tape out or winds
+    /// it back in) or one of the rail's plates.
+    ///
+    /// The reel is tested FIRST and by walking up from whatever was hit,
+    /// the same contract every station in this app keeps — a tap on its
+    /// nameplate is a tap on the reel.
+    @discardableResult
     func handleTap(_ entity: Entity) -> Bool {
         guard isVisible else { return false }
+        if owns(entity, under: reel) {
+            isOpen.toggle()
+            SoundPalette.play(.pop, on: reel, volume: 0.45)
+            return true
+        }
+        guard isDrawnOut else { return false }
         return plates.handleTap(entity)
+    }
+
+    /// Draws the tape out or winds it in without a pinch — for the debug
+    /// launch arguments, and for tests, which have no hands either.
+    func setOpen(_ open: Bool) { isOpen = open }
+
+    private func owns(_ entity: Entity, under ancestor: Entity) -> Bool {
+        var current: Entity? = entity
+        while let candidate = current {
+            if candidate === ancestor { return true }
+            current = candidate.parent
+        }
+        return false
     }
 
     /// Routes a drag on the rail. `handWorld` is in scene space; the rail
@@ -180,7 +324,10 @@ final class TimeRail {
     /// rail actually stands — offset, yaw and all.
     @discardableResult
     func handleDrag(entity: Entity, handWorld: SIMD3<Double>) -> Bool {
-        guard isVisible else { return false }
+        // Only once the tape is fully out: mid-draw the rail is still
+        // sliding, and a drag against a moving root would read a mapping
+        // that is itself in motion.
+        guard isVisible, isDrawnOut else { return false }
         guard track.isAdjusting || track.owns(entity) else { return false }
         let local = root.orientation.inverse.act(
             SIMD3<Float>(handWorld) - root.position)
@@ -218,16 +365,22 @@ struct TimeRailView: View {
             }
 
             #if DEBUG
-            // The simulator cannot pinch. `-pauseAfter 4 -scrubBack 1.5`
-            // runs the experiment, pauses it, then scrubs the room back
-            // 1.5 s; `-scrubStep -3` applies three frame-steps on top —
-            // photographing the mapping, not just the rail.
+            // The simulator cannot pinch, and the reel is now the only
+            // thing a pause puts on screen — so `-scrubBack` DRAWS THE
+            // TAPE OUT as well as scrubbing. That is the whole point of
+            // these arguments: reach a control a hand could also reach.
+            // `-pauseAfter 4 -scrubBack 1.5` runs the experiment, pauses
+            // it, pinches the reel and scrubs back 1.5 s; `-scrubStep -3`
+            // applies three frame-steps on top, photographing the
+            // mapping rather than just the rail. To photograph the reel
+            // CLOSED — its resting state — pass `-pauseAfter` alone,
+            // because that IS what a pause looks like.
             let back = UserDefaults.standard.double(forKey: "scrubBack")
             if back > 0 {
                 let scrub = module.timeScrub
                 let isPaused = module.isPaused
                 let steps = UserDefaults.standard.integer(forKey: "scrubStep")
-                Task {
+                Task { [weak made] in
                     var paused = false
                     for _ in 0..<300 where !paused {
                         paused = isPaused()
@@ -238,6 +391,7 @@ struct TimeRailView: View {
                     // Only ever scrub a pause that actually happened —
                     // this argument STAGES a state, it must not create one.
                     guard paused else { return }
+                    made?.setOpen(true)
                     scrub.scrub(back)
                     if steps != 0 { scrub.stepFrames(steps) }
                 }
