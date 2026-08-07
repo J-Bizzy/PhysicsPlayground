@@ -30,9 +30,24 @@ import simd
 final class TimeRail {
     let root = Entity()
 
-    /// Where the rail stands, before the lab-placement offset: the front
-    /// hem of the default 0.9 m apparatus cube, below the physics.
-    static let home = SIMD3<Float>(0, 0.92, -0.50)
+    /// Where the rail stands, before the lab-placement offset: centred
+    /// just under and in front of the apparatus, chest height.
+    ///
+    /// MEASURED, and the first three guesses were wrong in the same
+    /// direction. (0, 0.92, −0.50), (0, 1.02, −0.72) and (0, 1.12, −0.80)
+    /// sit 49°, 34° and 28° below a 1.5 m eye line; the simulator's fixed
+    /// viewport is about 25° tall below the horizon, so all three
+    /// photographed as a scrubbed room with no visible control. What
+    /// settled it was logging `visualBounds` — the rail was in the scene,
+    /// enabled and opaque the whole time, which ruled out every rendering
+    /// theory and left geometry.
+    ///
+    /// This sits ~15° down, which frames the rail AND the plate column
+    /// beside it: clear of the physics overhead, inside the frame, at a
+    /// distance a hand reaches. Standing under the apparatus is safe
+    /// precisely because the rail EXISTS ONLY WHILE PAUSED — it can
+    /// never come between a hand and live physics.
+    static let home = SIMD3<Float>(0, 1.20, -1.20)
     /// The capsule window the rail maps, newest at the right-hand end.
     static let range = -30.0...0.0
     /// A rail over an empty recording is a control over nothing — it
