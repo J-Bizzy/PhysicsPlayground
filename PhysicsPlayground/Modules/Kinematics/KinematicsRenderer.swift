@@ -105,6 +105,22 @@ final class KinematicsRenderer {
 
     private var arcPipeline: GeometryPipeline<[SIMD3<Float>], ArcTube>?
 
+    // The Time Capsule's recorded paths: every flight's actual arc across
+    // the recorded window, drawn as a walkable tube while the room is
+    // scrubbed. In the balls' own orange — this is a trajectory that
+    // HAPPENED, where the white arc is one that is predicted — and hidden
+    // the moment the room runs again.
+    private let pathEntity = ModelEntity()
+    private let pathCasingEntity = ModelEntity()
+    private let pathMaterial: UnlitMaterial
+    private let pathCasingMaterial =
+        Materials.contrastLine(DesignTokens.Palette.projectileUI).casing
+    private nonisolated static let pathRadius: Float = 0.0035
+    private var pathPipeline: GeometryPipeline<[[SIMD3<Float>]], ArcTube>?
+    /// The scrub nonce the tube was last built for. Nothing records while
+    /// paused, so the recorded window only changes when a restore does.
+    private var lastPathNonce: Int?
+
     // Spatial flight numbers: the pod's headline stats living IN the
     // room — peak height floats at the arc's apex (with a drop line
     // showing what the number measures), range + flight time sit on the
@@ -179,6 +195,15 @@ final class KinematicsRenderer {
         self.arcMaterial = arcMaterial
         root.addChild(arcCasingEntity)
         root.addChild(arcEntity)
+
+        // The recorded paths, same casing recipe, disabled until a scrub.
+        var recorded = UnlitMaterial(color: DesignTokens.Palette.projectileUI)
+        recorded.blending = .transparent(opacity: 0.6)
+        pathMaterial = recorded
+        pathEntity.isEnabled = false
+        pathCasingEntity.isEnabled = false
+        root.addChild(pathCasingEntity)
+        root.addChild(pathEntity)
 
         // Balls: unit sphere scaled per projectile, grabbable for throwing.
         let ballMesh = MeshResource.generateSphere(radius: Self.baseBallRadius)
@@ -290,6 +315,17 @@ final class KinematicsRenderer {
                         radius: Materials.casingRadius(forCore: Self.arcRadius)))
             },
             apply: { [weak self] in self?.applyArc($0) }
+        )
+
+        pathPipeline = GeometryPipeline(
+            compute: { lines in
+                ArcTube(
+                    core: TubeMesh.buffers(lines: lines, radius: Self.pathRadius),
+                    casing: TubeMesh.buffers(
+                        lines: lines,
+                        radius: Materials.casingRadius(forCore: Self.pathRadius)))
+            },
+            apply: { [weak self] in self?.applyRecordedPaths($0) }
         )
 
         buildFlightAnnotations()
@@ -434,6 +470,39 @@ final class KinematicsRenderer {
         }
     }
 
+    private func applyRecordedPaths(_ tube: ArcTube) {
+        if let mesh = TubeMesh.mesh(from: tube.core) {
+            pathEntity.model = ModelComponent(mesh: mesh, materials: [pathMaterial])
+        } else {
+            pathEntity.model = nil
+        }
+        if let casingMesh = TubeMesh.mesh(from: tube.casing) {
+            pathCasingEntity.model = ModelComponent(mesh: casingMesh,
+                                                    materials: [pathCasingMaterial])
+        } else {
+            pathCasingEntity.model = nil
+        }
+    }
+
+    /// The recorded-path tube exists exactly while the room is scrubbed.
+    /// Rebuilt only when the restore nonce moves — nothing records while
+    /// paused, so a scrub drag changes which instant the BALLS show, not
+    /// the window the tube draws.
+    private func syncRecordedPaths(_ model: KinematicsModel) {
+        guard model.scrubTime != nil else {
+            pathEntity.isEnabled = false
+            pathCasingEntity.isEnabled = false
+            lastPathNonce = nil
+            return
+        }
+        if lastPathNonce == nil {
+            pathPipeline?.submit(model.capsuleRecordedPaths())
+        }
+        lastPathNonce = model.scrubNonce
+        pathEntity.isEnabled = true
+        pathCasingEntity.isEnabled = true
+    }
+
     // MARK: Per-frame tick (from SceneEvents.Update)
 
     // MARK: The catch readout
@@ -543,6 +612,7 @@ final class KinematicsRenderer {
 
         syncFlights(model.flights)
         syncRings(model.rings)
+        syncRecordedPaths(model)
     }
 
     // MARK: Balls, dots, shadows

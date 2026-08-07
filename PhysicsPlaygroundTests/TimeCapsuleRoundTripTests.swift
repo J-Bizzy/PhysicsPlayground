@@ -212,6 +212,26 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
                        accuracy: 1e-12)
     }
 
+    /// The recorded-path polylines the tube is built from: present only
+    /// while scrubbed, one per flight, tracing the recorded window.
+    func testRecordedPathsExistOnlyWhileScrubbed() {
+        let model = bareModel()
+        model.fire()
+        for _ in 0..<120 { model.step(dt: dt) }
+        XCTAssertTrue(model.capsuleRecordedPaths().isEmpty,
+                      "A live room draws no recorded path")
+
+        model.isPaused = true
+        model.scrub(toOffset: 0.5)
+        let paths = model.capsuleRecordedPaths()
+        XCTAssertEqual(paths.count, 1)
+        XCTAssertGreaterThan(paths[0].count, 10)
+        // The polyline is the recorded arc: it starts where the muzzle
+        // was, not wherever the scrub happens to stand.
+        let start = SIMD3<Double>(paths[0][0])
+        XCTAssertLessThan(simd_distance(start, model.muzzlePoint), 0.1)
+    }
+
     /// Every restore bumps the scrub nonce — the signal renderers use to
     /// reseed presentation caches after a discontinuous state jump.
     func testScrubBumpsNonce() {

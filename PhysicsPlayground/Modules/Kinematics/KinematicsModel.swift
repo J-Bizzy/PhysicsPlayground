@@ -891,6 +891,27 @@ extension KinematicsModel: TimeCapsuleRecording {
         )
     }
 
+    /// The recorded flight paths across the whole capsule window, for
+    /// the walkable tube the renderer draws while scrubbed. One polyline
+    /// per flight that was airborne or rolling at any recorded instant,
+    /// strided down from the 90 Hz recording (the tube does not need a
+    /// vertex per physics tick), with near-coincident points dropped so
+    /// a ball that rolls to rest does not stack degenerate segments.
+    func capsuleRecordedPaths(stride: Int = 6) -> [[SIMD3<Float>]] {
+        guard scrubTime != nil, let span = capsule.span else { return [] }
+        var paths: [UUID: [SIMD3<Float>]] = [:]
+        for frame in capsule.frames(in: span, stride: stride) {
+            for flight in frame.snapshot.flights
+            where flight.status == .flying || flight.status == .rolling {
+                let point = SIMD3<Float>(flight.state.position)
+                if let last = paths[flight.id]?.last,
+                   simd_distance(last, point) < 0.004 { continue }
+                paths[flight.id, default: []].append(point)
+            }
+        }
+        return paths.values.filter { $0.count >= 2 }
+    }
+
     func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
         var restored = snapshot.flights
         // The past hand is gone: a ball that was held THEN comes back
