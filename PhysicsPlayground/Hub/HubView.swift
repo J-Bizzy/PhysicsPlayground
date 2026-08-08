@@ -23,10 +23,16 @@
 //     how this app satisfies it. Hidden for the entire time the app is
 //     in its normal state, that guarantee was unmet in normal use — and
 //     it was also the safety net under the only-way-into-a-lab problem.
-//  2. IT IS THE APP'S ONLY VIEW OF PROGRESS. `AppProgressLine` carries
-//     the tally, the streak and the single next step — the whole reason
-//     `nextStep` was written was to make the hub "somewhere you come
-//     back TO" — and it was invisible whenever the hub was actually up.
+//  2. IT WAS THE APP'S ONLY VIEW OF PROGRESS. `AppProgressLine` carries
+//     the tally, the streak and the single next step, and it was
+//     invisible whenever the hub was actually up.
+//
+//     NO LONGER TRUE OF THIS FILE, 2026-08-08: the progress line moved
+//     to `ExperimentsView`, behind the Gallery bar's flask button, on
+//     the owner's call that the experiments should be something you ask
+//     for rather than something you look at. Point 1 above is untouched
+//     and is still why this window must not blank itself — the catalog
+//     is the accessibility path whatever else it carries.
 //
 
 import SwiftUI
@@ -258,7 +264,17 @@ struct HubCatalogList: View {
             // instruction. What was missing is the answer to "what next,
             // anywhere" — and that is a question you ask of a catalog,
             // not of one exhibit.
-            AppProgressLine()
+            // GRAVE, 2026-08-08: `AppProgressLine` stood here — the
+            // app-wide tally and the single next step, in the catalog,
+            // whether or not anyone had asked for it. Owner's call: the
+            // experiments go behind a button beside Settings and the Lab
+            // Notebook. Both halves now live in `ExperimentsView`, which
+            // also became the first surface to show the twenty authored
+            // STEPS rather than counting them.
+            //
+            // The view itself is kept — it is still the right shape, and
+            // the reasoning above it about tally-versus-direction is the
+            // reasoning `ExperimentsView` follows.
             ForEach(HubDomain.allCases) { domain in
                 let modules = domain.moduleIDs.compactMap { byID[$0] }
                 if !modules.isEmpty {

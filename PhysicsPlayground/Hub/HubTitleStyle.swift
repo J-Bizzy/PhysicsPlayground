@@ -107,11 +107,26 @@ enum HubTitleStyle {
             blend($0, toward: UIColor(white: 0.72, alpha: 1), by: 0.30)
         } ?? UIColor(white: 0.78, alpha: 1)
         var metal = Materials.machined(stock)
-        // A low emissive floor so the letters never fall to pure black in
+        // An emissive floor so the letters never fall to pure black in
         // the shaded parts of the extrusion — the anodised colour stays
         // legible all the way round the bevel.
+        //
+        // 0.16 UNTIL 2026-08-08, and the owner's word for what it needed
+        // was "pop". The problem this solves is specific to a headset:
+        // the plaque is machined metal, so most of what you see is
+        // REFLECTED light, and the gallery is drawn over whatever room
+        // the wearer is standing in. Against a bright wall the highlights
+        // and the passthrough behind them land at nearly the same
+        // luminance and the mark goes soft — the same failure the colour
+        // it replaced had, one step further along.
+        //
+        // Lifting the floor to 0.34 makes the letterform carry its own
+        // light rather than borrowing the room's, so the shape holds at
+        // any wall brightness. It stays a floor, not a glow: the
+        // specular highlight is still what shapes the bevel, which is
+        // what keeps it reading as metal rather than as a lit sign.
         metal.emissiveColor = .init(color: stock)
-        metal.emissiveIntensity = 0.16
+        metal.emissiveIntensity = 0.34
 
         let model = ModelEntity(mesh: mesh, materials: [metal])
         model.position = SIMD3(-(bounds.min.x + bounds.max.x) / 2,

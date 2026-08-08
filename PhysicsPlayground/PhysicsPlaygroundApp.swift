@@ -66,6 +66,18 @@ struct PhysicsPlaygroundApp: App {
         .windowResizability(.contentSize)
         .defaultWindowPlacement { _, _ in WindowPlacement(.utilityPanel) }
 
+        // Experiments: behind the gallery bar's flask, beside Settings
+        // and the Lab Notebook (owner's call 2026-08-08). Tall, because
+        // it is the first surface that lists every authored step rather
+        // than counting them.
+        WindowGroup(id: ExperimentsView.windowID) {
+            ExperimentsView()
+                .environment(appModel)
+        }
+        .defaultSize(width: 480, height: 760)
+        .windowResizability(.contentSize)
+        .defaultWindowPlacement { _, _ in WindowPlacement(.utilityPanel) }
+
         // About: behind the home's info button.
         WindowGroup(id: AboutView.windowID) {
             AboutView()

@@ -61,11 +61,17 @@ struct PlaygroundSpaceView: View {
                         // module is paused with a recording worth scrubbing.
                         TimeRailView(module: module)
                             .id("time-rail-\(module.id)")
-                        // The one-time teach, beside the apparatus it
-                        // describes rather than in a window that may be
-                        // behind the reader.
-                        FirstRunHintView(module: module)
-                            .id("first-run-\(module.id)")
+                        // GRAVE, 2026-08-08: `FirstRunHint` stood a card
+                        // at head height on the left of every module,
+                        // naming the lab and saying "pinch to explore",
+                        // until it was dismissed. Owner's call — it is
+                        // unnecessary and it is in the way. It was added
+                        // on 2026-08-07 to move the first-run teach out
+                        // of the window and into the room; the answer
+                        // turns out to be that the teach did not need a
+                        // surface of its own. `AppSettings.seenHints`
+                        // stays: the podium hint in the Gallery still
+                        // uses it.
                         // The experiments watcher: notices when the physics
                         // reaches a goal and chimes exactly once.
                         ExperimentCheckerView(moduleID: module.id)

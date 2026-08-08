@@ -165,7 +165,8 @@ struct HubSpaceView: View {
                 HubUtilityBar(
                     openSettings: { openWindow(id: SettingsView.windowID) },
                     openAbout: { openWindow(id: AboutView.windowID) },
-                    openNotebook: { openWindow(id: NotebookView.windowID) })
+                    openNotebook: { openWindow(id: NotebookView.windowID) },
+                    openExperiments: { openWindow(id: ExperimentsView.windowID) })
             }
             Attachment(id: "podiumHint") {
                 // What the podium is FOR, said once, quietly, where the
@@ -473,7 +474,12 @@ final class HubScene {
         arcRadius = distance
         arcHeight = Self.arcHeightDefault
 
-        titlePosition = SIMD3(0, arcHeight + 0.70, -(arcRadius + 0.45))
+        // 0.70 ABOVE THE ARC UNTIL 2026-08-08, which put the lockup high
+        // enough that reading it was a neck movement rather than a
+        // glance. Owner's call: bring it down. 0.52 keeps it clear of
+        // the tallest exhibit's halo while landing it in the band the
+        // eye is already in when looking at the terraces.
+        titlePosition = SIMD3(0, arcHeight + 0.52, -(arcRadius + 0.45))
         buildBubbleTitle()
         buildPodium(distance: distance)
         buildGalleryBar(distance: distance)
@@ -1866,9 +1872,20 @@ private struct HubUtilityBar: View {
     let openSettings: () -> Void
     let openAbout: () -> Void
     let openNotebook: () -> Void
+    let openExperiments: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
+            // FIRST, because it is the only one of the four you consult
+            // mid-session rather than once. Settings and About are
+            // errands; the experiments are the reason to come back.
+            Button(action: openExperiments) {
+                Image(systemName: "flask.fill")
+                    .font(.title3)
+            }
+            .accessibilityLabel("Experiments")
+            .accessibilityHint("What to try next, and everything there is to try")
+
             Button(action: openSettings) {
                 Image(systemName: "gearshape.fill")
                     .font(.title3)
