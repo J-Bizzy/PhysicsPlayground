@@ -36,7 +36,10 @@ struct CircuitsSpaceView: View {
     /// The parts palette: two blocks of sources on the flanks, one per
     /// component kind. See `CircuitsPartsLayout` for the geometry and
     /// for what it replaced.
-    @State private var palette: Well?
+    /// THE PARTS CABINET. Was two columns of wells, one on each flank,
+    /// standing eleven kinds of component in the room permanently —
+    /// whether or not anybody was building. Owner's call 2026-08-08.
+    @State private var drawer: PartsDrawer?
     /// Which probe a hand is carrying, if either.
     @State private var probeDrag: CircuitsModel.ProbeSlot?
     /// Carrying the meter itself: where its case was when the hand closed
@@ -149,6 +152,32 @@ struct CircuitsSpaceView: View {
     /// entirely OUTSIDE the bench's build volume (`buildHalfExtents.x` is
     /// 0.70) — see the note in `CircuitsInstrumentClearanceTests` about
     /// the furniture that is not.
+    /// THE RIGHT FLANK, where the meter used to stand — and the meter
+    /// is inside it now, so the flank holds one object instead of two.
+    ///
+    /// Relative to `benchPivot` like every other piece of this bench's
+    /// furniture. Its footprint is checked against the build volume and
+    /// its neighbours by `CircuitsInstrumentClearanceTests`; the cabinet
+    /// is 0.34 x 0.22 x 0.20 and rides out another 0.155 when open, and
+    /// BOTH states are in that test because a drawer that clears
+    /// everything shut and fouls something open is still a bug.
+    ///
+    /// x = 0.92 AND NOT 0.66, which is where the meter used to stand.
+    /// At 0.66 the cabinet buries 0.21 m INTO the build volume — a part
+    /// dragged to the bench's right edge (`buildHalfExtents.x` is 0.70)
+    /// would be inside a 0.34 m box carrying a collider, and every pinch
+    /// aimed at it would open the drawer instead. That is the shielding
+    /// failure the clearance rules exist to prevent, and it is the same
+    /// one the layers bank already has on the other flank. Repeating it
+    /// knowingly, in new furniture, with the checker sitting right there,
+    /// would have been indefensible.
+    ///
+    /// 0.92 clears the build volume by 0.05 and puts the nearest face
+    /// 0.98 m from a standing viewer, against a 1.25 limit — so it is
+    /// further out than the meter was and still a reach rather than a
+    /// step.
+    private static let drawerAnchor = SIMD3<Float>(0.92, -0.02, 0.14)
+
     private static let presetsAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-1.02, 0.48, 0.10)
     /// The column hangs below the tab, centred on this point — a bank
@@ -264,44 +293,53 @@ struct CircuitsSpaceView: View {
             presetsHandle.summary = { lastPreset?.displayName ?? "your bench" }
             renderer.root.addChild(presetsHandle.root)
 
-            // THE PARTS PALETTE, which used to be a glass tray at the
-            // bottom of the frame. Two blocks of sources on the flanks,
-            // above the furniture row — see `CircuitsPartsLayout` for
-            // the geometry and for the three things wrong with the tray.
+            // THE PARTS, IN ONE STRIP.
             //
-            // Under `root`, like every other instrument here, and unlike
-            // the tray: the tray hung off `viewRoot` and inflated to
-            // eight times its size somewhere under the floor whenever
-            // anybody used Electron View.
-            var partSpecs: [Well.Spec] = []
-            for flank in CircuitsPartsLayout.Flank.allCases {
-                let kinds = CircuitsPartsLayout.kinds(on: flank)
-                // MEASURED, not assumed. These are the renderer's own
-                // bodies at final size and they differ by a factor of
-                // three; the pitch has to come from the tallest one
-                // actually standing in this block. Building each preview
-                // once here to measure it is the cost — `Well` builds its
-                // own from the same closure, so what is measured and what
-                // is shown cannot drift.
-                let tallest = kinds.reduce(Float(0)) { tallest, kind in
-                    max(tallest, CircuitsRenderer.partPreview(for: kind)
-                        .visualBounds(relativeTo: nil).extents.y)
-                }
-                let pitch = CircuitsPartsLayout.rowPitch(tallestPart: tallest)
-                for (index, kind) in kinds.enumerated() {
-                    partSpecs.append(.init(
+            // `CircuitsPartsLayout` still says WHICH parts and in what
+            // order — sources first, then passives, then the things that
+            // do something — and it no longer says WHERE. Its flanks,
+            // columns, pitch and reach arithmetic all described two
+            // blocks standing in the room, and there is one cabinet now;
+            // `PartsDrawer` lays the strip out from its own mouth width.
+            //
+            // The two `kinds(on:)` lists are concatenated rather than
+            // merged into one array, because that grouping is the only
+            // part of the old layout that was about the COMPONENTS
+            // rather than about the room, and it is the order a strip
+            // should scroll in.
+            //
+            // GRAVE: `slot`, `rowPitch`, `reach` and `offAxisAngle` now
+            // have no callers in the app. They are left standing with
+            // `CircuitsPartsLayoutTests` because the reasoning in them —
+            // what a reach costs, what an off-axis angle costs — is the
+            // material for whatever this bench does next, and because
+            // deleting a tested file in the same commit that adds a
+            // cabinet is two changes wearing one hat.
+            let partSpecs: [Well.Spec] = CircuitsPartsLayout.Flank.allCases
+                .flatMap { CircuitsPartsLayout.kinds(on: $0) }
+                .map { kind in
+                    Well.Spec(
                         name: kind.rawValue,
                         tint: UIColor(DesignTokens.Palette.circuitsAccent),
                         label: kind.displayName,
                         preview: { CircuitsRenderer.partPreview(for: kind) },
-                        position: CircuitsPartsLayout.slot(
-                            flank, index: index, rowPitch: pitch),
-                        spawn: { model.add(kind, at: $0) }))
+                        position: .zero,
+                        spawn: { model.add(kind, at: $0) })
                 }
-            }
-            let parts = Well(partSpecs)
+            let parts = PartsDrawer(partSpecs)
+            parts.root.position = Self.drawerAnchor
             renderer.root.addChild(parts.root)
-            self.palette = parts
+            self.drawer = parts
+
+            // AND THE METER GOES IN IT. It stood beside the bench at all
+            // times; the owner's word was "intruding". Stowed in slot 0
+            // it comes out the way a part does, except that it is one
+            // object rather than a source, so pulling it re-parents the
+            // instrument instead of spawning a copy.
+            if let meter = self.meter {
+                meter.root.removeFromParent()
+                parts.stow(meter.root)
+            }
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
@@ -337,7 +375,10 @@ struct CircuitsSpaceView: View {
                     // new capability, not decoration: at the budget the
                     // tray's pinch did nothing at all and said nothing
                     // about it.
-                    palette?.update(dt: event.deltaTime)
+                    drawer?.update(
+                        dt: event.deltaTime,
+                        nearestHand: appModel.room.nearestFingertip(
+                            to: CircuitsRenderer.benchPivot + Self.drawerAnchor))
                     verbs?.update(anchor: Self.clearAnchor, viewer: viewer,
                                   dt: event.deltaTime,
                                   resetNonce: appModel.resetNonce,
@@ -475,6 +516,7 @@ struct CircuitsSpaceView: View {
                     // distance: a verb plate is never also a reach for
                     // the bench behind it, wherever it happens to stand.
                     if verbs?.handleTap(value.entity) == true { return }
+                    if drawer?.handleTap(value.entity) == true { return }
                     if presetsHandle.handleTap(value.entity) { return }
                     if presetsHandle.isOpen,
                        presets?.handleTap(value.entity) == true { return }
@@ -558,6 +600,19 @@ struct CircuitsSpaceView: View {
                         renderer.showRubberBand(
                             from: SIMD3<Float>(sourceComponent.terminalPosition(source.end)),
                             to: target.map { SIMD3<Float>($0.position) } ?? handF)
+                    } else if let drawer, drawer.isDragging {
+                        // Scrolling, or the frame a pull commits on. The
+                        // spec comes back exactly once — `PartsDrawerTests`
+                        // pins that, because returning it every frame
+                        // would put one component on the bench per frame.
+                        if let spec = drawer.updateDrag(hand: handF),
+                           let id = spec.spawn(hand) {
+                            spawnedPartID = id
+                            partDrag = RelativeDrag(name: id.uuidString,
+                                                    target: hand, hand: hand)
+                            renderer.previewComponentID = id
+                            model.beginCarry(id: id)
+                        }
                     } else if let partDrag {
                         applyCircuitDrag(partDrag, hand: hand)
                     }
@@ -566,6 +621,7 @@ struct CircuitsSpaceView: View {
                     probeDrag = nil
                     meterDrag = nil
                     bloom.endGrip()
+                    drawer?.endDrag()
                     defer {
                         renderer?.hideRubberBand()
                         renderer?.previewComponentID = nil
@@ -693,17 +749,17 @@ struct CircuitsSpaceView: View {
                 model.beginCarry(id: grip.componentID)
                 return
             }
-            if let id = palette?.pull(candidate, at: hand) {
-                // BORN AT THE FINGERTIPS, not at the source. The tray
-                // spawned its copy at the template's own position and
-                // then dragged it to the hand, which meant every new part
-                // began with a jump across the room from a slab at knee
-                // height. A well hands it to you where your hand already
-                // is, so making a part and moving a part are the same
-                // gesture — the point of the whole primitive.
-                spawnedPartID = id
-                partDrag = RelativeDrag(name: name, target: hand, hand: hand)
-                renderer.previewComponentID = id
+            // THE DRAWER CLAIMS THE DRAG BEFORE IT KNOWS WHAT IT IS.
+            //
+            // A well could spawn on the first frame, because a pinch on a
+            // well means exactly one thing. The drawer's strip answers a
+            // pinch two ways — scroll along it, or pull a part out of it
+            // — and which one this is cannot be known until the hand has
+            // travelled (see `DrawerGesture`). So the drag opens here and
+            // resolves in `onChanged`; the part is still born AT THE
+            // FINGERTIPS when it comes, which is the whole reason a well
+            // beat the old tray.
+            if drawer?.beginDrag(candidate, hand: SIMD3<Float>(hand)) == true {
                 return
             }
             if let id = UUID(uuidString: name),

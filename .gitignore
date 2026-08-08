@@ -2,3 +2,6 @@
 *.swp
 *.swo
 *~
+
+# Blender/Python bytecode from the Tools/ model generators
+Tools/__pycache__/

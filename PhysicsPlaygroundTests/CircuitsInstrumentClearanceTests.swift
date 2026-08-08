@@ -64,6 +64,14 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
             // hanging under it.
             ("presets tab", box([-1.02, 0.48, 0.10], SIMD3(0.09, 0.05, 0.05))),
             ("presets column", box([-1.02, 0.24, 0.10], fiveHigh)),
+            // THE PARTS CABINET, IN BOTH STATES. A drawer that clears
+            // everything shut and fouls something open is still a bug —
+            // it just waits for a pinch, exactly like the presets column
+            // and the Clear plate's armed label.
+            ("parts cabinet", box([0.92, -0.02, 0.14], SIMD3(0.17, 0.11, 0.10))),
+            ("parts cabinet open",
+             box([0.92, -0.02, 0.14 + Float(PartsDrawer.travel) / 2],
+                 SIMD3(0.17, 0.11, 0.10 + Double(PartsDrawer.travel) / 2))),
         ]
     }
 
@@ -92,17 +100,19 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
     /// would overlap something when unfolded is still a bug; it just
     /// waits for a pinch. Same reasoning as sizing the Clear plate on its
     /// armed label.
-    func testTheNewPresetsFurnitureObeysTheSharedClearanceRules() {
-        let presets = standingFurniture.filter { $0.name.hasPrefix("presets") }
+    func testTheFurniturePlacedWithTheCheckerObeysIt() {
         let violations = InstrumentClearance.violations(
-            instruments: presets + standingFurniture.filter {
-                !$0.name.hasPrefix("presets")
-            },
-            station: buildVolume,
-            margin: 0)
-        // Only the presets are this commit's to answer for — see
+            instruments: standingFurniture, station: buildVolume, margin: 0)
+        // The furniture ADDED with the checker in hand answers for
+        // itself; the layers bank predates it — see
         // `testTheOlderBenchFurnitureStandsInsideTheBuildVolume`.
-        let mine = violations.filter { $0.contains("presets") }
+        //
+        // The two cabinet states are one object, so they overlap each
+        // other by construction and that pair is not a finding.
+        let mine = violations.filter {
+            ($0.contains("presets") || $0.contains("cabinet"))
+                && !($0.contains("parts cabinet") && $0.contains("parts cabinet open"))
+        }
         XCTAssertTrue(mine.isEmpty, """
             The presets furniture breaks \(mine.count) of the shared rules:
             \(mine.joined(separator: "\n"))
