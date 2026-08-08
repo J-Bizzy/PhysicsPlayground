@@ -30,6 +30,30 @@
 //  the strength of the field it summons), what you MAKE is on the right
 //  (the wells).
 //
+//  TWO RAILS SINCE 2026-08-08, and the anchors below are now DERIVED
+//  rather than typed. The goal for this arc said to delete this file and
+//  replace it with a generic `InstrumentRail`; the code disagreed, and
+//  the code was right. What is generic here is the four invariants — and
+//  they were generic all along, sitting in the one module that had
+//  already been broken by a layout mistake while five others placed their
+//  furniture with bare literals and no check at all. Those moved to
+//  `InstrumentClearance`. What is NOT generic is which flank of the
+//  station each rail stands on, at what depth, facing which way; that is
+//  a judgement about this room and it stays here.
+//
+//  So the rail took the arithmetic and left the judgement, which is
+//  exactly the split the errors argue for: every mistake this file's
+//  tests ever caught was spacing between neighbours (half-extents
+//  rounded 0.21 instead of 0.2025, leaving 2.75 cm against a 3 cm
+//  margin; a rail held still while the bank above it grew downward).
+//  None of them was about which side of the room something was on.
+//
+//  NOTHING MOVED. The two rails reproduce every previous anchor to the
+//  millimetre, and `testTheRailsReproduceTheHandPlacedLayout` pins that
+//  — this was a change of authorship, not of arrangement, and a pilot
+//  that quietly shifted the furniture would have made the invariant
+//  tests meaningless as a safety net for it.
+//
 //  EVERY ANCHOR MOVED OUTWARD ON 2026-07-31, and none of them moved
 //  because they looked better there. The station widened from 0.62 to
 //  0.78 (see `FieldModel.regionHalfExtents`), and these four boxes are
@@ -55,16 +79,14 @@ import simd
 
 enum FieldInstrumentLayout {
 
-    /// The clearance every instrument keeps from the station, equal to
-    /// `resolveCharge`'s proximity-fallback radius. See the file comment.
-    static let stationMargin = 0.12
-
-    /// Where a standing user's head is taken to be, for reach checks.
-    static let viewer = SIMD3<Double>(0, 1.5, 0)
-
-    /// The furthest an instrument may sit from the viewer: past this you
-    /// are stepping toward your own controls rather than reaching.
-    static let maximumReach = 1.25
+    // GRAVES, 2026-08-08. `stationMargin`, `viewer` and `maximumReach`
+    // moved to `InstrumentClearance` — they were never facts about
+    // Electric Fields. Re-exported here because the module's own tests
+    // and comments name them, and because a reader arriving at this file
+    // should not have to know where they went.
+    static var stationMargin: Double { InstrumentClearance.stationMargin }
+    static var viewer: SIMD3<Double> { InstrumentClearance.viewer }
+    static var maximumReach: Double { InstrumentClearance.maximumReach }
 
     /// The physics volume the instruments must stay out of.
     static var station: StationBox {
@@ -72,124 +94,107 @@ enum FieldInstrumentLayout {
                    halfExtents: FieldModel.regionHalfExtents)
     }
 
-    // MARK: Left — what exists
+    // MARK: The two rails
 
-    /// The layers bank: FOUR plates in a column (`StackLayout` pitch
-    /// 0.066, so 0.198 m of plates), standing off the station's −x flank.
-    /// (Six until 2026-08-03, when the flux meter's two plates came out
-    /// with the meter.)
+    /// LEFT — what exists. The layers bank, and under it the strength of
+    /// the field its bottom plate summons, so the pair reads as one
+    /// instrument: turn the field on here, set it immediately below.
     ///
-    /// AT THE STATION'S OWN DEPTH (z = −0.9), not at its near edge. The
+    /// At the station's own depth (z = −0.9), not at its near edge. A
     /// first attempt put the furniture at z = −0.5, which is 61° off the
-    /// forward axis — out at the edge of vision, where a screenshot showed
-    /// the bank half out of frame. The station is 1.24 m wide, so nothing
-    /// outside it can be closer than about 40°; matching its depth is what
-    /// brings the instruments back into the same band as the apparatus
-    /// they belong to. Circuits' bank sits beside its bench for exactly
-    /// this reason, and says so.
+    /// forward axis — out at the edge of vision, where a screenshot
+    /// showed the bank half out of frame. The station is 1.24 m wide, so
+    /// nothing outside it can be closer than about 40°; matching its
+    /// depth brings the instruments into the same band as the apparatus
+    /// they belong to.
     ///
-    /// The box stays the six-plate size deliberately: a declared box
-    /// larger than the bank only makes every clearance check stricter,
-    /// and shrinking it buys nothing.
-    static let bankAnchor = SIMD3<Double>(-1.05, 1.42, -0.90)
+    /// The gap is 0.07 rather than the default 0.03 because these two
+    /// are a pair a hand works between, not a stack.
+    static let leftRail = InstrumentRail(
+        head: SIMD3(-1.05, 1.42, -0.90),
+        gap: 0.07,
+        items: [
+            // The box stays the six-plate size deliberately (four plates
+            // since 2026-08-03): a declared box larger than the bank only
+            // makes every clearance check stricter, and shrinking it buys
+            // nothing.
+            .init(name: "layers bank", halfExtents: SIMD3(0.15, 0.20, 0.15)),
+            // Forward and a millimetre out — see `InstrumentRail.Item.inset`
+            // for why this one is allowed to break the column.
+            .init(name: "B rail", halfExtents: SIMD3(0.16, 0.05, 0.07),
+                  inset: SIMD2(-0.01, 0.08)),
+        ])
+
+    /// RIGHT — what you make. The Clear plate caps a column of well
+    /// mouths.
+    ///
+    /// Unmaking belongs with making: the wells are where every charge in
+    /// the room came from, so the one control that removes them all
+    /// stands at the head of the same column. ABOVE rather than below,
+    /// and the two alternatives both fail on arithmetic this file already
+    /// has — below the column lands under y ≈ 1.05, which a screenshot
+    /// once found off the bottom of the frame; level with it and further
+    /// out in x runs past `maximumReach`, since the wells' own near face
+    /// is already only 0.14 clear of the station wall.
+    ///
+    /// The fit is genuinely tight. This is the 2 cm of slack the file
+    /// header warns about, being spent.
+    static let rightRail = InstrumentRail(
+        head: SIMD3(1.02, 1.71, -0.90),
+        gap: 0.04,
+        items: [
+            // Sized on the ARMED label as well as the resting one: a
+            // confirming plate swaps its nameplate to "Tap again", and a
+            // box sized only to "Clear all" grows on arming — straight
+            // into whatever it was carefully cleared of.
+            .init(name: "clear plate", halfExtents: SIMD3(0.13, 0.06, 0.08)),
+            // The four mouths as ONE object. Four at 0.095 pitch span
+            // 0.285, so 0.1425 + a 0.06 mouth radius = 0.2025 half-height.
+            // NOT 0.21: rounding it up left 2.75 cm against a 3 cm margin,
+            // invisible in any screenshot, and the exact class of error
+            // these boxes exist to make impossible.
+            .init(name: "wells", halfExtents: SIMD3(0.06, 0.2025, 0.06),
+                  inset: SIMD2(-0.06, 0)),
+        ])
+
+    // MARK: Derived anchors
+    //
+    // Everything below is read out of the rails. They are kept as named
+    // statics because the SpaceView asks for them by name, and because a
+    // caller reaching into `leftRail.items[1]` by index is the sort of
+    // thing that silently retargets when somebody inserts an instrument.
+
+    static var bankAnchor: SIMD3<Double> { leftRail.anchor("layers bank")! }
     static let bankHalfExtents = SIMD3<Double>(0.15, 0.20, 0.15)
 
-    /// The B-strength rail, directly under the bank's bottom plate —
-    /// under the very switch that summons it, so the pair reads as one
-    /// instrument: turn the field on here, set its strength immediately
-    /// below. (The bank's plates span y 1.23…1.61.)
-    ///
-    /// Dropped 1.13 → 1.10 with the bank's sixth plate: the two boxes
-    /// have to keep 3 cm apart, and holding the rail still while the bank
-    /// grew downward would have left 1 cm.
-    static let fieldTrackAnchor = SIMD3<Double>(-1.06, 1.10, -0.82)
+    static var fieldTrackAnchor: SIMD3<Double> { leftRail.anchor("B rail")! }
     static let fieldTrackHalfExtents = SIMD3<Double>(0.16, 0.05, 0.07)
     /// Faces the user across the station's corner, so the rail runs
     /// horizontally across their view rather than edge-on.
     static let fieldTrackNormal = SIMD3<Double>(0.93, 0, 0.50)
 
-    // MARK: Right — what you make
+    static var clearPlateAnchor: SIMD3<Double> { rightRail.anchor("clear plate")! }
+    static let clearPlateHalfExtents = SIMD3<Double>(0.13, 0.06, 0.08)
 
-    /// The well mouths, in a column.
+    /// The well mouths, spaced within the column the right rail places.
     ///
-    /// The column is hung from the TOP rather than centred, because the
-    /// particle bank sits under it and the pair has to fit between the
-    /// user's eye height and the bottom of their comfortable view. A first
-    /// attempt put the bank at y = 0.98 and a screenshot found it below
-    /// the frame entirely — reachable by the arithmetic, invisible in
-    /// practice, which is the standard's "visible without being looked
-    /// for" failing quietly.
-    /// FOUR mouths now, not three: + charge, − charge, and one test
-    /// charge of EACH sign. The probe's polarity used to be a choice made
-    /// on a particle bank after the fact, which meant the thing you
-    /// pulled out of the well was whatever the bank happened to be set
-    /// to. Making it two mouths puts the choice in the act of creation,
-    /// the same way the ± charge mouths already did. (The particle bank
-    /// itself came out on 2026-08-03 — the wells are the whole choice.)
-    ///
-    /// The pitch tightens from 0.11 to 0.095 to fit the fourth without
-    /// the column growing into its neighbours. The arithmetic, since it
-    /// is tight: four mouths at 0.095 span 0.285, so the column's box is
-    /// 0.1425 + a 0.06 mouth radius = 0.2025 half-height about a centre
-    /// of 1.4075 — i.e. y 1.205…1.610. That clears the Clear plate above
-    /// (1.65) by 0.04.
-    ///
-    /// The half-extent is 0.2025 and NOT 0.21, which is the value this
-    /// comment was first written beside. `testInstrumentsDoNotOverlapEachOther`
-    /// caught the difference: rounding it up pushed the column's bottom
-    /// to 1.1975 and left 0.0275 against a 0.03 margin. Eight tenths of a
-    /// centimetre, invisible in any screenshot, and the exact class of
-    /// error this file's boxes exist to make impossible.
-    static let wellColumnX = 0.96
-    static let wellColumnZ = -0.90
+    /// FOUR mouths: + charge, − charge, and one test charge of each sign.
+    /// The probe's polarity used to be a choice made on a particle bank
+    /// after the fact, which meant the thing you pulled out of the well
+    /// was whatever the bank happened to be set to. Two mouths put the
+    /// choice in the act of creation, the way the ± charge mouths already
+    /// did.
     static let wellPitch = 0.095
-    static let wellTopY = 1.55
     static let wellHalfExtents = SIMD3<Double>(0.06, 0.2025, 0.06)
 
     static func wellAnchor(index: Int) -> SIMD3<Double> {
-        SIMD3(wellColumnX, wellTopY - Double(index) * wellPitch, wellColumnZ)
+        let column = rightRail.anchor("wells")!
+        // Hung from the top of the column's own box, so adding a fifth
+        // mouth grows it downward from a fixed head rather than sliding
+        // all four.
+        let top = column.y + wellHalfExtents.y - 0.06
+        return SIMD3(column.x, top - Double(index) * wellPitch, column.z)
     }
-
-    /// The Clear plate, capping the well column from above.
-    ///
-    /// It is on the RIGHT because unmaking belongs with making: the wells
-    /// are where every charge in the room came from, so the one control
-    /// that removes them all stands at the head of the same column. (It
-    /// was a `Button(role: .destructive)` labelled "Clear the field" in
-    /// the window panel, and it is a `confirms` plate now — see
-    /// `SpatialActionBank`. The window's confirmationDialog died with the
-    /// panel and this module's charges are not cheap to rebuild.)
-    ///
-    /// ABOVE, not below, and the two obvious alternatives both fail on
-    /// arithmetic this file already has:
-    ///
-    /// - Below the particle bank puts its box under y ≈ 1.05, and the
-    ///   comment on `wellTopY` records what happened the last time
-    ///   something landed there: reachable by the numbers, off the bottom
-    ///   of the frame in practice.
-    /// - Level with the column, further out in x, runs past
-    ///   `maximumReach` — the wells' own near face is already only 0.14
-    ///   clear of the station wall.
-    ///
-    /// So it goes up, and the fit is genuinely tight — this is the 2 cm
-    /// of slack the file header warns about, being spent. The box lands
-    /// at x 0.89…1.15, y 1.65…1.77, z −0.98…−0.82, which clears the
-    /// station by 0.13 (margin 0.12), clears the wells by 0.04 in y
-    /// (margin 0.03), sits 1.22 from the viewer (limit 1.25) and tops out
-    /// at 1.77 (limit 1.80). Every one of those is checked by
-    /// `FieldInstrumentLayoutTests`, which iterates `standingInstruments`
-    /// — so this box is covered by all four invariants for free, and
-    /// moving it by a few centimetres in the wrong direction fails the
-    /// build rather than quietly shielding a charge.
-    ///
-    /// The label is "Clear all", not the panel's "Clear the field",
-    /// because the plate's own width plus its longest nameplate is what
-    /// sets the box: `SpatialActionBank.reach(forLabels:)` must be passed
-    /// "Tap again" as well, since an armed plate swaps its nameplate and
-    /// a bank sized only to its resting label grows on arming — straight
-    /// into whatever it was cleared of.
-    static let clearPlateAnchor = SIMD3<Double>(1.02, 1.71, -0.90)
-    static let clearPlateHalfExtents = SIMD3<Double>(0.13, 0.06, 0.08)
 
     // MARK: On the apparatus
 
@@ -246,25 +251,15 @@ enum FieldInstrumentLayout {
     /// Every instrument that stands OUTSIDE the station, by name.
     /// The ΔV rail is deliberately absent — it moves with the capacitor, so
     /// it is checked separately over the capacitor's whole travel.
+    /// Every instrument that stands OUTSIDE the station, by name.
+    ///
+    /// Straight off the rails now, so an instrument added to a rail is
+    /// checked by every invariant for free — where the old list had to be
+    /// remembered, which is the failure mode this project keeps naming.
+    /// The ΔV rail is deliberately absent: it moves with the capacitor,
+    /// so it is checked separately over the capacitor's whole travel.
     static var standingInstruments: [(name: String, box: StationBox)] {
-        var boxes: [(String, StationBox)] = [
-            ("layers bank", StationBox(center: bankAnchor,
-                                       halfExtents: bankHalfExtents)),
-            ("B rail", StationBox(center: fieldTrackAnchor,
-                                  halfExtents: fieldTrackHalfExtents)),
-            ("clear plate", StationBox(center: clearPlateAnchor,
-                                       halfExtents: clearPlateHalfExtents)),
-        ]
-        // The three wells share one column; as a group they are one object
-        // to keep clear of everything else.
-        let top = wellAnchor(index: 0)
-        let bottom = wellAnchor(index: 3)
-        boxes.append(("wells", StationBox(center: (top + bottom) / 2,
-                                          halfExtents: wellHalfExtents)))
-        // (The column's own box: `wellHalfExtents.y` must cover the pitch
-        // plus a mouth's radius and halo, or the separation checks below
-        // are measuring a smaller object than the one in the room.)
-        return boxes.map { (name: $0.0, box: $0.1) }
+        leftRail.boxes + rightRail.boxes
     }
 
     static func voltageTrackBox(capacitorCenter: SIMD3<Double>) -> StationBox {

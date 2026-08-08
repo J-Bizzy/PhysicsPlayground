@@ -76,6 +76,94 @@ final class FieldInstrumentLayoutTests: XCTestCase {
 
     // MARK: Nothing stands where the physics is
 
+    // MARK: The rails reproduce what the hands placed
+
+    /// THE PILOT MUST NOT HAVE MOVED ANYTHING.
+    ///
+    /// On 2026-08-08 the four anchors stopped being typed and started
+    /// being derived from two `InstrumentRail`s. That is a change of
+    /// authorship, and it is only safe if it is ALSO not a change of
+    /// arrangement — every invariant below is a safety net for the
+    /// numbers, so a refactor that shifted them while the nets still
+    /// passed would have proved nothing about either.
+    ///
+    /// These literals are the values as of 2026-08-07, copied from the
+    /// file's own history. If a future change means to move an
+    /// instrument, this test is the one that should fail first, and the
+    /// literal should be updated in the same commit that moves it.
+    func testTheRailsReproduceTheHandPlacedLayout() {
+        func same(_ derived: SIMD3<Double>, _ historical: SIMD3<Double>,
+                  _ what: String) {
+            XCTAssertEqual(derived.x, historical.x, accuracy: 1e-9, "\(what) x")
+            XCTAssertEqual(derived.y, historical.y, accuracy: 1e-9, "\(what) y")
+            XCTAssertEqual(derived.z, historical.z, accuracy: 1e-9, "\(what) z")
+        }
+        same(FieldInstrumentLayout.bankAnchor,
+             SIMD3(-1.05, 1.42, -0.90), "layers bank")
+        same(FieldInstrumentLayout.fieldTrackAnchor,
+             SIMD3(-1.06, 1.10, -0.82), "B rail")
+        same(FieldInstrumentLayout.clearPlateAnchor,
+             SIMD3(1.02, 1.71, -0.90), "clear plate")
+        // The column head, and the pitch down it.
+        same(FieldInstrumentLayout.wellAnchor(index: 0),
+             SIMD3(0.96, 1.55, -0.90), "well 0")
+        same(FieldInstrumentLayout.wellAnchor(index: 3),
+             SIMD3(0.96, 1.55 - 3 * 0.095, -0.90), "well 3")
+    }
+
+    /// The spacing must now come from the neighbours' own sizes — that is
+    /// the whole reason the rail exists, and a rail that ignored an
+    /// item's height would reintroduce the arithmetic by hand.
+    func testGrowingAnInstrumentPushesTheOneBelowIt() {
+        let tall = InstrumentRail(
+            head: SIMD3(0, 1.5, -1),
+            gap: 0.05,
+            items: [
+                .init(name: "top", halfExtents: SIMD3(0.1, 0.30, 0.1)),
+                .init(name: "bottom", halfExtents: SIMD3(0.1, 0.05, 0.1)),
+            ])
+        let short = InstrumentRail(
+            head: SIMD3(0, 1.5, -1),
+            gap: 0.05,
+            items: [
+                .init(name: "top", halfExtents: SIMD3(0.1, 0.10, 0.1)),
+                .init(name: "bottom", halfExtents: SIMD3(0.1, 0.05, 0.1)),
+            ])
+        XCTAssertEqual(tall.anchor("bottom")!.y, 1.5 - 0.30 - 0.05 - 0.05,
+                       accuracy: 1e-9)
+        XCTAssertEqual(short.anchor("bottom")!.y, 1.5 - 0.10 - 0.05 - 0.05,
+                       accuracy: 1e-9)
+        // …and the gap between their faces is the gap, in both cases.
+        for rail in [tall, short] {
+            let boxes = rail.boxes.map(\.box)
+            XCTAssertEqual(boxes[0].minimum.y - boxes[1].maximum.y, 0.05,
+                           accuracy: 1e-9,
+                           "the rail left a different gap than it was asked for")
+        }
+    }
+
+    /// The shared checker has to agree with the four bespoke invariants
+    /// below — otherwise the module keeps two definitions of "legal" and
+    /// they drift.
+    func testTheSharedClearanceCheckerPassesThisLayout() {
+        let violations = InstrumentClearance.violations(
+            instruments: FieldInstrumentLayout.standingInstruments,
+            station: FieldInstrumentLayout.station)
+        XCTAssertTrue(violations.isEmpty,
+                      violations.joined(separator: "\n"))
+    }
+
+    /// …and has to be able to FAIL, or the line above is decoration.
+    func testTheSharedClearanceCheckerCatchesAnInstrumentInThePhysics() {
+        let inside = [(name: "trespasser",
+                       box: StationBox(center: FieldModel.regionCenter,
+                                       halfExtents: SIMD3(0.05, 0.05, 0.05)))]
+        let violations = InstrumentClearance.violations(
+            instruments: inside, station: FieldInstrumentLayout.station)
+        XCTAssertFalse(violations.isEmpty,
+                       "an instrument standing inside the station was called legal")
+    }
+
     /// The invariant the whole layout exists to satisfy.
     ///
     /// The margin is the proximity-fallback radius, not a taste: when a
