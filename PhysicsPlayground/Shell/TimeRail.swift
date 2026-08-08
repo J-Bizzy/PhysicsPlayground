@@ -209,8 +209,15 @@ final class TimeRail {
         // Sized to the reel and no larger, per the standing rule: an
         // input collider bigger than the thing it represents is the
         // invisible-scale-plate failure again.
-        reel.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: 0.052)]))
+        // The nameplate hangs 72 mm below the reel, outside the sphere.
+        // The reel is the ONLY thing a pause puts on screen, so the words
+        // saying what it is were the least pinchable part of the least
+        // familiar object in the app.
+        reel.components.set(CollisionComponent(shapes: [
+            .generateSphere(radius: 0.052),
+            .generateBox(size: [0.11, 0.024, 0.020])
+                .offsetBy(translation: [0, -0.072, 0]),
+        ]))
         reel.components.set(HoverEffectComponent())
         reel.components.set(GroundingShadowComponent(castsShadow: true))
         SpatialActions.attach(

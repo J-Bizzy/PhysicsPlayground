@@ -277,8 +277,25 @@ final class SpatialPicker {
         // 68 mm-thick slab out of a disc 10.5 mm thick, hanging 3 cm
         // above and below the fan over whatever the fan was drawn in
         // front of.
+        // THE LABEL IS PART OF THE TARGET. The pill sits 42 mm forward
+        // of the disc's centre, 8 mm past the 68 mm box, so the word
+        // naming the choice was scenery you could pinch through — the
+        // same defect `SpatialLayerBank` and `SpatialActionBank` each
+        // found and fixed alone, which is why there is now a criterion
+        // instead of a third comment.
+        //
+        // CLAMPED TO `colliderSpan` LATERALLY. A label wider than the
+        // disc's own reach is not a reason to widen the disc: `FanLayout`
+        // spaces the fan by exactly this number, so a long choice name
+        // would push neighbouring targets into each other and make which
+        // disc you hit a matter of hit order. Covering most of a long
+        // word beats overlapping the disc beside it.
+        let labelSpan = min(HubScene.namePlateWidth(choice.label, size: 0.009),
+                            Self.colliderSpan)
         disc.components.set(CollisionComponent(shapes: [
             .generateBox(size: [Self.colliderSpan, 0.038, Self.colliderSpan]),
+            .generateBox(size: [labelSpan, 0.020, 0.026])
+                .offsetBy(translation: [0, 0.005, 0.042]),
         ]))
         disc.components.set(HoverEffectComponent())
         SpatialActions.attach(

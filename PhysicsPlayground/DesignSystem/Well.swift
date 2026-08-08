@@ -209,9 +209,23 @@ final class Well {
         // A small generous margin so a near miss still counts — the well
         // is a target you reach for, not one you have to hit.
         let padded = bounds.extents + SIMD3<Float>(repeating: 0.028)
+        // THE LABEL IS PART OF THE TARGET. "Add magnet" hangs 34 mm below
+        // the miniature — well outside the padded box — so the words
+        // telling you what the well makes were the one part of it you
+        // could not pull from.
+        //
+        // Not widened LATERALLY beyond the padded box: wells stand in a
+        // column and a label-width target would reach across the bench
+        // toward whatever the well is drawn in front of. The box covers
+        // the label's own height and depth at the well's width, which is
+        // where a hand aiming at the word actually arrives.
+        let plateDrop = bounds.min.y - 0.034
         source.components.set(InputTargetComponent())
-        source.components.set(CollisionComponent(
-            shapes: [.generateBox(size: padded).offsetBy(translation: bounds.center)]))
+        source.components.set(CollisionComponent(shapes: [
+            .generateBox(size: padded).offsetBy(translation: bounds.center),
+            .generateBox(size: [padded.x, 0.030, 0.020])
+                .offsetBy(translation: [bounds.center.x, plateDrop, 0]),
+        ]))
         source.components.set(HoverEffectComponent())
 
         plate.position = [0, bounds.min.y - 0.034, 0]

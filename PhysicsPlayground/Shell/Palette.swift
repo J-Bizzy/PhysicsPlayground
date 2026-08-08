@@ -168,8 +168,17 @@ final class Palette {
             holder.addChild(label)
 
             holder.components.set(InputTargetComponent())
-            holder.components.set(CollisionComponent(
-                shapes: [.generateSphere(radius: Self.slotSize * 0.8)]))
+            // THE LABEL IS PART OF THE TARGET — the lab's name hangs
+            // below the miniature, outside the sphere, so the words on
+            // the one surface that opens a lab were unpinchable.
+            let slotLabelSpan = min(
+                HubScene.namePlateWidth(spec.title, size: 0.014),
+                Self.slotSize * 1.6)
+            holder.components.set(CollisionComponent(shapes: [
+                .generateSphere(radius: Self.slotSize * 0.8),
+                .generateBox(size: [slotLabelSpan, 0.024, 0.020])
+                    .offsetBy(translation: [0, -Self.slotSize * 0.92, 0.01]),
+            ]))
             holder.components.set(HoverEffectComponent())
             SpatialActions.attach(
                 to: holder, label: "Open \(spec.title)",
@@ -405,8 +414,19 @@ final class Palette {
     private func buildBead() {
         bead.name = "palette-bead"
         bead.components.set(InputTargetComponent())
-        bead.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: Self.beadRadius * 1.8)]))
+        // THE LABEL IS PART OF THE TARGET, and this one is a SIBLING of
+        // the bead rather than a child — added to `root` so it does not
+        // inherit the bead's spin. That makes it invisible to the
+        // parent-walking criterion, which is exactly why it survived
+        // while the picker's and the petals' were being found: nothing
+        // could attribute it to the control it names. The offset below
+        // mirrors the label's placement in `buildBead`; keep them
+        // together.
+        bead.components.set(CollisionComponent(shapes: [
+            .generateSphere(radius: Self.beadRadius * 1.8),
+            .generateBox(size: [0.052, 0.024, 0.020])
+                .offsetBy(translation: [0, -(Self.beadRadius + 0.026), 0]),
+        ]))
         bead.components.set(HoverEffectComponent())
         // The one permanent object in every lab missed the 2026-08-05
         // grounding-shadow pass; presence, not decoration.
@@ -496,8 +516,18 @@ final class Palette {
         disc.addChild(plate)
 
         disc.components.set(InputTargetComponent())
-        disc.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: 0.034)]))
+        // THE LABEL IS PART OF THE TARGET. Clamped to the petal pitch for
+        // the reason the picker's is — `petalRowSpan` spaces the ring by
+        // `petalColliderSpan`, and a wider target would overlap the petal
+        // beside it.
+        let petalLabelSpan = min(
+            HubScene.namePlateWidth(name.capitalized, size: 0.010),
+            Self.petalColliderSpan)
+        disc.components.set(CollisionComponent(shapes: [
+            .generateSphere(radius: 0.034),
+            .generateBox(size: [petalLabelSpan, 0.020, 0.024])
+                .offsetBy(translation: [0, 0.005, 0.047]),
+        ]))
         disc.components.set(HoverEffectComponent())
         // Label only — the ACTION is attached in `init`, where there is
         // a `self` to route the tap through.
