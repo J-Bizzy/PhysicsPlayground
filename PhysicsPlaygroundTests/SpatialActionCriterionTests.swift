@@ -189,32 +189,39 @@ final class SpatialActionCriterionTests: XCTestCase {
     // caught the day it is written rather than the day someone
     // remembers to add it here.
 
-    /// WHAT THIS SCAN STILL CANNOT SEE, stated here rather than left to
-    /// be discovered: `Packages/RenderKit` is outside it, and two files
-    /// in there stand input targets.
+    /// WHAT THE SCAN COVERS, and the one thing it still cannot judge.
     ///
-    /// · `SpatialTrackControl` — the app's RAIL, its one continuous
-    ///   control, and the file whose own header wrote the complaint this
-    ///   whole mechanism answers ("a slider is already an adjustable
-    ///   element that speaks its value"). It is still not adjustable.
-    /// · `Grabbable` — every carried object: magnets, balls, bobs,
-    ///   circuit parts. A larger question than a missing closure, since
-    ///   "move this to an arbitrary point in the room" has no obvious
-    ///   hands-free form.
+    /// `Packages/RenderKit` was outside it until 2026-08-08, because
+    /// `SpatialActions` lived in the app target and RenderKit cannot see
+    /// up a layer. Moving it down fixed the file that mattered most:
+    /// `SpatialTrackControl`, the app's one continuous control, whose own
+    /// header had carried the complaint since it was written.
     ///
-    /// Both are blocked on the same thing: `SpatialActions` lives in the
-    /// app target and RenderKit cannot see it. The fix is to move this
-    /// mechanism down into RenderKit — which is where a shared RealityKit
-    /// primitive belongs — and that is a LAYER CHANGE, which the working
-    /// agreement says to ask about rather than perform. Asked 2026-08-07;
-    /// widen `scanRoots` the moment it is agreed.
+    /// `Grabbable` is now the honest remainder. It stands input targets
+    /// on every carried object — magnets, balls, bobs, circuit parts —
+    /// and it takes an `activate` closure, so the FILE routes an action
+    /// and the scan is satisfied. But all eighteen call sites still pass
+    /// nothing, so those objects are hands-only in practice. The scan
+    /// cannot catch that: a default argument looks identical to a wired
+    /// one from the outside.
+    ///
+    /// That is not a hole to paper over — it is a real design question
+    /// this test should not pretend to answer. A tap on a carried object
+    /// opens its Bloom ring, and only the module knows which ring, so
+    /// each of the five SpaceViews that handle taps inline needs its
+    /// routing extracted first. Tracked as work, not as a passing test.
+
     private func scanRoots() throws -> [URL] {
         let thisFile = URL(fileURLWithPath: #filePath)
         let app = thisFile.deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("PhysicsPlayground")
-        let roots = ["Modules", "Hub", "DesignSystem", "Shell"]
+        var roots = ["Modules", "Hub", "DesignSystem", "Shell"]
             .map { app.appendingPathComponent($0) }
+        // RenderKit, since 2026-08-08 — see the note above.
+        roots.append(thisFile.deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Packages/RenderKit/Sources/RenderKit"))
         for root in roots {
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: root.path,

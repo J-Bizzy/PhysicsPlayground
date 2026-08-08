@@ -174,11 +174,27 @@ public final class SpatialTrackControl {
         root.components.set(HoverEffectComponent())
         root.components.set(GroundingShadowComponent(castsShadow: true))
 
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(
-            stringLiteral: "\(name). Drag the bead along the rail to set it.")
-        root.components.set(accessibility)
+        // ADJUSTABLE AT LAST. This file's own header has carried the
+        // complaint since it was written:
+        //
+        //     // a track replaces a `Slider`, and a slider is already an
+        //     // adjustable element that speaks its value. Migrating
+        //     // without this trades a control someone could operate
+        //     // blind for one they cannot.
+        //
+        // The `value` was added then and the adjustability was not,
+        // because `SpatialActions` lived in the app target and RenderKit
+        // cannot see up a layer. It moved down on 2026-08-08 for exactly
+        // this.
+        //
+        // A twentieth of the range per step, the same resolution the
+        // Bloom bead uses, and written through `write` — the same
+        // function the drag calls — so a hand and a keystroke cannot
+        // disagree about the ends.
+        SpatialActions.attach(
+            to: root, label: "\(name). Drag the bead along the rail to set it.",
+            value: format(read()),
+            adjust: { [weak self] steps in self?.nudge(by: steps) })
 
         refresh()
     }
@@ -236,6 +252,14 @@ public final class SpatialTrackControl {
 
     public func endAdjust() { isDragging = false }
 
+    /// One VoiceOver increment or decrement, in the value's own units.
+    public func nudge(by steps: Double) {
+        let span = range.upperBound - range.lowerBound
+        let next = read() + steps * span / 20
+        write(min(max(next, range.lowerBound), range.upperBound))
+        refresh()
+    }
+
     /// Moves the bead and the fill to the model's current value.
     public func refresh() {
         let fraction = layout.fraction(forValue: read(), in: range)
@@ -250,18 +274,21 @@ public final class SpatialTrackControl {
 
         setLabel(format(read()))
 
+        // The spoken reading, whether or not there is a derived line.
+        // This used to be inside `if let subtitle`, so a rail WITHOUT one
+        // — most of them — announced the value it was built with for the
+        // rest of the session, however far the bead had since travelled.
+        let spoken = subtitle.map { "\(lastLabel), \($0(read()))" } ?? lastLabel
         if let subtitle {
-            let text = subtitle(read())
-            subtitleLabel?.setText(text, color: UIColor(white: 0.95, alpha: 1))
-            // VoiceOver speaks both quantities, and keeps speaking both
-            // when only one of them moved.
-            let spoken = "\(lastLabel), \(text)"
-            if spoken != lastSpokenValue,
-               var accessibility = root.components[AccessibilityComponent.self] {
-                lastSpokenValue = spoken
-                accessibility.value = LocalizedStringResource(stringLiteral: spoken)
-                root.components.set(accessibility)
-            }
+            subtitleLabel?.setText(subtitle(read()),
+                                   color: UIColor(white: 0.95, alpha: 1))
+        }
+        if spoken != lastSpokenValue {
+            lastSpokenValue = spoken
+            // REPUBLISH, never rebuild: a fresh `AccessibilityComponent`
+            // carries empty `systemActions` and would strip the
+            // increment this file just gained.
+            SpatialActions.republish(value: spoken, on: root)
         }
     }
 

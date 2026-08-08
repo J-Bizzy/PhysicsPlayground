@@ -1,6 +1,16 @@
 //
-//  SpatialActionComponent.swift
-//  Physics Playground — Design System
+//  SpatialAction.swift
+//  RenderKit
+//
+//  MOVED DOWN A LAYER on 2026-08-08, from the app target's DesignSystem.
+//  It lived up there because that is where the primitives that needed it
+//  first happened to live — and the consequence was that the two files
+//  in RenderKit which stand input targets could not reach it.
+//  `SpatialTrackControl` — the app's one continuous control, and the
+//  file whose own header wrote the complaint this mechanism answers —
+//  was announced, adjustable-looking and inoperable for that reason
+//  alone. A shared RealityKit primitive belongs in the shared RealityKit
+//  layer.
 //
 //  HOW A CONTROL IN THE ROOM GETS OPERATED WITHOUT HANDS.
 //
@@ -37,24 +47,31 @@
 
 import RealityKit
 import SwiftUI
+import Foundation
 
 /// What a spatial control does when something other than a hand asks.
-struct SpatialActionComponent: Component {
+public struct SpatialActionComponent: Component {
     /// Press it. The same effect a pinch has.
-    var activate: (() -> Void)?
+    public var activate: (() -> Void)?
     /// Nudge a continuous value. `+1` is one increment, `−1` one
     /// decrement; the primitive decides what a step means, because only
     /// it knows the range.
-    var adjust: ((Double) -> Void)?
+    public var adjust: ((Double) -> Void)?
+
+    public init(activate: (() -> Void)? = nil,
+                adjust: ((Double) -> Void)? = nil) {
+        self.activate = activate
+        self.adjust = adjust
+    }
 }
 
 @MainActor
-enum SpatialActions {
+public enum SpatialActions {
     /// Makes `entity` operable by VoiceOver, and announces that it is.
     ///
     /// One call so the two halves cannot drift: the accessibility
     /// component advertises the action, this component performs it.
-    static func attach(to entity: Entity,
+    public static func attach(to entity: Entity,
                        label: String,
                        value: String? = nil,
                        activate: (() -> Void)? = nil,
@@ -85,7 +102,7 @@ enum SpatialActions {
     /// toggles for the rest of the session; toggle "Field lines" and it
     /// still says "hidden". `SpatialActionBank` does this correctly and
     /// has a test for it.
-    static func republish(value: String, on entity: Entity) {
+    public static func republish(value: String, on entity: Entity) {
         guard var accessibility = entity.components[AccessibilityComponent.self]
         else { return }
         accessibility.value = LocalizedStringResource(stringLiteral: value)
@@ -97,12 +114,12 @@ enum SpatialActions {
     /// lands on the entity carrying the accessibility component, but a
     /// primitive may well have put its collider on a child.
     @discardableResult
-    static func activate(_ entity: Entity) -> Bool {
+    public static func activate(_ entity: Entity) -> Bool {
         perform(from: entity) { $0.activate?() ; return $0.activate != nil }
     }
 
     @discardableResult
-    static func adjust(_ entity: Entity, by delta: Double) -> Bool {
+    public static func adjust(_ entity: Entity, by delta: Double) -> Bool {
         perform(from: entity) { $0.adjust?(delta) ; return $0.adjust != nil }
     }
 

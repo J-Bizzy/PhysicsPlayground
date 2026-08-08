@@ -10,6 +10,7 @@
 //
 
 import RealityKit
+import RenderKit
 import SwiftUI
 
 struct PlaygroundSpaceView: View {

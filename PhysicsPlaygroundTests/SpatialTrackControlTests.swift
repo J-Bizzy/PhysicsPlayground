@@ -57,6 +57,73 @@ final class SpatialTrackControlTests: XCTestCase {
         var value: Double = 0
     }
 
+    // MARK: Operable without hands
+
+    /// THE COMPLAINT THIS FILE'S OWN HEADER MADE, finally answered.
+    ///
+    ///     // a track replaces a `Slider`, and a slider is already an
+    ///     // adjustable element that speaks its value. Migrating
+    ///     // without this trades a control someone could operate blind
+    ///     // for one they cannot.
+    ///
+    /// The value was added when that was written; the adjustability was
+    /// not, because `SpatialActions` lived a layer above RenderKit until
+    /// 2026-08-08.
+    func testTheRailCanBeAdjustedWithoutHands() {
+        let (track, box) = makeTrack(range: 0...100)
+        box.value = 50
+        track.refresh()
+
+        XCTAssertTrue(SpatialActions.adjust(track.root, by: 1))
+        XCTAssertEqual(box.value, 55, accuracy: 1e-9,
+                       "one increment should be a twentieth of the range")
+        XCTAssertTrue(SpatialActions.adjust(track.root, by: -3))
+        XCTAssertEqual(box.value, 40, accuracy: 1e-9)
+
+        // It must stop at the ends rather than running past them — the
+        // same clamp the drag goes through, because it IS that clamp.
+        for _ in 0..<40 { SpatialActions.adjust(track.root, by: -1) }
+        XCTAssertEqual(box.value, 0, accuracy: 1e-9)
+        for _ in 0..<80 { SpatialActions.adjust(track.root, by: 1) }
+        XCTAssertEqual(box.value, 100, accuracy: 1e-9)
+    }
+
+    /// The bead has to MOVE with the keystroke, not just the number —
+    /// `nudge` calls `refresh()` for this reason, and a version that
+    /// wrote the value and left the bead behind would look broken to
+    /// everyone else in the room.
+    func testAdjustingWithoutHandsMovesTheBead() {
+        let (track, box) = makeTrack(range: 0...100)
+        box.value = 0
+        track.refresh()
+        let start = track.beadOffset
+
+        SpatialActions.adjust(track.root, by: 10)
+        XCTAssertEqual(box.value, 50, accuracy: 1e-9)
+        XCTAssertNotEqual(track.beadOffset.x, start.x, accuracy: 1e-4)
+    }
+
+    /// A rail with NO subtitle used to announce the value it was built
+    /// with for the whole session: the republish sat inside
+    /// `if let subtitle`, and most rails have none.
+    func testARailWithoutASubtitleStillUpdatesItsSpokenValue() throws {
+        let (track, box) = makeTrack(range: 0...100)
+        box.value = 0
+        track.refresh()
+        let first = try XCTUnwrap(track.root.components[AccessibilityComponent.self])
+            .value.map { String(localized: $0) }
+
+        box.value = 75
+        track.refresh()
+        let second = try XCTUnwrap(track.root.components[AccessibilityComponent.self])
+            .value.map { String(localized: $0) }
+
+        XCTAssertNotEqual(first, second, """
+            the rail spoke "\(first ?? "nil")" both before and after the value             moved from 0 to 75 — the spoken reading is frozen at whatever the             rail was built with.
+            """)
+        XCTAssertEqual(second, "75")
+    }
+
     // MARK: The mapping, through the entity
 
     /// The claim the bead makes by existing: where your hand is along the

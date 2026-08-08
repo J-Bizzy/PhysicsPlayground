@@ -68,16 +68,19 @@ public enum Grabbable {
     /// the model moves by the hand's displacement, and the renderer
     /// (ticking per frame) moves the entity and everything attached
     /// to it as one body.
-    public static func configureTouchTarget(_ entity: Entity, collisionRadius: Float) {
-        apply(.generateSphere(radius: collisionRadius), to: entity)
+    public static func configureTouchTarget(_ entity: Entity, collisionRadius: Float,
+                                            activate: (() -> Void)? = nil) {
+        apply(.generateSphere(radius: collisionRadius), to: entity, activate: activate)
     }
 
     /// A box target, for the things that are not balls — plates, bars,
     /// slabs, cylinders. `size` is the full extent on each axis.
     public static func configureTouchTarget(_ entity: Entity,
                                             box size: SIMD3<Float>,
-                                            offset: SIMD3<Float> = .zero) {
-        apply(.generateBox(size: size).offsetBy(translation: offset), to: entity)
+                                            offset: SIMD3<Float> = .zero,
+                                            activate: (() -> Void)? = nil) {
+        apply(.generateBox(size: size).offsetBy(translation: offset), to: entity,
+              activate: activate)
     }
 
     /// A box target measured from what is actually drawn, plus `padding`
@@ -92,18 +95,20 @@ public enum Grabbable {
     /// shipped; this is that pattern, named.)
     public static func configureTouchTarget(_ entity: Entity,
                                             matchingVisualBoundsOf source: Entity,
-                                            padding: Float = reach) {
+                                            padding: Float = reach,
+                                            activate: (() -> Void)? = nil) {
         let bounds = source.visualBounds(relativeTo: entity)
         let extents = bounds.extents
         guard extents.x.isFinite, extents.y.isFinite, extents.z.isFinite,
               simd_length(extents) > 1e-6 else {
             // Nothing drawn yet — a sphere of the padding is the most
             // honest target available, and it cannot shield anything.
-            return configureTouchTarget(entity, collisionRadius: max(padding, 1e-3))
+            return configureTouchTarget(entity, collisionRadius: max(padding, 1e-3),
+                                        activate: activate)
         }
         configureTouchTarget(entity,
                              box: extents + SIMD3<Float>(repeating: 2 * padding),
-                             offset: bounds.center)
+                             offset: bounds.center, activate: activate)
     }
 
     /// The LOCAL radius a sphere target needs on an entity that is
@@ -130,10 +135,27 @@ public enum Grabbable {
         return max(baseRadius * 1.14, baseRadius + (reach * 0.98) / scale)
     }
 
-    private static func apply(_ shape: ShapeResource, to entity: Entity) {
+    /// `activate` is what VoiceOver does with this object, and it is
+    /// OPTIONAL here on purpose: this helper configures an entity it did
+    /// not build and knows nothing about, so it cannot invent a meaning
+    /// for pressing it. The caller owns that — in this app a tap on a
+    /// carried object opens its Bloom ring, and only the module knows
+    /// which ring.
+    ///
+    /// Passing nothing leaves a grabbable that hands can move and
+    /// VoiceOver cannot. That is the state every one of the eighteen
+    /// call sites is in as of 2026-08-08, and it is the outstanding half
+    /// of the accessibility work — see the note in
+    /// `SpatialActionCriterionTests`. The parameter exists so the fix is
+    /// a call-site change rather than a redesign.
+    private static func apply(_ shape: ShapeResource, to entity: Entity,
+                              activate: (() -> Void)? = nil) {
         entity.components.set(InputTargetComponent())
         entity.components.set(CollisionComponent(shapes: [shape]))
         entity.components.set(HoverEffectComponent())
+        if let activate {
+            SpatialActions.attach(to: entity, label: entity.name, activate: activate)
+        }
         // Ground it: a soft contact shadow onto the real surfaces below,
         // so the floating object feels present in the room rather than
         // pasted on. (Renders against detected real-world geometry — a
