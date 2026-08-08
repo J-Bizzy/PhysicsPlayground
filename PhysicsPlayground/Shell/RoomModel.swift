@@ -489,6 +489,27 @@ final class RoomModel {
     /// that want the hand itself as an instrument (a probe, a compass).
     private(set) var fingertips: [SIMD3<Double>] = []
 
+    /// The tracked fingertip nearest `point`, or nil when no hand is
+    /// tracked at all.
+    ///
+    /// This is what drives `Recession`: instruments stand back until a
+    /// hand comes near them. Fingertips rather than the whole obstacle
+    /// field, because the field also contains furniture and the scene
+    /// mesh, and a bookshelf is not a reach.
+    ///
+    /// NIL IS MEANINGFUL and callers must not treat it as "far away":
+    /// in the simulator, and in any device frame where the hands are out
+    /// of view, there is no hand to be near anything. `Recession` reads
+    /// nil as full brightness for exactly that reason — an instrument
+    /// that dims because the system briefly lost your hands is an
+    /// instrument that flickers.
+    func nearestFingertip(to point: SIMD3<Float>) -> SIMD3<Float>? {
+        let target = SIMD3<Double>(point)
+        return fingertips
+            .min { simd_distance($0, target) < simd_distance($1, target) }
+            .map { SIMD3<Float>($0) }
+    }
+
     private func consumeHands() async {
         for await update in hands.anchorUpdates {
             let anchor = update.anchor

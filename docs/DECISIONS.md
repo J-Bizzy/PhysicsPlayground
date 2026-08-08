@@ -16,6 +16,72 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-07 — Gravity Lab folds: a tab that is both the summary and the door
+
+**Decision:** Owner's direction — *"the gravity lab is way too cluttered
+with UI. Please do a more simplistic design overhaul for this module."*
+The answer is a new design-system primitive, `SummonHandle`, and Gravity
+Lab is its first user.
+
+Standing objects in that room go from about **eighteen to nine**:
+
+| | Before | After |
+|---|---|---|
+| Layer plates | 7 | 2 (grid, field flow) |
+| Clock | 6 discs, ~0.40 m wide | 1 tab reading "Clock · 5×" |
+| Analysis | — | 1 tab (sweep, Lagrange behind it) |
+| Vectors | — | 1 tab (v, a, F behind it) |
+| Verb plates | 2 | 2 |
+| Rail, well, card | 3 | 3 |
+
+**Context:** `SpatialLayerBank`'s argument for never folding is right as
+far as it goes — *a bank is a readout as well as a control* — and it
+holds at four plates and fails at seven. It also collided with Phase 0:
+re-deriving the clock fan to fit its own touch targets made it 40 cm
+wide, correctly, which made the room worse.
+
+`SummonHandle.summary` is what dissolves the argument. A plain fold
+takes the readout away with the control; a fold that keeps a live
+one-line summary does not. "Clock · 5×" is the same fact six discs were
+carrying, in one object, and pinching it unfolds the fan to change it.
+
+**Consequences — and one place the goal was wrong.** §2.4 says to move
+velocity/acceleration/force onto the selected body's Bloom ring, on the
+grounds that they are per-body annotations and the ring already exists
+to hold them. The diagnosis is right and the prescription is not:
+`showVelocityVector` and its two siblings are **global** flags. The
+renderer draws the arrows on whichever body is selected, but the switch
+is not a property of that body, so a per-body ring would mean toggling
+it for Earth silently changed what Jupiter shows — a control that lies
+about its own scope. They get their own group and their own door
+instead. (A minor second reason: the ring already carries Predict and
+Delete, and `Bloom.Petal`'s ceiling is "two or three per object, never
+more".)
+
+`Recession` and `Motion` land with it. Instruments now sit at 45%
+opacity until a fingertip comes within 0.8 m — one mechanism, no
+capability removed, and the precedent is the hub's own focus recession
+plus "emphasis is opacity, light and sound — never geometry"
+(2026-07-30). `Motion` is the app's single Reduce Motion authority,
+because the setting reached two of eight animated primitives and the
+tell is in one frame: the hub's terrace hairlines freeze mid-shimmer
+while the door signs above them park correctly.
+
+**Not yet done.** The `Instrument`/`InstrumentRail` protocol the goal
+asks for is NOT built — `SummonHandle` is the piece of it that the
+clutter actually needed, and it is a standalone primitive. The rail,
+the Electric Fields pilot and deleting `FieldInstrumentLayout` remain,
+as does routing the other six animated primitives through `Motion` and
+the VoiceOver `systemActions` sweep. `SummonHandle` declares
+`.activate` and re-publishes its value on every toggle, so the pattern
+the sweep should follow is written down in one place.
+
+**Unverified.** Every number above is a count, not a screenshot. Three
+tabs in a column on the left flank, a fan that now unfolds above its own
+tab, and a room at 45% until you reach for it — none of that has been
+seen. Placement is what this project has got wrong three times with the
+arithmetic looking fine each time.
+
 ## 2026-08-07 — The front door gets a handle; the window stops going blank
 
 **Decision:** Phase 1 of the audit arc. Every item is a first-ninety-

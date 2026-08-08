@@ -613,6 +613,51 @@ decide whether the phase was worth doing.
       pad; it should go, and stay gone on the next launch. It must never
       be visible while a lab is already docked.
 
+## Phase 2 — Gravity Lab folds, and the room stands back
+
+**This is the owner's own complaint, so it is a judgement call before it
+is a check.** Everything here is `-openModule gravitylab` unless said
+otherwise.
+
+- [ ] **⟳⟳ IS IT CALMER?** The plain question, first, before any of the
+      detail. Standing objects went from about eighteen to nine: the
+      seven-plate bank is two, the six-disc clock is one tab, and two new
+      tabs hold what came off. If it does not read as a quieter room,
+      say so and the rest of this section does not matter.
+
+- [ ] **The three tabs down the left flank.** Under the two remaining
+      layer plates: Analysis, then Vectors. Each should read as a small
+      machined tab with its own live summary beneath — "off", or
+      "sweep, Lagrange", or "v a F". **The summary is the whole
+      argument for folding**: if you cannot tell what is switched on
+      without opening the tab, this design has failed and the plates
+      should come back out.
+
+- [ ] **The clock tab.** On the right flank where the fan used to be,
+      reading "Clock · 5×". Pinch it: the six-disc fan should unfold
+      ABOVE the tab, and the number on the tab should track whichever
+      disc you pick. Pinch again to fold. **Then check the tab still
+      tells you the speed with the fan closed** — that is the readout the
+      six discs used to be.
+
+- [ ] **Recession.** Stand back with your hands at your sides: every
+      instrument should sit at about 45% — clearly still readable, just
+      quiet. Reach toward one and it should come to full within about
+      arm's length, and only it, not the whole room. **Watch for
+      flicker**: if the hand tracking drops, everything should go to FULL
+      brightness rather than fading, and if you see it pulse as you move
+      your hands about, that is the bug.
+
+- [ ] **Reduce Motion.** Turn it on in system settings. The recession
+      should switch off entirely — full brightness, no fade — and every
+      fold should snap rather than ease. Nothing anywhere should freeze
+      part-way.
+
+- [ ] **Nothing lost.** Kepler sweep, Lagrange points, velocity,
+      acceleration and force must all still work from behind their
+      tabs, and the grid and field flow from the two plates that stayed.
+      The point of the fold is that nothing was removed.
+
 ## Cross-cutting
 
 ### Phase 0 of the 2026-08-07 audit arc — mostly invisible, four things that are not

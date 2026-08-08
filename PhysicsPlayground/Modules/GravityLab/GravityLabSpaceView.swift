@@ -132,6 +132,55 @@ struct GravityLabSpaceView: View {
             count: GravityLabModel.timeScales.count,
             itemSpan: Double(SpatialPicker.colliderSpan),
             reach: 0.34, verticalScale: 0.25, lift: 0, stagger: 0))
+    /// THE CLOCK, FOLDED — and the reason folding it is legitimate.
+    ///
+    /// The picker below stays open because it is a READOUT: which speed
+    /// you are running is the difference between an orbit you can watch
+    /// and one you cannot. That argument is right, and it is exactly
+    /// what `SummonHandle.summary` answers — the tab reads "Clock · 5×",
+    /// which is the same fact the six discs were carrying, in one object
+    /// instead of six. Six became fourteen centimetres wider on
+    /// 2026-08-07 when the fan was re-derived to fit its own touch
+    /// targets, which is what made this urgent.
+    @State private var clockHandle = SummonHandle(
+        title: "Clock", symbol: "clock",
+        accent: UIColor(DesignTokens.Palette.gravityAccent))
+
+    /// The second row: Kepler sweep and the Lagrange points.
+    ///
+    /// Both are ANALYSIS — overlays you switch on to study something
+    /// specific and then switch off again — as against the grid and the
+    /// field flow, which are how the system is drawn. Two plates behind
+    /// a door, and the door says which of them are on.
+    @State private var analysisHandle = SummonHandle(
+        title: "Analysis", symbol: "chart.xyaxis.line",
+        accent: UIColor(DesignTokens.Palette.gravityAccent))
+    /// The plates the Analysis handle unfolds.
+    @State private var analysis: SpatialLayerBank?
+
+    /// Velocity, acceleration and force — the arrows drawn ON the
+    /// selected body.
+    ///
+    /// THE GOAL SAID PUT THESE ON THE BODY'S BLOOM RING, and the code
+    /// says otherwise, so they are here instead. Two reasons, and the
+    /// first is the one that matters: `showVelocityVector` and its two
+    /// siblings are GLOBAL flags. The renderer draws the arrows on
+    /// whichever body is selected, but the switch is not a property of
+    /// that body — put it on a per-body ring and toggling it for Earth
+    /// silently changes what Jupiter shows, which is a control that lies
+    /// about its own scope. (Second, and minor: the ring already carries
+    /// Predict and Delete, and `Bloom.Petal`'s own ceiling is "two or
+    /// three per object, never more".)
+    ///
+    /// So the audit's diagnosis is right — three per-body annotations
+    /// had no business on a bank beside system-wide overlays — and its
+    /// prescription is not. They are their own group, behind their own
+    /// door, which says which of them are on.
+    @State private var vectorsHandle = SummonHandle(
+        title: "Vectors", symbol: "arrow.up.right",
+        accent: UIColor(DesignTokens.Palette.gravityAccent))
+    @State private var vectors: SpatialLayerBank?
+
     /// Identifies the floating readout above the selected body.
     private static let dataCardID = "gravity-data"
 
@@ -162,18 +211,69 @@ struct GravityLabSpaceView: View {
             // bank gives below: a switch that grew nine times along with
             // the solar system would put its own plates out of reach the
             // moment you used them.
+            // TWO PLATES, not seven. (Owner, 2026-08-07: this module
+            // is "way too cluttered".)
+            //
+            // What is left here is what the SYSTEM is drawn with — the
+            // grid it curves and the flow through it. The other five
+            // left for two different reasons, and the reasons are
+            // different kinds of wrong:
+            //
+            // · velocity / acceleration / force are PER-BODY
+            //   annotations. They were sitting on a system-wide bank
+            //   beside system-wide overlays, which is a category error:
+            //   "show the force" is a question about the planet you have
+            //   selected, and the selected body's control ring already
+            //   exists to answer questions about it. They are petals on
+            //   that ring now.
+            // · Kepler sweep and Lagrange points are ANALYSIS — things
+            //   you switch on to study something and off again. They are
+            //   behind the Analysis handle, which says which of them are
+            //   on, so folding them costs no readout.
             let bank = SpatialLayerBank(
                 accent: UIColor(DesignTokens.Palette.gravityAccent),
                 layers: [
                     .init(id: "grid", label: "Spacetime grid", symbol: "grid",
                           isOn: { model.showSpacetimeGrid },
                           toggle: { model.showSpacetimeGrid.toggle() }),
-                    .init(id: "sweep", label: "Kepler sweep", symbol: "triangle",
-                          isOn: { model.keplerSweepOn },
-                          toggle: { model.keplerSweepOn.toggle() }),
                     .init(id: "particles", label: "Field flow", symbol: "sparkles",
                           isOn: { model.showFieldParticles },
                           toggle: { model.showFieldParticles.toggle() }),
+                ])
+            renderer.root.addChild(bank.root)
+            layers = bank
+
+            // The second row, folded away behind the Analysis handle.
+            // The door onto `PhysicsCore.Lagrange`, which has solved
+            // this correctly and been unreachable since it was written,
+            // shows L1–L5 for the SELECTED planet against the Sun — so
+            // it is Jupiter's Trojan points when Jupiter is selected,
+            // and Sun–Earth L2 (where JWST is) when Earth is.
+            let analysisBank = SpatialLayerBank(
+                accent: UIColor(DesignTokens.Palette.gravityAccent),
+                layers: [
+                    .init(id: "sweep", label: "Kepler sweep", symbol: "triangle",
+                          isOn: { model.keplerSweepOn },
+                          toggle: { model.keplerSweepOn.toggle() }),
+                    .init(id: "lagrange", label: "Lagrange points",
+                          symbol: "circlebadge.2",
+                          isOn: { model.showLagrangePoints },
+                          toggle: { model.showLagrangePoints.toggle() }),
+                ])
+            renderer.root.addChild(analysisBank.root)
+            analysis = analysisBank
+
+            // The handles' summaries are what make folding honest: each
+            // reads out the state of what it hides, every frame.
+            analysisHandle.summary = {
+                let on = [model.keplerSweepOn ? "sweep" : nil,
+                          model.showLagrangePoints ? "Lagrange" : nil]
+                    .compactMap { $0 }
+                return on.isEmpty ? "off" : on.joined(separator: ", ")
+            }
+            let vectorBank = SpatialLayerBank(
+                accent: UIColor(DesignTokens.Palette.gravityAccent),
+                layers: [
                     .init(id: "velocity", label: "Velocity", symbol: "arrow.right",
                           isOn: { model.showVelocityVector },
                           toggle: { model.showVelocityVector.toggle() }),
@@ -184,19 +284,19 @@ struct GravityLabSpaceView: View {
                     .init(id: "force", label: "Force", symbol: "arrow.down.right",
                           isOn: { model.showForceVector },
                           toggle: { model.showForceVector.toggle() }),
-                    // The door onto `PhysicsCore.Lagrange`, which has
-                    // solved this correctly and been unreachable since it
-                    // was written. Shows L1–L5 for the SELECTED planet
-                    // against the Sun — so it is Jupiter's Trojan points
-                    // when Jupiter is selected, and Sun–Earth L2 (where
-                    // JWST is) when Earth is.
-                    .init(id: "lagrange", label: "Lagrange points",
-                          symbol: "circlebadge.2",
-                          isOn: { model.showLagrangePoints },
-                          toggle: { model.showLagrangePoints.toggle() }),
                 ])
-            renderer.root.addChild(bank.root)
-            layers = bank
+            renderer.root.addChild(vectorBank.root)
+            vectors = vectorBank
+            vectorsHandle.summary = {
+                let on = [model.showVelocityVector ? "v" : nil,
+                          model.showAccelerationVector ? "a" : nil,
+                          model.showForceVector ? "F" : nil].compactMap { $0 }
+                return on.isEmpty ? "off" : on.joined(separator: " ")
+            }
+            renderer.root.addChild(vectorsHandle.root)
+            clockHandle.summary = { "\(Int(model.timeScale))×" }
+            renderer.root.addChild(clockHandle.root)
+            renderer.root.addChild(analysisHandle.root)
 
             // The two verbs, under `root` like every other instrument
             // here — the scale rig reaches 9×, and a control that grew
@@ -312,20 +412,49 @@ struct GravityLabSpaceView: View {
                     // The clock bank stands beside the system, offset to
                     // the right so it never sits on the Sun, and at ~16°
                     // below eye — the same glance as the orrery itself.
-                    clockPicker.update(
-                        anchor: GravityLabRenderer.systemPosition
-                            + SIMD3(0.55, -0.09, 0),
-                        viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
-                        dt: event.deltaTime)
+                    let head = appModel.room.headPosition.map { SIMD3<Float>($0) }
+                    let clockAnchor = GravityLabRenderer.systemPosition
+                        + SIMD3<Float>(0.55, -0.09, 0)
+                    let hand = appModel.room.nearestFingertip(to: clockAnchor)
+                    // The TAB stands where the fan used to; the fan
+                    // unfolds above it only when asked.
+                    clockHandle.update(anchor: clockAnchor, viewer: head,
+                                       dt: event.deltaTime, nearestHand: hand)
+                    clockPicker.root.isEnabled = clockHandle.isOpen
+                    if clockHandle.isOpen {
+                        clockPicker.update(
+                            anchor: clockAnchor + SIMD3(0, 0.13, 0),
+                            viewer: head,
+                            dt: event.deltaTime)
+                    }
                     // What EXISTS is on the left, what you MAKE is on the
                     // right — the same hand rule Electric Fields lays out
                     // its instruments by, so the two modules teach one
                     // layout rather than two.
-                    layers?.update(
-                        anchor: GravityLabRenderer.systemPosition
-                            + SIMD3(-0.62, 0.06, 0),
-                        viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
-                        dt: event.deltaTime)
+                    let bankAnchor = GravityLabRenderer.systemPosition
+                        + SIMD3<Float>(-0.62, 0.06, 0)
+                    layers?.update(anchor: bankAnchor, viewer: head,
+                                   dt: event.deltaTime)
+                    Recession.apply(to: layers?.root ?? Entity(),
+                                    anchor: bankAnchor, nearestHand: hand)
+                    // The Analysis handle sits under the two plates it
+                    // is a sibling of, and its own row unfolds below it.
+                    let analysisAnchor = bankAnchor + SIMD3<Float>(0, -0.115, 0)
+                    analysisHandle.update(anchor: analysisAnchor, viewer: head,
+                                          dt: event.deltaTime, nearestHand: hand)
+                    analysis?.root.isEnabled = analysisHandle.isOpen
+                    if analysisHandle.isOpen {
+                        analysis?.update(anchor: analysisAnchor + SIMD3(0, -0.105, 0),
+                                         viewer: head, dt: event.deltaTime)
+                    }
+                    let vectorAnchor = bankAnchor + SIMD3<Float>(0, -0.230, 0)
+                    vectorsHandle.update(anchor: vectorAnchor, viewer: head,
+                                         dt: event.deltaTime, nearestHand: hand)
+                    vectors?.root.isEnabled = vectorsHandle.isOpen
+                    if vectorsHandle.isOpen {
+                        vectors?.update(anchor: vectorAnchor + SIMD3(0, -0.105, 0),
+                                        viewer: head, dt: event.deltaTime)
+                    }
                     // Under the clock bank, on the same flank: the clock
                     // decides how fast the system runs, these decide what
                     // is IN it. Both are things you do to the system as a
@@ -596,7 +725,18 @@ struct GravityLabSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
-                    if clockPicker.handleTap(value.entity) { return }
+                    // The handles get first refusal — they are the
+                    // doors, and a door has to answer before the room
+                    // behind it.
+                    if clockHandle.handleTap(value.entity) { return }
+                    if analysisHandle.handleTap(value.entity) { return }
+                    if vectorsHandle.handleTap(value.entity) { return }
+                    if vectorsHandle.isOpen,
+                       vectors?.handleTap(value.entity) == true { return }
+                    if clockHandle.isOpen,
+                       clockPicker.handleTap(value.entity) { return }
+                    if analysisHandle.isOpen,
+                       analysis?.handleTap(value.entity) == true { return }
                     if layers?.handleTap(value.entity) == true { return }
                     if worldPicker.handleTap(value.entity) { return }
                     if verbs?.handleTap(value.entity) == true { return }
