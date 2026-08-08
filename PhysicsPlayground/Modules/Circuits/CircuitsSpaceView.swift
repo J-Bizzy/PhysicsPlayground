@@ -65,6 +65,27 @@ struct CircuitsSpaceView: View {
     /// The bench's one standing verb: clear it. See `clearAnchor`.
     @State private var verbs: SpatialActionBank?
 
+    /// FIVE AUTHORED CIRCUITS THAT NOBODY COULD LOAD.
+    ///
+    /// `CircuitsModel.Preset` has five cases and `loadPreset` had ZERO
+    /// callers — series bulbs, parallel bulbs, a voltage divider, an RC
+    /// charger and a dead short, each with a paragraph of `insightText`
+    /// written for it, all compiled and unreachable. They were built for
+    /// the window panel that was deleted on 2026-08-01 and never given a
+    /// surface in the room.
+    ///
+    /// Behind a `SummonHandle` because that type's own header names this
+    /// exact case — "the things a room accumulates … a ten-preset fan" —
+    /// and because five more standing plates in a lab the owner already
+    /// called cluttered is not the trade. Folded it is one tab that
+    /// reads out the last circuit loaded.
+    @State private var presetsHandle = SummonHandle(
+        title: "Presets", symbol: "square.grid.2x2",
+        accent: UIColor(DesignTokens.Palette.circuitsAccent))
+    @State private var presets: SpatialActionBank?
+    /// What the handle reads out when folded.
+    @State private var lastPreset: CircuitsModel.Preset?
+
     /// Identifies the floating readout above the selected part.
     private static let readoutCardID = "circuit-readout"
 
@@ -103,6 +124,39 @@ struct CircuitsSpaceView: View {
     /// a `confirmationDialog` and why the plate `confirms`.
     private static let clearAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-1.02, -0.02, 0.10)
+
+    /// ABOVE THE CLEAR PLATE, on the far-left flank — and every other
+    /// candidate was ruled out by arithmetic rather than by taste, which
+    /// is what `InstrumentClearance` is for.
+    ///
+    /// The bank is five plates at 0.066 pitch, so it is 0.264 tall plus a
+    /// plate's own 0.05 — a 0.157 half-extent, not the 0.10 a glance
+    /// suggests. That number is what decides this:
+    ///
+    /// - Above the LAYERS bank (the first attempt): the layers bank is
+    ///   also five plates, spanning y 1.033…1.347. Clearing it by 3 cm
+    ///   puts the presets column's centre at 1.534, its top at 1.691, and
+    ///   the tab above THAT at 1.82 — past the 1.80 ceiling. Five over
+    ///   five does not fit on one flank.
+    /// - Between the layers bank and the Clear plate: 1 cm of gap once
+    ///   the Clear plate's 0.13 half-width and the labels are counted.
+    /// - The right flank is the meter's, and the meter MOVES once a hand
+    ///   has taken it, so nothing can be spaced against it.
+    ///
+    /// Above the Clear plate works: the plate is one row, so it tops out
+    /// at 1.29 and leaves the whole band above it free. It also puts the
+    /// column at x −1.17…−0.87, which is the only one of these positions
+    /// entirely OUTSIDE the bench's build volume (`buildHalfExtents.x` is
+    /// 0.70) — see the note in `CircuitsInstrumentClearanceTests` about
+    /// the furniture that is not.
+    private static let presetsAnchor = CircuitsRenderer.benchPivot
+        + SIMD3<Float>(-1.02, 0.48, 0.10)
+    /// The column hangs below the tab, centred on this point — a bank
+    /// centres its plates on its anchor rather than stacking down from
+    /// it, which is how the first attempt put the tab inside its own
+    /// column.
+    private static let presetsBankAnchor = CircuitsRenderer.benchPivot
+        + SIMD3<Float>(-1.02, 0.24, 0.10)
 
     var body: some View {
         RealityView { content, attachments in
@@ -178,6 +232,37 @@ struct CircuitsSpaceView: View {
                 ])
             renderer.root.addChild(benchVerbs.root)
             self.verbs = benchVerbs
+
+            // EVERY PRESET CONFIRMS, and that is not caution for its own
+            // sake: `loadPreset` opens with `clearBench()`, and this
+            // bench PERSISTS ACROSS LAUNCHES (`CircuitsModel(restoreSaved:)`).
+            // A single tap here would destroy work from a previous
+            // session — the same reason the Clear plate beside it
+            // confirms, and the reason its comment calls it the most
+            // dangerous of the seven verbs that left the window. Adding
+            // five more one-tap ways to do the same thing would have
+            // undone that decision by accident.
+            let presetBank = SpatialActionBank(
+                accent: UIColor(DesignTokens.Palette.circuitsAccent),
+                actions: CircuitsModel.Preset.allCases.map { preset in
+                    .init(id: preset.rawValue, label: preset.displayName,
+                          symbol: "bolt.horizontal",
+                          confirms: true,
+                          fire: {
+                              model.loadPreset(preset)
+                              lastPreset = preset
+                              presetsHandle.close()
+                          })
+                })
+            presetBank.root.isEnabled = false
+            renderer.root.addChild(presetBank.root)
+            self.presets = presetBank
+
+            // The handle is a READOUT as well as a door — the half that
+            // makes folding legitimate. It says which circuit is on the
+            // bench, or that the bench is the user's own.
+            presetsHandle.summary = { lastPreset?.displayName ?? "your bench" }
+            renderer.root.addChild(presetsHandle.root)
 
             // THE PARTS PALETTE, which used to be a glass tray at the
             // bottom of the frame. Two blocks of sources on the flanks,
@@ -258,6 +343,19 @@ struct CircuitsSpaceView: View {
                                   resetNonce: appModel.resetNonce,
                                   nearestHand: appModel.room.nearestFingertip(
                                     to: Self.clearAnchor))
+                    presetsHandle.update(
+                        anchor: Self.presetsAnchor, viewer: viewer,
+                        dt: event.deltaTime,
+                        nearestHand: appModel.room.nearestFingertip(
+                            to: Self.presetsAnchor))
+                    presets?.root.isEnabled = presetsHandle.isOpen
+                    if presetsHandle.isOpen {
+                        presets?.update(anchor: Self.presetsBankAnchor,
+                                        viewer: viewer, dt: event.deltaTime,
+                                        resetNonce: appModel.resetNonce,
+                                        nearestHand: appModel.room.nearestFingertip(
+                                            to: Self.presetsBankAnchor))
+                    }
                     // Rendered here every frame (not via the observation
                     // loop): a steady DC circuit mutates nothing that
                     // observation reliably re-fires on, but its electrons
@@ -377,6 +475,9 @@ struct CircuitsSpaceView: View {
                     // distance: a verb plate is never also a reach for
                     // the bench behind it, wherever it happens to stand.
                     if verbs?.handleTap(value.entity) == true { return }
+                    if presetsHandle.handleTap(value.entity) { return }
+                    if presetsHandle.isOpen,
+                       presets?.handleTap(value.entity) == true { return }
                     handleTap(on: value.entity)
                 }
         )

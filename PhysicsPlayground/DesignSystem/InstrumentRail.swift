@@ -183,8 +183,22 @@ struct InstrumentRail {
 enum InstrumentClearance {
 
     /// Clearance from the physics, equal to the proximity-fallback radius
-    /// a module uses when a pinch lands on nothing nameable. See the file
-    /// header, rule 1.
+    /// the module uses when a pinch lands on nothing nameable.
+    ///
+    /// A DEFAULT, NOT A CONSTANT, and hoisting it as a constant was my
+    /// mistake for a few hours. The rule is general; the NUMBER is not.
+    /// 0.12 is Electric Fields' `resolveCharge(fallbackRadius:)`, and it
+    /// is the right margin there because a pinch on empty air within
+    /// 12 cm of a charge grabs that charge — so an instrument any closer
+    /// could be pinched at a point that is also a grab. Circuit Workshop
+    /// has no such fallback: `nearestTerminal` only runs during a wire
+    /// drag the user has already started. Imposing 12 cm there would
+    /// declare a correct layout illegal, which is how a shared rule gets
+    /// a reputation for crying wolf and then gets switched off.
+    ///
+    /// Pass the module's own fallback radius. Pass 0 if it has none —
+    /// furniture still must not interpenetrate the build volume, and the
+    /// check still says so.
     static let stationMargin = 0.12
 
     /// Where a standing user's head is taken to be.
@@ -207,16 +221,17 @@ enum InstrumentClearance {
     /// check that stops at the first failure turns a layout pass into as
     /// many build-run cycles as there are mistakes.
     static func violations(instruments: [(name: String, box: StationBox)],
-                           station: StationBox) -> [String] {
+                           station: StationBox,
+                           margin: Double = stationMargin) -> [String] {
         var found: [String] = []
 
         for (name, box) in instruments {
-            if !box.isSeparated(from: station, margin: stationMargin) {
+            if !box.isSeparated(from: station, margin: margin) {
                 found.append(String(
                     format: "%@ is %.3f m from the physics (needs %.2f) — a pinch "
                           + "aimed at it could also be inside grabbing range of a "
                           + "real object", name, box.separation(from: station),
-                    stationMargin))
+                    margin))
             }
             // NEAREST point, not the far corner. You can reach an
             // instrument if any of it is within reach; measuring to the
