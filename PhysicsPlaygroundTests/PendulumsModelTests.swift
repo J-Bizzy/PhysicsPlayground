@@ -471,4 +471,87 @@ final class PendulumsModelTests: XCTestCase {
         model.removePendulum(id: id)
         XCTAssertFalse(model.pendulums.contains { $0.id == id })
     }
+
+    // MARK: The double's readouts
+
+    /// EVERY READOUT ABOUT THE DOUBLE PENDULUM USED TO LIE, and they all
+    /// lied for one reason: `step` wrote `doubleState` and never wrote
+    /// `state`, which is what the renderer, the card, the notebook and
+    /// the freeze sculpt all read.
+    ///
+    /// So `state.position` stayed a plumb bob at rest and
+    /// `state.velocity` was identically zero forever. The trail's
+    /// `speed > 0.02` gate never passed, so the chaotic trace the rig
+    /// exists for could not be drawn at all; the force arrows drew a
+    /// constant mg on a bob accelerating hard; the card read
+    /// `v 0.00 m/s` permanently.
+    ///
+    /// This asserts the mirror rather than any particular trajectory —
+    /// chaos makes a stored reference untestable, as this file's own
+    /// header explains, but "the two representations agree" is true on
+    /// every step of every trajectory.
+    func testTheDoublesStateTracksItsLowerBob() throws {
+        let model = PendulumsModel()
+        for existing in model.pendulums { model.removePendulum(id: existing.id) }
+        let id = try XCTUnwrap(model.addDoublePendulum())
+
+        var sawMotion = false
+        for _ in 0..<400 {
+            model.step(dt: 1.0 / 90)
+            let pendulum = try XCTUnwrap(model.pendulums.first { $0.id == id })
+            let double = try XCTUnwrap(pendulum.doubleState)
+            let lower = try XCTUnwrap(pendulum.lowerBobWorld)
+
+            // `state.position` is relative to the pivot; `lowerBobWorld`
+            // is the same point lifted into the room.
+            let fromState = pendulum.pivot + pendulum.state.position
+            XCTAssertEqual(simd_distance(fromState, lower), 0, accuracy: 1e-9,
+                           "state.position is not the lower bob")
+
+            // And the speed must match the double's own derivative.
+            let planar = double.lowerBobVelocity(rig: pendulum.doubleRig)
+            XCTAssertEqual(simd_length(pendulum.state.velocity),
+                           simd_length(planar), accuracy: 1e-9,
+                           "state.velocity is not the lower bob's speed")
+
+            if simd_length(pendulum.state.velocity) > 0.02 { sawMotion = true }
+        }
+
+        XCTAssertTrue(sawMotion,
+                      "the lower bob never exceeded the trail's own "
+                      + "`speed > 0.02` gate, so the chaotic trace would "
+                      + "still be undrawable")
+    }
+
+    /// A NEW double must not inherit the last one's speed.
+    ///
+    /// The mirror above writes `state` from the double's own solution
+    /// every step, so a fresh rig reports a fresh velocity — but the
+    /// first version of this test asserted the wrong thing (that a new
+    /// double is at rest a step later), which is false: it is released
+    /// from θ₁ = 2.2 rad and gravity has it moving inside one frame.
+    /// What is actually worth pinning is that the number describes THIS
+    /// pendulum rather than the one whose slot it took.
+    func testANewDoubleDoesNotInheritTheLastOnesSpeed() throws {
+        let model = PendulumsModel()
+        for existing in model.pendulums { model.removePendulum(id: existing.id) }
+
+        let first = try XCTUnwrap(model.addDoublePendulum())
+        for _ in 0..<300 { model.step(dt: 1.0 / 90) }
+        let fast = try XCTUnwrap(model.pendulums.first { $0.id == first })
+        XCTAssertGreaterThan(simd_length(fast.state.velocity), 0.2,
+                             "the fixture never got moving, so this proves nothing")
+        model.removePendulum(id: first)
+
+        _ = try XCTUnwrap(model.addDoublePendulum())
+        let fresh = try XCTUnwrap(model.pendulums.first)
+        XCTAssertEqual(simd_length(fresh.state.velocity), 0, accuracy: 1e-12,
+                       "a brand-new double is released from rest")
+
+        // And one step later it is moving at roughly free-fall speed,
+        // not at whatever the deleted one was doing.
+        model.step(dt: 1.0 / 90)
+        let stepped = try XCTUnwrap(model.pendulums.first)
+        XCTAssertLessThan(simd_length(stepped.state.velocity), 0.3)
+    }
 }

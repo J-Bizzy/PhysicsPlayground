@@ -169,6 +169,32 @@ public struct DoublePendulum: Equatable, Sendable {
                      upper.y - rig.length2 * cos(theta2))
     }
 
+    /// How fast the upper bob is moving, relative to the pivot.
+    ///
+    /// Differentiating `upperBob`: d/dt(L₁sinθ₁) = L₁ω₁cosθ₁, and
+    /// d/dt(−L₁cosθ₁) = L₁ω₁sinθ₁.
+    public func upperBobVelocity(rig: Rig) -> SIMD2<Double> {
+        SIMD2(rig.length1 * omega1 * cos(theta1),
+              rig.length1 * omega1 * sin(theta1))
+    }
+
+    /// How fast the lower bob is moving, relative to the pivot.
+    ///
+    /// THIS EXISTS BECAUSE NOTHING COULD SEE THE CHAOTIC BOB MOVE.
+    /// `DoublePendulum` solved the dynamics correctly from the day it
+    /// was written and reported only where the bobs ARE; every consumer
+    /// that wanted a speed — a trail's "is it moving" gate, a velocity
+    /// arrow, a readout card, a freeze sculpt — had nothing to ask, so
+    /// Pendulums' double rig drew no trail, showed `v 0.00 m/s`
+    /// permanently, and stamped a constant `mg` on a bob that is visibly
+    /// accelerating hard. The one image the rig exists for was
+    /// undrawable.
+    public func lowerBobVelocity(rig: Rig) -> SIMD2<Double> {
+        let upper = upperBobVelocity(rig: rig)
+        return SIMD2(upper.x + rig.length2 * omega2 * cos(theta2),
+                     upper.y + rig.length2 * omega2 * sin(theta2))
+    }
+
     /// Total mechanical energy, J, with the pivot as the datum.
     ///
     /// The cross term `2L₁L₂θ₁'θ₂'cos(θ₁−θ₂)` in the kinetic energy is

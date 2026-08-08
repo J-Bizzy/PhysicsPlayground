@@ -15,6 +15,7 @@
 //
 
 import XCTest
+import simd
 @testable import PhysicsCore
 
 final class DoublePendulumTests: XCTestCase {
@@ -176,5 +177,82 @@ final class DoublePendulumTests: XCTestCase {
                                      "a damped double pendulum gained energy")
             previous = now
         }
+    }
+
+    // MARK: The bobs' velocities
+
+    /// THE ACCESSOR THE WHOLE RIG WAS MISSING. `DoublePendulum` reported
+    /// only where the bobs ARE, so nothing downstream could ask how fast
+    /// the chaotic bob was moving — and Pendulums' trail, velocity
+    /// arrow, readout card and freeze sculpt all silently believed the
+    /// answer was zero.
+    ///
+    /// Checked against a finite difference of the POSITION accessor
+    /// rather than against a second copy of the algebra, so this cannot
+    /// pass by making the same differentiation mistake twice.
+    func testBobVelocitiesMatchTheDerivativeOfTheirPositions() {
+        let rig = DoublePendulum.Rig(length1: 0.42, length2: 0.31,
+                                     mass1: 0.8, mass2: 1.3, damping: 0)
+        var state = DoublePendulum(theta1: 1.1, theta2: -0.6,
+                                   omega1: 0.9, omega2: -1.7)
+
+        // A few steps in, so the check is not run at a symmetric start.
+        for _ in 0..<40 {
+            state = DoublePendulum.step(state, dt: 1.0 / 480, rig: rig, gravity: g)
+        }
+
+        let h = 1e-6
+        for (name, position, velocity) in [
+            ("upper", { (s: DoublePendulum) in s.upperBob(rig: rig) },
+             state.upperBobVelocity(rig: rig)),
+            ("lower", { (s: DoublePendulum) in s.lowerBob(rig: rig) },
+             state.lowerBobVelocity(rig: rig)),
+        ] as [(String, (DoublePendulum) -> SIMD2<Double>, SIMD2<Double>)] {
+            // Advance the ANGLES analytically by h at the current rates;
+            // over an interval this short that is the definition of the
+            // derivative the accessor claims to compute.
+            var ahead = state
+            ahead.theta1 += state.omega1 * h
+            ahead.theta2 += state.omega2 * h
+            var behind = state
+            behind.theta1 -= state.omega1 * h
+            behind.theta2 -= state.omega2 * h
+
+            let numeric = (position(ahead) - position(behind)) / (2 * h)
+            XCTAssertEqual(velocity.x, numeric.x, accuracy: 1e-6,
+                           "\(name) bob's x velocity")
+            XCTAssertEqual(velocity.y, numeric.y, accuracy: 1e-6,
+                           "\(name) bob's y velocity")
+        }
+    }
+
+    /// A rig at rest has bobs at rest — the degenerate case the trail
+    /// gate actually tests against.
+    func testBobsAtRestReportNoSpeed() {
+        let rig = DoublePendulum.Rig(length1: 0.5, length2: 0.5,
+                                     mass1: 1, mass2: 1, damping: 0)
+        let state = DoublePendulum(theta1: 0.7, theta2: 1.4)
+        XCTAssertEqual(simd_length(state.lowerBobVelocity(rig: rig)), 0,
+                       accuracy: 1e-12)
+    }
+
+    /// And a moving one reports a speed the energy agrees with: at the
+    /// instant both rods are straight down, all the kinetic energy is in
+    /// the bobs and the two calculations must meet.
+    func testSpeedAgreesWithKineticEnergyAtTheBottom() {
+        let rig = DoublePendulum.Rig(length1: 0.5, length2: 0.5,
+                                     mass1: 1, mass2: 1, damping: 0)
+        let state = DoublePendulum(theta1: 0, theta2: 0,
+                                   omega1: 2.0, omega2: 3.0)
+        let upper = state.upperBobVelocity(rig: rig)
+        let lower = state.lowerBobVelocity(rig: rig)
+        let kinetic = 0.5 * rig.mass1 * simd_length_squared(upper)
+            + 0.5 * rig.mass2 * simd_length_squared(lower)
+
+        // `energy` is potential + kinetic with the pivot as datum.
+        let potential = -g * (rig.mass1 * rig.length1
+            + rig.mass2 * (rig.length1 + rig.length2))
+        XCTAssertEqual(state.energy(rig: rig, gravity: g),
+                       kinetic + potential, accuracy: 1e-9)
     }
 }

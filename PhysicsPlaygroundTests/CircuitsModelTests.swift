@@ -1029,4 +1029,80 @@ final class CircuitsModelTests: XCTestCase {
                                            within: 0.035),
                      "a probe in mid-air should latch onto nothing")
     }
+
+    // MARK: Zombie wires
+
+    /// DELETING AN ARMED PART LEFT A WIRE THAT COULD NEVER BE REMOVED.
+    ///
+    /// Pinch a terminal (arms it), open that part's ring, tap Delete.
+    /// `pendingTerminal` still named the destroyed part, so the next
+    /// terminal tap anywhere appended a `Wire` whose `from` component
+    /// does not exist. The renderer disables it, so it is invisible and
+    /// un-pinchable; it permanently consumes one of the 36 budget slots;
+    /// and `persistSoon` writes it to `UserDefaults`, so it comes back
+    /// after a relaunch. There was no way to get rid of it.
+    func testDeletingAnArmedPartCannotLeaveAWireBehind() throws {
+        let model = CircuitsModel()
+        // A fresh model arrives with a seeded circuit already wired, so
+        // the bench is cleared first — otherwise the duplicate-wire
+        // guard, not the fix, is what these tests measure.
+        for existing in model.components { model.removeComponent(id: existing.id) }
+        let battery = try XCTUnwrap(model.add(.battery))
+        let bulb = try XCTUnwrap(model.add(.bulb))
+        let before = model.wires.count
+
+        // Arm a terminal on the battery, then delete the battery.
+        model.tapTerminal(.init(componentID: battery, end: 0))
+        model.removeComponent(id: battery)
+
+        // The next tap must not build anything.
+        model.tapTerminal(.init(componentID: bulb, end: 0))
+
+        XCTAssertEqual(model.wires.count, before,
+                       "a wire was created onto a component that no longer exists")
+        for wire in model.wires {
+            XCTAssertTrue(
+                model.components.contains { $0.id == wire.from.componentID },
+                "wire.from names a deleted component — invisible, un-pinchable, "
+                + "and persisted to disk")
+            XCTAssertTrue(model.components.contains { $0.id == wire.to.componentID })
+        }
+    }
+
+    /// The second half of the same guard: even if an arming survives by
+    /// some other route, the wire must still refuse to be built.
+    func testAWireIsNeverBuiltOntoAMissingComponent() throws {
+        let model = CircuitsModel()
+        for existing in model.components { model.removeComponent(id: existing.id) }
+        let battery = try XCTUnwrap(model.add(.battery))
+        let bulb = try XCTUnwrap(model.add(.bulb))
+
+        let before = model.wires.count
+
+        model.tapTerminal(.init(componentID: battery, end: 0))
+        // A terminal on a component that was never added at all.
+        model.tapTerminal(.init(componentID: UUID(), end: 1))
+        XCTAssertEqual(model.wires.count, before,
+                       "a wire was built onto a component that never existed")
+    }
+
+    /// The guard must refuse the impossible wire WITHOUT refusing the
+    /// ordinary one — a fix that simply stopped wiring anything would
+    /// pass the test above.
+    ///
+    /// Its own fixture, because the refusal path deliberately returns
+    /// before `tapTerminal`'s `defer` and so leaves the first terminal
+    /// still armed. That is reasonable behaviour — a tap on nothing
+    /// should not throw away what you had selected — but it means the
+    /// two cases cannot share a sequence.
+    func testTheOrdinaryWireIsStillBuilt() throws {
+        let model = CircuitsModel()
+        for existing in model.components { model.removeComponent(id: existing.id) }
+        let battery = try XCTUnwrap(model.add(.battery))
+        let bulb = try XCTUnwrap(model.add(.bulb))
+
+        model.tapTerminal(.init(componentID: battery, end: 0))
+        model.tapTerminal(.init(componentID: bulb, end: 1))
+        XCTAssertEqual(model.wires.count, 1)
+    }
 }

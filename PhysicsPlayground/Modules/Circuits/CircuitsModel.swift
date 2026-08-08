@@ -515,6 +515,11 @@ final class CircuitsModel {
             return
         }
         defer { pendingTerminal = nil }
+        // The PENDING end is re-validated too, not just the new one.
+        // Belt and braces against the zombie wire above: `removeComponent`
+        // clears the arming, and this refuses to build a wire onto a
+        // part that has gone however it went.
+        guard components.contains(where: { $0.id == pending.componentID }) else { return }
         guard pending != terminal else { return }  // tapped again: cancel
         // No duplicate wires between the same two terminals.
         let exists = wires.contains {
@@ -610,6 +615,18 @@ final class CircuitsModel {
         components.removeAll { $0.id == id }
         wires.removeAll { $0.from.componentID == id || $0.to.componentID == id }
         if selectedID == id { selectedID = components.last?.id }
+        // A HALF-DRAWN WIRE CANNOT SURVIVE ITS OWN PART.
+        //
+        // Pinch a terminal (which arms it), open that part's ring, tap
+        // Delete: `pendingTerminal` still named the destroyed part, and
+        // the next terminal tap anywhere on the bench appended a `Wire`
+        // whose `from` component does not exist. It is invisible
+        // (`isEnabled = false`), therefore un-pinchable and impossible
+        // to remove, permanently consumes one of the 36 budget slots,
+        // and is written straight to `UserDefaults` — so it survives
+        // relaunches. `connectTerminals` validated both ends; this, the
+        // path the Bloom's Delete petal actually calls, cleared neither.
+        if pendingTerminal?.componentID == id { pendingTerminal = nil }
         persistSoon()
     }
 

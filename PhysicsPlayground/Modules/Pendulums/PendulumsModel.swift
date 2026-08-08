@@ -438,6 +438,32 @@ final class PendulumsModel {
                     doubleState = DoublePendulum.step(
                         doubleState, dt: substep, rig: rig, gravity: gravity)
                     pendulums[index].doubleState = doubleState
+                    // MIRROR THE LOWER BOB INTO `state`, because `state`
+                    // is what everything downstream reads and this
+                    // branch never wrote it.
+                    //
+                    // A double pendulum's `state` therefore sat at its
+                    // initial plumb-bob position with zero velocity for
+                    // the entire life of the rig, and every consumer
+                    // believed it: the trail's `speed > 0.02` gate never
+                    // passed, so the chaotic trace the whole rig exists
+                    // for was UNDRAWABLE; the force arrows drew a
+                    // constant mg on a bob visibly accelerating hard;
+                    // the card read `θ 0°  v 0.00 m/s` forever; the
+                    // notebook wrote `Speed 0.000 m/s`; pausing produced
+                    // no freeze sculpt at all; and grabbing it froze it
+                    // and refused to follow the hand.
+                    //
+                    // `state` is the lower bob relative to the pivot, in
+                    // the pendulum's own swing plane — the same frame
+                    // `lowerBobWorld` lifts back into the room.
+                    let planar = doubleState.lowerBob(rig: rig)
+                    let planarVelocity = doubleState.lowerBobVelocity(rig: rig)
+                    let axis = pendulums[index].planeAxis
+                    pendulums[index].state = SphericalPendulum(
+                        position: axis * planar.x + SIMD3(0, planar.y, 0),
+                        velocity: axis * planarVelocity.x
+                            + SIMD3(0, planarVelocity.y, 0))
                 }
             }
             resolveBobCollisions()
