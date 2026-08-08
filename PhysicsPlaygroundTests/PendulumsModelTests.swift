@@ -554,4 +554,141 @@ final class PendulumsModelTests: XCTestCase {
         let stepped = try XCTUnwrap(model.pendulums.first)
         XCTAssertLessThan(simd_length(stepped.state.velocity), 0.3)
     }
+
+    // MARK: Bobs that meet
+
+    /// Mechanical energy of every simple pendulum on the bench, with the
+    /// pivot as datum. Frictionless, this may fall (a collision with
+    /// restitution < 1 removes some) but must never RISE.
+    private func benchEnergy(_ model: PendulumsModel) -> Double {
+        model.pendulums.filter { $0.kind == .simple }.reduce(0) { total, p in
+            let speed = simd_length(p.state.velocity)
+            let height = p.state.position.y      // negative, below the pivot
+            return total + 0.5 * p.mass * speed * speed
+                + p.mass * model.gravity * height
+        }
+    }
+
+    /// A FRICTIONLESS BENCH MUST NOT MAKE ENERGY — an invariant worth
+    /// pinning, and NOT evidence for the claim it was written to test.
+    ///
+    /// Audit P1-25 says off-axis bobs gain energy on every contact,
+    /// because the exchange is applied along the line of centres rather
+    /// than along each bob's own constraint tangent. The reasoning is
+    /// plausible; the effect is not there. Measured on this fixture —
+    /// two bobs whose lengths differ by 0.04 m, tilting the contact
+    /// normal ~34° off tangent while staying inside the 0.07 m contact
+    /// distance, so they genuinely collide — total energy moves by
+    /// 3.6e-15 J over 1800 steps, with and without the projection the
+    /// claim asks for. That fix was written and reverted; the reasoning
+    /// is at the call site in `PendulumsModel`.
+    ///
+    /// So this test does NOT discriminate between the two
+    /// implementations, and saying so is the point: two earlier versions
+    /// of it were vacuous in ways that were not obvious (the first hung
+    /// the bobs 25 cm apart, where they never touched at all), and a
+    /// test whose green nobody has interrogated is how this arc's worst
+    /// defects shipped. What it does buy is a real guard against a
+    /// FUTURE collision change that does inject energy.
+    func testAFrictionlessBenchNeverGainsEnergyThroughCollisions() throws {
+        let model = PendulumsModel()
+        for existing in model.pendulums { model.removePendulum(id: existing.id) }
+        model.frictionOn = false
+
+        // Two pendulums whose bobs CAN meet but do not meet level.
+        //
+        // The lengths differ by 0.04 m — enough to tilt the contact
+        // normal about 34° off the horizontal, and still inside the
+        // 0.07 m sum of the two bob radii, so they genuinely touch. The
+        // first version of this test used 0.80 and 0.55, which hangs the
+        // bobs 25 cm apart: they never collided at all and the test
+        // passed against the unfixed code, which is the only kind of
+        // green worth being suspicious of.
+        let pivot = PendulumsModel.defaultPivot
+        _ = try XCTUnwrap(model.addPendulum(length: 0.80, angle: 0.9, at: pivot))
+        _ = try XCTUnwrap(model.addPendulum(length: 0.76, angle: -0.9,
+                                            at: pivot + SIMD3(0.06, 0, 0)))
+
+        let start = benchEnergy(model)
+        var peak = start
+        var closestApproach = Double.infinity
+        for _ in 0..<(90 * 20) {
+            model.step(dt: 1.0 / 90)
+            peak = max(peak, benchEnergy(model))
+            if model.pendulums.count == 2 {
+                closestApproach = min(closestApproach,
+                                      simd_distance(model.pendulums[0].bobWorld,
+                                                    model.pendulums[1].bobWorld))
+            }
+        }
+
+        // A small tolerance for the integrator itself; the defect was
+        // not small — it compounded until the bobs flew.
+        // The measured figure is ~4e-15 J, so the tolerance is generous
+        // by twelve orders of magnitude and still catches anything that
+        // pumps the bench.
+        XCTAssertLessThan(
+            peak, start + 0.02,
+            "the bench gained \(peak - start) J across 20 s of off-axis "
+            + "collisions — a frictionless bench may lose energy, never make it")
+
+        // And the bobs must actually have COLLIDED, or the assertion
+        // above is about a bench where nothing ever happened. This is
+        // the check the first two versions of this test lacked.
+        let a = try XCTUnwrap(model.pendulums.first)
+        let b = try XCTUnwrap(model.pendulums.last)
+        XCTAssertLessThan(closestApproach, a.bobRadius + b.bobRadius,
+                          "the bobs never came within contact distance, so this "
+                          + "test exercised no collision at all")
+    }
+
+    /// COLLISIONS USED TO SWITCH OFF FOR THE WHOLE BENCH IF TWO PIVOTS
+    /// COINCIDED.
+    ///
+    /// The sweep is ordered along the line from the first movable pivot
+    /// to the last — ARRAY order, not spatial order — and a zero-length
+    /// axis returned early out of the entire resolution. Pull two
+    /// pendulums from the well without moving either and both land on
+    /// `defaultPivot`, so nothing in the room collided with anything
+    /// from then on, including a cradle standing beside them.
+    func testTwoPendulumsOnOnePivotDoNotDisableTheWholeBench() throws {
+        let model = PendulumsModel()
+        for existing in model.pendulums { model.removePendulum(id: existing.id) }
+        model.frictionOn = false
+
+        // THE STACKED PAIR GOES AT THE ENDS OF THE ARRAY, because the
+        // old axis was `movable.first.pivot` to `movable.last.pivot` in
+        // ARRAY order — that is the whole bug, and a fixture with the
+        // pair in the middle would leave the axis non-zero and prove
+        // nothing.
+        _ = try XCTUnwrap(model.addPendulum(length: 0.8, angle: 0.2))
+
+        // A cradle-like pair that WILL touch, well away from the origin.
+        let rail = PendulumsModel.defaultPivot + SIMD3(0.9, 0, 0)
+        _ = try XCTUnwrap(model.addPendulum(length: 0.8, angle: 0.6, at: rail))
+        _ = try XCTUnwrap(model.addPendulum(length: 0.8, angle: 0,
+                                            at: rail + SIMD3(0.07, 0, 0)))
+
+        // …and the second of the stacked pair, which is what the well
+        // produces if you pull twice and move neither.
+        _ = try XCTUnwrap(model.addPendulum(length: 0.8, angle: 0.2))
+        XCTAssertEqual(model.pendulums.first?.pivot, model.pendulums.last?.pivot,
+                       "the fixture must have the coinciding pair at the ENDS")
+
+        // The struck bob starts at rest; if collisions run at all, it
+        // must be moving before the swinging one could reach it by any
+        // other means.
+        let strickenID = model.pendulums[2].id
+        var sawTransfer = false
+        for _ in 0..<(90 * 4) {
+            model.step(dt: 1.0 / 90)
+            let struck = try XCTUnwrap(model.pendulums.first { $0.id == strickenID })
+            if simd_length(struck.state.velocity) > 0.05 { sawTransfer = true; break }
+        }
+
+        XCTAssertTrue(sawTransfer,
+                      "no momentum ever reached the second bob — two pendulums "
+                      + "sharing a pivot elsewhere on the bench switched "
+                      + "collisions off for everything")
+    }
 }

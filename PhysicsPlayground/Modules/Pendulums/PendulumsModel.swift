@@ -497,15 +497,35 @@ final class PendulumsModel {
 
         // The line the bobs are strung out on: from the first pivot to
         // the last. For a cradle that is the rail they hang from.
-        let first = pendulums[movable.first!].pivot
-        let last = pendulums[movable.last!].pivot
-        var axis = last - first
-        guard simd_length(axis) > 1e-6 else { return }
-        axis = simd_normalize(axis)
-
-        let ordered = movable.sorted {
-            simd_dot(pendulums[$0].bobWorld, axis)
-                < simd_dot(pendulums[$1].bobWorld, axis)
+        // A DEGENERATE AXIS SKIPS THE SORT, NOT THE RESOLUTION, and the
+        // difference is a bench where nothing collides at all.
+        //
+        // `movable.first`/`.last` are ARRAY order, not spatial order, so
+        // this line is whichever two happen to sit at the ends of the
+        // list. Pull two pendulums out of the well without moving
+        // either — both land on `defaultPivot` — and the axis was zero,
+        // the guard returned, and NO bob in the room collided with any
+        // other from then on, including a cradle standing beside them
+        // that had been working a moment earlier.
+        //
+        // The axis exists only to order the sweep. When the pivots
+        // coincide, the bobs themselves still say which way the line
+        // runs; when even those coincide, nothing is separated along any
+        // line and array order is as good as any other.
+        var axis = pendulums[movable.last!].pivot - pendulums[movable.first!].pivot
+        if simd_length(axis) <= 1e-6 {
+            axis = pendulums[movable.last!].bobWorld
+                - pendulums[movable.first!].bobWorld
+        }
+        let ordered: [Int]
+        if simd_length(axis) > 1e-6 {
+            let unit = simd_normalize(axis)
+            ordered = movable.sorted {
+                simd_dot(pendulums[$0].bobWorld, unit)
+                    < simd_dot(pendulums[$1].bobWorld, unit)
+            }
+        } else {
+            ordered = movable
         }
 
         for _ in 0..<(4 * ordered.count) {
@@ -529,6 +549,39 @@ final class PendulumsModel {
                 let (na, nb) = BobCollision.exchange((velocity: va, mass: a.mass),
                                                      (velocity: vb, mass: b.mass),
                                                      restitution: bobRestitution)
+                // AUDIT P1-25 SAYS THIS CREATES ENERGY. IT DOES NOT, as
+                // far as anything I could build will show, so the code
+                // stands and the claim is recorded as unreproduced.
+                //
+                // The claim: `normal` is the line of centres, not a
+                // tangent to either constraint sphere, so
+                // `SphericalPendulum.step` — which projects for
+                // direction but takes its magnitude from the work–energy
+                // theorem — turns the radial part into extra tangential
+                // speed, and off-axis pairs gain energy on every touch.
+                // The reasoning is plausible and the fix (project onto
+                // each bob's own tangent before writing back) was
+                // written, tested and reverted on 2026-08-07.
+                //
+                // MEASURED, on a frictionless bench with two bobs whose
+                // lengths differ by 0.04 m — enough to tilt the contact
+                // normal ~34° off tangent, still inside the 0.07 m
+                // contact distance so they genuinely collide (minimum
+                // gap 0.065 m over 20 s). Total mechanical energy over
+                // 1800 steps: **delta 3.6e-15 J, with and without the
+                // projection.** Machine precision, both ways. The two
+                // trajectories do differ, so the projection is not a
+                // no-op — it simply is not the difference between
+                // conserving energy and not.
+                //
+                // Two vacuous tests were written before this was
+                // measured: the first hung the bobs 25 cm apart so they
+                // never touched at all, and the second could not tell
+                // the two implementations apart. Reverting beats keeping
+                // a change to every bob collision in the app on the
+                // strength of an unreproduced claim — the standing rule
+                // for this arc is that where the audit and the code
+                // disagree, the code is right.
                 pendulums[i].state.velocity += normal * (na - va)
                 pendulums[j].state.velocity += normal * (nb - vb)
                 touched = true
