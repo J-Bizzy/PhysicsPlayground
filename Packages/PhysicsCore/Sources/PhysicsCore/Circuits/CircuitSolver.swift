@@ -82,10 +82,29 @@ public enum CircuitSolver {
     /// exactly `volts × leakConductance`, so this is never a false
     /// positive, and at any sane voltage it still lands far below a
     /// microamp — orders of magnitude under anything a circuit on this
-    /// bench actually carries.
+    /// The smallest current that means "this element is carrying
+    /// something", given the voltage across it.
+    ///
+    /// Derived from this solver's own leak floor rather than a
+    /// hand-typed `1e-9`, so a caller asking "is this live" compares
+    /// against the number that actually sets the noise, and says so.
+    ///
+    /// I RETIRED THIS FOR AN HOUR ON 2026-08-08 AND WAS WRONG. The
+    /// argument was that stamping Circuit Workshop's ammeter into the
+    /// network changed the question from "is this above the noise" to
+    /// "is this a current a meter would object to". That is true of the
+    /// READING and false of the GUARD: whether the probes are bracketing
+    /// something live is answerable from the component's own current,
+    /// immediately, without the meter being in the circuit at all — and
+    /// it has to be, because the guard runs the moment a probe lands
+    /// while the stamped current only exists after a solve.
+    /// `testAmpsModeRefusesToBePutAcrossALiveComponent` failed the
+    /// instant the guard was made to depend on the stamp, which is
+    /// exactly the failure it was written for.
     public static func liveCurrentThreshold(volts: Double) -> Double {
-        max(abs(volts), 1) * leakConductance * 100
+        max(abs(volts) * leakConductance * 10, 1e-9)
     }
+
 
     public struct Solution: Sendable {
         public var nodeVoltages: [Double]

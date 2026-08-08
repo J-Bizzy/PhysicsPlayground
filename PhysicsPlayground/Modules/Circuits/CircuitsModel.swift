@@ -775,8 +775,32 @@ final class CircuitsModel {
             }
             return CircuitElement(nodeA: a, nodeB: b, kind: kind)
         }
+        // 3b. THE METER, AS AN ELEMENT. Until 2026-08-08 A⎓ read the
+        // current of whichever component the probes bracketed, which is
+        // the opposite of what an ammeter does: put it across a broken
+        // switch — the correct placement, the loop deliberately open —
+        // and it reported the switch's own current, exactly 0.000 A. The
+        // meter was never in the network, and no current can flow
+        // through a meter that is not there.
+        //
+        // It is stamped only in A⎓ and only across two DIFFERENT nodes.
+        // In V⎓ an ammeter's shunt would short whatever it was measuring,
+        // and across one node it would be a loop of itself.
+        var meterElementIndex: Int?
+        var stamped = elements
+        if multimeterArmed, meterMode == .ampsDC,
+           let probeA, let probeB {
+            let a = node(probeA), b = node(probeB)
+            if a != b {
+                meterElementIndex = stamped.count
+                stamped.append(CircuitElement(
+                    nodeA: a, nodeB: b,
+                    kind: .resistor(ohms: Self.ammeterShuntOhms)))
+            }
+        }
         let solution = CircuitSolver.solveWithDiodes(
-            elements: elements, nodeCount: nodeCount, timeStep: timeStep).solution
+            elements: stamped, nodeCount: nodeCount, timeStep: timeStep).solution
+        meterCurrent = meterElementIndex.map { solution.currents[$0] }
 
         // Terminal voltages for the warm↔cool gradient the renderer
         // paints across the bench.
@@ -889,6 +913,27 @@ final class CircuitsModel {
     var multimeterArmed = false {
         didSet { if !multimeterArmed { probeA = nil; probeB = nil } }
     }
+    /// THE AMMETER'S OWN RESISTANCE, stamped into the network so that
+    /// current can flow THROUGH it.
+    ///
+    /// A real bench ammeter is a shunt of a few milliohms — low enough
+    /// not to disturb the circuit it measures, high enough to be a real
+    /// element. 1 mΩ against this bench's smallest other resistance
+    /// (`wireResistance`, tens of mΩ) changes the loop current by well
+    /// under a percent, which is the whole design requirement for an
+    /// ammeter.
+    ///
+    /// NOT `.conductor`: a perfect short carries a current the solver
+    /// reports through whichever parallel path it likes, and the meter
+    /// would read an arbitrary share of it. A resistance makes the
+    /// answer unique.
+    static let ammeterShuntOhms = 0.001
+
+
+    /// What the meter measured on the last step, amps — `nil` unless it
+    /// was actually in the network.
+    private(set) var meterCurrent: Double?
+
     private(set) var probeA: Terminal?
     private(set) var probeB: Terminal?
 
@@ -1019,7 +1064,6 @@ final class CircuitsModel {
         let bracketsOneComponent = probeA.componentID == probeB.componentID
             && probeA.end != probeB.end
         let component = components.first { $0.id == probeA.componentID }
-        let amps = bracketsOneComponent ? readouts[probeA.componentID]?.amps : nil
         let sameNode = abs(vA - vB) < 1e-3 && isProbePairConnected(probeA, probeB)
 
         switch meterMode {
@@ -1031,51 +1075,53 @@ final class CircuitsModel {
                     : "between the probes")
 
         case .ampsDC:
-            guard bracketsOneComponent, let amps, let component else {
-                return MultimeterReading(
-                    display: "— — —",
-                    note: "an ammeter goes IN SERIES: break the loop and "
-                        + "put both probes across the gap",
-                    fault: true)
-            }
-            // Current already flowing through the part the probes are
-            // across: the meter would be a short around it.
+            // READ THE METER, NOT THE COMPONENT. This branch used to
+            // return `readouts[probed component].amps`, which is the
+            // opposite of what an ammeter does — put it across a broken
+            // switch, the correct placement with the loop deliberately
+            // open, and it reported the switch's own current: exactly
+            // 0.000 A, every time. Audit P1-20 called that "two
+            // reachable outputs, FUSE and zero" and blamed a threshold;
+            // the threshold was innocent and the meter simply was not in
+            // the circuit. It is stamped as a real shunt now (see
+            // `ammeterShuntOhms`) and this reads what flows through it.
+            // THE GUARD COMES FIRST, AND IT DOES NOT USE THE STAMP.
             //
-            // The threshold is derived from the solver's own leak floor
-            // rather than being a hand-typed `1e-9`, which is the same
-            // magnitude as `CircuitSolver.leakConductance`.
-            //
-            // AUDIT P1-20 SAYS THAT TRIPPED FALSELY — that an open
-            // switch leaks 9 nA on a 9 V supply and the meter therefore
-            // refused a loop the user had just broken. MEASURED, it does
-            // not: battery–switch–bulb with the switch open reports
-            // `amps` of exactly 0.0, because the leak conductance goes
-            // to GROUND from each node and never through the open
-            // element itself. This is a clearer expression of the same
-            // intent, not a bug fix, and nothing observable changed.
-            //
-            // THE REAL DEFECT IN THIS MODE IS NOT FIXED, and it is worth
-            // stating precisely because the fix above is easy to mistake
-            // for it. The same measurement showed the meter reading
-            // `0.000 A · in series with the Switch` — correctly placed,
-            // loop correctly broken, and answering zero. The meter is
-            // never STAMPED into the network, so `amps` is the
-            // component's own current and no current can flow through a
-            // meter that is not there. A⎓ therefore still has two
-            // reachable outputs: FUSE, and zero. Fixing it means adding
-            // a low-resistance element between the two probed nodes in
-            // `solve` and reading ITS current, which is a real change to
-            // the network build and wants its own pass.
-            if abs(amps) > CircuitSolver.liveCurrentThreshold(volts: vA - vB) {
+            // Whether the probes are bracketing something live is a
+            // question about the COMPONENT, answerable the instant a
+            // probe lands. The stamped current only exists after a
+            // solve, so a guard that waited for it would print "— — —"
+            // for a frame — and, worse, would answer wrongly for any
+            // caller reading this property without stepping first.
+            // Making the guard depend on the stamp broke
+            // `testAmpsModeRefusesToBePutAcrossALiveComponent` on the
+            // first run, which is precisely what that test is for.
+            let bracketed = bracketsOneComponent
+                ? readouts[probeA.componentID]?.amps : nil
+            if bracketsOneComponent, let component, let bracketed,
+               abs(bracketed) > CircuitSolver.liveCurrentThreshold(volts: vA - vB) {
                 return MultimeterReading(
                     display: "FUSE",
                     note: "the \(component.kind.displayName) is live — probes "
                         + "across it would short it. Break the loop first.",
                     fault: true)
             }
+            // AND THE READING IS THE METER'S OWN CURRENT — the half that
+            // actually changed. Nil means the probes are not across two
+            // different nodes, so there is nothing for a series meter to
+            // be in.
+            guard let amps = meterCurrent else {
+                return MultimeterReading(
+                    display: "— — —",
+                    note: "an ammeter goes IN SERIES: break the loop and "
+                        + "put both probes across the gap",
+                    fault: true)
+            }
             return MultimeterReading(
                 display: Self.autoRange(amps, unit: "A"),
-                note: "in series with the \(component.kind.displayName)")
+                note: bracketsOneComponent && component != nil
+                    ? "in series with the \(component!.kind.displayName)"
+                    : "in series, between the probes")
 
         case .ohms:
             guard bracketsOneComponent, let component else {

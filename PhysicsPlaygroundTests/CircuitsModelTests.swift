@@ -1146,11 +1146,102 @@ final class CircuitsModelTests: XCTestCase {
         let reading = try XCTUnwrap(model.multimeterReading)
         XCTAssertNotEqual(reading.display, "FUSE",
                           "the meter refused a correctly broken loop")
-        XCTAssertEqual(
-            reading.display, "0.000 A",
-            "the meter now reads \(reading.display) — if that is a real "
-            + "current, the meter has been stamped into the network and this "
-            + "test has done its job; delete it and assert the current instead.")
+
+        // THE ASSERTION THIS TEST ASKED FOR. It used to demand
+        // "0.000 A" and say, in its own failure message, that a real
+        // current here would mean the meter had been stamped into the
+        // network and the test should be replaced. It has, and this is
+        // the replacement.
+        //
+        // NO MAGIC NUMBER: the meter and the bulb are in series, so the
+        // meter must read the loop current, which is the bulb's own.
+        // Comparing the two is a stronger claim than any literal — it
+        // would fail if the shunt were stamped in the wrong place, or
+        // sized so badly it changed the loop it was measuring.
+        let meter = try XCTUnwrap(model.meterCurrent)
+        let loop = try XCTUnwrap(model.readouts[bulb]?.amps)
+        XCTAssertGreaterThan(abs(meter), 1e-3,
+                             "the meter still reads nothing through a loop it "
+                             + "has itself completed")
+        XCTAssertEqual(abs(meter), abs(loop), accuracy: abs(loop) * 0.02, """
+            the meter reads \(meter) A while the bulb it is in series with \
+            carries \(loop) A — an ammeter in series must read the loop \
+            current.
+            """)
+        XCTAssertNotEqual(reading.display, "0.000 A")
+    }
+
+    /// THE SHUNT MUST NOT DISTURB WHAT IT MEASURES, which is the whole
+    /// design requirement for an ammeter and the reason it is 1 mΩ
+    /// rather than a perfect conductor.
+    ///
+    /// Closing the switch gives the same loop WITHOUT the meter in it,
+    /// so the two currents should agree to well under a percent. A shunt
+    /// sized carelessly would show up here as a loop that runs faster
+    /// when you measure it.
+    func testTheAmmeterBarelyDisturbsTheLoopItMeasures() throws {
+        let model = CircuitsModel()
+        model.clearBench()
+        let battery = try XCTUnwrap(model.add(.battery))
+        let switcher = try XCTUnwrap(model.add(.switcher))
+        let bulb = try XCTUnwrap(model.add(.bulb))
+        model.tapTerminal(.init(componentID: battery, end: 0))
+        model.tapTerminal(.init(componentID: switcher, end: 0))
+        model.tapTerminal(.init(componentID: switcher, end: 1))
+        model.tapTerminal(.init(componentID: bulb, end: 0))
+        model.tapTerminal(.init(componentID: bulb, end: 1))
+        model.tapTerminal(.init(componentID: battery, end: 1))
+
+        // Closed switch, no meter: the reference loop.
+        if model.components.first(where: { $0.id == switcher })?.isClosed == false {
+            model.toggleSwitch(id: switcher)
+        }
+        model.step(dt: 1.0 / 60)
+        let undisturbed = try XCTUnwrap(model.readouts[bulb]?.amps)
+
+        // Open switch, meter bridging the gap: the same loop, through
+        // the shunt.
+        model.toggleSwitch(id: switcher)
+        model.multimeterArmed = true
+        model.meterMode = .ampsDC
+        model.setProbe(.red, to: .init(componentID: switcher, end: 0))
+        model.setProbe(.black, to: .init(componentID: switcher, end: 1))
+        model.step(dt: 1.0 / 60)
+        let measured = try XCTUnwrap(model.meterCurrent)
+
+        XCTAssertEqual(abs(measured), abs(undisturbed),
+                       accuracy: abs(undisturbed) * 0.01, """
+            measuring the loop changed it: \(undisturbed) A closed, \
+            \(measured) A through the meter. The shunt is too large.
+            """)
+    }
+
+    /// IN V⎓ THE METER IS NOT AN ELEMENT. A voltmeter's shunt across a
+    /// live part would short it — so the stamp is gated on the mode, and
+    /// this is what would catch that gate being dropped.
+    func testTheMeterIsNotStampedInVoltageMode() throws {
+        let model = CircuitsModel()
+        model.clearBench()
+        let battery = try XCTUnwrap(model.add(.battery))
+        let bulb = try XCTUnwrap(model.add(.bulb))
+        model.tapTerminal(.init(componentID: battery, end: 0))
+        model.tapTerminal(.init(componentID: bulb, end: 0))
+        model.tapTerminal(.init(componentID: bulb, end: 1))
+        model.tapTerminal(.init(componentID: battery, end: 1))
+        model.step(dt: 1.0 / 60)
+        let before = try XCTUnwrap(model.readouts[bulb]?.amps)
+
+        model.multimeterArmed = true
+        model.meterMode = .voltsDC
+        model.setProbe(.red, to: .init(componentID: bulb, end: 0))
+        model.setProbe(.black, to: .init(componentID: bulb, end: 1))
+        model.step(dt: 1.0 / 60)
+
+        XCTAssertNil(model.meterCurrent,
+                     "a voltmeter was stamped into the network as an element")
+        let after = try XCTUnwrap(model.readouts[bulb]?.amps)
+        XCTAssertEqual(after, before, accuracy: abs(before) * 1e-6,
+                       "probing a bulb in V⎓ changed the current through it")
     }
 
     /// …and it must still refuse a LIVE one, or the fix has simply
