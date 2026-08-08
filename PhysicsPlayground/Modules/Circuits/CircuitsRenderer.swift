@@ -837,7 +837,12 @@ final class CircuitsRenderer {
         let holder = Entity()
         holder.name = component.id.uuidString
         holder.position = SIMD3<Float>(component.position)
-        Grabbable.configureTouchTarget(holder, collisionRadius: 0.075)
+        Grabbable.configureTouchTarget(
+            holder, collisionRadius: 0.075,
+            activate: { [weak self, weak holder] in
+                guard let holder else { return }
+                self?.onTap?(holder)
+            })
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = LocalizedStringResource(
@@ -905,7 +910,12 @@ final class CircuitsRenderer {
             grip.name = "s\(end)-\(component.id.uuidString)"
             let half = Float(component.terminalHalfSpan + CircuitsModel.endGripOffset)
             grip.position = SIMD3(end == 0 ? -half : half, 0, 0)
-            Grabbable.configureTouchTarget(grip, collisionRadius: 0.026)
+            Grabbable.configureTouchTarget(
+                grip, collisionRadius: 0.026,
+                activate: { [weak self, weak grip] in
+                    guard let grip else { return }
+                    self?.onTap?(grip)
+                })
             var gripAccessibility = AccessibilityComponent()
             gripAccessibility.isAccessibilityElement = true
             gripAccessibility.label = LocalizedStringResource(stringLiteral:

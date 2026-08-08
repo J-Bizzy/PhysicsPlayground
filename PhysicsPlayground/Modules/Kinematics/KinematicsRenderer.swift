@@ -33,6 +33,28 @@ import simd
 
 @MainActor
 final class KinematicsRenderer {
+    /// The SpaceView's tap router, so a carried object can be operated
+    /// without hands — `Grabbable` takes the closure and this supplies
+    /// it. The helper configures entities it did not build and cannot
+    /// invent a meaning for pressing one; only the module knows that a
+    /// tap here opens a control ring.
+    ///
+    /// BEHIND A BOX, unlike every other renderer's copy of this, and the
+    /// reason is Swift's initialisation rules rather than taste. This
+    /// renderer builds its launcher, its aim bead and both entity pools
+    /// inside `init`, before the last stored property is set — so a
+    /// closure written there cannot capture `self` at all, weakly or
+    /// otherwise. Capturing a LOCAL that happens to be a reference type
+    /// sidesteps that: `init` makes the box, hands it to the closures,
+    /// and stores it. Setting `onObjectTap` later writes through the same
+    /// box the closures are already holding.
+    private final class TapRouter { var route: ((Entity) -> Void)? }
+    private let tapRouter: TapRouter
+    var onObjectTap: ((Entity) -> Void)? {
+        get { tapRouter.route }
+        set { tapRouter.route = newValue }
+    }
+
     /// Root of everything we render, added to RealityView content at identity.
     let root = Entity()
     /// Freeze sculpts: a paused flight grows its velocity and force
@@ -173,6 +195,12 @@ final class KinematicsRenderer {
     private var lastArcInputs: ArcInputs?
 
     init() {
+        // FIRST, and as a local: everything below is built before the
+        // last stored property is set, so the closures must capture this
+        // rather than `self`.
+        let router = TapRouter()
+        tapRouter = router
+
         root.addChild(Lighting.keyLight())
         // Launcher: grabbable base sphere, barrel, aim bead — siblings at
         // room coordinates so manipulation never fights a parent transform.
@@ -182,7 +210,12 @@ final class KinematicsRenderer {
         launcherBase.name = Self.launcherName
         // 0.09 until 2026-08-07, on a 0.05 m ball. The launcher stands
         // among the things you throw.
-        Grabbable.configureTouchTarget(launcherBase, collisionRadius: 0.062)
+        Grabbable.configureTouchTarget(
+            launcherBase, collisionRadius: 0.062,
+            activate: { [weak launcherBase] in
+                guard let launcherBase else { return }
+                router.route?(launcherBase)
+            })
         Self.setAccessibility(on: launcherBase, label: "Launcher. Drag to move it anywhere in the room.")
         root.addChild(launcherBase)
 
@@ -206,7 +239,12 @@ final class KinematicsRenderer {
             materials: [Materials.energized(DesignTokens.Palette.projectileUI, glow: 0.4)]
         )
         bead.name = Self.aimBeadName
-        Grabbable.configureTouchTarget(bead, collisionRadius: 0.048)
+        Grabbable.configureTouchTarget(
+            bead, collisionRadius: 0.048,
+            activate: { [weak bead] in
+                guard let bead else { return }
+                router.route?(bead)
+            })
         Self.setAccessibility(on: bead, label: "Aim bead. Drag to point the launcher.")
         root.addChild(bead)
 
@@ -237,7 +275,12 @@ final class KinematicsRenderer {
             // The factor survives the per-ball scale, so 1.6× on a
             // basketball was a 0.19 m target hanging in the flight path
             // of every other ball in the room.
-            Grabbable.configureTouchTarget(sphere, collisionRadius: Self.baseBallRadius * 1.15)
+            Grabbable.configureTouchTarget(
+                sphere, collisionRadius: Self.baseBallRadius * 1.15,
+                activate: { [weak sphere] in
+                    guard let sphere else { return }
+                    router.route?(sphere)
+                })
             Self.setAccessibility(on: sphere, label: "Ball. Grab and throw it.")
             container.addChild(sphere)
             return sphere
@@ -296,7 +339,12 @@ final class KinematicsRenderer {
                 mesh: ringMesh ?? MeshResource.generateSphere(radius: 0.05),
                 materials: [capturedRingMaterial]
             )
-            Grabbable.configureTouchTarget(tube, collisionRadius: 0.05)
+            Grabbable.configureTouchTarget(
+                tube, collisionRadius: 0.05,
+                activate: { [weak tube] in
+                    guard let tube else { return }
+                    router.route?(tube)
+                })
             // A ring is grabbed by its RIM. One fat sphere in the
             // middle swallowed every pinch through the opening — the
             // banned bigger-than-the-visual collider. Small colliders

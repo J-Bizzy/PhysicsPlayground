@@ -23,6 +23,13 @@ import simd
 
 @MainActor
 final class FieldRenderer {
+    /// The SpaceView's tap router, so a carried object can be operated
+    /// without hands — `Grabbable` takes the closure and this supplies
+    /// it. The helper configures entities it did not build and cannot
+    /// invent a meaning for pressing one; only the module knows that a
+    /// tap here opens a control ring.
+    var onObjectTap: ((Entity) -> Void)?
+
     /// Root of everything we render; added to RealityView content at identity,
     /// so this entity's coordinate space == immersive space coordinates.
     let root = Entity()
@@ -379,7 +386,12 @@ final class FieldRenderer {
                 // for DRAGS; the tap chain had no fallback at all, so a
                 // charge between the plates could not be deleted or
                 // re-valued.
-                Grabbable.configureTouchTarget(plate, matchingVisualBoundsOf: plate)
+                Grabbable.configureTouchTarget(
+                    plate, matchingVisualBoundsOf: plate,
+                    activate: { [weak self, weak plate] in
+                        guard let plate else { return }
+                        self?.onObjectTap?(plate)
+                    })
                 var accessibility = AccessibilityComponent()
                 accessibility.isAccessibilityElement = true
                 accessibility.label = "Capacitor plate. Drag along the field axis to change the gap; carry it to move the capacitor."
@@ -617,7 +629,12 @@ final class FieldRenderer {
         // Name carries the charge's identity so manipulation event handlers
         // can map the grabbed entity back to a model object.
         sphere.name = charge.id.uuidString
-        Grabbable.configureTouchTarget(sphere, collisionRadius: Self.chargeRadius * 1.8)
+        Grabbable.configureTouchTarget(
+            sphere, collisionRadius: Self.chargeRadius * 1.8,
+            activate: { [weak self, weak sphere] in
+                guard let sphere else { return }
+                self?.onObjectTap?(sphere)
+            })
         setAccessibilityLabel(on: sphere, for: charge)
 
         // Translucent halo shown on the selected charge.
@@ -780,7 +797,12 @@ final class FieldRenderer {
             materials: [Materials.energized(Self.probePositiveColor)]
         )
         sphere.name = Self.probeEntityName
-        Grabbable.configureTouchTarget(sphere, collisionRadius: max(Self.probeRadius * 2.4, 0.06))
+        Grabbable.configureTouchTarget(
+            sphere, collisionRadius: max(Self.probeRadius * 2.4, 0.06),
+            activate: { [weak self, weak sphere] in
+                guard let sphere else { return }
+                self?.onObjectTap?(sphere)
+            })
 
         // Same sign glyph the source charges wear, scaled to probe size —
         // the shared parts builder, so the vertical stroke can be hidden

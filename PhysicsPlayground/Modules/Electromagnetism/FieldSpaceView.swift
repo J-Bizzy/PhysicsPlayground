@@ -112,6 +112,7 @@ struct FieldSpaceView: View {
     var body: some View {
         RealityView { content, attachments in
             let renderer = FieldRenderer()
+            renderer.onObjectTap = { handleObjectTap(on: $0) }
             content.add(renderer.root)
 
             // Everything this module measures, on one card standing with
@@ -479,25 +480,7 @@ struct FieldSpaceView: View {
     private var tap: some Gesture {
         TapGesture()
             .targetedToAnyEntity()
-            .onEnded { value in
-                if bloom.handleTap(value.entity) { return }
-                if bank?.handleTap(value.entity) == true { return }
-                if verbs?.handleTap(value.entity) == true { return }
-
-                for name in Self.ancestorNames(of: value.entity) {
-                    if name == FieldRenderer.probeEntityName, model.probe != nil {
-                        toggleRing(.probe, on: value.entity)
-                        return
-                    }
-                    if let id = UUID(uuidString: name),
-                       model.charges.contains(where: { $0.id == id }) {
-                        model.select(id: id)
-                        toggleRing(.charge(id), on: value.entity)
-                        return
-                    }
-                }
-                ring.target = nil
-            }
+            .onEnded { value in handleObjectTap(on: value.entity) }
     }
 
     private func toggleRing(_ target: FieldRingState.Target, on entity: Entity) {
@@ -721,4 +704,35 @@ struct FieldSpaceView: View {
             .min { $0.1 < $1.1 }?
             .0
     }
+
+    /// EXTRACTED FROM THE TAP CLOSURE, 2026-08-08, so VoiceOver reaches
+    /// the same routing a pinch does.
+    ///
+    /// `Grabbable` has taken an `activate` closure since the mechanism
+    /// moved into RenderKit, and every call site passed nothing — so the
+    /// objects a hand can carry could be reached no other way. It is not
+    /// a sweep: the helper configures entities it did not build and
+    /// cannot know what pressing one should mean. Only the module knows
+    /// that, so the routing had to come out of the gesture first.
+    private func handleObjectTap(on entity: Entity) {
+        if bloom.handleTap(entity) { return }
+        if bank?.handleTap(entity) == true { return }
+        if verbs?.handleTap(entity) == true { return }
+
+        for name in Self.ancestorNames(of: entity) {
+            if name == FieldRenderer.probeEntityName, model.probe != nil {
+                toggleRing(.probe, on: entity)
+                return
+            }
+            if let id = UUID(uuidString: name),
+               model.charges.contains(where: { $0.id == id }) {
+                model.select(id: id)
+                toggleRing(.charge(id), on: entity)
+                return
+            }
+        }
+        ring.target = nil
+    
+    }
+
 }

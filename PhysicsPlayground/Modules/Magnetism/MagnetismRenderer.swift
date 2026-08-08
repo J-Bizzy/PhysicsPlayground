@@ -26,6 +26,12 @@ import simd
 
 @MainActor
 final class MagnetismRenderer {
+    /// The SpaceView's tap router, so a carried object can be operated
+    /// without hands. `Grabbable` takes the closure and this supplies
+    /// it — the helper cannot invent a meaning for pressing a magnet,
+    /// and only the module knows that a tap opens its control ring.
+    var onObjectTap: ((Entity) -> Void)?
+
     let root = Entity()
     /// Everything the two-hand scale gesture grows lives under here;
     /// pods and lighting stay on `root`, unscaled. The rig's transform
@@ -233,8 +239,12 @@ final class MagnetismRenderer {
 
         // Matched to the orb itself rather than a hand-typed 0.06 that
         // outgrew it — the collider rule again.
-        Grabbable.configureTouchTarget(handCompass,
-                                       collisionRadius: Self.compassRadius * 1.08)
+        Grabbable.configureTouchTarget(
+            handCompass, collisionRadius: Self.compassRadius * 1.08,
+            activate: { [weak self, weak handCompass] in
+                guard let handCompass else { return }
+                self?.onObjectTap?(handCompass)
+            })
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Compass. Carry it around the magnets and watch the needle swing to the field."
@@ -457,7 +467,12 @@ final class MagnetismRenderer {
         // the near one took every pinch. The halo built just above is
         // the magnet's own silhouette, so measuring from it costs
         // nothing and follows any future change to the bar.
-        Grabbable.configureTouchTarget(container, matchingVisualBoundsOf: container)
+        Grabbable.configureTouchTarget(
+            container, matchingVisualBoundsOf: container,
+            activate: { [weak self, weak container] in
+                guard let container else { return }
+                self?.onObjectTap?(container)
+            })
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Bar magnet. Grab it and carry it — nearby magnets attract, repel, and swing to align."

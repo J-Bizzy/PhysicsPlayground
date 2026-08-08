@@ -101,6 +101,7 @@ struct KinematicsSpaceView: View {
     var body: some View {
         RealityView { content in
             let renderer = KinematicsRenderer()
+            renderer.onObjectTap = { handleObjectTap(on: $0) }
             content.add(renderer.root)
             renderer.root.addChild(bloom.root)
             renderer.root.addChild(ballPicker.root)
@@ -325,14 +326,7 @@ struct KinematicsSpaceView: View {
         .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
-                .onEnded { value in
-                    // The fan first: its discs sit above the launcher and
-                    // would otherwise be read as a tap on the launcher.
-                    if ballPicker.handleTap(value.entity) { return }
-                    if worldPicker.handleTap(value.entity) { return }
-                    if layers?.handleTap(value.entity) == true { return }
-                    _ = bloom.handleTap(value.entity)
-                }
+                .onEnded { value in handleObjectTap(on: value.entity) }
         )
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
@@ -589,4 +583,24 @@ struct KinematicsSpaceView: View {
             }
         }
     }
+
+    /// EXTRACTED FROM THE TAP CLOSURE, 2026-08-08, so VoiceOver reaches
+    /// the same routing a pinch does.
+    ///
+    /// `Grabbable` has taken an `activate` closure since the mechanism
+    /// moved into RenderKit, and every call site passed nothing — so the
+    /// objects a hand can carry could be reached no other way. It is not
+    /// a sweep: the helper configures entities it did not build and
+    /// cannot know what pressing one should mean. Only the module knows
+    /// that, so the routing had to come out of the gesture first.
+    private func handleObjectTap(on entity: Entity) {
+        // The fan first: its discs sit above the launcher and
+        // would otherwise be read as a tap on the launcher.
+        if ballPicker.handleTap(entity) { return }
+        if worldPicker.handleTap(entity) { return }
+        if layers?.handleTap(entity) == true { return }
+        _ = bloom.handleTap(entity)
+    
+    }
+
 }

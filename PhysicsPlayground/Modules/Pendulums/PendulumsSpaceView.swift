@@ -144,6 +144,7 @@ struct PendulumsSpaceView: View {
     var body: some View {
         RealityView { content, attachments in
             let renderer = PendulumsRenderer()
+            renderer.onObjectTap = { handleObjectTap(on: $0) }
             content.add(renderer.root)
             renderer.root.addChild(bloom.root)
 
@@ -544,43 +545,7 @@ struct PendulumsSpaceView: View {
         .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
-                .onEnded { value in
-                    // The instruments get first refusal, before the
-                    // fall-through that folds the ring away — otherwise
-                    // tapping a switch plate would also close whatever
-                    // bob ring was open.
-                    if layers?.handleTap(value.entity) == true { return }
-                    // NO pivot branch here. The collar's bead is opened
-                    // by a press that does not move it, inside the drag
-                    // gesture — see `onEnded`. A tap target on the collar
-                    // competed with its own drag and stopped the rig
-                    // being re-hung.
-                    if bloom.handleTap(value.entity) { return }
-                    // A tap on a bob selects it and toggles its control
-                    // ring; a tap on anything else folds the ring away.
-                    var current: Entity? = value.entity
-                    while let candidate = current {
-                        if let id = UUID(uuidString: candidate.name),
-                           model.pendulums.contains(where: { $0.id == id }) {
-                            model.select(id: id)
-                            pivotRing.openID = nil
-                            if ring.openID == id {
-                                ring.openID = nil
-                                SoundPalette.play(.releaseTick, on: value.entity,
-                                                  volume: 0.3)
-                            } else {
-                                ring.openID = id
-                                SoundPalette.play(.pop, on: value.entity, volume: 0.35)
-                            }
-                            return
-                        }
-                        current = candidate.parent
-                    }
-                    if ring.openID != nil {
-                        SoundPalette.play(.releaseTick, on: value.entity, volume: 0.3)
-                    }
-                    ring.openID = nil
-                }
+                .onEnded { value in handleObjectTap(on: value.entity) }
         )
     }
 
@@ -679,6 +644,56 @@ struct PendulumsSpaceView: View {
         bloom.update(anchor: SIMD3<Float>(pendulum.bobWorld),
                      viewer: viewer, revealTarget: 1, dt: dt)
     }
+
+    /// EXTRACTED FROM THE TAP CLOSURE, 2026-08-08, so VoiceOver reaches
+    /// the same routing a pinch does.
+    ///
+    /// `Grabbable` has taken an `activate` closure since the mechanism
+    /// moved into RenderKit, and every call site passed nothing — so the
+    /// objects a hand can carry could be reached no other way. It is not
+    /// a sweep: the helper configures entities it did not build and
+    /// cannot know what pressing one should mean. Here it means opening
+    /// that object's control ring, and only the module knows that, so
+    /// the routing had to come out of the gesture first.
+    private func handleObjectTap(on entity: Entity) {
+        // The instruments get first refusal, before the
+        // fall-through that folds the ring away — otherwise
+        // tapping a switch plate would also close whatever
+        // bob ring was open.
+        if layers?.handleTap(entity) == true { return }
+        // NO pivot branch here. The collar's bead is opened
+        // by a press that does not move it, inside the drag
+        // gesture — see `onEnded`. A tap target on the collar
+        // competed with its own drag and stopped the rig
+        // being re-hung.
+        if bloom.handleTap(entity) { return }
+        // A tap on a bob selects it and toggles its control
+        // ring; a tap on anything else folds the ring away.
+        var current: Entity? = entity
+        while let candidate = current {
+            if let id = UUID(uuidString: candidate.name),
+               model.pendulums.contains(where: { $0.id == id }) {
+                model.select(id: id)
+                pivotRing.openID = nil
+                if ring.openID == id {
+                    ring.openID = nil
+                    SoundPalette.play(.releaseTick, on: entity,
+                                      volume: 0.3)
+                } else {
+                    ring.openID = id
+                    SoundPalette.play(.pop, on: entity, volume: 0.35)
+                }
+                return
+            }
+            current = candidate.parent
+        }
+        if ring.openID != nil {
+            SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
+        }
+        ring.openID = nil
+    
+    }
+
 }
 
 /// The card floating above the selected bob: the numbers behind the swing.
@@ -720,4 +735,5 @@ struct PendulumInfoCard: View {
             .accessibilityElement(children: .combine)
         }
     }
+
 }

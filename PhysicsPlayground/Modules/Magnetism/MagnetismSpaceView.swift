@@ -64,6 +64,7 @@ struct MagnetismSpaceView: View {
     var body: some View {
         RealityView { content in
             let renderer = MagnetismRenderer()
+            renderer.onObjectTap = { handleTap(on: $0) }
             content.add(renderer.root)
             sceneContent = content
 
@@ -216,38 +217,7 @@ struct MagnetismSpaceView: View {
         .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
-                .onEnded { value in
-                    // The bank gets first refusal, ahead of the
-                    // fall-through that folds the ring away — otherwise
-                    // flicking a switch would also close whichever
-                    // magnet's ring was open.
-                    if layers?.handleTap(value.entity) == true { return }
-                    if bloom.handleTap(value.entity) { return }
-                    // A tap on a magnet toggles its control ring; a tap
-                    // on anything else folds it away.
-                    var current: Entity? = value.entity
-                    while let candidate = current {
-                        if let id = UUID(uuidString: candidate.name),
-                           model.magnets.contains(where: { $0.id == id }) {
-                            if ring.openID == id {
-                                ring.openID = nil
-                                SoundPalette.play(.releaseTick, on: value.entity,
-                                                  volume: 0.3)
-                            } else {
-                                ring.openID = id
-                                SoundPalette.play(.pop, on: value.entity, volume: 0.35)
-                            }
-                            return
-                        }
-                        current = candidate.parent
-                    }
-                    // Folding by tapping elsewhere answers too — the
-                    // unfold pops, so a silent fold read as broken.
-                    if ring.openID != nil {
-                        SoundPalette.play(.releaseTick, on: value.entity, volume: 0.3)
-                    }
-                    ring.openID = nil
-                }
+                .onEnded { value in handleTap(on: value.entity) }
         )
         // The multi-hand grab first, then the single-recogniser drag for
         // the affordances that are one-hand by nature (the strength
@@ -460,6 +430,48 @@ struct MagnetismSpaceView: View {
         }
         bloom.update(anchor: SIMD3<Float>(magnet.position),
                      viewer: viewer, revealTarget: 1, dt: dt)
+    }
+
+
+    /// EXTRACTED FROM THE TAP CLOSURE, 2026-08-08, so that VoiceOver can
+    /// reach it too.
+    ///
+    /// `Grabbable` takes an `activate` closure but every call site
+    /// passed nothing, so magnets and the compass could be moved by hand
+    /// and reached no other way. The fix is not a sweep: the helper
+    /// configures an entity it did not build and cannot know what
+    /// pressing it should mean, and in this module it means opening the
+    /// magnet's control ring. Only the module knows that — so the
+    /// routing had to come out of the gesture closure first.
+    private func handleTap(on entity: Entity) {
+        // The bank gets first refusal, ahead of the fall-through that
+        // folds the ring away — otherwise flicking a switch would also
+        // close whichever magnet's ring was open.
+        if layers?.handleTap(entity) == true { return }
+        if bloom.handleTap(entity) { return }
+        // A tap on a magnet toggles its control ring; a tap on anything
+        // else folds it away.
+        var current: Entity? = entity
+        while let candidate = current {
+            if let id = UUID(uuidString: candidate.name),
+               model.magnets.contains(where: { $0.id == id }) {
+                if ring.openID == id {
+                    ring.openID = nil
+                    SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
+                } else {
+                    ring.openID = id
+                    SoundPalette.play(.pop, on: entity, volume: 0.35)
+                }
+                return
+            }
+            current = candidate.parent
+        }
+        // Folding by tapping elsewhere answers too — the unfold pops, so
+        // a silent fold read as broken.
+        if ring.openID != nil {
+            SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
+        }
+        ring.openID = nil
     }
 
 }

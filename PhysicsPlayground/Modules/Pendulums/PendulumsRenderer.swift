@@ -20,6 +20,13 @@ import simd
 
 @MainActor
 final class PendulumsRenderer {
+    /// The SpaceView's tap router, so a carried object can be operated
+    /// without hands — `Grabbable` takes the closure and this supplies
+    /// it. The helper configures entities it did not build and cannot
+    /// invent a meaning for pressing one; only the module knows that a
+    /// tap here opens a control ring.
+    var onObjectTap: ((Entity) -> Void)?
+
     let root = Entity()
     /// Freeze sculpts: paused bobs grow velocity and net-force arrows.
     /// Walk under a frozen swing and read why it turns.
@@ -529,7 +536,12 @@ final class PendulumsRenderer {
         // cradle stand 0.07 m apart, so each one's target reached past
         // both its neighbours' centres and the middle of a cradle could
         // not be re-hung.
-        Grabbable.configureTouchTarget(pivot, collisionRadius: 0.028)
+        Grabbable.configureTouchTarget(
+            pivot, collisionRadius: 0.028,
+            activate: { [weak self, weak pivot] in
+                guard let pivot else { return }
+                self?.onObjectTap?(pivot)
+            })
         root.addChild(pivot)
 
         let cable = ModelEntity(
@@ -545,7 +557,12 @@ final class PendulumsRenderer {
         // touch — they are 0.07 m apart — so a 0.075 target enclosed
         // BOTH neighbours' centres and the ball you pinched was decided
         // by hit order rather than by aim.
-        Grabbable.configureTouchTarget(bob, collisionRadius: 0.048)
+        Grabbable.configureTouchTarget(
+            bob, collisionRadius: 0.048,
+            activate: { [weak self, weak bob] in
+                guard let bob else { return }
+                self?.onObjectTap?(bob)
+            })
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Pendulum bob. Grab it, carry it, and throw it."

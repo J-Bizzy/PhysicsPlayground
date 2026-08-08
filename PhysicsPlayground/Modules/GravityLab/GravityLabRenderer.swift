@@ -91,6 +91,23 @@ final class GravityLabRenderer {
     /// The ghost is aimed by dragging, so like the apsis beads its one
     /// hands-free verb is a step in or out along its own radius.
     var onGhostAdjust: ((Double) -> Void)?
+
+    /// The SpaceView's tap router, so a carried body can be operated
+    /// without hands — see `Grabbable`'s `activate`.
+    ///
+    /// BEHIND A BOX, for the same reason `KinematicsRenderer`'s is: the
+    /// body pool is built inside `init`, before the last stored property
+    /// is set, and a closure written there cannot capture `self` at all.
+    /// Capturing a local that happens to be a reference type sidesteps
+    /// it — `init` makes the box, hands it to the closures, and stores
+    /// it, so setting `onObjectTap` later writes through the same box
+    /// they are already holding.
+    private final class TapRouter { var route: ((Entity) -> Void)? }
+    private let tapRouter: TapRouter
+    var onObjectTap: ((Entity) -> Void)? {
+        get { tapRouter.route }
+        set { tapRouter.route = newValue }
+    }
     private var ghostCallout: Callout?
     private var verdictLine = Entity()
     private var verdictCallout: Callout?
@@ -247,6 +264,10 @@ final class GravityLabRenderer {
     private var lastMergeNonce = 0
 
     init() {
+        // FIRST, and as a local — see `TapRouter`.
+        let router = TapRouter()
+        tapRouter = router
+
         var grid = UnlitMaterial(color: .white)
         grid.blending = .transparent(opacity: 0.3)
         gridMaterial = grid
@@ -296,7 +317,12 @@ final class GravityLabRenderer {
             // scale, so it was 1.5× at every size — and an apsis bead
             // drawn in the 1.0–1.5 r annulus around a planet was visible,
             // hover-lit and completely unpinchable.
-            Grabbable.configureTouchTarget(sphere, collisionRadius: Self.baseBodyRadius * 1.15)
+            Grabbable.configureTouchTarget(
+                sphere, collisionRadius: Self.baseBodyRadius * 1.15,
+                activate: { [weak sphere] in
+                    guard let sphere else { return }
+                    router.route?(sphere)
+                })
             var accessibility = AccessibilityComponent()
             accessibility.isAccessibilityElement = true
             accessibility.label = "Celestial body. Grab to move it; throw it to set a new orbit."

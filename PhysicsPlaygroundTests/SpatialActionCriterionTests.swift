@@ -197,19 +197,21 @@ final class SpatialActionCriterionTests: XCTestCase {
     /// `SpatialTrackControl`, the app's one continuous control, whose own
     /// header had carried the complaint since it was written.
     ///
-    /// `Grabbable` is now the honest remainder. It stands input targets
-    /// on every carried object — magnets, balls, bobs, circuit parts —
-    /// and it takes an `activate` closure, so the FILE routes an action
-    /// and the scan is satisfied. But all eighteen call sites still pass
-    /// nothing, so those objects are hands-only in practice. The scan
-    /// cannot catch that: a default argument looks identical to a wired
-    /// one from the outside.
+    /// `Grabbable` WAS the honest remainder, and it is closed as of the
+    /// same day. It stands input targets on every carried object —
+    /// magnets, balls, bobs, circuit parts, charges, celestial bodies —
+    /// and for a few hours it took an `activate` closure that all
+    /// eighteen call sites passed nothing to. The scan stayed green
+    /// throughout, because a default argument is indistinguishable from
+    /// a wired one when all you are doing is reading a file.
     ///
-    /// That is not a hole to paper over — it is a real design question
-    /// this test should not pretend to answer. A tap on a carried object
-    /// opens its Bloom ring, and only the module knows which ring, so
-    /// each of the five SpaceViews that handle taps inline needs its
-    /// routing extracted first. Tracked as work, not as a passing test.
+    /// So the scan is not the check for those. `testMagnetismObjectsRoute\
+    /// ToTheModule` and its four siblings build each module's renderer
+    /// for real, point `onObjectTap` at a counter, and drive an
+    /// activation through the same ancestor walk VoiceOver uses. That is
+    /// the only check here that can tell "the mechanism exists" from
+    /// "the mechanism is connected", and removing one module's wiring
+    /// fails exactly that module's test.
 
     private func scanRoots() throws -> [URL] {
         let thisFile = URL(fileURLWithPath: #filePath)
@@ -287,6 +289,90 @@ final class SpatialActionCriterionTests: XCTestCase {
             than the app is known to have — it is matching on the wrong \
             thing, and its green result means nothing.
             """)
+    }
+
+    // MARK: The carried objects
+
+    /// THE GAP THE FILE SCAN COULD NOT SEE, now closed and asserted.
+    ///
+    /// `Grabbable` took an `activate` closure from 2026-08-08 and every
+    /// one of its call sites passed nothing, so magnets, balls, bobs,
+    /// circuit parts, charges and celestial bodies were hands-only. The
+    /// scan went green throughout, because a default argument is
+    /// indistinguishable from a wired one when you are reading a file.
+    ///
+    /// This builds each module's renderer for real, points its
+    /// `onObjectTap` at a counter, and drives an activation through the
+    /// same walk VoiceOver uses. It is the only check here that can tell
+    /// "the mechanism exists" from "the mechanism is connected".
+    private func assertObjectsRoute(
+        _ root: Entity, _ label: String, taps: () -> Int,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        var targets: [Entity] = []
+        func walk(_ entity: Entity) {
+            if entity.components[InputTargetComponent.self] != nil {
+                targets.append(entity)
+            }
+            entity.children.forEach(walk)
+        }
+        walk(root)
+        XCTAssertFalse(targets.isEmpty,
+                       "\(label) built no grabbable objects to test",
+                       file: file, line: line)
+
+        let before = taps()
+        var routed = 0
+        for target in targets where SpatialActions.activate(target) { routed += 1 }
+        XCTAssertGreaterThan(routed, 0, """
+            none of \(label)'s \(targets.count) carried objects could be \
+            activated — `Grabbable`'s `activate` is being passed nothing.
+            """, file: file, line: line)
+        XCTAssertGreaterThan(taps(), before, """
+            \(label)'s objects declare an action that does not reach the \
+            module's own tap routing.
+            """, file: file, line: line)
+    }
+
+    func testMagnetismObjectsRouteToTheModule() {
+        var taps = 0
+        let renderer = MagnetismRenderer()
+        renderer.onObjectTap = { _ in taps += 1 }
+        let model = MagnetismModel()
+        renderer.tick(model)
+        assertObjectsRoute(renderer.root, "Magnetism", taps: { taps })
+    }
+
+    func testPendulumsObjectsRouteToTheModule() {
+        var taps = 0
+        let renderer = PendulumsRenderer()
+        renderer.onObjectTap = { _ in taps += 1 }
+        renderer.tick(dt: 1 / 90, model: PendulumsModel())
+        assertObjectsRoute(renderer.root, "Pendulums", taps: { taps })
+    }
+
+    func testKinematicsObjectsRouteToTheModule() {
+        var taps = 0
+        let renderer = KinematicsRenderer()
+        renderer.onObjectTap = { _ in taps += 1 }
+        renderer.tick(KinematicsModel())
+        assertObjectsRoute(renderer.root, "Projectiles", taps: { taps })
+    }
+
+    func testGravityLabObjectsRouteToTheModule() {
+        var taps = 0
+        let renderer = GravityLabRenderer()
+        renderer.onObjectTap = { _ in taps += 1 }
+        renderer.tick(GravityLabModel())
+        assertObjectsRoute(renderer.root, "Gravity Lab", taps: { taps })
+    }
+
+    func testElectricFieldsObjectsRouteToTheModule() {
+        var taps = 0
+        let renderer = FieldRenderer()
+        renderer.onObjectTap = { _ in taps += 1 }
+        renderer.tick(FieldModel())
+        assertObjectsRoute(renderer.root, "Electric Fields", taps: { taps })
     }
 
     // MARK: The primitives it named late

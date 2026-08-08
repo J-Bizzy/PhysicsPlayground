@@ -189,6 +189,7 @@ struct GravityLabSpaceView: View {
     var body: some View {
         RealityView { content, attachments in
             let renderer = GravityLabRenderer()
+            renderer.onObjectTap = { handleObjectTap(on: $0) }
             content.add(renderer.root)
 
             // HANDS-FREE ROUTES FOR THE TWO CONTROLS THAT ARE ONLY EVER
@@ -750,79 +751,7 @@ struct GravityLabSpaceView: View {
         .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
-                .onEnded { value in
-                    // The handles get first refusal — they are the
-                    // doors, and a door has to answer before the room
-                    // behind it.
-                    if clockHandle.handleTap(value.entity) { return }
-                    if analysisHandle.handleTap(value.entity) { return }
-                    if vectorsHandle.handleTap(value.entity) { return }
-                    if vectorsHandle.isOpen,
-                       vectors?.handleTap(value.entity) == true { return }
-                    if clockHandle.isOpen,
-                       clockPicker.handleTap(value.entity) { return }
-                    if analysisHandle.isOpen,
-                       analysis?.handleTap(value.entity) == true { return }
-                    if layers?.handleTap(value.entity) == true { return }
-                    if worldPicker.handleTap(value.entity) { return }
-                    if verbs?.handleTap(value.entity) == true { return }
-                    if bloom.handleTap(value.entity) { return }
-                    // A tap on a body toggles its control ring; the
-                    // primary keeps no ring (deleting the sun deletes
-                    // the system). A tap on anything else folds it.
-                    //
-                    // Matched on the body's UUID, because that is what
-                    // the renderer names its spheres. It used to match
-                    // `$0.body.name == candidate.name` — the DISPLAY
-                    // name, "Earth", "Mars" — and no entity in this
-                    // scene has ever carried one. So the condition was
-                    // never true, and the mass bead and delete petal
-                    // could not be opened by tapping a planet at all.
-                    // The drag handler two functions up got this right;
-                    // the tap handler did not, and `-gravRing 1` sets
-                    // `ring.openID` directly, so every screenshot of the
-                    // ring was taken down a path no user can walk.
-                    // A TAP ALSO SELECTS, and until now it did not.
-                    //
-                    // `select(id:)` was reachable only from a DEBUG
-                    // launch argument, so the one user path to a
-                    // selection was to grab a body and drag it — which
-                    // freezes it and zeroes its velocity, destroying the
-                    // orbit you were about to study. Selection drives the
-                    // vectors, the Kepler sweep, the Predict button's
-                    // enabled state, the notebook rows and now the orbit
-                    // ring, and the Prophet experiment's own step text
-                    // says "Tap a planet to select it" — describing an
-                    // interaction that did not exist.
-                    var current: Entity? = value.entity
-                    while let candidate = current {
-                        if let id = UUID(uuidString: candidate.name),
-                           let body = model.bodies.first(where: { $0.id == id }) {
-                            // The star opens a ring too now — it has a
-                            // mass, and mass is a bead. It is never
-                            // SELECTED, though: selection means "whose
-                            // orbit am I looking at", and the focus of
-                            // every orbit has none of its own.
-                            if body.id != model.primaryBody?.id {
-                                model.select(id: body.id)
-                            }
-                            if ring.openID == body.id {
-                                ring.openID = nil
-                                SoundPalette.play(.releaseTick, on: value.entity,
-                                                  volume: 0.3)
-                            } else {
-                                ring.openID = body.id
-                                SoundPalette.play(.pop, on: value.entity, volume: 0.35)
-                            }
-                            return
-                        }
-                        current = candidate.parent
-                    }
-                    if ring.openID != nil {
-                        SoundPalette.play(.releaseTick, on: value.entity, volume: 0.3)
-                    }
-                    ring.openID = nil
-                }
+                .onEnded { value in handleObjectTap(on: value.entity) }
         )
     }
 
@@ -899,5 +828,90 @@ struct GravityLabSpaceView: View {
         bloom.update(anchor: SIMD3<Float>(body.body.position * toDisplay),
                      viewer: viewer, revealTarget: 1, dt: dt)
     }
+
+    /// EXTRACTED FROM THE TAP CLOSURE, 2026-08-08, so VoiceOver reaches
+    /// the same routing a pinch does.
+    ///
+    /// `Grabbable` has taken an `activate` closure since the mechanism
+    /// moved into RenderKit, and every call site passed nothing — so the
+    /// objects a hand can carry could be reached no other way. It is not
+    /// a sweep: the helper configures entities it did not build and
+    /// cannot know what pressing one should mean. Only the module knows
+    /// that, so the routing had to come out of the gesture first.
+    private func handleObjectTap(on entity: Entity) {
+        // The handles get first refusal — they are the
+        // doors, and a door has to answer before the room
+        // behind it.
+        if clockHandle.handleTap(entity) { return }
+        if analysisHandle.handleTap(entity) { return }
+        if vectorsHandle.handleTap(entity) { return }
+        if vectorsHandle.isOpen,
+           vectors?.handleTap(entity) == true { return }
+        if clockHandle.isOpen,
+           clockPicker.handleTap(entity) { return }
+        if analysisHandle.isOpen,
+           analysis?.handleTap(entity) == true { return }
+        if layers?.handleTap(entity) == true { return }
+        if worldPicker.handleTap(entity) { return }
+        if verbs?.handleTap(entity) == true { return }
+        if bloom.handleTap(entity) { return }
+        // A tap on a body toggles its control ring; the
+        // primary keeps no ring (deleting the sun deletes
+        // the system). A tap on anything else folds it.
+        //
+        // Matched on the body's UUID, because that is what
+        // the renderer names its spheres. It used to match
+        // `$0.body.name == candidate.name` — the DISPLAY
+        // name, "Earth", "Mars" — and no entity in this
+        // scene has ever carried one. So the condition was
+        // never true, and the mass bead and delete petal
+        // could not be opened by tapping a planet at all.
+        // The drag handler two functions up got this right;
+        // the tap handler did not, and `-gravRing 1` sets
+        // `ring.openID` directly, so every screenshot of the
+        // ring was taken down a path no user can walk.
+        // A TAP ALSO SELECTS, and until now it did not.
+        //
+        // `select(id:)` was reachable only from a DEBUG
+        // launch argument, so the one user path to a
+        // selection was to grab a body and drag it — which
+        // freezes it and zeroes its velocity, destroying the
+        // orbit you were about to study. Selection drives the
+        // vectors, the Kepler sweep, the Predict button's
+        // enabled state, the notebook rows and now the orbit
+        // ring, and the Prophet experiment's own step text
+        // says "Tap a planet to select it" — describing an
+        // interaction that did not exist.
+        var current: Entity? = entity
+        while let candidate = current {
+            if let id = UUID(uuidString: candidate.name),
+               let body = model.bodies.first(where: { $0.id == id }) {
+                // The star opens a ring too now — it has a
+                // mass, and mass is a bead. It is never
+                // SELECTED, though: selection means "whose
+                // orbit am I looking at", and the focus of
+                // every orbit has none of its own.
+                if body.id != model.primaryBody?.id {
+                    model.select(id: body.id)
+                }
+                if ring.openID == body.id {
+                    ring.openID = nil
+                    SoundPalette.play(.releaseTick, on: entity,
+                                      volume: 0.3)
+                } else {
+                    ring.openID = body.id
+                    SoundPalette.play(.pop, on: entity, volume: 0.35)
+                }
+                return
+            }
+            current = candidate.parent
+        }
+        if ring.openID != nil {
+            SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
+        }
+        ring.openID = nil
+    
+    }
+
 }
 
