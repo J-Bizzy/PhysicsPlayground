@@ -531,13 +531,20 @@ final class GravityLabRenderer {
                              occluders: [], head: viewerInSystem)
             return
         }
+        // IN THE RING'S FRAME, not the system's. `OrbitRing.root` sits on
+        // the primary and its beads are placed relative to it, so an
+        // absolute centre here is offset from the beads by the primary's
+        // own position — wrong by 0.2 AU the moment "Twin suns" moves the
+        // primary off the origin, and invisible before that because
+        // `reset()` puts the Sun at exactly zero.
+        let primaryDisplay = SIMD3<Float>(primary.body.position) * scale
         let occluders = model.bodies.map {
-            (center: SIMD3<Float>($0.body.position) * scale,
+            (center: SIMD3<Float>($0.body.position) * scale - primaryDisplay,
              radius: Float($0.displayRadius))
         }
         orbitRing.update(
             frame: frame,
-            primaryDisplay: SIMD3<Float>(primary.body.position) * scale,
+            primaryDisplay: primaryDisplay,
             simToDisplay: model.simToDisplay,
             rigScale: rigScale,
             occluders: occluders,

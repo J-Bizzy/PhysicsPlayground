@@ -120,7 +120,8 @@ final class OrbitRing {
     ///   - simToDisplay: display metres per simulation metre.
     ///   - rigScale: the two-hand rig's current scale, for bead
     ///     compensation.
-    ///   - occluders: every body's display centre and radius, so a bead
+    ///   - occluders: every body's display centre and radius IN THE
+    ///     RING'S OWN FRAME — that is, relative to `primaryDisplay`, so a bead
     ///     buried inside a planet stops being a target.
     ///   - head: the viewer in `root`'s own frame, or nil in the
     ///     simulator (where every bead stays reachable so the CLI can
@@ -210,6 +211,18 @@ final class OrbitRing {
     /// the near bead exactly on the planet. Hiding it costs nothing,
     /// because when r_p = r_a the two beads do the same thing and the far
     /// one is a complete substitute.
+    /// BOTH ARGUMENTS ARE IN THE RING'S OWN FRAME. `place` positions a
+    /// bead relative to `root`, which sits on the primary — so an
+    /// occluder list in ABSOLUTE display coordinates is offset from the
+    /// beads by exactly the primary's position, and every test is wrong
+    /// by that much.
+    ///
+    /// It was, until 2026-08-07, and `reset()` hid it: with the Sun at
+    /// the origin the two frames coincide and the arithmetic is
+    /// accidentally right. Press "Twin suns" — which puts the primaries
+    /// at ±0.2 AU — and beads sitting inside a planet stayed targetable
+    /// while beads in open space were hidden and stripped of their
+    /// input target, intermittently, as the pair orbited.
     nonisolated static func isOccluded(
         bead: SIMD3<Float>, radius: Float,
         by occluders: [(center: SIMD3<Float>, radius: Float)]

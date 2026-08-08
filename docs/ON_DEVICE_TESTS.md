@@ -689,6 +689,47 @@ app was six rooms of readouts with no controls in them.
       sits outside the plate and carried no collider, so the word was a
       hole you pinched straight through.
 
+### Phase 3 — physics that was visibly wrong
+
+- [ ] **The double pendulum draws its trail.** `-openModule pendulums`.
+      The chaotic rig's lower bob should leave a trace, its readout card
+      should show a changing speed rather than `v 0.00 m/s`, and pausing
+      should produce a freeze sculpt. None of that existed: `step` wrote
+      the double's own state and never wrote the field every readout
+      reads. Grab it too — it used to freeze and refuse to follow.
+
+- [ ] **The predicted arc lands where the ball lands.**
+      `-openModule kinematics -kinBalls 1`, pick the BASKETBALL (the
+      error scales with radius: 12 cm). Fire it at a wall and at the
+      floor. The white arc should corner where the ball corners and
+      touch down where it touches down — it used to be drawn for a
+      point, so it cut 12 cm inside every wall and 12 cm below every
+      bounce, compounding with each segment.
+
+- [ ] **⟳ The orbit ring's beads with the primary OFF the origin.**
+      `-openModule gravitylab -gravBinary 1` — this is the case the
+      whole fix is about and NO automated test reaches it. With twin
+      suns the primaries sit at ±0.2 AU. Select a planet, open its orbit
+      ring, and watch the two apsis beads as the pair orbits: a bead
+      buried inside a body should vanish, and a bead in open space
+      should stay visible AND stay pinchable. Before this the two were
+      swapped, intermittently, because the occluders were measured in
+      one frame and the beads in another.
+
+- [ ] **Electric Fields' card under a magnetic orbit.**
+      `-openModule electrostatics -emMagnetic 1 -emTesla 50000`. With no
+      charges in the room the card should show `Force qE 0.00 N`, a
+      NON-zero `Force qv×B`, and a total that matches. It used to report
+      only qE — so a probe visibly circling in front of you reported
+      zero force. Then `-emCap 1`: between the plates a strong E must
+      not sit beside `0.00 V`.
+
+- [ ] **Deleting an armed circuit part.** `-openModule circuits`. Pinch
+      a terminal to arm it, open that part's ring, Delete it, then tap
+      any other terminal. No wire should appear. Before, an invisible
+      un-pinchable wire was created, ate one of the 36 budget slots, and
+      came back after a relaunch.
+
 ## Cross-cutting
 
 ### Phase 0 of the 2026-08-07 audit arc — mostly invisible, four things that are not

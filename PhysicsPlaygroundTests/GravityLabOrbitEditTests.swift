@@ -328,4 +328,55 @@ final class GravityLabOrbitEditTests: XCTestCase {
                        "a body released at rest should fall straight in")
     }
 
+
+    // MARK: Occlusion is measured in the ring's own frame
+
+    /// A BEAD BURIED IN A PLANET MUST HIDE WHEREVER THE SYSTEM SITS.
+    ///
+    /// `OrbitRing.root` sits on the primary and places its beads
+    /// relative to it, so occluders handed in ABSOLUTE display
+    /// coordinates are offset from the beads by the primary's own
+    /// position. `reset()` puts the Sun at exactly the origin, where the
+    /// two frames coincide and the arithmetic is accidentally right —
+    /// which is why this survived. Press "Twin suns" and the primaries
+    /// go to ±0.2 AU: beads inside a planet stayed targetable, beads in
+    /// open space were hidden and stripped of their input target.
+    ///
+    /// WHAT THIS TEST DOES AND DOES NOT COVER, said plainly because it
+    /// looks like more than it is. `isOccluded` was always correct in
+    /// isolation — it compares two points and two radii. The defect was
+    /// at the CALL SITE, in `GravityLabRenderer.syncOrbitRing`, which
+    /// built the occluder list in system coordinates and handed it to a
+    /// function whose beads are in the ring's. That function is private
+    /// and its renderer cannot be driven far enough from a test to reach
+    /// it, so the fix itself is verified on device — see the Gravity Lab
+    /// entry in `docs/ON_DEVICE_TESTS.md`.
+    ///
+    /// What this pins is the CONTRACT the call site now has to meet: the
+    /// answer depends only on the relative arrangement, so anybody
+    /// passing coordinates in the wrong frame is making a claim this
+    /// spells out.
+    func testOcclusionDoesNotDependOnWhereTheSystemSits() {
+        let beadInRingFrame = SIMD3<Float>(0.30, 0, 0)
+        let beadRadius: Float = 0.01
+
+        // A planet sitting exactly on the bead, expressed in the ring's
+        // frame — the same relative arrangement in both cases.
+        let planetInRingFrame = (center: beadInRingFrame, radius: Float(0.05))
+
+        for primary in [SIMD3<Float>.zero,
+                        SIMD3<Float>(0.2, 0, 0),
+                        SIMD3<Float>(-1.4, 0.3, 0.8)] {
+            XCTAssertTrue(
+                OrbitRing.isOccluded(bead: beadInRingFrame, radius: beadRadius,
+                                     by: [planetInRingFrame]),
+                "a bead inside a planet must hide with the primary at \(primary)")
+        }
+
+        // And a bead well clear of every body must stay visible.
+        XCTAssertFalse(
+            OrbitRing.isOccluded(bead: SIMD3(0.30, 0, 0), radius: beadRadius,
+                                 by: [(center: SIMD3(-0.30, 0, 0), radius: 0.05)]),
+            "a bead in open space was hidden")
+    }
 }
