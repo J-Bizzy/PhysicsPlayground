@@ -109,6 +109,9 @@ final class GravityLabRenderer {
         set { tapRouter.route = newValue }
     }
     private var ghostCallout: Callout?
+    /// The paragraph that appears when a release parks a body at a
+    /// Lagrange point — see `syncLagrangeCapture`.
+    private var lagrangeCallout: Callout?
     private var verdictLine = Entity()
     private var verdictCallout: Callout?
     private var verdictShownWall: Double?
@@ -566,6 +569,49 @@ final class GravityLabRenderer {
         }
     }
 
+    /// THE PARAGRAPH THAT EXPLAINS WHY YOUR THROW WAS IGNORED.
+    ///
+    /// `release()` snaps a body dropped near a Lagrange point onto the
+    /// point and OVERWRITES its velocity with
+    /// `Lagrange.corotatingVelocity`. That is the right physics — a body
+    /// parked at L4 has to move with the rotating frame or it is not
+    /// parked — and with nothing said it looks exactly like the throw
+    /// was discarded. `GravityLabModel.lagrangeExplanations` has had a
+    /// paragraph ready for each of the five points since they were
+    /// written, and no surface to appear on: five strings, zero readers,
+    /// beside a `capturedPointName` written in four places and read in
+    /// none.
+    ///
+    /// IT FOLLOWS THE BODY rather than sitting on the point, and that is
+    /// the whole lesson rather than a placement detail. L1, L2 and L3
+    /// are saddles, so the captured body slides off over the next few
+    /// days — with the sentence saying it would travelling alongside.
+    /// L4 and L5 hold, and the paragraph stays put. The text makes a
+    /// prediction and the object either keeps it or does not, in view.
+    private func syncLagrangeCapture(_ model: GravityLabModel) {
+        guard let name = model.capturedPointName,
+              let text = GravityLabModel.lagrangeExplanations[name],
+              let id = model.capturedBodyID,
+              let body = model.bodies.first(where: { $0.id == id }) else {
+            lagrangeCallout?.isEnabled = false
+            return
+        }
+        if lagrangeCallout == nil {
+            let callout = Callout(color: Self.sweepGold, textSize: 0.020,
+                                  offset: SIMD3(0, 0.10, 0))
+            // A paragraph, so it wraps — every other callout in this app
+            // is a number and never needed to.
+            callout.wrapWidth = 0.46
+            callout.setAccessibilityName("Lagrange point \(name)")
+            systemRoot.addChild(callout.root)
+            lagrangeCallout = callout
+        }
+        lagrangeCallout?.isEnabled = true
+        lagrangeCallout?.anchor(at: SIMD3<Float>(body.body.position)
+                                * Float(model.simToDisplay))
+        lagrangeCallout?.setText(text)
+    }
+
     private func syncOrbitRing(_ model: GravityLabModel) {
         guard let selected = model.selectedBody,
               let primary = model.ringPrimary(for: selected),
@@ -921,6 +967,7 @@ final class GravityLabRenderer {
         syncVectors(model)
         syncMergeFlash(model)
         syncOrbitRing(model)
+        syncLagrangeCapture(model)
         applyRigCompensation()
         drainTrailUploads()
         syncLagrangeMarkers(model)

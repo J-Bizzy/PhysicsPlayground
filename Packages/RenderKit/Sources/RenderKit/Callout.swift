@@ -49,6 +49,22 @@ public final class Callout {
     /// property survives as an opt-out for a future bespoke case.
     /// Takes effect on the next text change.
     public var showsBacking = true
+
+    /// Wrap the label at this width, metres; 0 keeps it on one line.
+    ///
+    /// A reading is two words and a paragraph is not. Every callout in
+    /// this app was the former until Gravity Lab needed to explain what
+    /// an L-point is at the moment a body is captured by one — five
+    /// authored paragraphs that had no reader because there was no
+    /// surface that could hold a sentence.
+    public var wrapWidth: CGFloat = 0 {
+        didSet {
+            guard wrapWidth != oldValue else { return }
+            // The cached mesh is keyed on width, so the next `setText`
+            // would be a no-op against a stale string.
+            lastText = nil
+        }
+    }
     private var backingEntity: ModelEntity?
 
     /// What VoiceOver calls this readout — the quantity, not the number.
@@ -137,7 +153,7 @@ public final class Callout {
             backingEntity = nil
             return
         }
-        let mesh = Self.textMesh(text, size: textSize)
+        let mesh = Self.textMesh(text, size: textSize, wrapWidth: wrapWidth)
         var material = UnlitMaterial(color: color)
         material.blending = .opaque
         let model = ModelEntity(mesh: mesh, materials: [material])

@@ -617,6 +617,7 @@ final class GravityLabModel {
         heldID = id
         selectedID = id
         capturedPointName = nil
+        capturedBodyID = nil
         throwSampler.reset()
         hold(id: id, at: displayPoint, timestamp: timestamp)
     }
@@ -667,8 +668,10 @@ final class GravityLabModel {
             bodies[index].body.velocity = Lagrange.corotatingVelocity(
                 at: point, primary: pair.primary, secondary: pair.secondary)
             capturedPointName = name
+            capturedBodyID = bodies[index].id
         } else {
             capturedPointName = nil
+            capturedBodyID = nil
         }
     }
 
@@ -883,6 +886,22 @@ final class GravityLabModel {
     var showLagrangePoints = false
 
     /// Which point the satellite was inserted at, for the explanation.
+    /// Which Lagrange point the last release parked a body at, and
+    /// which body.
+    ///
+    /// WRITTEN IN FOUR PLACES AND READ IN NONE until 2026-08-08 — and
+    /// the silence was not cosmetic. `release()` OVERWRITES the velocity
+    /// the user just threw with `Lagrange.corotatingVelocity`, which is
+    /// the right physics and looks, without a word of explanation, like
+    /// the throw was ignored. `lagrangeExplanations` had five paragraphs
+    /// ready for exactly that moment and no surface to appear on.
+    ///
+    /// The body's id rides along so the callout can FOLLOW it. That is
+    /// the teaching: L1, L2 and L3 are saddles, so the captured body
+    /// slides off over the next few days while the paragraph saying it
+    /// would travels with it. L4 and L5 hold, and the paragraph stays
+    /// put.
+    private(set) var capturedBodyID: UUID?
     private(set) var capturedPointName: String?
 
     /// Whose points these are — the last planet the user TAPPED, not
@@ -1156,6 +1175,7 @@ final class GravityLabModel {
         prediction = nil
         predictionVerdict = nil
         capturedPointName = nil
+        capturedBodyID = nil
         bodies.removeAll()
         heldID = nil
         orbitEdit = nil
