@@ -638,11 +638,13 @@ be. The first is a visible change and wants judging, not just checking.
       just outside it.
 
 - [ ] **The hoop can be grabbed anywhere on its rim.**
-      `-openModule kinematics -kinBalls 1`. The rim carries twenty-four
+      `-openModule kinematics -kinBalls 1`. The rim carries twenty-eight
       small colliders now rather than eight — the count is derived from
-      the radius (a 0.034 m sphere covers 17° of a 0.23 m ring, so full
-      coverage needs 22). Try to drag the hoop from several different
-      points around the ring, including between the compass points.
+      the tube's SURFACE, not its centreline (a 0.034 m sphere has to
+      reach 0.02 m off-axis, which 24 does not quite manage). Try to
+      drag the hoop from several different points around the ring,
+      including between the compass points, and from a shallow angle
+      rather than straight on.
 
 - [ ] **The capacitor's interior is reachable again.** `-openModule
       electrostatics -emCap 1`. Put a charge between the plates and try

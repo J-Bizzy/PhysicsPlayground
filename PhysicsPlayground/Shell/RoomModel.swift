@@ -156,8 +156,16 @@ final class RoomModel {
     }
 
     private var clients = 0
-    /// Readable so the invariant "`sensing == .fine` iff we are actually
-    /// running" can be asserted; see `RoomSessionTests`.
+    /// Readable so `RoomSessionTests` can assert the relationship
+    /// between running and reporting.
+    ///
+    /// The invariant is one-directional, and saying so precisely matters
+    /// because an earlier comment here claimed an "iff" that the code
+    /// does not hold: anything OTHER than `.fine` implies we are not
+    /// running, but `.fine` does not imply we are. `.fine` means
+    /// "nothing to tell the user", and a session that is down because
+    /// nobody asked for it — either teardown path — is not a fault to
+    /// report.
     private(set) var isRunning = false
     /// Set BEFORE the first await in `retain()`, not after. See below.
     private var isStarting = false

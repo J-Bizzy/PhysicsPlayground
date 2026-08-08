@@ -21,7 +21,7 @@ A crescent of **two floating graphite terraces**, one per `HubDomain`, arcing ar
 
 Each terrace:
 
-- is a dark rounded slab (0.42 m deep, 0.055 m thick) with a **domain-coloured emissive hairline** along its front-top edge — one of the four places domain colour lives, alongside the door signage, the progress ring and the focus panel chip;
+- is a dark rounded slab (0.42 m deep, 0.055 m thick) with a **domain-coloured emissive hairline** along its front-top edge — one of the three places domain colour lives, alongside the door signage and the progress ring (the fourth was the focus panel's chip, deleted 2026-08-04);
 - carries one **pedestal puck** per module (r 0.085 m, 0.36 m pitch), each holding the module's **shell-free live miniature** (`Hub/HubVignettes.swift`), normalized to a constant 0.24 m world size, with a billboarded bubble-type name plate in front of the puck and the domain-coloured **progress ring** (gold when complete).
 
 Slab widths derive from module counts (`0.36·n + 0.08`); a module outside every domain extends its fallback domain's slab, so the old slot-wrap overlap bug is structurally impossible (`GalleryLayoutTests`). The **distance setting scales the crescent's plan** (radials, widths, pitch) and the **height setting scales terrace heights**; exhibits keep constant world size. A soft warm pool of light on the real floor ties the crescent to the room.
@@ -36,11 +36,20 @@ Each terrace also carries an **animated 3-D door sign** (`HubDomainTitle`) namin
 
 ### Focus
 
-Unchanged mechanic (head-direction cone 26° with hysteresis, `RoomModel`'s look ray; `-hubFocus <id>` pins it in the simulator), retuned expression: the focused exhibit **lifts 0.09 m off its puck** and scales to 1.22, a pool of its accent light appears on the pedestal, others recede and their names fade. The single billboarded glass **focus panel** (`HubFocusPanel`) is unchanged: domain chip, promise line, N-of-M progress dial, New/last-played badge, Enter button.
+Unchanged mechanic (head-direction cone 26° with hysteresis, `RoomModel`'s look ray; `-hubFocus <id>` pins it in the simulator): the focused exhibit **lifts 0.09 m off its puck** and scales to 1.22, and a pool of its accent light appears on the pedestal. Names stay legible at all times (owner, 2026-08-04 — a gallery whose captions vanish until you stare at them cannot be read at a glance); what IS focus-gated is the **promise line** (`HubDomain.promise`), one sentence of "what you actually do here" that fades in under the focused exhibit's name.
+
+**THE FOCUS PANEL IS GONE.** `HubFocusPanel` — domain chip, promise line, progress dial, New badge and Enter button — was deleted on 2026-08-04. This section described it as shipping until 2026-08-07. Its two load-bearing jobs were rehomed then: the promise line above, and the Enter button as a **machined ENTER plaque** standing on each puck's terrace (see *Entering*).
 
 ### Entering
 
-Pinch the exhibit or its Enter button → 0.42 s swell-and-rise with a pop, the terrace's hairline flares, then the scene swaps to the module.
+**Two doors, and the pair is load-bearing** (DECISIONS.md 2026-07-29: "neither may be deleted without the other changing"):
+
+- **The ENTER plaque** — a small machined slab in the module's accent, standing on the terrace in front of each puck. Gaze plus a pinch, nothing to aim or carry. This is the *reachable* path, and the one VoiceOver can operate (`.activate`; the exhibit itself also carries an "Enter" custom action).
+- **The pad** — carry an exhibit to the plate front and centre and release it inside the 0.34 m snap radius; it stands and turns with Load hanging over it. The *delightful* path.
+
+Either way: 0.42 s swell-and-rise with a pop, the terrace's hairline flares, then the scene swaps to the module.
+
+A **tap on the exhibit itself still does not enter** — 2026-07-29 removed that because it made the whole gallery one large accidental-activation surface while merely looking around, and that reasoning stands. It flashes the pad instead, teaching the ceremony. *(Between 2026-08-04 and 2026-08-07 the pad was the ONLY way in, because the focus panel's button went and nothing replaced it. That is the gap the plaque closes.)*
 
 ### Idle life & comfort
 

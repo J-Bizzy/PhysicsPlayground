@@ -9,15 +9,27 @@
 //  under a persistent "Physics / Playground" wordmark. Domains are
 //  physical structure: where a lab sits tells you what kind of physics
 //  it is, and one sweep of the head reads the whole room. Look toward
-//  an exhibit and it lifts off its puck, naming itself and opening its
-//  focus panel.
+//  an exhibit and it lifts off its puck, names itself, and says in one
+//  line what you actually do in there (`HubDomain.promise`).
 //
-//  Two ways in, and the panel's "Load Module" button is the one that
-//  always works — gaze plus a pinch, nothing to aim or carry. The other
-//  is the pad: drag an exhibit onto the plate floating front and centre
-//  and it stands there and turns, with Load hanging over it. The pad is
-//  the delightful path; the button is the reachable one, so neither is
-//  load-bearing alone.
+//  TWO WAYS IN, and the pair is deliberate — DECISIONS.md 2026-07-29:
+//  "neither may be deleted without the other changing."
+//
+//  · The ENTER plaque on each puck's terrace: gaze plus a pinch, nothing
+//    to aim or carry. The reachable one.
+//  · The pad: carry an exhibit onto the plate floating front and centre
+//    and it stands there and turns, with Load hanging over it. The
+//    delightful one.
+//
+//  THE PAIR WAS BROKEN FOR THREE DAYS. The reachable half used to be a
+//  "Load Module" button on a billboarded focus panel; the panel was
+//  deleted on 2026-08-04 and nothing replaced it, so from then until
+//  2026-08-07 the ONLY way into a lab was a sustained ~1.1 m pinch-drag
+//  onto a 0.105 m pad — the app's own rule (nothing may be the only path
+//  to a capability) broken at its front door. The plaque is the
+//  replacement, and it answers 2026-07-29's objection to a bare tap on
+//  the exhibit — that it made the whole gallery an accidental-activation
+//  surface — by being a small separate object you have to look AT.
 //
 //  The only motion is idle life: miniatures breathe out of phase and
 //  their physics runs. A handful of entities; per-frame work is a few
@@ -96,11 +108,50 @@ struct HubSpaceView: View {
             // return to the hub built another one, and every one of them
             // went on animating its own orphaned copy of the gallery,
             // forever, while you were somewhere else entirely.
+            scene.onDock = { appModel.settings.markHintSeen(HubScene.podiumHintID) }
+
             scene.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak scene] event in
                 scene?.animate(dt: event.deltaTime, lookRay: appModel.room.lookRay)
             }
+
+            // VOICEOVER CAN OPEN A LAB.
+            //
+            // Every exhibit's label has promised "Enter <module>" since
+            // the gallery shipped, against a tap handler that only
+            // flashed a distant plate — so the one thing the label said
+            // you could do was the one thing it could not.
+            //
+            // Two doors, because a VoiceOver user sweeping the room
+            // lands on the EXHIBIT, and making them hunt for a separate
+            // 0.11 m plaque beside it would be a worse version of the
+            // same problem: the plaque declares `.activate`, and the
+            // exhibit carries a custom action named "Enter".
+            //
+            // This is the app's FIRST `AccessibilityEvents`
+            // subscription. A grep for `systemActions` returned zero
+            // matches across the whole project before it, so every
+            // plate, petal, disc, rail and well in six labs is
+            // announced, readable, and impossible to operate. Phase 2
+            // closes that with one subscription in `PlaygroundSpaceView`;
+            // the front door could not wait for it.
+            scene.accessibilitySubscriptions = [
+                content.subscribe(to: AccessibilityEvents.Activate.self) { event in
+                    if let id = scene.enterPlaqueModuleID(for: event.entity) {
+                        enter(id)
+                    }
+                },
+                content.subscribe(to: AccessibilityEvents.CustomAction.self) { event in
+                    guard event.key.key == Self.enterAction.key,
+                          let id = scene.moduleID(for: event.entity) else { return }
+                    enter(id)
+                },
+            ]
         } update: { _, _ in
             scene.stillness = systemReduceMotion
+            scene.showPodiumHint(
+                !appModel.settings.hasSeenHint(HubScene.podiumHintID)
+                    && scene.dockedModuleID == nil
+                    && !scene.isCarrying)
         } attachments: {
             Attachment(id: "bar") {
                 HubUtilityBar(
@@ -115,7 +166,12 @@ struct HubSpaceView: View {
                 // "pad", not "podium": the plinth came off on 2026-08-03
                 // and copy that names a stand the wearer cannot see sends
                 // them looking for one.
-                Text("Drag a lab onto the pad to open it")
+                // It TEACHES rather than instructs, because it is no
+                // longer the only way in — every puck now carries an
+                // ENTER plaque. What this is for is the ceremony: the
+                // carry is the better story and nobody discovers it on
+                // their own.
+                Text("Or carry a lab to the pad")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 12)
@@ -152,6 +208,8 @@ struct HubSpaceView: View {
         .onDisappear {
             scene.subscription?.cancel()
             scene.subscription = nil
+            scene.accessibilitySubscriptions.forEach { $0.cancel() }
+            scene.accessibilitySubscriptions = []
             // An exhibit still in the hand when the gallery goes away.
             // Nothing else clears the carry: without this it survives in
             // `scene` and every later drag re-targets the same exhibit.
@@ -162,8 +220,18 @@ struct HubSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
-                    // A tap no longer enters — carrying a lab to the
-                    // podium does. The tap teaches the gesture: the
+                    // THE PLAQUE FIRST. It is the reachable way in —
+                    // gaze plus a pinch, nothing to aim or carry — and
+                    // it is a distinct object, so this cannot be
+                    // confused with a tap on the exhibit itself.
+                    if let id = scene.enterPlaqueModuleID(for: value.entity) {
+                        enter(id)
+                        return
+                    }
+                    // A tap on the EXHIBIT still does not enter, and the
+                    // 2026-07-29 reasoning for that stands: the whole
+                    // gallery would become an accidental-activation
+                    // surface. It teaches the ceremony instead — the
                     // podium flashes to say "bring it here."
                     guard scene.moduleID(for: value.entity) != nil else { return }
                     scene.hintPodium()
@@ -240,6 +308,16 @@ struct HubSpaceView: View {
         barTravelled = 0
     }
 
+    /// What VoiceOver calls the exhibit's "open this lab" action.
+    ///
+    /// `AccessibilityEvents.CustomAction` reports the action by its
+    /// `LocalizedStringResource`, and the delivered copy is not the same
+    /// instance, so the match is on `.key` — which for a resource built
+    /// from a literal IS that literal. One constant, used both to
+    /// declare the action on each exhibit and to recognise it coming
+    /// back, so the two cannot drift apart.
+    static let enterAction = LocalizedStringResource("Enter")
+
     /// One enter path for both the pinch and the panel's button: the
     /// chosen exhibit swells toward you while the rest of the hub holds,
     /// and the module takes over as the swell peaks — an arrival, not a
@@ -259,6 +337,9 @@ struct HubSpaceView: View {
 final class HubScene {
     let root = Entity()
     var subscription: EventSubscription?
+    /// Held for the same reason `subscription` is — an `EventSubscription`
+    /// outlives the view that made it. See `HubSpaceView.onDisappear`.
+    var accessibilitySubscriptions: [EventSubscription] = []
 
     private struct Exhibit {
         let moduleID: String
@@ -266,6 +347,9 @@ final class HubScene {
         let pulser: Entity      // scale pulse on selection
         let vignette: Entity    // slowly rotating miniature
         let namePivot: Entity   // billboarded name plate
+        /// The one-line "what you actually do here", shown only while
+        /// this exhibit is the focused one — see `HubDomain.promise`.
+        let promisePivot: Entity
         let halo: Entity        // accent glow, focused only
         let basePosition: SIMD3<Float>
         /// The animation the miniature was built with — captured
@@ -717,6 +801,7 @@ final class HubScene {
                                 timingFunction: .easeInOut)
             }
             dockedModuleID = id
+            onDock?()
             exhibit.anchor.move(to: Transform(translation: podiumTop),
                                 relativeTo: root, duration: 0.28,
                                 timingFunction: .easeOut)
@@ -897,7 +982,33 @@ final class HubScene {
     /// the user — a small plaque saying what the podium is FOR. The
     /// Load button hangs over the podium's top, so the two never
     /// collide. Same distance-compensating scale story as the bar.
+    /// The podium hint, held so it can be hidden. See `showPodiumHint`.
+    private var podiumHintEntity: Entity?
+
+    /// Whether the "carry a lab to the pad" teach should be on screen.
+    ///
+    /// It used to be PERMANENT, UNDISMISSABLE, and shown even while a
+    /// lab was already docked — so the app's single most prominent
+    /// instruction spent most of its life telling you to do the thing
+    /// you had just finished doing. Three conditions retire it now: a
+    /// lab is on the pad, one is in your hand, or you have docked one
+    /// before (`AppSettings.seenHints`, the same gate the module hints
+    /// use, under this pseudo-module id).
+    static let podiumHintID = "hub.podium"
+
+    func showPodiumHint(_ visible: Bool) {
+        podiumHintEntity?.isEnabled = visible
+    }
+
+    /// Called the first time a lab is actually seated on the pad, so the
+    /// teach can retire itself. Set by the view, which owns `AppSettings`
+    /// — and called from the dock branch rather than from the view's
+    /// `update:` closure, because writing app state during a SwiftUI
+    /// update pass is a different kind of bug.
+    var onDock: (() -> Void)?
+
     func seatPodiumHint(_ entity: Entity) {
+        podiumHintEntity = entity
         entity.components.set(BillboardComponent())
         entity.scale = SIMD3(repeating: 1.6)
         entity.position = SIMD3(podiumTop.x,
@@ -974,15 +1085,22 @@ final class HubScene {
         anchor.name = module.id
         anchor.position = basePosition
         // The gaze/pinch target is set at the BOTTOM of this function,
-        // once the miniature, the name plate and the progress ring
-        // exist, and is measured from them. It was a 0.19 m sphere —
+        // once the miniature exists, and is measured from THAT alone —
+        // not from the name plate or the progress ring, for reasons
+        // given at the site. It was a 0.19 m sphere —
         // 0.38 m across against a puck pitch of 0.36 — so every
         // exhibit's target reached 2 cm into both of its neighbours' and
         // which one you were aiming at was decided by hit order.
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
+        // The label DESCRIBES; the action is what opens the lab. It read
+        // "Enter <module>" against a tap that only flashed a distant
+        // plate — a label promising the one thing the object could not
+        // do. `HubDomain.promise` is the hand-written "what you actually
+        // do here" line, which had no readers at all until 2026-08-07.
         accessibility.label = LocalizedStringResource(
-            stringLiteral: "Enter \(module.title). \(module.blurb)")
+            stringLiteral: "\(module.title). \(HubDomain.promise(for: module.id))")
+        accessibility.customActions = [HubSpaceView.enterAction]
         anchor.components.set(accessibility)
         root.addChild(anchor)
 
@@ -1020,6 +1138,41 @@ final class HubScene {
         namePivot.components.set(BillboardComponent())
         namePivot.addChild(name)
         pulser.addChild(namePivot)
+
+        // WHAT YOU ACTUALLY DO HERE, under the name.
+        //
+        // `HubDomain.promise` is six hand-written lines that had ZERO
+        // readers — written for the focus panel, orphaned when the panel
+        // was deleted on 2026-08-04, and never rehomed. Without them the
+        // gallery is six unexplained objects: a visitor can see that one
+        // of them is a solar system, but not that they can grow it, walk
+        // into it, and hear its orbits as a chord.
+        //
+        // GATED ON FOCUS, which is what makes it affordable. Six
+        // permanent sentences would be six more things standing in a
+        // room this project is already trying to quieten; one sentence
+        // under the one exhibit you are facing is a caption.
+        let promise = HubDomain.promise(for: module.id)
+        let promisePivot = Entity()
+        if !promise.isEmpty {
+            let line = Self.namePlate(promise,
+                                      accent: UIColor(white: 0.88, alpha: 1),
+                                      size: 0.016)
+            // Tucked close under the name. THIS STACK IS THE THING TO
+            // LOOK AT IN THE SCREENSHOT: miniature, name (y −0.105),
+            // promise (−0.142), and the ENTER plaque standing forward
+            // on the terrace (−0.160, z 0.165). All three billboard, so
+            // they are separated in depth as well as height and the
+            // arithmetic alone cannot say whether they read as one tidy
+            // caption or as three things piled up. Placement is what
+            // this project has got wrong three times with the numbers
+            // looking fine.
+            promisePivot.position = [0, -0.142, 0.11]
+            promisePivot.components.set(BillboardComponent())
+            promisePivot.components.set(OpacityComponent(opacity: 0))
+            promisePivot.addChild(line)
+            pulser.addChild(promisePivot)
+        }
 
         // The module's own progress, worn as an arc behind the exhibit:
         // the domain-coloured arc of what is done, and a gold band once
@@ -1081,9 +1234,43 @@ final class HubScene {
         ]))
         anchor.components.set(HoverEffectComponent())
 
+        // The plaque stands under `anchor`, NOT under `pulser`: a
+        // control that swells and shrinks with the focus pulse is a
+        // control that moves while you are aiming at it.
+        // ON THE TERRACE, IN FRONT OF THE PLINTH — where a museum label
+        // goes, and the only place it can go.
+        //
+        // The puck is 0.17 m across and the exhibit's own touch target
+        // is a 0.27 m box centred on the miniature, so the whole puck
+        // top is INSIDE that target: a plaque standing on the puck is a
+        // plaque whose pinches the exhibit wins, which is worse than no
+        // plaque at all. `testGalleryExhibitTargetsDoNotOverlapEachOther`
+        // said so on the first run, for three of the six.
+        //
+        // It clears on Z, not on Y, and that was measured rather than
+        // reasoned: dropping it far enough to clear the exhibit's box
+        // vertically would sink it 12 mm INTO the terrace slab (the
+        // exhibit box bottom and the puck top are 5 mm apart). Standing
+        // it forward of the plinth clears the same box with 10 mm to
+        // spare and leaves it resting on the terrace, which is where a
+        // museum label lives anyway — under the miniature, under its
+        // name, at the front of the plinth.
+        let enter = Self.enterPlaque(accent: UIColor(module.accent))
+        enter.name = "\(Self.enterPrefix)\(module.id)"
+        enter.position = [0, -0.160, 0.165]
+        enter.components.set(BillboardComponent())
+        var enterAccessibility = AccessibilityComponent()
+        enterAccessibility.isAccessibilityElement = true
+        enterAccessibility.label = LocalizedStringResource(
+            stringLiteral: "Enter \(module.title)")
+        enterAccessibility.systemActions = [.activate]
+        enter.components.set(enterAccessibility)
+        anchor.addChild(enter)
+
         exhibits.append(Exhibit(
             moduleID: module.id, anchor: anchor, pulser: pulser,
-            vignette: vignette, namePivot: namePivot, halo: glow,
+            vignette: vignette, namePivot: namePivot,
+            promisePivot: promisePivot, halo: glow,
             basePosition: basePosition, animate: built.animate))
     }
 
@@ -1148,6 +1335,77 @@ final class HubScene {
     /// and every label longer than 14 mm straddled the switch it named.
     /// One formula, two callers — a second copy of the padding arithmetic
     /// would drift the moment either changed.
+    /// Entities named with this prefix are ENTER plaques; the suffix is
+    /// the module id.
+    static let enterPrefix = "enter-"
+
+    /// THE REACHABLE WAY IN — a small machined plaque standing on each
+    /// puck that says ENTER and means it.
+    ///
+    /// Why this exists, and why it is not simply the old bare tap.
+    ///
+    /// DECISIONS.md 2026-07-29 removed tap-to-enter because "entering by
+    /// tap made the whole gallery one large accidental-activation
+    /// surface while merely looking around" — a real problem, since an
+    /// exhibit is a 0.27 m object you are meant to look at. The same
+    /// entry made the podium and the focus panel's Load button an
+    /// explicit PAIR: "the podium is the delightful path; the button is
+    /// the reachable one, and neither may be deleted without the other
+    /// changing." On 2026-08-04 the panel was deleted and the podium did
+    /// not change, so the only way into a lab became a sustained ~1.1 m
+    /// pinch-drag onto a 0.105 m pad. That is the pact broken, and it
+    /// is also the app's own standing rule broken at its front door:
+    /// nothing may be the only path to a capability.
+    ///
+    /// A plaque answers the 2026-07-29 objection rather than ignoring
+    /// it. The accidental-activation surface was the whole exhibit; this
+    /// is a 0.11 m nameplate standing apart from it, below the
+    /// miniature and in front of it, which you have to look AT rather
+    /// than merely near. Gaze plus a pinch, nothing to aim or carry —
+    /// exactly what the deleted Load button gave, on the object it
+    /// belongs to instead of on a panel. The carry-to-the-podium stays
+    /// as the ceremony, and it remains the better story; it is simply
+    /// no longer the only door.
+    @MainActor
+    static func enterPlaque(accent: UIColor) -> Entity {
+        let plaque = Entity()
+
+        let label = HubTitleStyle.line("ENTER", size: 0.019, accent: accent)
+        let text = label.visualBounds(relativeTo: nil).extents
+        let width = max(text.x, 0.02) + 0.030
+        let height = max(text.y, 0.008) + 0.018
+
+        // A slab, not a card: the same alloy as the wordmark and the
+        // labs' instruments, so it reads as hardware rather than as
+        // interface pasted onto the room.
+        var stock = Materials.machined(
+            HubTitleStyle.blend(accent, toward: UIColor(white: 0.22, alpha: 1), by: 0.62))
+        stock.emissiveColor = .init(color: accent)
+        stock.emissiveIntensity = 0.05
+        let slab = ModelEntity(
+            mesh: .generateBox(width: width, height: height, depth: 0.010,
+                               cornerRadius: 0.0035),
+            materials: [stock])
+        plaque.addChild(slab)
+        label.position.z = 0.006
+        plaque.addChild(label)
+
+        Grabbable.configureTouchTarget(plaque, matchingVisualBoundsOf: plaque)
+        return plaque
+    }
+
+    /// The module a tap on an ENTER plaque belongs to, or nil.
+    func enterPlaqueModuleID(for entity: Entity) -> String? {
+        var current: Entity? = entity
+        while let candidate = current {
+            if candidate.name.hasPrefix(Self.enterPrefix) {
+                return String(candidate.name.dropFirst(Self.enterPrefix.count))
+            }
+            current = candidate.parent
+        }
+        return nil
+    }
+
     static func namePlateWidth(_ text: String, size: CGFloat = 0.036) -> Float {
         textExtents(text, size: size).x + Float(size) * 0.72 * 2
     }
@@ -1278,6 +1536,12 @@ final class HubScene {
             exhibit.pulser.scale = SIMD3(repeating: scale)
 
             exhibit.halo.components.set(OpacityComponent(opacity: focus))
+            // The promise, on the other hand, IS focus-gated — see where
+            // it is built. It trails the halo slightly so the sentence
+            // arrives after the exhibit has clearly been chosen, rather
+            // than flickering at every glance across the crescent.
+            exhibit.promisePivot.components.set(
+                OpacityComponent(opacity: max(focus * 1.4 - 0.4, 0)))
             // Every name stays legible ALL the time (owner, 2026-08-04,
             // reversing the materialise-on-gaze fade): a gallery whose
             // captions vanish until you stare at them cannot be read at

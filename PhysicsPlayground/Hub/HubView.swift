@@ -2,12 +2,31 @@
 //  HubView.swift
 //  Physics Playground — Hub
 //
-//  The hub's window. While the Gallery is in the room this window is
-//  deliberately empty — the space IS the menu, and the wordmark hangs
-//  in the room itself. Before the space opens (or if opening fails),
-//  the window is the real front door: the app's name, one button that
-//  raises the Gallery, and a domain-grouped catalog with live progress,
-//  so nothing about the app is unreachable from a plain window.
+//  The hub's window. Two states, and until 2026-08-07 the first of them
+//  was BLANK.
+//
+//  · Gallery not in the room — the full front door: the app's name, one
+//    button that raises the Gallery, and a domain-grouped catalog with
+//    live progress.
+//  · Gallery in the room — a compact version of the same catalog and the
+//    same progress line. The space is the menu and the wordmark hangs in
+//    the room, so the ceremony comes off; the CONTENT does not.
+//
+//  WHY THE SECOND STATE EXISTS. Everything here used to sit inside
+//  `if !appModel.isImmersiveSpaceOpen`, and `task` opens the Gallery
+//  half a second after launch — so within a second of a cold start the
+//  window collapsed to an empty 560×720 frame and stayed that way for
+//  the whole session. Two things went with it, and both are load-bearing:
+//
+//  1. THE FLAT CATALOG IS THE ACCESSIBILITY PATH. The standing rule is
+//     that nothing may be reachable only in space, and the catalog is
+//     how this app satisfies it. Hidden for the entire time the app is
+//     in its normal state, that guarantee was unmet in normal use — and
+//     it was also the safety net under the only-way-into-a-lab problem.
+//  2. IT IS THE APP'S ONLY VIEW OF PROGRESS. `AppProgressLine` carries
+//     the tally, the streak and the single next step — the whole reason
+//     `nextStep` was written was to make the hub "somewhere you come
+//     back TO" — and it was invisible whenever the hub was actually up.
 //
 
 import SwiftUI
@@ -60,6 +79,16 @@ struct HubView: View {
                 .accessibilityHint("Places the Gallery — the exhibit terraces — in your room")
 
                 HubCatalogList()
+            } else {
+                // THE COMPACT STATE. Same catalog, same progress line,
+                // no ceremony: the wordmark and the "Enter the Gallery"
+                // button would both be lying, since the Gallery is
+                // already in the room and has its own sign over the
+                // door. What stays is everything that answers a
+                // question — where am I, what next, and what are the
+                // six labs — plus a way into each of them that needs no
+                // aim and no carry.
+                HubCatalogList(isCompact: true)
             }
 
             Spacer(minLength: 12)
@@ -73,14 +102,20 @@ struct HubView: View {
             SoundPalette.masterVolume = appModel.settings.masterVolume
             // The Gallery is the menu — bring it up on arrival.
             //
-            // `-uiTesting 1` holds it back, because this window is
-            // deliberately EMPTY while the Gallery is in the room, and
-            // XCUITest can only see the window: nothing in an immersive
-            // space is addressable to it. The flat catalog it leaves up
-            // is not a test fixture, though — it is the app's real
-            // accessibility path, the one the standing rule demands
-            // (nothing may be reachable only in space), so testing
-            // against it tests something that has to work anyway.
+            // `-uiTesting 1` holds it back, so the FULL front door
+            // stays up: XCUITest can only see the window, and the
+            // wordmark and the "Enter the Gallery" button exist only in
+            // that state. (Before 2026-08-07 the argument was
+            // load-bearing for a harder reason — the window went
+            // completely blank once the Gallery opened, so without it
+            // there was nothing at all to test. The compact catalog
+            // means that is no longer true, and the argument now buys
+            // coverage of the front door rather than coverage of
+            // anything.) The catalog it leaves up is not a test fixture:
+            // it is the app's real accessibility path, the one the
+            // standing rule demands — nothing may be reachable only in
+            // space — so testing against it tests something that has to
+            // work anyway.
             if !appModel.isImmersiveSpaceOpen, !Self.isUITesting {
                 await openGallery()
             }
@@ -119,17 +154,26 @@ struct HubView: View {
     }
 }
 
-/// The flat catalog, shown only when the Gallery is not in the room:
-/// the modules grouped under their domains, each with its live
-/// progress, mirroring the terraces the space shows as objects.
+/// The flat catalog: the modules grouped under their domains, each with
+/// its live progress, mirroring the terraces the space shows as objects.
+///
+/// Shown in BOTH window states since 2026-08-07 — compactly while the
+/// Gallery is in the room. See this file's header for why hiding it was
+/// a defect rather than a simplification.
 struct HubCatalogList: View {
+    /// Shown beside a Gallery that is already in the room: the domain
+    /// headers stay (they are how this app names its two halves) but the
+    /// vertical rhythm tightens, because this is now a reference surface
+    /// rather than the front door.
+    var isCompact = false
+
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
         let byID = Dictionary(uniqueKeysWithValues:
             ModuleCatalog.all(appModel: appModel).map { ($0.id, $0) })
 
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: isCompact ? 10 : 14) {
             // WHERE YOU ARE, AND WHERE TO GO — the app-wide pair, wired
             // on 2026-08-03.
             //

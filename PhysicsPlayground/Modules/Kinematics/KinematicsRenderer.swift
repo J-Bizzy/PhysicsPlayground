@@ -302,16 +302,23 @@ final class KinematicsRenderer {
             // banned bigger-than-the-visual collider. Small colliders
             // hug the torus instead.
             //
-            // TWENTY-FOUR of them, not eight, and the count follows
-            // from the radius rather than being guessed. The collider
-            // rule caps a sphere on a tube 0.04 m across at 0.034 m
-            // radius, and a sphere of radius r on a ring of radius R
-            // covers 2·asin(r/2R) of arc — 16.96° here. So full
-            // coverage needs 360/16.96 ≈ 22 spheres, and eight left
-            // 11 cm of every 17.6 cm of rim untargetable while sixteen
-            // still left a 22 mm hole between every pair. Dragging the
-            // hoop is the only way to place it.
-            let rimCount = 24
+            // TWENTY-EIGHT of them, not eight, and the count is
+            // derived rather than guessed — twice, because the first
+            // derivation was wrong in an instructive way.
+            //
+            // The collider rule caps a sphere on a tube 0.04 m across
+            // at r = 0.034 m. Treating the hoop as a 1-D circle of
+            // radius R = 0.23 says a sphere covers 4·asin(r/2R) = 17.0°
+            // of arc, so 22 would do. THAT IGNORES THE TUBE'S OWN
+            // 0.02 m RADIUS: a centreline sphere has to reach points
+            // 0.02 m off the centreline, and at 24 spheres the nearest
+            // torus-surface point in the worst gap is 0.0350 m away —
+            // outside the sphere. Twenty-eight brings it to 0.0317 m
+            // and is the first count that genuinely covers the surface.
+            // Eight (the original) left 11 cm of every 17.6 cm of rim
+            // with no collider at all. Dragging the hoop is the only
+            // way to place it.
+            let rimCount = 28
             let rim = (0..<rimCount).map { index -> ShapeResource in
                 let angle = Float(index) / Float(rimCount) * 2 * .pi
                 return ShapeResource.generateSphere(radius: 0.034)

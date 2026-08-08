@@ -322,6 +322,18 @@ struct PendulumsSpaceView: View {
         // every later drag at the same one, with no exit but leaving.
         .onDisappear {
             renderer?.teardown()
+            // A GRIP SURVIVES THE SPACE CLOSING, and that is worse than
+            // it sounds. `Bloom` is a class, so `gripDrag` outlives this
+            // view; left set, `updateGrip` claims EVERY subsequent drag
+            // in the module and nothing at all can be grabbed. That
+            // exact failure is documented in PendulumsSpaceView's
+            // `onEnded` — it cost this module every one of its verbs
+            // once already.
+            bloom.endGrip()
+            // A collar press left armed intercepts the NEXT gesture's
+            // `onEnded` and returns early, so the next bob you grab is
+            // never released and stays held forever.
+            pressedPivot = nil
             drag = nil
             // A pending press now STICKS — `press` refuses to overwrite
             // one — so an `onEnded` that never arrives would otherwise

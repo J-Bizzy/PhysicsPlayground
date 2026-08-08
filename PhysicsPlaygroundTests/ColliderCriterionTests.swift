@@ -309,24 +309,33 @@ final class ColliderCriterionTests: XCTestCase {
         let scene = HubScene()
         scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
 
-        // Each exhibit's target, as a world-space box.
+        // Every per-exhibit target in the gallery, as a world-space box:
+        // the six exhibits AND the six ENTER plaques, which are new
+        // objects at the same 0.36 m pitch and so are subject to exactly
+        // the same question.
+        let moduleIDs = Set(ModuleCatalog.all(appModel: AppModel()).map(\.id))
         var targets: [(id: String, min: SIMD3<Float>, max: SIMD3<Float>)] = []
-        for exhibit in scene.root.children {
-            guard let collision = exhibit.components[CollisionComponent.self],
-                  let shape = collision.shapes.first,
-                  !exhibit.name.isEmpty,
-                  ModuleCatalog.all(appModel: AppModel())
-                      .contains(where: { $0.id == exhibit.name })
-            else { continue }
-            let centre = exhibit.position(relativeTo: nil) + shape.bounds.center
+
+        func collect(_ entity: Entity, label: String) {
+            guard let collision = entity.components[CollisionComponent.self],
+                  let shape = collision.shapes.first else { return }
+            let centre = entity.position(relativeTo: nil) + shape.bounds.center
             let half = shape.bounds.extents / 2
-            targets.append((exhibit.name, centre - half, centre + half))
+            targets.append((label, centre - half, centre + half))
         }
 
-        XCTAssertEqual(targets.count, 6,
-                       "expected six exhibits with targets; found \(targets.count) — "
-                       + "if the gallery changed shape this test is measuring "
-                       + "the wrong thing")
+        for exhibit in scene.root.children where moduleIDs.contains(exhibit.name) {
+            collect(exhibit, label: exhibit.name)
+            for child in exhibit.children
+            where child.name.hasPrefix(HubScene.enterPrefix) {
+                collect(child, label: child.name)
+            }
+        }
+
+        XCTAssertEqual(targets.count, 12,
+                       "expected six exhibits and six ENTER plaques with targets; "
+                       + "found \(targets.count) — if the gallery changed shape "
+                       + "this test is measuring the wrong thing")
 
         for (index, a) in targets.enumerated() {
             for b in targets[(index + 1)...] {
@@ -335,8 +344,14 @@ final class ColliderCriterionTests: XCTestCase {
                     && a.min.z < b.max.z && b.min.z < a.max.z
                 XCTAssertFalse(
                     overlaps,
-                    "\(a.id) and \(b.id) have overlapping touch targets — "
-                    + "which one a pinch selects is decided by hit order")
+                    String(format: "%@ and %@ have overlapping touch targets — "
+                           + "which one a pinch selects is decided by hit order.\n"
+                           + "  %@  x[%.3f…%.3f] y[%.3f…%.3f] z[%.3f…%.3f]\n"
+                           + "  %@  x[%.3f…%.3f] y[%.3f…%.3f] z[%.3f…%.3f]\n"
+                           + "  separate on ANY one axis and they no longer clash.",
+                           a.id, b.id,
+                           a.id, a.min.x, a.max.x, a.min.y, a.max.y, a.min.z, a.max.z,
+                           b.id, b.min.x, b.max.x, b.min.y, b.max.y, b.min.z, b.max.z))
             }
         }
     }
