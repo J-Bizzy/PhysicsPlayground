@@ -1030,7 +1030,33 @@ final class CircuitsModel {
             }
             // Current already flowing through the part the probes are
             // across: the meter would be a short around it.
-            if abs(amps) > 1e-9 {
+            //
+            // The threshold is derived from the solver's own leak floor
+            // rather than being a hand-typed `1e-9`, which is the same
+            // magnitude as `CircuitSolver.leakConductance`.
+            //
+            // AUDIT P1-20 SAYS THAT TRIPPED FALSELY — that an open
+            // switch leaks 9 nA on a 9 V supply and the meter therefore
+            // refused a loop the user had just broken. MEASURED, it does
+            // not: battery–switch–bulb with the switch open reports
+            // `amps` of exactly 0.0, because the leak conductance goes
+            // to GROUND from each node and never through the open
+            // element itself. This is a clearer expression of the same
+            // intent, not a bug fix, and nothing observable changed.
+            //
+            // THE REAL DEFECT IN THIS MODE IS NOT FIXED, and it is worth
+            // stating precisely because the fix above is easy to mistake
+            // for it. The same measurement showed the meter reading
+            // `0.000 A · in series with the Switch` — correctly placed,
+            // loop correctly broken, and answering zero. The meter is
+            // never STAMPED into the network, so `amps` is the
+            // component's own current and no current can flow through a
+            // meter that is not there. A⎓ therefore still has two
+            // reachable outputs: FUSE, and zero. Fixing it means adding
+            // a low-resistance element between the two probed nodes in
+            // `solve` and reading ITS current, which is a real change to
+            // the network build and wants its own pass.
+            if abs(amps) > CircuitSolver.liveCurrentThreshold(volts: vA - vB) {
                 return MultimeterReading(
                     display: "FUSE",
                     note: "the \(component.kind.displayName) is live — probes "

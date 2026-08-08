@@ -1046,7 +1046,7 @@ final class CircuitsModelTests: XCTestCase {
         // A fresh model arrives with a seeded circuit already wired, so
         // the bench is cleared first — otherwise the duplicate-wire
         // guard, not the fix, is what these tests measure.
-        for existing in model.components { model.removeComponent(id: existing.id) }
+        model.clearBench()
         let battery = try XCTUnwrap(model.add(.battery))
         let bulb = try XCTUnwrap(model.add(.bulb))
         let before = model.wires.count
@@ -1073,7 +1073,7 @@ final class CircuitsModelTests: XCTestCase {
     /// some other route, the wire must still refuse to be built.
     func testAWireIsNeverBuiltOntoAMissingComponent() throws {
         let model = CircuitsModel()
-        for existing in model.components { model.removeComponent(id: existing.id) }
+        model.clearBench()
         let battery = try XCTUnwrap(model.add(.battery))
         let bulb = try XCTUnwrap(model.add(.bulb))
 
@@ -1097,12 +1097,85 @@ final class CircuitsModelTests: XCTestCase {
     /// two cases cannot share a sequence.
     func testTheOrdinaryWireIsStillBuilt() throws {
         let model = CircuitsModel()
-        for existing in model.components { model.removeComponent(id: existing.id) }
+        model.clearBench()
         let battery = try XCTUnwrap(model.add(.battery))
         let bulb = try XCTUnwrap(model.add(.bulb))
 
         model.tapTerminal(.init(componentID: battery, end: 0))
         model.tapTerminal(.init(componentID: bulb, end: 1))
         XCTAssertEqual(model.wires.count, 1)
+    }
+
+    // MARK: The ammeter
+
+    /// THE METER REFUSED THE ONE THING IT EXISTS TO REWARD.
+    ///
+    /// A⎓ reports a current only when the probes bracket a component
+    /// whose loop is otherwise BROKEN — the meter completing the circuit
+    /// is the meter being in series, and getting that right is the whole
+    /// lesson. But the "is it already live" guard compared against a
+    /// hand-typed `1e-9`, and `CircuitSolver.leakConductance` is `1e-9`:
+    /// every open element leaks `volts × leakConductance`, so an open
+    /// switch on a 9 V supply carries 9 nA and tripped it. The meter
+    /// told you to break the loop you had just broken.
+    func testTheAmmeterAcceptsALoopTheUserHasBroken() throws {
+        let model = CircuitsModel()
+        model.clearBench()
+
+        // Battery — switch — bulb, in a ring, with the switch OPEN.
+        let battery = try XCTUnwrap(model.add(.battery))
+        let switcher = try XCTUnwrap(model.add(.switcher))
+        let bulb = try XCTUnwrap(model.add(.bulb))
+        model.tapTerminal(.init(componentID: battery, end: 0))
+        model.tapTerminal(.init(componentID: switcher, end: 0))
+        model.tapTerminal(.init(componentID: switcher, end: 1))
+        model.tapTerminal(.init(componentID: bulb, end: 0))
+        model.tapTerminal(.init(componentID: bulb, end: 1))
+        model.tapTerminal(.init(componentID: battery, end: 1))
+        if model.components.first(where: { $0.id == switcher })?.isClosed == true {
+            model.toggleSwitch(id: switcher)
+        }
+        model.step(dt: 1.0 / 60)
+
+        model.multimeterArmed = true
+        model.meterMode = .ampsDC
+        model.setProbe(.red, to: .init(componentID: switcher, end: 0))
+        model.setProbe(.black, to: .init(componentID: switcher, end: 1))
+        model.step(dt: 1.0 / 60)
+
+        let reading = try XCTUnwrap(model.multimeterReading)
+        XCTAssertNotEqual(reading.display, "FUSE",
+                          "the meter refused a correctly broken loop")
+        XCTAssertEqual(
+            reading.display, "0.000 A",
+            "the meter now reads \(reading.display) — if that is a real "
+            + "current, the meter has been stamped into the network and this "
+            + "test has done its job; delete it and assert the current instead.")
+    }
+
+    /// …and it must still refuse a LIVE one, or the fix has simply
+    /// disabled the guard.
+    func testTheAmmeterStillRefusesALiveComponent() throws {
+        let model = CircuitsModel()
+        model.clearBench()
+
+        let battery = try XCTUnwrap(model.add(.battery))
+        let bulb = try XCTUnwrap(model.add(.bulb))
+        model.tapTerminal(.init(componentID: battery, end: 0))
+        model.tapTerminal(.init(componentID: bulb, end: 0))
+        model.tapTerminal(.init(componentID: bulb, end: 1))
+        model.tapTerminal(.init(componentID: battery, end: 1))
+        model.step(dt: 1.0 / 60)
+
+        model.multimeterArmed = true
+        model.meterMode = .ampsDC
+        model.setProbe(.red, to: .init(componentID: bulb, end: 0))
+        model.setProbe(.black, to: .init(componentID: bulb, end: 1))
+        model.step(dt: 1.0 / 60)
+
+        let reading = try XCTUnwrap(model.multimeterReading)
+        XCTAssertEqual(reading.display, "FUSE",
+                       "probes across a live bulb would short it; the meter has "
+                       + "to say so rather than print a number")
     }
 }

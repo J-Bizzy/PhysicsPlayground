@@ -62,7 +62,30 @@ public struct CircuitElement: Sendable, Equatable {
 
 public enum CircuitSolver {
     public static let switchResistance = 1e-3
-    static let leakConductance = 1e-9
+    /// A tiny conductance to ground on every node, so an unconnected
+    /// island still has a solvable row rather than a singular matrix.
+    ///
+    /// PUBLIC because it is a FLOOR that callers have to reason about,
+    /// not an implementation detail. Every open element leaks
+    /// `voltage × leakConductance`, so a reading of "is any current
+    /// flowing here" compared against a fixed small number is really
+    /// comparing against this — and Circuits' ammeter used `1e-9`, the
+    /// same magnitude, so an open switch's 9 nA leak read as a live
+    /// circuit and the meter refused a loop the user had just broken.
+    /// A caller that needs such a threshold should derive it from here.
+    public static let leakConductance = 1e-9
+
+    /// How far above the leak floor a current has to be before it counts
+    /// as real, given the voltage driving it.
+    ///
+    /// A hundredfold margin: leak through an open element at `volts` is
+    /// exactly `volts × leakConductance`, so this is never a false
+    /// positive, and at any sane voltage it still lands far below a
+    /// microamp — orders of magnitude under anything a circuit on this
+    /// bench actually carries.
+    public static func liveCurrentThreshold(volts: Double) -> Double {
+        max(abs(volts), 1) * leakConductance * 100
+    }
 
     public struct Solution: Sendable {
         public var nodeVoltages: [Double]
