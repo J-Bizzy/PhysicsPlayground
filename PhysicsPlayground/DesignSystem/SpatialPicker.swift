@@ -154,7 +154,9 @@ final class SpatialPicker {
     func close() { isOpen = false }
 
     /// Per frame: hang over `anchor`, face the viewer, unfold or fold.
-    func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?, dt: Double) {
+    /// `nearestHand` drives recession — see `Recession`.
+    func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?, dt: Double,
+                nearestHand: SIMD3<Float>? = nil) {
         openness = Motion.ease(openness, toward: isOpen ? 1 : 0, dt: dt)
         root.isEnabled = openness > 0.02 && !discs.isEmpty
         guard root.isEnabled else { return }
@@ -192,6 +194,16 @@ final class SpatialPicker {
                     value: selected ? "selected" : "not selected", on: disc.entity)
             }
         }
+
+        // ANCHOR IN WORLD SPACE, NOT THE ARGUMENT. `anchor` is expressed
+        // in the parent's frame — labs place their apparatus under a root
+        // carrying a placement offset, and Gravity Lab's carries a scale
+        // too — while a fingertip from `RoomModel` is world space.
+        // Comparing the two directly measures a distance that does not
+        // exist. `root.position(relativeTo: nil)` is the same point in
+        // the frame the hand is already in.
+        Recession.apply(to: root, anchor: root.position(relativeTo: nil),
+                        nearestHand: nearestHand)
     }
 
     /// True when the tap chose something — the fan folds itself, so the

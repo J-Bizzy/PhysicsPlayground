@@ -100,9 +100,20 @@ final class Well {
         }
     }
 
-    /// Per frame: the idle breath, and the recoil after a spawn.
-    func update(dt: Double) {
+    /// Per frame: the idle breath, the recoil after a spawn, and the
+    /// recession.
+    ///
+    /// PER SOURCE, NOT PER ROOT, which is the one place this differs
+    /// from every other primitive: a bank is one object at one anchor,
+    /// but wells are spread along a bench, and fading the whole row on
+    /// the nearest one would light up wells half a metre from your hand.
+    func update(dt: Double, nearestHand: SIMD3<Float>? = nil) {
         time += dt
+        for source in sources {
+            Recession.apply(to: source,
+                            anchor: source.position(relativeTo: nil),
+                            nearestHand: nearestHand)
+        }
         for (index, preview) in previews.enumerated() {
             dip[index] = max(0, dip[index] - Float(dt) * 2.6)
             refusal[index] = max(0, refusal[index] - Float(dt) * 2.2)

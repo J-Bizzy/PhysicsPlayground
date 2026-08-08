@@ -115,11 +115,12 @@ struct MagnetismSpaceView: View {
                     // run for exactly the pinch it exists to forget.
                     expireStaleGrabs(now: CACurrentMediaTime())
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
-                    wells?.update(dt: event.deltaTime)
+                    let hand = appModel.room.nearestFingertip(to: Self.bankAnchor)
+                    wells?.update(dt: event.deltaTime, nearestHand: hand)
                     layers?.update(
                         anchor: Self.bankAnchor,
                         viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
-                        dt: event.deltaTime)
+                        dt: event.deltaTime, nearestHand: hand)
                     if let renderer {
                         syncBloom(renderer: renderer, dt: event.deltaTime)
                     }

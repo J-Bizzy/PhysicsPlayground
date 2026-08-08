@@ -374,12 +374,18 @@ struct FieldSpaceView: View {
         let headInRoot = head.map {
             renderer.root.convert(position: $0, from: nil)
         }
+        // WORLD SPACE, unlike `headInRoot` above: recession compares the
+        // hand against each instrument's own world position, so the hand
+        // must not be converted into the renderer's frame.
+        let hand = appModel.room.nearestFingertip(
+            to: renderer.root.convert(
+                position: SIMD3<Float>(FieldInstrumentLayout.bankAnchor), to: nil))
         bank?.update(anchor: SIMD3<Float>(FieldInstrumentLayout.bankAnchor),
-                     viewer: headInRoot, dt: dt)
+                     viewer: headInRoot, dt: dt, nearestHand: hand)
         verbs?.update(anchor: SIMD3<Float>(FieldInstrumentLayout.clearPlateAnchor),
                       viewer: headInRoot, dt: dt,
-                      resetNonce: appModel.resetNonce)
-        wells?.update(dt: dt)
+                      resetNonce: appModel.resetNonce, nearestHand: hand)
+        wells?.update(dt: dt, nearestHand: hand)
 
         // Each rail exists exactly when its apparatus does.
         voltageTrack?.isEnabled = model.capacitorOn

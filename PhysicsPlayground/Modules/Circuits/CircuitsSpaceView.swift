@@ -255,7 +255,9 @@ struct CircuitsSpaceView: View {
                     palette?.update(dt: event.deltaTime)
                     verbs?.update(anchor: Self.clearAnchor, viewer: viewer,
                                   dt: event.deltaTime,
-                                  resetNonce: appModel.resetNonce)
+                                  resetNonce: appModel.resetNonce,
+                                  nearestHand: appModel.room.nearestFingertip(
+                                    to: Self.clearAnchor))
                     // Rendered here every frame (not via the observation
                     // loop): a steady DC circuit mutates nothing that
                     // observation reliably re-fires on, but its electrons

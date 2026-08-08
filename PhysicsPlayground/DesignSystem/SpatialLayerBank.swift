@@ -80,7 +80,12 @@ final class SpatialLayerBank {
 
     /// Per frame: hang beside `anchor`, face the viewer, and repaint any
     /// plate whose model state changed.
-    func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?, dt: Double) {
+    /// `nearestHand` drives recession — see `Recession`. A bank is a
+    /// READOUT as well as a control, which is exactly why it recedes to
+    /// 0.45 rather than disappearing: which layers are on stays legible
+    /// across the room, and reaching toward it brings it up.
+    func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?, dt: Double,
+                nearestHand: SIMD3<Float>? = nil) {
         reveal = Motion.ease(reveal, toward: plates.isEmpty ? 0 : 1, dt: dt)
         root.isEnabled = reveal > 0.02 && !plates.isEmpty
         guard root.isEnabled else { return }
@@ -125,6 +130,16 @@ final class SpatialLayerBank {
                 plates[index].face.model?.materials = [Fade.unlit(next)]
             }
         }
+
+        // ANCHOR IN WORLD SPACE, NOT THE ARGUMENT. `anchor` is expressed
+        // in the parent's frame — labs place their apparatus under a root
+        // carrying a placement offset, and Gravity Lab's carries a scale
+        // too — while a fingertip from `RoomModel` is world space.
+        // Comparing the two directly measures a distance that does not
+        // exist. `root.position(relativeTo: nil)` is the same point in
+        // the frame the hand is already in.
+        Recession.apply(to: root, anchor: root.position(relativeTo: nil),
+                        nearestHand: nearestHand)
     }
 
     /// True when the tap flipped a layer.

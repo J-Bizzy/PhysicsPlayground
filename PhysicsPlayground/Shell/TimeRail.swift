@@ -243,8 +243,13 @@ final class TimeRail {
     /// Per frame: stand at the apparatus hem (riding the lab-placement
     /// offset), face the reader, fold in or out, and keep the bead on the
     /// model's value — nothing ticks a track by itself.
-    func update(dt: Double, viewer: SIMD3<Float>?, placement: SIMD3<Float>) {
+    func update(dt: Double, viewer: SIMD3<Float>?, placement: SIMD3<Float>,
+                nearestHand: SIMD3<Float>? = nil) {
         root.position = Self.home + placement
+        // The reel is a READOUT while it is wound in — it turns with the
+        // scrub — so like a bank it recedes rather than vanishing.
+        Recession.apply(to: root, anchor: root.position(relativeTo: nil),
+                        nearestHand: nearestHand)
 
         if let viewer, let facing = yaw(facing: viewer, from: root.position) {
             root.orientation = facing
@@ -304,6 +309,10 @@ final class TimeRail {
         track.refresh()
         // The plates lay themselves out relative to their own root; the
         // rail already faces the viewer, so they inherit its yaw.
+        // The rail's own plates never recede: they only exist while the
+        // tape is drawn out, which is already a deliberate act, and a
+        // scrub control that dims mid-scrub would fight the hand using
+        // it.
         plates.update(anchor: plates.root.position, viewer: nil, dt: dt)
     }
 
@@ -419,7 +428,9 @@ struct TimeRailView: View {
                 made?.update(
                     dt: event.deltaTime,
                     viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
-                    placement: appModel.labPlacement.offset)
+                    placement: appModel.labPlacement.offset,
+                    nearestHand: appModel.room.nearestFingertip(
+                        to: TimeRail.home + appModel.labPlacement.offset))
             }
 
             #if DEBUG

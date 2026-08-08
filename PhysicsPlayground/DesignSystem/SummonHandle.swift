@@ -109,7 +109,15 @@ final class SummonHandle {
             summaryLabel = plate
         }
 
-        Recession.apply(to: root, anchor: anchor, nearestHand: nearestHand)
+        // ANCHOR IN WORLD SPACE, NOT THE ARGUMENT. `anchor` is expressed
+        // in the parent's frame — labs place their apparatus under a root
+        // carrying a placement offset, and Gravity Lab's carries a scale
+        // too — while a fingertip from `RoomModel` is world space.
+        // Comparing the two directly measures a distance that does not
+        // exist. `root.position(relativeTo: nil)` is the same point in
+        // the frame the hand is already in.
+        Recession.apply(to: root, anchor: root.position(relativeTo: nil),
+                        nearestHand: nearestHand)
     }
 
     // MARK: Tap

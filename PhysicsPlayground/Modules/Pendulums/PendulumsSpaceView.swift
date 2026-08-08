@@ -218,11 +218,13 @@ struct PendulumsSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     renderer?.tick(dt: event.deltaTime, model: model)
-                    wells?.update(dt: event.deltaTime)
+                    let hand = appModel.room.nearestFingertip(to: Self.bankAnchor)
+                    wells?.update(dt: event.deltaTime, nearestHand: hand)
                     syncBloom(dt: event.deltaTime)
                     let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
                     layers?.update(anchor: Self.bankAnchor,
-                                   viewer: viewer, dt: event.deltaTime)
+                                   viewer: viewer, dt: event.deltaTime,
+                                   nearestHand: hand)
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
                     // moves a body by hand DISPLACEMENT, which a constant

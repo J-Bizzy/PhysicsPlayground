@@ -176,8 +176,9 @@ final class SpatialActionBank {
     ///   Taking the nonce here rather than having each SpaceView compare
     ///   it means the rule cannot be adopted by two of three modules,
     ///   which is how `contrastLine` and `SpatialTrackControl` both went.
+    /// `nearestHand` drives recession — see `Recession`.
     func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?, dt: Double,
-                resetNonce: Int = 0) {
+                resetNonce: Int = 0, nearestHand: SIMD3<Float>? = nil) {
         if let seen = seenResetNonce, seen != resetNonce { disarm() }
         seenResetNonce = resetNonce
         reveal = Motion.ease(reveal, toward: plates.isEmpty ? 0 : 1, dt: dt)
@@ -239,6 +240,16 @@ final class SpatialActionBank {
             plates[index].label.isEnabled = !isArmedNow
             plates[index].armedLabel.isEnabled = isArmedNow
         }
+
+        // ANCHOR IN WORLD SPACE, NOT THE ARGUMENT. `anchor` is expressed
+        // in the parent's frame — labs place their apparatus under a root
+        // carrying a placement offset, and Gravity Lab's carries a scale
+        // too — while a fingertip from `RoomModel` is world space.
+        // Comparing the two directly measures a distance that does not
+        // exist. `root.position(relativeTo: nil)` is the same point in
+        // the frame the hand is already in.
+        Recession.apply(to: root, anchor: root.position(relativeTo: nil),
+                        nearestHand: nearestHand)
     }
 
     /// True when the tap hit one of these plates — armed it, or fired it.

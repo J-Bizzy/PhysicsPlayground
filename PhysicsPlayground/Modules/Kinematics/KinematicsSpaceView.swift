@@ -260,7 +260,9 @@ struct KinematicsSpaceView: View {
                     model.catchBalls(atFingertips:
                         appModel.room.fingertips.map { $0 - placement })
                     renderer?.tick(model)
-                    wells?.update(dt: event.deltaTime)
+                    wells?.update(dt: event.deltaTime,
+                                  nearestHand: appModel.room.nearestFingertip(
+                                    to: Self.bankAnchor))
                     syncBloom(dt: event.deltaTime)
                     // The lab's placement in the user's room — a pure
                     // display offset, safe because every grab in this app
@@ -497,11 +499,14 @@ struct KinematicsSpaceView: View {
         let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
         bloom.update(anchor: anchor, viewer: viewer, revealTarget: 1, dt: dt)
         // Clear of the bloom's own petal arc, which reaches ~0.17 m up.
+        let hand = appModel.room.nearestFingertip(to: anchor)
         ballPicker.update(anchor: anchor + SIMD3(0, 0.20, 0),
-                          viewer: viewer, dt: dt)
+                          viewer: viewer, dt: dt, nearestHand: hand)
 
-        worldPicker.update(anchor: Self.worldsAnchor, viewer: viewer, dt: dt)
-        layers?.update(anchor: Self.bankAnchor, viewer: viewer, dt: dt)
+        worldPicker.update(anchor: Self.worldsAnchor, viewer: viewer, dt: dt,
+                           nearestHand: hand)
+        layers?.update(anchor: Self.bankAnchor, viewer: viewer, dt: dt,
+                       nearestHand: hand)
         // Nothing ticks a track by itself — the caller's duty, stated on
         // `SpatialTrackControl.refresh`.
         gravityTrack?.refresh()

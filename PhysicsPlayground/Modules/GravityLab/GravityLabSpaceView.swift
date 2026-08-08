@@ -432,7 +432,9 @@ struct GravityLabSpaceView: View {
                         SIMD3<Float>(renderer?.displayPoint(
                             fromWorld: SIMD3<Float>($0)) ?? .zero)
                     }
-                    wells?.update(dt: event.deltaTime)
+                    wells?.update(dt: event.deltaTime,
+                                  nearestHand: appModel.room.nearestFingertip(
+                                    to: GravityLabRenderer.systemPosition))
                     // The clock bank stands beside the system, offset to
                     // the right so it never sits on the Sun, and at ~16°
                     // below eye — the same glance as the orrery itself.
