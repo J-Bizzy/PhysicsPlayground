@@ -57,6 +57,11 @@ final class OrbitRing {
 
     private let conicCasing = ModelEntity()
     private let conicCore = ModelEntity()
+    /// One VoiceOver step on an apsis bead: which end, and how many
+    /// increments (negative for decrements). Set by the SpaceView, which
+    /// is the only place that can reach the model.
+    var onAdjust: ((Apsis, Double) -> Void)?
+
     private let nearBead: ModelEntity
     private let farBead: ModelEntity
 
@@ -98,6 +103,18 @@ final class OrbitRing {
 
         nearBead = Self.makeBead(name: Self.nearBeadName, accent: accent)
         farBead = Self.makeBead(name: Self.farBeadName, accent: accent)
+        // A BEAD IS PULLED, and a pull has no keyboard equivalent — so
+        // the one verb these get is increment and decrement, which is
+        // exactly what `-apsisDrag near|far,<factor>` already does from
+        // the CLI. Attached after construction because `makeBead` is
+        // static and the closure needs to reach `onAdjust`.
+        for (bead, apsis) in [(nearBead, Apsis.near), (farBead, Apsis.far)] {
+            SpatialActions.attach(
+                to: bead,
+                label: apsis == .near ? "Closest point of the orbit"
+                                      : "Furthest point of the orbit",
+                adjust: { [weak self] steps in self?.onAdjust?(apsis, steps) })
+        }
         root.addChild(nearBead)
         root.addChild(farBead)
         root.isEnabled = false

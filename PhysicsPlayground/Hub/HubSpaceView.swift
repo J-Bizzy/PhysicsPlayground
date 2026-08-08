@@ -134,11 +134,19 @@ struct HubSpaceView: View {
             // announced, readable, and impossible to operate. Phase 2
             // closes that with one subscription in `PlaygroundSpaceView`;
             // the front door could not wait for it.
+            // ONE MECHANISM, NOT TWO. This walked entity names looking
+            // for the `enter-` prefix, which was the right call on
+            // 2026-08-07 — the front door could not wait for Phase 2's
+            // component to exist. It exists now, and a second bespoke
+            // route is how the two drift apart: the plaque worked and
+            // the exhibit beside it did not, because only one of them
+            // was in this closure. `SpatialActions.activate` walks
+            // ancestors for whatever knows what to do, exactly as it
+            // does in every lab.
+            scene.onEnter = enter
             scene.accessibilitySubscriptions = [
                 content.subscribe(to: AccessibilityEvents.Activate.self) { event in
-                    if let id = scene.enterPlaqueModuleID(for: event.entity) {
-                        enter(id)
-                    }
+                    SpatialActions.activate(event.entity)
                 },
                 content.subscribe(to: AccessibilityEvents.CustomAction.self) { event in
                     guard event.key.key == Self.enterAction.key,
@@ -1006,6 +1014,9 @@ final class HubScene {
     /// `update:` closure, because writing app state during a SwiftUI
     /// update pass is a different kind of bug.
     var onDock: (() -> Void)?
+    /// Opens a lab. Set by the view, and reached from BOTH the exhibit
+    /// and its plaque — see the note on `accessibilitySubscriptions`.
+    var onEnter: ((String) -> Void)?
 
     func seatPodiumHint(_ entity: Entity) {
         podiumHintEntity = entity
@@ -1102,6 +1113,16 @@ final class HubScene {
             stringLiteral: "\(module.title). \(HubDomain.promise(for: module.id))")
         accessibility.customActions = [HubSpaceView.enterAction]
         anchor.components.set(accessibility)
+        // AND PLAIN ACTIVATE OPENS IT TOO. The custom action alone meant
+        // the exhibit's default gesture — the one VoiceOver offers first
+        // and the only one most people ever use — did nothing at all,
+        // while a rotor action nobody would look for was the real door.
+        // `attach` preserves the label and the custom action above; it
+        // adds the system one and the closure behind it.
+        SpatialActions.attach(
+            to: anchor,
+            label: "\(module.title). \(HubDomain.promise(for: module.id))",
+            activate: { [weak self] in self?.onEnter?(module.id) })
         root.addChild(anchor)
 
         let pulser = Entity()
@@ -1259,12 +1280,9 @@ final class HubScene {
         enter.name = "\(Self.enterPrefix)\(module.id)"
         enter.position = [0, -0.160, 0.165]
         enter.components.set(BillboardComponent())
-        var enterAccessibility = AccessibilityComponent()
-        enterAccessibility.isAccessibilityElement = true
-        enterAccessibility.label = LocalizedStringResource(
-            stringLiteral: "Enter \(module.title)")
-        enterAccessibility.systemActions = [.activate]
-        enter.components.set(enterAccessibility)
+        SpatialActions.attach(
+            to: enter, label: "Enter \(module.title)",
+            activate: { [weak self] in self?.onEnter?(module.id) })
         anchor.addChild(enter)
 
         exhibits.append(Exhibit(

@@ -107,6 +107,7 @@ struct CircuitsSpaceView: View {
     var body: some View {
         RealityView { content, attachments in
             let renderer = CircuitsRenderer()
+            renderer.onTap = { handleTap(on: $0) }
             content.add(renderer.root)
 
             // What the selected part is doing, on the part. The anchor
@@ -158,6 +159,9 @@ struct CircuitsSpaceView: View {
                 accent: UIColor(DesignTokens.Palette.circuitsAccent),
                 anchor: Self.meterAnchor)
             renderer.root.addChild(multimeter.root)
+            multimeter.onTap = { [weak multimeter] entity in
+                _ = multimeter?.handleTap(entity, model: model)
+            }
             self.meter = multimeter
 
             // Clearing the bench, off the window panel. Same parenting

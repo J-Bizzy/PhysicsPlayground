@@ -171,11 +171,12 @@ final class Palette {
             holder.components.set(CollisionComponent(
                 shapes: [.generateSphere(radius: Self.slotSize * 0.8)]))
             holder.components.set(HoverEffectComponent())
-            var accessibility = AccessibilityComponent()
-            accessibility.isAccessibilityElement = true
-            accessibility.label = LocalizedStringResource(
-                stringLiteral: "Open \(spec.title)")
-            holder.components.set(accessibility)
+            SpatialActions.attach(
+                to: holder, label: "Open \(spec.title)",
+                activate: { [weak self, weak holder] in
+                    guard let self, let holder else { return }
+                    _ = self.handleTap(holder)
+                })
             holder.isEnabled = false
             root.addChild(holder)
             slots.append((spec.id, holder, built.animate))
@@ -211,7 +212,19 @@ final class Palette {
             Self.makePetal(name: "settings", symbol: "gearshape.fill"),
             Self.makePetal(name: "reset", symbol: "arrow.counterclockwise"),
         ]
-        petals.forEach { root.addChild($0) }
+        petals.forEach { petal in
+            root.addChild(petal)
+            // Through `handleTap`, which is where the ring's own rules
+            // live: pause and reset fold the ring, capture and dim keep
+            // it open. Routing at the callbacks would lose that.
+            SpatialActions.attach(
+                to: petal, label: petal.name.replacingOccurrences(
+                    of: "palette-", with: "").capitalized,
+                activate: { [weak self, weak petal] in
+                    guard let self, let petal else { return }
+                    _ = self.handleTap(petal)
+                })
+        }
     }
 
     /// Where the bead lives, in the host's coordinates. A saved spot —
@@ -344,6 +357,7 @@ final class Palette {
         if name == bead.name {
             isOpen.toggle()
             SoundPalette.play(.pop, on: bead, volume: 0.5)
+            SpatialActions.republish(value: isOpen ? "open" : "closed", on: bead)
             return true
         }
         guard isOpen else { return false }
@@ -397,10 +411,12 @@ final class Palette {
         // The one permanent object in every lab missed the 2026-08-05
         // grounding-shadow pass; presence, not decoration.
         bead.components.set(GroundingShadowComponent(castsShadow: true))
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Labs. Pinch to open."
-        bead.components.set(accessibility)
+        SpatialActions.attach(
+            to: bead, label: "Labs", value: isOpen ? "open" : "closed",
+            activate: { [weak self] in
+                guard let self else { return }
+                _ = self.handleTap(self.bead)
+            })
 
         // The bead is a gyroscope, built by the same system that builds
         // every lab's miniature — `HubVignettes.make(for: "labs")`.
@@ -483,6 +499,8 @@ final class Palette {
         disc.components.set(CollisionComponent(
             shapes: [.generateSphere(radius: 0.034)]))
         disc.components.set(HoverEffectComponent())
+        // Label only — the ACTION is attached in `init`, where there is
+        // a `self` to route the tap through.
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = LocalizedStringResource(stringLiteral: name)

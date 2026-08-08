@@ -191,6 +191,30 @@ struct GravityLabSpaceView: View {
             let renderer = GravityLabRenderer()
             content.add(renderer.root)
 
+            // HANDS-FREE ROUTES FOR THE TWO CONTROLS THAT ARE ONLY EVER
+            // DRAGGED. Both mirror a debug argument that already exists,
+            // so neither is an invented interaction: a bead step is
+            // `-apsisDrag near|far,<factor>` at 10% per step, and the
+            // ghost steps along its own radius from the star.
+            renderer.onApsisAdjust = { apsis, steps in
+                guard let selected = model.selectedBody,
+                      let frame = model.orbitFrame(for: selected.id),
+                      model.beginOrbitEdit(bodyID: selected.id, holding: apsis)
+                else { return }
+                let direction = apsis == .near
+                    ? frame.periapsisDirection : -frame.periapsisDirection
+                let factor = 1 + 0.1 * steps
+                model.dragApsis(toDisplayPoint:
+                    direction * frame.radius(at: apsis) * factor)
+                model.endOrbitEdit()
+            }
+            renderer.onGhostAdjust = { steps in
+                guard let point = model.prediction?.position else { return }
+                let radius = simd_length(point)
+                guard radius > 1e-9 else { return }
+                model.movePrediction(to: point / radius * (radius * (1 + 0.1 * steps)))
+            }
+
             // The selected body's orbit and energy, on the body.
             //
             // `selectedAnchor` sits under `systemRoot`, which the scale

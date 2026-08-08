@@ -120,6 +120,9 @@ final class Bloom {
 
     /// The live drag on the grip, if any.
     private var gripDrag: (startHand: SIMD3<Float>, startValue: Double)?
+    /// The last value spoken for the bead, so the component is only
+    /// rewritten when the number actually changes.
+    private var lastGripSpoken: String?
 
     /// Where the bloom is anchored, world space (set every frame while
     /// it is open, and HELD while it folds — see `update`).
@@ -208,14 +211,34 @@ final class Bloom {
             let entity = Self.makePetal(petal)
             root.addChild(entity)
             petalEntities.append(entity)
+            // THROUGH `handleTap`, NOT STRAIGHT AT `petal.action`. The
+            // tap path is where availability is checked and where a
+            // `confirms` petal arms instead of firing; routing round it
+            // would hand the one user who cannot see the petal light up
+            // a single-tap way to wipe a bench. Same rule
+            // `SpatialActionBank` follows, and the same test covers it.
+            SpatialActions.attach(
+                to: entity, label: petal.name,
+                activate: { [weak self, weak entity] in
+                    guard let self, let entity else { return }
+                    _ = self.handleTap(entity)
+                })
         }
 
         gripEntity?.removeFromParent()
         gripRig?.removeFromParent()
-        if grip != nil {
+        if let grip {
             let handle = Self.makeGrip()
             root.addChild(handle)
             gripEntity = handle
+            // The bead is the one control here that is DRAGGED rather
+            // than pressed, so it is the one that needs increment and
+            // decrement. `SpatialTrackControl`'s own header made this
+            // exact complaint about rails — "a slider is already an
+            // adjustable element" — and then only added the value.
+            SpatialActions.attach(
+                to: handle, label: grip.name, value: grip.format(grip.read()),
+                adjust: { [weak self] delta in self?.nudgeGrip(by: delta) })
             let rig = Self.makeGripRig()
             root.addChild(rig.root)
             gripRig = rig.root
@@ -407,7 +430,18 @@ final class Bloom {
         // frame.
         label?.isEnabled = reveal > 0.02
         label?.anchor(at: gripEntity.position)
-        label?.setText(grip.format(grip.read()))
+        let reading = grip.format(grip.read())
+        label?.setText(reading)
+        // SPOKEN AND SEEN FROM THE SAME STRING, on the same frame. The
+        // defect `SpatialActions.republish` was written for is a value
+        // published once at build time, and a bead whose number is
+        // recomputed here every frame is exactly where that happens.
+        // Guarded on change because a component write per frame per
+        // bead is the cost this app already refuses for text meshes.
+        if reading != lastGripSpoken {
+            lastGripSpoken = reading
+            SpatialActions.republish(value: reading, on: gripEntity)
+        }
         label?.root.components.set(OpacityComponent(
             opacity: max(0, min((reveal - 0.35) / 0.5, 1))))
     }
@@ -481,12 +515,13 @@ final class Bloom {
             material.blending = .transparent(opacity: .init(floatLiteral: 1))
             icon.model?.materials = [material]
         }
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(stringLiteral: petal.name)
-        accessibility.value = LocalizedStringResource(
-            stringLiteral: armed ? "armed, tap again to confirm" : "")
-        entity.components.set(accessibility)
+        // REPUBLISH, DO NOT REBUILD. A fresh `AccessibilityComponent`
+        // here would carry empty `systemActions`, so arming a
+        // destructive petal would silently strip its Activate and strand
+        // a VoiceOver user one tap into a two-tap confirmation with no
+        // way to finish or back out.
+        SpatialActions.republish(
+            value: armed ? "armed, tap again to confirm" : "", on: entity)
     }
 
     func beginGrip(_ entity: Entity, hand: SIMD3<Float>) -> Bool {
@@ -517,6 +552,22 @@ final class Bloom {
         grip.write(min(max(gripDrag.startValue + delta,
                            grip.range.lowerBound), grip.range.upperBound))
         return true
+    }
+
+    /// One VoiceOver increment or decrement, in the value's own units.
+    ///
+    /// A twentieth of the range per step, which is the resolution a
+    /// finger gets from a 14 cm rail before the bead's own width starts
+    /// to matter. It writes through the SAME clamp `updateGrip` uses, so
+    /// the two paths cannot disagree about the ends.
+    func nudgeGrip(by steps: Double) {
+        guard let grip else { return }
+        let span = grip.range.upperBound - grip.range.lowerBound
+        let next = grip.read() + steps * span / 20
+        grip.write(min(max(next, grip.range.lowerBound), grip.range.upperBound))
+        if let gripEntity {
+            SpatialActions.republish(value: grip.format(grip.read()), on: gripEntity)
+        }
     }
 
     func endGrip() { gripDrag = nil }

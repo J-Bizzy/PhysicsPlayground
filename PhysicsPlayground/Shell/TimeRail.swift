@@ -213,10 +213,13 @@ final class TimeRail {
             shapes: [.generateSphere(radius: 0.052)]))
         reel.components.set(HoverEffectComponent())
         reel.components.set(GroundingShadowComponent(castsShadow: true))
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Time capsule. Pinch to draw out the recording."
-        reel.components.set(accessibility)
+        SpatialActions.attach(
+            to: reel, label: "Time capsule",
+            value: isOpen ? "drawn out" : "wound in",
+            activate: { [weak self] in
+                guard let self else { return }
+                _ = self.handleTap(self.reel)
+            })
 
         // The house nameplate under it, the same treatment the palette
         // bead wears: an unlabelled disc asks to be pinched on faith,
@@ -349,6 +352,8 @@ final class TimeRail {
         if owns(entity, under: reel) {
             isOpen.toggle()
             SoundPalette.play(.pop, on: reel, volume: 0.45)
+            SpatialActions.republish(value: isOpen ? "drawn out" : "wound in",
+                                     on: reel)
             return true
         }
         guard isDrawnOut else { return false }

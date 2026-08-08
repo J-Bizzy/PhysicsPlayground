@@ -183,13 +183,13 @@ final class SpatialPicker {
             if disc.wasSelected != selected {
                 discs[index].wasSelected = selected
                 disc.rim.model?.materials = [selected ? litRim : dimRim]
-                var accessibility = AccessibilityComponent()
-                accessibility.isAccessibilityElement = true
-                accessibility.label = LocalizedStringResource(
-                    stringLiteral: "\(accessibilityNoun): \(disc.label)")
-                accessibility.value = LocalizedStringResource(
-                    stringLiteral: selected ? "selected" : "not selected")
-                disc.entity.components.set(accessibility)
+                // REPUBLISH RATHER THAN REBUILD: a fresh component here
+                // would carry empty `systemActions` and silently strip
+                // Activate from whichever disc was just chosen — the
+                // selected one, i.e. the one most likely to be visited
+                // next.
+                SpatialActions.republish(
+                    value: selected ? "selected" : "not selected", on: disc.entity)
             }
         }
     }
@@ -269,11 +269,12 @@ final class SpatialPicker {
             .generateBox(size: [Self.colliderSpan, 0.038, Self.colliderSpan]),
         ]))
         disc.components.set(HoverEffectComponent())
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(
-            stringLiteral: "\(accessibilityNoun): \(choice.label)")
-        disc.components.set(accessibility)
+        SpatialActions.attach(
+            to: disc, label: "\(accessibilityNoun): \(choice.label)",
+            activate: { [weak self, weak disc] in
+                guard let self, let disc else { return }
+                _ = self.handleTap(disc)
+            })
         disc.isEnabled = false
         return (disc, rim)
     }

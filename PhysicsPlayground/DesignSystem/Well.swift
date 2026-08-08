@@ -82,6 +82,21 @@ final class Well {
             root.addChild(source)
             sources.append(source)
             previews.append(preview)
+            // A well is PULLED FROM, and a pull needs a hand position
+            // the activation does not have. It spawns just in front of
+            // and above the well instead — the same place a short pull
+            // would have put it — and then the object is an ordinary
+            // one that every other route can reach. Refusal still
+            // refuses: `pull` is the only path, so a lab at its budget
+            // dims here exactly as it does for a hand.
+            SpatialActions.attach(
+                to: source, label: spec.label,
+                activate: { [weak self, weak source] in
+                    guard let self, let source else { return }
+                    let origin = source.position(relativeTo: nil)
+                        + SIMD3<Float>(0, 0.06, 0.10)
+                    _ = self.pull(source, at: SIMD3<Double>(origin))
+                })
         }
     }
 
@@ -190,6 +205,9 @@ final class Well {
 
         plate.position = [0, bounds.min.y - 0.034, 0]
 
+        // The label is set here and the ACTION in `init`, because a
+        // static builder has no `self` to call `pull` on. `attach`
+        // overwrites this label with the same words.
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = LocalizedStringResource(

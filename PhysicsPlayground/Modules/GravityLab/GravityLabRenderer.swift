@@ -88,6 +88,9 @@ final class GravityLabRenderer {
         ghost.isEnabled = false
         return ghost
     }()
+    /// The ghost is aimed by dragging, so like the apsis beads its one
+    /// hands-free verb is a step in or out along its own radius.
+    var onGhostAdjust: ((Double) -> Void)?
     private var ghostCallout: Callout?
     private var verdictLine = Entity()
     private var verdictCallout: Callout?
@@ -412,6 +415,14 @@ final class GravityLabRenderer {
             compute: { Self.computeGrid($0) },
             apply: { [weak self] in self?.applyGrid($0) }
         )
+
+        // LAST, because `self` is not available until every stored
+        // property is initialised — the ghost is built in a
+        // stored-property closure that has no `self` to capture, so this
+        // is the first point its action can be attached at all.
+        SpatialActions.attach(
+            to: ghostEntity, label: "Predicted path",
+            adjust: { [weak self] steps in self?.onGhostAdjust?(steps) })
     }
 
     private var lagrangeMarkers: [ModelEntity] = []
@@ -432,6 +443,13 @@ final class GravityLabRenderer {
     /// beads, so the renderer answers whether a pinch landed on one.
     /// Mirrors `Well.pull(_:at:)` in shape.
     func apsis(for entity: Entity) -> Apsis? { orbitRing.apsis(for: entity) }
+
+    /// Forwards a VoiceOver step on an apsis bead to whoever owns the
+    /// model — see `OrbitRing.onAdjust`.
+    var onApsisAdjust: ((Apsis, Double) -> Void)? {
+        get { orbitRing.onAdjust }
+        set { orbitRing.onAdjust = newValue }
+    }
 
     func beadDisplayPoint(_ apsis: Apsis) -> SIMD3<Double> {
         orbitRing.beadDisplayPoint(apsis)

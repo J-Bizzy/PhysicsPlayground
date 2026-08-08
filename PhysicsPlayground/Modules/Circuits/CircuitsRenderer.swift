@@ -27,6 +27,16 @@ final class CircuitsRenderer {
     let root = Entity()
     var subscriptions: [EventSubscription] = []
 
+    /// The SpaceView's tap router, so a control this renderer builds can
+    /// be operated without hands.
+    ///
+    /// A CALLBACK RATHER THAN A MODEL REFERENCE, because the renderer
+    /// deliberately holds no model — every method here takes one as an
+    /// argument. `CircuitsSpaceView.handleTap(on:)` already routes
+    /// purely by entity name, so pointing VoiceOver at the same function
+    /// the pinch calls costs one property and cannot drift from it.
+    var onTap: ((Entity) -> Void)?
+
     /// Called from the SpaceView's `onDisappear`, and the reason it has
     /// to be called explicitly is that neither of the things it releases
     /// is tied to this object's lifetime.
@@ -846,6 +856,12 @@ final class CircuitsRenderer {
             terminal.components.set(CollisionComponent(
                 shapes: [.generateSphere(radius: 0.026)]))
             terminal.components.set(HoverEffectComponent())
+            SpatialActions.attach(
+                to: terminal, label: "Terminal",
+                activate: { [weak self, weak terminal] in
+                    guard let terminal else { return }
+                    self?.onTap?(terminal)
+                })
             var terminalAccessibility = AccessibilityComponent()
             terminalAccessibility.isAccessibilityElement = true
             terminalAccessibility.label = LocalizedStringResource(stringLiteral:
@@ -990,6 +1006,12 @@ final class CircuitsRenderer {
                     .offsetBy(translation: leverBounds.center),
             ]))
             pivot.components.set(HoverEffectComponent())
+            SpatialActions.attach(
+                to: pivot, label: "Switch",
+                activate: { [weak self, weak pivot] in
+                    guard let pivot else { return }
+                    self?.onTap?(pivot)
+                })
             body.addChild(pivot)
             visual.lever = pivot
         default:
@@ -1217,6 +1239,12 @@ final class CircuitsRenderer {
                 entity.components.set(CollisionComponent(
                     shapes: [.generateCapsule(height: 1, radius: 0.016)]))
                 entity.components.set(HoverEffectComponent())
+                SpatialActions.attach(
+                    to: entity, label: "Wire. Pinch to remove it.",
+                    activate: { [weak self, weak entity] in
+                        guard let entity else { return }
+                        self?.onTap?(entity)
+                    })
                 var accessibility = AccessibilityComponent()
                 accessibility.isAccessibilityElement = true
                 accessibility.label = "Wire. Pinch to remove it."

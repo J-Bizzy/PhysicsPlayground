@@ -124,6 +124,11 @@ final class Multimeter {
     /// terminals of one component are further apart than this.
     static let snapRadius: Double = 0.035
 
+    /// The SpaceView's tap router, so the dial, case and probes can be
+    /// operated without hands. Same shape and same reason as
+    /// `CircuitsRenderer.onTap`: this type holds no model.
+    var onTap: ((Entity) -> Void)?
+
     /// The case's entity name, which the module's drag handler looks for.
     static let bodyName = "meter-body"
 
@@ -175,6 +180,12 @@ final class Multimeter {
             .generateBox(size: [0.086, 0.168, 0.032]),
         ]))
         body.components.set(HoverEffectComponent())
+        SpatialActions.attach(
+            to: body, label: "Multimeter",
+            activate: { [weak self, weak body] in
+                guard let body else { return }
+                self?.onTap?(body)
+            })
         var bodyAccess = AccessibilityComponent()
         bodyAccess.isAccessibilityElement = true
         bodyAccess.label = "Multimeter. Drag to move it."
@@ -202,6 +213,15 @@ final class Multimeter {
         dial.components.set(CollisionComponent(
             shapes: [.generateSphere(radius: 0.030)]))
         dial.components.set(HoverEffectComponent())
+        // The dial CYCLES, so activate is the honest verb: one step per
+        // activation through the same `handleTap` a pinch takes, which
+        // is where the mode order lives.
+        SpatialActions.attach(
+            to: dial, label: "Meter mode",
+            activate: { [weak self, weak dial] in
+                guard let dial else { return }
+                self?.onTap?(dial)
+            })
         chassis.addChild(dial)
 
         // The reading, sitting in the bezel the mesh already provides.
@@ -218,6 +238,12 @@ final class Multimeter {
             }
             probe.name = slot == .red ? "meter-probe-red" : "meter-probe-black"
             probe.components.set(InputTargetComponent())
+            SpatialActions.attach(
+                to: probe, label: slot == .red ? "Red probe" : "Black probe",
+                activate: { [weak self, weak probe] in
+                    guard let probe else { return }
+                    self?.onTap?(probe)
+                })
             // Matched to the HANDLE, not to the whole probe: the needle
             // has to reach in among terminals its own grab box must not
             // cover.
