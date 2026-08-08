@@ -128,8 +128,62 @@ final class PhysicsFormatTests: XCTestCase {
     }
 
     /// Negative values keep their sign and their prefix.
+    ///
+    /// The literal here was "-2.5 mA" with an ASCII hyphen until
+    /// 2026-08-08. That was this test recording what the code did rather
+    /// than what it should do — the claim in its own name is about the
+    /// SIGN surviving, not about which character draws it.
     func testANegativeValueKeepsItsSignAndPrefix() {
-        XCTAssertEqual(PhysicsFormat.metric(-0.0025, "A", decimals: 1), "-2.5 mA")
+        XCTAssertEqual(PhysicsFormat.metric(-0.0025, "A", decimals: 1), "\u{2212}2.5 mA")
+    }
+
+    // MARK: One minus sign
+
+    /// EVERY NUMBER THIS APP SHOWS USES U+2212, because eight authored
+    /// labels already do and `printf` does not.
+    ///
+    /// The Time Capsule's scrub reads "−1.50 s" with a typographic minus
+    /// typed into the format string, in front of a number whose own sign
+    /// would have been a hyphen. So two glyphs for one idea, at two
+    /// widths, a few centimetres apart. A hyphen is a word-joiner drawn
+    /// short and high to sit between letters; a minus is drawn to the
+    /// width and height of the digits.
+    func testEveryNegativeReadingUsesTheTypographicMinus() {
+        let readings = [
+            PhysicsFormat.fixed(-1.5, decimals: 2),
+            PhysicsFormat.measurement(-9.81, "m/s²"),
+            PhysicsFormat.angle(-45),
+            PhysicsFormat.metric(-4.7e-5, "T"),
+            PhysicsFormat.scientific(-2.4e5),
+        ]
+        for reading in readings {
+            XCTAssertFalse(reading.contains("-"), """
+                "\(reading)" uses a hyphen where the rest of the app uses \
+                U+2212. Route it through `PhysicsFormat.typographic`.
+                """)
+            XCTAssertTrue(reading.contains("\u{2212}"),
+                          "\"\(reading)\" lost its sign entirely")
+        }
+    }
+
+    /// …and a positive reading must not grow one.
+    func testAPositiveReadingHasNoSign() {
+        XCTAssertEqual(PhysicsFormat.fixed(1.5, decimals: 2), "1.50")
+        XCTAssertFalse(PhysicsFormat.measurement(9.81, "m/s²").contains("\u{2212}"))
+    }
+
+    /// ROUNDING MUST NOT PUSH THE MANTISSA OUT OF ITS BAND.
+    ///
+    /// The prefix is chosen from the unrounded magnitude and the mantissa
+    /// is then rounded, so a value just under a decade picked the smaller
+    /// prefix and printed a four-digit mantissa — the exact "1000.0 V"
+    /// the test above exists to forbid, arrived at from the other side.
+    func testRoundingUpAcrossADecadeStepsThePrefix() {
+        XCTAssertEqual(PhysicsFormat.metric(999.97, "V", decimals: 1), "1.0 kV")
+        XCTAssertEqual(PhysicsFormat.metric(999.4, "V", decimals: 1), "999.4 V")
+        // And at the very top of the table there is nowhere to step to,
+        // so it must not run off the end of the prefix list.
+        XCTAssertFalse(PhysicsFormat.metric(9.9999e14, "W", decimals: 1).isEmpty)
     }
 
     // MARK: One spelling per fact

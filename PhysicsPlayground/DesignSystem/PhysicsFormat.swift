@@ -66,7 +66,25 @@ nonisolated enum PhysicsFormat {
         let quantised = quantise(value, decimals: decimals)
         // -0.00 is a real thing `%f` will print, and it reads as an error.
         let cleaned = quantised == 0 ? 0 : quantised
-        return String(format: "%.\(max(decimals, 0))f", cleaned)
+        return typographic(String(format: "%.\(max(decimals, 0))f", cleaned))
+    }
+
+    /// U+2212 MINUS SIGN, not the hyphen `%f` emits.
+    ///
+    /// THE APP ALREADY DECIDED THIS and only authored strings got the
+    /// memo. Eight hand-written labels use `−`, including the Time
+    /// Capsule's "−%.2f s" — which puts a typographic minus in front of
+    /// a number whose OWN sign, when it has one, is a hyphen. So a
+    /// negative potential renders "-12.00 V" a few centimetres from a
+    /// scrub reading "−1.50 s", in two different glyphs, at two
+    /// different widths, because one came from a keyboard and one from
+    /// `printf`.
+    ///
+    /// A hyphen is also the wrong character: it is a word-joiner, drawn
+    /// short and high to sit between letters. The minus sign is drawn to
+    /// the width and height of the digits beside it.
+    static func typographic(_ string: String) -> String {
+        string.replacingOccurrences(of: "-", with: "\u{2212}")
     }
 
     /// The value a `fixed` string represents — what a caller should
@@ -109,8 +127,20 @@ nonisolated enum PhysicsFormat {
         let magnitude = log10(abs(value))
         // Step DOWN to the prefix whose band this sits in, so 999 stays
         // 999 and 1000 becomes 1 k.
-        let chosen = prefixes.last { Double($0.exponent) <= magnitude }
-            ?? prefixes[0]
+        var index = prefixes.lastIndex { Double($0.exponent) <= magnitude }
+            ?? prefixes.startIndex
+        // AND STEP UP AGAIN IF ROUNDING PUSHED IT OUT OF THE BAND. The
+        // prefix is chosen from the unrounded magnitude, but what gets
+        // shown is rounded — so 999.97 V at one decimal picked the empty
+        // prefix and then printed "1000.0 V", which is the one string
+        // this function exists to prevent. Nothing about it looks wrong
+        // until you notice the app can also say "1.0 kV".
+        if abs(quantise(value / pow(10, Double(prefixes[index].exponent)),
+                        decimals: decimals)) >= 1000,
+           index + 1 < prefixes.endIndex {
+            index += 1
+        }
+        let chosen = prefixes[index]
         let scaled = value / pow(10, Double(chosen.exponent))
         return "\(fixed(scaled, decimals: decimals)) \(chosen.symbol)\(unit)"
     }
@@ -123,8 +153,18 @@ nonisolated enum PhysicsFormat {
         guard value.isFinite, value != 0 else { return "0" }
         let exponent = Int(floor(log10(abs(value))))
         guard abs(exponent) >= 3 else { return fixed(value, decimals: 2) }
+        // THROUGH `fixed`, not `String(format:)` directly. Building the
+        // mantissa here bypassed both house rules this file exists to
+        // enforce — the quantisation AND the minus sign — so a negative
+        // value came out of the canon wearing a hyphen. Caught by
+        // `testEveryNegativeReadingUsesTheTypographicMinus` on its first
+        // run, which is the argument for asserting over every entry
+        // point rather than the one being edited.
+        //
+        // (The superscript table already maps "-" to "⁻", so a negative
+        // EXPONENT was always right. It was only the mantissa.)
         let mantissa = value / pow(10, Double(exponent))
-        return String(format: "%.2f × 10%@", mantissa, superscript(exponent))
+        return "\(fixed(mantissa, decimals: 2)) × 10\(superscript(exponent))"
     }
 
     // MARK: States

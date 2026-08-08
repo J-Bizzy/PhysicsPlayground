@@ -795,20 +795,29 @@ final class CircuitsRenderer {
         return String(format: "%.0f rpm", rpm)
     }
 
+    /// THE PART'S LABEL AND THE PART'S READOUT MUST AGREE, so there is
+    /// one function that knows how a component value is written and this
+    /// is not it — `CircuitsModel.formatValue` is.
+    ///
+    /// This carried its OWN copy of the resistance rule (the same
+    /// threshold, the same two branches, spelled with a literal Ω where
+    /// the model spells `\u{03A9}`) and its own copy of the capacitance
+    /// rule. The model's copy has a comment recording the day its
+    /// capacitor branch printed "0 mF" beside a bench label reading
+    /// "100 µF" — the fix went in there, and this half of the same pair
+    /// was left behind. Two copies of a formatting rule is a readout and
+    /// a label waiting to disagree.
+    ///
+    /// What stays here is only what the BENCH says differently from the
+    /// readout: a motor reads in rpm, a switch reads open or closed, and
+    /// an AC source wears the tilde that tells you it is AC.
     private func labelText(for component: CircuitsModel.Component) -> String {
         switch component.kind {
-        case .battery: String(format: "%.1f V", component.value)
-        case .resistor, .bulb:
-            component.value >= 1000
-                ? String(format: "%.1f kΩ", component.value / 1000)
-                : String(format: "%.0f Ω", component.value)
-        case .capacitor:
-            component.value >= 1e-3
-                ? String(format: "%.1f mF", component.value * 1000)
-                : String(format: "%.0f µF", component.value * 1e6)
+        case .battery, .resistor, .bulb, .capacitor, .inductor:
+            CircuitsModel.formatValue(component.value, for: component.kind)
         case .switcher: component.isClosed ? "closed" : "open"
-        case .acSource: String(format: "%.1f V~", component.value)
-        case .inductor: String(format: "%.2f H", component.value)
+        case .acSource:
+            CircuitsModel.formatValue(component.value, for: component.kind) + "~"
         case .led: component.failed ? "burned out" : "LED"
         case .motor: Self.motorRPMLabel(component.motorSpeed)
         case .fuse: component.failed
