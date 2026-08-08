@@ -591,7 +591,17 @@ final class CircuitsModel {
         case .resistor, .bulb, .motor: value >= 1000
             ? String(format: "%.1f k\u{03A9}", value / 1000)
             : String(format: "%.0f \u{03A9}", value)
-        case .capacitor: String(format: "%.0f mF", value * 1000)
+        // THIS PRINTED "0 mF" AT THE BOTTOM OF THE CAPACITOR'S OWN RAIL
+        // while the bench label beside it said "100 µF".
+        //
+        // `%.0f` of `value * 1000` for a 100 µF part is 0.1 rounded to
+        // zero, and the whole usable range of this component — the rail
+        // spans microfarads — rounds to the same "0 mF". So the one
+        // readout telling you what you had just dialled in was a
+        // constant, and it disagreed with the label on the part.
+        // `PhysicsFormat.metric` picks the prefix from the magnitude,
+        // which is what the rest of the app already does.
+        case .capacitor: PhysicsFormat.metric(value, "F", decimals: 0)
         case .inductor: String(format: "%.2f H", value)
         case .fuse: String(format: "%.2f A", value)
         case .wire: String(format: "%.0f cm", value * 100)

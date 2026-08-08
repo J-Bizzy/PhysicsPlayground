@@ -1178,4 +1178,37 @@ final class CircuitsModelTests: XCTestCase {
                        "probes across a live bulb would short it; the meter has "
                        + "to say so rather than print a number")
     }
+
+    // MARK: The capacitor's own number
+
+    /// THE RAIL SAID "0 mF" WHILE THE PART SAID "100 µF".
+    ///
+    /// `formatValue` printed `%.0f` of `value × 1000`, and a capacitor on
+    /// this bench is measured in MICROfarads: 100 µF is 1e-4 F, times
+    /// 1000 is 0.1, rounded to "0". The whole usable range of the
+    /// component collapsed to the same string, so the readout under the
+    /// rail you were dragging never moved and contradicted the bench
+    /// label on the part itself.
+    func testTheCapacitorRailAgreesWithTheBenchLabel() {
+        // Every value the rail can actually reach must print something
+        // that is not "0" — a readout that cannot change is not one.
+        let range = CircuitsModel.valueRange(for: .capacitor)
+        var seen = Set<String>()
+        for step in 0...20 {
+            let value = range.lowerBound
+                + (range.upperBound - range.lowerBound) * Double(step) / 20
+            let text = CircuitsModel.formatValue(value, for: .capacitor)
+            XCTAssertFalse(text.hasPrefix("0 "),
+                           "\(value) F printed as \(text) — the whole "
+                           + "microfarad range used to round to `0 mF`")
+            seen.insert(text)
+        }
+        XCTAssertGreaterThan(seen.count, 5,
+                             "the readout barely changes across the rail's "
+                             + "entire range: \(seen.sorted())")
+
+        // And the headline case from the audit, exactly.
+        XCTAssertEqual(CircuitsModel.formatValue(100e-6, for: .capacitor),
+                       "100 µF")
+    }
 }
