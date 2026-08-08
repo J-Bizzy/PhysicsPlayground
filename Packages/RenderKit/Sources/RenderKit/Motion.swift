@@ -48,6 +48,16 @@ public enum Motion {
         return min(max(next, min(value, target)), max(value, target))
     }
 
+    /// The lerp factor itself, for a caller easing SEVERAL values
+    /// against one clock — `Bloom` moves a reveal, a scale and a stagger
+    /// per petal off the same rate, and calling `ease` three times would
+    /// read as three unrelated animations.
+    ///
+    /// Returns 1 under Reduce Motion, which lands everything this frame.
+    public static func rate(dt: Double, _ perSecond: Double = 9) -> Float {
+        isReduced ? 1 : Float(min(dt * perSecond, 1))
+    }
+
     /// `Double` overload, for the primitives whose openness is one.
     public static func ease(_ value: Double, toward target: Double,
                             dt: Double, rate: Double = 9) -> Double {

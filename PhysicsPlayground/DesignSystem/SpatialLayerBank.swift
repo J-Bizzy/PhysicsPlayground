@@ -80,7 +80,7 @@ final class SpatialLayerBank {
     /// Per frame: hang beside `anchor`, face the viewer, and repaint any
     /// plate whose model state changed.
     func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?, dt: Double) {
-        reveal = FanLayout.ease(reveal, toward: plates.isEmpty ? 0 : 1, dt: dt)
+        reveal = Motion.ease(reveal, toward: plates.isEmpty ? 0 : 1, dt: dt)
         root.isEnabled = reveal > 0.02 && !plates.isEmpty
         guard root.isEnabled else { return }
         root.position = anchor

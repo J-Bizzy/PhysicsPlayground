@@ -155,7 +155,7 @@ final class SpatialPicker {
 
     /// Per frame: hang over `anchor`, face the viewer, unfold or fold.
     func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?, dt: Double) {
-        openness = FanLayout.ease(openness, toward: isOpen ? 1 : 0, dt: dt)
+        openness = Motion.ease(openness, toward: isOpen ? 1 : 0, dt: dt)
         root.isEnabled = openness > 0.02 && !discs.isEmpty
         guard root.isEnabled else { return }
         root.position = anchor

@@ -271,9 +271,7 @@ final class Bloom {
         }
         let heldViewer = viewer ?? lastViewer
 
-        let rate = Float(min(dt * 9, 1))
-        reveal += (target - reveal) * rate
-        if abs(reveal - target) < 0.004 { reveal = target }
+        reveal = Motion.ease(reveal, toward: target, dt: dt)
 
         root.isEnabled = reveal > 0.01
         guard root.isEnabled else { return }
@@ -301,7 +299,7 @@ final class Bloom {
     }
 
     private func layoutPetals(dt: Double) {
-        let rate = Float(min(dt * 11, 1))
+        let rate = Motion.rate(dt: dt, 11)
 
         // An armed petal walked away from disarms itself, exactly as a
         // standing verb plate does. Without this a ring left open with a

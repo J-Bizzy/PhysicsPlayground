@@ -91,7 +91,14 @@ final class Well {
         for (index, preview) in previews.enumerated() {
             dip[index] = max(0, dip[index] - Float(dt) * 2.6)
             refusal[index] = max(0, refusal[index] - Float(dt) * 2.2)
-            let breath = 1 + 0.035 * Float(sin(time * 1.4 + Double(index) * 1.1))
+            // A PERPETUAL BREATH, IN EVERY LAB — which makes this the
+            // single worst Reduce Motion omission in the app: the other
+            // seven primitives animate when something happens, and this
+            // one never stops. Someone who has asked the system for less
+            // motion gets a still object.
+            let breath = Motion.isReduced
+                ? Float(1)
+                : 1 + 0.035 * Float(sin(time * 1.4 + Double(index) * 1.1))
             // The dip is a recoil: it shrinks on giving, then swells back.
             preview.scale = SIMD3(repeating: breath * (1 - 0.42 * dip[index]))
             // Refusal used to darken a glass halo. With the glass gone

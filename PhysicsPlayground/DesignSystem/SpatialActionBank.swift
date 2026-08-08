@@ -180,7 +180,7 @@ final class SpatialActionBank {
                 resetNonce: Int = 0) {
         if let seen = seenResetNonce, seen != resetNonce { disarm() }
         seenResetNonce = resetNonce
-        reveal = FanLayout.ease(reveal, toward: plates.isEmpty ? 0 : 1, dt: dt)
+        reveal = Motion.ease(reveal, toward: plates.isEmpty ? 0 : 1, dt: dt)
         root.isEnabled = reveal > 0.02 && !plates.isEmpty
         guard root.isEnabled else { return }
         root.position = anchor

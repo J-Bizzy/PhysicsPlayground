@@ -130,9 +130,9 @@ public final class FrozenVectors {
             if root.isEnabled { root.isEnabled = false }
             return
         }
-        let rate = Float(min(dt * 6, 1))
-        reveal += (target - reveal) * rate
-        if abs(reveal - target) < 0.01 { reveal = target }
+        // The freeze sculpt GROWS out of the body as it appears, and
+        // under Reduce Motion it simply arrives — see `Motion.ease`.
+        reveal = Motion.ease(reveal, toward: target, dt: dt, rate: 6)
         root.isEnabled = reveal > 0.01
         guard root.isEnabled else { return }
 

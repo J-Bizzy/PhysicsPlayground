@@ -175,12 +175,16 @@ public struct FanLayout: Sendable {
         return layout(span: high, reach: reach)
     }
 
-    /// Eases overall openness toward its target, frame-rate independent.
-    /// Snaps when close enough so a fan never sits fractionally open.
-    public static func ease(_ openness: Double, toward target: Double,
-                           dt: Double, rate: Double = 9) -> Double {
-        var next = openness + (target - openness) * min(dt * rate, 1)
-        if abs(next - target) < 0.004 { next = target }
-        return min(max(next, 0), 1)
-    }
+    // `FanLayout.ease` WAS HERE, and it is `Motion.ease` now
+    // (2026-08-07). It was a correct exponential ease with a snap, and
+    // three primitives used it — the picker and both banks — which is
+    // exactly why it had to go: it did not honour the system Reduce
+    // Motion switch, so being the shared helper made it the shared way
+    // of getting that wrong. Two eases in one app is one too many when
+    // only one of them obeys an accessibility setting.
+    //
+    // Its tests moved to `MotionTests`. `MotionCriterionTests` now fails
+    // the build on any hand-rolled ease in RenderKit or the design
+    // system, so this cannot quietly come back.
+
 }
