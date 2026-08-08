@@ -64,6 +64,10 @@ enum MagnetismModule {
                               PhysicsFormat.fixed(selected.strength, decimals: 3), "A·m²"))
             let others = model.magnets.filter { $0.id != selected.id }
             if !others.isEmpty {
+                // Point dipole, matching the dynamics — a readout that
+                // disagrees with the motion it describes is worse than
+                // an inaccurate one. Both move together when the bench
+                // is retuned; see `MagnetismModel.step`.
                 let force = MagneticField.netForce(on: selected, from: others)
                 rows.append(.init("Force on it",
                                   PhysicsFormat.scientific(simd_length(force)), "N"))

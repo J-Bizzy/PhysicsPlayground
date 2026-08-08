@@ -418,4 +418,117 @@ final class GeomagneticFieldTests: XCTestCase {
         let far = MagneticField.vector(at: SIMD3(0.60, 0, 0), dueTo: magnet)
         XCTAssertLessThan(simd_length(far), earth / 5)
     }
+
+    // MARK: The finite bar's force
+
+    private static let barLength = 0.16
+
+    /// FAR AWAY, A BAR IS A DIPOLE. This is the safety property for
+    /// replacing the dynamics' force: the new one must agree with the
+    /// old wherever the old one was right, or the fix has changed
+    /// something it had no business changing.
+    func testBarForceMeetsTheDipoleForceFarAway() {
+        let L = Self.barLength
+        let a = BarMagnet(position: .zero, moment: SIMD3(1.0, 0, 0))
+        for ratio in [8.0, 12.0, 20.0] {
+            let b = BarMagnet(position: SIMD3(L * ratio, 0, 0),
+                              moment: SIMD3(1.0, 0, 0))
+            let dipole = MagneticField.force(on: b, dueTo: a)
+            let bar = MagneticField.barForce(on: b, dueTo: a, length: L)
+            let error = simd_length(bar - dipole) / simd_length(dipole)
+            // Measured: 2.7 % at r/L = 8, 1.2 % at 12, 0.4 % at 20 —
+            // the O((L/r)^2) convergence the expansion promises. 7 % at
+            // r/L = 5 is still real disagreement, which is why the
+            // sampling starts at 8.
+            XCTAssertLessThan(error, 0.035,
+                              "at r/L = \(ratio) the two models differ by "
+                              + "\(error * 100)%, where the expansion should "
+                              + "have converged")
+        }
+    }
+
+    /// CLOSE IN, IT IS NOT — and by a margin that decides where the
+    /// magnets end up. Magnetism's `contactDistance` is 0.92 bar-lengths,
+    /// which is exactly where the dipole expansion has no claim.
+    func testBarForceDivergesFromTheDipoleAtContact() {
+        let L = Self.barLength
+        let a = BarMagnet(position: .zero, moment: SIMD3(1.0, 0, 0))
+        let b = BarMagnet(position: SIMD3(L * 0.92, 0, 0),
+                          moment: SIMD3(1.0, 0, 0))
+        let dipole = simd_length(MagneticField.force(on: b, dueTo: a))
+        let bar = simd_length(MagneticField.barForce(on: b, dueTo: a, length: L))
+        XCTAssertGreaterThan(
+            abs(bar - dipole) / bar, 0.2,
+            "if these now agree at contact, either the pole model or the "
+            + "dipole one has changed — this test exists to record that they "
+            + "genuinely do not, which is why the dynamics moved")
+    }
+
+    /// Newton's third law, EXACTLY. A sum of pole-pole central forces
+    /// has it by construction, where the dipole expansion only has it to
+    /// the order it is carried to.
+    func testBarForceObeysNewtonsThirdLaw() {
+        let L = Self.barLength
+        let a = BarMagnet(position: SIMD3(-0.05, 0.02, 0),
+                          moment: SIMD3(0.8, 0.6, 0))
+        let b = BarMagnet(position: SIMD3(0.09, -0.01, 0.03),
+                          moment: SIMD3(-0.3, 0.9, 0.2))
+        let fBA = MagneticField.barForce(on: b, dueTo: a, length: L)
+        let fAB = MagneticField.barForce(on: a, dueTo: b, length: L)
+        XCTAssertEqual(simd_length(fBA + fAB), 0,
+                       accuracy: simd_length(fBA) * 1e-9,
+                       "the pair does not push on each other equally")
+    }
+
+    /// Head to tail attracts and side by side repels, WELL CLEAR of the
+    /// poles. Two bar-lengths apart, not one — see the singularity test
+    /// below for why one is not a legal question to ask.
+    func testBarForceKeepsTheSignsAUserWouldCheck() {
+        let L = Self.barLength
+        let a = BarMagnet(position: .zero, moment: SIMD3(1.0, 0, 0))
+        let headToTail = BarMagnet(position: SIMD3(L * 2, 0, 0),
+                                   moment: SIMD3(1.0, 0, 0))
+        XCTAssertLessThan(MagneticField.barForce(on: headToTail, dueTo: a,
+                                                 length: L).x, 0,
+                          "north-to-south should pull them together")
+        let sideBySide = BarMagnet(position: SIMD3(0, L * 2, 0),
+                                   moment: SIMD3(1.0, 0, 0))
+        XCTAssertGreaterThan(MagneticField.barForce(on: sideBySide, dueTo: a,
+                                                    length: L).y, 0,
+                             "parallel and abreast should shove apart")
+    }
+
+    /// THE POLE MODEL HAS ITS OWN SINGULARITY, AND IT SITS EXACTLY WHERE
+    /// THE MAGNETS MEET. This is the test that stopped the dynamics
+    /// being switched over.
+    ///
+    /// Two bars head to tail at one bar-length apart put A's north pole
+    /// and B's south pole at the SAME POINT. `poleCoreRadius` softens
+    /// the divide-by-zero but cannot rescue the answer: measured, the
+    /// force comes out REPULSIVE for a pair that must attract, and a
+    /// fifth of a bar-length further out it is seven times the dipole
+    /// value.
+    ///
+    /// So audit P1-22 is right that the dipole is the wrong model at
+    /// `contactDistance` (50 % low there) and wrong that the bar field
+    /// is the remedy for the FORCE. Both are unusable at contact, in
+    /// opposite directions. A near-field force that is actually correct
+    /// needs the magnetised VOLUME integrated, which neither of these
+    /// is.
+    func testTheBarForceIsUnusableWhereThePolesMeet() {
+        let L = Self.barLength
+        let a = BarMagnet(position: .zero, moment: SIMD3(1.0, 0, 0))
+        let touching = BarMagnet(position: SIMD3(L, 0, 0),
+                                 moment: SIMD3(1.0, 0, 0))
+        let force = MagneticField.barForce(on: touching, dueTo: a, length: L)
+
+        XCTAssertGreaterThan(
+            force.x, 0,
+            "The pole-pair force at one bar-length is no longer repulsive. "
+            + "If the pole cores were widened or the model changed that may "
+            + "be an improvement — but Magnetism's dynamics were left on the "
+            + "point dipole BECAUSE of this, so re-read `MagnetismModel.step` "
+            + "before celebrating.")
+    }
+
 }

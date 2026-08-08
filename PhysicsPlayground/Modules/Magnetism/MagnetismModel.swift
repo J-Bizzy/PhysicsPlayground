@@ -238,6 +238,42 @@ final class MagnetismModel {
                 let others = magnets.enumerated().filter { $0.offset != i }.map(\.element)
                 guard !others.isEmpty else { continue }
 
+                // STILL THE POINT DIPOLE, AND IT IS MEASURABLY THE WRONG
+                // MODEL HERE. Read this before "fixing" it, because the
+                // obvious change has been made and reverted.
+                //
+                // These bars meet at `contactDistance` = 0.92
+                // bar-lengths, and at that separation the dipole
+                // expansion reports HALF the real field — 50.3 % low,
+                // measured, against the pole-pair model this file's own
+                // header says is exact for a bar. The tracer was moved
+                // onto `barVector` for exactly that reason, so the loops
+                // drawn over these magnets are computed from one model
+                // and their motion from another, and the loops are the
+                // correct one.
+                //
+                // AND THE OBVIOUS REMEDY IS WORSE, which is the part
+                // worth knowing. `MagneticField.netBarForce` exists and
+                // is tested, and switching to it was tried: it breaks
+                // `testASettledPairDoesNotJitter` and
+                // `testOnlyTheInertialBenchOvershootsAlignment`. That
+                // alone would just be a retune — but measuring it showed
+                // the real reason not to. The pole-pair model puts A's
+                // north pole and B's south pole at THE SAME POINT when
+                // the bars are one length apart, so at and inside
+                // contact it is not merely inaccurate, it is
+                // pathological: at r/L = 1.0 it reports REPULSION for a
+                // pair that must attract, and at 1.2 it is seven times
+                // the dipole value.
+                //
+                // So both models are unusable where these magnets
+                // actually meet, in opposite directions, and the dipole
+                // at least has the sign right and stays smooth. A force
+                // that is genuinely correct near contact needs the
+                // magnetised VOLUME integrated, which is a piece of
+                // physics neither model contains and nobody has written.
+                // `testTheBarForceIsUnusableWhereThePolesMeet` pins the
+                // measurement so this is not rediscovered.
                 let force = MagneticField.netForce(on: magnets[i], from: others)
                 let field = MagneticField.vector(at: magnets[i].position, dueTo: others)
                 let torque = simd_cross(magnets[i].moment, field)
@@ -318,7 +354,10 @@ final class MagnetismModel {
             guard !others.isEmpty else { continue }
 
             // Translate down the net force (direction exact; speed capped).
-            let force = MagneticField.netForce(on: magnets[i], from: others)
+            // Point dipole, matching the site above — see the long
+                // note there on why the correct pole-pair force is not
+                // in yet.
+                let force = MagneticField.netForce(on: magnets[i], from: others)
             let fMag = simd_length(force)
             if fMag > 1e-22 {
                 let speed = min(Self.forceGain * fMag, Self.maxLinearSpeed)

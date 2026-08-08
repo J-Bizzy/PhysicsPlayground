@@ -129,9 +129,59 @@ public enum MagneticField {
         return coeff * (m1r * m2 + m2r * m1 + m1m2 * rHat - 5 * m1r * m2r * rHat)
     }
 
-    /// Net force on `b` from all the `others`.
+    /// Net force on `b` from all the `others`, as POINT DIPOLES.
+    ///
+    /// Correct a few bar-lengths out and badly wrong nearer than that —
+    /// see `barForce`, which is what a bench of real bars should use.
     public static func netForce(on b: BarMagnet, from others: [BarMagnet]) -> SIMD3<Double> {
         others.reduce(.zero) { $0 + force(on: b, dueTo: $1) }
+    }
+
+    // MARK: The finite bar, again — this time for the force
+    //
+    // THE DYNAMICS WERE COMPUTED IN THE REGIME THIS FILE'S OWN HEADER
+    // RULES OUT. The tracer was moved onto `barVector` because the point
+    // dipole "is simply not the field of a bar magnet" close in; the
+    // FORCE was left on the dipole expansion, and the force is what
+    // decides where the magnets go. Measured, dipole against pole-pair,
+    // head-to-tail on the axis:
+    //
+    //     r/L = 0.92   50.3 % low     ← `contactDistance`
+    //     r/L = 1.5    21 %
+    //     r/L = 3      5.5 %
+    //     r/L = 5      2.0 %
+    //
+    // Magnetism's `contactDistance` is `magnetLength * 0.92`. So the
+    // single most repeated interaction in the module — two magnets
+    // snapping together — was driven by a field reporting HALF its real
+    // value, while the loops drawn over the top were traced from the
+    // right one. The picture and the motion disagreed, and the picture
+    // was correct.
+    //
+    // A uniformly magnetised bar is two poles of strength q = |m|/L at
+    // its ends, so the force on it is `q·B` at its north pole minus the
+    // same at its south. That is a sum of pole-pole central forces, so
+    // Newton's third law holds exactly rather than approximately, and it
+    // converges on the dipole answer as the bars separate — which is the
+    // property `testBarForceMeetsTheDipoleForceFarAway` pins.
+
+    /// Force on bar `b` from bar `a`, both treated as pole pairs.
+    public static func barForce(on b: BarMagnet, dueTo a: BarMagnet,
+                                length: Double) -> SIMD3<Double> {
+        let moment = simd_length(b.moment)
+        guard length > 1e-9, moment > 1e-30 else { return .zero }
+        let axis = b.moment / moment
+        let pole = moment / length
+        let north = b.position + axis * (length / 2)
+        let south = b.position - axis * (length / 2)
+        return pole * (barVector(at: north, dueTo: a, length: length)
+                       - barVector(at: south, dueTo: a, length: length))
+    }
+
+    /// Net pole-pair force on `b` from all the `others`.
+    public static func netBarForce(on b: BarMagnet, from others: [BarMagnet],
+                                   length: Double) -> SIMD3<Double> {
+        others.reduce(.zero) { $0 + barForce(on: b, dueTo: $1, length: length) }
     }
 
     /// Torque on `b` in the combined field of the `others`: τ = m × B.

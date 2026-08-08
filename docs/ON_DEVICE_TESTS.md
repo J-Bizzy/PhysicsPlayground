@@ -730,6 +730,45 @@ app was six rooms of readouts with no controls in them.
       un-pinchable wire was created, ate one of the 36 budget slots, and
       came back after a relaunch.
 
+### The magnet force is measurably the wrong model — and fixing it needs you
+
+**Not a check: a decision, with the measurement already done.**
+
+`MagneticField` treats a magnet as a point dipole for the FORCE, while
+the field lines drawn over the top are traced from the pole-pair model
+its own header says is exact for a bar. Head-to-tail on the axis, dipole
+against pole-pair:
+
+| r / L | dipole error |
+|---|---|
+| **0.92** — Magnetism's `contactDistance` | **50.3 % low** |
+| 1.5 | 21 % |
+| 3.0 | 5.5 % |
+| 5.0 | 2.0 % |
+
+So the module's most repeated interaction — two magnets snapping
+together — is driven by a field reporting half its real value, under
+loops computed correctly.
+
+**But the obvious remedy is worse, and this is the useful part.**
+`MagneticField.netBarForce` is written and tested — it obeys Newton's
+third law exactly and converges on the dipole past r/L ≈ 8. Switching
+the dynamics onto it was tried and reverted, because the pole-pair model
+puts one bar's north pole and the other's south pole at the SAME POINT
+when they are one length apart. At and inside contact it is not merely
+inaccurate but pathological: at r/L = 1.0 it reports REPULSION for a
+pair that must attract, and at 1.2 it is seven times the dipole value.
+
+So both models are unusable where these magnets meet, in opposite
+directions, and the dipole at least keeps the sign right and stays
+smooth. A force that is genuinely correct near contact needs the
+magnetised VOLUME integrated — physics neither model contains.
+
+- [ ] **Nothing to check here; this is a note.** The magnets behave
+      exactly as they did. It is recorded because P1-22 reads like a
+      one-line fix and is not, and because the next person to try it
+      should find the measurement rather than repeat it.
+
 ## Cross-cutting
 
 ### Phase 0 of the 2026-08-07 audit arc — mostly invisible, four things that are not
