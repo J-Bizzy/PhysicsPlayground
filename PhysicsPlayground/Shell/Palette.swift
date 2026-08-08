@@ -11,12 +11,22 @@
 //
 //  In its place: a single bead. Pinch it and it unfolds into a ring of
 //  the labs themselves — live miniatures, the same running physics the
-//  home constellation shows, not icons of them — with pause, capture,
-//  reset and settings as the only petals: the three controls you reach
-//  for without breaking off what you are doing, plus the one door to
-//  the app's preferences (the bead is the only interface that exists in
-//  every lab, so the door has to live on it). Pinch a lab and
-//  the room changes. Pinch the bead again and everything folds away.
+//  home constellation shows, not icons of them — with six petals:
+//  home, pause, capture, dim, settings, reset. Pinch a lab and the room
+//  changes. Pinch the bead again and everything folds away.
+//
+//  SIX PETALS IS NOT SIX MORE OBJECTS. The original decision (2026-07-29)
+//  allowed exactly two and every addition since has amended it, which is
+//  the right amount of friction — but the bar it sets is about what
+//  stands in the room, and a folded ring stands for nothing. The real
+//  cost of a petal is the width of the row when it is open, and that is
+//  now derived from the count (`petalRowSpan`) rather than hand-tuned,
+//  so the next one cannot quietly overlap its neighbours.
+//
+//  The two newest close capabilities that had NO door at all: `home`
+//  (the only route back to the gallery was a chevron in a 2-D window
+//  you may have left behind you) and `dim` (`cycleDimming` had zero
+//  callers while Gravity Lab darkens your real room by 85%).
 //
 //  The bead is the app's only permanent piece of interface.
 //
@@ -78,6 +88,25 @@ final class Palette {
     // asked for — today's six labs ride it with room to spare — and at
     // the old 0.06 m slot size the miniatures read as specks and their
     // thin lines shimmered.
+    /// One petal's touch target, across. The DISC is 0.048 m; the target
+    /// is deliberately wider, and it is the wider number that decides
+    /// whether two petals can be aimed at separately.
+    static let petalColliderSpan: Float = 0.068
+
+    /// How wide the petal row has to be to hold `count` of them.
+    ///
+    /// DERIVED, NOT TYPED, and the comment this replaces is the reason:
+    /// it said the span was "widened from 0.17 when the fourth petal
+    /// arrived, keeping clear air between neighbouring discs" — a number
+    /// hand-tuned for a specific count, which is exactly how Gravity
+    /// Lab's clock bank came to lay six discs out on geometry derived
+    /// for four. At 0.22 m a FIFTH petal would already have pitched at
+    /// 0.055 m against a 0.068 m target, and a sixth at 0.044 m: both
+    /// unaimable, both looking fine.
+    static func petalRowSpan(count: Int) -> Float {
+        Float(max(count - 1, 1)) * petalColliderSpan * 1.1
+    }
+
     private static let ringRadius: Float = 0.40
     private static let slotSize: Float = 0.072
     private static let beadRadius: Float = 0.026
@@ -87,6 +116,10 @@ final class Palette {
     var onReset: (() -> Void)?
     var onSettings: (() -> Void)?
     var onCapture: (() -> Void)?
+    /// Back to the gallery. See the petal list for why this exists.
+    var onHome: (() -> Void)?
+    /// Steps the room dimmer off → half → full.
+    var onDim: (() -> Void)?
 
     /// One ring slot's identity: the module, its short label, its color.
     struct Slot {
@@ -152,9 +185,29 @@ final class Palette {
         // learned; capture and settings sit between them. (Each petal
         // past the original two amends the "exactly two petals"
         // decision — see DECISIONS.md 2026-07-29.)
+        // HOME and DIM arrive 2026-08-07, and both close a capability
+        // with NO other door.
+        //
+        // · Home — `dismissImmersiveSpace` appeared zero times in the
+        //   app target, and the only route from a lab back to the
+        //   gallery was a chevron in a 2-D window the user may well have
+        //   left behind them. A one-path capability, and the one path
+        //   was not in the room.
+        // · Dim — `AppModel.cycleDimming()` had zero callers. Entering
+        //   Gravity Lab darkens the user's real room by 85% with no
+        //   control in the window, none in the room and none in
+        //   Settings. That is the rule's strongest form broken: not one
+        //   path, none.
+        //
+        // They go on the RING rather than into the room because the ring
+        // is the one container this app already has that costs nothing
+        // at rest — six petals folded away are still zero standing
+        // objects, which a plate on a bank would not be.
         petals = [
+            Self.makePetal(name: "home", symbol: "square.grid.2x2.fill"),
             Self.makePetal(name: "pause", symbol: "pause.fill"),
             Self.makePetal(name: "capture", symbol: "square.and.pencil"),
+            Self.makePetal(name: "dim", symbol: "circle.lefthalf.filled"),
             Self.makePetal(name: "settings", symbol: "gearshape.fill"),
             Self.makePetal(name: "reset", symbol: "arrow.counterclockwise"),
         ]
@@ -277,7 +330,8 @@ final class Palette {
             // Petals fan across a constant 0.22 m span below the bead —
             // widened from 0.17 when the fourth petal arrived, keeping
             // clear air between neighbouring discs.
-            let x = (Float(index) / Float(max(petals.count - 1, 1)) - 0.5) * 0.22
+            let x = (Float(index) / Float(max(petals.count - 1, 1)) - 0.5)
+                * Self.petalRowSpan(count: petals.count)
             petal.position = SIMD3(x * own, -0.135 * own, 0)
             petal.scale = SIMD3(repeating: max(own, 0.001))
             petal.isEnabled = own > 0.02
@@ -300,6 +354,15 @@ final class Palette {
             // captures cost three unfoldings.
             onCapture?()
             SoundPalette.play(.chime, on: bead, volume: 0.5)
+            return true
+        }
+        if name == "palette-home" { onHome?(); isOpen = false; return true }
+        if name == "palette-dim" {
+            // Stays OPEN, like capture: dimming is a thing you tune by
+            // looking at the result, and off → half → full is three
+            // taps. Refolding after each would cost three unfoldings.
+            onDim?()
+            SoundPalette.play(.pop, on: bead, volume: 0.35)
             return true
         }
         if name == "palette-settings" { onSettings?(); isOpen = false; return true }
@@ -457,6 +520,12 @@ struct PaletteView: View {
             made.onReset = { appModel.resetActiveModule(module) }
             made.onSettings = { openWindow(id: SettingsView.windowID) }
             made.onCapture = { appModel.captureNotebookEntry() }
+            // Home clears the active module, which swaps the module
+            // scene for `HubSpaceView` inside the SAME immersive space —
+            // the gallery is not a separate space, so this is a
+            // one-line answer to "let me out of this lab".
+            made.onHome = { appModel.activeModuleID = nil }
+            made.onDim = { appModel.cycleDimming() }
             content.add(made.root)
             palette = made
             #if DEBUG

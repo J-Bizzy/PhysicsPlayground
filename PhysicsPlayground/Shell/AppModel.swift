@@ -97,8 +97,17 @@ final class AppModel {
     /// contrast back while the user keeps their furniture and their
     /// feet. Modules that can't be read in a sunlit room open with it
     /// already part-closed (ModuleDescriptor.preferredDimming).
-    /// A manual change sticks for as long as the user stays in the
+    /// A manual change — the palette bead's `dim` petal, which steps
+    /// off → half → full — sticks for as long as the user stays in the
     /// module; entering a different one adopts that module's preference.
+    ///
+    /// The sentence above described that manual change from the day it
+    /// was written until 2026-08-07, and there was no manual change:
+    /// `cycleDimming` and `setDimming` had ZERO callers anywhere, so
+    /// entering Gravity Lab darkened the user's real room by 85% with no
+    /// control in the window, none in the room and none in Settings.
+    /// Not one path to a capability — none — which reads as a bug rather
+    /// than as a feature.
     var roomDimming: Double = 0
 
     func setDimming(_ level: Double) {

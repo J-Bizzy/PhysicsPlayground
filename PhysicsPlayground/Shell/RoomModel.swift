@@ -76,6 +76,55 @@ final class RoomModel {
         case denied
         /// Authorized, but `session.run` threw anyway.
         case failed
+
+        /// The one-line version, for a title bar or a card.
+        ///
+        /// THE COPY LIVES ON THE CASE, not on a view. It was two private
+        /// static functions on `ModuleHostView`, which meant the only
+        /// place in the app that could explain a lesser room was a
+        /// warning triangle in a MODULE's title bar — reachable only
+        /// after the user has already chosen a lab, and only if they
+        /// look at a window they may have left behind them. The ask
+        /// itself happens on the gallery, about a second after launch,
+        /// so the hub is where an explanation actually belongs; that
+        /// needed one authority for the sentences rather than two.
+        var headline: String {
+            switch self {
+            case .fine: ""
+            case .unsupported: "This device can't sense your room"
+            case .denied: "Physics Playground can't see your room"
+            case .failed: "Room sensing didn't start"
+            }
+        }
+
+        /// What is lost, and what to do about it. A warning with no
+        /// remedy is a complaint.
+        var detail: String {
+            switch self {
+            case .fine:
+                ""
+            case .unsupported:
+                "Experiments run in open space instead. The physics is "
+                + "identical — only the parts that use your real walls and "
+                + "furniture are missing."
+            case .denied:
+                "Experiments won't bounce off your real walls or floor, and "
+                + "apparatus won't be hidden behind your furniture. To turn "
+                + "it back on, open Settings › Privacy & Security › World "
+                + "Sensing and allow Physics Playground."
+            case .failed:
+                "Something went wrong starting it. Leaving this lab and "
+                + "opening it again usually fixes it."
+            }
+        }
+
+        /// Said BEFORE the system asks, so the permission sheet is not
+        /// the first the user hears of it. One line: the sheet itself is
+        /// where the detail belongs, and a wall of text in front of a
+        /// dialog is how people learn to dismiss both.
+        static let preExplanation =
+            "visionOS will ask to use your room, so labs can stand on your "
+            + "floor and balls can bounce off your real walls."
     }
 
     /// Read by the shell to explain a lesser room. See `Sensing`.

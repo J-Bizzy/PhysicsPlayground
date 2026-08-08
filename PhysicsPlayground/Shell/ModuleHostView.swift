@@ -296,31 +296,15 @@ struct ModuleHostView: View {
     // message is the one that tells a simulator user to open Settings and
     // grant a permission they were never asked for.
 
+    // The sentences moved onto `RoomModel.Sensing` on 2026-08-07, so the
+    // hub can say the same things at the moment they actually matter —
+    // the permission is asked for on the gallery, long before anybody
+    // reaches a module title bar. See `Sensing.headline`.
     private static func sensingHeadline(_ sensing: RoomModel.Sensing) -> String {
-        switch sensing {
-        case .fine: ""
-        case .unsupported: "This device can't sense your room"
-        case .denied: "Physics Playground can't see your room"
-        case .failed: "Room sensing didn't start"
-        }
+        sensing.headline
     }
 
     private static func sensingDetail(_ sensing: RoomModel.Sensing) -> String {
-        switch sensing {
-        case .fine:
-            ""
-        case .unsupported:
-            "Experiments run in open space instead. The physics is "
-            + "identical — only the parts that use your real walls and "
-            + "furniture are missing."
-        case .denied:
-            "Experiments won't bounce off your real walls or floor, and "
-            + "apparatus won't be hidden behind your furniture. To turn "
-            + "it back on, open Settings › Privacy & Security › World "
-            + "Sensing and allow Physics Playground."
-        case .failed:
-            "Something went wrong starting it. Leaving this lab and "
-            + "opening it again usually fixes it."
-        }
+        sensing.detail
     }
 }

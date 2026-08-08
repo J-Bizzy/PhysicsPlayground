@@ -60,6 +60,11 @@ struct PlaygroundSpaceView: View {
                         // module is paused with a recording worth scrubbing.
                         TimeRailView(module: module)
                             .id("time-rail-\(module.id)")
+                        // The one-time teach, beside the apparatus it
+                        // describes rather than in a window that may be
+                        // behind the reader.
+                        FirstRunHintView(module: module)
+                            .id("first-run-\(module.id)")
                         // The experiments watcher: notices when the physics
                         // reaches a goal and chimes exactly once.
                         ExperimentCheckerView(moduleID: module.id)

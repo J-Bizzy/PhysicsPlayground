@@ -553,6 +553,66 @@ file). The new well and the standing script:
       names must exist and be where it says. ⟳ Electric Fields' third
       experiment is the cyclotron circle now, not the Gauss bubble.
 
+## Phase 1 of the 2026-08-07 audit arc — the front door
+
+All of this is new surface, and none of it can be judged from the
+simulator. Work it in this order; the first two are the ones that
+decide whether the phase was worth doing.
+
+- [ ] **⟳ The ENTER plaque, and the stack it lives in.** No argument
+      needed — the gallery is what you see at launch. Each puck's
+      terrace now carries a small machined ENTER slab in the module's
+      accent, standing forward of the plinth. **What CORRECT looks
+      like:** a caption stack under each miniature that reads as one
+      thing — name, then (on the exhibit you are facing) a one-line
+      promise, then the plaque in front on the terrace. **What to watch
+      for:** the three are billboarded and separated in depth as well as
+      height, so they can be geometrically clear and still LOOK piled
+      up. Then aim at a plaque and pinch: it must open that lab, and
+      pinching the miniature above it must still only flash the pad.
+
+- [ ] **The promise line.** Turn your head slowly along the crescent.
+      One sentence should fade in under the exhibit you are facing and
+      out again as you move on — never two at once, never flickering as
+      you sweep past.
+
+- [ ] **The window is not blank.** Look at the hub window with the
+      Gallery up. It should show the progress line, the next step and
+      the compact catalog. Tapping a row there must still open its lab —
+      that is the accessibility path, and it has been unreachable in
+      normal use since the gallery started auto-opening.
+
+- [ ] **The way out.** In the same window, "Put the Gallery away" should
+      close the immersive space and leave you with your room and the
+      window. Then "Enter the Gallery" brings it back.
+
+- [ ] **The bead has six petals now** — home, pause, capture, dim,
+      settings, reset — and the row is wider to fit them. `-paletteOpen 1`
+      photographs it; on device, open it and **aim at each petal in
+      turn**, which is the check the width exists for. `home` returns to
+      the gallery from inside a lab; `dim` steps the room off → half →
+      full and leaves the ring open so you can tune it against what you
+      see.
+
+- [ ] **The room-sensing note.** Hardest to see, because it wants a
+      fresh install. On first launch the window should carry one quiet
+      line about visionOS asking for your room BEFORE the sheet appears.
+      `-roomSensing denied` fakes the refusal: the window should then say
+      what is lost and how to turn it back on, not just show a triangle.
+
+- [ ] **The first-run teach is in the room.** Erase the app or use
+      `-resetHints 1`, then enter any lab. The module's paragraph should
+      hang beside the apparatus — not only in the window, which may be
+      behind you. Pinch it to dismiss; it must not come back, and the
+      window's copy of it must go at the same time. Check it does not
+      overlap the apparatus in the labs with the widest benches
+      (Circuits, Gravity Lab).
+
+- [ ] **The podium hint retires itself.** With hints reset, the "Or
+      carry a lab to the pad" line should be up. Carry one lab to the
+      pad; it should go, and stay gone on the next launch. It must never
+      be visible while a lab is already docked.
+
 ## Cross-cutting
 
 ### Phase 0 of the 2026-08-07 audit arc — mostly invisible, four things that are not

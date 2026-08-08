@@ -34,6 +34,7 @@ import SwiftUI
 struct HubView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @State private var openFailed = false
 
     var body: some View {
@@ -78,6 +79,7 @@ struct HubView: View {
                 .buttonStyle(.podProminent)
                 .accessibilityHint("Places the Gallery — the exhibit terraces — in your room")
 
+                RoomSensingNote()
                 HubCatalogList()
             } else {
                 // THE COMPACT STATE. Same catalog, same progress line,
@@ -88,7 +90,27 @@ struct HubView: View {
                 // question — where am I, what next, and what are the
                 // six labs — plus a way into each of them that needs no
                 // aim and no carry.
+                RoomSensingNote()
                 HubCatalogList(isCompact: true)
+
+                // THE WAY OUT. `dismissImmersiveSpace` appeared ZERO
+                // times in the app target, so a user who simply wanted
+                // their room back mid-session had to know about the
+                // Digital Crown. The palette bead's `home` petal leaves
+                // a LAB; this leaves the room entirely, and the two are
+                // different requests.
+                Button {
+                    Task {
+                        appModel.activeModuleID = nil
+                        await dismissImmersiveSpace()
+                    }
+                } label: {
+                    Label("Put the Gallery away", systemImage: "xmark.circle")
+                        .font(DesignTokens.TypeScale.footnote)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityHint("Closes the room and returns to this window")
             }
 
             Spacer(minLength: 12)
@@ -151,6 +173,48 @@ struct HubView: View {
         if case .error = result {
             withAnimation(.easeOut(duration: 0.2)) { openFailed = true }
         }
+    }
+}
+
+/// What the app is about to ask for, or what it lost when the ask was
+/// refused.
+///
+/// PRE-EXPLAINED, because the ask is not where the user is looking.
+/// `room.retain()` starts the `ARKitSession` about a second after
+/// launch, from the GALLERY, before any lab — and the only sentence in
+/// the app explaining why lived in a module's `firstRunHint`, which the
+/// user has not reached and may never render. So the system sheet was
+/// the first anyone heard of it, and a decline produced a warning
+/// triangle in a title bar they may never look at.
+///
+/// One line before, the real consequence after, both in the window the
+/// user is actually facing at that moment. The sentences are
+/// `RoomModel.Sensing`'s, shared with the module title bar.
+struct RoomSensingNote: View {
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        let sensing = appModel.room.sensing
+        Group {
+            if sensing == .fine {
+                Label(RoomModel.Sensing.preExplanation, systemImage: "arkit")
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.tertiary)
+            } else {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label(sensing.headline, systemImage: "exclamationmark.triangle.fill")
+                        .font(DesignTokens.TypeScale.footnote.weight(.semibold))
+                        .foregroundStyle(.orange)
+                    Text(sensing.detail)
+                        .font(DesignTokens.TypeScale.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: 500, alignment: .leading)
+        .multilineTextAlignment(.leading)
+        .accessibilityElement(children: .combine)
     }
 }
 

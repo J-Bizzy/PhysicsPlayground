@@ -16,6 +16,105 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-07 — The front door gets a handle; the window stops going blank
+
+**Decision:** Phase 1 of the audit arc. Every item is a first-ninety-
+seconds failure with no recovery, and each one was a capability with
+zero paths or one.
+
+- **An ENTER plaque on every puck.** A small machined slab in the
+  module's accent, standing on the terrace in front of each plinth.
+  Gaze plus a pinch, nothing to aim or carry. The carry-to-the-pad stays
+  as the ceremony and the podium hint now teaches it rather than being
+  the only instruction.
+- **The window keeps a compact catalog and `AppProgressLine` at all
+  times**, instead of going blank the moment the Gallery opens — which
+  is half a second after launch, every launch.
+- **`HubDomain.promise` finally has a reader**: one line of "what you
+  actually do here" under the focused exhibit's name, gated on focus so
+  at most one is ever on screen.
+- **The palette bead gains `home` and `dim`**, and its petal row width
+  is now DERIVED from the count.
+- **The room-sensing explanation moved onto `RoomModel.Sensing`** and is
+  said in the hub window — one line before the ask, the real consequence
+  and its remedy after a refusal.
+- **The first-run teach is mounted in the room** beside the apparatus,
+  dismissed by a pinch, sharing `seenHints` with the flat one.
+- **`dismissImmersiveSpace` exists.** It appeared zero times in the app
+  target.
+
+**Context:** DECISIONS 2026-07-29 removed tap-to-enter because "entering
+by tap made the whole gallery one large accidental-activation surface
+while merely looking around", and in the same entry made the podium and
+the focus panel's Load button an explicit pair: *"the podium is the
+delightful path; the button is the reachable one, and neither may be
+deleted without the other changing."* The panel was deleted on
+2026-08-04 and the podium did not change. For three days the only way
+into a lab was a sustained ~1.1 m pinch-drag onto a 0.105 m pad, and the
+flat catalog that is this app's whole answer to "nothing may be
+reachable only in space" was hidden for the entire time the app was in
+its normal state.
+
+The plaque answers the 2026-07-29 objection rather than ignoring it: the
+accidental-activation surface was the exhibit itself, a 0.27 m object
+you are meant to look at, and this is a separate 0.11 m sign you have to
+look AT. A tap on the exhibit still does not enter.
+
+**Consequences:** Where the plaque STANDS was measured, not reasoned,
+and the measurement changed the design. The puck is 0.17 m across and
+the exhibit's own touch target is a 0.27 m box, so the whole puck top is
+inside it — a plaque there is a plaque whose pinches the exhibit wins.
+Dropping it low enough to clear vertically sinks it into the terrace, so
+it stands forward of the plinth and clears on z. The new
+`testGalleryExhibitTargetsDoNotOverlapEachOther` caught all of that on
+the first run, and caught a later attempt to fold the name plate into
+the exhibit's target (the plate carries the module TITLE, which is wider
+than the 0.36 m puck pitch on its own).
+
+Six petals on the bead is not six more objects: a folded ring stands for
+nothing, and the real cost is the row's width when open. That width was
+a literal 0.22 m carrying a comment that it had been "widened from 0.17
+when the fourth petal arrived" — the clock-bank defect exactly, one
+count later. A fifth petal would have pitched at 0.055 m against a
+0.068 m target. It is derived now, with a criterion test.
+
+**Still open:** the in-room teach and the promise line are new standing
+objects in rooms this project is trying to quieten, and the owner's
+2026-08-07 direction is that Gravity Lab in particular is "way too
+cluttered". Both are focus- or once-gated for that reason, and neither
+is in Gravity Lab's own instrument set — but the count is the count, and
+Phase 2's container work is where it gets paid back.
+
+## 2026-08-04 → 2026-08-06 — The entries that were never written
+
+**Decision:** Recorded late, on 2026-08-07, because the log had none at
+all for these three days and its own 2026-08-03 entry diagnoses exactly
+this drift. What happened, from the commits and the code:
+
+- **2026-08-04 — the focus panel was deleted.** `HubFocusPanel` carried
+  the domain chip, the promise line, the progress dial, the New badge
+  and the Enter button. Names also stopped fading on unfocus at the
+  owner's direction, on the grounds that a gallery whose captions vanish
+  until you stare at them cannot be read at a glance.
+- **2026-08-05 — the visual polish pass**, ten commits: the material
+  canon test, backed labels, `Fade`/shadows/pulse, `PlateStyle`, the
+  store-copy criterion.
+- **2026-08-06 — three projectile bounce fixes**, backed labels on by
+  default, and `docs/CIRCUITS_DESIGN_REVIEW.md`.
+
+**Context:** The panel's deletion is the one that mattered and the one
+that went unrecorded. It took with it the only reachable way into a lab
+and the only reader `HubDomain.promise` had, and because nothing was
+written down, both losses were invisible until the 2026-08-07 audit
+went looking. The entry that should have been written on the day would
+have had to answer 2026-07-29's "neither may be deleted without the
+other changing", and answering it is what would have caught this.
+
+**Consequences:** Both losses are repaired above. The rule this
+re-states: deleting a surface is not a small change if anything was
+displayed ON it — the content survives compilation and dies silently,
+which is the shape of every item in the audit's dead-content table.
+
 ## 2026-08-07 — The collider rule, the fan span and the press-vs-tap all stop being matters of attention
 
 **Decision:** The Phase 0 pass of the 2026-08-07 audit arc. Nine

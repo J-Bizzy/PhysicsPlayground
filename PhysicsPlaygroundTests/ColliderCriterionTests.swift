@@ -356,6 +356,35 @@ final class ColliderCriterionTests: XCTestCase {
         }
     }
 
+    /// THE PALETTE'S PETAL ROW, at every count it could plausibly reach.
+    ///
+    /// This is the clock-bank defect's other home. The row's width was a
+    /// literal 0.22 m carrying a comment that it had been "widened from
+    /// 0.17 when the fourth petal arrived" — hand-tuned for a count, in
+    /// a list that grows. At 0.22 m a fifth petal pitches at 0.055 m and
+    /// a sixth at 0.044 m, against a 0.068 m touch target: both
+    /// unaimable, both looking perfectly reasonable in a screenshot.
+    /// Two petals were added on 2026-08-07.
+    func testThePetalRowFitsEveryCountItCouldReach() {
+        for count in 2...10 {
+            let span = Palette.petalRowSpan(count: count)
+            let pitch = span / Float(count - 1)
+            XCTAssertGreaterThan(
+                pitch, Palette.petalColliderSpan,
+                String(format: "%d petals pitch at %.4f m against a %.3f m touch "
+                       + "target — adjacent petals cannot be told apart by a "
+                       + "pinch.", count, pitch, Palette.petalColliderSpan))
+        }
+    }
+
+    /// …and the row must stay reachable. A petal you have to walk to is
+    /// not on a bead you are holding.
+    func testThePetalRowStaysWithinArmsReach() {
+        XCTAssertLessThan(Palette.petalRowSpan(count: 6), 0.60,
+                          "six petals need a row wider than a comfortable "
+                          + "two-handed sweep")
+    }
+
     /// The placement puck is the object you move a whole lab with, and
     /// it stands among the lab's own apparatus.
     func testLabPlacementPuckCollidersFit() {
