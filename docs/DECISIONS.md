@@ -31,13 +31,19 @@ test enforces:
   is one degree of freedom and `atan2` is exact.
 - **`ColliderCriterionTests`** walks every `CollisionComponent` in a
   scene built from each of the six modules, the gallery, the design
-  system's primitives and the placement puck, and fails any shape
-  larger than its entity's own visual bounds by more than
-  `max(×1.15, +30 mm)`. It found violations in every module and the
-  gallery; the worst was a 0.52 m sphere on a 12 mm capacitor plate,
-  which made every charge inside the capacitor unpinchable.
-  `Grabbable` gained `box:` and `matchingVisualBoundsOf:` overloads,
+  system's primitives and the placement puck, and fails any shape more
+  than `max(×1.15, +30 mm)` larger than its entity's own visual bounds,
+  measured in WORLD METRES — shielding is a property of the room, and
+  the two frames diverge wherever an entity is scaled per instance. It
+  found violations in every module and the gallery; the worst was a
+  0.52 m sphere on a 12 mm capacitor plate, which made every charge
+  inside the capacitor unpinchable. `Grabbable` gained `box:`,
+  `matchingVisualBoundsOf:` and `sphereTargetRadius(baseRadius:scale:)`,
   because sphere-only was what forced the rule to be broken.
+  A SECOND criterion sits beside it —
+  `testGalleryExhibitTargetsDoNotOverlapEachOther` — because the first
+  cannot police a collider derived from the very bounds it is measured
+  against. See the two review rounds below.
 - **`FanLayout.spread(count:itemSpan:reach:…)`** derives a fan's span
   from how many things are in it and how wide their touch targets are.
   Gravity Lab's clock bank was hand-tuned for four discs and its array
