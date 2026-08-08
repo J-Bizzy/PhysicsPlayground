@@ -732,22 +732,66 @@ final class FieldModel {
     struct ProbeReadout {
         var fieldMagnitude: Double   // N/C
         var potential: Double        // V
+        /// |q(E + v×B)| — the force actually pushing the probe.
         var forceMagnitude: Double   // N
+        /// |qE| on its own.
+        var electricForce: Double    // N
+        /// |q v×B| on its own — zero unless the probe is MOVING across
+        /// a field, which is the whole of what makes it magnetic.
+        var magneticForce: Double    // N
         var acceleration: Double     // m/s²
         var speed: Double            // m/s
     }
 
+    /// What the card says about the probe.
+    ///
+    /// THE CARD USED TO REPORT THE ELECTRIC FORCE WHILE THE HEADLINE
+    /// DEMO WAS MAGNETIC. `stepProbe` pushes the probe with the full
+    /// Lorentz force F = q(E + v×B) — correctly — and this computed
+    /// `|q||E|` and called it the force. Switch Uniform B on with no
+    /// charges in the room and the card read `Force 0.00 N` while the
+    /// probe visibly circled in front of you at a = v²/r ≈ 0.35 m/s².
+    /// The one number that could have explained the orbit said there
+    /// was nothing happening.
+    ///
+    /// It reports BOTH TERMS SEPARATELY now, because the split is the
+    /// lesson rather than a formatting choice: qE does not depend on
+    /// motion and points along the field, q v×B vanishes when the probe
+    /// stops and is always perpendicular to its path. Seeing the second
+    /// one appear as the probe speeds up, and the first stay put, is
+    /// what tells you why one field pushes and the other steers.
     var probeReadout: ProbeReadout? {
         guard let probe else { return nil }
-        let fieldMagnitude = simd_length(fieldVector(at: probe.position))
-        let force = abs(probeQ) * fieldMagnitude
+        let electric = fieldVector(at: probe.position)
+        let magnetic = simd_cross(probe.velocity, magneticField)
+        let electricForce = probeQ * electric
+        let magneticForce = probeQ * magnetic
+        let net = electricForce + magneticForce
         return ProbeReadout(
-            fieldMagnitude: fieldMagnitude,
-            potential: ElectricField.potential(at: probe.position, dueTo: charges),
-            forceMagnitude: force,
-            acceleration: force / probeM,
+            fieldMagnitude: simd_length(electric),
+            // THE CAPACITOR COUNTS TOWARD THE POTENTIAL TOO. `fieldVector`
+            // includes the plates and this did not, so the card could show
+            // a large E beside `0.00 V` — the one thing a potential cannot
+            // be. Between the plates the field is uniform, so the work per
+            // coulomb from the centre is just −E·(r − centre).
+            potential: ElectricField.potential(at: probe.position, dueTo: charges)
+                + capacitorPotential(at: probe.position),
+            forceMagnitude: simd_length(net),
+            electricForce: simd_length(electricForce),
+            magneticForce: simd_length(magneticForce),
+            acceleration: simd_length(net) / probeM,
             speed: simd_length(probe.velocity)
         )
+    }
+
+    /// The plates' contribution to the potential, V, taking the
+    /// capacitor's centre as the datum — the same convention
+    /// `ElectricField.potential` uses for a point charge at infinity, in
+    /// the only place a uniform field allows one.
+    func capacitorPotential(at point: SIMD3<Double>) -> Double {
+        let field = capacitorField(at: point)
+        guard field != .zero else { return 0 }
+        return -simd_dot(field, point - capacitorCenter)
     }
 
     // MARK: Selected-charge bindings for the charge's control ring

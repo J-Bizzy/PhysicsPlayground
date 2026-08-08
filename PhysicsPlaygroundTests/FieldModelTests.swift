@@ -401,4 +401,89 @@ final class FieldModelTests: XCTestCase {
     // (Electron mode's realistic-field test left with the mode itself on
     // 2026-08-03 — the probe is always the charged ball now. Git history
     // holds the e/m coverage.)
+
+    // MARK: What the card says about the probe
+
+    /// THE CARD REPORTED THE ELECTRIC FORCE WHILE THE DEMO WAS MAGNETIC.
+    ///
+    /// `stepProbe` pushes the probe with the full Lorentz force
+    /// q(E + v×B) — correctly — and `probeReadout` computed `|q||E|` and
+    /// called it "Force". Switch Uniform B on with no charges in the
+    /// room and the card read `Force 0.00 N` while the probe visibly
+    /// circled in front of you. The one number that could have explained
+    /// the orbit said nothing was happening.
+    func testTheCardReportsTheMagneticForceOnACirclingProbe() throws {
+        let model = FieldModel()
+        model.removeAllCharges()
+        model.magneticFieldOn = true
+        model.magneticFieldTesla = 5e4
+        model.dropProbe()
+        for _ in 0..<10 { model.stepProbe(dt: 1.0 / 90.0) }
+
+        let readout = try XCTUnwrap(model.probeReadout)
+
+        // No charges and no plates, so there is genuinely no E.
+        XCTAssertEqual(readout.electricForce, 0, accuracy: 1e-18,
+                       "there is no electric field here")
+        // …and the probe is nonetheless being pushed, hard enough to
+        // bend it into a circle.
+        XCTAssertGreaterThan(readout.magneticForce, 0,
+                             "a moving charge in a magnetic field feels q v×B; "
+                             + "reporting zero is why the orbit was unexplained")
+        XCTAssertEqual(readout.forceMagnitude, readout.magneticForce,
+                       accuracy: readout.magneticForce * 1e-9,
+                       "with no E, the whole force is magnetic")
+
+        // The acceleration the card quotes must be the one the probe is
+        // actually undergoing: a = v²/r for circular motion.
+        let speed = readout.speed
+        let expected = speed * speed / model.cyclotronRadius
+        XCTAssertEqual(readout.acceleration, expected, accuracy: expected * 0.05,
+                       "the quoted acceleration is not the one bending the path")
+    }
+
+    /// A STATIONARY probe feels no magnetic force, which is the other
+    /// half of the same lesson — and the reason the split is worth
+    /// showing rather than folding into one number.
+    func testAStationaryProbeFeelsNoMagneticForce() throws {
+        let model = FieldModel()
+        model.removeAllCharges()
+        model.magneticFieldOn = true
+        model.magneticFieldTesla = 5e4
+        model.dropProbe()
+        // `holdProbe` is the grab path: it parks the probe and zeroes
+        // its velocity, which is exactly the state this is about.
+        model.holdProbe(at: model.samplingRegion.center)
+
+        let readout = try XCTUnwrap(model.probeReadout)
+        XCTAssertEqual(readout.speed, 0, accuracy: 1e-12)
+        XCTAssertEqual(readout.magneticForce, 0, accuracy: 1e-18,
+                       "q v×B is zero when v is zero")
+    }
+
+    /// A LARGE FIELD BESIDE `0.00 V` IS THE ONE THING A POTENTIAL CANNOT
+    /// BE. `fieldVector` includes the capacitor plates and the card's
+    /// potential did not, so between the plates the card showed a strong
+    /// E and no potential difference from anywhere to anywhere.
+    func testThePotentialIncludesTheCapacitor() throws {
+        let model = FieldModel()
+        model.removeAllCharges()
+        model.capacitorOn = true
+        model.dropProbe()
+
+        // Off-centre along the field axis, where a uniform field must
+        // show a potential difference from the centre.
+        let offset = SIMD3<Double>(model.plateSeparation / 4, 0, 0)
+        model.holdProbe(at: model.capacitorCenter + offset)
+        let readout = try XCTUnwrap(model.probeReadout)
+
+        XCTAssertGreaterThan(readout.fieldMagnitude, 0,
+                             "the plates should make a field here")
+        XCTAssertEqual(
+            readout.potential,
+            -simd_dot(model.capacitorField(at: model.capacitorCenter + offset), offset),
+            accuracy: 1e-9)
+        XCTAssertNotEqual(readout.potential, 0,
+                          "a strong E beside 0.00 V is not a thing a field can do")
+    }
 }

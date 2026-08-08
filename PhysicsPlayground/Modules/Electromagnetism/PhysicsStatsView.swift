@@ -26,12 +26,25 @@ struct PhysicsStatsView: View {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                     statRow("E field", PhysicsFormat.scientific(readout.fieldMagnitude), "N/C")
                     statRow("Potential", PhysicsFormat.scientific(readout.potential), "V")
-                    statRow("Force", PhysicsFormat.scientific(readout.forceMagnitude), "N")
+                    // THE TWO TERMS, SEPARATELY, because the split is
+                    // the lesson. qE does not depend on motion and points
+                    // along the field; q v×B vanishes when the probe stops
+                    // and is always perpendicular to its path. One row
+                    // reading `Force` used to carry only the first, so a
+                    // probe circling in a pure magnetic field reported
+                    // `0.00 N` while visibly accelerating.
+                    statRow("Force qE", PhysicsFormat.scientific(readout.electricForce), "N")
+                    if model.magneticFieldOn {
+                        statRow("Force qv×B",
+                                PhysicsFormat.scientific(readout.magneticForce), "N")
+                    }
+                    statRow("Force total",
+                            PhysicsFormat.scientific(readout.forceMagnitude), "N")
                     statRow("Acceleration", PhysicsFormat.fixed(readout.acceleration), "m/s²")
                     statRow("Speed", PhysicsFormat.fixed(readout.speed), "m/s")
                 }
 
-                Text("Test charge: q = \(model.probeIsPositive ? "+" : "−")\(model.probeChargeMagnitude * 1e9, specifier: "%.0f") nC, m = 0.5 g.  F = qE, a = F/m.")
+                Text("Test charge: q = \(model.probeIsPositive ? "+" : "−")\(model.probeChargeMagnitude * 1e9, specifier: "%.0f") nC, m = 0.5 g.  F = q(E + v×B), a = F/m.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
