@@ -19,7 +19,8 @@
 //  reflection in any way that would fail loudly. Reading the file is
 //  crude, but it fails for the right reason and names the line.
 //
-//  The rule: nothing under `PhysicsPlayground/Modules` constructs a
+//  The rule: nothing under Modules, Hub, DesignSystem or Shell
+//  constructs a
 //  `SimpleMaterial`. A part is `energized` (lit energy), `machined` or
 //  `graphite` (built things), `glossy` (display type), `frostedGlass` /
 //  `glassEdge` (instruments), `contrastLine` / `luminous` (lines and
@@ -38,38 +39,53 @@ final class MaterialCanonCriterionTests: XCTestCase {
     /// than skipping when the tree is unreachable: every check below is
     /// a negative one, and a negative assertion over a missing directory
     /// passes vacuously.
-    private func moduleDirectory() throws -> URL {
+    /// EVERY SHIPPING SURFACE, not just the modules.
+    ///
+    /// This scanned `Modules/` alone, which left the two directories
+    /// that DEFINE the canon outside the only test enforcing it — and
+    /// the gallery, the first surface every user sees, was in neither.
+    /// `Hub/HubSpaceView` hand-rolled the exact pale-glass recipe the
+    /// rule exists to ban.
+    private func scanRoots() throws -> [URL] {
         let thisFile = URL(fileURLWithPath: #filePath)
         // …/PhysicsPlayground/PhysicsPlaygroundTests/ThisFile.swift
-        let project = thisFile.deletingLastPathComponent()
+        let app = thisFile.deletingLastPathComponent()
             .deletingLastPathComponent()
-        let modules = project
             .appendingPathComponent("PhysicsPlayground")
-            .appendingPathComponent("Modules")
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: modules.path,
-                                             isDirectory: &isDirectory),
-              isDirectory.boolValue else {
-            XCTFail("""
-                The module source is not reachable from \(thisFile.path), so \
-                every check in this file would pass without reading anything. \
-                If the tree moved, fix this path — do not let it skip.
-                """)
-            throw XCTSkip("source tree not reachable")
+        let roots = ["Modules", "Hub", "DesignSystem", "Shell"]
+            .map { app.appendingPathComponent($0) }
+        for root in roots {
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: root.path,
+                                                 isDirectory: &isDirectory),
+                  isDirectory.boolValue else {
+                XCTFail("""
+                    \(root.lastPathComponent) is not reachable from \
+                    \(thisFile.path), so every check in this file would pass \
+                    without reading it. If the tree moved, fix this path — do \
+                    not let it skip.
+                    """)
+                throw XCTSkip("source tree not reachable")
+            }
         }
-        return modules
+        return roots
     }
 
     /// Every Swift file under `PhysicsPlayground/Modules`. Deliberately
     /// NOT `Archive/` — cut modules keep their physics outside the build
     /// and are not shipping surfaces.
     private func moduleSources() throws -> [URL] {
-        let modules = try moduleDirectory()
-        return FileManager.default.enumerator(
-            at: modules, includingPropertiesForKeys: nil)?
-            .compactMap { $0 as? URL }
-            .filter { $0.pathExtension == "swift" }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
+        try scanRoots().flatMap { root in
+            FileManager.default.enumerator(
+                at: root, includingPropertiesForKeys: nil)?
+                .compactMap { $0 as? URL }
+                .filter { $0.pathExtension == "swift" }
+                // `Materials` IS the canon, so it necessarily contains
+                // every recipe the rest of the app is forbidden to
+                // hand-roll. Same for the two tests' own fixtures.
+                .filter { $0.lastPathComponent != "Materials.swift" } ?? []
+        }
+        .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
     /// The anchor. A suite of negative checks needs a positive one

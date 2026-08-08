@@ -16,6 +16,56 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-07 — Three accents measured against reserved hues, and two of them are a decision for the owner
+
+**Decision:** `MaterialCanonCriterionTests` now scans `Hub/`,
+`DesignSystem/` and `Shell/` as well as `Modules/` — the two directories
+that DEFINE the canon were outside the only test enforcing it, and so
+was the gallery, the first surface every user sees. It passes: there is
+no `SimpleMaterial` in any of them.
+
+**The colour work is NOT done, and the measurements are why.** Audit 3.5
+says `electrostaticsAccent` (1.0, 0.84, 0.04) is the reserved completion
+gold (1.0, 0.84, 0.25) and should be shifted. Measured in CIE Lab:
+
+| pair | ΔE |
+|---|---|
+| `kinematicsAccent` ↔ `VectorPalette.acceleration` | **5.1** |
+| `completionGold` ↔ `electrostaticsAccent` | 11.6 |
+| `gravityAccent` (indigo) ↔ `VectorPalette.velocity` | 19.5 |
+
+The audit named the middle one. **The worst is one it mentions only
+obliquely** — Mechanics' door hue #FF9F0A and the acceleration arrow's
+`.systemOrange` are 5.1 apart, which is barely a perceptible difference,
+and Projectiles draws acceleration arrows in its own accent's colour.
+Gravity Lab has the same problem with velocity at 19.5.
+
+**Why none of it was changed.** Each of the three is a different kind of
+decision and none of them is mine to take alone:
+
+- Shifting `electrostaticsAccent` away from gold means moving a module's
+  identity hue, and gold IS yellow — getting ΔE 20 from it while
+  remaining recognisably "the yellow lab" may not be possible. The
+  alternative is moving `completionGold`, which appears on every
+  progress ring in the gallery.
+- Fixing the acceleration collision means changing either the Mechanics
+  DOOR (brand) or the acceleration arrow (a shared physics vocabulary
+  used in every module). Both are wider than the defect.
+
+A test was deliberately NOT written for these. A criterion whose
+threshold has to be lowered until it passes is a listing test wearing a
+criterion's clothes, and this arc has already produced four green tests
+that proved nothing. The numbers are here so the decision can be taken
+on evidence; the test goes in with the fix.
+
+**Also unaddressed, and recorded rather than guessed:** audit P2-6 says
+the hub hand-rolls the glass recipe the design system bans. The rule
+that actually exists bans `SimpleMaterial` and explicitly permits a
+`PhysicallyBasedMaterial` "whose values are a stated decision" — which
+is what `HubSpaceView` builds, without the stated decision. That is a
+real gap, but closing it changes how the gallery bar and podium look,
+and nothing in this arc has been seen on device yet.
+
 ## 2026-08-07 — Gravity Lab folds: a tab that is both the summary and the door
 
 **Decision:** Owner's direction — *"the gravity lab is way too cluttered
