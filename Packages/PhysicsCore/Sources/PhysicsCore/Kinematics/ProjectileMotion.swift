@@ -134,6 +134,27 @@ public enum ProjectileMotion {
     /// with `restitution` until the bounce budget or the energy runs out.
     /// Ground crossings are linearly interpolated inside the step, so
     /// range and flight time don't quantize to the step size.
+    ///
+    /// `radius` IS NOT OPTIONAL DECORATION — pass the ball's. This
+    /// function draws Projectiles' predicted arc, and "predicted arc,
+    /// bounces included" is that module's central claim, so any way in
+    /// which it disagrees with the live flight is a white line promising
+    /// something the ball then fails to do. It disagreed in three ways
+    /// until 2026-08-07, all of them from treating the projectile as a
+    /// point:
+    ///
+    /// · it struck walls with `radius: 0`, so the arc cornered at the
+    ///   wall plane while a basketball (r = 0.121 m) turns 12 cm short
+    ///   of it;
+    /// · it bounced the ball's CENTRE off y = 0 rather than its surface,
+    ///   so every floor contact was drawn 12 cm too low;
+    /// · it discarded `hit.t`, so the remainder of the frame after a
+    ///   bounce was never spent — the exact defect `RoomWalls.Hit.t`'s
+    ///   own doc says "deadened every fast bounce", fixed in the live
+    ///   model on 2026-08-06 and not here.
+    ///
+    /// Each error compounds into the next segment, so by the second
+    /// bounce the arc and the ball are visibly different curves.
     public static func simulate(
         from start: SIMD3<Double> = .zero,
         launchVelocity: SIMD3<Double>,
@@ -142,6 +163,7 @@ public enum ProjectileMotion {
         restitution: Double = 0,
         maxBounces: Int = 0,
         walls: [RoomWalls.Wall] = [],
+        radius: Double = 0,
         timeStep: Double = 1.0 / 240.0,
         maxDuration: Double = 30,
         pointStride: Int = 4
@@ -169,20 +191,29 @@ public enum ProjectileMotion {
             if !walls.isEmpty, bounces < maxBounces,
                let hit = RoomWalls.strike(
                    previous: previous.position, current: state.position,
-                   velocity: state.velocity, radius: 0,
+                   velocity: state.velocity, radius: radius,
                    restitution: restitution, walls: walls) {
                 bounces += 1
                 points.append(hit.position)
-                state = ParticleDynamics.State(position: hit.position, velocity: hit.velocity)
+                // Spend what is left of the step, as the live model
+                // does. Dropping it leaves the ball at the contact point
+                // for a whole frame, which reads as the bounce sticking.
+                let remaining = timeStep * (1 - hit.t)
+                state = ParticleDynamics.State(
+                    position: hit.position + hit.velocity * remaining,
+                    velocity: hit.velocity)
             }
 
-            // Crossed the ground going down.
-            if state.position.y < 0, state.velocity.y < 0 {
+            // Touched the ground going down — the ball's SURFACE, so a
+            // basketball rests on the floor rather than half through it.
+            if state.position.y < radius, state.velocity.y < 0 {
                 let dip = previous.position.y - state.position.y
-                let fraction = dip > 0 ? previous.position.y / dip : 0
-                let contact = previous.position + fraction * (state.position - previous.position)
-                let contactTime = time - timeStep + fraction * timeStep
-                points.append(SIMD3(contact.x, 0, contact.z))
+                let fraction = dip > 0 ? (previous.position.y - radius) / dip : 0
+                let clamped = min(max(fraction, 0), 1)
+                let contact = previous.position
+                    + clamped * (state.position - previous.position)
+                let contactTime = time - timeStep + clamped * timeStep
+                points.append(SIMD3(contact.x, radius, contact.z))
                 if firstContact == nil {
                     firstContact = (contact, contactTime)
                 }
@@ -191,7 +222,7 @@ public enum ProjectileMotion {
                 if bounces < maxBounces, reboundSpeed > restSpeed {
                     bounces += 1
                     state = ParticleDynamics.State(
-                        position: SIMD3(contact.x, 0, contact.z),
+                        position: SIMD3(contact.x, radius, contact.z),
                         velocity: bounce(velocity: state.velocity, restitution: restitution)
                     )
                     continue

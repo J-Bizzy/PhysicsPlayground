@@ -241,6 +241,11 @@ final class KinematicsModel {
             restitution: projectile.restitution,
             maxBounces: 4,
             walls: respectRoomWalls ? roomWalls : [],
+            // THE BALL'S OWN RADIUS. Omitted, the arc is drawn for a
+            // point: with a basketball it corners 12 cm short of every
+            // wall and 12 cm below every floor bounce, and "predicted
+            // arc, bounces included" is this module's central claim.
+            radius: projectile.diameter / 2,
             maxDuration: 12
         )
     }

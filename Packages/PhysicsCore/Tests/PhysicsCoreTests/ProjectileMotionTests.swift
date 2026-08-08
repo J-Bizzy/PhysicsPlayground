@@ -209,4 +209,89 @@ final class ProjectileMotionTests: XCTestCase {
                        range(wind: .zero, air: false), accuracy: 1e-12,
                        "vacuum flights must ignore wind entirely")
     }
+
+    // MARK: The predicted arc is the ball's own path
+
+    /// "PREDICTED ARC, BOUNCES INCLUDED" IS THE MODULE'S CENTRAL CLAIM,
+    /// and until 2026-08-07 the white line and the ball were different
+    /// curves. `simulate` treated the projectile as a POINT three ways:
+    /// it struck walls with `radius: 0`, it bounced the centre off
+    /// y = 0, and it threw away `hit.t` so the rest of the frame after a
+    /// bounce was never spent.
+    ///
+    /// A basketball is 0.121 m in radius, so each of those is a 12 cm
+    /// error, and they compound into every later segment.
+    func testTheArcRestsOnTheBallsSurfaceNotItsCentre() {
+        let radius = 0.121
+        let path = ProjectileMotion.simulate(
+            from: SIMD3(0, 1.6, 0),
+            launchVelocity: SIMD3(3, 0, 0),
+            gravity: 9.81, restitution: 0.6, maxBounces: 3,
+            radius: radius)
+
+        for point in path.points {
+            XCTAssertGreaterThanOrEqual(
+                point.y, radius - 1e-9,
+                "the arc dips to \(point.y) — below the ball's own surface, so "
+                + "it is drawn through the floor")
+        }
+    }
+
+    /// A point projectile is still supported, and still lands on y = 0 —
+    /// so adding the parameter changed nothing for callers that have no
+    /// radius to give.
+    func testAZeroRadiusStillLandsOnTheFloor() throws {
+        let path = ProjectileMotion.simulate(
+            from: SIMD3(0, 1.6, 0),
+            launchVelocity: SIMD3(3, 0, 0),
+            gravity: 9.81)
+        let landing = try XCTUnwrap(path.landingPoint)
+        XCTAssertEqual(landing.y, 0, accuracy: 1e-9)
+    }
+
+    /// The ball turns at its SURFACE, not at the wall plane. A wall at
+    /// x = 2 stops a basketball's centre at x = 2 − r.
+    func testTheArcTurnsAtTheBallsSurfaceNotTheWallPlane() throws {
+        let radius = 0.121
+        // A wall at x = 2 facing back down −x, spanning z and y.
+        let wall = RoomWalls.Wall(
+            center: SIMD3(2, 1.5, 0), normal: SIMD3(-1, 0, 0),
+            uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0),
+            halfU: 3, halfV: 3)
+
+        let path = ProjectileMotion.simulate(
+            from: SIMD3(0, 1.5, 0),
+            launchVelocity: SIMD3(6, 0, 0),
+            gravity: 0, restitution: 1, maxBounces: 1,
+            walls: [wall], radius: radius)
+
+        let furthest = try XCTUnwrap(path.points.map { $0.x }.max())
+        XCTAssertEqual(furthest, 2 - radius, accuracy: 0.02,
+                       "the arc reached x = \(furthest); a ball of radius "
+                       + "\(radius) turns at \(2 - radius)")
+    }
+
+    /// AND IT KEEPS MOVING THROUGH THE BOUNCE. Discarding `hit.t` parks
+    /// the ball at the contact point for the remainder of the step,
+    /// which is what `RoomWalls.Hit.t`'s own doc calls deadening a fast
+    /// bounce. Measured as: after the turn, the arc has actually come
+    /// back off the wall.
+    func testTheArcSpendsTheRestOfTheFrameAfterABounce() throws {
+        // A wall at x = 2 facing back down −x, spanning z and y.
+        let wall = RoomWalls.Wall(
+            center: SIMD3(2, 1.5, 0), normal: SIMD3(-1, 0, 0),
+            uAxis: SIMD3(0, 0, 1), vAxis: SIMD3(0, 1, 0),
+            halfU: 3, halfV: 3)
+        let path = ProjectileMotion.simulate(
+            from: SIMD3(0, 1.5, 0),
+            launchVelocity: SIMD3(12, 0, 0),
+            gravity: 0, restitution: 1, maxBounces: 1,
+            walls: [wall], radius: 0.121, timeStep: 1.0 / 60)
+
+        let peak = try XCTUnwrap(path.points.map { $0.x }.max())
+        let lastPoint: SIMD3<Double> = try XCTUnwrap(path.points.last)
+        let last = lastPoint.x
+        XCTAssertLessThan(last, peak - 0.5,
+                          "the arc never came back off the wall")
+    }
 }
