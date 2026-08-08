@@ -69,7 +69,12 @@ public final class BackedLabel {
 
     /// The plate alone — for a caller composing its own glyphs (the
     /// callout) that still wants the one house backing.
-    static func backing(behind bounds: BoundingBox, size: CGFloat) -> ModelEntity {
+    /// Public since 2026-08-08: `CircuitsInsightCard` needs the same
+    /// plate behind a wrapped paragraph, and a second copy of the
+    /// inset-and-corner arithmetic is how two labels in one room end up
+    /// wearing different backings.
+    public static func backing(behind bounds: BoundingBox,
+                               size: CGFloat) -> ModelEntity {
         let padX = Float(size) * 0.5
         let padY = Float(size) * 0.44
         let width = (bounds.max.x - bounds.min.x) + padX * 2

@@ -217,14 +217,35 @@ public final class Callout {
 
     /// Generated text meshes are expensive; modules re-request the same
     /// strings constantly ("9.0 V", "45°"). Cache keyed by content+size.
-    public static func textMesh(_ text: String, size: CGFloat) -> MeshResource {
-        let key = "\(size)|\(text)"
+    /// `wrapWidth` in metres wraps the run at word boundaries; 0 leaves
+    /// it on one line.
+    ///
+    /// A SENTENCE NEEDS THIS AND A READING DOES NOT. Every caller until
+    /// 2026-08-08 passed a number or two words, so one line was always
+    /// right — and then Circuit Workshop's `insightText`, which is two
+    /// sentences of teaching, needed a surface. Unwrapped it renders as
+    /// a single run several metres wide, which is not a small problem
+    /// with the layout but a different object entirely.
+    public static func textMesh(_ text: String, size: CGFloat,
+                                wrapWidth: CGFloat = 0) -> MeshResource {
+        let key = "\(size)|\(wrapWidth)|\(text)"
         if let cached = cache[key] { return cached }
+        // The container has to be TALL, not tight: `generateText` clips
+        // to the frame rather than growing it, so a height guessed too
+        // small silently drops the last line of a paragraph. Ten lines'
+        // worth is more than any reading in this app and costs nothing —
+        // the mesh is bounded by the glyphs, not by the frame.
+        let frame = wrapWidth > 0
+            ? CGRect(x: -wrapWidth / 2, y: -size * 14,
+                     width: wrapWidth, height: size * 14)
+            : .zero
         let mesh = MeshResource.generateText(
             text,
             extrusionDepth: Float(size) * 0.06,
             font: .systemFont(ofSize: size, weight: .semibold),
-            alignment: .center)
+            containerFrame: frame,
+            alignment: .center,
+            lineBreakMode: wrapWidth > 0 ? .byWordWrapping : .byTruncatingTail)
         // Bounded so a module that formats a continuously-varying number
         // can't grow the cache without limit.
         if cache.count > 400 { cache.removeAll(keepingCapacity: true) }

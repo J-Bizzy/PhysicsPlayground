@@ -40,6 +40,10 @@ struct CircuitsSpaceView: View {
     /// standing eleven kinds of component in the room permanently —
     /// whether or not anybody was building. Owner's call 2026-08-08.
     @State private var drawer: PartsDrawer?
+
+    /// The running commentary — twelve writers and no readers until
+    /// 2026-08-08. See `CircuitsInsightCard`.
+    @State private var insight = CircuitsInsightCard()
     /// Which probe a hand is carrying, if either.
     @State private var probeDrag: CircuitsModel.ProbeSlot?
     /// Carrying the meter itself: where its case was when the hand closed
@@ -326,6 +330,14 @@ struct CircuitsSpaceView: View {
                         position: .zero,
                         spawn: { model.add(kind, at: $0) })
                 }
+            // ABOVE the build volume (`buildHalfExtents.y` is 0.48
+            // about y = 1.25, so parts top out at 1.73), not inside it.
+            // The card carries no collider, but a paragraph drawn
+            // through the middle of a circuit is its own problem.
+            insight.root.position = CircuitsRenderer.benchPivot
+                + SIMD3<Float>(0, 0.60, 0)
+            renderer.root.addChild(insight.root)
+
             let parts = PartsDrawer(partSpecs)
             parts.root.position = Self.drawerAnchor
             renderer.root.addChild(parts.root)
@@ -375,6 +387,11 @@ struct CircuitsSpaceView: View {
                     // new capability, not decoration: at the budget the
                     // tray's pinch did nothing at all and said nothing
                     // about it.
+                    insight.update(
+                        text: model.insightText,
+                        anchor: CircuitsRenderer.benchPivot
+                            + SIMD3<Float>(0, 0.60, 0),
+                        dt: event.deltaTime)
                     drawer?.update(
                         dt: event.deltaTime,
                         nearestHand: appModel.room.nearestFingertip(
