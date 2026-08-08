@@ -111,6 +111,58 @@ struct PlaygroundSpaceView: View {
                 .frame(width: 0, height: 0)
                 .onAppear { appModel.isImmersiveSpaceOpen = true }
                 .onDisappear { appModel.isImmersiveSpaceOpen = false }
+
+            // THE ONE PLACE VOICEOVER'S ACTIONS ARRIVE.
+            //
+            // Every plate, petal, disc, rail and well in six labs was
+            // announced, readable and impossible to operate: a grep for
+            // `systemActions` returned zero matches across the whole
+            // project, and since the window panels were deleted there is
+            // no fallback surface, so this app was six rooms of readouts
+            // with no controls in them.
+            //
+            // ONE subscription rather than six, because the routing is
+            // not per-module: `SpatialActionComponent` rides the entity
+            // that knows what to do, so this walks up from whatever was
+            // activated exactly as the gesture chains do. A module that
+            // grows a new control gets this for free — and a module that
+            // forgets is caught by `SpatialActionCriterionTests`, which
+            // fails any interactive primitive that cannot be operated.
+            AccessibilityActionRouter()
+        }
+    }
+}
+
+/// Delivers VoiceOver's actions to whichever control was activated.
+///
+/// A `RealityView` with nothing in it but two subscriptions: the events
+/// arrive on the scene, not on a view, and this is the smallest thing
+/// that can hold a scene subscription for as long as the space is open.
+///
+/// `.increment` and `.decrement` are one call with a sign, because a
+/// rail and a grip differ only in what a step means and only they know
+/// their own range — `SpatialActionComponent.adjust` takes the sign and
+/// the primitive turns it into `span / 20`.
+private struct AccessibilityActionRouter: View {
+    @State private var subscriptions: [EventSubscription] = []
+
+    var body: some View {
+        RealityView { content in
+            subscriptions = [
+                content.subscribe(to: AccessibilityEvents.Activate.self) { event in
+                    SpatialActions.activate(event.entity)
+                },
+                content.subscribe(to: AccessibilityEvents.Increment.self) { event in
+                    SpatialActions.adjust(event.entity, by: 1)
+                },
+                content.subscribe(to: AccessibilityEvents.Decrement.self) { event in
+                    SpatialActions.adjust(event.entity, by: -1)
+                },
+            ]
+        }
+        .onDisappear {
+            subscriptions.forEach { $0.cancel() }
+            subscriptions = []
         }
     }
 }

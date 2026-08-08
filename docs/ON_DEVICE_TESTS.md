@@ -658,6 +658,37 @@ otherwise.
       tabs, and the grid and field flow from the two plates that stayed.
       The point of the fold is that nothing was removed.
 
+### VoiceOver can operate the room (2026-08-07)
+
+**This needs a headset with VoiceOver on, and it is the first time any
+of it has ever worked.** Before this pass a grep for `systemActions`
+returned zero matches across the whole project: every plate, petal,
+disc, rail, well and grip was announced, readable, and impossible to
+press. With the window panels gone there was no fallback either, so the
+app was six rooms of readouts with no controls in them.
+
+- [ ] **A layer plate.** Any lab. Swipe to a plate — it should read its
+      name and whether it is showing or hidden — then double-tap.
+      The layer must toggle, and **the spoken value must change with
+      it.** (It used to read the LAUNCH state of thirty-five toggles for
+      the whole session, whatever you did to them.)
+- [ ] **A destructive plate still confirms.** `-openModule circuits`,
+      find Clear. The FIRST activation must only arm it — the value
+      should change to "armed — tap again to confirm" — and the second
+      must fire. Routing straight at the verb would hand the one user
+      who cannot see the plate light up a single-tap way to wipe a bench.
+- [ ] **An unavailable plate refuses.** A plate that is dim because its
+      action cannot happen should offer VoiceOver no action at all,
+      rather than accepting one and doing nothing.
+- [ ] **A summon handle.** `-openModule gravitylab`, swipe to Clock: it
+      should read "Clock", value "hidden", and double-tap should unfold
+      the fan and change the value to "showing".
+- [ ] **The labels are part of their plates.** With VoiceOver OFF, aim a
+      pinch at the WORD beside a plate rather than at the plate itself —
+      "Spacetime grid", "Field flow". It should flip the layer. The pill
+      sits outside the plate and carried no collider, so the word was a
+      hole you pinched straight through.
+
 ## Cross-cutting
 
 ### Phase 0 of the 2026-08-07 audit arc — mostly invisible, four things that are not

@@ -299,6 +299,11 @@ final class SpatialActionBank {
         let state = !available ? "unavailable"
             : (armed ? "armed — tap again to confirm" : "button")
         component.value = LocalizedStringResource(stringLiteral: state)
+        // Advertised only while the action can actually happen: a plate
+        // that refuses the tap must refuse it to VoiceOver too, or the
+        // one user who cannot see it go dim is the one who is told it
+        // will work.
+        component.systemActions = available ? [.activate] : []
         return component
     }
 
@@ -400,11 +405,30 @@ final class SpatialActionBank {
         // An oversized one here would shield the apparatus the bank
         // hangs beside — the `SpatialScaleHandle` failure, which made
         // whole modules silently non-interactive.
-        plate.components.set(CollisionComponent(
-            shapes: [.generateBox(size: [0.092, 0.056, 0.018])]))
+        let labelSpan = HubScene.namePlateWidth(action.label, size: Self.labelSize)
+        plate.components.set(CollisionComponent(shapes: [
+            .generateBox(size: [0.092, 0.056, 0.018]),
+            // The label is part of the target — see the twin of this in
+            // `SpatialLayerBank`. The pill sits `labelGap` past the
+            // plate's edge and carried no collider, so the word naming
+            // the verb was scenery you could pinch through.
+            .generateBox(size: [labelSpan + 0.010, Self.plateHeight * 0.8, 0.018])
+                .offsetBy(translation: [
+                    Self.plateWidth / 2 + Self.labelGap + labelSpan / 2, 0, 0,
+                ]),
+        ]))
         plate.components.set(HoverEffectComponent())
         plate.components.set(accessibility(for: action, armed: false,
                                            available: action.isAvailable()))
+        // VoiceOver's press goes through the SAME arm-then-fire path a
+        // pinch does, so a destructive verb still confirms rather than
+        // firing on the first activation.
+        plate.components.set(SpatialActionComponent(activate: { [weak plate] in
+            guard let plate,
+                  let index = self.plates.firstIndex(where: { $0.entity === plate })
+            else { return }
+            _ = self.press(index: index, on: plate)
+        }))
         plate.isEnabled = false
 
         return Plate(action: action, entity: plate, face: face,

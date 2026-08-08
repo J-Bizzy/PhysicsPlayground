@@ -53,7 +53,8 @@ final class SpatialLayerBank {
     private let layout: StackLayout
     private var reveal: Double = 0
     private var plates: [(layer: LayerSwitch, entity: ModelEntity,
-                          face: ModelEntity, paint: SIMD4<Float>?)] = []
+                          face: ModelEntity, paint: SIMD4<Float>?,
+                          spokenOn: Bool?)] = []
 
     init(accent: UIColor, layers: [LayerSwitch] = [],
          layout: StackLayout = StackLayout()) {
@@ -69,7 +70,7 @@ final class SpatialLayerBank {
         for layer in layers {
             let (plate, face) = makePlate(layer)
             root.addChild(plate)
-            plates.append((layer, plate, face, nil))
+            plates.append((layer, plate, face, nil, nil))
         }
         reveal = 0
         root.isEnabled = false
@@ -104,6 +105,16 @@ final class SpatialLayerBank {
             // rebuilds nothing — the same 90-times-a-second discipline
             // the instant repaint kept.
             let on = plates[index].layer.isOn()
+            // THE SPOKEN VALUE FOLLOWS THE LAMP. It was written once at
+            // construction and never again, so VoiceOver read the launch
+            // state of thirty-five display toggles forever — the one
+            // thing `SpatialActionBank` next door gets right, and has a
+            // test for.
+            if plates[index].spokenOn != on {
+                plates[index].spokenOn = on
+                SpatialActions.republish(value: on ? "showing" : "hidden",
+                                         on: plates[index].entity)
+            }
             let target = Fade.paint(on ? accent : UIColor(white: 0.30, alpha: 1),
                                     opacity: on ? 0.95 : 0.42)
             let painted = plates[index].paint
@@ -159,6 +170,7 @@ final class SpatialLayerBank {
     }
 
     private func makePlate(_ layer: LayerSwitch) -> (ModelEntity, ModelEntity) {
+        let labelSpan = HubScene.namePlateWidth(layer.label, size: Self.labelSize)
         // A pane of frosted glass, dark enough to hold its shape against
         // a lit wall — the plate still reads as one object when every
         // layer on it is switched off.
@@ -229,14 +241,28 @@ final class SpatialLayerBank {
         // Collider matched to the plate, per the collider-≤-visual rule —
         // an oversized one would shield the apparatus the bank hangs beside.
         plate.components.set(CollisionComponent(
-            shapes: [.generateBox(size: [0.092, 0.056, 0.016])]))
+            shapes: [
+                .generateBox(size: [0.092, 0.056, 0.016]),
+                // THE LABEL IS A HOLE WITHOUT THIS. The pill is placed
+                // OUTSIDE the plate — `labelGap` past its edge — and
+                // carried no collider, so the word "Field lines" was
+                // scenery you could pinch straight through while the
+                // plate it names sat next to it. A second box over the
+                // label's own extent, offset to where the label is.
+                .generateBox(size: [labelSpan + 0.010,
+                                    Self.plateHeight * 0.8, 0.016])
+                    .offsetBy(translation: [
+                        Self.plateWidth / 2 + Self.labelGap + labelSpan / 2, 0, 0,
+                    ]),
+            ]))
         plate.components.set(HoverEffectComponent())
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(stringLiteral: layer.label)
-        accessibility.value = LocalizedStringResource(
-            stringLiteral: layer.isOn() ? "showing" : "hidden")
-        plate.components.set(accessibility)
+        SpatialActions.attach(
+            to: plate, label: layer.label,
+            value: layer.isOn() ? "showing" : "hidden",
+            activate: { [weak plate] in
+                layer.toggle()
+                if let plate { SoundPalette.play(.pop, on: plate, volume: 0.35) }
+            })
         plate.isEnabled = false
         return (plate, face)
     }

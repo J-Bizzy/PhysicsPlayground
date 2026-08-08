@@ -177,11 +177,6 @@ final class SummonHandle {
         ]))
         tab.components.set(HoverEffectComponent())
 
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(stringLiteral: title)
-        accessibility.systemActions = [.activate]
-        tab.components.set(accessibility)
         applyLook()
     }
 
@@ -195,17 +190,18 @@ final class SummonHandle {
                 : Materials.machined(UIColor(white: 0.30, alpha: 1)),
         ]
         tab.position.z = isOpen ? -0.002 : 0
-        var accessibility = tab.components[AccessibilityComponent.self]
-            ?? AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(stringLiteral: title)
-        // RE-PUBLISHED ON EVERY CHANGE. `SpatialLayerBank` sets its
-        // component once at construction and never again, so VoiceOver
-        // reads the launch state of thirty-five toggles forever;
-        // `SpatialActionBank` does this correctly and has a test for it.
-        accessibility.value = LocalizedStringResource(
-            stringLiteral: isOpen ? "showing" : "hidden")
-        accessibility.systemActions = [.activate]
-        tab.components.set(accessibility)
+        // RE-PUBLISHED ON EVERY CHANGE, and wired to the same toggle the
+        // pinch takes.
+        //
+        // This declared `.activate` and had nothing behind it for its
+        // first hour — advertising an action it could not perform, which
+        // is worse than declaring none. `SpatialActionCriterionTests`
+        // caught it on its own first run, which is the argument for
+        // asserting "hit-testable and announced implies operable"
+        // rather than "declares systemActions".
+        SpatialActions.attach(
+            to: tab, label: title,
+            value: isOpen ? "showing" : "hidden",
+            activate: { [weak self] in _ = self?.handleTap(self?.tab ?? Entity()) })
     }
 }
