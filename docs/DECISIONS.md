@@ -16,7 +16,7 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
-## 2026-08-09 — The predicted arc and the ball are up to 9 cm apart in free flight (OPEN, UNEXPLAINED)
+## 2026-08-09 — The predicted arc and the ball diverge at ~3 m/s in free flight (OPEN, NARROWED)
 
 **Decision:** None. A measurement, and an admission that I could not
 account for it. No test was committed, because the only test I could
@@ -55,12 +55,38 @@ measure of agreement, in which case the metric is wrong and the arc is
 fine; or the two integrators genuinely drift, in which case the claim on
 the box is overstated.
 
+**UPDATE, same day — the experiment was run and it eliminated the
+innocent explanation.** Matching on SIMULATED time instead of
+nearest-point distance, walls off, `maxBounces` irrelevant because no
+bounce occurs in the window:
+
+    t = 0.100 s → 0.345 m      t = 0.400 s → 1.243 m
+    t = 0.200 s → 0.643 m      t = 0.500 s → 1.543 m
+
+Separation grows linearly at about 3.0 m/s against a 7.5 m/s launch,
+from a COMMON ORIGIN. Both controls check out: `points[0]` is exactly
+`muzzlePoint` (gap 0.00000), and the polyline's cadence is measured, not
+assumed — consecutive points are 0.1243 m apart at 7.5 m/s, an implied
+1/60.3 s against a nominal 1/60. `timeScale` is 1.0, so simulated and
+wall time coincide here.
+
+So it is not the metric, and it is not sampling. Two curves that leave
+the same point and drift apart linearly, sharing
+`ProjectileMotion.acceleration`, the same drag, gravity, radius and
+restitution, and both RK4 — the live model taking two substeps of dt/2
+per frame against the predictor's fixed 1/240.
+
+I did not find it, and I stopped rather than guess at the end of a long
+session. The next step is to print BOTH velocity vectors at t = 0.05 s:
+if they already differ, the inputs are not what they appear to be
+(different drag object, different aim, a stale `projectile`); if they
+agree and only the positions drift, it is integration.
+
 **Consequences:** the three P1-24 repairs are real and stay. Whether the
-arc a wearer sees is the ball's path to within a ball's width is
-UNKNOWN, and the number to beat is 0.09 m. Anyone picking this up should
-start by plotting predicted-vs-actual position at matched TIMES rather
-than nearest-point distance — that distinguishes the two candidates in
-one run.
+arc a wearer sees is the ball's path is UNKNOWN and now looks WORSE than
+the first measurement suggested: 0.345 m apart a tenth of a second after
+launch, not 0.09 m. If that holds up it is a visible defect in the
+module's headline claim, and it is not one of P1-24's three causes.
 
 ## 2026-08-09 — Circuit Workshop's bench is too wide for its own instruments (OPEN)
 
