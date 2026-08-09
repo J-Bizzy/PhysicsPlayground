@@ -49,6 +49,62 @@ public struct TubeBuffers: Sendable {
         return try? MeshResource.generate(from: [descriptor])
     }
 
+    /// Thins polylines that are sampled far finer than the tube they
+    /// will become, WITHOUT rounding off the corners.
+    ///
+    /// A field-line tracer integrates at a step chosen for the physics,
+    /// not for the mesh: Magnetism walks 8 mm steps to build a 1.6 mm
+    /// tube, so five points in six pay for vertices nobody can see. But
+    /// a plain "keep every Nth point" flattens exactly the places that
+    /// need the samples — loops crowd tightest where they wrap a pole,
+    /// and that is the shape a reader is reading.
+    ///
+    /// So the rule is distance OR turn, whichever comes first: a point
+    /// survives if it is `spacing` along the line from the last one
+    /// kept, or if the heading has swung `maximumTurn` since then.
+    /// Straight far-field runs — which is where the vertex count
+    /// actually lives — thin out by the full ratio; a tight near-pole
+    /// arc keeps every point it needs and no more. Ends are always
+    /// kept, so a loop still closes where it closed.
+    ///
+    /// - Parameters:
+    ///   - spacing: metres of arc between kept points on a straight run.
+    ///   - maximumTurn: radians of heading change that forces a keep.
+    public nonisolated static func decimated(
+        _ lines: [[SIMD3<Float>]], spacing: Float, maximumTurn: Float = .pi / 18
+    ) -> [[SIMD3<Float>]] {
+        guard spacing > 0 else { return lines }
+        let cosineLimit = cos(maximumTurn)
+        return lines.map { line in
+            guard line.count > 2 else { return line }
+            var kept: [SIMD3<Float>] = [line[0]]
+            var walked: Float = 0
+            // Heading as of the last kept point; zero until we have one.
+            var reference = SIMD3<Float>.zero
+
+            for index in 1..<(line.count - 1) {
+                let step = line[index] - line[index - 1]
+                let length = simd_length(step)
+                guard length > 1e-9 else { continue }
+                walked += length
+                let heading = step / length
+
+                let turned = reference == .zero
+                    ? false
+                    : simd_dot(heading, reference) < cosineLimit
+                if walked >= spacing || turned {
+                    kept.append(line[index])
+                    walked = 0
+                    reference = heading
+                } else if reference == .zero {
+                    reference = heading
+                }
+            }
+            kept.append(line[line.count - 1])
+            return kept
+        }
+    }
+
     /// Pure vertex math — safe on any thread.
     public nonisolated static func buffers(
         lines: [[SIMD3<Float>]], radius: Float = 0.0016, sides: Int = 5

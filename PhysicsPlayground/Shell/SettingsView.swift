@@ -28,7 +28,6 @@ struct SettingsView: View {
     static let windowID = "settings"
 
     @Environment(AppModel.self) private var appModel
-    @State private var confirmingProgressReset = false
 
     var body: some View {
         @Bindable var settings = appModel.settings
@@ -64,30 +63,9 @@ struct SettingsView: View {
                     caption("Every module's first-run hint appears once more.")
                 }
 
-                PanelSection("Progress") {
-                    Button("Reset experiment progress…", role: .destructive) {
-                        confirmingProgressReset = true
-                    }
-                    .buttonStyle(.podQuiet)
-                    caption("Clears every completed experiment and the streak. "
-                            + "There is no undo.")
-                }
             }
             .padding(DesignTokens.Panel.outerPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .confirmationDialog(
-            "Reset all experiment progress?",
-            isPresented: $confirmingProgressReset,
-            titleVisibility: .visible
-        ) {
-            Button("Reset everything", role: .destructive) {
-                appModel.experiments.resetAll()
-            }
-            Button("Keep my progress", role: .cancel) {}
-        } message: {
-            Text("Every completion mark and the streak are wiped. "
-                 + "The labs themselves are untouched.")
         }
     }
 

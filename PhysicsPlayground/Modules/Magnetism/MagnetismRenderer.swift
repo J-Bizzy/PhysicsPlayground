@@ -295,7 +295,42 @@ final class MagnetismRenderer {
     // the only silent module finally answers the hand.
 
     private var knownMagnetIDs: Set<UUID> = []
-    private var contactPairs: Set<String> = []
+    /// Which magnets are currently touching, so a thud plays once on
+    /// contact rather than every frame they stay together.
+    ///
+    /// KEYED ON A STRUCT, NOT A STRING. It was
+    /// `[a.id.uuidString, b.id.uuidString].sorted().joined(separator: "-")`
+    /// — and `UUID.uuidString` builds a fresh 36-character String every
+    /// access, so each pair cost two Strings, an array, a sorted array
+    /// and a joined String, then hashed 72 characters to look it up.
+    /// This loop is O(n²) over the bench and runs every frame: eight
+    /// magnets is 28 pairs, so 140 allocations a frame to answer a
+    /// question about two UUIDs that were already in hand.
+    private struct ContactPair: Hashable {
+        let a: UUID, b: UUID
+
+        init(_ a: UUID, _ b: UUID) {
+            self.a = a
+            self.b = b
+        }
+
+        /// SYMMETRIC rather than sorted, which is what `sorted()` was
+        /// buying. Ordering the two would mean comparing UUIDs, and the
+        /// only ordering `UUID` offers out of the box is on
+        /// `uuidString` — the allocation this type exists to remove.
+        /// Equality and the hash ignore which one arrived first, so the
+        /// pair is one key either way round without ever ordering it.
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            (lhs.a == rhs.a && lhs.b == rhs.b)
+                || (lhs.a == rhs.b && lhs.b == rhs.a)
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(a.hashValue ^ b.hashValue)
+        }
+    }
+
+    private var contactPairs: Set<ContactPair> = []
 
     private func tickSounds(_ model: MagnetismModel) {
         let ids = Set(model.magnets.map(\.id))
@@ -309,10 +344,10 @@ final class MagnetismRenderer {
         knownMagnetIDs = ids
 
         let contact = MagnetismModel.magnetLength * 0.98
-        var current: Set<String> = []
+        var current: Set<ContactPair> = []
         for (index, a) in model.magnets.enumerated() {
             for b in model.magnets.dropFirst(index + 1) {
-                let key = [a.id.uuidString, b.id.uuidString].sorted().joined(separator: "-")
+                let key = ContactPair(a.id, b.id)
                 if simd_distance(a.position, b.position) < contact {
                     current.insert(key)
                     if !contactPairs.contains(key), let entity = magnetEntities[a.id] {
@@ -545,7 +580,26 @@ final class MagnetismRenderer {
             center: MagnetismModel.regionCenter,
             halfExtents: SIMD3(2.2, 1.2, 2.2),
             budget: lineBudget(forStrength: strongest))
-        let lines = traced.map { $0.map(SIMD3<Float>.init) }
+        // THIN THE POLYLINES BEFORE THEY BECOME TUBES.
+        //
+        // The tracer walks `stepSize` = 8 mm because that is what the
+        // integration wants; the tube it feeds has a 1.6 mm radius, and
+        // three of them are built from the same lines. At the top of
+        // the range — 48 loops that each ran the full 2400 steps — that
+        // is roughly 576 000 vertices per tube, uploaded on the main
+        // actor, three times.
+        //
+        // `decimated` keeps every point a curve needs and drops the
+        // ones a straight run does not, which is the right trade here
+        // because the budget is spent on LONG loops and long loops are
+        // the far-field ones that barely bend. Neither `maxSteps` nor
+        // `lineBudget` moves: dropping maxSteps would truncate loops
+        // mid-air instead of letting them close, and pinning the budget
+        // back to a constant is precisely the dead strength bead the
+        // owner rejected on 2026-08-03.
+        let lines = TubeMesh.decimated(
+            traced.map { $0.map(SIMD3<Float>.init) },
+            spacing: 0.05, maximumTurn: .pi / 18)
         var result = LinesResult()
         result.core = TubeMesh.buffers(lines: lines, radius: MagnetismRenderer.lineRadius)
         result.casing = TubeMesh.buffers(
@@ -611,6 +665,37 @@ final class MagnetismRenderer {
         }
     }
 
+    /// Whether the bench has moved enough to be worth tracing again.
+    ///
+    /// EXACT INEQUALITY WAS THE WRONG TEST. `sources != lastLineInputs`
+    /// on an `Equatable` of `Double`s is true whenever the last bit
+    /// moved, and the module's DEFAULT motion is the overdamped glide —
+    /// magnets ease toward rest over a second or more, so every frame of
+    /// every settle resubmitted a full volume trace. The pipeline
+    /// coalesces, so this never queued up; it just meant the worker was
+    /// never idle and the main actor took three fresh mesh uploads as
+    /// fast as it could produce them.
+    ///
+    /// 2 mm and ~1.1° are below what the drawn field can express: loops
+    /// are traced on 8 mm steps through a 3.5 m volume, so a magnet
+    /// moving 2 mm cannot move a line by a pixel. Adding or removing a
+    /// magnet always retraces, whatever the geometry says.
+    private nonisolated static func fieldLinesWorthRetracing(
+        _ sources: [BarMagnet], versus previous: [BarMagnet]?
+    ) -> Bool {
+        guard let previous else { return true }
+        guard previous.count == sources.count else { return true }
+        for (magnet, was) in zip(sources, previous) {
+            if magnet.id != was.id { return true }
+            if simd_distance(magnet.position, was.position) > 0.002 { return true }
+            // Compares the moment itself, so a strength change counts as
+            // much as a rotation — the strength bead redraws the field.
+            if simd_distance(magnet.moment, was.moment)
+                > 0.02 * MagnetismModel.defaultStrength { return true }
+        }
+        return false
+    }
+
     private func syncFieldLines(_ model: MagnetismModel) {
         linesEntity.isEnabled = model.showFieldLines
         lineCasingEntity.isEnabled = model.showFieldLines
@@ -618,7 +703,7 @@ final class MagnetismRenderer {
         arrowHeads.root.isEnabled = model.showFieldLines
         guard model.showFieldLines else { return }
         let sources = model.magnets
-        guard sources != lastLineInputs else { return }
+        guard Self.fieldLinesWorthRetracing(sources, versus: lastLineInputs) else { return }
         lastLineInputs = sources
         linesPipeline?.submit(LinesJob(magnets: sources))
     }

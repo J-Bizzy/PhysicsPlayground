@@ -16,6 +16,200 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-09 — Electric Fields' field lines wear Electric Fields' colour
+
+**Decision:** `Palette.fieldLineUI` becomes `electrostaticsAccent`
+(#FFEA05) instead of pale cyan, so the lines in the lab and in the hub
+miniature match the module's own hue. Magnetism's miniature, which was
+borrowing that token, is repointed at `MagnetismRenderer.lineColor`.
+
+**Context:** Owner's call. Every other surface this module owns — the
+door sign, the nameplate, the icon, the switch labels — wears
+`electrostaticsAccent`, and the one thing the lab is actually about wore
+an unrelated cyan. Derived FROM the accent rather than hand-mixed near
+it: a hand-mixed warm yellow would land a few ΔE away, which is exactly
+the "two shades of the same yellow" failure recorded against
+`electrostaticsAccent` itself, and it would show most on the home screen
+where the miniature's lines sit beside the nameplate.
+
+It also un-collides the field from its own sources. Cyan lines ran
+through blue negative charges — the field and one of its two poles in
+the same corner of the wheel.
+
+**Consequences:**
+
+- **A latent mismatch surfaced and was fixed.** `fieldLineUI` was
+  written as a general token and used by TWO hub vignettes, so the
+  magnetism miniature drew magnetic field lines in Electric Fields'
+  colour. That was already wrong — `MagnetismRenderer` draws that lab's
+  lines in lavender, so the miniature advertising it never matched it —
+  and a shared token merely hid it while both were neutral cyan.
+  Changing the token would have turned magnets yellow.
+- **The token now means what its name implies for one module.** Anything
+  else wanting a field line reads its own renderer's constant, which is
+  the rule that stops the next drift.
+- **STILL OPEN: Magnetism has the same defect this entry fixes.** Its
+  accent is pink and its field lines are lavender, in both the lab and
+  now the miniature. They agree with each other, which is the bug this
+  entry was about; they do not agree with the door. Left alone
+  deliberately — it was not asked for, and lavender-on-pink is a closer
+  pair than cyan-on-yellow ever was.
+
+## 2026-08-09 — No card of words stands in a lab
+
+**Decision:** Owner's call. Both dark text panels inside the modules are
+deleted: the in-room first-run teach (`Shell/RoomTeach.swift`) and the
+Circuits running commentary (`CircuitsInsightCard`). The teach survives
+in the module WINDOW, which is where it started. The small backed
+readouts on the apparatus — values, switch labels, rack names — stay.
+
+**Context:** This reverses 2026-08-08 twice over, and the reversal is
+narrower than it looks. That entry moved the teach into the room to fix
+a real defect: RealityKit content renders in front of a window behind
+it, so the apparatus was drawing straight through the sentence. The fix
+worked. What it produced was a paragraph standing in front of the bench
+instead of behind it — legible, and covering the thing it describes. A
+screenshot of Circuit Workshop shows the card spanning the entire
+apparatus, which is a worse trade than the one it replaced.
+
+The room has now rejected three cards of words in three days:
+`FirstRunHint` (08-08, "unnecessary and in the way"), the Gallery's
+"Or carry a lab to the pad" (08-09), and `RoomTeach` (08-09). The
+pattern is not about any one card's copy or placement. **A paragraph is
+the wrong shape for this room.** Anything big enough to read at a
+comfortable distance is big enough to cover an experiment, and this app's
+whole argument is that the experiment is the explanation.
+
+The insight card had the best case of the three and is worth recording
+properly, because it was not a repeat of the hint. It said something
+DIFFERENT each time, about the circuit you had just built; it was absent
+when there was nothing to say; and it woke twelve authored paragraphs
+that had been written and left dark since the window panels were deleted
+on 2026-08-01. Its own header set the condition for its removal — "if it
+ever repeats itself it is behaving like the hint and should go the same
+way" — and the verdict is that the shape was wrong even though the
+content was not.
+
+**Consequences:**
+
+- **The window is the only place a lab explains itself in words.**
+  `ModuleDescriptor.firstRunHint` and `ModuleHostView` are unchanged, and
+  `AppSettings.seenHints` still gates that copy. A wearer who opens the
+  room without reading the window gets no sentence — which is the state
+  the app was in before 2026-08-07, and the owner's judgement is that the
+  apparatus teaches better than the paragraph did.
+- **`CircuitsModel` loses its whole commentary layer**: `insightText`,
+  `insightClock`, `insightHoldUntil`, the twelve-second `hold` that kept
+  an authored paragraph from being overwritten by the live line, and
+  `failureNote`, whose only reader was that layer. Deleting the card
+  without them would recreate exactly the twelve-writers-no-readers
+  defect the card was built to fix.
+- **The five presets keep their circuits and lose their paragraphs.**
+  `loadPreset` still builds series bulbs, parallel bulbs, a divider, an
+  RC charger and a dead short out of ordinary rewireable parts. That is
+  the teaching now.
+- **`PendulumsModel.insightText` is left alone and is DEAD** — twelve
+  writers, zero readers, and no card was ever built for it. It is
+  outside the scope of this change and is recorded here so the next
+  reader knows it is not load-bearing.
+- Two test files go: `RoomTeachTests` (which asserted the card stood
+  nearer than every lab's apparatus) and `CircuitsInsightTests`.
+
+## 2026-08-09 — The home screen loses four surfaces and gains three modelled platforms
+
+**Decision:** Owner's call, five changes to the Gallery in one pass.
+
+1. **The experiments system is deleted outright** — `Experiments.swift`,
+   `ExperimentsView`, the flask button, the progress ring behind every
+   exhibit, the per-module counts in the flat catalog, the Settings
+   reset, the persisted completions and streak, and all twenty authored
+   steps. Not hidden behind a switch: removed.
+2. **The ENTER plaque is gone**, and a tap on an exhibit now flies it to
+   the pad instead of doing nothing.
+3. **The "Or carry a lab to the pad" card is gone.**
+4. **The wordmark's black backing plate is gone**, replaced by a dark
+   keyline built per glyph.
+5. **The terraces, the pucks and the pad are modelled** —
+   `Tools/galleryplatforms.py`, five new USDZ assets.
+
+**Context:** Changes 2 and 3 are one decision, and they undo the pact
+recorded on 2026-07-29 ("the podium is the delightful path; the button is
+the reachable one, and neither may be deleted without the other
+changing"). The pact was honoured, not broken: the reachable path did
+change, into a tap. What is gone is the FURNITURE that used to explain
+the ceremony — a plaque standing on every terrace and a caption hanging
+at the pad's rim, both of which existed to teach a gesture. A tap that
+performs the gesture teaches it better and leaves nothing standing.
+
+The 2026-07-29 objection to tap-to-enter still stands and is not
+violated. That objection was that entering by tap made a shelf of six
+live miniatures into one large accidental-activation surface. A tap that
+MOVES a lab across the room does not enter anything; the door is still
+the Load button, still a second deliberate pinch, still in a different
+place. VoiceOver keeps a direct route into the lab, because the
+ceremony's entire payload is visual and charging it to someone sweeping
+the room by touch would be a worse deal than the plaque was.
+
+Change 4 reverses 2026-08-08, one day old. The plate was the right
+diagnosis — ivory metal over a cream wall is light-on-light, and CASINGS
+BEAT GLOWS (2026-07-26) — and the wrong object: a black rectangle
+hanging in the room to make some words legible. The casing now follows
+the letterforms. Two earlier attempts at that had failed and both are
+recorded in the code: a dark copy offset backward interpenetrates type
+this deeply extruded, and a dark copy SCALED UP moves every glyph
+outward from the string's centre so the shell letters land between their
+own neighbours. Both fail because they treat a line as one object;
+building it glyph by glyph does not.
+
+**The platform designs, and the three that lost.** The owner chose an
+optical bench from four candidates. The others are recorded because a
+decision with no alternatives written down reads later as the only thing
+anyone thought of:
+
+- **Optical bench + docking cradle (chosen)** — milled breadboard
+  terraces with T-slots and a lit front rail, three-ball kinematic
+  mounts as pedestals, and a hexagonal docking cradle whose three latch
+  fingers close on a lab when it lands.
+- **Museum vitrine plinths** — terrazzo shelves with brushed-brass
+  fascias, turned brass pedestal rings, and a graduated turntable for
+  the pad. Closest to `HubTitleStyle`'s existing plaque voice.
+- **Levitation coils** — no slab at all: a contour plate, Halbach coil
+  rings with a field skirt under each hovering miniature, and a maglev
+  trap for the pad. The most physics-native and the least furniture.
+- **Equipment rack** — anodised rack panels with ears, vent slots and
+  hex fasteners, shock-mount isolators, and a hardpoint with a captive
+  fastener for the pad.
+
+**Consequences:**
+
+- **The app no longer tracks anything about the user's progress.** The
+  hub is a launcher again, and the argument in the deleted
+  `ExperimentCatalog.nextStep` — that a tally says where you are and
+  nothing about where to go, so a hub carrying only a score can only
+  ever be a launcher — is now a description of what shipped rather than
+  a problem statement. Reopening it means designing the direction half
+  first. `DesignTokens.Palette.completionGold` went with it, under this
+  project's own rule that a token nobody reads is unreachable choice.
+- **Nothing in the room is the only path to a lab.** Tap, carry, and the
+  flat window catalog all reach every module; VoiceOver reaches them
+  directly. `GalleryDoorTests` asserts all of it, and is the successor
+  to `EnterPlaqueTests` — the door has been rebuilt four times now and
+  two of those rebuilds shipped broken.
+- **A terrace is TILES, not a slab.** `GalleryLayout` sizes terraces from
+  module count (`0.36·n + 0.08`), so the asset is a 0.36 m bay plus two
+  0.04 m caps and the arithmetic closes exactly. A seventh lab lands on
+  a terrace one real bay longer. Nothing may be non-uniformly stretched
+  to fit.
+- **Two details in those assets were built, shipped to a screenshot, and
+  rebuilt**, and both failures were the same failure. A drilled 25 mm
+  hole grid cut correctly, cost 4,556 vertices per bay, and was
+  invisible — a dark hole in a near-black bench has no contrast to show.
+  The kinematic mounts' steel balls sat under a top plate wider than the
+  circle they stand on, so the one detail that makes the part an
+  instrument faced the floor. A part is only as good as its silhouette
+  from where the viewer actually stands, and neither error is visible in
+  the numbers.
+
 ## 2026-08-09 — I accused the predicted arc of a defect it does not have (RETRACTED)
 
 **Decision:** The two entries this replaces were wrong. `ProjectileMotion`

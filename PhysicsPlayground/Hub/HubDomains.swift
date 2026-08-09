@@ -7,9 +7,15 @@
 //  the specific experience inside it. The domain is a WAYFINDING layer,
 //  not a new hierarchy: experiences keep their own accents everywhere
 //  they already use them, and the domain colour appears in exactly
-//  three places — the floating header over each group, the progress
-//  ring around each miniature, and the chip on the focus panel.
+//  TWO places — the terrace's own hairline and the door sign above it.
 //  Everywhere else the room stays calm.
+//
+//  It named three until 2026-08-09, and none of the three was right:
+//  the "floating header" became the door sign, the progress ring went
+//  on 2026-08-04, and the focus panel's chip went with the experiments
+//  system. A wayfinding colour listing surfaces that no longer exist
+//  is worse than no list, because the next person adds a fourth on the
+//  authority of the sentence.
 //
 //  Two, deliberately, after trying one-world-per-domain and measuring
 //  why it failed (DECISIONS.md 2026-07-30): standing a domain's

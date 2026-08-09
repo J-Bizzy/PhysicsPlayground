@@ -28,6 +28,40 @@ the "strongly three-dimensional" test:
 - **Fields / Oscillators** — the old merged-module wrappers, already
   unused since the modules were split back apart.
 
+## What PhysicsCore still carries for these, in full
+
+The Fluids note above was the only place this was written down, which
+made it read as a decision about the wind tunnel rather than the policy
+it actually is. Audited 2026-08-09: **seventeen source files and about
+110 tests in `PhysicsCore` exist only for archived modules.** No app
+module reaches any of them; they compile into the library and run on
+every `swift test`.
+
+| Area | Files | Tests |
+|---|---|---|
+| Optics | `RayOptics`, `RayOptics3D`, `Prism`, `GlassBlock`, `Refraction` | 23 |
+| Waves | `DoubleSlit`, `WaveField`, `EmissionTrail` | 17 |
+| Fluids | `FluidGrid`, `SurfacePressure`, `PotentialFlow` | 29 + `FluidGridBench` |
+| Magnetism (unused half) | `Induction`, `CurrentLoop` | 12 |
+| Math | `MarchingSquares`, `Isosurface`, `StreamlineTracer` | 28 |
+| Oscillations | `ElasticSheet` | 13 |
+
+Kept on purpose, for the reason the Fluids line gives — reviving a
+module should cost a module folder, not a rebuild — and because this is
+real, exact, tested physics that happens not to have a room right now.
+The cost is seconds on the fast suite and zero bytes in the app: none
+of it is linked into anything the six modules reach.
+
+Two things that are NOT in that table, because they look archived and
+are not: `DragBody` is live (`ObstacleField`, in `Shell/RoomModel`),
+and `StationBox` is live (`DesignSystem/InstrumentRail`). Deleting
+either while "pruning the wind tunnel" would break the shipping app.
+
+`FluidGridBench` is the one genuinely stale item — a timing probe
+measuring `FluidGrid` "at the size the wind tunnel actually runs", and
+nothing runs that size. It is a benchmark for a resolution the app does
+not use.
+
 Nothing here is deleted. The physics these leaned on lives in
 PhysicsCore and is still fully tested. To restore a module: move its
 folder back under `PhysicsPlayground/Modules/`, add its one line to

@@ -105,17 +105,6 @@ final class CircuitsRenderer {
     /// The end grip being pulled right now (system-dragged — don't
     /// reposition it), if any.
     var stretchingHandle: CircuitsModel.Terminal?
-    /// The opposite end's world position, captured when the pull began —
-    /// the fixed pivot the part swings around.
-    var swingPivot: SIMD3<Double>?
-
-    /// The part's aim as the hand actually left it — the system may have
-    /// twisted the holder during a carry, and the model adopts that.
-    func liveAxis(of id: UUID) -> SIMD3<Double>? {
-        guard let visual = visuals[id] else { return nil }
-        return SIMD3<Double>(visual.holder.orientation.act([1, 0, 0]))
-    }
-
     /// The bench's own magnetic field, as arrows on a coarse grid.
     ///
     /// Budget and spacing are deliberately modest. This is a field that
@@ -414,9 +403,6 @@ final class CircuitsRenderer {
     private func targetZoom(_ model: CircuitsModel) -> Float {
         max(handZoom, model.electronView ? Self.electronViewZoom : 1)
     }
-
-    /// The zoom the bench is actually showing, for the readout.
-    var currentZoom: Float { benchScale }
 
     // MARK: The bench's hum
 

@@ -12,24 +12,30 @@
 //  an exhibit and it lifts off its puck, names itself, and says in one
 //  line what you actually do in there (`HubDomain.promise`).
 //
-//  TWO WAYS IN, and the pair is deliberate — DECISIONS.md 2026-07-29:
-//  "neither may be deleted without the other changing."
+//  ONE DOOR, REACHED TWO WAYS — and the door is the pad. An exhibit
+//  standing on the plate floating front and centre turns there with Load
+//  hanging over it, and that button is the only thing in this room that
+//  opens a lab.
 //
-//  · The ENTER plaque on each puck's terrace: gaze plus a pinch, nothing
-//    to aim or carry. The reachable one.
-//  · The pad: carry an exhibit onto the plate floating front and centre
-//    and it stands there and turns, with Load hanging over it. The
-//    delightful one.
+//  · TAP an exhibit and it flies to the pad by itself.
+//  · Or CARRY it there, which is the better story and always was.
 //
-//  THE PAIR WAS BROKEN FOR THREE DAYS. The reachable half used to be a
-//  "Load Module" button on a billboarded focus panel; the panel was
-//  deleted on 2026-08-04 and nothing replaced it, so from then until
-//  2026-08-07 the ONLY way into a lab was a sustained ~1.1 m pinch-drag
-//  onto a 0.105 m pad — the app's own rule (nothing may be the only path
-//  to a capability) broken at its front door. The plaque is the
-//  replacement, and it answers 2026-07-29's objection to a bare tap on
-//  the exhibit — that it made the whole gallery an accidental-activation
-//  surface — by being a small separate object you have to look AT.
+//  Neither one enters. That is the whole design: DECISIONS.md 2026-07-29
+//  removed tap-to-enter because a shelf of six live miniatures you are
+//  meant to look at makes a terrible activation surface, and a tap that
+//  merely moves an object across the room does not bring the problem
+//  back. The second pinch, on a button that names the lab it opens, is
+//  where the commitment happens.
+//
+//  WHAT THIS REPLACED. From 2026-08-04 to 08-07 the pad was the ONLY way
+//  in — a sustained ~1.1 m pinch-drag onto a 0.105 m plate — which broke
+//  the app's own rule that nothing may be the only path to a capability.
+//  An ENTER plaque on every puck fixed that and stood until 2026-08-09,
+//  when the owner cut it along with the "Or carry a lab to the pad" card
+//  at the pad's rim. Both were furniture explaining a gesture; the tap
+//  performs the gesture instead. VoiceOver keeps a direct route — the
+//  exhibit publishes an "Enter" action and a plain activate — because
+//  a two-step ceremony is a worse deal for someone sweeping the room.
 //
 //  The only motion is idle life: miniatures breathe out of phase and
 //  their physics runs. A handful of entities; per-frame work is a few
@@ -54,17 +60,7 @@ struct HubSpaceView: View {
     var body: some View {
         RealityView { content, attachments in
             let modules = ModuleCatalog.all(appModel: appModel)
-            var progress: [String: (done: Int, total: Int)] = [:]
-            for module in modules {
-                let entries = ExperimentCatalog.experiments(for: module.id,
-                                                            appModel: appModel)
-                progress[module.id] = (
-                    entries.filter {
-                        appModel.experiments.completed.contains($0.experiment.id)
-                    }.count,
-                    entries.count)
-            }
-            scene.build(modules: modules, progress: progress)
+            scene.build(modules: modules)
             scene.placement = appModel.galleryPlacement
             scene.stillness = systemReduceMotion
             content.add(scene.root)
@@ -89,9 +85,6 @@ struct HubSpaceView: View {
             if let bar = attachments.entity(for: "bar") {
                 scene.seatTitleBar(bar)
             }
-            if let hint = attachments.entity(for: "podiumHint") {
-                scene.seatPodiumHint(hint)
-            }
             #if DEBUG
             // `-hubDock <module id>` seats an exhibit on the podium at
             // launch, so the docked state and Load button can be
@@ -108,8 +101,6 @@ struct HubSpaceView: View {
             // return to the hub built another one, and every one of them
             // went on animating its own orphaned copy of the gallery,
             // forever, while you were somewhere else entirely.
-            scene.onDock = { appModel.settings.markHintSeen(HubScene.podiumHintID) }
-
             scene.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak scene] event in
                 scene?.animate(dt: event.deltaTime, lookRay: appModel.room.lookRay)
             }
@@ -121,11 +112,14 @@ struct HubSpaceView: View {
             // flashed a distant plate — so the one thing the label said
             // you could do was the one thing it could not.
             //
-            // Two doors, because a VoiceOver user sweeping the room
-            // lands on the EXHIBIT, and making them hunt for a separate
-            // 0.11 m plaque beside it would be a worse version of the
-            // same problem: the plaque declares `.activate`, and the
-            // exhibit carries a custom action named "Enter".
+            // AND IT GOES STRAIGHT IN, which is the one place this door
+            // is not the pad. A sighted tap flies the lab to the plate
+            // and asks for a second pinch on the Load button; routing
+            // VoiceOver the same way would mean sweeping the room again
+            // to find a button that moved somewhere new — a ceremony
+            // whose whole payload is visual, charged to the person who
+            // cannot collect it. The exhibit publishes both a plain
+            // `.activate` and an "Enter" custom action, and both enter.
             //
             // This is the app's FIRST `AccessibilityEvents`
             // subscription. A grep for `systemActions` returned zero
@@ -134,13 +128,14 @@ struct HubSpaceView: View {
             // announced, readable, and impossible to operate. Phase 2
             // closes that with one subscription in `PlaygroundSpaceView`;
             // the front door could not wait for it.
+            //
             // ONE MECHANISM, NOT TWO. This walked entity names looking
             // for the `enter-` prefix, which was the right call on
             // 2026-08-07 — the front door could not wait for Phase 2's
             // component to exist. It exists now, and a second bespoke
-            // route is how the two drift apart: the plaque worked and
-            // the exhibit beside it did not, because only one of them
-            // was in this closure. `SpatialActions.activate` walks
+            // route is how the two drift apart: the ENTER plaque worked
+            // and the exhibit beside it did not, because only one of
+            // them was in this closure. `SpatialActions.activate` walks
             // ancestors for whatever knows what to do, exactly as it
             // does in every lab.
             scene.onEnter = enter
@@ -156,46 +151,23 @@ struct HubSpaceView: View {
             ]
         } update: { _, _ in
             scene.stillness = systemReduceMotion
-            scene.showPodiumHint(
-                !appModel.settings.hasSeenHint(HubScene.podiumHintID)
-                    && scene.dockedModuleID == nil
-                    && !scene.isCarrying)
         } attachments: {
             Attachment(id: "bar") {
                 HubUtilityBar(
                     openSettings: { openWindow(id: SettingsView.windowID) },
                     openAbout: { openWindow(id: AboutView.windowID) },
-                    openNotebook: { openWindow(id: NotebookView.windowID) },
-                    openExperiments: { openWindow(id: ExperimentsView.windowID) })
+                    openNotebook: { openWindow(id: NotebookView.windowID) })
             }
-            Attachment(id: "podiumHint") {
-                // What the podium is FOR, said once, quietly, where the
-                // action happens. The focus panel's Load button remains
-                // the guaranteed way in; this teaches the fun one.
-                // "pad", not "podium": the plinth came off on 2026-08-03
-                // and copy that names a stand the wearer cannot see sends
-                // them looking for one.
-                // It TEACHES rather than instructs, because it is no
-                // longer the only way in — every puck now carries an
-                // ENTER plaque. What this is for is the ceremony: the
-                // carry is the better story and nobody discovers it on
-                // their own.
-                Text("Or carry a lab to the pad")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .glassBackgroundEffect(in: Capsule())
-                    // The ONE readout in the app that was missing this.
-                    // An attachment carries a collider for its content,
-                    // and this one is seated at the podium rim, 12 cm
-                    // toward the user — inside the volume the
-                    // exhibit-carry drag sweeps through on its way to
-                    // the podium. So the hint telling you to drag a lab
-                    // onto the podium was standing in the way of doing
-                    // it. All six module cards get this right.
-                    .allowsHitTesting(false)
-            }
+            // THE PAD TEACHES ITSELF NOW (2026-08-09). A card reading
+            // "Or carry a lab to the pad" used to hang at the pad's rim,
+            // because the carry was a gesture nobody discovers on their
+            // own and the plaque beside each exhibit was the path that
+            // did not need explaining. Both are gone: a tap on an exhibit
+            // now SENDS it to the pad, so the first thing anyone tries
+            // performs the ceremony and shows them where it lands. A
+            // sentence describing a gesture is worth less than a gesture
+            // that demonstrates itself, and this one cost a collider
+            // standing in the path of the very drag it described.
             Attachment(id: "load") {
                 if let module = ModuleCatalog.all(appModel: appModel)
                     .first(where: { $0.id == scene.dockedModuleID }) {
@@ -229,21 +201,30 @@ struct HubSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
-                    // THE PLAQUE FIRST. It is the reachable way in —
-                    // gaze plus a pinch, nothing to aim or carry — and
-                    // it is a distinct object, so this cannot be
-                    // confused with a tap on the exhibit itself.
-                    if let id = scene.enterPlaqueModuleID(for: value.entity) {
-                        enter(id)
-                        return
-                    }
-                    // A tap on the EXHIBIT still does not enter, and the
-                    // 2026-07-29 reasoning for that stands: the whole
-                    // gallery would become an accidental-activation
-                    // surface. It teaches the ceremony instead — the
-                    // podium flashes to say "bring it here."
-                    guard scene.moduleID(for: value.entity) != nil else { return }
-                    scene.hintPodium()
+                    // A TAP SENDS THE LAB TO THE PAD (owner, 2026-08-09).
+                    //
+                    // This is the third answer to "how do you get into a
+                    // lab", and it is the first one that does not have to
+                    // be explained. A bare tap-to-ENTER was removed on
+                    // 2026-07-29 because it made the whole gallery an
+                    // accidental-activation surface — glance at a shelf
+                    // of six live miniatures, pinch by reflex, and you
+                    // are somewhere else. That reasoning still stands and
+                    // this does not violate it: a tap moves an object
+                    // across the room, it does not leave the room. The
+                    // door is still the Load button, and it is still a
+                    // second, deliberate pinch at a different place.
+                    //
+                    // What it replaces is `hintPodium`, which flashed the
+                    // pad to say "bring it here" — a demonstration that
+                    // asked you to go and do the thing yourself. Doing it
+                    // FOR you teaches the same lesson, leaves the lab
+                    // sitting where the carry would have put it, and
+                    // means the ceremony's destination is discovered by
+                    // the most obvious gesture in the room rather than by
+                    // a caption at its rim.
+                    guard let id = scene.moduleID(for: value.entity) else { return }
+                    scene.sendToPad(id: id)
                 }
         )
         // Carry a lab to the podium — or the whole gallery by its bar.
@@ -396,7 +377,9 @@ final class HubScene {
 
     // MARK: Layout — the Gallery
     //
-    // A crescent of four domain terraces, authored and computed in
+    // A crescent of TWO domain terraces — six labs behind two doors
+    // since the 2026-07-30 rebuild; this said "four" until 2026-08-09.
+    // Authored and computed in
     // GalleryLayout. The constellation scatter this replaces put every
     // lab at its own azimuth/height/depth; position was designed but
     // it EXPLAINED nothing — the room read as bubbles. The terraces
@@ -457,8 +440,7 @@ final class HubScene {
     private static let arcDistanceDefault: Float = 2.0
     private static let arcHeightDefault: Float = 1.4
 
-    func build(modules: [ModuleDescriptor],
-               progress: [String: (done: Int, total: Int)] = [:]) {
+    func build(modules: [ModuleDescriptor]) {
         // Idempotent on purpose: `build` is additive below, and a
         // second call on a surviving scene used to stack a second
         // gallery on top of the first — the Settings reposition bug.
@@ -511,9 +493,7 @@ final class HubScene {
             for (index, id) in terrace.moduleIDs.enumerated() {
                 guard let module = byID[id] else { continue }
                 buildExhibit(for: module,
-                             at: terrace.exhibitPositions[index],
-                             domain: terrace.domain,
-                             progress: progress[id] ?? (0, 0))
+                             at: terrace.exhibitPositions[index])
             }
         }
     }
@@ -524,23 +504,16 @@ final class HubScene {
     private var terraceHairlines: [HubDomain: ModelEntity] = [:]
     /// Each terrace's signage, driven from the idle loop.
     private var domainTitles: [HubDomain: HubDomainTitle] = [:]
-    /// One domain's slab: a floating graphite shelf with a lit hairline
-    /// of the domain's colour along its front edge, and a pedestal puck
-    /// per module. Architecture BENEATH the physics, never around it —
-    /// the miniatures stay shell-free.
+    /// One domain's terrace: an optical bench, tiled from modelled bays,
+    /// with a lit hairline of the domain's colour lying in the machined
+    /// channel along its front edge and a kinematic mount per module.
+    /// Architecture BENEATH the physics, never around it — the
+    /// miniatures stay shell-free.
     private func buildTerrace(_ terrace: GalleryLayout.Terrace) {
-        let graphite = Materials.graphite(Self.slabTint)
-
         let slab = Entity()
         slab.position = terrace.center
         slab.orientation = simd_quatf(angle: terrace.yaw, axis: [0, 1, 0])
-        let box = ModelEntity(
-            mesh: .generateBox(width: terrace.width,
-                               height: GalleryLayout.slabThickness,
-                               depth: GalleryLayout.slabDepth,
-                               cornerRadius: 0.03),
-            materials: [graphite])
-        slab.addChild(box)
+        buildBenchTop(terrace, on: slab)
 
         var lit = UnlitMaterial(color: UIColor(terrace.domain.color))
         lit.blending = .transparent(opacity: 0.85)
@@ -549,8 +522,13 @@ final class HubScene {
                                height: 0.004, depth: 0.004,
                                cornerRadius: 0.002),
             materials: [lit])
-        hairline.position = SIMD3(0, GalleryLayout.slabThickness / 2 + 0.002,
-                                  GalleryLayout.slabDepth / 2 - 0.006)
+        // IN the channel now, not on the surface. It sat 2 mm proud of a
+        // featureless slab because there was nothing to sit in; the bay
+        // is milled with a trough along its front rail, and a light
+        // lying in a trough is a light pipe, while the same light
+        // balanced on a flat edge is a strip stuck to it.
+        hairline.position = SIMD3(0, GalleryLayout.slabThickness / 2 - 0.002,
+                                  GalleryLayout.slabDepth / 2 - 0.0095)
         slab.addChild(hairline)
         terraceHairlines[terrace.domain] = hairline
 
@@ -568,13 +546,105 @@ final class HubScene {
         root.addChild(slab)
 
         for top in terrace.puckTops {
-            let puck = ModelEntity(
-                mesh: .generateCylinder(height: GalleryLayout.puckHeight,
-                                        radius: GalleryLayout.puckRadius),
-                materials: [graphite])
-            puck.position = top - SIMD3(0, GalleryLayout.puckHeight / 2, 0)
-            root.addChild(puck)
+            // Placed AT the top face, not at the centre: every modelled
+            // platform here is drawn hanging below its own origin, so a
+            // call site never repeats a half-thickness.
+            let mount = Self.loadPlatform(
+                "GalleryMount",
+                fallback: {
+                    let puck = ModelEntity(
+                        mesh: .generateCylinder(
+                            height: GalleryLayout.puckHeight,
+                            radius: GalleryLayout.puckRadius),
+                        materials: [Materials.graphite(Self.slabTint)])
+                    puck.position.y = -GalleryLayout.puckHeight / 2
+                    let holder = Entity()
+                    holder.addChild(puck)
+                    return holder
+                })
+            mount.position = top
+            root.addChild(mount)
         }
+    }
+
+    /// Lays the terrace's top out of modelled tiles: two end caps and
+    /// one bay per module.
+    ///
+    /// WHY TILES AND NOT ONE SLAB. `GalleryLayout` sizes a terrace from
+    /// its module count — `basePuckPitch · n + baseWidthMargin` — so no
+    /// single asset can be the right width for a catalog that changes.
+    /// The alternative is stretching one, and stretching a drilled bench
+    /// turns every hole into an ellipse, which is the exact tell that
+    /// says an object was resized rather than built. Real optical
+    /// benches bolt together out of sections, so the honest asset is a
+    /// section: `Tools/galleryplatforms.py` writes a 0.36 m bay and a
+    /// 0.04 m cap, and 0.36·n + 2 × 0.04 is the layout's own formula.
+    ///
+    /// The bay is scaled in X ONLY, and by exactly 1.0 at the shipped
+    /// geometry. The scale exists because `GalleryLayout` still takes a
+    /// distance and multiplies the plan by it — the sliders that drove
+    /// that are gone, but the math is live and tested, so the tiling
+    /// closes at any of its values rather than leaving a gap that only
+    /// appears if someone reopens the setting. Depth and thickness are
+    /// never scaled: the layout does not scale them either.
+    private func buildBenchTop(_ terrace: GalleryLayout.Terrace,
+                               on slab: Entity) {
+        let capWidth = GalleryLayout.baseWidthMargin / 2
+        let bays = max(terrace.moduleIDs.count, 1)
+        let bayWidth = (terrace.width - capWidth * 2) / Float(bays)
+
+        // THE FALLBACK IS A REAL SHELF. Following `TimeRail.buildReel`:
+        // if the asset does not load, the gallery must still have
+        // terraces, because a missing floor under six exhibits is not a
+        // degraded look, it is six labs hanging in the air.
+        guard let bay = Self.platform("GalleryBay"),
+              let cap = Self.platform("GalleryCap") else {
+            let box = ModelEntity(
+                mesh: .generateBox(width: terrace.width,
+                                   height: GalleryLayout.slabThickness,
+                                   depth: GalleryLayout.slabDepth,
+                                   cornerRadius: 0.03),
+                materials: [Materials.graphite(Self.slabTint)])
+            slab.addChild(box)
+            return
+        }
+
+        // Tiles are modelled with their top face at the origin; the slab
+        // node sits at the terrace's mid-thickness, so everything hangs
+        // from its top.
+        let top = GalleryLayout.slabThickness / 2
+        for index in 0..<bays {
+            let piece = bay.clone(recursive: true)
+            piece.scale.x = bayWidth / GalleryLayout.basePuckPitch
+            piece.position = SIMD3(
+                -terrace.width / 2 + capWidth
+                    + bayWidth * (Float(index) + 0.5),
+                top, 0)
+            slab.addChild(piece)
+        }
+        for side in [Float(-1), 1] {
+            let piece = cap.clone(recursive: true)
+            piece.position = SIMD3(
+                side * (terrace.width / 2 - capWidth / 2), top, 0)
+            slab.addChild(piece)
+        }
+    }
+
+    /// A modelled platform, or nil. Prototypes are loaded once and
+    /// cloned: six mounts and three bays per terrace are the same mesh,
+    /// and `Entity.load` re-parses the asset every call.
+    private static var platformCache: [String: Entity] = [:]
+
+    private static func platform(_ name: String) -> Entity? {
+        if let cached = platformCache[name] { return cached }
+        guard let loaded = try? Entity.load(named: name) else { return nil }
+        platformCache[name] = loaded
+        return loaded
+    }
+
+    private static func loadPlatform(_ name: String,
+                                     fallback: () -> Entity) -> Entity {
+        platform(name).map { $0.clone(recursive: true) } ?? fallback()
     }
 
     // MARK: The podium — where a lab is brought to be opened
@@ -665,21 +735,47 @@ final class HubScene {
                           plateTop + GalleryLayout.exhibitLift,
                           -Self.podiumReach * (distance / 2.0))
 
-        let graphite = Materials.graphite(Self.slabTint)
-
         let podium = Entity()
         podium.position = SIMD3(podiumTop.x, 0, podiumTop.z)
-        let plate = ModelEntity(
-            mesh: .generateCylinder(height: Self.podiumPlateThickness,
-                                    radius: Self.podiumRadius),
-            materials: [graphite])
-        plate.position.y = plateBottom + Self.podiumPlateThickness / 2
-        podium.addChild(plate)
+
+        // THE PAD IS A DOCKING CRADLE, not a larger version of the pucks
+        // it takes labs from. It was a plain cylinder, 2 cm wider than a
+        // terrace puck and made of the same stock, which is the shape
+        // that says "another shelf" — and this is the one platform in
+        // the room that is not a shelf. It is the door.
+        //
+        // Hexagonal, milled with a pocket, and ringed by three latch
+        // fingers that close when a lab lands. See `setLatches`.
+        let cradle = Self.loadPlatform(
+            "GalleryCradle",
+            fallback: {
+                let plate = ModelEntity(
+                    mesh: .generateCylinder(height: Self.podiumPlateThickness,
+                                            radius: Self.podiumRadius),
+                    materials: [Materials.graphite(Self.slabTint)])
+                plate.position.y = -Self.podiumPlateThickness / 2
+                let holder = Entity()
+                holder.addChild(plate)
+                return holder
+            })
+        cradle.position.y = plateTop
+        podium.addChild(cradle)
+        buildLatches(on: podium, at: plateTop)
 
         // The champagne rim — the same jeweller's line the title wears.
+        //
+        // HEXAGONAL, AND INSET. It was a 48-segment circle at exactly
+        // `podiumRadius`, which was right while the pad was a cylinder
+        // of that radius and became wrong the moment it became a hex:
+        // a circle through a hexagon's circumradius runs OUTSIDE the
+        // flats and INSIDE the vertices, so the line sawed through the
+        // body six times per lap. Six segments follow the edge it is
+        // drawing, and 0.099 keeps it on the top face rather than
+        // balanced on the chamfer.
         var rim = UnlitMaterial(color: Self.titleRimColor)
         rim.blending = .transparent(opacity: 0.7)
-        if let ring = Self.rimTube(radius: Self.podiumRadius, y: plateTop + 0.002) {
+        if let ring = Self.rimTube(radius: 0.099, y: plateTop + 0.002,
+                                   segments: 6) {
             ring.model?.materials = [rim]
             podium.addChild(ring)
         }
@@ -697,10 +793,24 @@ final class HubScene {
         let glow = Entity()
         var glowMaterial = UnlitMaterial(color: Self.titleRimColor)
         glowMaterial.blending = .transparent(opacity: 0.22)
+        // INTO THE POCKET, not onto the lid. The pool was a disc 2 mm
+        // above a flat plate, which is what the pad used to be; the
+        // cradle is milled 8 mm deep, so the same disc hung in the air
+        // over the recess it was meant to be lighting. Sized to the
+        // pocket and laid 2.5 mm above its floor, it is light collecting
+        // in the receptacle — which is also the only place on this
+        // object where a soft glow has a surface to fall on.
         let pool = ModelEntity(
-            mesh: .generateCylinder(height: 0.001, radius: Self.podiumRadius - 0.015),
+            mesh: .generateCylinder(height: 0.001, radius: 0.068),
             materials: [glowMaterial])
-        pool.position.y = plateTop + 0.002
+        // −0.0035, measured against the ASSET rather than against the
+        // pocket's nominal depth. The pocket is cut to −0.008 but a
+        // lighter floor plate lies in it, and its top face is at
+        // −0.0045; a pool at −0.0055 — which is where "2.5 mm above the
+        // pocket floor" puts it — would have been sealed underneath that
+        // plate and drawn nothing at all. This sits 1 mm above the
+        // surface the light is supposed to be falling on.
+        pool.position.y = plateTop - 0.0035
         glow.addChild(pool)
         if let hover = Self.rimTube(radius: Self.podiumRadius - 0.032,
                                     y: plateBottom - Self.podiumHoverGap) {
@@ -714,6 +824,79 @@ final class HubScene {
         podiumGlow = glow
 
         root.addChild(podium)
+    }
+
+    // MARK: The cradle's latches
+
+    /// The three fingers, held so the dock and the release can turn them.
+    private var latchPivots: [Entity] = []
+
+    /// How far a finger stands off the cradle's centre, and the two
+    /// angles it lives between. Open is a raised, offering pose; closed
+    /// lays the tip down over the pocket's rim.
+    /// Mirrors `POST_RADIUS` in `Tools/galleryplatforms.py` — the fingers
+    /// have to turn on the posts the cradle actually carries.
+    private static let latchRadius: Float = 0.082
+    private static let latchOpen: Float = 0.62
+    private static let latchClosed: Float = -0.10
+
+    /// Rings the pad with its latch fingers.
+    ///
+    /// Each finger is two nested entities: a SEAT carrying the placement
+    /// around the ring, and a PIVOT inside it carrying nothing but the
+    /// hinge angle. One transform per job — the alternative is composing
+    /// a yaw and a hinge into a single quaternion on every frame of the
+    /// animation, which is how a finger ends up swinging out of its own
+    /// socket halfway through.
+    ///
+    /// The model reaches along −Z from its pivot, so a finger seated at
+    /// ring angle θ is yawed by π/2 − θ to point at the centre.
+    private func buildLatches(on podium: Entity, at plateTop: Float) {
+        latchPivots.removeAll()
+        guard let finger = Self.platform("GalleryLatch") else { return }
+
+        for index in 0..<3 {
+            let theta = Float.pi / 2 + Float(index) * 2 * .pi / 3
+            let seat = Entity()
+            seat.position = SIMD3(Self.latchRadius * cos(theta),
+                                  plateTop + 0.004,
+                                  Self.latchRadius * sin(theta))
+            seat.orientation = simd_quatf(angle: .pi / 2 - theta,
+                                          axis: [0, 1, 0])
+            let pivot = Entity()
+            pivot.orientation = simd_quatf(angle: Self.latchOpen,
+                                           axis: [1, 0, 0])
+            pivot.addChild(finger.clone(recursive: true))
+            seat.addChild(pivot)
+            podium.addChild(seat)
+            latchPivots.append(pivot)
+        }
+    }
+
+    /// Closes the latches over a docked lab, or opens them again.
+    ///
+    /// THIS IS THE ARRIVAL. A tap now flies a miniature across the room
+    /// to the pad, and without this the flight simply stops — the lab is
+    /// at the pad because its coordinates say so. Three fingers folding
+    /// over it is the difference between stopping there and being
+    /// received, and it costs three rotations.
+    ///
+    /// Stilled under Reduce Motion by jumping to the pose rather than
+    /// skipping it: the fingers are a READOUT of whether the pad is
+    /// holding something, and a readout that only updates for people who
+    /// tolerate animation is not a readout.
+    private func setLatches(closed: Bool, duration: Double) {
+        let angle = closed ? Self.latchClosed : Self.latchOpen
+        for pivot in latchPivots {
+            let pose = Transform(rotation: simd_quatf(angle: angle,
+                                                      axis: [1, 0, 0]))
+            if stillness || duration <= 0 {
+                pivot.transform = pose
+            } else {
+                pivot.move(to: pose, relativeTo: pivot.parent,
+                           duration: duration, timingFunction: .easeInOut)
+            }
+        }
     }
 
     // MARK: The gallery's grab bar
@@ -761,9 +944,14 @@ final class HubScene {
         entity.nearestAncestor { $0.name == galleryBarName } != nil
     }
 
-    private static func rimTube(radius: Float, y: Float) -> ModelEntity? {
-        let points = (0...48).map { step -> SIMD3<Float> in
-            let angle = Float(step) / 48 * 2 * .pi
+    /// A ring of tube. `segments` is 48 for a circle and 6 for a line
+    /// that has to lie on the hex cradle's own edge — a ring whose
+    /// segment count disagrees with the solid it decorates intersects it
+    /// once per facet.
+    private static func rimTube(radius: Float, y: Float,
+                                segments: Int = 48) -> ModelEntity? {
+        let points = (0...segments).map { step -> SIMD3<Float> in
+            let angle = Float(step) / Float(segments) * 2 * .pi
             return SIMD3(cos(angle) * radius, y, sin(angle) * radius)
         }
         guard let mesh = TubeMesh.tube(lines: [points], radius: 0.0014, sides: 4)
@@ -780,7 +968,12 @@ final class HubScene {
               let exhibit = exhibits.first(where: { $0.moduleID == id }) else {
             return false
         }
-        if dockedModuleID == id { dockedModuleID = nil; loadButton?.isEnabled = false }
+        if dockedModuleID == id {
+            dockedModuleID = nil
+            loadButton?.isEnabled = false
+            // Lifted out of the cradle: the fingers let go first.
+            setLatches(closed: false, duration: 0.18)
+        }
         draggingID = id
         let local = root.convert(position: world, from: nil)
         dragOffset = exhibit.anchor.position - local
@@ -819,23 +1012,11 @@ final class HubScene {
 
         if simd_distance(exhibit.anchor.position, podiumTop) < Self.podiumSnapRadius {
             // Docked: the exhibit settles onto the pedestal and the
-            // Load button appears above it.
-            if let previous = dockedModuleID, previous != id,
-               let old = exhibits.first(where: { $0.moduleID == previous }) {
-                returningIDs[previous] = time + 0.45
-                old.anchor.move(to: Transform(translation: old.basePosition),
-                                relativeTo: root, duration: 0.4,
-                                timingFunction: .easeInOut)
-            }
-            dockedModuleID = id
-            onDock?()
-            exhibit.anchor.move(to: Transform(translation: podiumTop),
-                                relativeTo: root, duration: 0.28,
-                                timingFunction: .easeOut)
-            SoundPalette.play(.chime, on: exhibit.anchor, volume: 0.6)
-            seatLoadButton()
-            loadButton?.isEnabled = true
-            podiumGlow?.components.set(OpacityComponent(opacity: 1.0))
+            // Load button appears above it. 0.28 s, because the hand
+            // released it within 34 cm of the pad — it has almost
+            // arrived already, and a long glide over a short distance
+            // reads as the object being taken off you.
+            dock(exhibit, id: id, duration: 0.28)
         } else {
             // Not offered: it glides home.
             returningIDs[id] = time + 0.5
@@ -843,6 +1024,52 @@ final class HubScene {
                                 relativeTo: root, duration: 0.45,
                                 timingFunction: .easeInOut)
             podiumGlow?.components.set(OpacityComponent(opacity: 0.35))
+        }
+    }
+
+    /// Seats an exhibit on the pad: whatever was there goes home, this
+    /// one flies in, and the Load button comes up over it.
+    ///
+    /// ONE dock, three callers — the released carry, the tap, and the
+    /// debug seat. They differ only in how long the flight takes, and
+    /// that is the whole reason this is a function: the carry's version
+    /// grew a chime, a glow, a returning-grace entry and an eviction over
+    /// several passes, and a tap that re-implemented "put it on the pad"
+    /// would have had to grow all four again, correctly, from memory.
+    private func dock(_ exhibit: Exhibit, id: String, duration: Double) {
+        // EVICT FIRST. Two labs cannot stand on one pad, and the one
+        // being replaced has to be told to go home before `dockedModuleID`
+        // forgets it was ever there.
+        if let previous = dockedModuleID, previous != id,
+           let old = exhibits.first(where: { $0.moduleID == previous }) {
+            returningIDs[previous] = time + 0.45
+            old.anchor.move(to: Transform(translation: old.basePosition),
+                            relativeTo: root, duration: 0.4,
+                            timingFunction: .easeInOut)
+        }
+        dockedModuleID = id
+        // NO `returningIDs` GRACE HERE, unlike the glide home. The idle
+        // loop's docked branch is the one arm that never writes
+        // `anchor.position` — it only turns the miniature and lights its
+        // name — so the flight is unopposed, and a grace entry would
+        // instead skip the branch and freeze the lab's physics for the
+        // whole way in.
+        exhibit.anchor.move(to: Transform(translation: podiumTop),
+                            relativeTo: root, duration: duration,
+                            timingFunction: .easeOut)
+        SoundPalette.play(.chime, on: exhibit.anchor, volume: 0.6)
+        seatLoadButton()
+        loadButton?.isEnabled = true
+        podiumGlow?.components.set(OpacityComponent(opacity: 1.0))
+
+        // The latches close AS IT LANDS, not as it sets off — they are
+        // the cradle answering the arrival, and fingers that fold shut
+        // over an empty pocket while the lab is still crossing the room
+        // are a machine closing on nothing.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(duration * 0.75))
+            guard let self, self.dockedModuleID == id else { return }
+            self.setLatches(closed: true, duration: 0.26)
         }
     }
 
@@ -856,17 +1083,28 @@ final class HubScene {
         seatLoadButton()
         loadButton?.isEnabled = true
         podiumGlow?.components.set(OpacityComponent(opacity: 1.0))
+        setLatches(closed: true, duration: 0)
     }
     #endif
 
-    /// A tap on an exhibit teaches the gesture: the podium flashes.
-    func hintPodium() {
-        guard let podiumGlow else { return }
-        podiumGlow.components.set(OpacityComponent(opacity: 1.0))
-        Task { @MainActor [weak podiumGlow] in
-            try? await Task.sleep(for: .milliseconds(650))
-            podiumGlow?.components.set(OpacityComponent(opacity: 0.35))
-        }
+    /// A tap on an exhibit sends it to the pad — the gallery's reachable
+    /// door since the ENTER plaque came off on 2026-08-09.
+    ///
+    /// SLOWER THAN THE CARRY'S LANDING, and deliberately so. A released
+    /// carry is already at the pad and 0.28 s finishes a movement the
+    /// hand began; this one crosses the better part of a metre from a
+    /// terrace the wearer is looking AT, and the flight is the only thing
+    /// that says where their lab went. Fast enough not to be a wait,
+    /// slow enough to be followed.
+    ///
+    /// A tap on the lab ALREADY on the pad is not a second door — it is
+    /// ignored, because re-flying an object to the spot it occupies is a
+    /// glitch, and because the Load button is sitting over it.
+    func sendToPad(id: String) {
+        guard dockedModuleID != id, !isCarrying,
+              let exhibit = exhibits.first(where: { $0.moduleID == id })
+        else { return }
+        dock(exhibit, id: id, duration: 0.5)
     }
 
     // THE FLOOR POOL IS GONE (2026-07-31), and it is not coming back in
@@ -894,10 +1132,6 @@ final class HubScene {
     /// the ceiling. Set from the arc geometry in build().
     private var titlePosition = SIMD3<Float>(0, 1.98, -2.05)
 
-    /// Warm ivory, opaque, self-lit enough to hold its own against
-    /// daylight. (It was a frosted grey at 80% opacity, which over a
-    /// cream wall is a smudge.)
-    private static let titleColor = HubTitleStyle.ivory
     /// The warm edge-light behind the letters — the thing that turns
     /// flat white type into something that looks lit. Champagne rather
     /// than gold: at full saturation it read as a toy.
@@ -905,8 +1139,13 @@ final class HubScene {
     /// The lockup's overall width, metres. Both lines are scaled to
     /// exactly this, which is what makes it read as a designed mark.
     private static let titleWidth: Float = 0.60
-    /// Gap between the two lines, as a fraction of a line's cap height.
-    private static let titleLeading: Float = 0.30
+
+    // `titleColor` and `titleLeading` were deleted 2026-08-09, both
+    // unread. They are what is left of the wordmark BEFORE the machined
+    // plaque: a colour and a line gap are the two knobs flat extruded
+    // type has, and the plaque draws its own keyline per glyph and
+    // spaces its two lines from the cap height it measures. The plaque
+    // shipped 2026-08-02 and these two have described nothing since.
 
     /// "Physics / Playground" as a two-line LOCKUP, not two words that
     /// happen to be near each other.
@@ -934,10 +1173,18 @@ final class HubScene {
 
         let lines = ["Physics", "Playground"]
         // Build at a reference size, then scale each to the common width.
+        //
+        // MEASURED FROM WHAT IS BUILT. This used to build with `line`
+        // and measure with `extents` — two calls that agreed only
+        // because both wrapped the same single text mesh. The keylined
+        // builder lays the line out glyph by glyph and swells a shell
+        // around each one, so its real extents are its own business;
+        // asking `extents` would measure a narrower object than the one
+        // standing in the room, and the flush-width lockup would set
+        // both lines to the wrong scale.
         let reference: CGFloat = 0.17
-        let built = lines.map { text -> (entity: Entity, extents: SIMD3<Float>) in
-            (HubTitleStyle.line(text, size: reference, accent: nil),
-             HubTitleStyle.extents(text, size: reference))
+        let built = lines.map { text in
+            HubTitleStyle.keylined(text, size: reference, accent: nil)
         }
         let scales = built.map { Self.titleWidth / max($0.extents.x, 1e-4) }
         // Cap heights AFTER scaling — a wider scale makes taller letters.
@@ -963,35 +1210,29 @@ final class HubScene {
             cursor -= height + gap
         }
 
-        // THE PLAQUE GETS A PLAQUE, and this is the app's own lesson
-        // applied to the one surface that had escaped it.
+        // THE BACKING PLATE STOOD HERE FOR ONE DAY, and what replaced it
+        // is the same idea with the rectangle taken out.
         //
         // The mark is ivory machined metal and the room behind it is
         // somebody's wall — cream, in the first screenshot ever taken of
-        // it, which showed the wordmark as a barely-there ghost. I had
-        // already tried the obvious fix and pushed the emissive from
-        // 0.16 to 0.34; it did nothing, because the problem is not that
-        // the letters are dim. It is that light-on-light has no
-        // contrast, and DECISIONS.md settled this on 2026-07-26 in four
-        // words: CASINGS BEAT GLOWS. The layer-bank plates a metre away
-        // in the same screenshot are perfectly legible, and they are
-        // dark stock.
+        // it, which showed the wordmark as a barely-there ghost. The
+        // obvious fix, pushing the emissive from 0.16 to 0.34, did
+        // nothing: the letters were never dim, and light-on-light has no
+        // contrast however bright the light. DECISIONS.md settled the
+        // principle on 2026-07-26 in four words — CASINGS BEAT GLOWS —
+        // and the layer-bank plates a metre away in that same screenshot
+        // are perfectly legible on dark stock.
         //
-        // So the letters keep their ivory and get something to be ivory
-        // AGAINST. Sized from the measured lockup rather than typed, so
-        // it cannot drift from the words the way a hand-set panel would.
-        let plateInset: Float = 0.085
-        var backing = Materials.machined(UIColor(white: 0.10, alpha: 1))
-        backing.blending = .transparent(opacity: .init(floatLiteral: 0.82))
-        let plate = ModelEntity(
-            mesh: .generateBox(width: Self.titleWidth + plateInset * 2,
-                               height: blockHeight + plateInset * 2,
-                               depth: 0.006, cornerRadius: 0.018),
-            materials: [backing])
-        // BEHIND the letters, which sit at z 0 — far enough back that
-        // the extrusion never punches through the face.
-        plate.position = SIMD3(0, 0, -0.012)
-        titleAnchor.addChild(plate)
+        // So on 2026-08-08 the lockup got a 0.10-white plate at 82%
+        // behind it, sized from the measured block. It worked, and the
+        // owner cut it the next day: the contrast was wanted, a black
+        // panel hanging in the room was not.
+        //
+        // The casing is now PART OF THE LETTERS — a dark shell swelled
+        // around each glyph inside `HubTitleStyle.keylined`, which is
+        // why nothing is added here. Same contrast, at the only place
+        // the eye actually needs it, and no edge in the room that is not
+        // a letterform.
 
         // A thin champagne rule under the lockup — the jeweller's line
         // that makes the mark read as set type rather than floating
@@ -1035,53 +1276,10 @@ final class HubScene {
         titleAnchor.addChild(entity)
     }
 
-    /// Parents the podium hint just under the cap's front rim, facing
-    /// the user — a small plaque saying what the podium is FOR. The
-    /// Load button hangs over the podium's top, so the two never
-    /// collide. Same distance-compensating scale story as the bar.
-    /// The podium hint, held so it can be hidden. See `showPodiumHint`.
-    private var podiumHintEntity: Entity?
-
-    /// Whether the "carry a lab to the pad" teach should be on screen.
-    ///
-    /// It used to be PERMANENT, UNDISMISSABLE, and shown even while a
-    /// lab was already docked — so the app's single most prominent
-    /// instruction spent most of its life telling you to do the thing
-    /// you had just finished doing. Three conditions retire it now: a
-    /// lab is on the pad, one is in your hand, or you have docked one
-    /// before (`AppSettings.seenHints`, the same gate the module hints
-    /// use, under this pseudo-module id).
-    static let podiumHintID = "hub.podium"
-
-    func showPodiumHint(_ visible: Bool) {
-        podiumHintEntity?.isEnabled = visible
-    }
-
-    /// Called the first time a lab is actually seated on the pad, so the
-    /// teach can retire itself. Set by the view, which owns `AppSettings`
-    /// — and called from the dock branch rather than from the view's
-    /// `update:` closure, because writing app state during a SwiftUI
-    /// update pass is a different kind of bug.
-    var onDock: (() -> Void)?
-    /// Opens a lab. Set by the view, and reached from BOTH the exhibit
-    /// and its plaque — see the note on `accessibilitySubscriptions`.
+    /// Opens a lab. Set by the view, and reached from the exhibit's
+    /// VoiceOver actions and from the Load button — see the note on
+    /// `accessibilitySubscriptions`.
     var onEnter: ((String) -> Void)?
-
-    func seatPodiumHint(_ entity: Entity) {
-        podiumHintEntity = entity
-        entity.components.set(BillboardComponent())
-        entity.scale = SIMD3(repeating: 1.6)
-        entity.position = SIMD3(podiumTop.x,
-                                podiumTop.y - GalleryLayout.exhibitLift - 0.09,
-                                podiumTop.z + 0.12)
-        // Belt AND braces, per `stripInput`'s own doc comment:
-        // `.allowsHitTesting(false)` governs the SwiftUI view's interior
-        // and is not a promise about the entity hosting it, which can
-        // still carry an input target and a collider sized to the card.
-        // This one sits in the path of the very gesture it describes.
-        stripInput(from: entity)
-        root.addChild(entity)
-    }
 
     /// The measured size of a run of the title face, for the lockup.
     /// Internal, not private: `HubDomainTitle` builds its two-line
@@ -1137,10 +1335,12 @@ final class HubScene {
         return base
     }
 
+    /// `domain` WAS A PARAMETER HERE and is not any more. Its only use
+    /// was tinting the progress ring, so it left with the experiments —
+    /// an exhibit's own accent comes from its `ModuleDescriptor`, and the
+    /// terrace it stands on is what says which domain it belongs to.
     private func buildExhibit(for module: ModuleDescriptor,
-                              at basePosition: SIMD3<Float>,
-                              domain: HubDomain,
-                              progress: (done: Int, total: Int)) {
+                              at basePosition: SIMD3<Float>) {
         let anchor = Entity()
         anchor.name = module.id
         anchor.position = basePosition
@@ -1251,17 +1451,6 @@ final class HubScene {
             pulser.addChild(promisePivot)
         }
 
-        // The module's own progress, worn as an arc behind the exhibit:
-        // the domain-coloured arc of what is done, and a gold band once
-        // everything is — the reward lives on the home screen itself.
-        if progress.total > 0 {
-            let ring = Self.progressRing(
-                done: progress.done, total: progress.total,
-                accent: UIColor(domain.color))
-            ring.components.set(BillboardComponent())
-            pulser.addChild(ring)
-        }
-
         // MEASURED FROM THE MINIATURE, and from nothing else.
         //
         // The obvious move is to measure `pulser`, which is everything
@@ -1311,93 +1500,31 @@ final class HubScene {
         ]))
         anchor.components.set(HoverEffectComponent())
 
-        // The plaque stands under `anchor`, NOT under `pulser`: a
-        // control that swells and shrinks with the focus pulse is a
-        // control that moves while you are aiming at it.
-        // ON THE TERRACE, IN FRONT OF THE PLINTH — where a museum label
-        // goes, and the only place it can go.
+        // THE ENTER PLAQUE STOOD HERE, and its removal (owner,
+        // 2026-08-09) took a whole spacing problem with it.
         //
-        // The puck is 0.17 m across and the exhibit's own touch target
-        // is a 0.27 m box centred on the miniature, so the whole puck
-        // top is INSIDE that target: a plaque standing on the puck is a
-        // plaque whose pinches the exhibit wins, which is worse than no
-        // plaque at all. `testGalleryExhibitTargetsDoNotOverlapEachOther`
-        // said so on the first run, for three of the six.
+        // It was a machined slab reading ENTER, standing on the terrace
+        // in front of each puck at y −0.160, z 0.165. It had to stand
+        // FORWARD rather than lower because the exhibit's own 0.27 m
+        // touch target covers the entire puck top, so anything seated
+        // there loses every pinch to the miniature above it; and the day
+        // before it was deleted, an attempt to derive its y from the
+        // measured caption height sank all six into the slab, invisible,
+        // with every test green.
         //
-        // It clears on Z, not on Y, and that was measured rather than
-        // reasoned: dropping it far enough to clear the exhibit's box
-        // vertically would sink it 12 mm INTO the terrace slab (the
-        // exhibit box bottom and the puck top are 5 mm apart). Standing
-        // it forward of the plinth clears the same box with 10 mm to
-        // spare and leaves it resting on the terrace, which is where a
-        // museum label lives anyway — under the miniature, under its
-        // name, at the front of the plinth.
-        let enter = Self.enterPlaque(accent: UIColor(module.accent))
-        enter.name = "\(Self.enterPrefix)\(module.id)"
-        // −0.160, UNCHANGED, and the reason is a grave.
-        //
-        // The promise caption above wraps now, so it is two lines for
-        // most labs and the plaque crosses the second one. Deriving the
-        // plaque's y from the caption's measured height (2026-08-09)
-        // moved it 37 mm down — into the terrace slab it rests on. Every
-        // ENTER plaque in the gallery vanished, which is the second way
-        // into a lab, and the three tests written for that spacing were
-        // all green while it happened.
-        //
-        // The stack is caption (z 0.11) and plaque (z 0.165), both
-        // billboarding from different depths, so their on-screen order
-        // is not their y order and no arithmetic in y decides it — which
-        // is what the caption's own comment said before any of this was
-        // written. Fixing it means choosing one plane for the whole
-        // stack and re-checking the plaque against the collider box it
-        // was moved forward to clear: a placement decision with a
-        // photograph attached, not a spacing tweak.
-        enter.position = [0, -0.160, Self.plaqueDepth]
-        enter.components.set(BillboardComponent())
-        SpatialActions.attach(
-            to: enter, label: "Enter \(module.title)",
-            activate: { [weak self] in self?.onEnter?(module.id) })
-        anchor.addChild(enter)
+        // What replaces it is `sendToPad`: the tap that used to be
+        // "wrong object, nothing happens" now flies the lab to the pad,
+        // so the door needs no furniture on the terrace at all. The
+        // caption stack is two billboarded objects now instead of three,
+        // which is also the end of the y-arithmetic-between-different-
+        // depths trap that this file warned about twice and fell into
+        // anyway.
 
         exhibits.append(Exhibit(
             moduleID: module.id, anchor: anchor, pulser: pulser,
             vignette: vignette, namePivot: namePivot,
             promisePivot: promisePivot, halo: glow,
             basePosition: basePosition, animate: built.animate))
-    }
-
-    /// The completed fraction drawn as an arc behind the miniature,
-    /// billboarded so it reads as a dial without ever framing the model.
-    /// There is deliberately no full-circle track under it: the faint
-    /// white ring read as a halo AROUND every exhibit rather than as a
-    /// dial, and came off at the owner's direction (2026-08-03).
-    private static func progressRing(done: Int, total: Int,
-                                     accent: UIColor) -> Entity {
-        let ring = Entity()
-        let radius: Float = 0.15
-        let z: Float = -0.10
-        let gold = DesignTokens.Palette.completionGoldUI
-        let complete = done == total
-
-        func circlePoints(fraction: Float, z: Float) -> [SIMD3<Float>] {
-            let segments = max(Int(48 * fraction), 2)
-            // Start at 12 o'clock, sweep clockwise as seen by the user.
-            return (0...segments).map { step in
-                let angle = .pi / 2 - 2 * .pi * fraction * Float(step) / Float(segments)
-                return SIMD3(radius * cos(angle), radius * sin(angle), z)
-            }
-        }
-
-        let fraction = Float(done) / Float(total)
-        if fraction > 0.01,
-           let arc = TubeMesh.tube(lines: [circlePoints(fraction: fraction,
-                                                        z: z + 0.002)],
-                                   radius: 0.0024, sides: 4) {
-            var lit = UnlitMaterial(color: complete ? gold : accent)
-            lit.blending = .transparent(opacity: complete ? 0.6 : 0.5)
-            ring.addChild(ModelEntity(mesh: arc, materials: [lit]))
-        }
-        return ring
     }
 
     /// An exhibit's name, built to survive the room behind it.
@@ -1427,95 +1554,6 @@ final class HubScene {
     /// and every label longer than 14 mm straddled the switch it named.
     /// One formula, two callers — a second copy of the padding arithmetic
     /// would drift the moment either changed.
-    /// Entities named with this prefix are ENTER plaques; the suffix is
-    /// the module id.
-    static let enterPrefix = "enter-"
-
-    /// THE REACHABLE WAY IN — a small machined plaque standing on each
-    /// puck that says ENTER and means it.
-    ///
-    /// Why this exists, and why it is not simply the old bare tap.
-    ///
-    /// DECISIONS.md 2026-07-29 removed tap-to-enter because "entering by
-    /// tap made the whole gallery one large accidental-activation
-    /// surface while merely looking around" — a real problem, since an
-    /// exhibit is a 0.27 m object you are meant to look at. The same
-    /// entry made the podium and the focus panel's Load button an
-    /// explicit PAIR: "the podium is the delightful path; the button is
-    /// the reachable one, and neither may be deleted without the other
-    /// changing." On 2026-08-04 the panel was deleted and the podium did
-    /// not change, so the only way into a lab became a sustained ~1.1 m
-    /// pinch-drag onto a 0.105 m pad. That is the pact broken, and it
-    /// is also the app's own standing rule broken at its front door:
-    /// nothing may be the only path to a capability.
-    ///
-    /// A plaque answers the 2026-07-29 objection rather than ignoring
-    /// it. The accidental-activation surface was the whole exhibit; this
-    /// is a 0.11 m nameplate standing apart from it, below the
-    /// miniature and in front of it, which you have to look AT rather
-    /// than merely near. Gaze plus a pinch, nothing to aim or carry —
-    /// exactly what the deleted Load button gave, on the object it
-    /// belongs to instead of on a panel. The carry-to-the-podium stays
-    /// as the ceremony, and it remains the better story; it is simply
-    /// no longer the only door.
-    @MainActor
-    /// The plaque's height, from the arithmetic `enterPlaque` uses rather
-    /// than a number typed twice. Constant in practice — the word and the
-    /// size are fixed — but derived, so the caption above it can be
-    /// spaced against what the plaque actually is.
-    static var enterPlaqueHeight: Float {
-        let text = HubTitleStyle.line("ENTER", size: Self.enterLabelSize,
-                                      accent: .white)
-            .visualBounds(relativeTo: nil).extents
-        return max(text.y, 0.008) + 0.018
-    }
-
-    static let enterLabelSize: CGFloat = 0.019
-
-    static func enterPlaque(accent: UIColor) -> Entity {
-        let plaque = Entity()
-
-        let label = HubTitleStyle.line("ENTER", size: Self.enterLabelSize,
-                                       accent: accent)
-        let text = label.visualBounds(relativeTo: nil).extents
-        let width = max(text.x, 0.02) + 0.030
-        let height = max(text.y, 0.008) + 0.018
-
-        // A slab, not a card: the same alloy as the wordmark and the
-        // labs' instruments, so it reads as hardware rather than as
-        // interface pasted onto the room.
-        var stock = Materials.machined(
-            HubTitleStyle.blend(accent, toward: UIColor(white: 0.22, alpha: 1), by: 0.62))
-        stock.emissiveColor = .init(color: accent)
-        stock.emissiveIntensity = 0.05
-        let slab = ModelEntity(
-            mesh: .generateBox(width: width, height: height, depth: 0.010,
-                               cornerRadius: 0.0035),
-            materials: [stock])
-        plaque.addChild(slab)
-        label.position.z = 0.006
-        plaque.addChild(label)
-
-        Grabbable.configureTouchTarget(plaque, matchingVisualBoundsOf: plaque)
-        return plaque
-    }
-
-    /// The module a tap on an ENTER plaque belongs to, or nil.
-    func enterPlaqueModuleID(for entity: Entity) -> String? {
-        var current: Entity? = entity
-        while let candidate = current {
-            if candidate.name.hasPrefix(Self.enterPrefix) {
-                return String(candidate.name.dropFirst(Self.enterPrefix.count))
-            }
-            current = candidate.parent
-        }
-        return nil
-    }
-
-    /// The depth the caption and the ENTER plaque share, so that their
-    /// vertical spacing survives billboarding.
-    static let plaqueDepth: Float = 0.165
-
     /// Where the promise caption's CENTRE sits under the exhibit name.
     static let promiseTop: Float = -0.142
 
@@ -1530,22 +1568,15 @@ final class HubScene {
         textExtents(text, size: size).x + Float(size) * 0.72 * 2
     }
 
-    /// How tall the plate `namePlate` would build.
-    ///
-    /// Asked of the SAME arithmetic the builder uses, not of the finished
-    /// entity's `visualBounds`. The first attempt at spacing the ENTER
-    /// plaque measured the built caption — and a freshly built, unparented
-    /// entity does not report the plate, so the plaque moved down by less
-    /// than the caption was tall and still crossed its second line. A
-    /// number you can compute before you build is a number you can also
-    /// TEST, which is the difference between this and another screenshot.
-    static func namePlateHeight(_ text: String, size: CGFloat = 0.036,
-                                wrapWidth: CGFloat = 0) -> Float {
-        let extents = wrapWidth > 0
-            ? Callout.textMesh(text, size: size, wrapWidth: wrapWidth).bounds.extents
-            : textExtents(text, size: size)
-        return extents.y + Float(size) * 0.44 * 2
-    }
+    // `namePlateHeight` was deleted 2026-08-09 with the ENTER plaque it
+    // spaced. Keeping the lesson, which outlived its caller: it asked
+    // the SAME arithmetic the builder uses rather than the built
+    // entity's `visualBounds`, because a freshly built, unparented
+    // entity does not report its plate — the first attempt measured the
+    // caption, moved the plaque down by less than the caption was tall,
+    // and still crossed its second line. A number you can compute
+    // before you build is a number you can also TEST, which is the
+    // difference between that fix and another screenshot.
 
     /// A nameplate, optionally WRAPPED.
     ///
@@ -1622,21 +1653,49 @@ final class HubScene {
     /// furniture is gone and focus is expressed the only way that does
     /// not add any: the thing you are facing gets bigger, comes toward
     /// you, and sits in a pool of its own light.
+    /// The focus pool's entity name — the pool of the module's colour
+    /// that appears on the platform under whichever exhibit you face.
+    static let focusPoolName = "focus-pool"
+
     private static func focusGlow(accent: UIColor) -> Entity {
         // A pool of the module's colour ON the puck beneath the
         // miniature — the slab relights under the exhibit you face.
         // (It used to be a billboarded halo floating behind the model;
         // with real furniture underneath, light falling on a surface
         // reads as light.)
+        // THE THREE DISCS SHARED ONE PLANE, and this is the fix.
+        //
+        // All three were built at the glow's own origin — three
+        // transparent cylinders 1 mm thick at identical y — so their
+        // faces were coplanar to the micron and the depth buffer had to
+        // choose between them per pixel, per frame, as the head moved.
+        // That is the flicker under a focused exhibit, and it is most
+        // obvious on the pad, where the docked lab holds still and gives
+        // the eye time to watch it happen.
+        //
+        // A LADDER, WIDEST AT THE BOTTOM. Half a millimetre apart is
+        // plenty for the depth buffer, and stacking the faint wide disc
+        // lowest means the tighter, brighter ones read as lying on top
+        // of it — which is the order the falloff is trying to describe
+        // anyway.
         let glow = Entity()
-        for (radius, opacity) in [(Float(0.085), Float(0.30)),
-                                  (Float(0.135), Float(0.15)),
-                                  (Float(0.200), Float(0.06))] {
+        // Named so the stacking rule can be TESTED. Reaching for these
+        // discs by shape instead — flat, wide, translucent — also finds
+        // the Gravity Lab miniature's two orbit tracks, which are rings
+        // at different radii and never overlap, and the test fails on an
+        // exhibit that is drawn correctly.
+        glow.name = Self.focusPoolName
+        let layers: [(radius: Float, opacity: Float)] = [
+            (0.200, 0.06), (0.135, 0.15), (0.085, 0.30),
+        ]
+        for (index, layer) in layers.enumerated() {
             var material = UnlitMaterial(color: accent)
-            material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+            material.blending = .transparent(
+                opacity: .init(floatLiteral: layer.opacity))
             let disc = ModelEntity(
-                mesh: .generateCylinder(height: 0.001, radius: radius),
+                mesh: .generateCylinder(height: 0.001, radius: layer.radius),
                 materials: [material])
+            disc.position.y = Float(index) * 0.0005
             glow.addChild(disc)
         }
         glow.position = SIMD3(0, -GalleryLayout.exhibitLift + 0.006, 0)
@@ -2024,20 +2083,14 @@ private struct HubUtilityBar: View {
     let openSettings: () -> Void
     let openAbout: () -> Void
     let openNotebook: () -> Void
-    let openExperiments: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
-            // FIRST, because it is the only one of the four you consult
-            // mid-session rather than once. Settings and About are
-            // errands; the experiments are the reason to come back.
-            Button(action: openExperiments) {
-                Image(systemName: "flask.fill")
-                    .font(.title3)
-            }
-            .accessibilityLabel("Experiments")
-            .accessibilityHint("What to try next, and everything there is to try")
-
+            // A FLASK STOOD FIRST HERE from 2026-08-08 to 08-09, opening
+            // the experiments window, on the reasoning that it was the
+            // only one of the four you consult mid-session rather than
+            // once. The experiments are gone (owner, 2026-08-09) and the
+            // bar is back to three verbs, all errands.
             Button(action: openSettings) {
                 Image(systemName: "gearshape.fill")
                     .font(.title3)

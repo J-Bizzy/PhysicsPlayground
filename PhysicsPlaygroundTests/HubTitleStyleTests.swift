@@ -67,6 +67,137 @@ final class HubTitleStyleTests: XCTestCase {
                        + "interpenetrate them")
     }
 
+    // MARK: The keyline
+
+    /// EVERY GLYPH GETS A SHELL. The keyline is what the wordmark is
+    /// read against on a bright wall; one letter without it is one
+    /// letter that disappears at the worst moment.
+    @MainActor
+    func testEveryGlyphIsKeylined() {
+        let word = "PHYSICS"
+        let built = HubTitleStyle.keylined(word, size: 0.17, accent: nil)
+        XCTAssertEqual(built.entity.children.count, word.count * 2, """
+            \(built.entity.children.count) parts for \(word.count) letters. \
+            Each glyph is a letter plus its casing, so this should be twice \
+            the letter count — anything less is a letter with no keyline.
+            """)
+    }
+
+    /// THE SHELL IS BEHIND THE LETTER, and this is the assertion that
+    /// catches the whole thing rendering as a dark blob. The casing is
+    /// swollen and deeper than what it backs; if its face ever comes
+    /// forward of the letter's, the wordmark is a black slab with the
+    /// shape of some words.
+    @MainActor
+    func testTheKeylineSitsBehindTheLetterItBacks() {
+        let word = "PLAY"
+        let built = HubTitleStyle.keylined(word, size: 0.17, accent: nil)
+        let parts = built.entity.children.map {
+            $0.visualBounds(relativeTo: built.entity)
+        }
+        XCTAssertEqual(parts.count, word.count * 2, "unexpected part count")
+
+        for index in stride(from: 0, to: parts.count, by: 2) {
+            let letter = parts[index], casing = parts[index + 1]
+            XCTAssertLessThan(casing.max.z, letter.max.z, """
+                a casing's face reaches z \(casing.max.z) against its \
+                letter's \(letter.max.z) — level with or in front of the type \
+                it is supposed to sit behind, which draws the wordmark as a \
+                dark blob shaped like some words.
+                """)
+            XCTAssertLessThan(casing.min.z, letter.min.z, """
+                the casing does not run deeper than its letter, so the letter \
+                is not contained by it — that is two solids sharing a volume, \
+                which is the doubling this builder exists to avoid.
+                """)
+        }
+    }
+
+    /// SHELL AND LETTER SHARE A CENTRE. This is the failure `namePlate`
+    /// documents and this builder exists to avoid: scale a whole string
+    /// and every glyph moves outward from the string's centre, so the
+    /// casing letters land between their own neighbours and the word
+    /// reads as if printed twice. Built per glyph, the two cannot
+    /// separate — unless someone reintroduces a string-wide scale, which
+    /// is what this catches.
+    @MainActor
+    func testEachCasingIsCentredOnItsOwnGlyph() {
+        let word = "PLAYGROUND"
+        let built = HubTitleStyle.keylined(word, size: 0.17, accent: nil)
+        let parts = built.entity.children.map {
+            $0.visualBounds(relativeTo: built.entity)
+        }
+        // The builder adds each glyph as a letter followed by its
+        // casing, so the pairing is positional.
+        XCTAssertEqual(parts.count, word.count * 2, "unexpected part count")
+
+        for index in stride(from: 0, to: parts.count, by: 2) {
+            let letter = parts[index], casing = parts[index + 1]
+            XCTAssertEqual(casing.center.x, letter.center.x, accuracy: 0.002, """
+                a casing centred at x \(casing.center.x) backs a letter at \
+                \(letter.center.x). Off-centre casings are the printed-twice \
+                failure returning.
+                """)
+            XCTAssertEqual(casing.center.y, letter.center.y, accuracy: 0.002,
+                           "the casing is not vertically centred on its letter")
+            XCTAssertGreaterThan(casing.extents.x, letter.extents.x, """
+                the casing is no wider than the letter it backs, so there is \
+                no keyline to see.
+                """)
+        }
+    }
+
+    /// THE PER-GLYPH LAYOUT AGREES WITH THE FONT'S OWN.
+    ///
+    /// The builder lays the line out itself — right edge of glyph i is
+    /// the right edge of the prefix ending at glyph i — rather than
+    /// letting `generateText` set one string. That is the only part of
+    /// this that could silently drift: if the placement accumulated
+    /// error, letters would space out or crowd together and nothing
+    /// would fail. So the built width is compared against what the font
+    /// produces for the same word in one pass, which is the layout being
+    /// imitated.
+    @MainActor
+    func testTheKeylinedLineIsAsWideAsTheFontWouldSetIt() {
+        for word in ["PHYSICS", "PLAYGROUND"] {
+            let single = HubTitleStyle.extents(word, size: 0.17).x
+            let built = HubTitleStyle.keylined(word, size: 0.17, accent: nil).extents.x
+            // The casing swells past the outermost letters on both
+            // sides, so the keylined line is legitimately a little
+            // wider — but only by about that swell.
+            let allowed = single * (1 + HubTitleStyle.keylineSwell)
+            XCTAssertGreaterThan(built, single * 0.98, """
+                \(word) sets \(built) m keylined against \(single) m in one \
+                pass — narrower, so the per-glyph placement is crowding the \
+                letters together.
+                """)
+            XCTAssertLessThan(built, allowed + 0.01, """
+                \(word) sets \(built) m keylined against \(single) m in one \
+                pass. The casing explains a few per cent; this is the \
+                placement spacing the letters out.
+                """)
+        }
+    }
+
+    /// ONE BASELINE. Each glyph is generated separately, so the one way
+    /// to get this wrong is to re-centre every letter on its own ink —
+    /// which drops "O" and "S", the letters that overshoot the cap line,
+    /// below their neighbours.
+    @MainActor
+    func testEveryGlyphSitsOnTheSameBaseline() {
+        let built = HubTitleStyle.keylined("PLAYGROUND", size: 0.17, accent: nil)
+        let feet = built.entity.children.map {
+            $0.visualBounds(relativeTo: built.entity).min.y
+        }
+        let lowest = feet.min() ?? 0, highest = feet.max() ?? 0
+        let capHeight = built.extents.y
+        XCTAssertLessThan(highest - lowest, capHeight * 0.12, """
+            the glyphs' feet span \(highest - lowest) m against a cap height \
+            of \(capHeight) m — they are not standing on one line. Round \
+            letters overshoot by a per cent or two; this is more than that.
+            """)
+    }
+
     /// An accented sign is tinted toward the stock alloy rather than
     /// printed in the raw domain hue: the signage is metal, and metal
     /// takes a colour by being anodised, not by being painted.

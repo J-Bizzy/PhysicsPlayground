@@ -120,7 +120,9 @@ final class HomeChromeUITests: XCTestCase {
 
         XCTAssertTrue(app.buttons["Show hints again"].waitForExistence(timeout: 20),
                       "the settings window never showed its onboarding action")
-        XCTAssertTrue(app.buttons["Reset experiment progress…"].exists,
-                      "the destructive progress reset is missing from settings")
+        // "Reset experiment progress…" was the second assertion here
+        // until 2026-08-09. The experiments system was deleted and that
+        // destructive action with it, leaving Onboarding as the window's
+        // one button.
     }
 }

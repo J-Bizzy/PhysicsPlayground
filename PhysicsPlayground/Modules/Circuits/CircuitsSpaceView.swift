@@ -41,9 +41,6 @@ struct CircuitsSpaceView: View {
     /// why the cabinet that briefly held them is gone.
     @State private var palette: Well?
 
-    /// The running commentary — twelve writers and no readers until
-    /// 2026-08-08. See `CircuitsInsightCard`.
-    @State private var insight = CircuitsInsightCard()
     /// Which probe a hand is carrying, if either.
     @State private var probeDrag: CircuitsModel.ProbeSlot?
     /// Carrying the meter itself: where its case was when the hand closed
@@ -76,10 +73,12 @@ struct CircuitsSpaceView: View {
     ///
     /// `CircuitsModel.Preset` has five cases and `loadPreset` had ZERO
     /// callers — series bulbs, parallel bulbs, a voltage divider, an RC
-    /// charger and a dead short, each with a paragraph of `insightText`
-    /// written for it, all compiled and unreachable. They were built for
-    /// the window panel that was deleted on 2026-08-01 and never given a
-    /// surface in the room.
+    /// charger and a dead short, all compiled and unreachable. They were
+    /// built for the window panel that was deleted on 2026-08-01 and
+    /// never given a surface in the room. (Each also carried an authored
+    /// paragraph explaining itself; those went with the insight card on
+    /// 2026-08-09. The CIRCUITS are the teaching now — five real
+    /// arrangements you can take apart.)
     ///
     /// Behind a `SummonHandle` because that type's own header names this
     /// exact case — "the things a room accumulates … a ten-preset fan" —
@@ -131,6 +130,12 @@ struct CircuitsSpaceView: View {
     /// a `confirmationDialog` and why the plate `confirms`.
     private static let clearAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-1.02, -0.02, 0.10)
+
+    /// The layers bank, on the bench's left flank. Named since
+    /// 2026-08-09 so the reach criterion can measure it; the value is
+    /// unchanged.
+    static let bankAnchor = CircuitsRenderer.benchPivot
+        + SIMD3<Float>(-0.62, -0.06, 0.16)
 
     /// BESIDE THE CLEAR PLATE, and unfolding UPWARD — moved down from
     /// y 1.73 on 2026-08-08 after a screenshot showed what the owner had
@@ -300,14 +305,6 @@ struct CircuitsSpaceView: View {
                         position: CircuitsPartsLayout.rightSlot(index: index),
                         spawn: { model.add(kind, at: $0) })
                 }
-            // ABOVE the build volume (`buildHalfExtents.y` is 0.48
-            // about y = 1.25, so parts top out at 1.73), not inside it.
-            // The card carries no collider, but a paragraph drawn
-            // through the middle of a circuit is its own problem.
-            insight.root.position = CircuitsRenderer.benchPivot
-                + SIMD3<Float>(0, 0.60, 0)
-            renderer.root.addChild(insight.root)
-
             // THE METER IS THE TWELFTH SLOT. It stood beside the bench
             // at all times and the owner's word was "intruding"; the
             // cabinet that briefly swallowed it is gone, so it parks in
@@ -400,7 +397,7 @@ struct CircuitsSpaceView: View {
                         // bench — so it is the owner's, not a tidy-up.
                         // The multimeter's rest position (+0.62) is
                         // inside the volume for the same reason.
-                        anchor: CircuitsRenderer.benchPivot + SIMD3(-0.62, -0.06, 0.16),
+                        anchor: Self.bankAnchor,
                         viewer: viewer,
                         dt: event.deltaTime)
                     meter?.update(viewer: viewer, model: model)
@@ -410,11 +407,6 @@ struct CircuitsSpaceView: View {
                     // new capability, not decoration: at the budget the
                     // tray's pinch did nothing at all and said nothing
                     // about it.
-                    insight.update(
-                        text: model.insightText,
-                        anchor: CircuitsRenderer.benchPivot
-                            + SIMD3<Float>(0, 0.60, 0),
-                        dt: event.deltaTime)
                     palette?.update(
                         dt: event.deltaTime,
                         nearestHand: appModel.room.nearestFingertip(
@@ -491,10 +483,10 @@ struct CircuitsSpaceView: View {
             // way to photograph them.
             //
             // `-circPreset series|parallel|divider|rcCharger|shortCircuit`
-            // loads one and — the point — puts its authored paragraph on
-            // the insight card. The card is absent whenever there is
-            // nothing to say, so `-seedCircuits 1` alone photographs an
-            // empty space where the teaching goes.
+            // loads one. It used to also put that preset's authored
+            // paragraph on the insight card; the card was deleted on
+            // 2026-08-09 and the paragraphs with it, so this now just
+            // builds the circuit.
             if let name = UserDefaults.standard.string(forKey: "circPreset"),
                let preset = CircuitsModel.Preset(rawValue: name) {
                 model.loadPreset(preset)
@@ -759,7 +751,7 @@ struct CircuitsSpaceView: View {
         var petals: [Bloom.Petal] = []
         if part.kind == .switcher {
             petals.append(.init(name: "Open or close", symbol: "power",
-                                tint: UIColor(white: 0.45, alpha: 1)) {
+                                tint: DesignTokens.Palette.neutralActionUI) {
                 model.toggleSwitch(id: uuid)
             })
         }
@@ -771,12 +763,12 @@ struct CircuitsSpaceView: View {
             })
         } else if model.isWired(id: uuid) {
             petals.append(.init(name: "Detach", symbol: "scissors",
-                                tint: UIColor(white: 0.45, alpha: 1)) {
+                                tint: DesignTokens.Palette.neutralActionUI) {
                 model.detachComponent(id: uuid)
             })
         }
         petals.append(.init(name: "Delete", symbol: "trash",
-                            tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
+                            tint: DesignTokens.Palette.destructiveUI) {
             model.removeComponent(id: uuid)
         })
 
@@ -962,7 +954,10 @@ struct CircuitsSpaceView: View {
     /// be made. `SpatialPicker` made the same move for the same reason.
 }
 
-// CircuitsSelectedReadout lives in CircuitsControlsPanel.swift —
-// it was rescued there when this view was briefly a station of the
-// merged E&M world, and the panel is its right home anyway.
+// CircuitsSelectedReadout lives in CircuitsSelectedReadout.swift.
+//
+// It pointed at `CircuitsControlsPanel.swift` until 2026-08-09, and
+// that file was deleted on 2026-08-01 with every other module panel —
+// a signpost to a room that had been demolished eight days earlier.
+// The readout moved to its own file in the same sweep.
 

@@ -309,10 +309,14 @@ final class ColliderCriterionTests: XCTestCase {
         let scene = HubScene()
         scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
 
-        // Every per-exhibit target in the gallery, as a world-space box:
-        // the six exhibits AND the six ENTER plaques, which are new
-        // objects at the same 0.36 m pitch and so are subject to exactly
-        // the same question.
+        // Every per-exhibit target in the gallery, as a world-space box.
+        //
+        // SIX, not twelve. Each puck also carried an ENTER plaque until
+        // 2026-08-09 — a second grabbable at the same 0.36 m pitch, and
+        // so subject to exactly this question; three of the six failed it
+        // on the first run and had to be moved forward off the puck. The
+        // plaques are gone (a tap on the exhibit now sends it to the pad
+        // instead), which leaves the exhibits alone at that pitch.
         let moduleIDs = Set(ModuleCatalog.all(appModel: AppModel()).map(\.id))
         var targets: [(id: String, min: SIMD3<Float>, max: SIMD3<Float>)] = []
 
@@ -326,14 +330,10 @@ final class ColliderCriterionTests: XCTestCase {
 
         for exhibit in scene.root.children where moduleIDs.contains(exhibit.name) {
             collect(exhibit, label: exhibit.name)
-            for child in exhibit.children
-            where child.name.hasPrefix(HubScene.enterPrefix) {
-                collect(child, label: child.name)
-            }
         }
 
-        XCTAssertEqual(targets.count, 12,
-                       "expected six exhibits and six ENTER plaques with targets; "
+        XCTAssertEqual(targets.count, moduleIDs.count,
+                       "expected one target per exhibit; "
                        + "found \(targets.count) — if the gallery changed shape "
                        + "this test is measuring the wrong thing")
 

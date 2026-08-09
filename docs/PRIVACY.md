@@ -43,7 +43,6 @@ Stored locally in the app's own container, never transmitted:
 
 - **Lab Notebook entries** — the observations you choose to capture, with
   the physics readings at that moment.
-- **Experiment progress** — which experiments you have completed.
 - **Settings** — volume, gallery placement, which first-run hints you
   have dismissed.
 - **Your circuit bench** — Circuit Workshop remembers what you built.

@@ -26,7 +26,13 @@ Real physics, in your room
 Alternates, all within limit:
 - `Room-scale physics labs` (23)
 - `Six labs. Real constants.` (25)
-- `Experiments you can hold` (24)
+
+*`Experiments you can hold` (24) was a fourth alternate until 2026-08-09.
+It was coined while the app shipped an experiments system, and when that
+system was deleted the line was left in place with a note explaining that
+it no longer named anything. An alternate you have ruled out is not an
+alternate — it is a line someone can still pick by accident, with the
+reason not to sitting in italics beside it. Deleted rather than annotated.*
 
 ## Promotional text (170 max, editable without review)
 
@@ -61,7 +67,7 @@ Rules this follows, because they cost ranking if broken:
 ```
 Physics Playground turns your room into a laboratory.
 
-Six experiments stand at full size in the space around you. You don't
+Six labs stand at full size in the space around you. You don't
 watch them — you reach in. Throw a pendulum bob and it swings from the
 hand speed you gave it. Carry a bar magnet toward another and feel the
 field reorganise. Grab a planet and hurl it out of orbit, then watch the

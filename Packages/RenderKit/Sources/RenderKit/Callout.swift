@@ -116,13 +116,12 @@ public final class Callout {
         root.position = worldPosition
     }
 
-    /// Moves the label relative to the anchor (to dodge other content).
-    public func setOffset(_ newOffset: SIMD3<Float>) {
-        guard simd_distance(newOffset, offset) > 1e-4 else { return }
-        offset = newOffset
-        labelPivot.position = offset
-        rebuildLeader()
-    }
+    // `setOffset(_:)` was deleted 2026-08-09 — public RenderKit API with
+    // no consumer in the app or the tests. Every caller sets its offset
+    // once at construction and lives with it; the dodge-other-content
+    // case it was written for is handled by the eight hand-picked
+    // offsets at the call sites instead, which is its own small problem
+    // and a Phase 2 one.
 
     /// How often a changing readout may regenerate its glyphs.
     ///
@@ -136,15 +135,28 @@ public final class Callout {
     ///
     /// Eight updates a second is faster than anyone can read a changing
     /// number and a tenth of the work.
-    private static let minimumInterval: Double = 1.0 / 8
+    /// Shared with `BackedLabel`, which has the same problem for the
+    /// same reason — one number, so the two cannot drift into "the
+    /// callouts update at one rate and the numerals at another".
+    static let minimumLabelInterval: Double = 1.0 / 8
+    private static var minimumInterval: Double { minimumLabelInterval }
 
     /// Updates the text. Free when unchanged, and rate-limited when it
     /// changes, because generating glyphs is not free.
     public func setText(_ text: String) {
         guard text != lastText else { return }
-        let now = CACurrentMediaTime()
-        guard now - lastTextTime >= Self.minimumInterval else { return }
-        lastTextTime = now
+        // Clearing jumps the queue — see `BackedLabel.setText`, where
+        // the same exemption is spelled out at length. It was latent
+        // here from the day the limit landed: a callout whose subject
+        // disappears could keep describing it for an eighth of a
+        // second. Nothing caught it because `Callout`'s tests set a
+        // value and read it, and only `BackedLabel` had a test that
+        // cleared one.
+        if !text.isEmpty {
+            let now = CACurrentMediaTime()
+            guard now - lastTextTime >= Self.minimumInterval else { return }
+            lastTextTime = now
+        }
         lastText = text
         labelEntity?.removeFromParent()
         backingEntity?.removeFromParent()

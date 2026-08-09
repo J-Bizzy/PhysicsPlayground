@@ -58,7 +58,8 @@ struct MagnetismSpaceView: View {
     /// reach exactly when you had zoomed in to look at something. The
     /// well and the blooms belong to the field and DO scale with it; an
     /// instrument belongs to the room.
-    private static let bankAnchor = SIMD3<Float>(MagnetismModel.regionCenter)
+    /// Internal since 2026-08-09 so the reach criterion can measure it.
+    static let bankAnchor = SIMD3<Float>(MagnetismModel.regionCenter)
         + SIMD3(-0.80, 0.10, 0.08)
 
     var body: some View {
@@ -409,11 +410,11 @@ struct MagnetismSpaceView: View {
             uuid,
             petals: [
                 .init(name: "Flip poles", symbol: "arrow.triangle.2.circlepath",
-                      tint: UIColor(white: 0.45, alpha: 1)) {
+                      tint: DesignTokens.Palette.neutralActionUI) {
                     model.flipMagnet(id: uuid)
                 },
                 .init(name: "Delete", symbol: "trash",
-                      tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
+                      tint: DesignTokens.Palette.destructiveUI) {
                     model.removeMagnet(id: uuid)
                 },
             ],

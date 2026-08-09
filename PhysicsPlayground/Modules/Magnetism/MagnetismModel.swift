@@ -235,8 +235,7 @@ final class MagnetismModel {
                     bodies[id] = DipoleBody()
                     continue
                 }
-                let others = magnets.enumerated().filter { $0.offset != i }.map(\.element)
-                guard !others.isEmpty else { continue }
+                guard magnets.count > 1 else { continue }
 
                 // STILL THE POINT DIPOLE, AND IT IS MEASURABLY THE WRONG
                 // MODEL HERE. Read this before "fixing" it, because the
@@ -274,8 +273,9 @@ final class MagnetismModel {
                 // physics neither model contains and nobody has written.
                 // `testTheBarForceIsUnusableWhereThePolesMeet` pins the
                 // measurement so this is not rediscovered.
-                let force = MagneticField.netForce(on: magnets[i], from: others)
-                let field = MagneticField.vector(at: magnets[i].position, dueTo: others)
+                let force = MagneticField.netForce(on: magnets, at: i)
+                let field = MagneticField.vector(
+                    at: magnets[i].position, dueTo: magnets, excluding: i)
                 let torque = simd_cross(magnets[i].moment, field)
 
                 let strength = magnets[i].strength
@@ -350,14 +350,13 @@ final class MagnetismModel {
         let h = min(dt, 1.0 / 60.0)
         var next = magnets
         for i in magnets.indices where !heldIDs.contains(magnets[i].id) {
-            let others = magnets.enumerated().filter { $0.offset != i }.map(\.element)
-            guard !others.isEmpty else { continue }
+            guard magnets.count > 1 else { continue }
 
             // Translate down the net force (direction exact; speed capped).
             // Point dipole, matching the site above — see the long
                 // note there on why the correct pole-pair force is not
                 // in yet.
-                let force = MagneticField.netForce(on: magnets[i], from: others)
+                let force = MagneticField.netForce(on: magnets, at: i)
             let fMag = simd_length(force)
             if fMag > 1e-22 {
                 let speed = min(Self.forceGain * fMag, Self.maxLinearSpeed)
@@ -387,7 +386,8 @@ final class MagnetismModel {
             // the angle between them. Clamp the step to that and an
             // aligned pair lands exactly on alignment and stops dead,
             // which is what real magnets do.
-            let field = MagneticField.vector(at: magnets[i].position, dueTo: others)
+            let field = MagneticField.vector(
+                at: magnets[i].position, dueTo: magnets, excluding: i)
             let torque = simd_cross(magnets[i].moment, field)
             let tMag = simd_length(torque)
             let fieldMag = simd_length(field)
@@ -581,22 +581,14 @@ final class MagnetismModel {
     // selection" named somewhere else. It had no caller anywhere,
     // including tests.
 
-    /// Reverses the selected magnet's poles (N↔S) — the control that turns
-    /// attraction into repulsion without a twist gesture.
-    func flipSelected() {
-        guard let index = magnets.firstIndex(where: { $0.id == selectedID }) else { return }
-        magnets[index].moment = -magnets[index].moment
-    }
-
-    /// Strength of the selected magnet (|m|, A·m²), preserving direction.
-    var selectedStrength: Double {
-        get { selectedMagnet?.strength ?? Self.defaultStrength }
-        set {
-            guard let index = magnets.firstIndex(where: { $0.id == selectedID }) else { return }
-            let axis = magnets[index].axis
-            magnets[index].moment = axis * max(newValue, 0.1)
-        }
-    }
+    // `flipSelected()` and `selectedStrength` followed it on 2026-08-09,
+    // and the grave above is why they are worth a second note: that
+    // sweep deleted the sibling standing eight lines away and left
+    // these two, which are the same thing — panel controls addressing
+    // "the selection" by name, orphaned when the panel went. Flip and
+    // strength are both petals on the magnet's own ring now. An audit
+    // that removes one member of a group and writes a paragraph about
+    // it is how the other members come to look deliberate.
 
     // MARK: Field readout for the notebook
     //

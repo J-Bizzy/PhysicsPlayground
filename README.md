@@ -1,6 +1,6 @@
 # Physics Playground
 
-Room-scale physics labs for Apple Vision Pro. Six experiments, each one
+Room-scale physics labs for Apple Vision Pro. Six labs, each one
 fully volumetric and grabbable in your actual room — you throw the
 pendulum bob, you carry the magnet, you reshape the orbit by pulling on
 it.

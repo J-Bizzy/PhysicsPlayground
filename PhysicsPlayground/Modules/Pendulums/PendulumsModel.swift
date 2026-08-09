@@ -171,11 +171,22 @@ final class PendulumsModel {
     var scrubTime: Double?
     var scrubNonce = 0
 
-    enum TrailMode: String, CaseIterable, Identifiable {
-        case off, short, long, infinite
-        var id: String { rawValue }
-    }
-    var trailMode: TrailMode = .short
+    // `TrailMode` (off/short/long/infinite) and the `trailMode` property
+    // were deleted 2026-08-09. Four cases, one of them ever reached:
+    // `.short` was the default and the only value `reset()` ever wrote,
+    // no control in the room set it — the bank's four plates are the
+    // vector layers and friction — and `PendulumsRenderer.syncTrail`
+    // carried a `switch` whose other three arms had never run.
+    //
+    // Same shape as the `HubTitleStyle` enum deleted 2026-08-02, and
+    // the same argument: a taxonomy with one reachable case is not a
+    // choice mechanism, it is a constant wearing a switch statement.
+    // The constant is `PendulumsRenderer.trailLifetime`, 1.4 s.
+    //
+    // If trails ever become a control, this comes back as a plate on
+    // the bank AND a `flip` case in ResetCoverageTests — in that order,
+    // because a state with no visible control is how the four modules
+    // on 2026-07-31 drifted out of `reset()` in the first place.
     var showVelocity = true
     var showAcceleration = false
     var showForces = false
@@ -644,7 +655,6 @@ final class PendulumsModel {
         gravity = 9.81
         isPaused = false
         timeScale = 1.0
-        trailMode = .short
         showVelocity = true
         showAcceleration = false
         showForces = false
@@ -677,8 +687,8 @@ extension PendulumsModel: TimeCapsuleRecording {
     /// remainder of the fixed substep, and a restore that dropped it
     /// would re-enter the swing up to one substep out of phase — exactly
     /// the class of error this project refuses to accept as "close
-    /// enough". Out: `frictionOn`, `trailMode`, the vector layers and
-    /// selection (what the observer chose, not what the bench did).
+    /// enough". Out: `frictionOn`, the vector layers and selection
+    /// (what the observer chose, not what the bench did).
     struct CapsuleSnapshot: Equatable {
         var pendulums: [Pendulum]
         var accumulator: Double

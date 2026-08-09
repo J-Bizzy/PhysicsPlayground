@@ -122,6 +122,11 @@ final class KinematicsRenderer {
 
     private let ballPool: EntityPool<ModelEntity>
     private var ballMaterialKeys: [String] = []
+    /// Which flight each pooled ball is currently named for — the same
+    /// trade as Gravity Lab's `bodySlotIDs`: the entity `.name` must be
+    /// the uuidString so manipulation routes correctly, but asking
+    /// whether it already is one allocated a String per ball per frame.
+    private var ballSlotIDs: [UUID?] = []
     /// The scale each pooled ball's touch target was last sized for.
     private var ballColliderScales: [Int: Float] = [:]
     private var appliedTextureVersion = -1
@@ -286,6 +291,7 @@ final class KinematicsRenderer {
             return sphere
         }
         ballMaterialKeys = Array(repeating: "", count: ballPool.budget)
+        ballSlotIDs = Array(repeating: nil, count: ballPool.budget)
         root.addChild(ballPool.root)
         root.addChild(frozenVectors.root)
 
@@ -754,7 +760,8 @@ final class KinematicsRenderer {
 
             // The slot represents this flight now: rename so manipulation
             // events route to the right model object.
-            if slot.payload.name != flight.id.uuidString {
+            if ballSlotIDs[index] != flight.id {
+                ballSlotIDs[index] = flight.id
                 slot.payload.name = flight.id.uuidString
             }
             applyBallMaterial(for: flight.projectile, at: index, slot: slot)

@@ -81,23 +81,7 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertTrue(relaunched.seenHints.isEmpty, "the reset persists")
     }
 
-    func testExperimentResetWipesProgressAndStreak() {
-        UserDefaults.standard.removeObject(forKey: ExperimentProgress.key)
-        UserDefaults.standard.removeObject(forKey: "streak.count")
-        UserDefaults.standard.removeObject(forKey: "streak.lastDay")
-
-        let progress = ExperimentProgress()
-        progress.complete("test.reset")
-        XCTAssertFalse(progress.completed.isEmpty)
-        XCTAssertEqual(progress.streak, 1)
-
-        progress.resetAll()
-        XCTAssertTrue(progress.completed.isEmpty)
-        XCTAssertEqual(progress.streak, 0)
-
-        // A relaunch starts truly clean.
-        let relaunched = ExperimentProgress()
-        XCTAssertTrue(relaunched.completed.isEmpty)
-        XCTAssertEqual(relaunched.streak, 0)
-    }
+    // `testExperimentResetWipesProgressAndStreak` was deleted here on
+    // 2026-08-09 along with `ExperimentProgress` itself. It covered
+    // Settings → Reset experiment progress, which is also gone.
 }

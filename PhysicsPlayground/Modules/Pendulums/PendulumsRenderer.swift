@@ -162,11 +162,11 @@ final class PendulumsRenderer {
 
     // Period tags: T at each pivot — the number that ONLY length and
     // gravity move, floating exactly where that story is anchored.
-    // Text meshes are string-cached; labels update only when the
-    // rendered string changes.
-    private var periodLabels: [UUID: (holder: Entity, text: ModelEntity)] = [:]
-    private var periodKeys: [UUID: String] = [:]
-    private var periodMeshCache: [String: MeshResource] = [:]
+    /// The period tags, one per pendulum. `BackedLabel` owns the glyph
+    /// cache and the "has it changed" check, so this file no longer
+    /// keeps its own `periodKeys`/`periodMeshCache` beside the shared
+    /// ones (deleted 2026-08-09 with the move onto the house plate).
+    private var periodLabels: [UUID: (holder: Entity, backed: BackedLabel)] = [:]
     /// The period tag's own colour — this module's accent.
     ///
     /// It used to be a hand-typed purple that was BYTE-IDENTICAL to the
@@ -174,8 +174,7 @@ final class PendulumsRenderer {
     /// the force-vector colour. In an app whose first rule is that
     /// colour is semantic and never decorative, two different meanings
     /// cannot share a hex.
-    private let periodMaterial = UnlitMaterial(
-        color: DesignTokens.Palette.pendulumsAccentUI)
+    private static let periodTextColor = DesignTokens.Palette.pendulumsAccentUI
     private let ghostMaterial: UnlitMaterial = {
         var material = UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))
         material.blending = .transparent(opacity: 0.28)
@@ -191,7 +190,6 @@ final class PendulumsRenderer {
     /// you move rather than rolling between them. No glow either way:
     /// this is a mass, not a source.
     private static let bobMaterial = Materials.machined(UIColor(white: 0.9, alpha: 1))
-    private let aluminumMaterial = Materials.machined(UIColor(white: 0.7, alpha: 1))
     /// Darker and rougher than the bob on purpose — a cable should not
     /// compete with the mass hanging off it.
     private let cableMaterial = Materials.machined(
@@ -310,7 +308,6 @@ final class PendulumsRenderer {
             visuals[id] = nil
             periodLabels[id]?.holder.removeFromParent()
             periodLabels[id] = nil
-            periodKeys[id] = nil
         }
 
         if grabbedID == nil {
@@ -605,20 +602,36 @@ final class PendulumsRenderer {
 
     // MARK: Trail
 
+    /// The period tag over a pivot: "T = 1.42 s".
+    ///
+    /// ON THE HOUSE PLATE SINCE 2026-08-09, and it is the label
+    /// `BackedLabel` was written for. Its header names this exact
+    /// defect — "the modules' live numerals stayed naked unlit text" —
+    /// and this was the last one, an extruded semibold run in the
+    /// module accent with nothing behind it, thirty centimetres from a
+    /// switch bank whose every plate wears a backing.
+    ///
+    /// It also carried the centring bug the hub fixed in January and
+    /// `BackedLabel` was built with: `position = [-(minX+maxX)/2, 0, 0]`
+    /// centres on X only, so the run hung with its BASELINE on the
+    /// anchor and its mass floating above — the same "not actually
+    /// centred" the wordmark's own note describes. Adopting the shared
+    /// type fixes the backing and the baseline in one move, and drops
+    /// this file's private glyph cache in favour of the shared one.
     private func syncPeriodLabel(for pendulum: PendulumsModel.Pendulum,
                                  gravity: Double, visible: Bool = true) {
-        let label: (holder: Entity, text: ModelEntity)
+        let label: (holder: Entity, backed: BackedLabel)
         if let existing = periodLabels[pendulum.id] {
             label = existing
         } else {
             let holder = Entity()
             let pivot = Entity()
             pivot.components.set(BillboardComponent())
-            let text = ModelEntity()
-            pivot.addChild(text)
+            let backed = BackedLabel(size: 0.024)
+            pivot.addChild(backed.root)
             holder.addChild(pivot)
             root.addChild(holder)
-            label = (holder, text)
+            label = (holder, backed)
             periodLabels[pendulum.id] = label
         }
         label.holder.isEnabled = visible
@@ -627,35 +640,21 @@ final class PendulumsRenderer {
 
         let string = "T = " + PhysicsFormat.measurement(
             pendulum.period(gravity: gravity), "s", decimals: 2)
-        guard periodKeys[pendulum.id] != string else { return }
-        periodKeys[pendulum.id] = string
-        let mesh: MeshResource
-        if let cached = periodMeshCache[string] {
-            mesh = cached
-        } else {
-            if periodMeshCache.count > 200 { periodMeshCache.removeAll() }
-            mesh = MeshResource.generateText(
-                string, extrusionDepth: 0.002,
-                font: .systemFont(ofSize: 0.024, weight: .semibold))
-            periodMeshCache[string] = mesh
-        }
-        label.text.model = ModelComponent(mesh: mesh, materials: [periodMaterial])
-        let bounds = mesh.bounds
-        label.text.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
+        label.backed.setText(string, color: Self.periodTextColor)
     }
 
+    /// How long a bob's trail dot lives, seconds.
+    ///
+    /// Was the `.short` arm of a four-case `switch` on
+    /// `model.trailMode`; the other three arms had never run, and the
+    /// enum was deleted 2026-08-09 (see `PendulumsModel`). Long enough
+    /// to draw the arc either side of the low point, short enough that
+    /// a fast swing does not paint a solid disc.
+    private static let trailLifetime = 1.4
+
     private func syncTrail(dt: Double, model: PendulumsModel) {
-        let lifetime: Double
-        switch model.trailMode {
-        case .off: lifetime = 0
-        case .short: lifetime = 1.4
-        case .long: lifetime = 4.0
-        case .infinite: lifetime = .infinity
-        }
-        guard lifetime > 0, !model.isPaused else {
-            if lifetime == 0 {
-                for slot in trailPool.slots { slot.entity.isEnabled = false }
-            }
+        let lifetime = Self.trailLifetime
+        guard !model.isPaused else {
             ageTrail(lifetime: lifetime)
             return
         }

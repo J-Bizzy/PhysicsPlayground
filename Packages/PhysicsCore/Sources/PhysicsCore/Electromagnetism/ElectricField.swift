@@ -45,6 +45,24 @@ public enum ElectricField {
         }
     }
 
+    /// E at `point` from every charge except the one at `index`.
+    ///
+    /// The free-charge flock asks this per charge per frame, and the
+    /// spelling it replaces —
+    /// `charges.enumerated().filter { $0.offset != j }.map(\.element)`
+    /// — allocated two arrays each time to say "not this one". Same sum,
+    /// no temporaries. (`MagneticField` gained the twin of this on the
+    /// same day, for the same loop shape.)
+    public static func vector(at point: SIMD3<Double>,
+                              dueTo charges: [PointCharge],
+                              excluding index: Int) -> SIMD3<Double> {
+        var sum = SIMD3<Double>.zero
+        for i in charges.indices where i != index {
+            sum += vector(at: point, dueTo: charges[i])
+        }
+        return sum
+    }
+
     /// Field magnitude in N/C at `point` — a convenience for display code.
     public static func magnitude(at point: SIMD3<Double>, dueTo charges: [PointCharge]) -> Double {
         simd_length(vector(at: point, dueTo: charges))

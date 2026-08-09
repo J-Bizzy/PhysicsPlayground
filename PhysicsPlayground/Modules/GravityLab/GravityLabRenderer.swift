@@ -202,6 +202,17 @@ final class GravityLabRenderer {
 
     private let bodyPool: EntityPool<ModelEntity>
     private var bodyMaterialKeys: [String]
+    /// Which body each pooled slot is currently named for.
+    ///
+    /// The slot's entity `.name` has to BE the uuidString — that is how
+    /// a manipulation event finds its model object — but deciding
+    /// whether it already is one cost a fresh 36-character String per
+    /// slot per frame, because `UUID.uuidString` allocates on every
+    /// access. Sixteen bodies meant sixteen Strings a frame built only
+    /// to be compared and thrown away. Comparing the UUIDs answers the
+    /// same question for nothing, and the String is built on the frame
+    /// a slot actually changes hands.
+    private var bodySlotIDs: [UUID?]
     /// The scale each pooled body's touch target was last sized for.
     private var bodyColliderScales: [Int: Float] = [:]
     private var bodyNames: [String]
@@ -217,10 +228,12 @@ final class GravityLabRenderer {
     private let trailPool: EntityPool<Void>
     private var trailEntities: [ModelEntity] = []
     private var trailBuiltCounts: [Int]
+    /// The `simToDisplay` the built trail meshes were baked at.
+    private var trailBuiltScale: Float = 1
     private var trailMaterialCache: [String: UnlitMaterial] = [:]
     private var activeTrailSlots = 0
     private var trailPipeline: GeometryPipeline<TrailJob, TrailResult>?
-    private var predictionPipeline: GeometryPipeline<PredictionJob, TubeBuffers>?
+    private var predictionPipeline: GeometryPipeline<PredictionJob, PredictionBuffers>?
     private var predictionActive = false
     private var gridPipeline: GeometryPipeline<GridJob, TubeBuffers>?
     private let gridMaterial: UnlitMaterial
@@ -232,6 +245,26 @@ final class GravityLabRenderer {
     private var appliedTextureVersion = -1
     private let predictionEntity = ModelEntity()
     private let predictionMaterial: UnlitMaterial
+    /// THE SAME ARC, CASED — 2026-08-09.
+    ///
+    /// Projectiles draws a predicted arc too, from the same
+    /// `predictedArcUI` token, and cases it with `Materials.contrastLine`
+    /// (`KinematicsRenderer`). This one was a bare translucent white
+    /// tube, which is the exact case `Materials`' own note names: "if
+    /// you are adding lines to a module, this is the pass that is
+    /// probably missing." One idea, one colour, two treatments.
+    ///
+    /// Only the prediction. The orbit TRAILS are the same shape of
+    /// problem and are deliberately left alone: there are sixteen of
+    /// them, they rebuild as the bodies move, and casing them would
+    /// double the module's hottest geometry to fix a line that is on
+    /// screen while a planet is held. The grid is a judgement for the
+    /// owner to make on a photograph, not one to make from a rule.
+    private let predictionCasingEntity = ModelEntity()
+    private let predictionCasingMaterial: UnlitMaterial
+    /// Shared by the core tube and by `casingRadius`, so the two cannot
+    /// be changed apart.
+    private static let predictionRadius: Float = 0.002
     private let flashEntity: ModelEntity
     private var platform: ModelEntity!
 
@@ -343,6 +376,7 @@ final class GravityLabRenderer {
             return sphere
         }
         bodyMaterialKeys = Array(repeating: "", count: bodyPool.budget)
+        bodySlotIDs = Array(repeating: nil, count: bodyPool.budget)
         bodyNames = Array(repeating: "", count: bodyPool.budget)
         systemRoot.addChild(bodyPool.root)
         systemRoot.addChild(frozenVectors.root)
@@ -388,9 +422,16 @@ final class GravityLabRenderer {
         systemRoot.addChild(trailPool.root)
 
         // Held-body orbit prediction.
-        var predictionMaterial = UnlitMaterial(color: DesignTokens.Palette.predictedArcUI)
-        predictionMaterial.blending = .transparent(opacity: 0.55)
-        self.predictionMaterial = predictionMaterial
+        // Two passes from the one recipe, so the casing's near-black and
+        // the core's opacity stay the house numbers rather than this
+        // file's. `coreOpacity` keeps the 0.55 the arc already had — a
+        // ghost of a path, not a drawn one.
+        let (predictionCasing, predictionCore) = Materials.contrastLine(
+            DesignTokens.Palette.predictedArcUI, coreOpacity: 0.55)
+        self.predictionMaterial = predictionCore
+        self.predictionCasingMaterial = predictionCasing
+        // Casing FIRST, so the core draws over it.
+        systemRoot.addChild(predictionCasingEntity)
         systemRoot.addChild(predictionEntity)
 
         // Merge flash.
@@ -1215,17 +1256,18 @@ final class GravityLabRenderer {
     /// Billboarded name tags riding above the bodies — you should never
     /// have to guess which dot is Mars.
     private var bodyLabels: [Entity] = []
-    private var bodyLabelTexts: [ModelEntity] = []
-    private var labelMeshCache: [String: MeshResource] = [:]
-
-    private func labelMesh(for name: String) -> MeshResource {
-        if let cached = labelMeshCache[name] { return cached }
-        let mesh = MeshResource.generateText(
-            name, extrusionDepth: 0.001,
-            font: .systemFont(ofSize: 0.022, weight: .semibold))
-        labelMeshCache[name] = mesh
-        return mesh
-    }
+    /// ONE MODULE, TWO LABEL TREATMENTS, BOTH ON SCREEN AT ONCE.
+    ///
+    /// The planet names were 75%-opacity white text with nothing behind
+    /// them, while the Lagrange markers in this same file are
+    /// `BackedLabel`s wearing the house plate — so turning on the
+    /// Lagrange layer put the two styles a few centimetres apart. That
+    /// is the "written on different days" tell, inside one renderer.
+    ///
+    /// Moved onto `BackedLabel` 2026-08-09, which also retires this
+    /// file's private `labelMeshCache` in favour of the shared glyph
+    /// cache, and centres the run on both axes instead of X only.
+    private var bodyLabelPlates: [BackedLabel] = []
 
     private func ensureLabel(_ index: Int) {
         while bodyLabels.count <= index {
@@ -1233,15 +1275,12 @@ final class GravityLabRenderer {
             let pivot = Entity()
             pivot.components.set(BillboardComponent())
             holder.addChild(pivot)
-            let text = ModelEntity()
-            var material = UnlitMaterial(color: UIColor(white: 1, alpha: 0.75))
-            material.blending = .transparent(opacity: 0.75)
-            text.model = ModelComponent(mesh: labelMesh(for: " "), materials: [material])
-            pivot.addChild(text)
+            let plate = BackedLabel(size: 0.022)
+            pivot.addChild(plate.root)
             holder.isEnabled = false
             systemRoot.addChild(holder)
             bodyLabels.append(holder)
-            bodyLabelTexts.append(text)
+            bodyLabelPlates.append(plate)
         }
     }
 
@@ -1253,18 +1292,18 @@ final class GravityLabRenderer {
             }
             let orbiting = model.bodies[index]
             slot.entity.isEnabled = true
-            if slot.payload.name != orbiting.id.uuidString {
+            if bodySlotIDs[index] != orbiting.id {
+                bodySlotIDs[index] = orbiting.id
                 slot.payload.name = orbiting.id.uuidString
             }
             ensureLabel(index)
+            // The "material key" IS the body's name, so this gate is
+            // already exactly "has this slot changed bodies" — the
+            // label belongs inside it, not beside it.
             if bodyMaterialKeys[index] != orbiting.body.name {
                 bodyMaterialKeys[index] = orbiting.body.name
                 slot.payload.model?.materials = [material(for: orbiting.body.name)]
-                let mesh = labelMesh(for: orbiting.body.name)
-                bodyLabelTexts[index].model?.mesh = mesh
-                let bounds = mesh.bounds
-                bodyLabelTexts[index].position = [
-                    -(bounds.min.x + bounds.max.x) / 2, 0, 0]
+                bodyLabelPlates[index].setText(orbiting.body.name, color: .white)
             }
             bodyLabels[index].isEnabled = true
             bodyLabels[index].position = SIMD3<Float>(orbiting.body.position) * scale
@@ -1393,18 +1432,36 @@ final class GravityLabRenderer {
 
     // MARK: Trails (vertex math on the pipeline worker)
 
+    // A JOB CARRIES ONLY THE TRAILS THAT MOVED.
+    //
+    // It used to carry every body, because the resubmit test was "did
+    // ANY trail grow" and the payload was then built for all of them.
+    // At sixteen bodies that queued sixteen uploads every fourth frame
+    // against a drain of three per frame — six frames of work arriving
+    // every four — so the queue never emptied and the main actor did
+    // three `MeshResource.generate` calls every frame, permanently. The
+    // budget that was meant to spread one burst over five frames had
+    // become a floor instead of a ceiling.
+    //
+    // `slots` says which body each entry belongs to, so a partial job
+    // still lands on the right entities. In steady flight one or two
+    // trails cross the 8 mm spacing threshold in any given window, so
+    // the queue now drains and the renderer goes quiet between them.
     private nonisolated struct TrailJob: Sendable {
+        var slots: [Int]
         var names: [String]
         var lines: [[SIMD3<Float>]]
     }
 
     private nonisolated struct TrailResult: Sendable {
+        var slots: [Int]
         var names: [String]
         var buffers: [TubeBuffers]
     }
 
     private nonisolated static func computeTrails(_ job: TrailJob) -> TrailResult {
         TrailResult(
+            slots: job.slots,
             names: job.names,
             buffers: job.lines.map { line in
                 line.count >= 2
@@ -1430,10 +1487,21 @@ final class GravityLabRenderer {
     private static let trailUploadsPerFrame = 3
 
     private func applyTrails(_ result: TrailResult) {
-        pendingTrailUploads = result.buffers.enumerated().compactMap { index, buffers in
-            guard index < trailEntities.count, index < activeTrailSlots,
-                  index < result.names.count else { return nil }
-            return (index, buffers, result.names[index])
+        // APPENDED, not assigned. A partial job means a second job can
+        // arrive while the first is still draining, and overwriting the
+        // queue would drop trails that were computed but never uploaded
+        // — a body whose line then stops growing until the next time it
+        // happens to be in a batch. Anything still queued for the same
+        // slot is superseded, so the newer buffers win.
+        let arriving = Set(result.slots)
+        pendingTrailUploads.removeAll { arriving.contains($0.index) }
+        for (position, buffers) in result.buffers.enumerated() {
+            guard position < result.slots.count, position < result.names.count
+            else { continue }
+            let index = result.slots[position]
+            guard index < trailEntities.count, index < activeTrailSlots
+            else { continue }
+            pendingTrailUploads.append((index, buffers, result.names[position]))
         }
         drainTrailUploads()
     }
@@ -1473,27 +1541,42 @@ final class GravityLabRenderer {
             trailBuiltCounts[index] = -1
         }
 
-        // One coalescing job covers every body; resubmitted at a quarter
-        // of the render rate when any trail actually grew.
+        // One coalescing job, carrying ONLY the trails that grew —
+        // `trailBuiltCounts` already tracked this per body and the old
+        // code used it as a single yes/no for the whole system.
         guard frameCounter % 4 == 0 else { return }
-        var changed = false
-        for index in 0..<activeTrailSlots
-        where model.bodies[index].trail.count != trailBuiltCounts[index] {
-            changed = true
-            break
-        }
-        guard changed else { return }
 
         let scale = self.scale
+        // TRAIL VERTICES ARE BAKED IN DISPLAY SPACE, so a change of
+        // `simToDisplay` invalidates every built line at once — nothing
+        // about a body's own trail says its mesh is now the wrong size.
+        //
+        // This was already wrong before the per-body submit and was
+        // hidden by the coarser one: the old code rebuilt ALL trails
+        // whenever ANY grew, so a rescale was silently repaired by the
+        // next body to cross the spacing threshold. Submitting only
+        // what grew would have left the others at the old scale
+        // indefinitely — a rescale you can see, one orbit at a time.
+        if trailBuiltScale != scale {
+            trailBuiltScale = scale
+            for index in trailBuiltCounts.indices where trailBuiltCounts[index] != -1 {
+                trailBuiltCounts[index] = -1
+            }
+        }
+
+        var slots: [Int] = []
         var names: [String] = []
         var lines: [[SIMD3<Float>]] = []
         for index in 0..<activeTrailSlots {
             let orbiting = model.bodies[index]
+            guard orbiting.trail.count != trailBuiltCounts[index] else { continue }
+            slots.append(index)
             names.append(orbiting.body.name)
             lines.append(orbiting.trail.map { SIMD3<Float>($0) * scale })
             trailBuiltCounts[index] = orbiting.trail.count
         }
-        trailPipeline?.submit(TrailJob(names: names, lines: lines))
+        guard !slots.isEmpty else { return }
+        trailPipeline?.submit(TrailJob(slots: slots, names: names, lines: lines))
     }
 
     // MARK: Held-body prediction (n-body integration on the worker)
@@ -1503,7 +1586,13 @@ final class GravityLabRenderer {
         var scale: Float
     }
 
-    private nonisolated static func computePrediction(_ job: PredictionJob) -> TubeBuffers {
+    /// The core tube and the near-black casing swept fatter around it.
+    private nonisolated struct PredictionBuffers: Sendable {
+        var core = TubeBuffers()
+        var casing = TubeBuffers()
+    }
+
+    private nonisolated static func computePrediction(_ job: PredictionJob) -> PredictionBuffers {
         let path = NBody.predictedPath(
             bodies: job.inputs.bodies, of: job.inputs.index,
             dt: job.inputs.dt, steps: job.inputs.steps,
@@ -1511,16 +1600,24 @@ final class GravityLabRenderer {
             gravitationalConstant: job.inputs.gravitationalConstant
         )
         let points = path.map { SIMD3<Float>($0) * job.scale }
-        guard points.count >= 2 else { return TubeBuffers() }
-        return TubeMesh.buffers(lines: [points], radius: 0.002)
+        guard points.count >= 2 else { return PredictionBuffers() }
+        return PredictionBuffers(
+            core: TubeMesh.buffers(lines: [points], radius: Self.predictionRadius),
+            casing: TubeMesh.buffers(
+                lines: [points],
+                radius: Materials.casingRadius(forCore: Self.predictionRadius)))
     }
 
-    private func applyPrediction(_ buffers: TubeBuffers) {
+    private func applyPrediction(_ buffers: PredictionBuffers) {
         guard predictionActive else { return }
-        if let mesh = TubeMesh.mesh(from: buffers) {
+        if let mesh = TubeMesh.mesh(from: buffers.core) {
             predictionEntity.model = ModelComponent(mesh: mesh, materials: [predictionMaterial])
+            predictionCasingEntity.model = TubeMesh.mesh(from: buffers.casing).map {
+                ModelComponent(mesh: $0, materials: [predictionCasingMaterial])
+            }
         } else {
             predictionEntity.model = nil
+            predictionCasingEntity.model = nil
         }
     }
 
@@ -1529,6 +1626,10 @@ final class GravityLabRenderer {
             if predictionActive {
                 predictionActive = false
                 predictionEntity.model = nil
+                // The casing goes with it. Left behind, a released body
+                // leaves a black thread of its own predicted path
+                // hanging in the room with no arc inside it.
+                predictionCasingEntity.model = nil
             }
             return
         }

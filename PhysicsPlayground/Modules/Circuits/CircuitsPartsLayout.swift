@@ -103,20 +103,19 @@ enum CircuitsPartsLayout {
     /// where parts are — and the palette clears the row those two stand
     /// in vertically instead. A column far enough out to clear the box
     /// in x is 50°+ off axis and out of reach both.
-    static let innerColumnX: Float = 0.66
-    static let outerColumnX: Float = 0.86
-
-    /// At the bench's own depth, near enough. Matching the apparatus's
-    /// depth is what keeps an instrument in the same band as the thing
-    /// it belongs to; the first build pulled this in to −0.62 to buy
-    /// reach and spent the whole gain on angle.
-    static let columnZ: Float = -0.80
-
-    /// The bottom row's centre. Set by what is UNDER it, not by what
-    /// looks balanced: the layers bank's topmost plate reaches y ≈ 1.36,
-    /// and the palette's lowest NAMEPLATE — which hangs below its part,
-    /// not level with it — has to clear that.
-    static let bottomRowY: Float = 1.50
+    // THE FOUR COLUMN CONSTANTS WERE DELETED 2026-08-09, and the
+    // paragraph above is kept because it is the finding, not the
+    // decoration: `innerColumnX` 0.66, `outerColumnX` 0.86, `columnZ`
+    // −0.80 and `bottomRowY` 1.50 are the two-flank geometry, and the
+    // rack went two flanks → cabinet → one block on the right (see
+    // `CircuitsSpaceView`'s note on the drawer that was built and
+    // reverted). They had no readers left in any of those moves.
+    //
+    // The reason to keep the argument and drop the numbers: the next
+    // person to want a second column will re-derive 0.66 and 0.86 in an
+    // afternoon, and will not re-derive that a column far enough out to
+    // clear the box in x is 50°+ off axis AND out of reach. The
+    // constants were the cheap half.
 
     static let rows = 3
     static let columns = 2

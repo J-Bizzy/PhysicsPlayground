@@ -246,7 +246,6 @@ final class CircuitsModel {
     }
     var isPaused = false
     /// The contextual one-liner shown after loading a premade circuit.
-    private(set) var insightText = ""
 
     // MARK: Live electrical state (rebuilt every step)
 
@@ -558,12 +557,6 @@ final class CircuitsModel {
         }
     }
 
-    /// True when the selected part has at least one wire on it.
-    var selectedIsWired: Bool {
-        guard let selectedID else { return false }
-        return isWired(id: selectedID)
-    }
-
     // MARK: Per-component edits — what the Bloom calls
 
     /// The range a part's value may be pulled across, and the unit it
@@ -651,14 +644,13 @@ final class CircuitsModel {
         }
     }
 
-    var selectedIsClosed: Bool {
-        get { selectedComponent?.isClosed ?? true }
-        set {
-            guard let index = components.firstIndex(where: { $0.id == selectedID }),
-                  components[index].kind == .switcher else { return }
-            components[index].isClosed = newValue
-        }
-    }
+    // `selectedIsWired` and `selectedIsClosed` were deleted 2026-08-09.
+    // Both were read only by `CircuitsInsightCard`, which the owner
+    // deleted the same week under the rule that a paragraph is the
+    // wrong shape for this room. `isWired(id:)` above is the live form
+    // and the Bloom asks it about the part in your hand; a switch's
+    // state is read off the switch, which is a thing on the bench with
+    // a lever, not a property of "the selection".
 
     // MARK: The solve (every frame)
 
@@ -863,11 +855,9 @@ final class CircuitsModel {
                 if component.kind == .led, amps > Self.ledMaxAmps {
                     components[index].failed = true
                     emitSound(.boom, at: component.position, volume: 0.35)
-                    failureNote = "The LED burned out — it drew \(Int(amps * 1000)) mA, past its 30 mA limit. Add series resistance, then tap Replace on its card."
                 } else if component.kind == .fuse, amps > component.value {
                     components[index].failed = true
                     emitSound(.pop, at: component.position, volume: 0.8)
-                    failureNote = "The fuse blew at \(PhysicsFormat.measurement(amps, "A", decimals: 1)) — beyond its \(PhysicsFormat.measurement(component.value, "A", decimals: 1)) rating. It did its job; find the short, then Replace it."
                 }
             }
         }
@@ -881,20 +871,42 @@ final class CircuitsModel {
                 scopeSamples.removeFirst(scopeSamples.count - Self.scopeCapacity)
             }
         }
-        updateLiveInsight()
 
         // 5. Wire currents for the electron flow: each terminal's element
         // current fans out evenly over its wires (a visualization choice;
         // parallel wires between the same nodes share indistinguishably).
+        // TWO LOOKUP TABLES, BUILT ONCE, instead of two linear scans per
+        // terminal per wire.
+        //
+        // `outflow` used to call `components.firstIndex(where:)` and
+        // `wires.filter { … }.count` — and it is called twice per wire,
+        // so the fan-out alone was O(W²) with a fresh array allocated
+        // for every one of those counts. All of it inside `solve`,
+        // which runs every frame INCLUDING while paused, by design, so
+        // a frozen bench paid it too.
+        //
+        // Both answers are facts about the bench GRAPH, and the graph is
+        // the same for every wire in a given solve.
+        var componentIndex: [UUID: Int] = [:]
+        componentIndex.reserveCapacity(components.count)
+        for (index, component) in components.enumerated() {
+            componentIndex[component.id] = index
+        }
+        var fanOut: [Terminal: Int] = [:]
+        fanOut.reserveCapacity(wires.count * 2)
+        for wire in wires {
+            fanOut[wire.from, default: 0] += 1
+            fanOut[wire.to, default: 0] += 1
+        }
+
         var flows: [UUID: Double] = [:]
+        flows.reserveCapacity(wires.count)
         for wire in wires {
             func outflow(_ terminal: Terminal) -> Double {
-                guard let index = components.firstIndex(where: { $0.id == terminal.componentID })
-                else { return 0 }
+                guard let index = componentIndex[terminal.componentID] else { return 0 }
                 let current = solution.currents[index]
                 let directed = terminal.end == 1 ? current : -current
-                let fan = wires.filter { $0.from == terminal || $0.to == terminal }.count
-                return directed / Double(max(fan, 1))
+                return directed / Double(max(fanOut[terminal] ?? 1, 1))
             }
             flows[wire.id] = (outflow(wire.from) - outflow(wire.to)) / 2
         }
@@ -1263,82 +1275,34 @@ final class CircuitsModel {
     /// The Electron View toggle: the whole bench swells around the user.
     var electronView = false
     /// The latest failure explanation (shown until the part is replaced).
-    private(set) var failureNote = ""
 
     /// Puts a burned/blown part back in service.
     func replaceFailed(id: UUID) {
         guard let index = components.firstIndex(where: { $0.id == id }) else { return }
         components[index].failed = false
-        failureNote = ""
         emitSound(.chime, at: components[index].position, volume: 0.5)
     }
 
-    /// Live guided physics: one line about what the circuit is doing
-    /// RIGHT NOW, refreshed at most twice a second.
-    private var insightClock = 0.0
-
-    /// Until when an AUTHORED paragraph holds the card against the live
-    /// commentary, in simulated seconds.
-    ///
-    /// THE FIVE PRESET PARAGRAPHS WERE STILL DARK WITHOUT THIS, which a
-    /// screenshot showed and the code did not. `loadPreset` writes its
-    /// paragraph and `updateLiveInsight` overwrote it within half a
-    /// second — so waking them amounted to displaying each one for one
-    /// frame. Reachable, technically, and unreadable.
-    ///
-    /// The two kinds of message are not peers. The running commentary
-    /// describes what the circuit is doing and is true again a moment
-    /// later; a preset's paragraph explains what you have just been
-    /// handed and is only worth reading once. The second must therefore
-    /// win the collision, and only for as long as it takes to read.
-    private var insightHoldUntil = 0.0
-
-    /// Twelve seconds: the longest preset paragraph is ~50 words, and
-    /// an adult reads that in about eight. The margin is for looking at
-    /// the circuit while you read about it, which is the whole point.
-    private static let insightHold = 12.0
-
-    /// Pins a paragraph for `insightHold` seconds.
-    private func hold(_ text: String) {
-        insightText = text
-        insightHoldUntil = simTime + Self.insightHold
-    }
-
-    private func updateLiveInsight() {
-        // A failure always speaks: a blown fuse is not commentary, and a
-        // paragraph about series bulbs over a dead bench is worse than
-        // no paragraph.
-        if components.contains(where: { $0.failed }) {
-            insightText = failureNote
-            insightClock = simTime
-            insightHoldUntil = 0
-            return
-        }
-        guard simTime >= insightHoldUntil else { return }
-        guard simTime - insightClock > 0.5 else { return }
-        insightClock = simTime
-        // The hardest-working dissipator.
-        var topID: UUID?
-        var topWatts = 0.05
-        for component in components
-        where component.kind != .battery && component.kind != .acSource {
-            let watts = abs(readouts[component.id]?.watts ?? 0)
-            if watts > topWatts {
-                topWatts = watts
-                topID = component.id
-            }
-        }
-        if let capacitor = components.first(where: { $0.kind == .capacitor }),
-           let amps = readouts[capacitor.id]?.amps, abs(amps) > 1e-4 {
-            let percent = Int(min(abs(capacitor.capacitorVoltage)
-                / max(abs(readouts[capacitor.id]?.volts ?? 1), 0.01), 1) * 100)
-            insightText = "The capacitor is charging exponentially — \(percent)% of the way to its final voltage, and the current shrinks as it fills."
-        } else if let topID, let top = components.first(where: { $0.id == topID }) {
-            insightText = "The \(top.kind.displayName.lowercased()) dissipates the most power right now — \(PhysicsFormat.measurement(topWatts, "W", decimals: 2)) as heat\(top.kind == .bulb ? " and light" : "")."
-        } else if electronView {
-            insightText = "Electron View: each electron only drifts millimeters per second — but the field pushes ALL of them at once, so the bulb lights instantly."
-        }
-    }
+    // THE RUNNING COMMENTARY IS GONE (owner, 2026-08-09).
+    //
+    // `insightText` was set in twelve places — the capacitor's charge
+    // percentage, whichever component was dissipating the most power,
+    // what Electron View is really showing, why a fuse blew, and a
+    // paragraph for each of the five presets — and drawn on a dark card
+    // floating above the bench. `insightClock`, `insightHoldUntil`, the
+    // twelve-second `hold` that stopped the live line overwriting an
+    // authored one, and `failureNote` were all machinery for that one
+    // surface, and they go with it.
+    //
+    // It had a real argument for existing: unlike the first-run hint it
+    // said something DIFFERENT each time, about the circuit you had just
+    // built, and it vanished when there was nothing to say. Its own
+    // header set the condition for its removal — "if it ever repeats
+    // itself it is behaving like the hint and should go the same way" —
+    // and the owner's call is that a paragraph hanging over the bench is
+    // the wrong shape for this app whether or not it repeats. The
+    // readouts on the parts say what the circuit is doing; they are
+    // attached to the thing they describe, which the card never was.
 
     // MARK: Persistence (the bench survives relaunch)
 
@@ -1431,7 +1395,6 @@ final class CircuitsModel {
             SavedBench(components: components, wires: wires)) else { return false }
         slots[name] = data
         writeSlots(slots)
-        hold("Saved as “\(name)” — load it any time from the Saved circuits list.")
         return true
     }
 
@@ -1440,7 +1403,6 @@ final class CircuitsModel {
         guard let data = readSlots()[name],
               let bench = try? JSONDecoder().decode(SavedBench.self, from: data),
               apply(bench) else { return false }
-        hold("Loaded “\(name)” — it's live, and it's yours to rewire.")
         persistSoon()
         return true
     }
@@ -1505,7 +1467,6 @@ final class CircuitsModel {
             connect((toggle, 1), (bulb2, 1))
             connect((bulb2, 0), (bulb1, 1))
             connect((bulb1, 0), (battery, 0))
-            hold("Series: ONE path, so the same current threads both bulbs — each gets half the voltage and glows dimmer than it would alone. Unscrew either and the whole loop dies.")
         case .parallel:
             let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
             let bulb1 = place(.bulb, at: SIMD3(-0.18, 1.45, -0.9))
@@ -1514,7 +1475,6 @@ final class CircuitsModel {
             connect((battery, 1), (bulb2, 1))
             connect((bulb1, 0), (battery, 0))
             connect((bulb2, 0), (battery, 0))
-            hold("Parallel: each bulb gets the FULL 9 V, so both burn at full brightness — and the battery pays for it, pushing double the current. Select the battery and compare its mA to one bulb's.")
         case .divider:
             let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
             let r1 = place(.resistor, at: SIMD3(-0.2, 1.5, -0.9), value: 470)
@@ -1522,7 +1482,6 @@ final class CircuitsModel {
             connect((battery, 1), (r2, 1))
             connect((r2, 0), (r1, 1))
             connect((r1, 0), (battery, 0))
-            hold("A voltage divider: the 9 V splits in proportion to resistance — select each resistor and read ~2.9 V across 470 Ω and ~6.1 V across 1 kΩ. Slide either value and watch the split follow.")
         case .rcCharger:
             let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
             let resistor = place(.resistor, at: SIMD3(-0.3, 1.31, -0.9), axis: up, value: 1000)
@@ -1532,13 +1491,11 @@ final class CircuitsModel {
             connect((toggle, 1), (capacitor, 1))
             connect((capacitor, 0), (resistor, 1))
             connect((resistor, 0), (battery, 0))
-            hold("RC charging: the capacitor fills toward 9 V with time constant τ = RC ≈ 2.2 s — select it and watch the charge curve slow as it approaches full. Flip the switch to pause the flow mid-charge.")
         case .shortCircuit:
             let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
             let jumper = place(.wire, at: SIMD3(0, 1.45, -0.9), value: 0.4)
             connect((battery, 1), (jumper, 1))
             connect((jumper, 0), (battery, 0))
-            hold("A dead short: nothing limits the current but the battery's own 50 mΩ — about 150 A, the red warning, and in real life a very hot battery. Add a bulb into the loop to tame it.")
         }
         selectedID = components.first?.id
         solve(dt: 1.0 / 90.0)
@@ -1622,7 +1579,6 @@ final class CircuitsModel {
         wires = []
         selectedID = nil
         pendingTerminal = nil
-        insightText = ""
         readouts = [:]
         wireFlows = [:]
         totalSourcePower = 0
@@ -1694,8 +1650,7 @@ final class CircuitsModel {
         reset()
         refreshSlotNames()
         if restoreSaved, restoreSavedBench() {
-            insightText = ""
-        }
+            }
     }
 }
 

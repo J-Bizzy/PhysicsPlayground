@@ -30,6 +30,22 @@ enum PendulumsModule {
             // were removed on 2026-08-02 — leaving the app's one
             // onboarding surface pointing at an empty wall.
             firstRunHint: "Five steel balls, touching, with one drawn back — let it go and watch which of them move. Grab any bob and throw it sideways; press a pendulum's top collar for a bead that pays out its cable, or drag that collar to re-hang the whole rig. visionOS will ask to use your room so the rig can hang in it.",
+            // THE HOUSE DIMMING, 2026-08-09. Three modules opened at 0
+            // and three at 0.35, so cutting between labs in a demo read
+            // as cutting between apps — the room's own brightness
+            // changing was the loudest difference between two rooms
+            // that are meant to feel like one place.
+            //
+            // 0.35 is the value Electric Fields and Magnetism already
+            // shipped, chosen there because a bright wall eats
+            // translucent field art. A steel rig does not need it to be
+            // legible; it takes it so that the SET does.
+            //
+            // Gravity Lab stays at 0.85 with a 16 m shell, and that
+            // remains the one deliberate exception in the app: a pale
+            // Sun and specks of planet genuinely have no contrast
+            // against a lit wall, and its descriptor says so.
+            preferredDimming: 0.35,
             legend: legendItems,
             isPaused: { appModel.pendulumsModel.isPaused },
             togglePause: { appModel.pendulumsModel.togglePauseRespectingScrub() },

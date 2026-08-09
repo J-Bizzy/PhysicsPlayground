@@ -45,6 +45,42 @@ public enum MagneticField {
         simd_length(vector(at: point, dueTo: magnets))
     }
 
+    // MARK: Every magnet but one
+    //
+    // A bench integrating itself asks, for each magnet, what the OTHERS
+    // do to it. Spelled at the call site that is
+    // `magnets.enumerated().filter { $0.offset != i }.map(\.element)`,
+    // which allocates two arrays — the filter's tuples and the map's
+    // elements — for every magnet, on every substep. Magnetism runs
+    // four substeps a frame in the inertial mode, so eight magnets cost
+    // sixty-four array allocations a frame to express "skip index i".
+    //
+    // These take the whole array and the index to leave out. Same
+    // arithmetic, same results — `MagneticFieldTests` pins the numbers
+    // against the materialising form.
+
+    /// B at `point` from every magnet except the one at `index`.
+    public static func vector(at point: SIMD3<Double>,
+                              dueTo magnets: [BarMagnet],
+                              excluding index: Int) -> SIMD3<Double> {
+        var sum = SIMD3<Double>.zero
+        for i in magnets.indices where i != index {
+            sum += vector(at: point, dueTo: magnets[i])
+        }
+        return sum
+    }
+
+    /// Net force on `magnets[index]` from every other magnet.
+    public static func netForce(on magnets: [BarMagnet],
+                                at index: Int) -> SIMD3<Double> {
+        var sum = SIMD3<Double>.zero
+        let subject = magnets[index]
+        for i in magnets.indices where i != index {
+            sum += force(on: subject, dueTo: magnets[i])
+        }
+        return sum
+    }
+
     // MARK: The finite bar
     //
     // Everything above treats a magnet as a POINT dipole, which is exact

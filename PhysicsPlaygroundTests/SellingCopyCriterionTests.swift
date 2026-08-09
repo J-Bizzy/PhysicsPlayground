@@ -36,7 +36,27 @@ final class SellingCopyCriterionTests: XCTestCase {
         "-emGauss",     // the staging argument the old shot 3 used
         "-penFoucault", // the staging arguments the old shot 5 used
         "-penSpin",
+        "next step",    // the experiments system's affordance (2026-08-09)
     ]
+
+    // WHAT IS DELIBERATELY *NOT* ON THAT LIST, and why — because the
+    // obvious next entries are both wrong, and the next person to audit
+    // this file will reach for them (2026-08-09).
+    //
+    // "experiment" — the experiments SYSTEM was deleted, but the word is
+    // ordinary English and the copy uses it that way ("nothing in it is
+    // an experiment"). Matching is case-insensitive, so banning the
+    // feature's name also bans the noun. A criterion that fails on fair
+    // copy gets weakened by whoever hits it next, and a weakened
+    // criterion is worse than none.
+    //
+    // "streak" — NOT a removed feature. The projectile hoop streak is
+    // live (`KinematicsModel.streak`). Banning it would forbid selling
+    // something that ships. The experiments system had a streak too, and
+    // the collision of names is the whole trap.
+    //
+    // The rule this leaves: ban names that can only mean the dead
+    // feature. "next step" qualifies; a common noun never does.
 
     private func repositoryRoot() throws -> URL {
         let thisFile = URL(fileURLWithPath: #filePath)

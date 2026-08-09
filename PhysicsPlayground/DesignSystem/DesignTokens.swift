@@ -27,8 +27,49 @@ enum DesignTokens {
         static let negativeUI: UIColor = .systemBlue
         static let probePositiveUI: UIColor = .systemGreen
         static let probeNegativeUI: UIColor = .systemPurple
-        static let fieldLineUI = UIColor(red: 0.45, green: 0.85, blue: 1.0, alpha: 1)
+        /// ELECTRIC FIELDS' LINES, IN ELECTRIC FIELDS' COLOUR.
+        ///
+        /// Pale cyan (0.45, 0.85, 1.0) until 2026-08-09, which was a hue
+        /// this module owned nowhere else: the door sign, the nameplate,
+        /// the switch labels and the plates all wear
+        /// `electrostaticsAccent`, and the one thing the lab is actually
+        /// ABOUT wore something unrelated. Owner's call — the lines
+        /// match the theme.
+        ///
+        /// Taken FROM the accent rather than hand-mixed near it. A
+        /// hand-mixed warm yellow would land a few ΔE from #FFEA05,
+        /// which is the "two shades of the same yellow" failure the
+        /// accent's own doc comment below was written about; and derived
+        /// this way, a future move of the accent takes the field with it
+        /// instead of leaving them a little apart.
+        ///
+        /// It also un-collides the charges. Cyan lines ran through blue
+        /// negative charges — the field and one of its two sources in
+        /// the same corner of the wheel — and yellow is clear of both
+        /// `positiveUI` red and `negativeUI` blue.
+        static let fieldLineUI = UIColor(electrostaticsAccent)
         static let selectionHaloUI: UIColor = .white
+
+        // MARK: The two petal tints
+        //
+        // A ring's petals are the only place in the app where a control
+        // is coloured by WHAT IT DOES rather than by which lab it is in,
+        // and both tints were hand-typed at every call site: this red
+        // seven times across six modules, the grey below six times
+        // across four. Nobody chose seven reds; they were copied.
+        //
+        // The values are exactly what was already there, so nothing
+        // moves today. The point is tomorrow: a hue that lives in seven
+        // files drifts one file at a time, and two shades of red on
+        // adjacent rings is the failure this palette's own accent notes
+        // were written about.
+
+        /// Delete, clear, remove — the petal you cannot undo.
+        static let destructiveUI = UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)
+        /// A petal that acts without destroying: reset a value, cycle a
+        /// choice, open a picker. Deliberately colourless, so the
+        /// destructive red is the only tinted petal on a ring.
+        static let neutralActionUI = UIColor(white: 0.45, alpha: 1)
         static let projectileUI: UIColor = .systemOrange
         static let predictedArcUI: UIColor = .white
         static let launcherUI: UIColor = .systemGray
@@ -50,12 +91,15 @@ enum DesignTokens {
         // project deletes unreachable choice (hintCornerRadius went the
         // same way).
 
-        /// Completion gold — the colour of DONE, everywhere it is said:
-        /// the in-space progress ring's full band and the flat catalog's
-        /// "N of N experiments" line. One value, two surfaces, so the
-        /// two claims of completeness cannot drift apart.
-        static let completionGoldUI = UIColor(red: 1.0, green: 0.84, blue: 0.25, alpha: 1)
-        static let completionGold = Color(uiColor: completionGoldUI)
+        // `completionGold` (#FFD640) was deleted 2026-08-09 with the
+        // experiments system, under the rule stated six lines above: a
+        // token nobody reads is unreachable choice. It was the colour of
+        // DONE — the progress ring's full band and the catalog's
+        // "N of N experiments" line — and both surfaces went the same
+        // day, leaving one live reader, a test asserting that no module
+        // accent collided with it. A reservation protecting nothing is
+        // not a guardrail. Its number survives in `electrostaticsAccent`
+        // below, which was moved to clear it and should not drift back.
 
         // Gravity Lab
         // Aliases of RenderKit's VectorPalette — the one canon for the
@@ -65,8 +109,14 @@ enum DesignTokens {
         static let forceVectorUI: UIColor = VectorPalette.force
         static let gravityVectorUI: UIColor = VectorPalette.gravity
         static let velocityVector = Color(uiColor: velocityVectorUI)
-        static let accelerationVector = Color(uiColor: accelerationVectorUI)
-        static let forceVector = Color(uiColor: forceVectorUI)
+        // The `accelerationVector` and `forceVector` SwiftUI twins were
+        // deleted 2026-08-09, unread. The vector trio is drawn in the
+        // ROOM, by renderers that take the `…UI` originals; the twins
+        // exist for legends and cards, and only velocity ever appeared
+        // in one. Same rule as `arrowStrong` above — a token nobody
+        // reads is unreachable choice. Both `…UI` forms stay: they are
+        // live, and `AccentAuthorityTests` measures accents against
+        // them.
         static let sunColor = Color(uiColor: celestialUI("Sun"))
 
         /// Celestial body colors, keyed by preset name (custom = teal).
@@ -111,25 +161,55 @@ enum DesignTokens {
         /// wearing its neighbour module's subject as a name.
         /// #FFEA05, and it was #FFD60A until 2026-08-08.
         ///
-        /// (1.0, 0.84, 0.04) against `completionGold` (1.0, 0.84, 0.25) is
-        /// the same red, the same green, and 0.21 of blue between them —
-        /// ΔE 11.6, which is two shades of the same yellow. Gold is
-        /// RESERVED for "you have finished something", so a module whose
-        /// every plate and well wears near-gold is quietly congratulating
-        /// the user for standing in the room.
+        /// (1.0, 0.84, 0.04) against the completion gold of the day
+        /// (1.0, 0.84, 0.25) was the same red, the same green, and 0.21
+        /// of blue between them — ΔE 11.6, which is two shades of the
+        /// same yellow. Gold was RESERVED for "you have finished
+        /// something", so a module whose every plate and well wore
+        /// near-gold quietly congratulated the user for standing in the
+        /// room.
         ///
-        /// The shift is the SMALLEST one that clears ΔE 20 from gold and
+        /// The shift was the SMALLEST one clearing ΔE 20 from gold and
         /// from every `VectorPalette` entry — searched rather than
         /// picked, because any yellow clearly distinct from a gold is
         /// necessarily a hue change and the honest move is the least of
         /// them. It travels ΔE 12.2 from the old value and stays
         /// unmistakably electric yellow.
+        ///
+        /// THE GOLD ITSELF WENT WITH THE EXPERIMENTS on 2026-08-09, so
+        /// half this argument is now archaeology. The value stays where
+        /// the search put it: the `VectorPalette` half of the constraint
+        /// is still live, and moving back toward #FFD60A to reclaim a
+        /// vacated reservation would be re-deciding a settled hue for
+        /// the sake of a colour nothing draws.
         static let electrostaticsAccent = Color(red: 1.0, green: 0.92, blue: 0.02) // #FFEA05
         static let kinematicsAccent = Color(red: 1.00, green: 0.62, blue: 0.04)    // #FF9F0A, the Mechanics door
-        static let gravityAccent = Color.indigo
-        static let pendulumsAccentUI = UIColor(Color.purple)
+        /// THE LAST TWO STOCK ACCENTS, OWNED — 2026-08-09.
+        ///
+        /// These were `Color.indigo` and `Color.purple` while the four
+        /// above were owned literals, in the file whose own argument is
+        /// that an unowned hue is the drift the unification removed.
+        /// `testThePaletteOwnsItsAccentHues` missed them because it
+        /// grepped for three specific spellings — `Color.yellow`,
+        /// `.green`, `.orange` — which are the three that happened to
+        /// be wrong the day it was written. It reflects now.
+        ///
+        /// THE VALUES ARE THE STOCK ONES, MEASURED, not replacements
+        /// chosen for them. Nothing about these two doors was wrong on
+        /// screen; what was wrong is that the app did not know what
+        /// colour they were. Owning a hue and redesigning it are
+        /// different jobs and this is the first — if the indigo should
+        /// move, that is a decision to make on a photograph.
+        ///
+        /// Measured on visionOS rather than assumed: `Color.indigo`
+        /// resolves to #6D7CFF here, not the #5856D6 that iOS
+        /// documentation would have you type. A "system colour" is a
+        /// promise about semantics, not about a number, which is the
+        /// second reason not to build a palette out of them.
+        static let gravityAccent = Color(red: 0.427, green: 0.486, blue: 1.0)      // #6D7CFF
+        static let pendulumsAccent = Color(red: 0.859, green: 0.204, blue: 0.949)  // #DB34F2
+        static let pendulumsAccentUI = UIColor(pendulumsAccent)
         static let circuitsAccent = Color(red: 0.19, green: 0.82, blue: 0.35)      // #30D158, the E&M door
-        static let pendulumsAccent = Color.purple
         static let magnetismAccent = Color(red: 0.85, green: 0.3, blue: 0.62)
     }
 
@@ -146,14 +226,18 @@ enum DesignTokens {
         // keep their padding; only the gaps between blocks shrink).
         static let outerPadding: CGFloat = 22
         static let sectionSpacing: CGFloat = 20
-        static let rowSpacing: CGFloat = 12
+        // `rowSpacing` (12) was deleted 2026-08-09: zero readers, and it
+        // measured the gap between rows of a MODULE PANEL, which is a
+        // surface this app stopped having on 2026-08-01.
     }
 
     // MARK: Type scale
     // Semantic fonts only, so Dynamic Type scales every module identically.
 
     enum TypeScale {
-        static let screenTitle: Font = .largeTitle.bold()
+        // `screenTitle` (.largeTitle.bold()) was deleted 2026-08-09,
+        // unread: the app's two remaining flat windows title themselves
+        // with `wordmark(_:)` below, which is the ratified voice.
         static let cardTitle: Font = .title3.bold()
         static let sectionHeader: Font = .headline
         static let control: Font = .body

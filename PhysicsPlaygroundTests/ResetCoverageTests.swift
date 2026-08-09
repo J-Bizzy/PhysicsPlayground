@@ -27,8 +27,9 @@
 //  bug visible the moment it gets a control and invisible before. The
 //  same sweep over Doubles would drag in accumulators, clocks and
 //  personal bests that are deliberately NOT reset (`bestStreak`,
-//  `bestPredictionMissAU`, `simTime`), and a test with a growing
-//  exception list is the listing test again.
+//  `simTime` — and `bestPredictionMissAU` until it was deleted with the
+//  experiments on 2026-08-09), and a test with a growing exception list
+//  is the listing test again.
 //
 //  `@Observable` stores each tracked property in an underscored backing
 //  field, so that is what `Mirror` reports and what this reads.

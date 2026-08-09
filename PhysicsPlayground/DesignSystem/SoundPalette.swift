@@ -49,7 +49,6 @@ enum SoundPalette {
     private nonisolated struct CachedSounds: Sendable {
         var oneShots: [Sound: URL] = [:]
         var ambient: URL?
-        var fanHum: URL?
         var resonanceTone: URL?
     }
 
@@ -80,7 +79,6 @@ enum SoundPalette {
                     cached.oneShots[sound] = try? writeIfNeeded(sound)
                 }
                 cached.ambient = try? writeAmbientIfNeeded()
-                cached.fanHum = try? writeFanHumIfNeeded()
                 cached.resonanceTone = try? writeResonanceToneIfNeeded()
                 return cached
             }.value
@@ -92,11 +90,6 @@ enum SoundPalette {
             }
             if let url = cached.ambient {
                 ambientResource = try? await AudioFileResource(
-                    contentsOf: url,
-                    configuration: .init(shouldLoop: true))
-            }
-            if let url = cached.fanHum {
-                fanHumResource = try? await AudioFileResource(
                     contentsOf: url,
                     configuration: .init(shouldLoop: true))
             }
@@ -265,55 +258,27 @@ enum SoundPalette {
         }
     }
 
-    // MARK: Fan hum (wind tunnel)
+    // THE FAN HUM WENT WITH THE WIND TUNNEL, three days late.
+    //
+    // A 3-second axial-fan loop — broadband air noise pulsed at the
+    // blade-pass rate over a motor hum — synthesized, written to
+    // Caches, and loaded as an `AudioFileResource` on every launch.
+    // `startFanHum` had no callers anywhere, including tests: the
+    // module it blew through was archived 2026-07-30 and the sound
+    // kept being made for it for ten days. Deleted 2026-08-09.
+    //
+    // It is the only piece of residue found in this pass that cost
+    // anything at RUNTIME rather than just space on the page, which is
+    // the argument for checking `warmUp`'s list against its callers
+    // whenever a module leaves: synthesis is keyed off `CachedSounds`,
+    // and a field nobody reads still gets rendered.
 
-    private static var fanHumResource: AudioFileResource?
-
-    /// Starts the looping fan hum on `entity`; the caller drives its
-    /// gain with the wind. Returns nil until synthesis has finished.
-    static func startFanHum(on entity: Entity, gainDecibels: Double = -30) -> AudioPlaybackController? {
-        guard let fanHumResource else { return nil }
-        entity.components.set(SpatialAudioComponent(gain: Audio.Decibel(gainDecibels)))
-        return entity.playAudio(fanHumResource)
-    }
-
-    private nonisolated static func writeFanHumIfNeeded() throws -> URL {
-        let url = try soundsDirectory().appendingPathComponent("fan-hum-1.wav")
-        if !FileManager.default.fileExists(atPath: url.path) {
-            try wavData(samples: synthesizeFanHum()).write(to: url)
-        }
-        return url
-    }
-
-    /// A 3-second seamless loop of an axial fan: broadband air noise
-    /// pulsed at the blade-pass rate over a motor hum. Every periodic
-    /// component is an integer number of cycles in 3 s, and the noise
-    /// bed is crossfaded, so the seam vanishes.
-    private nonisolated static func synthesizeFanHum() -> [Float] {
-        var lowPassed = 0.0
-        var samples = render(duration: 3.0) { t, _ in
-            let noise = Double.random(in: -1...1)
-            lowPassed += 0.09 * (noise - lowPassed)
-            // Six blades at ~240 rpm: 24 blade passes a second.
-            let bladePass = 1 + 0.35 * sin(2 * .pi * 24 * t)
-            let motor = 0.16 * sin(2 * .pi * 120 * t) + 0.05 * sin(2 * .pi * 240 * t)
-            return lowPassed * 2.1 * bladePass + motor
-        }
-        let fade = Int(0.4 * sampleRate)
-        for index in 0..<fade {
-            let mix = Float(index) / Float(fade)
-            let tail = samples[samples.count - fade + index]
-            samples[index] = tail * (1 - mix) + samples[index] * mix
-        }
-        return samples
-    }
-
-    /// Plays `sound` spatially from `entity` (which should already sit at
-    /// the source position). volume 0…1 → −28…0 dB.
     /// Settings' master volume, 0…1. Applied to every one-shot; the
     /// settings window writes it here so callers never have to know.
     static var masterVolume: Double = 1
 
+    /// Plays `sound` spatially from `entity` (which should already sit at
+    /// the source position). volume 0…1 → −28…0 dB.
     static func play(_ sound: Sound, on entity: Entity, volume: Double = 1) {
         guard let resource = resources[sound] else { return }
         let effective = min(max(volume * masterVolume, 0), 1)

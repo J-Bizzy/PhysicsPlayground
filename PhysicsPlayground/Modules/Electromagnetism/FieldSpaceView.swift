@@ -429,7 +429,7 @@ struct FieldSpaceView: View {
                 ring.target,
                 petals: [
                     .init(name: "Delete", symbol: "trash",
-                          tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
+                          tint: DesignTokens.Palette.destructiveUI) {
                         model.removeCharge(id: id)
                     },
                 ],
@@ -451,7 +451,7 @@ struct FieldSpaceView: View {
                 ring.target,
                 petals: [
                     .init(name: "Delete", symbol: "trash",
-                          tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
+                          tint: DesignTokens.Palette.destructiveUI) {
                         model.removeProbe()
                     },
                 ],

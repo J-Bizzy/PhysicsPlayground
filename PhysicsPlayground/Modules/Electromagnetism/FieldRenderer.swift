@@ -690,11 +690,13 @@ final class FieldRenderer {
 
     // MARK: Probe
 
-    /// Same-frame probe sync, called from the per-frame simulation tick so
-    /// the probe's motion never waits for the observation round-trip.
-    func syncProbeNow(_ probe: TestChargeDynamics.ProbeState?, isPositive: Bool) {
-        syncProbeEntity(probe, isPositive: isPositive)
-    }
+    // `syncProbeNow` was deleted 2026-08-09. Its doc claimed a
+    // same-frame sync "called from the per-frame simulation tick", and
+    // it had no callers — which reads like a broken guarantee and is
+    // not one: `render` calls `syncProbeEntity` directly and `tick`
+    // calls `render`, so the probe has been syncing in-frame the whole
+    // time. This was a wrapper that named a promise the code below
+    // already keeps.
 
     private func syncProbeEntity(_ probe: TestChargeDynamics.ProbeState?, isPositive: Bool) {
         guard let probe else {
@@ -752,6 +754,18 @@ final class FieldRenderer {
         return pool
     }()
     private var appliedTrailPolarity: Bool?
+    /// How many trail beads the taper was last computed for.
+    ///
+    /// Each bead's fade and scale are functions of its INDEX and the
+    /// length of the trail — not of where the probe is — so once the
+    /// trail reaches its 190-point budget they are the same numbers
+    /// every frame forever. Writing them anyway meant 190
+    /// `OpacityComponent` sets and 190 scale writes per frame, about
+    /// 17 000 component writes a second, to store values already there.
+    /// The trail grows only while the probe is running and stops the
+    /// moment it is full, so this is stale for a second or two and
+    /// correct for the rest of the flight.
+    private var appliedTrailCount: Int?
 
     private func syncProbeTrail(_ model: FieldModel) {
         let trail = model.probeTrail
@@ -777,12 +791,17 @@ final class FieldRenderer {
         // The newest points are the ones worth keeping when the path is
         // longer than the pool.
         let visible = trail.suffix(count)
+        let taperChanged = appliedTrailCount != count
+        appliedTrailCount = count
         for (index, point) in visible.enumerated() {
             let slot = probeTrailPool.slots[index]
             slot.entity.isEnabled = true
             slot.entity.position = SIMD3<Float>(point)
             // Fade and taper toward the tail, so the curve reads with a
-            // direction rather than as a static loop of beads.
+            // direction rather than as a static loop of beads. Index-
+            // derived, so it only needs rewriting when the trail's
+            // LENGTH changes — see `appliedTrailCount`.
+            guard taperChanged else { continue }
             let age = Float(index) / Float(max(count - 1, 1))
             slot.entity.scale = SIMD3(repeating: 0.35 + 0.65 * age)
             slot.entity.components.set(

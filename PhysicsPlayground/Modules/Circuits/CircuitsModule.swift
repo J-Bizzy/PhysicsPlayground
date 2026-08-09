@@ -28,6 +28,10 @@ enum CircuitsModule {
             icon: "powerplug.fill",
             accent: DesignTokens.Palette.circuitsAccent,
             firstRunHint: "The loop in front of you is live — pinch the switch lever to break it. Pull parts out of the racks on either side of you and drop them so copper ends nearly touch: they connect themselves. Pull an orange end grip to aim or stretch a part; pinch two copper terminals to wire across a distance; the trash button removes a selected part. visionOS will ask to use your room so the bench can stand in it.",
+            // The house dimming — see `PendulumsModule` for the whole
+            // argument. Five of six modules sit here now; Gravity Lab's
+            // 0.85 is the one exception.
+            preferredDimming: 0.35,
             legend: legend,
             isPaused: { appModel.circuitsModel.isPaused },
             togglePause: { appModel.circuitsModel.togglePauseRespectingScrub() },

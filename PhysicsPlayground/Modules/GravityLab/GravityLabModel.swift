@@ -130,9 +130,11 @@ final class GravityLabModel {
 
     private(set) var prediction: Prediction?
     private(set) var predictionVerdict: PredictionVerdict?
-    /// The best (smallest) resolved miss this session, AU — the number
-    /// the Prophet experiment watches.
-    private(set) var bestPredictionMissAU: Double?
+    // `bestPredictionMissAU` — the smallest resolved miss this session,
+    // in AU — was deleted on 2026-08-09. Its one reader was the Prophet
+    // experiment's predicate, and the experiments went that day. A
+    // running minimum nothing ever asks for is a write-only property,
+    // and this file has a grave for one of those already.
 
     /// Arms a prediction on the selected body: the ghost appears AT the
     /// body, one sweep window on the clock. Dragging refines the guess.
@@ -150,10 +152,6 @@ final class GravityLabModel {
         prediction?.position = simPoint
     }
 
-    func cancelPrediction() {
-        prediction = nil
-    }
-
     private func resolvePredictionIfDue() {
         guard let prediction, simulatedDays >= prediction.resolvesAt else { return }
         guard let body = bodies.first(where: { $0.id == prediction.bodyID }) else {
@@ -167,7 +165,6 @@ final class GravityLabModel {
             guess: prediction.position,
             missAU: miss,
             shownAt: simulatedDays)
-        bestPredictionMissAU = min(bestPredictionMissAU ?? .infinity, miss)
         self.prediction = nil
         emitSound(miss < 0.1 ? .chime : .pop,
                   at: body.body.position, volume: 0.8)
@@ -877,17 +874,14 @@ final class GravityLabModel {
         )
     }
 
-    /// The predicted path itself (sim coordinates) — the synchronous
-    /// form the tests pin; the renderer computes the same thing from
-    /// `heldPredictionInputs` on its worker.
-    func heldPrediction(timestamp: Double = CACurrentMediaTime()) -> [SIMD3<Double>] {
-        guard let inputs = heldPredictionInputs(timestamp: timestamp) else { return [] }
-        return NBody.predictedPath(
-            bodies: inputs.bodies, of: inputs.index,
-            dt: inputs.dt, steps: inputs.steps, pointStride: inputs.pointStride,
-            gravitationalConstant: inputs.gravitationalConstant
-        )
-    }
+    // `heldPrediction(timestamp:)` and `cancelPrediction()` were deleted
+    // 2026-08-09, both with zero callers. The first is the more
+    // instructive: its doc comment called it "the synchronous form the
+    // tests pin", and no test pinned it — the assertion that justified
+    // keeping a second path to the same answer had itself been deleted,
+    // so the comment was the only thing still claiming a reader. The
+    // renderer's worker path through `heldPredictionInputs` is the one
+    // that ships and the one `LagrangeCaptureTests` exercises.
 
     // MARK: The Lagrange points — a LAYER, not a mode
     //
@@ -1200,8 +1194,9 @@ final class GravityLabModel {
         // they are not covered by the rule above — but a settled ghost
         // and a verdict about a planet that no longer exists surviving
         // into a brand-new solar system is the same failure in a
-        // different costume. `bestPredictionMissAU` deliberately stays:
-        // it is a personal best, and the Prophet experiment reads it.
+        // different costume. (`bestPredictionMissAU` used to be excepted
+        // here as a personal best the Prophet experiment read; both are
+        // gone since 2026-08-09.)
         prediction = nil
         predictionVerdict = nil
         capturedPointName = nil
@@ -1271,8 +1266,8 @@ extension GravityLabModel: TimeCapsuleRecording {
     /// spacing rule `appendTrailPoints` applies live — so a scrubbed
     /// trail is not a reconstruction of the recording, it IS the
     /// recording. Out: `timeScale` (the live clock keeps setting how time
-    /// runs; the capsule only records what it produced), the display
-    /// layers, and `bestPredictionMissAU`, which is a personal best.
+    /// runs; the capsule only records what it produced) and the display
+    /// layers.
     struct CapsuleSnapshot: Equatable {
         struct Body: Equatable {
             var id: UUID

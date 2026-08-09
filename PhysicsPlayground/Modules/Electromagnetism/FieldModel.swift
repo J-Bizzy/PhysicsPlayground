@@ -286,13 +286,8 @@ final class FieldModel {
         for j in charges.indices {
             let mover = charges[j]
             if mover.id == heldChargeID { continue }
-            let others = charges.enumerated()
-                .filter { $0.offset != j }
-                .map(\.element)
-            var field = SIMD3<Double>.zero
-            if !others.isEmpty {
-                field = ElectricField.vector(at: mover.position, dueTo: others)
-            }
+            var field = ElectricField.vector(
+                at: mover.position, dueTo: charges, excluding: j)
             field += capacitorField(at: mover.position)
             let force = mover.charge * field
             var velocity = Self.chargeDriftGain * force

@@ -23,16 +23,16 @@
 //     how this app satisfies it. Hidden for the entire time the app is
 //     in its normal state, that guarantee was unmet in normal use — and
 //     it was also the safety net under the only-way-into-a-lab problem.
-//  2. IT WAS THE APP'S ONLY VIEW OF PROGRESS. `AppProgressLine` carries
+//  2. IT WAS THE APP'S ONLY VIEW OF PROGRESS. `AppProgressLine` carried
 //     the tally, the streak and the single next step, and it was
 //     invisible whenever the hub was actually up.
 //
-//     NO LONGER TRUE OF THIS FILE, 2026-08-08: the progress line moved
-//     to `ExperimentsView`, behind the Gallery bar's flask button, on
-//     the owner's call that the experiments should be something you ask
-//     for rather than something you look at. Point 1 above is untouched
-//     and is still why this window must not blank itself — the catalog
-//     is the accessibility path whatever else it carries.
+//     REASON 2 IS GONE, and so is everything it referred to: the
+//     progress line moved to `ExperimentsView` on 2026-08-08, and on
+//     2026-08-09 the owner cut the experiments system entirely. Reason 1
+//     is untouched and is the whole reason this window must not blank
+//     itself — the catalog is the accessibility path whatever else it
+//     carries, and it now carries nothing else.
 //
 
 import SwiftUI
@@ -244,37 +244,19 @@ struct HubCatalogList: View {
             ModuleCatalog.all(appModel: appModel).map { ($0.id, $0) })
 
         VStack(alignment: .leading, spacing: isCompact ? 10 : 14) {
-            // WHERE YOU ARE, AND WHERE TO GO — the app-wide pair, wired
-            // on 2026-08-03.
+            // A GRAVE, TWO DAYS DEEP. `AppProgressLine` stood here — the
+            // app-wide tally, the streak and the one concrete next step
+            // — on an argument worth keeping even though the feature is
+            // not: a tally tells you where you are and nothing about
+            // where to go, so a hub carrying only a score can only ever
+            // be a launcher. It moved to `ExperimentsView` on 2026-08-08
+            // (the owner's call that experiments should be something you
+            // ask for rather than something you look at), and on
+            // 2026-08-09 the whole system came out.
             //
-            // `ExperimentCatalog` has four public entry points and THREE
-            // OF THEM HAD NO CALLERS: `total`, `completedCount` and
-            // `nextStep`. The last one carries a doc comment arguing at
-            // length that "a tally that says '4 of 24 complete' tells you
-            // where you are and nothing about where to go — so the hub
-            // could only ever be a launcher. One concrete next step …
-            // turns it into somewhere you come back TO." The argument was
-            // written, the function was written, and the surface never
-            // was — the same "authored but dark" defect as the coach
-            // marks and `Lagrange.swift`.
-            //
-            // It goes HERE rather than into the room. The gallery's focus
-            // panel already names the next step for the module you are
-            // looking at, which is the better place for a per-module
-            // instruction. What was missing is the answer to "what next,
-            // anywhere" — and that is a question you ask of a catalog,
-            // not of one exhibit.
-            // GRAVE, 2026-08-08: `AppProgressLine` stood here — the
-            // app-wide tally and the single next step, in the catalog,
-            // whether or not anyone had asked for it. Owner's call: the
-            // experiments go behind a button beside Settings and the Lab
-            // Notebook. Both halves now live in `ExperimentsView`, which
-            // also became the first surface to show the twenty authored
-            // STEPS rather than counting them.
-            //
-            // The view itself is kept — it is still the right shape, and
-            // the reasoning above it about tally-versus-direction is the
-            // reasoning `ExperimentsView` follows.
+            // What is left is the catalog itself, which was always the
+            // load-bearing half: six labs, grouped by domain, each a
+            // button that opens its lab without needing a room.
             ForEach(HubDomain.allCases) { domain in
                 let modules = domain.moduleIDs.compactMap { byID[$0] }
                 if !modules.isEmpty {
@@ -300,76 +282,11 @@ struct HubCatalogList: View {
     }
 }
 
-/// The app-wide tally and the single next thing to do.
-///
-/// Deliberately ONE line of each. A tally is a score and a step is a
-/// direction, and the argument in `ExperimentCatalog.nextStep` is that
-/// the second is what makes a hub somewhere you return to. Listing every
-/// outstanding experiment would be a to-do list, which is the shape this
-/// project rejected when the experiments were "a checklist in a side pod
-/// … achievements to stumble into rather than a path through the module".
-struct AppProgressLine: View {
-    @Environment(AppModel.self) private var appModel
-
-    var body: some View {
-        let done = ExperimentCatalog.completedCount(appModel: appModel)
-        let total = ExperimentCatalog.total(appModel: appModel)
-
-        if total > 0 {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text("\(done) of \(total) experiments")
-                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                    if appModel.experiments.streak > 1 {
-                        Text("· \(appModel.experiments.streak)-day streak")
-                            .font(DesignTokens.TypeScale.footnote)
-                            .foregroundStyle(.tertiary)
-                    }
-                    Spacer(minLength: 0)
-                }
-
-                if let next = ExperimentCatalog.nextStep(appModel: appModel) {
-                    // The module's own accent, because the line is a
-                    // pointer INTO a room and the colour is how this app
-                    // says which one.
-                    Label {
-                        Text("\(next.experiment.title) — \(next.module.title)")
-                            .font(DesignTokens.TypeScale.footnote)
-                    } icon: {
-                        Image(systemName: "flask")
-                            .foregroundStyle(next.module.accent)
-                    }
-                    if !next.experiment.step.isEmpty {
-                        Text(next.experiment.step)
-                            .font(DesignTokens.TypeScale.footnote)
-                            .foregroundStyle(.tertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                } else {
-                    Text("Every experiment done.")
-                        .font(DesignTokens.TypeScale.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 4)
-            .padding(.bottom, 2)
-            .accessibilityElement(children: .combine)
-        }
-    }
-}
-
 private struct HubCatalogRow: View {
     let module: ModuleDescriptor
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
-        let entries = ExperimentCatalog.experiments(for: module.id,
-                                                    appModel: appModel)
-        let done = entries.filter {
-            appModel.experiments.completed.contains($0.experiment.id)
-        }.count
-
         Button {
             appModel.activeModuleID = module.id
         } label: {
@@ -385,13 +302,19 @@ private struct HubCatalogRow: View {
                     Text(module.title)
                         .font(.callout)
                         .lineLimit(1)
-                    if !entries.isEmpty {
-                        Text("\(done) of \(entries.count) experiments")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(done == entries.count
-                                             ? DesignTokens.Palette.completionGold
-                                             : Color.secondary)
-                    }
+                    // WHAT THE ROW'S SECOND LINE SAYS NOW. It read
+                    // "2 of 5 experiments" until 2026-08-09, and the
+                    // honest minimum after deleting that was to drop to
+                    // one line — but the row is built around two, and
+                    // `HubDomain.promise` is the sentence the gallery
+                    // already shows under the exhibit you are facing.
+                    // The flat catalog is the accessibility path, so the
+                    // one thing it should not be is the version that
+                    // tells you less about a lab than the room does.
+                    Text(HubDomain.promise(for: module.id))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.forward")
@@ -408,7 +331,7 @@ private struct HubCatalogRow: View {
             in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .hoverEffect()
         // Named as ONE control. Without this the row exposes only its
-        // composed children — an icon, a title, a progress line, a
+        // composed children — an icon, a title, a promise line, a
         // chevron — so VoiceOver reads it as four things and a UI test
         // cannot address it by name at all. Found by the first UI test
         // that tried to press it (`HomeChromeUITests`), which is

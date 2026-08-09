@@ -9,7 +9,8 @@
 //  single-line `namePlate` — the builder every other caller feeds a
 //  lab's NAME — so a sentence became one long plate running straight
 //  through the neighbouring exhibits' names and behind its own ENTER
-//  plaque. The photograph (2026-08-08, `-hubFocus pendulums`) shows the
+//  plaque (since removed). The photograph (2026-08-08, `-hubFocus
+//  pendulums`) shows the
 //  Pendulums promise crossing "Projectile Mo…" on one side and "Gravity
 //  Lab" on the other.
 //
@@ -90,18 +91,20 @@ final class GalleryCaptionTests: XCTestCase {
             """)
     }
 
-    /// NO TEST HERE ASSERTS THE PLAQUE CLEARS THE CAPTION, and that is
-    /// deliberate.
+    /// THE PLAQUE-CLEARS-THE-CAPTION PROBLEM IS CLOSED, and it is worth
+    /// recording that it was closed by DELETION rather than by a fix.
     ///
-    /// One was written on 2026-08-09 and passed over a photograph with
-    /// ENTER drawn through the sentence. The caption billboards from
-    /// z 0.11 and the plaque from z 0.165, so their on-screen order is
-    /// not their y order, and a test comparing y values is measuring
-    /// something other than what it claims. Acting on it moved the
-    /// plaque into the terrace slab and made every ENTER in the gallery
-    /// disappear — green the whole way.
+    /// A test for it was written on 2026-08-09 and passed over a
+    /// photograph with ENTER drawn through the sentence. The caption
+    /// billboards from z 0.11 and the plaque did so from z 0.165, so
+    /// their on-screen order was never their y order, and a test
+    /// comparing y values was measuring something other than what it
+    /// claimed. Acting on it moved the plaque into the terrace slab and
+    /// made every ENTER in the gallery disappear — green the whole way.
     ///
-    /// A test that cannot see the thing it asserts is worse than no
-    /// test, because it is also a claim that somebody checked. The
-    /// overlap is real and open; see the grave in `HubScene`.
+    /// Later the same day the plaque came off entirely (a tap on an
+    /// exhibit sends it to the pad now), which leaves the caption stack
+    /// as name and promise at one depth. The lesson outlives the objects:
+    /// a test that cannot see the thing it asserts is worse than no test,
+    /// because it is also a claim that somebody checked.
 }

@@ -35,6 +35,10 @@ enum KinematicsModule {
             // this way and would have needed a surface of its own; this
             // one is already on screen.
             firstRunHint: "Grab any ball and throw it — physics takes over the instant you let go. For precise launches, drag the launcher anywhere and pinch its orange bead to aim. Balls bounce off your real walls and floor, so visionOS will ask to use your room.",
+            // The house dimming — see `PendulumsModule` for the whole
+            // argument. Five of six modules sit here now; Gravity Lab's
+            // 0.85 is the one exception.
+            preferredDimming: 0.35,
             legend: legend,
             isPaused: { appModel.kinematicsModel.isPaused },
             // Through the capsule, not a bare toggle: un-pausing from a

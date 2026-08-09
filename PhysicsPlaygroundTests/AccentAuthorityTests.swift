@@ -33,24 +33,66 @@ final class AccentAuthorityTests: XCTestCase {
         return text.split(separator: "\n", omittingEmptySubsequences: false)
     }
 
+    /// Every stock colour SwiftUI and UIKit hand out by name.
+    ///
+    /// THE LIST IS THE POINT. This test used to check three spellings —
+    /// `Color.yellow`, `Color.green`, `Color.orange` — because those
+    /// were the three that were wrong on the day it was written. It
+    /// therefore passed for months over `gravityAccent = Color.indigo`
+    /// and `pendulumsAccent = Color.purple`, which are the same defect
+    /// in a hue the author had not thought of. A criterion that lists
+    /// the instances somebody already found is the same act of
+    /// attention that missed the others; this one closes the class.
+    private static let stockColorNames = [
+        "black", "blue", "brown", "clear", "cyan", "gray", "grey", "green",
+        "indigo", "mint", "orange", "pink", "purple", "red", "teal",
+        "white", "yellow",
+    ]
+
     /// The palette defines accents as owned values, never as stock
     /// SwiftUI colours — a stock colour is an unowned hue that happens
-    /// to be near a door.
+    /// to be near a door. It is also not a fixed hue: `Color.indigo`
+    /// resolves differently on visionOS than the iOS value its name
+    /// suggests, so "stock" does not even mean "the same colour".
     func testThePaletteOwnsItsAccentHues() throws {
         let lines = try source("PhysicsPlayground/DesignSystem/DesignTokens.swift")
         XCTAssertFalse(lines.isEmpty, "DesignTokens.swift unreadable — scanning nothing")
+
+        var accentLinesScanned = 0
         for (number, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("///") else { continue }
-            for stock in ["Color.yellow", "Color.green", "Color.orange"] {
-                XCTAssertFalse(trimmed.contains(stock), """
-                    DesignTokens.swift:\(number + 1) defines a hue as `\(stock)`. \
-                    An accent is an OWNED value (the door hues #30D158 / \
-                    #FF9F0A are the precedent); a stock colour beside them \
-                    recreates the two-greens drift this test closed.
-                    """)
+            // Only the hue DEFINITIONS. A `Color(uiColor:)` twin or a
+            // `UIColor(someAccent)` derivation is not a stock colour.
+            guard trimmed.contains("Accent"), trimmed.contains("=") else { continue }
+            accentLinesScanned += 1
+
+            for stock in Self.stockColorNames {
+                for spelling in ["Color.\(stock)", "UIColor.\(stock)",
+                                 "UIColor.system\(stock.capitalized)"] {
+                    XCTAssertFalse(trimmed.contains(spelling), """
+                        DesignTokens.swift:\(number + 1) defines an accent as \
+                        `\(spelling)`.
+
+                        An accent is an OWNED value (the door hues #30D158 / \
+                        #FF9F0A are the precedent); a stock colour beside them \
+                        recreates the two-greens drift this test closed — and a \
+                        stock colour is not even a fixed number across platforms.
+
+                        If you want that exact hue, MEASURE it and write the \
+                        literal, the way gravityAccent and pendulumsAccent were \
+                        owned on 2026-08-09.
+                        """)
+                }
             }
         }
+        // A negative criterion over lines it never matched passes
+        // vacuously — the same guard `SellingCopyCriterionTests` uses.
+        XCTAssertGreaterThanOrEqual(accentLinesScanned, 6, """
+            only \(accentLinesScanned) accent definitions were scanned, and the \
+            app has six modules. The line shape this test recognises has \
+            changed and it is now checking almost nothing.
+            """)
     }
 
     // MARK: Distance, not just ownership
@@ -91,23 +133,18 @@ final class AccentAuthorityTests: XCTestCase {
     /// not "different shade".
     private let minimumSeparation = 20.0
 
-    /// COMPLETION GOLD IS RESERVED, and a module accent that sits on top
-    /// of it congratulates the user for standing in the room.
+    /// `testNoModuleAccentCollidesWithCompletionGold` STOOD HERE and was
+    /// deleted on 2026-08-09 with the experiments system.
     ///
-    /// `electrostaticsAccent` was #FFD60A against gold's #FFD640 — same
-    /// red, same green, ΔE 11.6. Every plate, well and label in Electric
-    /// Fields wore it.
-    func testNoModuleAccentCollidesWithCompletionGold() {
-        let gold = DesignTokens.Palette.completionGoldUI
-        for (name, accent) in Self.moduleAccents {
-            let distance = deltaE(accent, gold)
-            XCTAssertGreaterThanOrEqual(distance, minimumSeparation, """
-                \(name) is ΔE \(String(format: "%.1f", distance)) from the \
-                reserved completion gold — near enough that a lab full of it \
-                reads as an award.
-                """)
-        }
-    }
+    /// It was a real catch in its day: `electrostaticsAccent` was #FFD60A
+    /// against gold's #FFD640 — same red, same green, ΔE 11.6 — and every
+    /// plate, well and label in Electric Fields wore it, so the lab read
+    /// as an award. The accent was moved and stayed moved.
+    ///
+    /// There is nothing left to collide with. Gold was the colour of a
+    /// completed experiment and nothing draws it now, so the assertion
+    /// would be reserving a hue against a claim the app no longer makes.
+    /// The `VectorPalette` test below is the live half of the same rule.
 
     /// …and nor may an accent collide with a VECTOR colour, which is the
     /// same failure one layer down: the arrows and the furniture are in

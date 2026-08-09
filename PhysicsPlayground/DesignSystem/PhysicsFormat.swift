@@ -66,7 +66,27 @@ nonisolated enum PhysicsFormat {
         let quantised = quantise(value, decimals: decimals)
         // -0.00 is a real thing `%f` will print, and it reads as an error.
         let cleaned = quantised == 0 ? 0 : quantised
-        return typographic(String(format: "%.\(max(decimals, 0))f", cleaned))
+        return typographic(String(format: Self.fixedSpecifier(decimals), cleaned))
+    }
+
+    /// `"%.<n>f"` without building it each time.
+    ///
+    /// The interpolated form allocated a format String on every call —
+    /// and this is called dozens of times a frame across the renderers
+    /// (skyline labels, callouts, component labels, every readout row),
+    /// so the app was allocating a throwaway String to describe how to
+    /// build a String. Seven entries cover every precision the house
+    /// uses; anything past them falls back to the old path rather than
+    /// growing a table nobody reads.
+    private static let fixedSpecifiers = [
+        "%.0f", "%.1f", "%.2f", "%.3f", "%.4f", "%.5f", "%.6f",
+    ]
+
+    private static func fixedSpecifier(_ decimals: Int) -> String {
+        let clamped = max(decimals, 0)
+        return clamped < fixedSpecifiers.count
+            ? fixedSpecifiers[clamped]
+            : "%.\(clamped)f"
     }
 
     /// U+2212 MINUS SIGN, not the hyphen `%f` emits.

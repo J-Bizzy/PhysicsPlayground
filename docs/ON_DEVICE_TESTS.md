@@ -551,10 +551,8 @@ file). The new well and the standing script:
 
 ### The experiment steps
 
-- [ ] On the home screen, a lab's card shows the next experiment's title
-      AND its step. Follow one to the end in the room — every control it
-      names must exist and be where it says. ⟳ Electric Fields' third
-      experiment is the cyclotron circle now, not the Gauss bubble.
+*(Deleted 2026-08-09 with the experiments system. There are no authored
+steps, no per-lab progress and no tally anywhere in the app.)*
 
 ## Phase 1 of the 2026-08-07 audit arc — the front door
 
@@ -562,17 +560,27 @@ All of this is new surface, and none of it can be judged from the
 simulator. Work it in this order; the first two are the ones that
 decide whether the phase was worth doing.
 
-- [ ] **⟳ The ENTER plaque, and the stack it lives in.** No argument
-      needed — the gallery is what you see at launch. Each puck's
-      terrace now carries a small machined ENTER slab in the module's
-      accent, standing forward of the plinth. **What CORRECT looks
-      like:** a caption stack under each miniature that reads as one
-      thing — name, then (on the exhibit you are facing) a one-line
-      promise, then the plaque in front on the terrace. **What to watch
-      for:** the three are billboarded and separated in depth as well as
-      height, so they can be geometrically clear and still LOOK piled
-      up. Then aim at a plaque and pinch: it must open that lab, and
-      pinching the miniature above it must still only flash the pad.
+- [ ] **⟳⟳ A TAP SENDS A LAB TO THE PAD.** No argument needed — the
+      gallery is what you see at launch. Aim at any miniature and pinch
+      it once. **What CORRECT looks like:** it lifts off its mount and
+      flies to the cradle front and centre over about half a second, the
+      three latch fingers fold down over it, and Load Module appears
+      above it naming that lab. Pinch that to enter. **What to watch
+      for:** (a) the flight has to be FOLLOWABLE — if you lose track of
+      where your lab went, it is too fast; (b) tapping a second lab must
+      send the first one home, not stack them; (c) tapping the lab
+      already on the pad must do nothing at all; (d) the latches must
+      close as it ARRIVES, not as it sets off.
+
+      *(This replaced the ENTER plaque on 2026-08-09. Nothing stands on
+      the terraces now except the mounts and the miniatures — if you see
+      a small machined slab reading ENTER, you are on an old build.)*
+
+- [ ] **⟳ The caption stack.** Under each miniature: its name, and on
+      the exhibit you are facing, a one-line promise. **What to watch
+      for:** both billboard, so they can be geometrically clear and
+      still LOOK piled up. This was a stack of three until the plaque
+      came off, and the plaque was the piece that made it hard.
 
 - [ ] **The promise line.** Turn your head slowly along the crescent.
       One sentence should fade in under the exhibit you are facing and
@@ -580,8 +588,8 @@ decide whether the phase was worth doing.
       you sweep past.
 
 - [ ] **The window is not blank.** Look at the hub window with the
-      Gallery up. It should show the progress line, the next step and
-      the compact catalog. Tapping a row there must still open its lab —
+      Gallery up. It should show the compact catalog — each lab's name
+      and its promise line. Tapping a row there must still open its lab —
       that is the accessibility path, and it has been unreachable in
       normal use since the gallery started auto-opening.
 
@@ -603,18 +611,40 @@ decide whether the phase was worth doing.
       `-roomSensing denied` fakes the refusal: the window should then say
       what is lost and how to turn it back on, not just show a triangle.
 
-- [ ] **The first-run teach is in the room.** Erase the app or use
-      `-resetHints 1`, then enter any lab. The module's paragraph should
-      hang beside the apparatus — not only in the window, which may be
-      behind you. Pinch it to dismiss; it must not come back, and the
-      window's copy of it must go at the same time. Check it does not
-      overlap the apparatus in the labs with the widest benches
-      (Circuits, Gravity Lab).
+- [ ] **⟳⟳ NO CARD OF WORDS STANDS IN A LAB.** Erase the app or use
+      `-resetHints 1`, then enter each of the six. **What CORRECT looks
+      like:** the apparatus, and nothing written floating in front of it
+      — no teach paragraph, no running commentary. The lab's sentence is
+      in the module WINDOW only, while the room is shut.
+      **What to watch for:** the small backed readouts on the apparatus
+      itself (values, switch labels, rack names) are NOT this and must
+      still be there — if those have gone, too much was deleted.
 
-- [ ] **The podium hint retires itself.** With hints reset, the "Or
-      carry a lab to the pad" line should be up. Carry one lab to the
-      pad; it should go, and stay gone on the next launch. It must never
-      be visible while a lab is already docked.
+      *(An in-room teach card shipped 2026-08-08 and Circuits' insight
+      card with it; both were cut 2026-08-09 for covering the bench they
+      described. If you see a dark paragraph over the apparatus you are
+      on an old build.)*
+
+- [ ] **⟳ Nothing hangs at the pad's rim.** The "Or carry a lab to the
+      pad" card was deleted 2026-08-09 — the tap demonstrates the
+      gesture instead. Carry a lab to the pad by hand and confirm the
+      drag sweeps through clean air: that card used to sit inside the
+      volume the carry passes through, so the sentence describing the
+      gesture stood in the way of performing it.
+
+- [ ] **⟳⟳ The three platforms, which are modelled now.** Stand close
+      enough to read them. **The terraces** are milled benches with
+      T-slots running their length and a lit channel along the front
+      rail — check the slots CROSS the joins between tiles, because
+      hiding those joins is half of why they are there. **The mounts**
+      should read as three-ball kinematic mounts: a base, a smaller top
+      plate, and three bright steel balls standing OUTSIDE the plate's
+      rim. **The pad** is a hexagonal cradle with a machined pocket and
+      three latch fingers. **What to watch for:** the terraces must not
+      have got louder than the physics standing on them — they measured
+      identical in median brightness to the plain slabs they replaced,
+      but the new specular highlights are real and only a headset can
+      say whether they pull the eye.
 
 ## Phase 2 — Gravity Lab folds, and the room stands back
 
@@ -1077,9 +1107,10 @@ in a room.
 
 ### The catalog, and the numbers
 
-- [ ] **Open the flat catalog.** Above the two domains there is a tally
-      and ONE next step. Complete that experiment and check the line
-      moves on to another.
+- [ ] **Open the flat catalog.** Two domains, six labs, and nothing that
+      counts your progress. (This said "a tally and ONE next step —
+      complete that experiment" until 2026-08-09; the experiments system
+      was deleted and the check outlived it.)
 - [ ] **Capture a notebook entry in three different labs and compare
       them.** Every row should read in one voice.
 - [ ] **Gravity Lab at 100× clock, watching the data card.** ν reads to
@@ -1090,5 +1121,54 @@ in a room.
 
 - [ ] **Enter and leave eight or ten labs in a row, then use one.**
       Nothing should feel heavier at the tenth lab than at the first.
-- [ ] **Complete an experiment, then leave that lab and enter another.**
-      No chime should fire for the lab you left.
+
+## The 2026-08-09 cleanup — what the suites cannot see
+
+Every item here exists because a green test proved the arithmetic and
+proves nothing about the room.
+
+### The cut test (the whole point of the atmosphere change)
+
+- [ ] **Enter all six labs in sequence, as a demo would cut between
+      them.** The room's brightness should not change from lab to lab.
+      Five now open at 0.35; Gravity Lab alone goes to 0.85 and that
+      one step should read as *entering space*, not as a bug.
+
+### Magnetism's field lines — the riskiest change in the pass
+
+- [ ] **Look along a loop where it wraps a pole.** The polylines are
+      decimated before they become tubes, keeping points by curvature.
+      Faceting, if it exists, shows up here first and at close range —
+      the simulator's resolution cannot settle it.
+- [ ] **Slide the strength bead from one end to the other.** Loop count
+      should still change with it, and the redraw should not stutter:
+      the retrace is now gated on 2 mm / ~1°, so a settling bench stops
+      re-tracing instead of retracing every frame.
+
+### The labels that moved onto the house plate
+
+- [ ] **Pendulums: select ONE pendulum** (the tag is suppressed when
+      pivots crowd, so the default cradle shows none). "T = … s" should
+      wear a dark plate and sit centred on its anchor, not hang from its
+      baseline.
+- [ ] **Gravity Lab with the Lagrange layer on.** Planet names and
+      Lagrange markers should now wear the same plate. They were two
+      different treatments a few centimetres apart.
+
+### Reach — measured now, but a metre is a body, not a number
+
+- [ ] **Gravity Lab: reach for Binary and Worlds without stepping.**
+      They came in from 1.36 m to 1.13 m.
+- [ ] **While you are there, try the clock tab.** It measures 1.33 m —
+      still past the limit, found by the same test and deliberately not
+      fixed alone, because Gravity Lab's whole right flank wants one
+      pass. Confirm whether it really is a step.
+- [ ] **Projectiles: try to reach the layers bank and the three rails.**
+      Known out of reach at ~1.7 m and recorded as such. This is the
+      module's whole instrument wall, not one anchor.
+
+### Prediction arc — unreachable from the CLI
+
+- [ ] **Hold a planet and watch the ghost path.** It is cased now, the
+      way Projectiles' predicted arc already was. It only draws while a
+      body is held, so no screenshot could check it.

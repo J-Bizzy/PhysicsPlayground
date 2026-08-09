@@ -133,13 +133,38 @@ enum ModuleCatalog {
         // Cut and archived, each returning with one line here plus its
         // HubDomains entry: Springs, Elastic Field, Optics, Waves,
         // Wind Tunnel. Physics stays in PhysicsCore, tested.
-        [
-            ElectromagnetismModule.descriptor(appModel: appModel),
-            CircuitsModule.descriptor(appModel: appModel),
-            MagnetismModule.descriptor(appModel: appModel),
-            KinematicsModule.descriptor(appModel: appModel),
-            PendulumsModule.descriptor(appModel: appModel),
-            GravityLabModule.descriptor(appModel: appModel),
-        ]
+        registry.map { $0.make(appModel) }
     }
+
+    /// Just the one, without building the other five.
+    ///
+    /// `AppModel.activeModule` used to call `all` and `first(where:)` —
+    /// six descriptors, each carrying five or so closures plus a
+    /// `TimeScrubControls` with five more, so about sixty closure
+    /// allocations to answer "which module is open". That would be a
+    /// footnote if it were rare, and it is not: the models are
+    /// `@Observable` and mutate every frame, so the views observing
+    /// them re-evaluate every frame, and `PlaygroundSpaceView.body`
+    /// alone reads `activeModule` three times.
+    ///
+    /// Built from the SAME `registry` as `all`, because the failure
+    /// mode of a second hand-written list is a module that exists in
+    /// the catalog and cannot be opened by id.
+    static func descriptor(id: String, appModel: AppModel) -> ModuleDescriptor? {
+        registry.first { $0.id == id }?.make(appModel)
+    }
+
+    /// The one list. Ids are declared here so a lookup does not have to
+    /// build a descriptor to find out what it is called.
+    private static let registry: [(id: String, make: (AppModel) -> ModuleDescriptor)] = [
+        (ElectromagnetismModule.id, ElectromagnetismModule.descriptor),
+        (CircuitsModule.id, CircuitsModule.descriptor),
+        (MagnetismModule.id, MagnetismModule.descriptor),
+        (KinematicsModule.id, KinematicsModule.descriptor),
+        (PendulumsModule.id, PendulumsModule.descriptor),
+        (GravityLabModule.id, GravityLabModule.descriptor),
+    ]
+
+    /// Every module's id, without constructing anything.
+    static var allIDs: [String] { registry.map(\.id) }
 }

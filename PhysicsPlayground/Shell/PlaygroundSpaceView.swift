@@ -61,27 +61,26 @@ struct PlaygroundSpaceView: View {
                         // module is paused with a recording worth scrubbing.
                         TimeRailView(module: module)
                             .id("time-rail-\(module.id)")
-                        // GRAVE, 2026-08-08: `FirstRunHint` stood a card
-                        // at head height on the left of every module,
-                        // naming the lab and saying "pinch to explore",
-                        // until it was dismissed. Owner's call — it is
-                        // unnecessary and it is in the way. It was added
-                        // on 2026-08-07 to move the first-run teach out
-                        // of the window and into the room; the answer
-                        // turns out to be that the teach did not need a
-                        // surface of its own. `AppSettings.seenHints`
-                        // stays: the podium hint in the Gallery still
-                        // uses it.
-                        // The experiments watcher: notices when the physics
-                        // reaches a goal and chimes exactly once.
-                        ExperimentCheckerView(moduleID: module.id)
-                            .id("experiments-\(module.id)")
-                        // The lab's first sentence, IN the lab. It was
-                        // drawn in the flat module window until
-                        // 2026-08-08, where the apparatus stood through
-                        // it — see `RoomTeach.swift`.
-                        RoomTeachView(module: module)
-                            .id("teach-\(module.id)")
+                        // NO CARD OF WORDS STANDS IN A LAB, and the room
+                        // has now rejected two of them.
+                        //
+                        // `FirstRunHint` hung at head height on the left
+                        // of every module, naming the lab and saying
+                        // "pinch to explore" until it was dismissed. It
+                        // came out on 2026-08-08 — unnecessary, and in
+                        // the way. Its replacement, `RoomTeach`, moved
+                        // the same paragraph in FRONT of the apparatus
+                        // so the window could not stand through it, and
+                        // the owner cut that on 2026-08-09 for the same
+                        // reason one step worse: a 262-line card whose
+                        // whole job was to cover the bench it described.
+                        //
+                        // The teach survives in the module WINDOW
+                        // (`ModuleHostView`, `ModuleDescriptor.firstRunHint`),
+                        // which is where it started and the one place it
+                        // obscures no physics. `AppSettings.seenHints`
+                        // stays: that window copy is gated on it.
+                        //
                         // Quiet lab room tone under every module (not the hub);
                         // no per-module id, so it runs seamlessly across switches.
                         AmbientLabAudioView()

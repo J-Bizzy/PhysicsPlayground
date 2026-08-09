@@ -184,6 +184,46 @@ struct GravityLabSpaceView: View {
     /// Identifies the floating readout above the selected body.
     private static let dataCardID = "gravity-data"
 
+    /// LEFT — what exists. The layers bank, with the analysis and
+    /// vectors handles hanging under it.
+    static let bankAnchor = GravityLabRenderer.systemPosition
+        + SIMD3<Float>(-0.62, 0.06, 0)
+
+    /// RIGHT — what you make and unmake. Binary and Worlds.
+    ///
+    /// PULLED IN AND LIFTED, 2026-08-09. It was
+    /// `systemPosition + (0.82, -0.20, 0)` — 1.37 m from a standing
+    /// viewer's nearest reach against a 1.25 m limit, so the one pair of
+    /// verbs in this lab could be seen and not touched. Nothing had ever
+    /// measured it: every module's bank anchor was a literal inside a
+    /// render closure, and `InstrumentClearance` was only ever pointed
+    /// at Electric Fields.
+    ///
+    /// Lifting it 15 cm does most of the work — the old y of 1.05 was
+    /// 45 cm below the eye line, and vertical distance costs reach just
+    /// as horizontal does. Pulling 12 cm in x does the rest.
+    ///
+    /// THE 0.20 OF Z IS FORCED, and it is worth saying why rather than
+    /// leaving it looking like a taste. At the system's own depth this
+    /// bank cannot be both reachable and clear of the clock handle: the
+    /// reach limit wants x ≤ 0.60, and the clock stands at x = 0.55, so
+    /// the two want the same air. Coming forward is the only axis left.
+    ///
+    /// It is not free — furniture forward of the apparatus can occlude
+    /// it — which is the trade `clockAnchor` below is already making at
+    /// a smaller scale. 0.20 rather than the 0.16 tried first: at 0.16
+    /// the gap to the clock handle is 0.03, which is `separation`
+    /// EXACTLY, and a rule satisfied to the last millimetre is one bad
+    /// rounding from being broken. `InstrumentReachCriterionTests`
+    /// measures both the reach and that gap.
+    static let verbAnchor = GravityLabRenderer.systemPosition
+        + SIMD3<Float>(0.70, -0.05, 0.20)
+
+    /// The clock's folding tab — the verb bank's nearest neighbour, and
+    /// the constraint that decides its depth.
+    static let clockAnchor = GravityLabRenderer.systemPosition
+        + SIMD3<Float>(0.55, -0.09, 0)
+
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -440,8 +480,7 @@ struct GravityLabSpaceView: View {
                     // the right so it never sits on the Sun, and at ~16°
                     // below eye — the same glance as the orrery itself.
                     let head = appModel.room.headPosition.map { SIMD3<Float>($0) }
-                    let clockAnchor = GravityLabRenderer.systemPosition
-                        + SIMD3<Float>(0.55, -0.09, 0)
+                    let clockAnchor = Self.clockAnchor
                     let hand = appModel.room.nearestFingertip(to: clockAnchor)
                     // The TAB stands where the fan used to; the fan
                     // unfolds above it only when asked.
@@ -458,8 +497,7 @@ struct GravityLabSpaceView: View {
                     // right — the same hand rule Electric Fields lays out
                     // its instruments by, so the two modules teach one
                     // layout rather than two.
-                    let bankAnchor = GravityLabRenderer.systemPosition
-                        + SIMD3<Float>(-0.62, 0.06, 0)
+                    let bankAnchor = Self.bankAnchor
                     layers?.update(anchor: bankAnchor, viewer: head,
                                    dt: event.deltaTime)
                     Recession.apply(to: layers?.root ?? Entity(),
@@ -487,8 +525,7 @@ struct GravityLabSpaceView: View {
                     // is IN it. Both are things you do to the system as a
                     // whole, as against the layers bank's what-is-drawn.
                     verbs?.update(
-                        anchor: GravityLabRenderer.systemPosition
-                            + SIMD3(0.82, -0.20, 0),
+                        anchor: Self.verbAnchor,
                         viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
                         dt: event.deltaTime,
                         resetNonce: appModel.resetNonce)
@@ -514,9 +551,22 @@ struct GravityLabSpaceView: View {
                     // moves a body by hand DISPLACEMENT, which a constant
                     // translation leaves untouched.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // …but the control pods do NOT go with it: the user
-                    // parked them where they wanted them, and moving the
-                    // apparatus is not a request to move the controls.
+                    // …AND THE INSTRUMENTS GO WITH IT, which is what
+                    // this comment used to deny.
+                    //
+                    // It read "the control pods do NOT go with it: the
+                    // user parked them where they wanted them" — a
+                    // sentence about the four-bead pods, which have not
+                    // existed since 2026-08-01. The other four modules
+                    // had the same paragraph corrected on 2026-08-03
+                    // with a note explaining it was false in all four;
+                    // the sweep missed this one, so the module the fix
+                    // was written for kept the wrong version for six
+                    // days. Every bank, handle, rail and picker here is
+                    // a child of `renderer.root` (see the `addChild`
+                    // calls in the make closure), so moving the lab
+                    // moves the whole lab — which is the behaviour a
+                    // user dragging a room-scale orrery expects.
                 }
             )
 
@@ -828,7 +878,7 @@ struct GravityLabSpaceView: View {
                     model.armPrediction()
                 },
                 .init(name: "Delete", symbol: "trash",
-                      tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
+                      tint: DesignTokens.Palette.destructiveUI) {
                     model.removeBody(id: uuid)
                 },
             ],

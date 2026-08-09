@@ -121,7 +121,13 @@ struct PendulumsSpaceView: View {
     // this depth is y ≈ 1.35.
     private static let instrumentZ: Float = -1.08
     /// Left of the swing, above the well at y = 1.30.
-    private static let bankAnchor = SIMD3<Float>(-0.92, 1.58, instrumentZ)
+    ///
+    /// Internal rather than private since 2026-08-09 so
+    /// `InstrumentReachCriterionTests` can measure it. Every module's
+    /// bank used to be a literal buried in a render closure, which is
+    /// why nothing had ever checked whether they were reachable — and
+    /// two of them were not.
+    static let bankAnchor = SIMD3<Float>(-0.92, 1.58, instrumentZ)
 
     /// Walks up from a tapped entity to a pivot collar, if it is one.
     /// The renderer names them `pivot-<uuid>`.
@@ -586,7 +592,7 @@ struct PendulumsSpaceView: View {
                 "pivot-\(pivotID)",
                 petals: [
                     .init(name: "Delete", symbol: "trash",
-                          tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
+                          tint: DesignTokens.Palette.destructiveUI) {
                         model.removePendulum(id: pivotID)
                     },
                 ],
@@ -619,7 +625,7 @@ struct PendulumsSpaceView: View {
             uuid,
             petals: [
                 .init(name: "Mass", symbol: "scalemass",
-                      tint: UIColor(white: 0.45, alpha: 1)) {
+                      tint: DesignTokens.Palette.neutralActionUI) {
                     // Cycle light → medium → heavy → light. The period
                     // doesn't change — which is the lesson.
                     let masses = [0.5, 1.5, 3.0]
@@ -628,7 +634,7 @@ struct PendulumsSpaceView: View {
                     model.setMass(id: uuid, next)
                 },
                 .init(name: "Delete", symbol: "trash",
-                      tint: UIColor(red: 0.85, green: 0.25, blue: 0.25, alpha: 1)) {
+                      tint: DesignTokens.Palette.destructiveUI) {
                     model.removePendulum(id: uuid)
                 },
             ],

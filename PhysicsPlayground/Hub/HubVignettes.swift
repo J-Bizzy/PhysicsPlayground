@@ -996,8 +996,20 @@ enum HubVignettes {
                     }
                 }
             }
+            // THE MAGNET'S OWN LAVENDER, not the electric field's.
+            //
+            // This borrowed `Palette.fieldLineUI` and so drew magnetic
+            // lines in Electric Fields' colour — a mismatch that was
+            // invisible while that token happened to be a neutral cyan
+            // and became loud the moment it became yellow (2026-08-09).
+            //
+            // It was already wrong before that. `MagnetismRenderer`
+            // draws this lab's lines in lavender, so the miniature on
+            // the home screen and the apparatus it advertises have never
+            // agreed. Reading the renderer's own constant is what stops
+            // them drifting again.
             return lines(paths, radius: 0.0017,
-                         DesignTokens.Palette.fieldLineUI)
+                         MagnetismRenderer.lineColor)
         }
 
         let stops: [Float] = [0, 0.5, 1]

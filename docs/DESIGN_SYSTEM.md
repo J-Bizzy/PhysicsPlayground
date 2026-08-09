@@ -132,9 +132,15 @@ Colour is **semantic, never decorative**.
 | Electricity & Magnetism | electrostatics, circuits, magnetism | Green | `#30D158` |
 | Mechanics & Energy | kinematics, pendulums, gravitylab | Orange | `#FF9F0A` |
 
-Domain accent appears on the terrace hairline, the door signage
-(`HubDomainTitle`), the progress ring, and the focus panel's chip — nowhere
-else.
+Domain accent appears in **two** places — the terrace hairline and the door
+signage (`HubDomainTitle`) — and nowhere else.
+
+> It listed four until 2026-08-09. The **progress ring** around each miniature
+> went on 2026-08-04 and the **focus panel's chip** went with the experiments
+> system on 2026-08-09; the sentence outlived both. `Hub/HubDomains.swift`
+> carried the same three-place claim in its own header and is corrected too.
+> Two places is also the more defensible number: the accent is wayfinding, and
+> a hue that appears in four places is decoration.
 
 **Per-module accents** (`DesignTokens.Palette.*Accent`) are a separate system
 for module chrome. Owned by `DesignTokens`, never ad hoc.
@@ -155,11 +161,15 @@ apparatus up beside you.
 - **Wordmark.** "Physics / Playground", **persistent** — it is the app's
   nameplate, not an intro. (`hasSeenWordmark` and the one-shot behaviour were
   deleted on 2026-07-29.)
-- **Voice.** `HubTitleStyle.shipping` = **`.plaque`**, a machined solid,
-  pinned in code (2026-07-31). The other three voices stay in the enum as what
-  the choice was made *against*; there is no setting, and the specimen wall
-  that auditioned them is gone. A plaque is **one solid, not a stack** — held
-  by `testThePlaqueIsASingleSolid`.
+- **Voice.** The machined plaque, and it is the only thing `HubTitleStyle` can
+  draw. There is no setting and no enum: the four-case taxonomy, the
+  `shipping` constant, the `current` global and the `switch` in every method
+  were deleted on 2026-08-02, because a choice mechanism with one reachable
+  case is not a choice. `HubTitleStyle` is a namespace now, not a type you
+  pick from — the losing voices live in the git history and DECISIONS.md,
+  which is where a rejected option belongs. A plaque is **one solid, not a
+  stack** — held by `testThePlaqueIsASingleSolid`.
+  (This said "the other three voices stay in the enum" until 2026-08-09.)
 - **Name plates.** Billboarded, one per exhibit; only the faced exhibit shows
   its full name. `HubScene.namePlate` returns a pill **centred on its own
   origin** — place it by its edge (`namePlateWidth`) or it straddles whatever

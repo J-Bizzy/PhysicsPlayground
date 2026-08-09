@@ -11,28 +11,50 @@ Target: visionOS (Vision Pro), mixed-immersion home space.
 Two rendering paths; the spatial one is primary:
 
 - **The Gallery** (`Hub/HubSpaceView.swift`, geometry in `Hub/GalleryLayout.swift`) — the immersive-space hub. `HubView` auto-opens the immersive space on arrival.
-- **The 2D front door** (`Hub/HubView.swift`) — the plain window, shown only before/without the immersive space: app name and tagline, an "Enter the Gallery" button, a domain-grouped catalog with per-module experiment progress, and an inline error banner with manual Retry if the space fails to open (the failure used to be swallowed silently).
+- **The 2D front door** (`Hub/HubView.swift`) — the plain window: app name and tagline, an "Enter the Gallery" button, a domain-grouped catalog carrying each lab's promise line, and an inline error banner with manual Retry if the space fails to open (the failure used to be swallowed silently). Since 2026-08-07 the catalog stays up, compactly, while the Gallery is in the room — it is the accessibility path, and hiding it was a defect. The per-module experiment progress it used to show went with the experiments on 2026-08-09.
 
 ### The Gallery
 
-A crescent of **two floating graphite terraces**, one per `HubDomain`, arcing around the user at azimuths **−28° (Electricity & Magnetism) and +28° (Mechanics & Energy)**, at slightly varied radii (1.95 / 2.05 m at the default distance) and slab-top heights (1.00 / 0.92 m at the default height). Values are authored in `GalleryLayout.slots`.
+A crescent of **two floating graphite terraces**, one per `HubDomain`, arcing around the user at azimuths **−28° (Electricity & Magnetism) and +28° (Mechanics & Energy)**, at slightly varied radii (1.95 / 2.05 m) and a **shared** slab-top height of **0.96 m**. Values are authored in `GalleryLayout.slots`.
+
+> The heights were 1.00 / 0.92 and were unified on 2026-08-04 — staggered tops read as uneven rather than as designed. The radii stay varied because that is what makes the crescent read as an arc rather than a wall; the heights were the pair that looked like a mistake. (Spec corrected 2026-08-09; it had described the pre-unification values for five days.)
 
 *(Was four terraces at ±54°/±18° while the catalog held four domains. The catalog was cut to two doors on 2026-07-30 when the merged-worlds geometry failed; the code followed and this paragraph did not, until 2026-08-01.)*
 
 Each terrace:
 
-- is a dark rounded slab (0.42 m deep, 0.055 m thick) with a **domain-coloured emissive hairline** along its front-top edge — one of the three places domain colour lives, alongside the door signage and the progress ring (the fourth was the focus panel's chip, deleted 2026-08-04);
-- carries one **pedestal puck** per module (r 0.085 m, 0.36 m pitch), each holding the module's **shell-free live miniature** (`Hub/HubVignettes.swift`), normalized to a constant 0.24 m world size, with a billboarded bubble-type name plate in front of the puck and the domain-coloured **progress ring** (gold when complete).
+- is a **modelled optical bench** (0.42 m deep, 0.055 m thick), tiled from a 0.36 m bay per module plus two 0.04 m end caps (`Tools/galleryplatforms.py` → `GalleryBay.usdz`, `GalleryCap.usdz`), T-slotted along its length, with a **domain-coloured emissive hairline** lying in the machined channel along its front rail — one of the two places domain colour lives, alongside the door signage (the progress ring went with the experiments on 2026-08-09; the focus panel's chip was deleted 2026-08-04);
+- carries one **three-ball kinematic mount** per module (r 0.085 m, 0.36 m pitch — `GalleryMount.usdz`), each holding the module's **shell-free live miniature** (`Hub/HubVignettes.swift`), normalized to a constant 0.24 m world size, with a billboarded bubble-type name plate in front of the mount.
 
-Slab widths derive from module counts (`0.36·n + 0.08`); a module outside every domain extends its fallback domain's slab, so the old slot-wrap overlap bug is structurally impossible (`GalleryLayoutTests`). The **distance setting scales the crescent's plan** (radials, widths, pitch) and the **height setting scales terrace heights**; exhibits keep constant world size. A soft warm pool of light on the real floor ties the crescent to the room.
+*(Terraces were plain boxes and the pucks plain cylinders until 2026-08-09. Tiles rather than one asset because the layout sizes a terrace from its module count; nothing here is stretched to fit.)*
+
+Slab widths derive from module counts (`0.36·n + 0.08`); a module outside every domain extends its fallback domain's slab, so the old slot-wrap overlap bug is structurally impossible (`GalleryLayoutTests`). Exhibits keep constant world size (0.24 m) whatever the crescent does.
+
+> **The distance and height SETTINGS are gone**, and so is the floor light pool. Both sentences survived here until 2026-08-09.
+>
+> The two sliders were replaced by the **grab bar**: you take the gallery in your hands and put it where you want it, which is one gesture instead of two numbers in a settings window, and it is the same verb every lab uses. `arcDistanceDefault` and `arcHeightDefault` are now constants.
+>
+> The floor pool died because **y = 0 is not the user's floor**. It was drawn at the origin, which lands somewhere between the ankles and the ceiling depending on where the wearer calibrated — a warm light tying the crescent to a plane that is not the room's.
 
 ### Title and signage
 
 The two-line wordmark ("Physics / Playground", champagne rule beneath) floats **permanently** above the crescent's centre (≈2.1 m at defaults). The one-shot `hasSeenWordmark` behaviour is deleted.
 
-Its **voice is the machined plaque** — `HubTitleStyle.shipping = .plaque`, pinned in code on 2026-07-31 after an audition against three alternatives. There is no setting; the other voices remain in the enum as what the choice was made against. A plaque is one solid, not a stack.
+Its **voice is the machined plaque**, pinned in code on 2026-07-31 after an audition against three alternatives. There is no setting, and since 2026-08-02 there is no enum either — `HubTitleStyle` is a namespace, because a four-case taxonomy with one reachable case is a choice mechanism with nothing to choose.
 
-Each terrace also carries an **animated 3-D door sign** (`HubDomainTitle`) naming its domain, with one kinetic element apiece — an electron lapping the E&M sign, a ball on a true parabola over Mechanics. **This reverses the earlier "no floating domain headers" rule** (2026-07-30), which is why the branding budget was re-opened for exactly two signs. Under reduce-motion the signs park at a composed rest pose rather than freezing mid-flight.
+**Contrast comes from a per-glyph KEYLINE** (`HubTitleStyle.keylined`), not from a panel: each letter is generated, placed on measured prefix advances, and given a dark casing swelled 22% about its own centre and set back behind its face. Ivory metal over a cream wall is light-on-light, and raising the emissive floor does not fix that — a backing plate did, for one day (2026-08-08), and the owner cut the black rectangle on 2026-08-09. A dark copy offset backward, and a dark copy scaled as a whole string, have both been tried and both fail; see the builder's own comment.
+
+Each terrace also carries a **3-D door sign** (`HubDomainTitle`) naming its domain — a static machined lockup with a shimmering rule under the type. **This reverses the earlier "no floating domain headers" rule** (2026-07-30), which is why the branding budget was re-opened for exactly two signs.
+
+> **The kinetic elements were deleted 2026-08-04** — an electron lapping the E&M sign, a ball on a true parabola over Mechanics. This paragraph described both as shipping until 2026-08-09, and carried a reduce-motion clause about them "parking at a composed rest pose rather than freezing mid-flight", which was vacuous once there was no flight to freeze. The signs are lockups now, and the one thing that still moves is the rule's shimmer.
+>
+> Note §2's decision 3 still records "No floating domain headers — stands", which this section reverses. The spec has contradicted itself on that point since the signs landed; the signs are what ships.
+
+### The pad
+
+A **modelled hexagonal docking cradle** (`GalleryCradle.usdz`) floating front and centre at 1.05 m, milled with a pocket and ringed by three **latch fingers** (`GalleryLatch.usdz`) that close over a lab as it lands and open when it is lifted out. Hexagonal against a gallery of circles on purpose: it is the one platform in the room that is not a shelf.
+
+*(The plinth beneath it came off 2026-08-03 — one leg touching a floor the app cannot see. The plate kept the exact height the column gave it, because that number was measured. The cylinder became a cradle on 2026-08-09.)*
 
 ### Focus
 
@@ -42,14 +64,16 @@ Unchanged mechanic (head-direction cone 26° with hysteresis, `RoomModel`'s look
 
 ### Entering
 
-**Two doors, and the pair is load-bearing** (DECISIONS.md 2026-07-29: "neither may be deleted without the other changing"):
+**One door, reached two ways** (rewritten 2026-08-09). The door is the **pad**: a lab standing on the modelled cradle front and centre turns there with **Load Module** hanging over it, and that button is the only thing in the room that opens a lab.
 
-- **The ENTER plaque** — a small machined slab in the module's accent, standing on the terrace in front of each puck. Gaze plus a pinch, nothing to aim or carry. This is the *reachable* path, and the one VoiceOver can operate (`.activate`; the exhibit itself also carries an "Enter" custom action).
-- **The pad** — carry an exhibit to the plate front and centre and release it inside the 0.34 m snap radius; it stands and turns with Load hanging over it. The *delightful* path.
+- **Tap an exhibit** and it flies to the pad by itself (0.5 s), where the cradle's three latch fingers close over it.
+- **Or carry it there** and release inside the 0.34 m snap radius (0.28 s to settle). The better story, and still the one nobody discovers unaided — which is why the tap now demonstrates it.
 
-Either way: 0.42 s swell-and-rise with a pop, the terrace's hairline flares, then the scene swaps to the module.
+Either way, entering is: 0.42 s swell-and-rise with a pop, the terrace's hairline flares, then the scene swaps to the module.
 
-A **tap on the exhibit itself still does not enter** — 2026-07-29 removed that because it made the whole gallery one large accidental-activation surface while merely looking around, and that reasoning stands. It flashes the pad instead, teaching the ceremony. *(Between 2026-08-04 and 2026-08-07 the pad was the ONLY way in, because the focus panel's button went and nothing replaced it. That is the gap the plaque closes.)*
+A **tap on the exhibit still does not enter**, and 2026-07-29's reasoning is why: entering by tap made the gallery one large accidental-activation surface. Moving a lab across the room is not entering, so the tap does not reinstate the problem. **VoiceOver goes straight in** — the exhibit publishes both `.activate` and an "Enter" custom action — because the ceremony's payload is entirely visual.
+
+*(History: the pad was the ONLY way in from 2026-08-04 to 08-07, when the focus panel's Load button was deleted and nothing replaced it. An ENTER plaque on every puck closed that gap and stood until 2026-08-09, when it and the pad's teach card were both cut. `GalleryDoorTests` covers the door now; the plaque's tests are its ancestor.)*
 
 ### Idle life & comfort
 
@@ -59,7 +83,7 @@ Miniatures breathe ±8 mm on desynced periods and run their physics; hairlines s
 
 Unchanged from v3: the **Palette bead** (`Shell/Palette.swift`) with four petals — pause, capture (the notebook), settings (gear), reset; the fourth was added on 2026-07-29 and the count is capped there — and the module window's floating title bar (`Shell/ModuleHostView.swift`).
 
-**The title bar is now the whole window** (DECISIONS 2026-08-01). `ModuleDescriptor.makeControls` and the six `*ControlsPanel.swift` are deleted; every control and readout stands on the apparatus. The bar gained a **Key** button (the legend, as a popover) and shows a **warning triangle** when the room cannot be sensed. The catalog card carries the next experiment's *step* as well as its title, because the module window no longer has anywhere to put it.
+**The title bar is now the whole window** (DECISIONS 2026-08-01). `ModuleDescriptor.makeControls` and the six `*ControlsPanel.swift` are deleted; every control and readout stands on the apparatus. The bar gained a **Key** button (the legend, as a popover) and shows a **warning triangle** when the room cannot be sensed. *(It also carried the next experiment's step until 2026-08-09.)*
 
 ---
 
@@ -74,7 +98,7 @@ Numbering from v3. Don't revisit a standing one without a `DECISIONS.md` entry.
 5. **No Quick Demo button** — stands; every exhibit is a perpetual live demo.
 6. **Focus, not hover** — stands, unchanged mechanic.
 7. ~~One-shot wordmark~~ — **reversed**: the wordmark is persistent (DECISIONS 2026-07-29).
-8. **No Search, no Daily Challenge surface** — stands.
+8. **No Search, no Daily Challenge surface** — stands, and **hardened 2026-08-09**: the experiments system, which was the app's only progress surface, was deleted entirely. The hub tracks nothing about the user.
 9. **Procedural vignettes; `RoomModel` for head pose; `SceneEvents.Update` ticking** — stands.
 
 ## 3. Open work

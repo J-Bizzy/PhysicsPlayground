@@ -6,6 +6,20 @@
 //  space is on screen. Each module's model is created lazily on first entry
 //  and retained, so switching modules preserves their state.
 //
+//  "LAZILY" IS ASPIRATIONAL, and worth knowing before you rely on it.
+//  The getters below are lazy, but `ModuleDescriptor` evaluates
+//  `timeScrub: .init(model: appModel.<x>Model)` eagerly, so building the
+//  catalog forces all six models — plus six 2 700-frame Time Capsule ring
+//  buffers, about 2 MB, whether or not the feature is switched on.
+//
+//  `activeModule` used to build the whole catalog on every read, which
+//  meant every SwiftUI invalidation did it; since 2026-08-09 it asks
+//  `ModuleCatalog.descriptor(id:appModel:)` for the one it wants, and the
+//  `-openModule` validation reads `ModuleCatalog.allIDs` rather than
+//  constructing anything. So the per-frame cost is gone and the launch
+//  footprint is not: making it genuinely lazy means `TimeScrubControls`
+//  taking an autoclosure, which is a change to all six descriptors.
+//
 
 import SwiftUI
 import Observation
@@ -53,18 +67,20 @@ final class AppModel {
         resetNonce &+= 1
     }
 
-    // MARK: Visit history — powers "New" badges and "last played".
+    // MARK: Visit history — powers "New" badges.
 
     private(set) var visitedModuleIDs: Set<String> =
         Set(UserDefaults.standard.stringArray(forKey: "visited.modules") ?? [])
 
-    func lastPlayed(_ moduleID: String) -> Date? {
-        UserDefaults.standard.object(forKey: "lastPlayed.\(moduleID)") as? Date
-    }
+    // `lastPlayed(_:)` AND ITS "lastPlayed.<id>" WRITE went with the
+    // experiments (2026-08-09). Its only reader was
+    // `ExperimentCatalog.modulesByRecency`, which ordered the experiment
+    // list by the lab you were last in. Left behind, the write would be
+    // exactly the defect the recency tests were written to catch: a
+    // timestamp recorded on every visit, forever, that nothing asks for.
 
     private func recordVisit() {
         guard let id = activeModuleID else { return }
-        UserDefaults.standard.set(Date(), forKey: "lastPlayed.\(id)")
         if !visitedModuleIDs.contains(id) {
             visitedModuleIDs.insert(id)
             UserDefaults.standard.set(visitedModuleIDs.sorted(), forKey: "visited.modules")
@@ -153,8 +169,6 @@ final class AppModel {
     /// Driven by the active module's descriptor; bound to the shared
     /// immersive space's style selection.
     var immersionStyle: ImmersionStyle = .mixed
-    /// Completed-experiment bookkeeping, shared app-wide and persisted.
-    let experiments = ExperimentProgress()
 
     // `controlPodsVisible` was deleted here on 2026-08-03. A GRAVE: it
     // had zero readers anywhere in the app, and its doc comment
@@ -167,7 +181,7 @@ final class AppModel {
 
     var activeModule: ModuleDescriptor? {
         guard let activeModuleID else { return nil }
-        return ModuleCatalog.all(appModel: self).first { $0.id == activeModuleID }
+        return ModuleCatalog.descriptor(id: activeModuleID, appModel: self)
     }
 
     init() {
@@ -183,7 +197,11 @@ final class AppModel {
             // so the app quietly showed the HUB — indistinguishable from
             // a module that opened and rendered nothing. Chasing that
             // through a profiler is a bad afternoon; say so instead.
-            let known = ModuleCatalog.all(appModel: self).map(\.id)
+            // `allIDs`, not `all(appModel:).map(\.id)` — validating a
+            // name should not construct six modules' worth of closures,
+            // and during `init` it is the difference between reading a
+            // launch argument and standing up every model in the app.
+            let known = ModuleCatalog.allIDs
             if known.contains(id) {
                 activeModuleID = id
             } else {

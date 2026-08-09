@@ -90,7 +90,8 @@ struct KinematicsSpaceView: View {
     // four instruments swinging around the room with the launcher is a
     // lot of furniture to drag through a wall.
     private static let instrumentZ: Float = -1.10
-    private static let bankAnchor = SIMD3<Float>(-1.52, 1.34, instrumentZ)
+    /// Internal since 2026-08-09 so the reach criterion can measure it.
+    static let bankAnchor = SIMD3<Float>(-1.52, 1.34, instrumentZ)
     private static let worldsAnchor = SIMD3<Float>(-1.05, 1.50, instrumentZ)
     private static let gravityCenter = SIMD3<Float>(-1.05, 1.30, instrumentZ)
     private static let windCenter = SIMD3<Float>(-1.05, 1.10, instrumentZ)
@@ -443,7 +444,7 @@ struct KinematicsSpaceView: View {
                     model.fire()
                 },
                 .init(name: "Balls", symbol: "circle.grid.2x2.fill",
-                      tint: UIColor(white: 0.45, alpha: 1)) { [ballPicker] in
+                      tint: DesignTokens.Palette.neutralActionUI) { [ballPicker] in
                     ballPicker.toggle()
                 },
                 // Clearing the volley, off the window panel. The
@@ -477,7 +478,7 @@ struct KinematicsSpaceView: View {
                 // and cannot freeze. `confirms` gives it the same two-tap
                 // arm the standing plates use.
                 .init(name: "Clear", symbol: "trash.slash",
-                      tint: UIColor(white: 0.45, alpha: 1),
+                      tint: DesignTokens.Palette.neutralActionUI,
                       isAvailable: { !model.flights.isEmpty },
                       confirms: true) {
                     model.clearFlights()
