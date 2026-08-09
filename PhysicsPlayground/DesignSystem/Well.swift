@@ -89,12 +89,33 @@ final class Well {
     /// past; the other five modules have three or four and want none of
     /// this. Nil keeps their behaviour exactly as it was — the window is
     /// opt-in, so adding it could not change a module that did not ask.
-    var visibleCount: Int?
+    ///
+    /// Setting this BUILDS the carets, because a caller sets it after
+    /// `init` and the first version built them there — where
+    /// `visibleCount` was still nil, the guard bailed, and the rack
+    /// shipped with no affordance at all. The tests for the affordance
+    /// caught it, which is the whole reason they exist.
+    var visibleCount: Int? {
+        didSet {
+            guard visibleCount != oldValue else { return }
+            buildCarets()
+            applyWindow()
+        }
+    }
 
     /// Which slot is at the top of the window.
     private(set) var scrollIndex = 0
 
     let root = Entity()
+
+    /// The strip the sources ride, and the only thing that MOVES when
+    /// the rack is scrolled.
+    ///
+    /// Separate from `root` because the carets must not slide with it —
+    /// they mark the WINDOW, which stays where it was authored, and a
+    /// caret that drifts up the room as you browse is worse than none.
+    /// (The first version slid `root` itself and took the carets along.)
+    private let rack = Entity()
     private var specs: [Spec] = []
     private var sources: [Entity] = []
     /// The preview model inside each source, scaled by the breath — kept
@@ -112,13 +133,14 @@ final class Well {
     private var time: Double = 0
 
     init(_ specs: [Spec]) {
+        root.addChild(rack)
         self.specs = specs
         dip = Array(repeating: 0, count: specs.count)
         refusal = Array(repeating: 0, count: specs.count)
         for spec in specs {
             let (source, preview) = Self.makeSource(spec)
             source.position = spec.position
-            root.addChild(source)
+            rack.addChild(source)
             sources.append(source)
             previews.append(preview)
             // A well is PULLED FROM, and a pull needs a hand position
@@ -192,7 +214,7 @@ final class Well {
     private func applyWindow() {
         guard let visibleCount, !specs.isEmpty else {
             for source in sources { source.isEnabled = true }
-            root.position.y = 0
+            rack.position.y = 0
             return
         }
         let last = max(specs.count - visibleCount, 0)
@@ -201,7 +223,7 @@ final class Well {
         // lifts the rack by the distance from the first slot to the one
         // that should now head the window.
         let head = specs[0].position.y
-        root.position.y = head - specs[min(scrollIndex, specs.count - 1)].position.y
+        rack.position.y = head - specs[min(scrollIndex, specs.count - 1)].position.y
         for (index, source) in sources.enumerated() {
             source.isEnabled = index >= scrollIndex
                 && index < scrollIndex + visibleCount
@@ -214,14 +236,105 @@ final class Well {
         guard let visibleCount, specs.count > visibleCount else { return }
         scrollIndex = min(max(scrollIndex + slots, 0), specs.count - visibleCount)
         applyWindow()
+        refreshCarets()
     }
 
-    /// True when there is more above or below the window — the caller
-    /// draws whatever tells the user so.
+    /// True when there is more above or below the window.
+    ///
+    /// READ BY THE CARETS BELOW, not left for a caller to remember. The
+    /// first version of this said "the caller draws whatever tells the
+    /// user so" and no caller did — six of twelve parts on screen and
+    /// nothing saying the other six existed, which is the same
+    /// authored-but-dark defect this project keeps convicting, committed
+    /// by the comment that promised otherwise.
     var canScrollUp: Bool { scrollIndex > 0 }
     var canScrollDown: Bool {
         guard let visibleCount else { return false }
         return scrollIndex + visibleCount < specs.count
+    }
+
+    // MARK: The carets
+
+    /// The two marks that say the rack goes on.
+    ///
+    /// A DRAG IS INVISIBLE. A rack of six with no affordance is a rack of
+    /// six as far as anyone can tell, and the parts they cannot see are
+    /// the ones they will not build with. These say "more this way" by
+    /// existing, and pressing one moves a whole page — so the feature is
+    /// reachable without knowing the gesture, and reachable by VoiceOver,
+    /// which cannot drag at all.
+    ///
+    /// A PAGE, not a slot: at six visible of twelve, one press reaches
+    /// the end. Stepping one at a time would take six presses to learn
+    /// what is down there.
+    private let upCaret = ModelEntity()
+    private let downCaret = ModelEntity()
+
+    static let caretName = "well-caret"
+
+    private func buildCarets() {
+        // Idempotent: the window can be set more than once, and a second
+        // pair of carets would sit exactly on the first.
+        upCaret.removeFromParent()
+        downCaret.removeFromParent()
+        guard let visibleCount, specs.count > visibleCount else { return }
+        let pitch = slotPitch
+        let top = specs[0].position
+        for (caret, direction) in [(upCaret, Float(1)), (downCaret, Float(-1))] {
+            caret.name = "\(Self.caretName)-\(direction > 0 ? "up" : "down")"
+            caret.model = ModelComponent(
+                mesh: .generateCone(height: 0.016, radius: 0.013),
+                materials: [Materials.machined(UIColor(white: 0.62, alpha: 1))])
+            // Pointing the way it takes you.
+            caret.orientation = simd_quatf(angle: direction > 0 ? 0 : .pi,
+                                           axis: [0, 0, 1])
+            let span = Float(visibleCount - 1) * pitch
+            caret.position = SIMD3(top.x,
+                                   direction > 0 ? top.y + 0.055
+                                                 : top.y - span - 0.055,
+                                   top.z)
+            caret.components.set(InputTargetComponent())
+            caret.components.set(CollisionComponent(
+                shapes: [.generateSphere(radius: 0.020)]))
+            caret.components.set(HoverEffectComponent())
+            root.addChild(caret)
+        }
+        refreshCarets()
+    }
+
+    private func refreshCarets() {
+        upCaret.isEnabled = canScrollUp
+        downCaret.isEnabled = canScrollDown
+        // Announced with what pressing them DOES, and re-announced as the
+        // window moves — a caret that still says "6 more below" at the
+        // bottom of the rack is worse than a silent one.
+        SpatialActions.attach(
+            to: upCaret, label: "Earlier parts",
+            value: "\(scrollIndex) above",
+            activate: { [weak self] in self?.page(-1) })
+        SpatialActions.attach(
+            to: downCaret, label: "More parts",
+            value: "\(max(specs.count - scrollIndex - (visibleCount ?? 0), 0)) below",
+            activate: { [weak self] in self?.page(1) })
+    }
+
+    /// One window's worth, the direction the caret points.
+    func page(_ direction: Int) {
+        scroll(by: direction * (visibleCount ?? 1))
+    }
+
+    /// True if the tap hit a caret — the caller's other tap handling
+    /// should not also run.
+    @discardableResult
+    func handleTap(_ entity: Entity) -> Bool {
+        var current: Entity? = entity
+        while let candidate = current {
+            if candidate === upCaret { page(-1); return true }
+            if candidate === downCaret { page(1); return true }
+            if candidate === root { return false }
+            current = candidate.parent
+        }
+        return false
     }
 
     // MARK: Dragging the rack
@@ -243,7 +356,7 @@ final class Well {
     /// ordinary `pull` should handle it as it always did.
     func beginDrag(_ entity: Entity, hand: SIMD3<Float>) -> Bool {
         guard visibleCount != nil, specs.count > (visibleCount ?? 0),
-              let name = Self.sourceName(of: entity, under: root),
+              let name = Self.sourceName(of: entity, under: rack),
               let index = sources.firstIndex(where: { $0.name == name })
         else { return false }
         dragStart = hand
@@ -289,6 +402,9 @@ final class Well {
 
     var isDragging: Bool { dragStart != nil }
 
+    /// How many slots there are, window or no window.
+    var slotCount: Int { specs.count }
+
     /// The slot at `index`, for a caller resolving a committed pull.
     func spec(at index: Int) -> Spec? {
         specs.indices.contains(index) ? specs[index] : nil
@@ -309,7 +425,7 @@ final class Well {
     /// its own drag.
     @discardableResult
     func pull(_ entity: Entity, at hand: SIMD3<Double>) -> UUID? {
-        guard let name = Self.sourceName(of: entity, under: root),
+        guard let name = Self.sourceName(of: entity, under: rack),
               let index = sources.firstIndex(where: { $0.name == name })
         else { return nil }
         if let handOver = specs[index].handOver {
@@ -332,11 +448,11 @@ final class Well {
         return id
     }
 
-    private static func sourceName(of entity: Entity, under root: Entity) -> String? {
+    private static func sourceName(of entity: Entity, under rack: Entity) -> String? {
         var current: Entity? = entity
         while let candidate = current {
-            if candidate.parent === root { return candidate.name }
-            if candidate === root { return nil }
+            if candidate.parent === rack { return candidate.name }
+            if candidate === rack { return nil }
             current = candidate.parent
         }
         return nil

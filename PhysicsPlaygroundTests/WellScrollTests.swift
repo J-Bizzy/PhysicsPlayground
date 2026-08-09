@@ -45,9 +45,24 @@ final class WellScrollTests: XCTestCase {
         return well
     }
 
+    /// Asked of the well rather than walked out of the scene graph: the
+    /// slots hang off a sliding rack inside `root` and the carets hang
+    /// off `root` itself, and a test that knows that is a test that
+    /// breaks when the hierarchy is rearranged for a reason it does not
+    /// care about.
     private func enabledSlots(_ well: Well) -> [String] {
-        well.root.children.filter(\.isEnabled).map(\.name)
-            .filter { $0.hasPrefix("well-slot") }
+        (0..<well.slotCount).compactMap { index in
+            guard let source = well.source(at: index), source.isEnabled else {
+                return nil
+            }
+            return source.name
+        }
+    }
+
+    /// The sliding strip — the thing that must move when you scroll, and
+    /// must not when you do not.
+    private func rackEntity(_ well: Well) throws -> Entity {
+        try XCTUnwrap(well.root.children.first)
     }
 
     // MARK: The rule
@@ -111,10 +126,10 @@ final class WellScrollTests: XCTestCase {
     // MARK: The window
 
     /// THE FEATURE IS OPT-IN. Five modules never asked for it.
-    func testAWellWithNoWindowShowsEverything() {
+    func testAWellWithNoWindowShowsEverything() throws {
         let well = rack(9)
         XCTAssertEqual(enabledSlots(well).count, 9)
-        XCTAssertEqual(well.root.position.y, 0,
+        XCTAssertEqual(try rackEntity(well).position.y, 0,
                        "a well with no window moved its rack")
     }
 
@@ -128,9 +143,9 @@ final class WellScrollTests: XCTestCase {
     /// Scrolling moves the window, and the rack slides so the window
     /// stays where the first slot was authored — otherwise the parts
     /// would walk down the room as you browsed.
-    func testScrollingMovesTheWindowAndNotTheHole() {
+    func testScrollingMovesTheWindowAndNotTheHole() throws {
         let well = rack(12, visible: 6)
-        let restingY = well.root.position.y
+        let restingY = try rackEntity(well).position.y
         well.scroll(by: 3)
         well.update(dt: 1 / 90)
 
@@ -142,7 +157,8 @@ final class WellScrollTests: XCTestCase {
         // Slot 3 now sits where slot 0 used to: the rack lifted by
         // exactly three pitches.
         let pitch = CircuitsPartsLayout.rightRowPitch
-        XCTAssertEqual(well.root.position.y, restingY + 3 * pitch, accuracy: 1e-5)
+        XCTAssertEqual(try rackEntity(well).position.y,
+                       restingY + 3 * pitch, accuracy: 1e-5)
     }
 
     /// It must stop at both ends. A rack scrolled past its last slot is
@@ -203,6 +219,70 @@ final class WellScrollTests: XCTestCase {
         well.endDrag()
         XCTAssertEqual(resolved, [2],
                        "a pull resolved \(resolved.count) times: \(resolved)")
+    }
+
+    // MARK: The affordance
+
+    private func caret(_ well: Well, _ direction: String) -> Entity? {
+        well.root.children.first { $0.name == "\(Well.caretName)-\(direction)" }
+    }
+
+    /// A RACK WITH NO MARK IS A RACK OF SIX. The parts a user cannot see
+    /// are the ones they will not build with, and a drag is invisible —
+    /// so the window has to say that it is a window.
+    ///
+    /// This test exists because the first version of the scroll shipped
+    /// `canScrollUp`/`canScrollDown` with a comment saying "the caller
+    /// draws whatever tells the user so", and no caller did.
+    func testTheRackSaysWhenThereIsMore() throws {
+        let well = rack(12, visible: 6)
+        XCTAssertEqual(caret(well, "up")?.isEnabled, false,
+                       "an up caret at the top of the rack points nowhere")
+        XCTAssertEqual(caret(well, "down")?.isEnabled, true,
+                       "six of twelve are hidden and nothing says so")
+
+        well.scroll(by: 6)
+        well.update(dt: 1 / 90)
+        XCTAssertEqual(caret(well, "up")?.isEnabled, true)
+        XCTAssertEqual(caret(well, "down")?.isEnabled, false,
+                       "a down caret at the end of the rack points nowhere")
+    }
+
+    /// …and a rack that fits has no carets at all.
+    func testAShortRackHasNoCarets() {
+        let well = rack(4, visible: 6)
+        XCTAssertNil(caret(well, "up"))
+        XCTAssertNil(caret(well, "down"))
+    }
+
+    /// PRESSING ONE MOVES A PAGE. At six of twelve that is one press to
+    /// the end — stepping a slot at a time would be six presses to learn
+    /// what is down there.
+    func testPressingACaretMovesAWholePage() throws {
+        let well = rack(12, visible: 6)
+        let down = try XCTUnwrap(caret(well, "down"))
+        XCTAssertTrue(well.handleTap(down))
+        well.update(dt: 1 / 90)
+        XCTAssertTrue(enabledSlots(well).contains("well-slot11"))
+        XCTAssertFalse(enabledSlots(well).contains("well-slot0"))
+    }
+
+    /// The carets are operable without hands — they are the ONLY route
+    /// for a VoiceOver user, who cannot drag the rack at all.
+    func testTheCaretsWorkWithoutHands() throws {
+        let well = rack(12, visible: 6)
+        let down = try XCTUnwrap(caret(well, "down"))
+        XCTAssertTrue(SpatialActions.activate(down),
+                      "the caret announces itself and cannot be pressed")
+        well.update(dt: 1 / 90)
+        XCTAssertTrue(well.canScrollUp, "activating the caret did not scroll")
+    }
+
+    /// A tap that misses them falls through, or the rack becomes a hole
+    /// in that side of the room.
+    func testATapElsewhereIsNotConsumed() {
+        let well = rack(12, visible: 6)
+        XCTAssertFalse(well.handleTap(Entity()))
     }
 
     // MARK: The one-of-a-kind slot

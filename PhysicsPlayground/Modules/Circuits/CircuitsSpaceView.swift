@@ -525,6 +525,11 @@ struct CircuitsSpaceView: View {
                     // distance: a verb plate is never also a reach for
                     // the bench behind it, wherever it happens to stand.
                     if verbs?.handleTap(value.entity) == true { return }
+                    // The rack's carets, before anything else on that
+                    // flank: they sit at the ends of the parts column and
+                    // a miss would otherwise fall through to whatever is
+                    // behind them.
+                    if palette?.handleTap(value.entity) == true { return }
                     if presetsHandle.handleTap(value.entity) { return }
                     if presetsHandle.isOpen,
                        presets?.handleTap(value.entity) == true { return }
