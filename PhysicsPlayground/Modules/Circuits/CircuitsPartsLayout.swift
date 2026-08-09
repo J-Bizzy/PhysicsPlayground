@@ -172,6 +172,48 @@ enum CircuitsPartsLayout {
     /// outer column comes first, on the right the inner one does, so
     /// both blocks read outward-in and inward-out respectively — i.e.
     /// both read left to right, the way the labels under them do.
+    /// ONE BLOCK, ON THE RIGHT, IN THE OPENING VIEW — owner's call,
+    /// 2026-08-08, replacing both the two-flank split and the parts
+    /// cabinet that briefly replaced it.
+    ///
+    /// The cabinet was the right answer to "eleven components standing
+    /// in the room permanently" and the wrong answer to what the bench
+    /// is FOR: building. Parts you have to open something to reach are
+    /// parts you reach for less, and a workshop with its components in a
+    /// drawer is tidier and slower. Tidy was not the goal.
+    ///
+    /// TWO COLUMNS OF SIX, and every number here is a constraint rather
+    /// than a preference:
+    ///
+    /// - x 0.80 and 0.94 puts the block's near face 0.04 m clear of the
+    ///   bench's build volume (`buildHalfExtents.x` is 0.70). Any closer
+    ///   and a part dragged to the bench's right edge would sit inside a
+    ///   well's collider, which is the shielding failure that cost this
+    ///   module its interactivity once already.
+    /// - z −0.55 is FORWARD of the bench's own −0.9, not level with it.
+    ///   That is what "accessible" costs geometrically: the furthest
+    ///   mouth is then 1.21 m from a standing viewer against a 1.25
+    ///   limit, where at the bench's depth it would be past it.
+    /// - Six rows at 0.105 span y 0.975…1.50, inside the working band
+    ///   and inside the opening frame.
+    static let rightColumns: [Float] = [0.80, 0.94]
+    static let rightTopY: Float = 1.50
+    static let rightRowPitch: Float = 0.105
+    static let rightZ: Float = -0.55
+    /// Six per column: eleven kinds fill the first column and five of
+    /// the second, and a twelfth would extend the shorter one rather
+    /// than growing the block downward out of reach.
+    static let rightRows = 6
+
+    /// Where part `index` stands, in world coordinates.
+    static func rightSlot(index: Int) -> SIMD3<Float> {
+        let column = min(index / rightRows, rightColumns.count - 1)
+        let row = index % rightRows
+        return SIMD3(rightColumns[column],
+                     rightTopY - Float(row) * rightRowPitch,
+                     rightZ)
+    }
+
     static func slot(_ flank: Flank, index: Int, rowPitch: Float) -> SIMD3<Float> {
         let column = index % columns
         let row = index / columns

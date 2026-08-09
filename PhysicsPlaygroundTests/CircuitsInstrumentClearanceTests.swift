@@ -64,15 +64,29 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
             // hanging under it.
             ("presets tab", box([-1.02, 0.48, 0.10], SIMD3(0.09, 0.05, 0.05))),
             ("presets column", box([-1.02, 0.24, 0.10], fiveHigh)),
-            // THE PARTS CABINET, IN BOTH STATES. A drawer that clears
-            // everything shut and fouls something open is still a bug —
-            // it just waits for a pinch, exactly like the presets column
-            // and the Clear plate's armed label.
-            ("parts cabinet", box([0.92, -0.02, 0.14], SIMD3(0.17, 0.11, 0.10))),
-            ("parts cabinet open",
-             box([0.92, -0.02, 0.14 + Float(PartsDrawer.travel) / 2],
-                 SIMD3(0.17, 0.11, 0.10 + Double(PartsDrawer.travel) / 2))),
+            // THE PARTS BLOCK. World coordinates, not bench-relative —
+            // `CircuitsPartsLayout.rightSlot` places these absolutely, so
+            // the box is built from the real slots rather than from an
+            // offset that would drift if the bench moved.
+            ("parts block", partsBlock),
         ]
+    }
+
+    /// Every well mouth as one box, measured from the layout itself.
+    private var partsBlock: StationBox {
+        let slots = (0..<11).map { CircuitsPartsLayout.rightSlot(index: $0) }
+        var lo = SIMD3<Double>(Double(slots[0].x), Double(slots[0].y),
+                               Double(slots[0].z))
+        var hi = lo
+        for slot in slots {
+            let p = SIMD3<Double>(Double(slot.x), Double(slot.y), Double(slot.z))
+            lo = simd_min(lo, p)
+            hi = simd_max(hi, p)
+        }
+        // Each mouth's own half-extents, as `Well` measures them.
+        let mouth = SIMD3<Double>(0.06, 0.055, 0.06)
+        return StationBox(center: (lo + hi) / 2,
+                          halfExtents: (hi - lo) / 2 + mouth)
     }
 
     /// The bench's build volume — where a part can legally be dragged to,
@@ -107,11 +121,9 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
         // itself; the layers bank predates it — see
         // `testTheOlderBenchFurnitureStandsInsideTheBuildVolume`.
         //
-        // The two cabinet states are one object, so they overlap each
-        // other by construction and that pair is not a finding.
         let mine = violations.filter {
-            ($0.contains("presets") || $0.contains("cabinet"))
-                && !($0.contains("parts cabinet") && $0.contains("parts cabinet open"))
+            ($0.contains("presets") || $0.contains("parts block"))
+
         }
         XCTAssertTrue(mine.isEmpty, """
             The presets furniture breaks \(mine.count) of the shared rules:
