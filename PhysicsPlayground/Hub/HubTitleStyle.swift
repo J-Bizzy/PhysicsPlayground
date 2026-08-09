@@ -126,7 +126,14 @@ enum HubTitleStyle {
         // specular highlight is still what shapes the bevel, which is
         // what keeps it reading as metal rather than as a lit sign.
         metal.emissiveColor = .init(color: stock)
-        metal.emissiveIntensity = 0.34
+        // BACK TO 0.16 ON 2026-08-08. I pushed this to 0.34 to make the
+        // wordmark "pop" and a screenshot showed it had not: the mark
+        // was still a ghost on a cream wall, because light-on-light has
+        // no contrast and a brighter light does not create any. The fix
+        // is a dark backing plate behind the lockup — see
+        // `HubSpaceView.buildBubbleTitle` — and with something to be
+        // ivory against, the original floor is the right one again.
+        metal.emissiveIntensity = 0.16
 
         let model = ModelEntity(mesh: mesh, materials: [metal])
         model.position = SIMD3(-(bounds.min.x + bounds.max.x) / 2,

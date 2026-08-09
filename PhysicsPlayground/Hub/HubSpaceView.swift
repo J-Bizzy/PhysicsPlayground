@@ -474,12 +474,25 @@ final class HubScene {
         arcRadius = distance
         arcHeight = Self.arcHeightDefault
 
-        // 0.70 ABOVE THE ARC UNTIL 2026-08-08, which put the lockup high
-        // enough that reading it was a neck movement rather than a
-        // glance. Owner's call: bring it down. 0.52 keeps it clear of
-        // the tallest exhibit's halo while landing it in the band the
-        // eye is already in when looking at the terraces.
-        titlePosition = SIMD3(0, arcHeight + 0.52, -(arcRadius + 0.45))
+        // 0.70 ABOVE THE ARC UNTIL 2026-08-08, then 0.52 on the owner's
+        // call to bring it down, and 0.62 once a screenshot showed what
+        // 0.52 collided with.
+        //
+        // The collision is between two changes made the same day and
+        // neither wrong alone: the main window STOPPED BLANKING when the
+        // gallery opens (Phase 1 — the flat catalog is the accessibility
+        // path and hiding it was the defect), and the wordmark came
+        // down. The window now sits permanently where the mark was
+        // lowered into, and the two overlapped in the first picture of
+        // the gallery anyone has taken.
+        //
+        // 0.66 is the compromise: lower than it was, and clear of the
+        // window's top edge, which 0.62 still grazed. Some overlap is
+        // inherent — the catalog is a system window the wearer can move
+        // and the mark is anchored to the arc — so this buys separation
+        // at the DEFAULT placement rather than pretending to guarantee
+        // it everywhere.
+        titlePosition = SIMD3(0, arcHeight + 0.66, -(arcRadius + 0.45))
         buildBubbleTitle()
         buildPodium(distance: distance)
         buildGalleryBar(distance: distance)
@@ -949,6 +962,36 @@ final class HubScene {
             titleAnchor.addChild(item.entity)
             cursor -= height + gap
         }
+
+        // THE PLAQUE GETS A PLAQUE, and this is the app's own lesson
+        // applied to the one surface that had escaped it.
+        //
+        // The mark is ivory machined metal and the room behind it is
+        // somebody's wall — cream, in the first screenshot ever taken of
+        // it, which showed the wordmark as a barely-there ghost. I had
+        // already tried the obvious fix and pushed the emissive from
+        // 0.16 to 0.34; it did nothing, because the problem is not that
+        // the letters are dim. It is that light-on-light has no
+        // contrast, and DECISIONS.md settled this on 2026-07-26 in four
+        // words: CASINGS BEAT GLOWS. The layer-bank plates a metre away
+        // in the same screenshot are perfectly legible, and they are
+        // dark stock.
+        //
+        // So the letters keep their ivory and get something to be ivory
+        // AGAINST. Sized from the measured lockup rather than typed, so
+        // it cannot drift from the words the way a hand-set panel would.
+        let plateInset: Float = 0.085
+        var backing = Materials.machined(UIColor(white: 0.10, alpha: 1))
+        backing.blending = .transparent(opacity: .init(floatLiteral: 0.82))
+        let plate = ModelEntity(
+            mesh: .generateBox(width: Self.titleWidth + plateInset * 2,
+                               height: blockHeight + plateInset * 2,
+                               depth: 0.006, cornerRadius: 0.018),
+            materials: [backing])
+        // BEHIND the letters, which sit at z 0 — far enough back that
+        // the extrusion never punches through the face.
+        plate.position = SIMD3(0, 0, -0.012)
+        titleAnchor.addChild(plate)
 
         // A thin champagne rule under the lockup — the jeweller's line
         // that makes the mark read as set type rather than floating
