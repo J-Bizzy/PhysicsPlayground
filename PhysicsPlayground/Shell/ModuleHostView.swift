@@ -241,9 +241,19 @@ struct ModuleHostView: View {
                     Image(systemName: "hand.point.up.left")
                         .font(.footnote)
                         .foregroundStyle(module.accent)
+                    // PRIMARY, not secondary. This is the first sentence
+                    // a new wearer reads in a lab and it was styled as a
+                    // caption — the app's lowest-contrast text, over
+                    // translucent glass, in front of a live room. The
+                    // first photograph of Pendulums in a room (2026-08-08)
+                    // has it crossing five steel bobs and four vector
+                    // arrows, with whole phrases unreadable.
+                    //
+                    // The failure banner ten lines up is plain `.primary`,
+                    // and it says one short thing you can ignore. The
+                    // ranking was backwards.
                     Text(module.firstRunHint)
                         .font(DesignTokens.TypeScale.footnote)
-                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 6)
                     Button {
@@ -258,12 +268,19 @@ struct ModuleHostView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Dismiss hint")
                 }
-                // The same quiet glass the failure banner above wears —
-                // this was the last bare element in the title bar, a
-                // naked HStack pretending it wasn't chrome.
+                // Glass, like the failure banner above — this was the
+                // last bare element in the title bar, a naked HStack
+                // pretending it wasn't chrome — but THICKER than the
+                // banner's. The banner is one line and transient; this is
+                // four lines standing over the apparatus until it is
+                // dismissed, which is a different job for the same
+                // material. "Casings beat glows" (DECISIONS, 2026-07-26)
+                // is the same rule seen from the other side: a surface
+                // earns legibility by what is behind the text, not by
+                // making the text brighter.
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(.regularMaterial,
+                .background(.thickMaterial,
                             in: RoundedRectangle(cornerRadius: 12,
                                                  style: .continuous))
                 .transition(.opacity.combined(with: .move(edge: .top)))
