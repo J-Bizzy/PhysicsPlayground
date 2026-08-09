@@ -315,7 +315,33 @@ struct CircuitsSpaceView: View {
                 + SIMD3<Float>(0, 0.60, 0)
             renderer.root.addChild(insight.root)
 
-            let parts = Well(partSpecs)
+            // THE METER IS THE TWELFTH SLOT. It stood beside the bench
+            // at all times and the owner's word was "intruding"; the
+            // cabinet that briefly swallowed it is gone, so it parks in
+            // the rack with everything else instead. `handOver` rather
+            // than `spawn` because there is exactly ONE multimeter —
+            // minting a second on every pull would be the opposite of an
+            // instrument.
+            let meterSlot = Well.Spec(
+                name: "multimeter",
+                tint: UIColor(DesignTokens.Palette.circuitsAccent),
+                label: "Multimeter",
+                preview: { Multimeter.miniature() },
+                position: CircuitsPartsLayout.rightSlot(index: partSpecs.count),
+                spawn: { _ in nil },
+                // CAPTURING THE INSTRUMENT, NOT THE VIEW: a SwiftUI
+                // `View` is a struct, so there is no `self` to hold
+                // weakly — and the meter is the only thing this closure
+                // actually needs.
+                handOver: { [weak multimeter] hand in
+                    multimeter?.place(at: SIMD3<Float>(hand))
+                })
+
+            let parts = Well(partSpecs + [meterSlot])
+            // A WINDOW, NOT A WALL: six of the twelve, the rest a drag
+            // away. Opt-in, so the five modules with three or four
+            // sources are untouched.
+            parts.visibleCount = CircuitsPartsLayout.rightVisibleRows
             renderer.root.addChild(parts.root)
             self.palette = parts
 
@@ -582,6 +608,21 @@ struct CircuitsSpaceView: View {
                         renderer.showRubberBand(
                             from: SIMD3<Float>(sourceComponent.terminalPosition(source.end)),
                             to: target.map { SIMD3<Float>($0.position) } ?? handF)
+                    } else if let palette, palette.isDragging {
+                        // Browsing, or the frame a pull commits on. The
+                        // slot comes back exactly once — returning it
+                        // every frame would put one part on the bench
+                        // per frame.
+                        if let slot = palette.updateDrag(hand: handF),
+                           let source = palette.source(at: slot) {
+                            if let id = palette.pull(source, at: hand) {
+                                spawnedPartID = id
+                                partDrag = RelativeDrag(name: id.uuidString,
+                                                        target: hand, hand: hand)
+                                renderer.previewComponentID = id
+                                model.beginCarry(id: id)
+                            }
+                        }
                     } else if let partDrag {
                         applyCircuitDrag(partDrag, hand: hand)
                     }
@@ -589,6 +630,7 @@ struct CircuitsSpaceView: View {
                 .onEnded { value in
                     probeDrag = nil
                     meterDrag = nil
+                    palette?.endDrag()
                     bloom.endGrip()
                     defer {
                         renderer?.hideRubberBand()
@@ -717,13 +759,15 @@ struct CircuitsSpaceView: View {
                 model.beginCarry(id: grip.componentID)
                 return
             }
-            if let id = palette?.pull(candidate, at: hand) {
-                // BORN AT THE FINGERTIPS, not at the source: a well hands
-                // the part over where your hand already is, so making one
-                // and moving one are the same gesture.
-                spawnedPartID = id
-                partDrag = RelativeDrag(name: name, target: hand, hand: hand)
-                renderer.previewComponentID = id
+            // THE RACK CLAIMS THE DRAG BEFORE IT KNOWS WHAT IT IS.
+            //
+            // A pinch on a slot means two things now — slide the rack to
+            // see the other six, or take this one — and which cannot be
+            // known until the hand has travelled (`ScrollGesture`). So
+            // the drag opens here and resolves in `onChanged`; the part
+            // is still born AT THE FINGERTIPS when it comes, which is
+            // the whole reason a well beat the old tray.
+            if palette?.beginDrag(candidate, hand: SIMD3<Float>(hand)) == true {
                 return
             }
             if let id = UUID(uuidString: name),

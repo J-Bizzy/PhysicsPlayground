@@ -74,7 +74,14 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
 
     /// Every well mouth as one box, measured from the layout itself.
     private var partsBlock: StationBox {
-        let slots = (0..<11).map { CircuitsPartsLayout.rightSlot(index: $0) }
+        // THE WINDOW, NOT THE WHOLE RACK. Only six slots are on screen
+        // at once and the rack slides so the window stays put, so the
+        // occupied volume is six rows however many parts exist. Measuring
+        // all twelve would reserve half a metre of room nothing stands
+        // in — and would fail the working-band check for furniture that
+        // is never visible there.
+        let slots = (0..<CircuitsPartsLayout.rightVisibleRows)
+            .map { CircuitsPartsLayout.rightSlot(index: $0) }
         var lo = SIMD3<Double>(Double(slots[0].x), Double(slots[0].y),
                                Double(slots[0].z))
         var hi = lo

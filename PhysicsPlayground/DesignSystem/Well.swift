@@ -53,7 +53,46 @@ final class Well {
         /// caller can hand the new thing straight to the drag it was
         /// born from.
         let spawn: (SIMD3<Double>) -> UUID?
+
+        /// For a ONE-OF-A-KIND object that lives in the shelf rather
+        /// than being manufactured by it.
+        ///
+        /// Circuit Workshop's multimeter is the case: there is exactly
+        /// one, so pulling its slot must hand over the instrument that
+        /// exists rather than mint a second. `spawn` cannot express that
+        /// — returning nil there means "I could not", which dims the
+        /// slot in refusal.
+        ///
+        /// When this is set the slot is a PARKING SPACE, and `pull`
+        /// answers with the pop rather than the flinch.
+        var handOver: (@MainActor (SIMD3<Double>) -> Void)?
+
+        init(name: String, tint: UIColor, label: String,
+             preview: @escaping @MainActor () -> Entity,
+             position: SIMD3<Float>,
+             spawn: @escaping (SIMD3<Double>) -> UUID?,
+             handOver: (@MainActor (SIMD3<Double>) -> Void)? = nil) {
+            self.name = name
+            self.tint = tint
+            self.label = label
+            self.preview = preview
+            self.position = position
+            self.spawn = spawn
+            self.handOver = handOver
+        }
     }
+
+    /// How many slots are on screen at once, or nil for all of them.
+    ///
+    /// A SHELF, NOT A WALL. Circuit Workshop stands twelve kinds of part
+    /// and the owner's note was that twelve at once is a lot to look
+    /// past; the other five modules have three or four and want none of
+    /// this. Nil keeps their behaviour exactly as it was — the window is
+    /// opt-in, so adding it could not change a module that did not ask.
+    var visibleCount: Int?
+
+    /// Which slot is at the top of the window.
+    private(set) var scrollIndex = 0
 
     let root = Entity()
     private var specs: [Spec] = []
@@ -109,6 +148,7 @@ final class Well {
     /// the nearest one would light up wells half a metre from your hand.
     func update(dt: Double, nearestHand: SIMD3<Float>? = nil) {
         time += dt
+        applyWindow()
         for source in sources {
             Recession.apply(to: source,
                             anchor: source.position(relativeTo: nil),
@@ -139,12 +179,145 @@ final class Well {
         }
     }
 
+    // MARK: The window
+
+    /// Shows only `visibleCount` slots, starting at `scrollIndex`, and
+    /// slides them up so the window always sits where the first slot
+    /// was authored.
+    ///
+    /// The slots keep their AUTHORED positions and the whole rack moves,
+    /// rather than each slot being re-placed. That way the layout stays
+    /// the one thing that decides where parts stand — a scroll is the
+    /// rack sliding past a hole, which is what it looks like.
+    private func applyWindow() {
+        guard let visibleCount, !specs.isEmpty else {
+            for source in sources { source.isEnabled = true }
+            root.position.y = 0
+            return
+        }
+        let last = max(specs.count - visibleCount, 0)
+        scrollIndex = min(max(scrollIndex, 0), last)
+        // Authored positions run DOWN the column, so scrolling forward
+        // lifts the rack by the distance from the first slot to the one
+        // that should now head the window.
+        let head = specs[0].position.y
+        root.position.y = head - specs[min(scrollIndex, specs.count - 1)].position.y
+        for (index, source) in sources.enumerated() {
+            source.isEnabled = index >= scrollIndex
+                && index < scrollIndex + visibleCount
+        }
+    }
+
+    /// Scrolls by whole slots — a rack of discrete objects left between
+    /// two positions is a rack with something half out of view.
+    func scroll(by slots: Int) {
+        guard let visibleCount, specs.count > visibleCount else { return }
+        scrollIndex = min(max(scrollIndex + slots, 0), specs.count - visibleCount)
+        applyWindow()
+    }
+
+    /// True when there is more above or below the window — the caller
+    /// draws whatever tells the user so.
+    var canScrollUp: Bool { scrollIndex > 0 }
+    var canScrollDown: Bool {
+        guard let visibleCount else { return false }
+        return scrollIndex + visibleCount < specs.count
+    }
+
+    // MARK: Dragging the rack
+
+    private var dragStart: SIMD3<Float>?
+    private var scrollAtGrab = 0
+    private var gesture: ScrollGesture = .undecided
+    private var draggedIndex: Int?
+
+    /// How far a hand travels along the rack per slot scrolled. Matched
+    /// to the authored pitch so the rack tracks the fingers.
+    private var slotPitch: Float {
+        guard specs.count > 1 else { return 0.105 }
+        return abs(specs[1].position.y - specs[0].position.y)
+    }
+
+    /// Begins a drag on the rack. Returns false if the pinch missed it,
+    /// or if there is nothing to scroll — in which case the caller's
+    /// ordinary `pull` should handle it as it always did.
+    func beginDrag(_ entity: Entity, hand: SIMD3<Float>) -> Bool {
+        guard visibleCount != nil, specs.count > (visibleCount ?? 0),
+              let name = Self.sourceName(of: entity, under: root),
+              let index = sources.firstIndex(where: { $0.name == name })
+        else { return false }
+        dragStart = hand
+        scrollAtGrab = scrollIndex
+        gesture = .undecided
+        draggedIndex = index
+        return true
+    }
+
+    /// Continues it. Returns the slot to pull, once, when the hand has
+    /// committed to taking something rather than browsing.
+    func updateDrag(hand: SIMD3<Float>) -> Int? {
+        guard let dragStart else { return nil }
+        let travel = hand - dragStart
+        switch gesture {
+        case .pull:
+            return nil                              // already spent
+        case .scroll:
+            applyScroll(travel)
+            return nil
+        case .undecided:
+            gesture = ScrollGesture.classify(travel: travel, axis: .vertical)
+            if gesture == .scroll { applyScroll(travel) }
+            return gesture == .pull ? draggedIndex : nil
+        }
+    }
+
+    private func applyScroll(_ travel: SIMD3<Float>) {
+        guard let visibleCount, slotPitch > 1e-6 else { return }
+        // Drag DOWN to bring later slots up, the way a physical rack
+        // behaves under a finger.
+        let slots = Int((-travel.y / slotPitch).rounded())
+        scrollIndex = min(max(scrollAtGrab + slots, 0),
+                          max(specs.count - visibleCount, 0))
+        applyWindow()
+    }
+
+    func endDrag() {
+        dragStart = nil
+        draggedIndex = nil
+        gesture = .undecided
+    }
+
+    var isDragging: Bool { dragStart != nil }
+
+    /// The slot at `index`, for a caller resolving a committed pull.
+    func spec(at index: Int) -> Spec? {
+        specs.indices.contains(index) ? specs[index] : nil
+    }
+
+    /// The entity standing in slot `index` — what a pull should be
+    /// measured from.
+    func source(at index: Int) -> Entity? {
+        sources.indices.contains(index) ? sources[index] : nil
+    }
+
     /// If `entity` belongs to a source, makes its object at `hand` and
     /// returns the new id — the caller then drags it like anything else.
+    ///
+    /// A slot with a `handOver` gives up the ONE object it parks and
+    /// returns nil, which is a success rather than a refusal: the caller
+    /// has nothing new to drag because the thing already existed and has
+    /// its own drag.
+    @discardableResult
     func pull(_ entity: Entity, at hand: SIMD3<Double>) -> UUID? {
         guard let name = Self.sourceName(of: entity, under: root),
               let index = sources.firstIndex(where: { $0.name == name })
         else { return nil }
+        if let handOver = specs[index].handOver {
+            handOver(hand)
+            dip[index] = 1
+            SoundPalette.play(.pop, on: sources[index], volume: 0.5)
+            return nil
+        }
         // The recoil and the pop are the well SAYING it just gave
         // something up, so they only happen when it did. A lab at its
         // budget used to chirp and flinch and hand back nothing — the

@@ -347,6 +347,49 @@ final class Multimeter {
     ///
     /// Owned HERE for the same reason `probeTip` is: `update` runs every
     /// frame, so anything it writes unconditionally cannot be dragged.
+    /// A SMALL STAND-IN FOR THE SLOT IT PARKS IN, not the meter itself.
+    ///
+    /// The rack builds a preview per slot and the real instrument is one
+    /// object that has to keep its own position, its dial and its two
+    /// probes. Putting the live meter in the rack would mean the rack
+    /// owning its transform, which is exactly the fight
+    /// `place(at:)` exists to settle — the anchor was re-applied sixty
+    /// times a second once already, and a drag on the case had no
+    /// visible effect at all.
+    ///
+    /// So the slot shows a miniature and `handOver` moves the real one
+    /// to your hand.
+    @MainActor
+    static func miniature() -> Entity {
+        let holder = Entity()
+        let body = ModelEntity(
+            mesh: .generateBox(width: 0.043, height: 0.084, depth: 0.016,
+                               cornerRadius: 0.005),
+            materials: [Materials.machined(UIColor(white: 0.24, alpha: 1))])
+        holder.addChild(body)
+
+        // The screen, so it reads as a meter at a glance rather than as
+        // a block — the one feature that distinguishes it in a rack of
+        // components at this size.
+        var screen = UnlitMaterial(color: UIColor(red: 0.10, green: 0.16,
+                                                  blue: 0.13, alpha: 1))
+        screen.blending = .opaque
+        let face = ModelEntity(
+            mesh: .generatePlane(width: 0.031, height: 0.020,
+                                 cornerRadius: 0.002),
+            materials: [screen])
+        face.position = [0, 0.022, 0.0085]
+        holder.addChild(face)
+
+        let dial = ModelEntity(
+            mesh: .generateCylinder(height: 0.004, radius: 0.011),
+            materials: [Materials.machined(UIColor(white: 0.34, alpha: 1))])
+        dial.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+        dial.position = [0, -0.016, 0.009]
+        holder.addChild(dial)
+        return holder
+    }
+
     /// The anchor used to be a `private static let` in the view and was
     /// re-applied sixty times a second, which is why a drag on the case
     /// would have had no visible effect even once the case had a

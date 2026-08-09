@@ -196,22 +196,33 @@ enum CircuitsPartsLayout {
     ///   limit, where at the bench's depth it would be past it.
     /// - Six rows at 0.105 span y 0.975…1.50, inside the working band
     ///   and inside the opening frame.
-    static let rightColumns: [Float] = [0.80, 0.94]
+    /// ONE COLUMN, SIX AT A TIME, SCROLLING — owner's refinement,
+    /// 2026-08-08: twelve slots at once is a lot to look past.
+    ///
+    /// The block was two columns of six. A window of six in ONE column
+    /// halves the width as well as the count, and it is the arrangement
+    /// where scrolling is legible: a rack sliding past a hole reads as a
+    /// rack, where two columns half-filled reads as a mistake. The
+    /// twelfth slot is the multimeter, which now lives here rather than
+    /// standing beside the bench — see `CircuitsSpaceView`.
+    static let rightColumnX: Float = 0.80
     static let rightTopY: Float = 1.50
     static let rightRowPitch: Float = 0.105
     static let rightZ: Float = -0.55
-    /// Six per column: eleven kinds fill the first column and five of
-    /// the second, and a twelfth would extend the shorter one rather
-    /// than growing the block downward out of reach.
-    static let rightRows = 6
+    /// How many are on screen at once. Six spans y 0.975…1.50, inside
+    /// the working band and the opening frame; the rest are a drag away.
+    static let rightVisibleRows = 6
 
-    /// Where part `index` stands, in world coordinates.
+    /// Where slot `index` stands, in world coordinates.
+    ///
+    /// EVERY slot has a position, including the ones currently scrolled
+    /// out of the window — `Well` moves the whole rack and hides what
+    /// falls outside, so the layout stays the one thing that decides
+    /// where a part is.
     static func rightSlot(index: Int) -> SIMD3<Float> {
-        let column = min(index / rightRows, rightColumns.count - 1)
-        let row = index % rightRows
-        return SIMD3(rightColumns[column],
-                     rightTopY - Float(row) * rightRowPitch,
-                     rightZ)
+        SIMD3(rightColumnX,
+              rightTopY - Float(index) * rightRowPitch,
+              rightZ)
     }
 
     static func slot(_ flank: Flank, index: Int, rowPitch: Float) -> SIMD3<Float> {
