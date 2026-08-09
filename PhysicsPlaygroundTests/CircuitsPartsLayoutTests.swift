@@ -137,4 +137,64 @@ final class CircuitsPartsLayoutTests: XCTestCase {
                            "slot \(i) left the column")
         }
     }
+
+    // MARK: The rack against the build volume
+
+    /// EVERY SLOT CLEARS THE BUILD VOLUME BY THE MARGIN.
+    ///
+    /// The audit (P1-28) said this file "checks reach, angle, mirroring
+    /// and pitch — never a slot against the clamp box", and it was right:
+    /// the rack sat 0.10 m from a volume that ends at 0.70, inside the
+    /// 0.12 m `stationMargin`, and nothing said so. The consequence it
+    /// noticed — parts jumping inward at birth — is a symptom, and the
+    /// symptom is legitimate (the rack is furniture, the volume is where
+    /// circuits live, and the rule keeps them apart). The violation was
+    /// the gap.
+    func testEveryRackSlotClearsTheBuildVolume() {
+        let clamp = Float(CircuitsModel.buildHalfExtents.x)
+        let margin = Float(InstrumentClearance.stationMargin)
+        for index in 0..<CircuitsPartsLayout.rightVisibleRows {
+            let slot = CircuitsPartsLayout.rightSlot(index: index)
+            XCTAssertGreaterThanOrEqual(abs(slot.x) - clamp, margin - 1e-4, """
+                rack slot \(index) is at x \(slot.x), only \
+                \(abs(slot.x) - clamp) m outside a build volume that ends at \
+                \(clamp). The margin is \(margin) — the rack is standing in \
+                the space the clearance rule reserves.
+                """)
+        }
+    }
+
+    /// …AND STILL WITHIN REACH AND ON AXIS. Pushing the rack out to clear
+    /// the volume is the obvious repair and it spends the other two
+    /// budgets; this is the one that says how much is left.
+    func testTheRackStaysReachableAndOnAxis() {
+        let viewer = SIMD3<Float>(InstrumentClearance.viewer)
+        for index in 0..<CircuitsPartsLayout.rightVisibleRows {
+            let slot = CircuitsPartsLayout.rightSlot(index: index)
+            let reach = simd_length(slot - viewer)
+            XCTAssertLessThanOrEqual(Double(reach),
+                                     InstrumentClearance.maximumReach, """
+                rack slot \(index) is \(reach) m away — past the reach limit, \
+                so you step toward your own parts.
+                """)
+            let angle = atan2(abs(slot.x), abs(slot.z)) * 180 / .pi
+            XCTAssertLessThanOrEqual(angle, 48.0, """
+                rack slot \(index) is \(angle) degrees off the forward axis, \
+                out at the edge of vision. Bring `rightZ` toward the wearer \
+                before pushing `rightColumnX` any further out.
+                """)
+        }
+    }
+
+    /// The pair can fail. Without this they are two budgets that happen
+    /// to be satisfied by whatever numbers are in the file.
+    func testTheClearanceRuleWouldCatchTheOldColumn() {
+        let clamp = Float(CircuitsModel.buildHalfExtents.x)
+        let margin = Float(InstrumentClearance.stationMargin)
+        // 0.80, where the column stood until 2026-08-09.
+        XCTAssertLessThan(0.80 - clamp, margin, """
+            0.80 satisfies the margin, so the assertion above is not \
+            measuring the thing that was wrong.
+            """)
+    }
 }

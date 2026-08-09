@@ -212,13 +212,42 @@ enum CircuitsPartsLayout {
     /// rack, where two columns half-filled reads as a mistake. The
     /// twelfth slot is the multimeter, which now lives here rather than
     /// standing beside the bench — see `CircuitsSpaceView`.
-    static let rightColumnX: Float = 0.80
+    /// OUTSIDE THE BUILD VOLUME BY `InstrumentClearance.stationMargin`,
+    /// and that is what fixes the number rather than taste.
+    ///
+    /// It was 0.80 against a build volume that ends at
+    /// `CircuitsModel.buildHalfExtents.x` = 0.70 — a 0.10 m gap inside a
+    /// 0.12 m margin, so the rack was standing in the space the rule
+    /// reserves. Measured 2026-08-09; the audit's P1-28 had noticed the
+    /// consequence (parts jump inward the instant they are born) and
+    /// attributed it to the old two-flank arrangement, which no longer
+    /// exists. The violation survived the rewrite.
+    ///
+    /// Moving out to 0.82 spends the other two budgets, and
+    /// `testTheWindowClearsBothLimitsWithMargin` caught it immediately:
+    /// at the old depth the sixth row scraped 47.55 degrees against a
+    /// 47 degree working limit. There is NO depth that satisfies all
+    /// three with six rows on screen — solved numerically over z from
+    /// 0.72 to 0.95, and every one fails on reach or on angle.
+    ///
+    /// So the window is five. z = −0.77 (further away, which is what
+    /// shrinks the angle) gives reach 1.201 m against 1.23 and 46.8
+    /// degrees against 47. Nothing is lost: the well scrolls, and the
+    /// sixth part is one drag away — that is what the scroll is for.
+    ///
+    /// A part born here still enters the build volume — `add(_:at:)`
+    /// clamps to 0.70, so it travels 0.12 m inward. That is not a defect
+    /// to remove: the rack is furniture and the volume is where circuits
+    /// live, and the clearance rule requires them to be apart.
+    static let rightColumnX: Float = 0.82
     static let rightTopY: Float = 1.50
     static let rightRowPitch: Float = 0.105
-    static let rightZ: Float = -0.75
-    /// How many are on screen at once. Six spans y 0.975…1.50, inside
-    /// the working band and the opening frame; the rest are a drag away.
-    static let rightVisibleRows = 6
+    static let rightZ: Float = -0.77
+    /// How many are on screen at once. FIVE, spanning y 1.08…1.50 — six
+    /// put the bottom row past the reach budget once the column moved
+    /// out to clear the build volume (2026-08-09). The rest are a drag
+    /// away.
+    static let rightVisibleRows = 5
 
     /// Where slot `index` stands, in world coordinates.
     ///
