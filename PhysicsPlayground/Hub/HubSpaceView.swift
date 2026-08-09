@@ -1334,7 +1334,6 @@ final class HubScene {
         // name, at the front of the plinth.
         let enter = Self.enterPlaque(accent: UIColor(module.accent))
         enter.name = "\(Self.enterPrefix)\(module.id)"
-        // Under whatever the caption turned out to be, not at −0.160.
         // −0.160, UNCHANGED, and the reason is a grave.
         //
         // The promise caption above wraps now, so it is two lines for
