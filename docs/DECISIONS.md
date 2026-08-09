@@ -16,77 +16,55 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
-## 2026-08-09 — The predicted arc and the ball diverge at ~3 m/s in free flight (OPEN, NARROWED)
+## 2026-08-09 — I accused the predicted arc of a defect it does not have (RETRACTED)
 
-**Decision:** None. A measurement, and an admission that I could not
-account for it. No test was committed, because the only test I could
-have made green was one tuned to the number I happened to measure.
+**Decision:** The two entries this replaces were wrong. `ProjectileMotion`
+and `KinematicsModel` agree as far as I could measure, P1-24's three
+repairs hold, and the "3 m/s divergence" I recorded was my test comparing
+the arc against the wrong ball. No code was changed on the strength of
+the false claim; the damage was to the record, and this is the repair.
 
-**Context:** P1-24 said the white arc and the ball bounce differently,
-for three reasons — `simulate` was given `radius: 0`, bounced the ball's
-CENTRE off y = 0, and discarded `hit.t`. All three are repaired in the
-code. What was missing was the thing that keeps them repaired: nothing
-asserts the two curves coincide, and "predicted arc, bounces included"
-is the module's central claim.
+**What actually happened.** Verified directly: fire the launcher, track
+the flight created by that call, and read positions at moments where the
+ball's simulated time coincides with a sample of the polyline.
 
-Writing that assertion produced a result I cannot explain. Firing a
-basketball at 7.5 m/s, 30 degrees, walls on, and measuring the live
-ball's distance to its own predicted polyline every frame:
+    t = 0.0333 s   ball (-0.1410, 1.3595)   arc (-0.1410, 1.3596)
+    t = 0.0667 s   ball ( 0.0755, 1.4682)   arc ( 0.0755, 1.4682)
 
-    0.03 s → 0.0005 m      0.22 s → 0.0877 m
-    0.14 s → 0.0719 m      0.40 s → 0.0001 m
-    0.53 s → 0.1338 m      0.72 s → 0.6610 m
+A tenth of a millimetre. The ball's velocity is (6.495, 3.641, 0) against
+a launch vector of (6.495, 3.750, 0) — gravity, and nothing else, has
+touched it.
 
-The curves COINCIDE at instants and separate by up to 9 cm between them,
-during free flight, before any bounce. Chord sag from the polyline's
-sampling (`pointStride: 4` at 1/240 s, a 0.125 m chord) is about 0.3 mm
-— three orders of magnitude too small. The live model and `simulate`
-use the same `ProjectileMotion.acceleration`, the same drag, the same
-radius and restitution, and both are RK4; the live model takes two
-substeps of dt/2 at 1/90 against the predictor's 1/240, which is a
-plausible source of SOME error and not of this shape. A periodic
-separate-and-rejoin is what you get from two paths offset along their
-own direction of travel, which would point at a timing or sampling
-mismatch rather than a physics one.
+**The four wrong turns, because each produced a confident wrong number
+and the last one reached a commit message:**
 
-Two candidates I did not get to: the predicted polyline may be sampled
-sparsely enough that "distance to the nearest segment" is not the right
-measure of agreement, in which case the metric is wrong and the arc is
-fine; or the two integrators genuinely drift, in which case the claim on
-the box is overstated.
+1. Compared the ball's distance to the polyline over a window longer than
+   the polyline. The prediction ends; the ball does not; distance to a
+   finished curve grows without bound. → "9 cm and unexplained".
+2. Matched wall-clock against simulated time. (`timeScale` is 1.0, so
+   this one happened to be harmless.)
+3. Guessed the polyline's cadence twice, in both directions — 1/60 then
+   1/240 — instead of measuring it. Consecutive points are 0.1243 m apart
+   at 7.5 m/s: an implied 1/60.3 s.
+4. Read `flights.first`. THE MODULE SEEDS A WELCOME SHOT AT STARTUP, so
+   that is somebody else's ball, launched elsewhere at another speed.
+   Its velocity was (3.502, 3.393, 0) — constant x, no drag decay, which
+   is what finally gave it away. This is the one I wrote up as a defect
+   in shipping code.
 
-**UPDATE, same day — the experiment was run and it eliminated the
-innocent explanation.** Matching on SIMULATED time instead of
-nearest-point distance, walls off, `maxBounces` irrelevant because no
-bounce occurs in the window:
+**Consequences.** No test ships. Every version I could write was either
+red for a reason I had not found or green by a tolerance I had tuned, and
+after four wrong turns in one sitting I do not trust a fifth attempt made
+at the same sitting. The claim is still worth a criterion and the
+obstacles are now named: track the flight `fire()` creates, step at the
+polyline's own cadence (`pointStride · timeStep`), stop at the end of the
+arc, and expect agreement near 1e-4 m in free flight.
 
-    t = 0.100 s → 0.345 m      t = 0.400 s → 1.243 m
-    t = 0.200 s → 0.643 m      t = 0.500 s → 1.543 m
-
-Separation grows linearly at about 3.0 m/s against a 7.5 m/s launch,
-from a COMMON ORIGIN. Both controls check out: `points[0]` is exactly
-`muzzlePoint` (gap 0.00000), and the polyline's cadence is measured, not
-assumed — consecutive points are 0.1243 m apart at 7.5 m/s, an implied
-1/60.3 s against a nominal 1/60. `timeScale` is 1.0, so simulated and
-wall time coincide here.
-
-So it is not the metric, and it is not sampling. Two curves that leave
-the same point and drift apart linearly, sharing
-`ProjectileMotion.acceleration`, the same drag, gravity, radius and
-restitution, and both RK4 — the live model taking two substeps of dt/2
-per frame against the predictor's fixed 1/240.
-
-I did not find it, and I stopped rather than guess at the end of a long
-session. The next step is to print BOTH velocity vectors at t = 0.05 s:
-if they already differ, the inputs are not what they appear to be
-(different drag object, different aim, a stale `projectile`); if they
-agree and only the positions drift, it is integration.
-
-**Consequences:** the three P1-24 repairs are real and stay. Whether the
-arc a wearer sees is the ball's path is UNKNOWN and now looks WORSE than
-the first measurement suggested: 0.345 m apart a tenth of a second after
-launch, not 0.09 m. If that holds up it is a visible defect in the
-module's headline claim, and it is not one of P1-24's three causes.
+The general lesson is the session's, not this file's: three separate
+times today a test agreed with me while a photograph or a raw dump
+disagreed. Measuring the wrong relationship is the failure mode here, not
+getting the arithmetic wrong, and it does not announce itself — it comes
+out green.
 
 ## 2026-08-09 — Circuit Workshop's bench is too wide for its own instruments (OPEN)
 
