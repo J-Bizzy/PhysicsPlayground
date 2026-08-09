@@ -16,6 +16,52 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-09 — The predicted arc and the ball are up to 9 cm apart in free flight (OPEN, UNEXPLAINED)
+
+**Decision:** None. A measurement, and an admission that I could not
+account for it. No test was committed, because the only test I could
+have made green was one tuned to the number I happened to measure.
+
+**Context:** P1-24 said the white arc and the ball bounce differently,
+for three reasons — `simulate` was given `radius: 0`, bounced the ball's
+CENTRE off y = 0, and discarded `hit.t`. All three are repaired in the
+code. What was missing was the thing that keeps them repaired: nothing
+asserts the two curves coincide, and "predicted arc, bounces included"
+is the module's central claim.
+
+Writing that assertion produced a result I cannot explain. Firing a
+basketball at 7.5 m/s, 30 degrees, walls on, and measuring the live
+ball's distance to its own predicted polyline every frame:
+
+    0.03 s → 0.0005 m      0.22 s → 0.0877 m
+    0.14 s → 0.0719 m      0.40 s → 0.0001 m
+    0.53 s → 0.1338 m      0.72 s → 0.6610 m
+
+The curves COINCIDE at instants and separate by up to 9 cm between them,
+during free flight, before any bounce. Chord sag from the polyline's
+sampling (`pointStride: 4` at 1/240 s, a 0.125 m chord) is about 0.3 mm
+— three orders of magnitude too small. The live model and `simulate`
+use the same `ProjectileMotion.acceleration`, the same drag, the same
+radius and restitution, and both are RK4; the live model takes two
+substeps of dt/2 at 1/90 against the predictor's 1/240, which is a
+plausible source of SOME error and not of this shape. A periodic
+separate-and-rejoin is what you get from two paths offset along their
+own direction of travel, which would point at a timing or sampling
+mismatch rather than a physics one.
+
+Two candidates I did not get to: the predicted polyline may be sampled
+sparsely enough that "distance to the nearest segment" is not the right
+measure of agreement, in which case the metric is wrong and the arc is
+fine; or the two integrators genuinely drift, in which case the claim on
+the box is overstated.
+
+**Consequences:** the three P1-24 repairs are real and stay. Whether the
+arc a wearer sees is the ball's path to within a ball's width is
+UNKNOWN, and the number to beat is 0.09 m. Anyone picking this up should
+start by plotting predicted-vs-actual position at matched TIMES rather
+than nearest-point distance — that distinguishes the two candidates in
+one run.
+
 ## 2026-08-09 — Circuit Workshop's bench is too wide for its own instruments (OPEN)
 
 **Decision:** None yet — this is a measurement placed in front of the
