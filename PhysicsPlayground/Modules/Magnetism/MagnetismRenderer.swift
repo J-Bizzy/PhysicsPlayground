@@ -283,7 +283,7 @@ final class MagnetismRenderer {
             // is the antiparallel case.
             handCompassNeedle?.orientation = rotation(from: [0, 1, 0], to: direction)
         }
-        handCompassCallout?.setText(String(format: "%.1f µT", model.compassMicroTesla))
+        handCompassCallout?.setText(PhysicsFormat.measurement(model.compassMicroTesla, "µT", decimals: 1))
         handCompassCallout?.anchor(at: SIMD3(0, 0.05, 0))
     }
 

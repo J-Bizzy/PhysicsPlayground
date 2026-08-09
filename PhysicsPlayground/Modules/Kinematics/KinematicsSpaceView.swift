@@ -149,7 +149,7 @@ struct KinematicsSpaceView: View {
                 range: KinematicsModel.gravityRange,
                 read: { model.gravity },
                 write: { model.gravity = $0 },
-                format: { String(format: "%.2f m/s²", $0) })
+                format: { PhysicsFormat.measurement($0, "m/s²", decimals: 2) })
             renderer.root.addChild(gravity.root)
             gravityTrack = gravity
 
@@ -161,7 +161,7 @@ struct KinematicsSpaceView: View {
                 range: KinematicsModel.windSpeedRange,
                 read: { model.windSpeed },
                 write: { model.windSpeed = $0 },
-                format: { String(format: "%.1f m/s", $0) })
+                format: { PhysicsFormat.measurement($0, "m/s", decimals: 1) })
             renderer.root.addChild(wind.root)
             windTrack = wind
 
@@ -488,7 +488,7 @@ struct KinematicsSpaceView: View {
                 range: KinematicsModel.speedRange,
                 read: { model.launchSpeed },
                 write: { model.launchSpeed = $0 },
-                format: { String(format: "%.1f m/s", $0) },
+                format: { PhysicsFormat.measurement($0, "m/s", decimals: 1) },
                 radius: { 0.10 }))
         let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
         bloom.update(anchor: anchor, viewer: viewer, revealTarget: 1, dt: dt)

@@ -186,6 +186,78 @@ final class PhysicsFormatTests: XCTestCase {
         XCTAssertFalse(PhysicsFormat.metric(9.9999e14, "W", decimals: 1).isEmpty)
     }
 
+    // MARK: The canon is not optional
+
+    /// NO MODULE FORMATS A NUMBER BY HAND.
+    ///
+    /// `PhysicsFormat` existed and was bypassed at 57 call sites under
+    /// `Modules/`, which is how the same quantity came to be spelled two
+    /// ways in one module: `CircuitsModel` printed "0 mF" at the bottom
+    /// of the capacitor's own rail while the bench label beside it said
+    /// "100 µF", and four separate files hand-rolled SI prefixes with
+    /// four separate sets of bands.
+    ///
+    /// A BAN RATHER THAN A COUNT. "Fewer than N" is a ratchet somebody
+    /// loosens; zero is a rule. And it has to be enforced by a test
+    /// rather than by review, because a raw `String(format:)` is exactly
+    /// what a hurried call site reaches for — it is shorter than the
+    /// correct thing.
+    ///
+    /// WHAT THIS BUYS, concretely: quantisation (so a live readout does
+    /// not rebuild its text mesh every frame for a number that reads the
+    /// same), the typographic minus, and one answer to "how many
+    /// decimals does a length get".
+    func testNoModuleFormatsANumberByHand() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("PhysicsPlayground/Modules")
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: root.path,
+                                             isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            XCTFail("""
+                Modules/ is not reachable from \(root.path) — this check would \
+                pass without reading anything. Fix the path; do not let it skip.
+                """)
+            throw XCTSkip("source tree not reachable")
+        }
+
+        let files = FileManager.default.enumerator(at: root,
+                                                   includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" } ?? []
+        XCTAssertGreaterThan(files.count, 20,
+                             "found \(files.count) module files — the scan is "
+                             + "looking in the wrong place")
+
+        var offenders: [String] = []
+        for file in files {
+            guard let text = try? String(contentsOf: file, encoding: .utf8) else {
+                continue
+            }
+            for (number, line) in text.split(separator: "\n",
+                                             omittingEmptySubsequences: false)
+                .enumerated() {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                // Comments may name it — several explain why it went.
+                guard !trimmed.hasPrefix("//") else { continue }
+                if line.contains("String(format:") {
+                    offenders.append("\(file.lastPathComponent):\(number + 1)")
+                }
+            }
+        }
+
+        XCTAssertTrue(offenders.isEmpty, """
+            \(offenders.count) module call site(s) format a number by hand \
+            instead of through `PhysicsFormat`:
+            \(offenders.joined(separator: "\n"))
+            Use `measurement`, `metric`, `angle`, `fixed` or `scientific`. If a \
+            reading genuinely needs a shape none of those make, add it THERE — \
+            a fifth hand-rolled SI prefixer is what this ban exists to stop.
+            """)
+    }
+
     // MARK: One spelling per fact
 
     /// The notebook had three spellings of a switched state — "on/off",

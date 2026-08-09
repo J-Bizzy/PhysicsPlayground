@@ -62,8 +62,10 @@ struct FieldReadoutCard: View {
             let kilovolts = (model.plateVoltage / 1000).rounded()
             let gradient = model.plateFieldkVPerM
             let centimetres = (model.plateSeparation * 100).rounded()
-            Text(String(format: "ΔV %.0f kV   E = V/d = %.1f kV/m   d = %.0f cm",
-                        kilovolts, gradient, centimetres))
+            Text("ΔV \(PhysicsFormat.measurement(kilovolts, "kV", decimals: 0))"
+                 + "   E = V/d = "
+                 + PhysicsFormat.measurement(gradient, "kV/m", decimals: 1)
+                 + "   d = \(PhysicsFormat.measurement(centimetres, "cm", decimals: 0))")
                 .font(DesignTokens.TypeScale.footnote.monospacedDigit())
             Text("Uniform field in the gap. The rail under the plates sets ΔV; grabbing a plate sets d.")
                 .font(DesignTokens.TypeScale.footnote)
@@ -75,8 +77,9 @@ struct FieldReadoutCard: View {
             Divider().opacity(0.4)
             let radius = (model.cyclotronRadius * 100).rounded()
             let kilotesla = (model.magneticFieldTesla / 1000).rounded()
-            Text(String(format: "B %.0f kT   r = mv/qB = %.0f cm",
-                        kilotesla, radius))
+            Text("B \(PhysicsFormat.measurement(kilotesla, "kT", decimals: 0))"
+                 + "   r = mv/qB = "
+                 + PhysicsFormat.measurement(radius, "cm", decimals: 0))
                 .font(DesignTokens.TypeScale.footnote.monospacedDigit())
             // This number is a stage light, not a measurement, and it
             // has to say so where it is READ. It followed the NUMBER

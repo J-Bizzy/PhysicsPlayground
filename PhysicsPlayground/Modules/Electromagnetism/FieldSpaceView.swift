@@ -340,12 +340,12 @@ struct FieldSpaceView: View {
             read: { model.plateVoltage },
             // Snapped to 500 V so the bead lands on honest values.
             write: { model.setPlateVoltage($0) },
-            format: { String(format: "%.0f kV", $0 / 1000) },
+            format: { PhysicsFormat.measurement($0 / 1000, "kV", decimals: 0) },
             // E = V/d, live under the rail — the physics this apparatus
             // teaches, previously visible only on the card across the
             // room. Follows a plate drag (d) as well as the bead (V).
             subtitle: { _ in
-                String(format: "E = %.1f kV/m", model.plateFieldkVPerM)
+                "E = " + PhysicsFormat.measurement(model.plateFieldkVPerM, "kV/m", decimals: 1)
             })
         renderer.viewRoot.addChild(voltage.root)
         self.voltageTrack = voltage
@@ -358,7 +358,7 @@ struct FieldSpaceView: View {
             range: FieldModel.magneticFieldRange,
             read: { model.magneticFieldTesla },
             write: { model.magneticFieldTesla = $0 },
-            format: { String(format: "%.0f kT", $0 / 1000) })
+            format: { PhysicsFormat.measurement($0 / 1000, "kT", decimals: 0) })
         renderer.viewRoot.addChild(field.root)
         self.fieldTrack = field
     }
@@ -438,7 +438,7 @@ struct FieldSpaceView: View {
                     range: FieldModel.magnitudeRange,
                     read: { model.magnitudeMicroCoulombs(id: id) },
                     write: { model.setMagnitude(id: id, microCoulombs: $0) },
-                    format: { String(format: "%.1f \u{00B5}C", $0) },
+                    format: { PhysicsFormat.measurement($0, "\u{00B5}C", decimals: 1) },
                     // Rides the charge's own surface, so the handle moves
                     // outward as the charge grows.
                     radius: { renderer.displayRadius(forChargeID: id) + 0.02 }))
@@ -460,7 +460,7 @@ struct FieldSpaceView: View {
                     range: FieldModel.probeChargeRange,
                     read: { model.probeChargeMagnitude },
                     write: { model.setProbeMagnitude($0) },
-                    format: { String(format: "%.0f nC", $0 * 1e9) },
+                    format: { PhysicsFormat.measurement($0 * 1e9, "nC", decimals: 0) },
                     radius: { 0.05 }))
             bloom.update(anchor: SIMD3<Float>(probe.position),
                          viewer: viewer, revealTarget: 1, dt: dt)

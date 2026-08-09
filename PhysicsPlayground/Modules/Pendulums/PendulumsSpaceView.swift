@@ -595,7 +595,7 @@ struct PendulumsSpaceView: View {
                     range: PendulumsModel.lengthRange,
                     read: { model.pendulums.first(where: { $0.id == pivotID })?.length ?? 0.8 },
                     write: { model.setLength(id: pivotID, $0) },
-                    format: { String(format: "%.2f m", $0) },
+                    format: { PhysicsFormat.measurement($0, "m", decimals: 2) },
                     radius: { 0.07 }))
             let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
             bloom.update(anchor: SIMD3<Float>(pendulum.pivot),
@@ -637,7 +637,7 @@ struct PendulumsSpaceView: View {
                 range: PendulumsModel.lengthRange,
                 read: { model.pendulums.first(where: { $0.id == uuid })?.length ?? 0.8 },
                 write: { model.setLength(id: uuid, $0) },
-                format: { String(format: "%.2f m", $0) },
+                format: { PhysicsFormat.measurement($0, "m", decimals: 2) },
                 radius: { Float(pendulum.bobRadius) + 0.03 }))
 
         let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
@@ -723,9 +723,11 @@ struct PendulumInfoCard: View {
             let length = (pendulum.length * 100).rounded() / 100
             let period = (pendulum.period(gravity: model.gravity) * 100).rounded() / 100
             VStack(alignment: .leading, spacing: 3) {
-                Text(String(format: "L %.2f m   T %.2f s", length, period))
+                Text("L \(PhysicsFormat.measurement(length, "m", decimals: 2))   "
+                     + "T \(PhysicsFormat.measurement(period, "s", decimals: 2))")
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                Text(String(format: "θ %.0f°   v %.2f m/s", degrees, speed))
+                Text("θ \(PhysicsFormat.angle(degrees, decimals: 0))   "
+                     + "v \(PhysicsFormat.measurement(speed, "m/s", decimals: 2))")
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
             }
             // A card in a ROOM, not on a panel: it has to hold its shape

@@ -137,7 +137,8 @@ final class GravityLabRenderer {
             ghostCallout?.isEnabled = true
             ghostCallout?.anchor(at: ghostEntity.position)
             let daysLeft = max(prediction.resolvesAt - model.simulatedDays, 0)
-            ghostCallout?.setText(String(format: "your guess · %.0f d", daysLeft))
+            ghostCallout?.setText("your guess · "
+                                  + PhysicsFormat.measurement(daysLeft, "d", decimals: 0))
         } else {
             ghostEntity.isEnabled = false
             ghostCallout?.isEnabled = false
@@ -165,9 +166,10 @@ final class GravityLabRenderer {
                     verdictCallout = callout
                 }
                 verdictCallout?.anchor(at: (guess + actual) / 2)
-                verdictCallout?.setText(String(format: verdict.missAU < 0.1
-                    ? "off by %.2f AU — called it" : "off by %.2f AU",
-                    verdict.missAU))
+                let miss = PhysicsFormat.measurement(verdict.missAU, "AU",
+                                                     decimals: 2)
+                verdictCallout?.setText(verdict.missAU < 0.1
+                    ? "off by \(miss) — called it" : "off by \(miss)")
             }
             // Eight seconds of reading time, then the verdict retires.
             let shown = verdictShownWall.map { CACurrentMediaTime() - $0 } ?? 0
@@ -795,7 +797,7 @@ final class GravityLabRenderer {
             let mid = arc[arc.count / 2]
             label?.isEnabled = true
             label?.anchor(at: apex + SIMD3<Float>(mid) * toDisplay * 0.6)
-            label?.setText(String(format: "%.2f AU²", area / (au * au)))
+            label?.setText(PhysicsFormat.measurement(area / (au * au), "AU²", decimals: 2))
         }
 
         if let current = model.sweepCurrentGeometry() {

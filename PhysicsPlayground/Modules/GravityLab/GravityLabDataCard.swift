@@ -59,14 +59,14 @@ struct GravityLabDataCard: View {
     @ViewBuilder
     private func orbitRows(_ elements: OrbitalElements) -> some View {
         let au = CelestialBody.astronomicalUnit
-        row("a", elements.semiMajorAxis.map { String(format: "%.3f AU", $0 / au) }
+        row("a", elements.semiMajorAxis.map { PhysicsFormat.measurement($0 / au, "AU", decimals: 3) }
             ?? "∞ (parabolic)")
-        row("e", String(format: "%.4f", elements.eccentricity))
-        row("r_p", String(format: "%.3f AU", elements.periapsisRadius / au))
+        row("e", PhysicsFormat.fixed(elements.eccentricity, decimals: 4))
+        row("r_p", PhysicsFormat.measurement(elements.periapsisRadius / au, "AU", decimals: 3))
         // A hyperbola's far apsis is algebraically behind the focus,
         // which is correct and is not a distance anyone wants read out.
         row("r_a", elements.hasApoapsis
-            ? String(format: "%.3f AU", elements.apoapsisRadius / au)
+            ? PhysicsFormat.measurement(elements.apoapsisRadius / au, "AU", decimals: 3)
             : "—")
         row("i", degrees(elements.inclination))
         // A circular orbit has no periapsis and an equatorial one has no
@@ -83,7 +83,7 @@ struct GravityLabDataCard: View {
         }
         row("ν", degrees(elements.trueAnomaly))
         row("T", elements.period.map {
-            String(format: "%.2f years", $0 / (365.25 * 86_400))
+            PhysicsFormat.measurement($0 / (365.25 * 86_400), "years", decimals: 2)
         } ?? "unbound")
         if elements.degeneracy != .none {
             Text(degeneracyNote(elements.degeneracy))

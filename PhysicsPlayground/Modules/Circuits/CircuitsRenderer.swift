@@ -626,7 +626,7 @@ final class CircuitsRenderer {
             let pivot = towerLabelPivots[index]
             pivot.isEnabled = true
             pivot.position = base + SIMD3(0, height + (height >= 0 ? 0.05 : -0.06), 0)
-            towerLabels[index].setText(String(format: "%.1f V", node.voltage),
+            towerLabels[index].setText(PhysicsFormat.measurement(node.voltage, "V", decimals: 1),
                                        color: Self.skylineTint(bucket))
         }
     }
@@ -792,7 +792,7 @@ final class CircuitsRenderer {
     /// while the rotor accelerates).
     private static func motorRPMLabel(_ speed: Double) -> String {
         let rpm = (abs(speed) * 60 / (2 * .pi) / 50).rounded() * 50
-        return String(format: "%.0f rpm", rpm)
+        return PhysicsFormat.measurement(rpm, "rpm", decimals: 0)
     }
 
     /// THE PART'S LABEL AND THE PART'S READOUT MUST AGREE, so there is
@@ -822,11 +822,11 @@ final class CircuitsRenderer {
         case .motor: Self.motorRPMLabel(component.motorSpeed)
         case .fuse: component.failed
             ? "blown"
-            : String(format: "%.1f A fuse", component.value)
+            : PhysicsFormat.measurement(component.value, "A fuse", decimals: 1)
         case .wire:
             component.value >= 0.995
-                ? String(format: "%.2f m", component.value)
-                : String(format: "%.0f cm", component.value * 100)
+                ? PhysicsFormat.measurement(component.value, "m", decimals: 2)
+                : PhysicsFormat.measurement(component.value * 100, "cm", decimals: 0)
         }
     }
 
@@ -1417,13 +1417,13 @@ final class CircuitsRenderer {
     private static func humanTime(_ seconds: Double) -> String {
         guard seconds.isFinite, seconds > 0 else { return "—" }
         switch seconds {
-        case ..<1e-6: return String(format: "%.1f ns", seconds * 1e9)
-        case ..<1e-3: return String(format: "%.1f µs", seconds * 1e6)
-        case ..<1: return String(format: "%.1f ms", seconds * 1e3)
-        case ..<60: return String(format: "%.1f s", seconds)
-        case ..<3600: return String(format: "%.1f min", seconds / 60)
-        case ..<86_400: return String(format: "%.1f h", seconds / 3600)
-        default: return String(format: "%.1f days", seconds / 86_400)
+        case ..<1e-6: return PhysicsFormat.measurement(seconds * 1e9, "ns", decimals: 1)
+        case ..<1e-3: return PhysicsFormat.measurement(seconds * 1e6, "µs", decimals: 1)
+        case ..<1: return PhysicsFormat.measurement(seconds * 1e3, "ms", decimals: 1)
+        case ..<60: return PhysicsFormat.measurement(seconds, "s", decimals: 1)
+        case ..<3600: return PhysicsFormat.measurement(seconds / 60, "min", decimals: 1)
+        case ..<86_400: return PhysicsFormat.measurement(seconds / 3600, "h", decimals: 1)
+        default: return PhysicsFormat.measurement(seconds / 86_400, "days", decimals: 1)
         }
     }
 

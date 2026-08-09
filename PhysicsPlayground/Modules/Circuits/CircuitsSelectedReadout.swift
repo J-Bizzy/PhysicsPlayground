@@ -47,16 +47,17 @@ struct CircuitsSelectedReadout: View {
                     let volts = (abs(readout.volts) * 100).rounded() / 100
                     let milliamps = (abs(readout.amps) * 1000 * 10).rounded() / 10
                     let watts = (abs(readout.watts) * 100).rounded() / 100
-                    Text(String(format: "%.2f V   %.1f mA", volts, milliamps))
+                    Text("\(PhysicsFormat.measurement(volts, "V", decimals: 2))   "
+                         + PhysicsFormat.measurement(milliamps, "mA", decimals: 1))
                         .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                    Text(String(format: "%.2f W", watts))
+                    Text(PhysicsFormat.measurement(watts, "W", decimals: 2))
                         .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
 
                 if component.kind == .capacitor {
                     let charge = (component.capacitorVoltage * 100).rounded() / 100
-                    Text(String(format: "charged to %.2f V", charge))
+                    Text("charged to \(PhysicsFormat.measurement(charge, "V", decimals: 2))")
                         .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                         .foregroundStyle(DesignTokens.Palette.circuitsAccent)
                 }

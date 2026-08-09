@@ -355,7 +355,7 @@ struct GravityLabSpaceView: View {
                 range: 0.2...4.0,
                 read: { model.gMultiplier },
                 write: { model.gMultiplier = $0 },
-                format: { String(format: "%.2f × G", $0) })
+                format: { PhysicsFormat.measurement($0, "× G", decimals: 2) })
             renderer.root.addChild(gravity.root)
             gravityTrack = gravity
 
@@ -810,7 +810,7 @@ struct GravityLabSpaceView: View {
                     range: GravityLabModel.primaryMassRangeSuns,
                     read: { model.massInSuns(id: uuid) },
                     write: { model.setMass(id: uuid, suns: $0) },
-                    format: { String(format: "%.2f Suns", $0) },
+                    format: { PhysicsFormat.measurement($0, "Suns", decimals: 2) },
                     radius: { Float(model.displayRadius(id: uuid)) + 0.05 })
                 : .init(
                     name: "Mass",
@@ -818,8 +818,8 @@ struct GravityLabSpaceView: View {
                     read: { model.massInEarths(id: uuid) },
                     write: { model.setMass(id: uuid, earths: $0) },
                     format: { $0 < 1
-                        ? String(format: "%.2f Earths", $0)
-                        : String(format: "%.0f Earths", $0) },
+                        ? PhysicsFormat.measurement($0, "Earths", decimals: 2)
+                        : PhysicsFormat.measurement($0, "Earths", decimals: 0) },
                     radius: { Float(model.displayRadius(id: uuid)) + 0.03 }))
 
         let viewer = appModel.room.headPosition.map {

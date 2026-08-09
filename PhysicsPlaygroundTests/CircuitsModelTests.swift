@@ -1009,10 +1009,19 @@ final class CircuitsModelTests: XCTestCase {
     }
 
     /// The display auto-ranges the way a real one does.
+    ///
+    /// AND AT ONE RESOLUTION IN EVERY BAND, which the hand-rolled
+    /// prefixer did not: it showed one decimal in milli, three in the
+    /// base unit and two in kilo. A 3½-digit bench meter shows the same
+    /// digits wherever the range lands — that is what auto-ranging is
+    /// for — so the assertions below now pin the resolution as well as
+    /// the prefix.
     func testTheDisplayAutoRanges() {
-        XCTAssertTrue(CircuitsModel.autoRange(0.0042, unit: "A").contains("mA"))
-        XCTAssertTrue(CircuitsModel.autoRange(9.0, unit: "V").contains("9.000 V"))
-        XCTAssertTrue(CircuitsModel.autoRange(4700, unit: "Ω").contains("kΩ"))
+        XCTAssertEqual(CircuitsModel.autoRange(0.0042, unit: "A"), "4.200 mA")
+        XCTAssertEqual(CircuitsModel.autoRange(9.0, unit: "V"), "9.000 V")
+        XCTAssertEqual(CircuitsModel.autoRange(4700, unit: "Ω"), "4.700 kΩ")
+        // Zero is a reading, not an absence.
+        XCTAssertEqual(CircuitsModel.autoRange(0, unit: "A"), "0.000 A")
     }
 
     /// A probe lands on the terminal it is nearest, and only if it is

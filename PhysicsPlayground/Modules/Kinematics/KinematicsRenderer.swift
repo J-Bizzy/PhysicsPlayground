@@ -504,7 +504,7 @@ final class KinematicsRenderer {
         if let apex = trajectory.points.max(by: { $0.y < $1.y }), apex.y > 0.3 {
             apexMarker.isEnabled = true
             apexMarker.position = SIMD3<Float>(apex)
-            apexLabel.setText(String(format: "%.1f m", trajectory.apexHeight),
+            apexLabel.setText(PhysicsFormat.measurement(trajectory.apexHeight, "m", decimals: 1),
                               color: Self.annotationWhite)
             apexDropLine.isEnabled = true
             apexDropLine.position = SIMD3(Float(apex.x), Float(apex.y) / 2, Float(apex.z))

@@ -625,7 +625,8 @@ final class PendulumsRenderer {
         guard visible else { return }
         label.holder.position = SIMD3<Float>(pendulum.pivot) + SIMD3(0, 0.055, 0)
 
-        let string = String(format: "T = %.2f s", pendulum.period(gravity: gravity))
+        let string = "T = " + PhysicsFormat.measurement(
+            pendulum.period(gravity: gravity), "s", decimals: 2)
         guard periodKeys[pendulum.id] != string else { return }
         periodKeys[pendulum.id] = string
         let mesh: MeshResource

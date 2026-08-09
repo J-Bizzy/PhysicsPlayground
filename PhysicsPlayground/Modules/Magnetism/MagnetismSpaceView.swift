@@ -422,7 +422,7 @@ struct MagnetismSpaceView: View {
                 range: MagnetismModel.strengthRange,
                 read: { model.strength(id: uuid) },
                 write: { model.setStrength(id: uuid, $0) },
-                format: { String(format: "%.1f A\u{00B7}m\u{00B2}", $0) },
+                format: { PhysicsFormat.measurement($0, "A\u{00B7}m\u{00B2}", decimals: 1) },
                 radius: { Float(MagnetismModel.magnetLength) * 0.6 }))
 
         let viewer = appModel.room.headPosition.map {

@@ -587,10 +587,10 @@ final class CircuitsModel {
 
     static func formatValue(_ value: Double, for kind: ComponentKind) -> String {
         switch kind {
-        case .battery, .acSource: String(format: "%.1f V", value)
+        case .battery, .acSource: PhysicsFormat.measurement(value, "V", decimals: 1)
         case .resistor, .bulb, .motor: value >= 1000
-            ? String(format: "%.1f k\u{03A9}", value / 1000)
-            : String(format: "%.0f \u{03A9}", value)
+            ? PhysicsFormat.measurement(value / 1000, "k\u{03A9}", decimals: 1)
+            : PhysicsFormat.measurement(value, "\u{03A9}", decimals: 0)
         // THIS PRINTED "0 mF" AT THE BOTTOM OF THE CAPACITOR'S OWN RAIL
         // while the bench label beside it said "100 µF".
         //
@@ -602,9 +602,9 @@ final class CircuitsModel {
         // `PhysicsFormat.metric` picks the prefix from the magnitude,
         // which is what the rest of the app already does.
         case .capacitor: PhysicsFormat.metric(value, "F", decimals: 0)
-        case .inductor: String(format: "%.2f H", value)
-        case .fuse: String(format: "%.2f A", value)
-        case .wire: String(format: "%.0f cm", value * 100)
+        case .inductor: PhysicsFormat.measurement(value, "H", decimals: 2)
+        case .fuse: PhysicsFormat.measurement(value, "A", decimals: 2)
+        case .wire: PhysicsFormat.measurement(value * 100, "cm", decimals: 0)
         case .led, .switcher: ""
         }
     }
@@ -867,7 +867,7 @@ final class CircuitsModel {
                 } else if component.kind == .fuse, amps > component.value {
                     components[index].failed = true
                     emitSound(.pop, at: component.position, volume: 0.8)
-                    failureNote = "The fuse blew at \(String(format: "%.1f", amps)) A — beyond its \(String(format: "%.1f", component.value)) A rating. It did its job; find the short, then Replace it."
+                    failureNote = "The fuse blew at \(PhysicsFormat.measurement(amps, "A", decimals: 1)) — beyond its \(PhysicsFormat.measurement(component.value, "A", decimals: 1)) rating. It did its job; find the short, then Replace it."
                 }
             }
         }
@@ -1185,15 +1185,24 @@ final class CircuitsModel {
     /// Auto-ranging, the way a real display does it: milli, then unit,
     /// then kilo, always three significant figures.
     nonisolated static func autoRange(_ value: Double, unit: String) -> String {
-        let magnitude = abs(value)
-        if magnitude < 1e-9 { return "0.000 " + unit }
-        if magnitude < 0.9995 {
-            return String(format: "%.1f m%@", value * 1000, unit)
-        }
-        if magnitude < 999.5 {
-            return String(format: "%.3f %@", value, unit)
-        }
-        return String(format: "%.2f k%@", value / 1000, unit)
+        // GRAVE, 2026-08-08: this was a fourth hand-rolled SI prefixer —
+        // milli below 1, base to 999.5, kilo above — sitting beside the
+        // three the app had already consolidated into
+        // `PhysicsFormat.metric`. Its bands were the same bands and its
+        // rounding was its own, which is how "the same quantity spelled
+        // two ways in the same module" happens.
+        //
+        // The one behaviour worth keeping is the zero: a meter reading
+        // "0 A" and one reading nothing are different claims, and this
+        // one says the reading IS zero.
+        guard abs(value) > 1e-9 else { return "0.000 " + unit }
+        // THREE DECIMALS IN EVERY BAND, where the hand-rolled version
+        // used one for milli, three for the base unit and two for kilo.
+        // No bench meter does that: a 3½-digit DMM shows the same
+        // resolution wherever the range lands, which is the whole point
+        // of auto-ranging. So this is a small display change and a
+        // correction — "4.200 mA" rather than "4.2 mA".
+        return PhysicsFormat.metric(value, unit, decimals: 3)
     }
 
     /// True when the two probes share a node through wires alone.
@@ -1291,7 +1300,7 @@ final class CircuitsModel {
                 / max(abs(readouts[capacitor.id]?.volts ?? 1), 0.01), 1) * 100)
             insightText = "The capacitor is charging exponentially — \(percent)% of the way to its final voltage, and the current shrinks as it fills."
         } else if let topID, let top = components.first(where: { $0.id == topID }) {
-            insightText = "The \(top.kind.displayName.lowercased()) dissipates the most power right now — \(String(format: "%.2f", topWatts)) W as heat\(top.kind == .bulb ? " and light" : "")."
+            insightText = "The \(top.kind.displayName.lowercased()) dissipates the most power right now — \(PhysicsFormat.measurement(topWatts, "W", decimals: 2)) as heat\(top.kind == .bulb ? " and light" : "")."
         } else if electronView {
             insightText = "Electron View: each electron only drifts millimeters per second — but the field pushes ALL of them at once, so the bulb lights instantly."
         }

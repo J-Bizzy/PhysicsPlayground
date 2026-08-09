@@ -681,7 +681,7 @@ final class FieldRenderer {
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         let polarity = charge.isPositive ? "Positive" : "Negative"
-        let magnitude = String(format: "%.1f", charge.magnitudeMicroCoulombs)
+        let magnitude = PhysicsFormat.fixed(charge.magnitudeMicroCoulombs, decimals: 1)
         accessibility.label = LocalizedStringResource(
             stringLiteral: "\(polarity) charge, \(magnitude) microcoulombs. Drag to move."
         )
