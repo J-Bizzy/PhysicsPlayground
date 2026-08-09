@@ -1225,9 +1225,12 @@ final class HubScene {
         let promise = HubDomain.promise(for: module.id)
         let promisePivot = Entity()
         if !promise.isEmpty {
+            // Narrower than the puck pitch, so a caption can only ever
+            // belong to the exhibit it is under.
             let line = Self.namePlate(promise,
                                       accent: UIColor(white: 0.88, alpha: 1),
-                                      size: 0.016)
+                                      size: Self.promiseSize,
+                                      wrapWidth: Self.promiseWrapWidth)
             // Tucked close under the name. THIS STACK IS THE THING TO
             // LOOK AT IN THE SCREENSHOT: miniature, name (y −0.105),
             // promise (−0.142), and the ENTER plaque standing forward
@@ -1237,7 +1240,11 @@ final class HubScene {
             // caption or as three things piled up. Placement is what
             // this project has got wrong three times with the numbers
             // looking fine.
-            promisePivot.position = [0, -0.142, 0.11]
+            // Left at its own depth. Moving it into the plaque's
+            // plane — so the vertical arithmetic would be valid under
+            // billboarding — is the right idea and is NOT what shipped;
+            // see the plaque comment below.
+            promisePivot.position = [0, Self.promiseTop, 0.11]
             promisePivot.components.set(BillboardComponent())
             promisePivot.components.set(OpacityComponent(opacity: 0))
             promisePivot.addChild(line)
@@ -1327,7 +1334,26 @@ final class HubScene {
         // name, at the front of the plinth.
         let enter = Self.enterPlaque(accent: UIColor(module.accent))
         enter.name = "\(Self.enterPrefix)\(module.id)"
-        enter.position = [0, -0.160, 0.165]
+        // Under whatever the caption turned out to be, not at −0.160.
+        // −0.160, UNCHANGED, and the reason is a grave.
+        //
+        // The promise caption above wraps now, so it is two lines for
+        // most labs and the plaque crosses the second one. Deriving the
+        // plaque's y from the caption's measured height (2026-08-09)
+        // moved it 37 mm down — into the terrace slab it rests on. Every
+        // ENTER plaque in the gallery vanished, which is the second way
+        // into a lab, and the three tests written for that spacing were
+        // all green while it happened.
+        //
+        // The stack is caption (z 0.11) and plaque (z 0.165), both
+        // billboarding from different depths, so their on-screen order
+        // is not their y order and no arithmetic in y decides it — which
+        // is what the caption's own comment said before any of this was
+        // written. Fixing it means choosing one plane for the whole
+        // stack and re-checking the plaque against the collider box it
+        // was moved forward to clear: a placement decision with a
+        // photograph attached, not a spacing tweak.
+        enter.position = [0, -0.160, Self.plaqueDepth]
         enter.components.set(BillboardComponent())
         SpatialActions.attach(
             to: enter, label: "Enter \(module.title)",
@@ -1434,10 +1460,24 @@ final class HubScene {
     /// as the ceremony, and it remains the better story; it is simply
     /// no longer the only door.
     @MainActor
+    /// The plaque's height, from the arithmetic `enterPlaque` uses rather
+    /// than a number typed twice. Constant in practice — the word and the
+    /// size are fixed — but derived, so the caption above it can be
+    /// spaced against what the plaque actually is.
+    static var enterPlaqueHeight: Float {
+        let text = HubTitleStyle.line("ENTER", size: Self.enterLabelSize,
+                                      accent: .white)
+            .visualBounds(relativeTo: nil).extents
+        return max(text.y, 0.008) + 0.018
+    }
+
+    static let enterLabelSize: CGFloat = 0.019
+
     static func enterPlaque(accent: UIColor) -> Entity {
         let plaque = Entity()
 
-        let label = HubTitleStyle.line("ENTER", size: 0.019, accent: accent)
+        let label = HubTitleStyle.line("ENTER", size: Self.enterLabelSize,
+                                       accent: accent)
         let text = label.visualBounds(relativeTo: nil).extents
         let width = max(text.x, 0.02) + 0.030
         let height = max(text.y, 0.008) + 0.018
@@ -1473,33 +1513,103 @@ final class HubScene {
         return nil
     }
 
+    /// The depth the caption and the ENTER plaque share, so that their
+    /// vertical spacing survives billboarding.
+    static let plaqueDepth: Float = 0.165
+
+    /// Where the promise caption's CENTRE sits under the exhibit name.
+    static let promiseTop: Float = -0.142
+
+    /// The caption's type size, and the width it wraps at — narrower than
+    /// the puck pitch, so a caption can only belong to one exhibit.
+    static let promiseSize: CGFloat = 0.016
+    static var promiseWrapWidth: CGFloat {
+        CGFloat(GalleryLayout.basePuckPitch * 0.84)
+    }
+
     static func namePlateWidth(_ text: String, size: CGFloat = 0.036) -> Float {
         textExtents(text, size: size).x + Float(size) * 0.72 * 2
     }
 
+    /// How tall the plate `namePlate` would build.
+    ///
+    /// Asked of the SAME arithmetic the builder uses, not of the finished
+    /// entity's `visualBounds`. The first attempt at spacing the ENTER
+    /// plaque measured the built caption — and a freshly built, unparented
+    /// entity does not report the plate, so the plaque moved down by less
+    /// than the caption was tall and still crossed its second line. A
+    /// number you can compute before you build is a number you can also
+    /// TEST, which is the difference between this and another screenshot.
+    static func namePlateHeight(_ text: String, size: CGFloat = 0.036,
+                                wrapWidth: CGFloat = 0) -> Float {
+        let extents = wrapWidth > 0
+            ? Callout.textMesh(text, size: size, wrapWidth: wrapWidth).bounds.extents
+            : textExtents(text, size: size)
+        return extents.y + Float(size) * 0.44 * 2
+    }
+
+    /// A nameplate, optionally WRAPPED.
+    ///
+    /// Single-line was right while every caller passed a lab's name.
+    /// `HubDomain.promise` is a sentence, and the first photograph of the
+    /// focused exhibit's caption stack (2026-08-08) showed it as one long
+    /// unwrapped plate running straight through the neighbouring
+    /// exhibits' names and behind its own ENTER plaque. Pucks are
+    /// `GalleryLayout.basePuckPitch` apart, so anything wider than that
+    /// belongs to more than one exhibit.
+    ///
+    /// The comment at the promise's call site asked exactly this
+    /// question — "whether they read as one tidy caption or as three
+    /// things piled up" — and answered itself the moment there was a
+    /// picture. Placement is what this project has got wrong three times
+    /// with the numbers looking fine.
     static func namePlate(_ text: String, accent: UIColor,
-                          size: CGFloat = 0.036) -> Entity {
+                          size: CGFloat = 0.036,
+                          wrapWidth: CGFloat = 0) -> Entity {
         let plate = Entity()
 
-        let extents = textExtents(text, size: size)
+        let extents = wrapWidth > 0
+            ? Callout.textMesh(text, size: size, wrapWidth: wrapWidth).bounds.extents
+            : textExtents(text, size: size)
         // Padding scales WITH the type: fixed values authored for the
         // gallery's 36 mm plates made a 10 mm palette label wear a
         // plate three text-heights wide — neighbouring labels collided
         // into one smear of backing.
         let padY = Float(size) * 0.44
-        let width = namePlateWidth(text, size: size)
+        let width = wrapWidth > 0
+            ? extents.x + Float(size) * 0.72 * 2
+            : namePlateWidth(text, size: size)
         let height = extents.y + padY * 2
 
         var backing = UnlitMaterial(color: UIColor(white: 0.02, alpha: 1))
         backing.blending = .transparent(opacity: 0.58)
+        // Same lesson as `BackedLabel.backing`: `height / 2` is a pill
+        // for one line and a lozenge for several, and a lozenge's curved
+        // ends eat the first and last words of every line.
         let card = ModelEntity(
             mesh: .generatePlane(width: width, height: height,
-                                 cornerRadius: height / 2),
+                                 cornerRadius: min(height / 2,
+                                                   Float(size) * 1.2)),
             materials: [backing])
         card.position.z = -0.006
         plate.addChild(card)
 
-        plate.addChild(bubbleText(text, size: size, color: accent, emissive: 0.6))
+        if wrapWidth > 0 {
+            // Wrapped runs use a flat mesh: the bubble builder extrudes
+            // and clear-coats one line of display type, which is the
+            // wrong voice for a caption and unreadable stacked.
+            let mesh = Callout.textMesh(text, size: size, wrapWidth: wrapWidth)
+            var material = UnlitMaterial(color: accent)
+            material.blending = .opaque
+            let run = ModelEntity(mesh: mesh, materials: [material])
+            let bounds = mesh.bounds
+            run.position = [-(bounds.min.x + bounds.max.x) / 2,
+                            -(bounds.min.y + bounds.max.y) / 2, 0]
+            plate.addChild(run)
+        } else {
+            plate.addChild(bubbleText(text, size: size,
+                                      color: accent, emissive: 0.6))
+        }
         return plate
     }
 
