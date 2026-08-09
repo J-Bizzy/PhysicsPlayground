@@ -58,8 +58,33 @@ final class ExperimentProgress {
 
     // MARK: Streak — consecutive days with at least one completion.
 
-    private(set) var streak: Int =
-        UserDefaults.standard.integer(forKey: "streak.count")
+    /// Consecutive days with at least one completion — CHECKED AGAINST
+    /// THE CALENDAR ON LOAD, not just trusted.
+    ///
+    /// This was `UserDefaults.integer(forKey:)` and nothing else, so the
+    /// stored number was believed forever. `recordStreakDay` resets it
+    /// correctly when a gap is found — but only when you next complete
+    /// something, and until then the app claims a streak that broke. Miss
+    /// Wednesday and Thursday and Friday still reads "4-day streak",
+    /// which is the one thing a streak must never do: a counter you
+    /// cannot break is not a reason to come back.
+    ///
+    /// A streak survives only if its last day was today or yesterday.
+    private(set) var streak: Int = ExperimentProgress.loadedStreak()
+
+    private static func loadedStreak() -> Int {
+        let defaults = UserDefaults.standard
+        let stored = defaults.integer(forKey: "streak.count")
+        guard stored > 0,
+              let last = defaults.object(forKey: "streak.lastDay") as? Date
+        else { return 0 }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today)
+        else { return 0 }
+        let day = calendar.startOfDay(for: last)
+        return day == today || day == yesterday ? stored : 0
+    }
 
     /// Whether today already counts toward the streak.
     var completedToday: Bool {
@@ -114,13 +139,48 @@ enum ExperimentCatalog {
     static func nextStep(appModel: AppModel)
     -> (module: ModuleDescriptor, experiment: Experiment)? {
         let done = appModel.experiments.completed
-        for module in ModuleCatalog.all(appModel: appModel) {
+        for module in modulesByRecency(appModel: appModel) {
             for entry in experiments(for: module.id, appModel: appModel)
             where !done.contains(entry.experiment.id) {
                 return (module, entry.experiment)
             }
         }
         return nil
+    }
+
+    /// The labs, most recently visited first — the lab you are IN ahead
+    /// of all of them.
+    ///
+    /// `nextStep` used to walk `ModuleCatalog` in its declaration order,
+    /// so it recommended the first unfinished experiment in the first
+    /// module, forever, to everybody. A new user standing in Pendulums
+    /// was told "Opposites attract — Electric Fields"; the one line whose
+    /// whole job is to say what to do next was pointing at a different
+    /// room.
+    ///
+    /// `AppModel.lastPlayed(_:)` has existed the whole time, with a
+    /// writer and NO reader. This is the reader.
+    ///
+    /// A module never opened sorts last rather than first: the point is
+    /// to continue what you were doing, and an untouched lab is a
+    /// suggestion rather than a continuation. Catalog order breaks ties,
+    /// so the recommendation is stable for a user who has played nothing.
+    static func modulesByRecency(appModel: AppModel) -> [ModuleDescriptor] {
+        let catalog = ModuleCatalog.all(appModel: appModel)
+        let order = Dictionary(uniqueKeysWithValues:
+            catalog.enumerated().map { ($0.element.id, $0.offset) })
+        return catalog.sorted { a, b in
+            // The lab currently open always wins — you are standing in it.
+            if a.id == appModel.activeModuleID { return true }
+            if b.id == appModel.activeModuleID { return false }
+            switch (appModel.lastPlayed(a.id), appModel.lastPlayed(b.id)) {
+            case let (x?, y?): return x == y
+                ? (order[a.id] ?? 0) < (order[b.id] ?? 0) : x > y
+            case (_?, nil): return true
+            case (nil, _?): return false
+            case (nil, nil): return (order[a.id] ?? 0) < (order[b.id] ?? 0)
+            }
+        }
     }
 
     /// How many of the catalog's experiments are done (ignores any
