@@ -81,9 +81,22 @@ public final class BackedLabel {
         let height = (bounds.max.y - bounds.min.y) + padY * 2
         var material = UnlitMaterial(color: UIColor(white: 0.02, alpha: 1))
         material.blending = .transparent(opacity: 0.58)
+        // A PILL FOR A BADGE, A ROUNDED RECT FOR A PARAGRAPH.
+        //
+        // `height / 2` alone was written for the one-line number badges
+        // this started as, where it makes a stadium. Give it a wrapped
+        // paragraph and the same rule makes a lozenge whose curved ends
+        // eat the first and last words of every line — visible in the
+        // first photograph of the in-room teach (2026-08-08), where
+        // "Grab" and "so" hung outside their own backing.
+        //
+        // Capping at a little over the glyph height keeps the badge
+        // exactly as it was (a single line is barely taller than the cap)
+        // and gives anything taller an honest corner.
+        let radius = min(height / 2, Float(size) * 1.2)
         let card = ModelEntity(
             mesh: .generatePlane(width: width, height: height,
-                                 cornerRadius: height / 2),
+                                 cornerRadius: radius),
             materials: [material])
         card.position.z = -Float(size) * 0.17
         return card

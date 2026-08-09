@@ -16,6 +16,46 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-08 — The first-run teach moves into the room, and stays in the window while the room is shut
+
+**Decision:** Each lab's `firstRunHint` is drawn as a card in the room
+(`Shell/RoomTeach.swift`), standing nearer to the wearer than any lab's
+apparatus and dismissed by touching it anywhere. The flat window still
+draws it while the immersive space is CLOSED, and both dismissals write
+the same receipt.
+
+**Context:** The first photograph ever taken of a lab in a room
+(2026-08-08, Pendulums) showed five steel bobs and four vector arrows
+standing through the sentence, whole phrases unreadable: RealityKit
+content renders in front of a window that happens to be behind it. The
+first attempt at a fix raised the text's contrast — it was styled
+`.secondary`, the app's quietest, for the most important sentence in the
+lab, while the failure banner above it was plain. That was an
+independently correct change and it barely moved the photograph. You
+cannot win a depth argument with a colour.
+
+This is the third occlusion of the same shape in two days — the home
+wordmark behind the catalog window, the L4 paragraph inside the star,
+this — and all three were fixed by putting the words in front, not by
+making them brighter.
+
+Keeping the window copy while the room is shut is not two places for one
+string. The card does not exist at that moment, so they are never both
+on screen; and the flat window is the accessibility path, so deleting
+the hint from it would leave a wearer who never opens the room as the
+only person who never reads the sentence.
+
+**Consequences:** The shell now owns an in-room teaching surface, and
+`RoomTeachCard.standoff` is a promise it can keep only because the shell
+places both the card and the labs. `RoomTeachTests` asserts the card
+stands nearer than each lab's apparatus, so a module that moves its
+physics forward turns the build red rather than quietly going back to
+being occluded. The window's hint is now conditional, which is one more
+state for the title bar to be in. And the accessibility label is the
+sentence itself — `SpatialActions.attach` writes that label, so the
+first draft announced "First-run hint" and never read it out; a test
+caught it before the commit.
+
 ## 2026-08-07 — Three accents measured against reserved hues, and two of them are a decision for the owner
 
 **Decision:** `MaterialCanonCriterionTests` now scans `Hub/`,

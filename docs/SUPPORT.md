@@ -35,7 +35,7 @@ control panels — the window is a title bar. Look for:
 - **Wells** — pinch and pull to make a new charge, magnet or pendulum.
 - **Rings** — tap an object and its own controls unfold around it.
 
-Each lab's first-run hint names its own, once. If you dismissed them and
+Each lab's first-run hint names its own, once, on a card in the room you dismiss by touching. If you dismissed them and
 want them back: **Settings › Show hints again**.
 
 ### How do I move the experiment?

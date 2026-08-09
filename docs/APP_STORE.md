@@ -262,7 +262,7 @@ staging simply did not work. This cost two rounds of confused screenshots.
 
 ## Before you shoot
 
-- [ ] **Dismiss the first-run hint** in each lab, or it sits across the
+- [ ] **Dismiss the first-run hint** in each lab (touch the card), or it sits across the
       top of the frame. It is dismissed per module and persists — so shoot
       each lab twice: once to dismiss, once for real. (`-resetHints 1`
       brings them all back if you want the hint *in* a shot.)

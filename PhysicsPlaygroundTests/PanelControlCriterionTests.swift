@@ -115,8 +115,9 @@ final class PanelControlCriterionTests: XCTestCase {
             inside a module.
 
             The module window is a TITLE BAR — plus "Show in room" while \
-            the space is closed, and the first-run hint until it is \
-            dismissed. Nothing else (DECISIONS.md, 2026-08-01).
+            the space is closed, and the first-run hint for as long as it \
+            stays closed. Nothing else (DECISIONS.md, 2026-08-01; the \
+            teach moved into the room 2026-08-08, see RoomTeach.swift).
 
             A control belongs on the apparatus: a SpatialLayerBank plate \
             for a latching state, a SpatialActionBank plate for a standing \

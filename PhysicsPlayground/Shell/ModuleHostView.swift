@@ -234,24 +234,35 @@ struct ModuleHostView: View {
                 }
             }
 
-            // The one-time hint: a sentence from the module, shown
-            // until the user closes it. Dismissal is the read receipt.
-            if !appModel.settings.hasSeenHint(module.id) {
+            // The one-time hint, WHILE THE ROOM IS SHUT.
+            //
+            // The teach moved into the room on 2026-08-08 (`RoomTeach`),
+            // because the apparatus stood through it here — RealityKit
+            // content renders in front of a window behind it, and the
+            // first photograph of a lab in a room showed five bobs and
+            // four vector arrows crossing the sentence.
+            //
+            // It is still drawn here while the immersive space is
+            // CLOSED, and that is not the same thing as keeping it in
+            // two places: the room card does not exist yet at that
+            // moment, so the two are never on screen together. The flat
+            // window is the accessibility path — a wearer who never
+            // opens the room would otherwise be the only one who never
+            // reads the sentence, which is the wrong person to drop.
+            //
+            // Both dismissals write the same receipt, so reading it in
+            // either place is reading it.
+            if !appModel.settings.hasSeenHint(module.id),
+               !appModel.isImmersiveSpaceOpen {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "hand.point.up.left")
                         .font(.footnote)
                         .foregroundStyle(module.accent)
-                    // PRIMARY, not secondary. This is the first sentence
-                    // a new wearer reads in a lab and it was styled as a
-                    // caption — the app's lowest-contrast text, over
-                    // translucent glass, in front of a live room. The
-                    // first photograph of Pendulums in a room (2026-08-08)
-                    // has it crossing five steel bobs and four vector
-                    // arrows, with whole phrases unreadable.
-                    //
-                    // The failure banner ten lines up is plain `.primary`,
-                    // and it says one short thing you can ignore. The
-                    // ranking was backwards.
+                    // PRIMARY, not secondary. It was styled as a caption
+                    // — the app's lowest-contrast text — for the first
+                    // sentence a new wearer reads in a lab, while the
+                    // failure banner ten lines up, one short line you can
+                    // ignore, is plain. The ranking was backwards.
                     Text(module.firstRunHint)
                         .font(DesignTokens.TypeScale.footnote)
                         .fixedSize(horizontal: false, vertical: true)
@@ -270,14 +281,9 @@ struct ModuleHostView: View {
                 }
                 // Glass, like the failure banner above — this was the
                 // last bare element in the title bar, a naked HStack
-                // pretending it wasn't chrome — but THICKER than the
-                // banner's. The banner is one line and transient; this is
-                // four lines standing over the apparatus until it is
-                // dismissed, which is a different job for the same
-                // material. "Casings beat glows" (DECISIONS, 2026-07-26)
-                // is the same rule seen from the other side: a surface
-                // earns legibility by what is behind the text, not by
-                // making the text brighter.
+                // pretending it wasn't chrome — but thicker, because four
+                // lines you must read is a different job from one line
+                // you may ignore.
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(.thickMaterial,

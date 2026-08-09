@@ -76,6 +76,12 @@ struct PlaygroundSpaceView: View {
                         // reaches a goal and chimes exactly once.
                         ExperimentCheckerView(moduleID: module.id)
                             .id("experiments-\(module.id)")
+                        // The lab's first sentence, IN the lab. It was
+                        // drawn in the flat module window until
+                        // 2026-08-08, where the apparatus stood through
+                        // it — see `RoomTeach.swift`.
+                        RoomTeachView(module: module)
+                            .id("teach-\(module.id)")
                         // Quiet lab room tone under every module (not the hub);
                         // no per-module id, so it runs seamlessly across switches.
                         AmbientLabAudioView()

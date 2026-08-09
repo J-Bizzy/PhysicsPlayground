@@ -482,9 +482,12 @@ file). The new well and the standing script:
 
 - [ ] The window shows a title bar and nothing else — no cards, no
       dropdowns, no scroll.
-- [ ] Below it, only two things ever appear: **Show in room** when the
-      immersive space is closed, and the **first-run hint** until you
-      dismiss it. Dismiss the hint; it stays gone on re-entry.
+- [ ] Below it, only two things ever appear, and both only while the
+      immersive space is CLOSED: **Show in room**, and the **first-run
+      hint**. Open the room and the hint leaves the window — it is a
+      card in front of the apparatus from then on (2026-08-08). Dismiss
+      it in either place; it stays gone on re-entry, and dismissing it
+      in the window means the card never appears.
 - [ ] The bar does not truncate the longest name. **Circuit Workshop**
       at default and at the largest accessibility text size.
 - [ ] **Key** opens the legend as a popover and it closes on a tap
@@ -1027,7 +1030,7 @@ reading "seconds ago".
 - [ ] **System Reduce Motion** (Settings ▸ Accessibility): the hub's
       idle life stills, and the door signs PARK at a composed rest pose
       — the electron at its track's side, the ball resting on the rule.
-- [ ] **Every lab's first-run hint** appears once and stays dismissed.
+- [ ] **Every lab's first-run hint** appears once and stays dismissed — as a CARD IN THE ROOM, in front of the apparatus, dismissed by touching it anywhere (2026-08-08). Check it is not crossed by the physics; that is the defect it was moved to fix. With the room shut it still appears in the window instead, and dismissing it either way counts.
 - [ ] **The notebook** captures a moment from each lab with sane
       numbers and units.
 - [ ] **Leave and re-enter a lab**: its state survives.
