@@ -144,10 +144,15 @@ final class RecessionCriterionTests: XCTestCase {
         ])
         for _ in 0..<10 { well.update(dt: 1 / 90, nearestHand: .zero) }
 
-        let sources = well.root.children
-        XCTAssertEqual(sources.count, 2)
-        let nearWell = try XCTUnwrap(sources.first { $0.name == "well-near" })
-        let farWell = try XCTUnwrap(sources.first { $0.name == "well-far" })
+        // ASKED OF THE WELL, not walked out of `root`: the sources hang
+        // off a sliding rack inside it since the scroll landed, and a
+        // test that knows the hierarchy breaks when the hierarchy is
+        // rearranged for a reason it does not care about. (It did.)
+        XCTAssertEqual(well.slotCount, 2)
+        let nearWell = try XCTUnwrap(well.source(at: 0))
+        let farWell = try XCTUnwrap(well.source(at: 1))
+        XCTAssertEqual(nearWell.name, "well-near")
+        XCTAssertEqual(farWell.name, "well-far")
 
         XCTAssertEqual(opacity(of: nearWell), 1, accuracy: 1e-4,
                        "the well under the hand should be at full brightness")

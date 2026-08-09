@@ -136,6 +136,20 @@ final class SummonHandle {
         return true
     }
 
+    /// Unfolds or folds it without a tap — for the debug launch
+    /// arguments, and for tests, which have no hands either.
+    ///
+    /// `TimeRail` carries the twin of this for the same reason: a
+    /// control whose only route is a pinch is a control the simulator
+    /// can never photograph, so the folded state would be the only one
+    /// any CLI screenshot could ever show.
+    func setOpen(_ open: Bool) {
+        guard open != isOpen else { return }
+        isOpen = open
+        applyLook()
+        onToggle?(open)
+    }
+
     /// Folds it without a tap — a reset, or another handle opening.
     func close() {
         guard isOpen else { return }

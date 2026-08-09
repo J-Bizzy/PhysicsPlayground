@@ -62,8 +62,8 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
             ("clear plate", box([-1.02, -0.02, 0.10], SIMD3(0.13, 0.06, 0.08))),
             // The presets tab folded: one plate plus the summary line
             // hanging under it.
-            ("presets tab", box([-1.02, 0.48, 0.10], SIMD3(0.09, 0.05, 0.05))),
-            ("presets column", box([-1.02, 0.24, 0.10], fiveHigh)),
+            ("presets tab", box([-1.02, 0.15, 0.10], SIMD3(0.09, 0.05, 0.05))),
+            ("presets column", box([-1.02, 0.39, 0.10], fiveHigh)),
             // THE PARTS BLOCK. World coordinates, not bench-relative —
             // `CircuitsPartsLayout.rightSlot` places these absolutely, so
             // the box is built from the real slots rather than from an
@@ -138,24 +138,37 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
             """)
     }
 
-    /// The specific thing that was got wrong twice.
+    /// The specific thing that was got wrong three times.
     ///
     /// First the tab sat INSIDE its own column, because a bank centres
-    /// its plates on its anchor rather than stacking down from it.
-    /// Then, moved above the layers bank, five plates over five plates
-    /// pushed the tab to y 1.82 — past the 1.80 ceiling.
-    func testThePresetsTabSitsAboveItsOwnColumnAndBelowTheCeiling() throws {
+    /// its plates on its anchor rather than stacking down from it. Then,
+    /// moved above the layers bank, five plates over five plates pushed
+    /// the tab past the 1.80 ceiling. Then the column was flipped to
+    /// unfold UPWARD — grouping the tab with the Clear plate, after a
+    /// screenshot showed the old height reading "on its own" — and this
+    /// test failed, because it asserted the tab was ABOVE its column.
+    ///
+    /// DIRECTION IS NOT THE CLAIM. What must be true is that the tab and
+    /// the column do not occupy each other, and that neither leaves the
+    /// working band; which way the column opens is a layout decision the
+    /// test has no business pinning. It said "above" only because that
+    /// is how the first version happened to work.
+    func testThePresetsTabAndItsColumnDoNotOccupyEachOther() throws {
         let all = standingFurniture
         let tab = try XCTUnwrap(all.first { $0.name == "presets tab" }).box
         let column = try XCTUnwrap(all.first { $0.name == "presets column" }).box
 
-        XCTAssertGreaterThan(tab.minimum.y, column.maximum.y,
-                             "the tab is inside the column it opens")
-        XCTAssertGreaterThanOrEqual(tab.separation(from: column),
-                                    InstrumentClearance.separation)
-        XCTAssertLessThan(tab.maximum.y, InstrumentClearance.workingHeight.upperBound)
-        XCTAssertGreaterThan(column.minimum.y,
-                             InstrumentClearance.workingHeight.lowerBound)
+        XCTAssertGreaterThanOrEqual(
+            tab.separation(from: column), InstrumentClearance.separation,
+            "the tab is inside the column it opens")
+        for (name, box) in [("tab", tab), ("column", column)] {
+            XCTAssertLessThan(box.maximum.y,
+                              InstrumentClearance.workingHeight.upperBound,
+                              "the presets \(name) is above a comfortable reach")
+            XCTAssertGreaterThan(box.minimum.y,
+                                 InstrumentClearance.workingHeight.lowerBound,
+                                 "the presets \(name) hangs too low to use")
+        }
     }
 
     /// And the column must clear the Clear plate it stands above.

@@ -132,38 +132,31 @@ struct CircuitsSpaceView: View {
     private static let clearAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-1.02, -0.02, 0.10)
 
-    /// ABOVE THE CLEAR PLATE, on the far-left flank — and every other
-    /// candidate was ruled out by arithmetic rather than by taste, which
-    /// is what `InstrumentClearance` is for.
+    /// BESIDE THE CLEAR PLATE, and unfolding UPWARD — moved down from
+    /// y 1.73 on 2026-08-08 after a screenshot showed what the owner had
+    /// already said in words: at that height it read "on its own",
+    /// floating over the wall a long way from anything it belongs to.
     ///
-    /// The bank is five plates at 0.066 pitch, so it is 0.264 tall plus a
-    /// plate's own 0.05 — a 0.157 half-extent, not the 0.10 a glance
-    /// suggests. That number is what decides this:
+    /// The constraint that shapes this is that the presets column and
+    /// the layers bank are BOTH five plates, and two five-plate columns
+    /// do not fit stacked inside the 0.70…1.80 working band. So they
+    /// cannot share the bank's x, and the far-left flank is where the
+    /// Clear plate already lives.
     ///
-    /// - Above the LAYERS bank (the first attempt): the layers bank is
-    ///   also five plates, spanning y 1.033…1.347. Clearing it by 3 cm
-    ///   puts the presets column's centre at 1.534, its top at 1.691, and
-    ///   the tab above THAT at 1.82 — past the 1.80 ceiling. Five over
-    ///   five does not fit on one flank.
-    /// - Between the layers bank and the Clear plate: 1 cm of gap once
-    ///   the Clear plate's 0.13 half-width and the labels are counted.
-    /// - The right flank is the meter's, and the meter MOVES once a hand
-    ///   has taken it, so nothing can be spaced against it.
-    ///
-    /// Above the Clear plate works: the plate is one row, so it tops out
-    /// at 1.29 and leaves the whole band above it free. It also puts the
-    /// column at x −1.17…−0.87, which is the only one of these positions
-    /// entirely OUTSIDE the bench's build volume (`buildHalfExtents.x` is
-    /// 0.70) — see the note in `CircuitsInstrumentClearanceTests` about
-    /// the furniture that is not.
+    /// Grouping them is the fix: the tab sits 0.06 above the Clear
+    /// plate's top edge, which reads as one small stack of verbs rather
+    /// than two strays, and the column unfolds UP into the empty band
+    /// instead of down through the plate. Unfolded it spans y
+    /// 1.483…1.797, inside the ceiling by 3 mm — tight, and checked by
+    /// `CircuitsInstrumentClearanceTests` rather than by eye.
     private static let presetsAnchor = CircuitsRenderer.benchPivot
-        + SIMD3<Float>(-1.02, 0.48, 0.10)
+        + SIMD3<Float>(-1.02, 0.15, 0.10)
     /// The column hangs below the tab, centred on this point — a bank
     /// centres its plates on its anchor rather than stacking down from
     /// it, which is how the first attempt put the tab inside its own
     /// column.
     private static let presetsBankAnchor = CircuitsRenderer.benchPivot
-        + SIMD3<Float>(-1.02, 0.24, 0.10)
+        + SIMD3<Float>(-1.02, 0.39, 0.10)
 
     var body: some View {
         RealityView { content, attachments in
@@ -334,8 +327,23 @@ struct CircuitsSpaceView: View {
                 // weakly — and the meter is the only thing this closure
                 // actually needs.
                 handOver: { [weak multimeter] hand in
+                    // Out of the rack and into the hand — and VISIBLE,
+                    // which is the half that was missing. The instrument
+                    // starts hidden so the rack's slot is the only
+                    // multimeter in the room until somebody asks for it.
                     multimeter?.place(at: SIMD3<Float>(hand))
+                    multimeter?.root.isEnabled = true
                 })
+
+            // HIDDEN UNTIL PULLED. The slot above shows a miniature; the
+            // real instrument is one object with its own transform, its
+            // dial and two probes, and leaving it standing beside the
+            // bench as well put TWO multimeters in the room — the
+            // miniature in the rack and the original still intruding
+            // exactly where the owner objected to it. Caught in the
+            // first CLI screenshot of the rack, which is the whole
+            // reason the launch arguments above exist.
+            multimeter.root.isEnabled = false
 
             let parts = Well(partSpecs + [meterSlot])
             // A WINDOW, NOT A WALL: six of the twelve, the rest a drag
@@ -454,6 +462,35 @@ struct CircuitsSpaceView: View {
                let first = model.components.first {
                 ring.openID = first.id
             }
+            // THE THREE SURFACES ADDED ON 2026-08-08, none of which the
+            // simulator can reach with a finger, and all of which I have
+            // been asking the owner to check on device for want of a
+            // way to photograph them.
+            //
+            // `-circPreset series|parallel|divider|rcCharger|shortCircuit`
+            // loads one and — the point — puts its authored paragraph on
+            // the insight card. The card is absent whenever there is
+            // nothing to say, so `-seedCircuits 1` alone photographs an
+            // empty space where the teaching goes.
+            if let name = UserDefaults.standard.string(forKey: "circPreset"),
+               let preset = CircuitsModel.Preset(rawValue: name) {
+                model.loadPreset(preset)
+                lastPreset = preset
+            }
+            // `-circPresetsOpen 1` unfolds the presets tab. Its five
+            // plates are behind a `SummonHandle` and a handle is a
+            // pinch, so folded is the only state a screenshot could ever
+            // catch without this.
+            if UserDefaults.standard.bool(forKey: "circPresetsOpen") {
+                presetsHandle.setOpen(true)
+            }
+            // `-circScroll <n>` scrolls the parts rack n slots. A rack
+            // that only ever shows its first six is a rack whose scroll
+            // cannot be reviewed — and the carets change with it, so
+            // this is also the only way to photograph the up caret lit.
+            let scroll = UserDefaults.standard.integer(forKey: "circScroll")
+            if scroll != 0 { parts.scroll(by: scroll) }
+
             // `-circField 1` switches on the bench's own magnetic
             // field. The plate is on the layers bank and the simulator
             // has no finger to flick it with, and this is the one layer

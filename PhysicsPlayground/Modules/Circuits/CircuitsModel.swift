@@ -1276,13 +1276,47 @@ final class CircuitsModel {
     /// Live guided physics: one line about what the circuit is doing
     /// RIGHT NOW, refreshed at most twice a second.
     private var insightClock = 0.0
+
+    /// Until when an AUTHORED paragraph holds the card against the live
+    /// commentary, in simulated seconds.
+    ///
+    /// THE FIVE PRESET PARAGRAPHS WERE STILL DARK WITHOUT THIS, which a
+    /// screenshot showed and the code did not. `loadPreset` writes its
+    /// paragraph and `updateLiveInsight` overwrote it within half a
+    /// second — so waking them amounted to displaying each one for one
+    /// frame. Reachable, technically, and unreadable.
+    ///
+    /// The two kinds of message are not peers. The running commentary
+    /// describes what the circuit is doing and is true again a moment
+    /// later; a preset's paragraph explains what you have just been
+    /// handed and is only worth reading once. The second must therefore
+    /// win the collision, and only for as long as it takes to read.
+    private var insightHoldUntil = 0.0
+
+    /// Twelve seconds: the longest preset paragraph is ~50 words, and
+    /// an adult reads that in about eight. The margin is for looking at
+    /// the circuit while you read about it, which is the whole point.
+    private static let insightHold = 12.0
+
+    /// Pins a paragraph for `insightHold` seconds.
+    private func hold(_ text: String) {
+        insightText = text
+        insightHoldUntil = simTime + Self.insightHold
+    }
+
     private func updateLiveInsight() {
-        guard simTime - insightClock > 0.5 else { return }
-        insightClock = simTime
+        // A failure always speaks: a blown fuse is not commentary, and a
+        // paragraph about series bulbs over a dead bench is worse than
+        // no paragraph.
         if components.contains(where: { $0.failed }) {
             insightText = failureNote
+            insightClock = simTime
+            insightHoldUntil = 0
             return
         }
+        guard simTime >= insightHoldUntil else { return }
+        guard simTime - insightClock > 0.5 else { return }
+        insightClock = simTime
         // The hardest-working dissipator.
         var topID: UUID?
         var topWatts = 0.05
@@ -1397,7 +1431,7 @@ final class CircuitsModel {
             SavedBench(components: components, wires: wires)) else { return false }
         slots[name] = data
         writeSlots(slots)
-        insightText = "Saved as “\(name)” — load it any time from the Saved circuits list."
+        hold("Saved as “\(name)” — load it any time from the Saved circuits list.")
         return true
     }
 
@@ -1406,7 +1440,7 @@ final class CircuitsModel {
         guard let data = readSlots()[name],
               let bench = try? JSONDecoder().decode(SavedBench.self, from: data),
               apply(bench) else { return false }
-        insightText = "Loaded “\(name)” — it's live, and it's yours to rewire."
+        hold("Loaded “\(name)” — it's live, and it's yours to rewire.")
         persistSoon()
         return true
     }
@@ -1471,7 +1505,7 @@ final class CircuitsModel {
             connect((toggle, 1), (bulb2, 1))
             connect((bulb2, 0), (bulb1, 1))
             connect((bulb1, 0), (battery, 0))
-            insightText = "Series: ONE path, so the same current threads both bulbs — each gets half the voltage and glows dimmer than it would alone. Unscrew either and the whole loop dies."
+            hold("Series: ONE path, so the same current threads both bulbs — each gets half the voltage and glows dimmer than it would alone. Unscrew either and the whole loop dies.")
         case .parallel:
             let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
             let bulb1 = place(.bulb, at: SIMD3(-0.18, 1.45, -0.9))
@@ -1480,7 +1514,7 @@ final class CircuitsModel {
             connect((battery, 1), (bulb2, 1))
             connect((bulb1, 0), (battery, 0))
             connect((bulb2, 0), (battery, 0))
-            insightText = "Parallel: each bulb gets the FULL 9 V, so both burn at full brightness — and the battery pays for it, pushing double the current. Select the battery and compare its mA to one bulb's."
+            hold("Parallel: each bulb gets the FULL 9 V, so both burn at full brightness — and the battery pays for it, pushing double the current. Select the battery and compare its mA to one bulb's.")
         case .divider:
             let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
             let r1 = place(.resistor, at: SIMD3(-0.2, 1.5, -0.9), value: 470)
@@ -1488,7 +1522,7 @@ final class CircuitsModel {
             connect((battery, 1), (r2, 1))
             connect((r2, 0), (r1, 1))
             connect((r1, 0), (battery, 0))
-            insightText = "A voltage divider: the 9 V splits in proportion to resistance — select each resistor and read ~2.9 V across 470 Ω and ~6.1 V across 1 kΩ. Slide either value and watch the split follow."
+            hold("A voltage divider: the 9 V splits in proportion to resistance — select each resistor and read ~2.9 V across 470 Ω and ~6.1 V across 1 kΩ. Slide either value and watch the split follow.")
         case .rcCharger:
             let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
             let resistor = place(.resistor, at: SIMD3(-0.3, 1.31, -0.9), axis: up, value: 1000)
@@ -1498,13 +1532,13 @@ final class CircuitsModel {
             connect((toggle, 1), (capacitor, 1))
             connect((capacitor, 0), (resistor, 1))
             connect((resistor, 0), (battery, 0))
-            insightText = "RC charging: the capacitor fills toward 9 V with time constant τ = RC ≈ 2.2 s — select it and watch the charge curve slow as it approaches full. Flip the switch to pause the flow mid-charge."
+            hold("RC charging: the capacitor fills toward 9 V with time constant τ = RC ≈ 2.2 s — select it and watch the charge curve slow as it approaches full. Flip the switch to pause the flow mid-charge.")
         case .shortCircuit:
             let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
             let jumper = place(.wire, at: SIMD3(0, 1.45, -0.9), value: 0.4)
             connect((battery, 1), (jumper, 1))
             connect((jumper, 0), (battery, 0))
-            insightText = "A dead short: nothing limits the current but the battery's own 50 mΩ — about 150 A, the red warning, and in real life a very hot battery. Add a bulb into the loop to tame it."
+            hold("A dead short: nothing limits the current but the battery's own 50 mΩ — about 150 A, the red warning, and in real life a very hot battery. Add a bulb into the loop to tame it.")
         }
         selectedID = components.first?.id
         solve(dt: 1.0 / 90.0)

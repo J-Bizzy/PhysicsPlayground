@@ -131,6 +131,60 @@ final class CircuitsInsightTests: XCTestCase {
         }
     }
 
+    /// AND IT SURVIVES THE RUNNING COMMENTARY, which is what "reaching a
+    /// surface" actually requires.
+    ///
+    /// `loadPreset` wrote its paragraph and `updateLiveInsight`
+    /// overwrote it within half a second, so each of the five was
+    /// displayed for roughly one frame. The earlier test passed —
+    /// the string DID reach the card — and a screenshot of the Series
+    /// preset showed the power-leader line instead. Reachable and
+    /// unreadable are different things, and only one of them was tested.
+    func testAPresetParagraphOutlastsTheLiveCommentary() throws {
+        let model = CircuitsModel()
+        model.loadPreset(.series)
+        let paragraph = model.insightText
+        XCTAssertTrue(paragraph.contains("Series"), paragraph)
+
+        // Several seconds of a live, unpaused circuit — far more than
+        // the half-second the commentary refreshes on.
+        for _ in 0..<300 { model.step(dt: 1.0 / 60) }
+        XCTAssertEqual(model.insightText, paragraph, """
+            the preset's paragraph was replaced by the running commentary \
+            after \(300.0 / 60) s. It is meant to hold long enough to read.
+            """)
+    }
+
+    /// …and then yields, because the commentary is about the circuit as
+    /// it is NOW and a paragraph about how it arrived stops being true.
+    func testTheCommentaryTakesOverOnceTheParagraphHasBeenRead() {
+        let model = CircuitsModel()
+        model.loadPreset(.series)
+        let paragraph = model.insightText
+        for _ in 0..<(20 * 60) { model.step(dt: 1.0 / 60) }
+        XCTAssertNotEqual(model.insightText, paragraph,
+                          "the paragraph never yields — the card is now a sign")
+        XCTAssertFalse(model.insightText.isEmpty)
+    }
+
+    /// A FAILURE INTERRUPTS IT. A blown fuse is not commentary, and a
+    /// paragraph about series bulbs over a dead bench is worse than
+    /// none.
+    func testAFailureSpeaksOverAHeldParagraph() throws {
+        let model = CircuitsModel()
+        model.loadPreset(.shortCircuit)
+        let paragraph = model.insightText
+        // The dead short blows its way to a failure on its own.
+        for _ in 0..<240 { model.step(dt: 1.0 / 60) }
+        if model.components.contains(where: { $0.failed }) {
+            XCTAssertNotEqual(model.insightText, paragraph,
+                              "a component failed and the card kept talking "
+                              + "about the preset")
+        } else {
+            throw XCTSkip("the short did not blow anything in 4 s")
+        }
+    }
+
     /// Every preset's paragraph is DIFFERENT. Five circuits sharing one
     /// sentence would be a tally in prose — and the strings are the only
     /// thing that distinguishes the five once the parts are on the
