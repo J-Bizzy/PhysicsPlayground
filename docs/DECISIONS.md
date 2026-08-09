@@ -16,6 +16,40 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-09 — Circuit Workshop's bench is too wide for its own instruments (OPEN)
+
+**Decision:** None yet — this is a measurement placed in front of the
+owner, and the code is unchanged.
+
+**Context:** The parts rack was found standing 0.10 m from a build volume
+that ends at 0.70, inside a 0.12 m `InstrumentClearance.stationMargin`.
+That one was fixable: x 0.82, z −0.77, and the on-screen window drops
+from six slots to five because no depth satisfies margin, reach and
+off-axis angle with six.
+
+The layers bank on the other flank is not fixable the same way. It sits
+at x −0.62, INSIDE the volume. It is 0.15 half-wide, so clearing the
+margin needs its centre at |x| ≥ 0.97, and a search over x 0.82…1.30
+against z 0.60…1.20 finds NO position satisfying all three rules. The
+closest is x 0.97, z −0.73: reach 1.253 m against a 1.25 limit and 53.0
+degrees against 48. The multimeter's rest position (+0.62) is inside the
+volume for the same reason.
+
+So the constraint that is actually binding is the bench's own width. At
+`CircuitsModel.buildHalfExtents.x` = 0.60 the bank fits at x 0.87,
+z −0.79 — reach 1.215, 47.8 degrees. At 0.55 it is comfortable.
+
+**Consequences of the change, if it is made:** narrowing the volume is
+one number, and it is not free. `add(_:at:)` clamps to the volume, so
+every saved circuit holding a part between 0.60 and 0.70 has a component
+outside its own bench on restore — a migration, not a constant. The
+alternative is to fold the flanking instruments behind a `SummonHandle`
+so they are not standing in the room at all, which is the answer Phase 2
+already reaches for elsewhere and which changes what the bench looks
+like when you walk up to it. Both are the owner's call; the measurement
+is recorded at the bank's anchor in `CircuitsSpaceView` so the next
+reader does not re-derive it or "fix" it by nudging.
+
 ## 2026-08-08 — The first-run teach moves into the room, and stays in the window while the room is shut
 
 **Decision:** Each lab's `firstRunHint` is drawn as a card in the room

@@ -377,6 +377,29 @@ struct CircuitsSpaceView: View {
                     // LEFT, like every module's bank (2026-08-04).
                     let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
                     layers?.update(
+                        // x −0.62 IS INSIDE THE BUILD VOLUME, which spans
+                        // ±0.70. Measured 2026-08-09, and left alone
+                        // deliberately — the number is not the problem.
+                        //
+                        // The bank is 0.15 half-wide, so clearing the
+                        // volume by `InstrumentClearance.stationMargin`
+                        // needs its centre at |x| ≥ 0.97. Searched x
+                        // 0.82…1.30 against z 0.60…1.20: NO position
+                        // satisfies margin, reach and off-axis angle at
+                        // once. The closest is x 0.97, z −0.73 — reach
+                        // 1.253 m against a 1.25 limit and 53.0° against
+                        // 48°. The bench is simply too wide for its own
+                        // flanking furniture.
+                        //
+                        // It becomes feasible the moment the bench
+                        // narrows: at `buildHalfExtents.x` = 0.60 the
+                        // bank fits at x 0.87, z −0.79 (reach 1.215,
+                        // 47.8°). That is a one-number change with a
+                        // real cost — every saved circuit with a part
+                        // between 0.60 and 0.70 is then outside its own
+                        // bench — so it is the owner's, not a tidy-up.
+                        // The multimeter's rest position (+0.62) is
+                        // inside the volume for the same reason.
                         anchor: CircuitsRenderer.benchPivot + SIMD3(-0.62, -0.06, 0.16),
                         viewer: viewer,
                         dt: event.deltaTime)
