@@ -21,187 +21,120 @@ import simd
 
 final class CircuitsPartsLayoutTests: XCTestCase {
 
-    /// The tallest part in the module, for worst-case pitch. The wire is
-    /// a 0.12 m cylinder and the battery 0.11; anything taller arriving
-    /// later makes this test fail rather than silently push the top row
-    /// out of reach.
-    private static let tallestPart: Float = 0.12
+    // THESE TESTS DESCRIBED TWO FLANKS UNTIL 2026-08-08, and the layout
+    // has changed twice since — first to a right-hand block, then to a
+    // single scrolling column of six with the multimeter as a twelfth
+    // slot. The mirror, third-column and per-flank-overflow checks went
+    // with the arrangement they described.
+    //
+    // THE TWO THAT SURVIVED ARE THE TWO THAT MATTERED, and letting them
+    // lapse cost exactly what they were written to prevent. The new
+    // column shipped at z −0.55, which is 55.5° off axis against this
+    // module's own 48° limit — the SAME trade the deleted comment
+    // warned about in these words: the first palette "passed the reach
+    // test above with 3 cm to spare and still put half its labels off
+    // the edge of the screen, because it bought that reach by pulling
+    // the columns forward in z — which spends angle to buy distance."
+    //
+    // A test that describes an arrangement dies with the arrangement. A
+    // test that describes a CONSTRAINT should have been carried across
+    // and was not.
 
-    private func slots() -> [(CircuitsPartsLayout.Flank, Int, SIMD3<Float>)] {
-        var out: [(CircuitsPartsLayout.Flank, Int, SIMD3<Float>)] = []
-        let pitch = CircuitsPartsLayout.rowPitch(tallestPart: Self.tallestPart)
-        for flank in CircuitsPartsLayout.Flank.allCases {
-            for index in CircuitsPartsLayout.kinds(on: flank).indices {
-                out.append((flank, index,
-                            CircuitsPartsLayout.slot(flank, index: index,
-                                                     rowPitch: pitch)))
-            }
-        }
-        return out
-    }
-
-    // MARK: Coverage
-
-    /// EVERY component kind stands somewhere.
-    ///
-    /// The failure this guards is silent and total: a kind nobody
-    /// assigned to a flank has no source in the room, so it is a part
-    /// the bench can hold but nobody can make.
-    func testEveryComponentKindIsOnExactlyOneFlank() {
-        let placed = CircuitsPartsLayout.Flank.allCases
-            .flatMap { CircuitsPartsLayout.kinds(on: $0) }
-
-        XCTAssertEqual(Set(placed).count, placed.count,
-                       "a part kind stands on both flanks")
-        XCTAssertEqual(Set(placed), Set(CircuitsModel.ComponentKind.allCases),
-                       "a part kind has no source in the room — add it to "
-                       + "CircuitsPartsLayout.kinds(on:)")
-    }
-
-    /// No flank holds more than the block can show.
-    func testNeitherFlankOverflowsItsBlock() {
-        let capacity = CircuitsPartsLayout.rows * CircuitsPartsLayout.columns
-        for flank in CircuitsPartsLayout.Flank.allCases {
-            XCTAssertLessThanOrEqual(
-                CircuitsPartsLayout.kinds(on: flank).count, capacity,
-                "\(flank) has more parts than its \(capacity) slots — the "
-                + "extras would stack below the block, into the furniture")
+    /// Only the six on screen are checked, and that is the point: the
+    /// rack slides so the window always occupies the top six positions,
+    /// so a twelfth slot never sits anywhere a sixth one does not.
+    private func windowSlots() -> [(Int, SIMD3<Float>)] {
+        (0..<CircuitsPartsLayout.rightVisibleRows).map {
+            ($0, CircuitsPartsLayout.rightSlot(index: $0))
         }
     }
 
-    // MARK: Reach
+    // MARK: Reachable, and visible
 
-    /// EVERY slot is reachable. The invariant the two-column shape was
-    /// chosen for: a third column lands past this line.
-    func testEverySlotIsWithinReach() {
-        for (flank, index, slot) in slots() {
+    /// YOUR ARM GETS THERE.
+    func testEveryVisibleSlotIsWithinReach() {
+        for (index, slot) in windowSlots() {
             XCTAssertLessThanOrEqual(
                 CircuitsPartsLayout.reach(to: slot),
                 CircuitsPartsLayout.maximumReach,
-                "\(flank) slot \(index) at \(slot) is a step away, not a reach")
+                """
+                slot \(index) at \(slot) is \(CircuitsPartsLayout.reach(to: slot)) m \
+                away — a step, not a reach.
+                """)
         }
     }
 
-    /// EVERY slot is inside the frame.
-    ///
-    /// THE CONSTRAINT THAT ACTUALLY BIT. The first build of this palette
-    /// passed the reach test above with 3 cm to spare and still put half
-    /// its labels off the edge of the screen, because it bought that
-    /// reach by pulling the columns forward in z — which spends angle to
-    /// buy distance. Reach says "your arm gets there"; this says "your
-    /// eyes do".
-    func testEverySlotIsInsideTheFrame() {
-        for (flank, index, slot) in slots() {
+    /// AND YOUR EYES DO, which is the binding constraint here and the
+    /// one that was let lapse. Reach is bought by pulling the column
+    /// forward; forward is paid for in angle.
+    func testEveryVisibleSlotIsInsideTheFrame() {
+        for (index, slot) in windowSlots() {
+            let angle = CircuitsPartsLayout.offAxisAngle(to: slot)
             XCTAssertLessThanOrEqual(
-                CircuitsPartsLayout.offAxisAngle(to: slot),
-                CircuitsPartsLayout.maximumOffAxisAngle,
-                "\(flank) slot \(index) at \(slot) is "
-                + "\(CircuitsPartsLayout.offAxisAngle(to: slot))° off axis, "
-                + "out at the edge of vision")
+                angle, CircuitsPartsLayout.maximumOffAxisAngle,
+                """
+                slot \(index) at \(slot) is \(angle)° off axis, out at the edge \
+                of vision. If this was bought to satisfy the reach check, the \
+                column has been pulled too far forward — that is the trade \
+                this pair of tests exists to keep honest.
+                """)
         }
     }
 
-    /// A third column would breach one limit or the other — the test
-    /// that keeps the "why only two columns" comment honest. If this
-    /// ever fails, the geometry changed and the palette can grow.
-    func testAThirdColumnWouldNotFit() {
-        let pitch = CircuitsPartsLayout.rowPitch(tallestPart: Self.tallestPart)
-        let gap = CircuitsPartsLayout.outerColumnX - CircuitsPartsLayout.innerColumnX
-        let thirdColumn = SIMD3<Float>(
-            CircuitsPartsLayout.outerColumnX + gap,
-            CircuitsPartsLayout.bottomRowY
-                + Float(CircuitsPartsLayout.rows - 1) * pitch,
-            CircuitsPartsLayout.columnZ)
-
-        let breachesReach = CircuitsPartsLayout.reach(to: thirdColumn)
-            > CircuitsPartsLayout.maximumReach
-        let breachesFrame = CircuitsPartsLayout.offAxisAngle(to: thirdColumn)
-            > CircuitsPartsLayout.maximumOffAxisAngle
-        XCTAssertTrue(breachesReach || breachesFrame,
-                      "a third column now fits — the comment in "
-                      + "CircuitsPartsLayout saying it cannot is stale")
-    }
-
-    // MARK: Clearance from the furniture row
-
-    /// The lowest nameplate clears the layer bank below it.
+    /// The two limits are satisfied with room to spare, not scraped.
     ///
-    /// The bench's furniture reads as a row at one height — Clear plate,
-    /// meter, bench, layers — and the palette is a second storey above
-    /// it. The tallest thing in that row is the layer bank: five plates
-    /// on a 0.066 pitch, centred at benchPivot.y − 0.06, so its top plate
-    /// reaches about 1.36. A block hanging into that would put a part
-    /// name across a switch.
-    func testTheLowestNameplateClearsTheFurnitureRow() {
-        let bankCentre = CircuitsRenderer.benchPivot.y - 0.06
-        let bankTop = bankCentre + Float(5 - 1) / 2 * 0.066 + 0.025
-        // A `Well` hangs its plate 0.034 under the object's own bottom.
-        let lowestPlate = CircuitsPartsLayout.bottomRowY
-            - Self.tallestPart / 2 - 0.034
-
-        XCTAssertGreaterThan(
-            lowestPlate - bankTop, 0.02,
-            "the palette's bottom row hangs into the furniture row "
-            + "(plate at \(lowestPlate), bank tops out at \(bankTop))")
+    /// A layout sitting exactly on a limit is one that the next change
+    /// breaks, and both of these have been scraped before: the reach
+    /// check once passed by 3 cm while the labels were off screen.
+    func testTheWindowClearsBothLimitsWithMargin() {
+        let worstReach = windowSlots().map {
+            CircuitsPartsLayout.reach(to: $0.1)
+        }.max() ?? 0
+        let worstAngle = windowSlots().map {
+            CircuitsPartsLayout.offAxisAngle(to: $0.1)
+        }.max() ?? 0
+        XCTAssertLessThan(worstReach, CircuitsPartsLayout.maximumReach - 0.02,
+                          "the window is scraping the reach limit at \(worstReach)")
+        XCTAssertLessThan(worstAngle,
+                          CircuitsPartsLayout.maximumOffAxisAngle - 1.0,
+                          "the window is scraping the angle limit at \(worstAngle)°")
     }
 
-    // MARK: Shape
+    // MARK: Coverage and shape
 
-    /// No two parts share a slot.
+    /// EVERY component kind stands somewhere. The failure this guards is
+    /// silent and total: a kind in no list has no source in the room, so
+    /// it is a part the bench can hold and nobody can make.
+    func testEveryComponentKindHasASlot() {
+        let listed = CircuitsPartsLayout.Flank.allCases
+            .flatMap { CircuitsPartsLayout.kinds(on: $0) }
+        for kind in CircuitsModel.ComponentKind.allCases {
+            XCTAssertTrue(listed.contains(kind),
+                          "\(kind) can be built but not made — no slot lists it")
+        }
+        XCTAssertEqual(Set(listed).count, listed.count,
+                       "a kind is listed twice, so it gets two slots")
+    }
+
+    /// No two slots coincide.
     func testNoTwoSlotsCoincide() {
-        let positions = slots().map(\.2)
-        for (i, a) in positions.enumerated() {
-            for (j, b) in positions.enumerated() where j > i {
-                XCTAssertGreaterThan(simd_distance(a, b), 0.05,
+        let all = (0..<12).map { CircuitsPartsLayout.rightSlot(index: $0) }
+        for i in all.indices {
+            for j in (i + 1)..<all.count {
+                XCTAssertGreaterThan(simd_distance(all[i], all[j]), 0.02,
                                      "slots \(i) and \(j) are on top of each other")
             }
         }
     }
 
-    /// The two BLOCKS mirror each other, so the room is not lopsided.
-    ///
-    /// Per ROW, not per index — slot 0 is the outer column on the left
-    /// and the inner column on the right, because both flanks read left
-    /// to right (see `slot`). Comparing index to index instead is the
-    /// obvious version of this test and it fails against correct
-    /// geometry; it is written down here so the next person does not
-    /// "fix" the layout to satisfy it.
-    func testTheBlocksMirror() {
-        let pitch = CircuitsPartsLayout.rowPitch(tallestPart: Self.tallestPart)
-        for row in 0..<CircuitsPartsLayout.rows {
-            let first = row * CircuitsPartsLayout.columns
-            let indices = first..<(first + CircuitsPartsLayout.columns)
-            let left = indices.map {
-                CircuitsPartsLayout.slot(.left, index: $0, rowPitch: pitch)
-            }
-            let right = indices.map {
-                CircuitsPartsLayout.slot(.right, index: $0, rowPitch: pitch)
-            }
-            XCTAssertEqual(left.map { abs($0.x) }.sorted(),
-                           right.map { abs($0.x) }.sorted(),
-                           "row \(row) stands off-centre")
-            XCTAssertEqual(Set(left.map(\.y)), Set(right.map(\.y)),
-                           "row \(row) sits at a different height per side")
-            XCTAssertEqual(Set(left.map(\.z)), Set(right.map(\.z)))
+    /// The column reads downward, in the authored order.
+    func testTheColumnReadsDownward() {
+        let all = (0..<12).map { CircuitsPartsLayout.rightSlot(index: $0) }
+        for i in 1..<all.count {
+            XCTAssertLessThan(all[i].y, all[i - 1].y,
+                              "slot \(i) is not below slot \(i - 1)")
+            XCTAssertEqual(all[i].x, all[0].x, accuracy: 1e-6,
+                           "slot \(i) left the column")
         }
-    }
-
-    /// Reading order runs left to right and top to bottom, on both
-    /// sides. The mirrored column ordering is the easiest thing here to
-    /// get backwards, and backwards means the labels read right to left
-    /// on one flank only.
-    func testBothFlanksReadLeftToRight() {
-        let pitch = CircuitsPartsLayout.rowPitch(tallestPart: Self.tallestPart)
-        for flank in CircuitsPartsLayout.Flank.allCases {
-            let first = CircuitsPartsLayout.slot(flank, index: 0, rowPitch: pitch)
-            let second = CircuitsPartsLayout.slot(flank, index: 1, rowPitch: pitch)
-            XCTAssertLessThan(first.x, second.x,
-                              "\(flank) reads right to left")
-            XCTAssertEqual(first.y, second.y, accuracy: 1e-6,
-                           "\(flank)'s first two parts are not on one row")
-        }
-        let top = CircuitsPartsLayout.slot(.left, index: 0, rowPitch: pitch)
-        let next = CircuitsPartsLayout.slot(.left, index: 2, rowPitch: pitch)
-        XCTAssertLessThan(next.y, top.y, "the block reads bottom to top")
     }
 }

@@ -159,10 +159,6 @@ enum CircuitsPartsLayout {
     }
 
     /// How far apart this flank's rows must sit, given the tallest part
-    /// standing in it.
-    static func rowPitch(tallestPart: Float) -> Float {
-        tallestPart + plateAndGap
-    }
 
     /// The slot for the `index`th part of a flank, in reading order:
     /// left to right, top row first.
@@ -190,10 +186,21 @@ enum CircuitsPartsLayout {
     ///   and a part dragged to the bench's right edge would sit inside a
     ///   well's collider, which is the shielding failure that cost this
     ///   module its interactivity once already.
-    /// - z −0.55 is FORWARD of the bench's own −0.9, not level with it.
-    ///   That is what "accessible" costs geometrically: the furthest
-    ///   mouth is then 1.21 m from a standing viewer against a 1.25
-    ///   limit, where at the bench's depth it would be past it.
+    /// - z −0.75, and the two numbers it sits between are the whole
+    ///   design. Pulling the block FORWARD of the bench's −0.9 buys
+    ///   reach: at the bench's own depth the bottom of the window is
+    ///   1.31 m from a standing viewer, past the 1.25 limit. But
+    ///   forward spends ANGLE for that distance, and this module has
+    ///   already been bitten by exactly that trade — the first parts
+    ///   palette passed the reach check with 3 cm to spare and still put
+    ///   half its labels off the edge of the screen.
+    ///
+    ///   I repeated it. z −0.55 measures 55.5° off axis against a 48°
+    ///   limit, and it shipped because the test that would have caught
+    ///   it described the two-flank layout and was not carried forward.
+    ///   −0.75 is 46.8° and 1.216 m: inside both, with margin on each.
+    ///   `CircuitsPartsLayoutTests` checks them of the WINDOW now, not
+    ///   of a flank.
     /// - Six rows at 0.105 span y 0.975…1.50, inside the working band
     ///   and inside the opening frame.
     /// ONE COLUMN, SIX AT A TIME, SCROLLING — owner's refinement,
@@ -208,7 +215,7 @@ enum CircuitsPartsLayout {
     static let rightColumnX: Float = 0.80
     static let rightTopY: Float = 1.50
     static let rightRowPitch: Float = 0.105
-    static let rightZ: Float = -0.55
+    static let rightZ: Float = -0.75
     /// How many are on screen at once. Six spans y 0.975…1.50, inside
     /// the working band and the opening frame; the rest are a drag away.
     static let rightVisibleRows = 6
@@ -225,19 +232,19 @@ enum CircuitsPartsLayout {
               rightZ)
     }
 
-    static func slot(_ flank: Flank, index: Int, rowPitch: Float) -> SIMD3<Float> {
-        let column = index % columns
-        let row = index / columns
-        let magnitude: Float
-        switch flank {
-        case .left: magnitude = column == 0 ? outerColumnX : innerColumnX
-        case .right: magnitude = column == 0 ? innerColumnX : outerColumnX
-        }
-        let x = flank == .left ? -magnitude : magnitude
-        // Row 0 is the TOP one, so it sits `rows - 1` pitches up.
-        let y = bottomRowY + Float(rows - 1 - row) * rowPitch
-        return SIMD3(x, y, columnZ)
-    }
+    // GRAVES, 2026-08-08. `slot(_:index:rowPitch:)` and
+    // `rowPitch(tallestPart:)` described the two-flank arrangement:
+    // inner and outer columns, a pitch derived from the tallest part in
+    // a block, and a mirrored left and right. That arrangement is gone
+    // twice over — first to one right-hand block, then to a single
+    // scrolling column — and code describing a room that no longer
+    // exists is the thing this project keeps convicting.
+    //
+    // `reach(to:)` and `offAxisAngle(to:)` STAY, and are the reason this
+    // is a deletion rather than a purge: they measure any slot against
+    // the viewer, they are what the surviving tests use, and letting
+    // them lapse with their old callers is exactly how the new column
+    // shipped 7° outside a limit this file already knew about.
 
     /// How far a slot is from the viewer — the number `maximumReach`
     /// governs.
