@@ -521,6 +521,34 @@ struct GravityLabSpaceView: View {
             )
 
             #if DEBUG
+            // `-gravLagrange 1` switches the Lagrange layer on AND parks
+            // a body at L4, which is the only way to photograph the
+            // capture callout.
+            //
+            // It reaches a CAPABILITY rather than a control, in the
+            // manner of `-apsisDrag`: the paragraph appears when a
+            // release lands a body near a point, and neither the release
+            // nor the point is something the simulator can pinch. The
+            // five paragraphs it exists to show spent the project's
+            // whole life with no reader, so a way to look at one matters
+            // more here than in most places.
+            if UserDefaults.standard.bool(forKey: "gravLagrange") {
+                model.showLagrangePoints = true
+                if let host = model.bodies.dropFirst().first {
+                    model.select(id: host.id)
+                }
+                if let target = model.lagrangePoints.first(where: { $0.name == "L4" })
+                    ?? model.lagrangePoints.first,
+                   let mover = model.bodies.first(where: {
+                       $0.id != model.primaryBody?.id
+                           && $0.id != model.selectedBody?.id
+                   }) {
+                    let display = target.position * model.simToDisplay
+                    model.grab(id: mover.id, at: display, timestamp: 0)
+                    model.hold(id: mover.id, at: display, timestamp: 0.05)
+                    model.release(id: mover.id, timestamp: 0.1)
+                }
+            }
             // `-viewScale 7` bakes in a committed scale for CLI shots.
             let forcedScale = UserDefaults.standard.double(forKey: "viewScale")
             if forcedScale > 0 {

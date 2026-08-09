@@ -111,7 +111,7 @@ final class GravityLabRenderer {
     private var ghostCallout: Callout?
     /// The paragraph that appears when a release parks a body at a
     /// Lagrange point — see `syncLagrangeCapture`.
-    private var lagrangeCallout: Callout?
+    private(set) var lagrangeCallout: Callout?
     private var verdictLine = Entity()
     private var verdictCallout: Callout?
     private var verdictShownWall: Double?
@@ -206,6 +206,13 @@ final class GravityLabRenderer {
     private var bodyColliderScales: [Int: Float] = [:]
     private var bodyNames: [String]
     private static let baseBodyRadius: Float = 0.05
+
+    /// The sun's halo mesh, and the star radius its scale is expressed
+    /// against: `sunGlow.scale = displayRadius / glowReferenceRadius`, so
+    /// the halo reaches `glowBaseRadius / glowReferenceRadius` times the
+    /// star. Named because `calloutAnchor` has to clear it.
+    static let glowBaseRadius: Double = 0.105
+    static let glowReferenceRadius: Double = 0.075
 
     private let trailPool: EntityPool<Void>
     private var trailEntities: [ModelEntity] = []
@@ -361,7 +368,8 @@ final class GravityLabRenderer {
 
         var glowMaterial = UnlitMaterial(color: UIColor(red: 1.0, green: 0.82, blue: 0.5, alpha: 1))
         glowMaterial.blending = .transparent(opacity: 0.16)
-        sunGlow = ModelEntity(mesh: .generateSphere(radius: 0.105), materials: [glowMaterial])
+        sunGlow = ModelEntity(mesh: .generateSphere(radius: Float(Self.glowBaseRadius)),
+                              materials: [glowMaterial])
         systemRoot.addChild(sunGlow)
 
         audioEmitter.components.set(SpatialAudioComponent())
@@ -609,9 +617,59 @@ final class GravityLabRenderer {
             lagrangeCallout = callout
         }
         lagrangeCallout?.isEnabled = true
-        lagrangeCallout?.anchor(at: SIMD3<Float>(body.body.position)
-                                * Float(model.simToDisplay))
+        lagrangeCallout?.anchor(at: calloutAnchor(for: body, in: model))
         lagrangeCallout?.setText(text)
+    }
+
+    /// Where the paragraph stands: on the body, then FORWARD ALONG THE
+    /// VIEW RAY far enough to clear the star.
+    ///
+    /// Following the body is the point (above) and this does not change
+    /// it — the callout still tracks a saddle-point escape. What it fixes
+    /// is what the first photograph of the paragraph showed: an inner
+    /// planet's L-points sit close in (Mercury's are 0.387 AU out, and
+    /// the star's halo is 0.31 m of that at display scale), so the text
+    /// was standing INSIDE the star. Half its glyphs rendered in front of
+    /// the sphere and half behind, and the last three lines were cut off
+    /// mid-word.
+    ///
+    /// A backing plate is no help against that, which is worth saying
+    /// because the plate was already there and already on — it was inside
+    /// the star as well. Depth is not contrast, and the fix for one is
+    /// not the fix for the other.
+    private func calloutAnchor(for body: GravityLabModel.OrbitingBody,
+                               in model: GravityLabModel) -> SIMD3<Float> {
+        let scale = Float(model.simToDisplay)
+        let seat = SIMD3<Float>(body.body.position) * scale
+        guard let viewer = viewerInSystem, let star = model.primaryBody else {
+            return seat
+        }
+        let centre = SIMD3<Float>(star.body.position) * scale
+        // How far the halo actually reaches, asked of the same two
+        // numbers that build it rather than of a ratio typed in here: a
+        // standoff derived by hand from constants somewhere else is one
+        // that silently stops clearing the star the day either moves.
+        let halo = Float(star.displayRadius)
+            * Float(Self.glowBaseRadius / Self.glowReferenceRadius)
+
+        // IN FRONT OF THE STAR'S NEAR SURFACE, not merely "pushed a bit
+        // toward the reader". The first attempt moved the text by
+        // `halo + margin` along the seat-to-viewer ray and clamped it to
+        // half the viewer distance; the photograph after it had four of
+        // five lines clear and a circular bite out of the fifth, because
+        // the clamp bound before the text was out. Solving for the plane
+        // says how far is enough instead of guessing.
+        let axis = viewer - centre
+        let reach = length(axis)
+        guard reach > 1e-4 else { return seat }
+        let toward = axis / reach
+        let clearance = halo + 0.05
+        let depth = dot(seat - centre, toward)
+        guard depth < clearance else { return seat }
+        // …but never into the reader's face: stop short of arm's length
+        // even if that leaves the star clipping a line.
+        let room = max(0, reach - 0.25 - depth)
+        return seat + toward * min(clearance - depth, room)
     }
 
     private func syncOrbitRing(_ model: GravityLabModel) {
@@ -1268,7 +1326,8 @@ final class GravityLabRenderer {
             sunGlow.isEnabled = isSun
             if isSun {
                 sunGlow.position = sunLight.position
-                sunGlow.scale = SIMD3(repeating: Float(primary.displayRadius / 0.075))
+                sunGlow.scale = SIMD3(
+                    repeating: Float(primary.displayRadius / Self.glowReferenceRadius))
             }
         }
 

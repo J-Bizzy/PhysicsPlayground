@@ -474,6 +474,30 @@ final class GravityLabModel {
         bodies.first(where: { $0.id == id })?.displayRadius ?? 0.02
     }
 
+    /// The capture must name a body that still exists.
+    ///
+    /// Found on 2026-08-08 by a test written for something else: park a
+    /// planet at an inner world's L4 with no orbital velocity and it
+    /// falls into the star within a couple of sim months. It merges, and
+    /// `capturedPointName` goes on naming it — the model holding a
+    /// verdict about an object that is gone, which is precisely the
+    /// failure `reset()` already apologises for a few hundred lines down
+    /// ("a verdict about a planet that no longer exists").
+    ///
+    /// SWEPT, not cleared at each removal site. There are two today and
+    /// they do not look alike: `removeBody` deletes, while the merge in
+    /// the collision pass REPLACES the captured body with a heavier one
+    /// carrying a new id. So "clear it where you delete" was already two
+    /// different edits, and a third site would be a third chance to
+    /// forget. Asking whether the id still resolves cannot be forgotten
+    /// by a future removal, because it does not know about removals.
+    private func pruneCapture() {
+        guard let id = capturedBodyID else { return }
+        guard !bodies.contains(where: { $0.id == id }) else { return }
+        capturedBodyID = nil
+        capturedPointName = nil
+    }
+
     func removeBody(id: UUID) {
         if orbitEdit?.bodyID == id { endOrbitEdit() }
         bodies.removeAll { $0.id == id }
@@ -956,7 +980,7 @@ final class GravityLabModel {
         "L1": "L1 sits between the star and the planet, where their pulls and the orbit's rotation balance — but it is a saddle: any nudge grows, so real L1 missions burn fuel to stay. Watch yours slide off.",
         "L2": "L2 lies beyond the planet, where the two pulls together speed a satellite up enough to keep pace with the planet's orbit. Unstable like L1 — Sun–Earth L2 is where JWST flies, on a halo orbit it has to maintain.",
         "L3": "L3 hides on the far side of the star, opposite the planet — the science-fiction 'counter-Earth' spot. The most weakly unstable of the three collinear points, and still no place to park unattended.",
-        "L4": "L4 leads the planet by 60°, an equilateral triangle with the star — and it is genuinely stable: displaced bodies orbit *around* the point. Jupiter's L4 holds thousands of Trojan asteroids.",
+        "L4": "L4 leads the planet by 60°, an equilateral triangle with the star — and it is genuinely stable: displaced bodies orbit around the point instead of sliding off it. Jupiter's L4 holds thousands of Trojan asteroids.",
         "L5": "L5 trails the planet by 60°, the mirror of L4 and just as stable. Proposed home for space colonies since the 1970s precisely because what you leave here stays.",
     ]
 
@@ -965,6 +989,12 @@ final class GravityLabModel {
     /// Advances the system by one rendered frame of simulated time, in
     /// Verlet substeps small enough to stay stable at 100×.
     func step(dt: Double) {
+        // EVERY FRAME, PAUSED OR NOT — a body can be deleted from a
+        // stopped room — and AFTER the physics, because the collision
+        // pass below is itself one of the things that removes the
+        // captured body. Called at the top instead, this was permanently
+        // one frame behind the merge it exists to notice.
+        defer { pruneCapture() }
         guard !isPaused else { return }
         // Recorded even when the guard below stops the physics: a room
         // that has just merged down to one body still has a present, and
