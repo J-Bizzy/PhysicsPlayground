@@ -67,7 +67,7 @@ enum PendulumsModule {
         LegendItem(swatch: .fill(DesignTokens.Palette.velocityVector),
                    text: "Blue arrow — velocity; the trail runs blue (slow) to orange (fast), so the swing colours its own speed"),
         LegendItem(swatch: .fill(Color(red: 0.95, green: 0.85, blue: 0.2)),
-                   text: "Force arrows — purple gravity, yellow cable tension, red net force"),
+                   text: "Force arrows — cyan gravity, yellow cable tension, red net force"),
         LegendItem(swatch: .line(.white),
                    text: "White ghost line while holding a bob — the exact swing a release right now would launch"),
     ]

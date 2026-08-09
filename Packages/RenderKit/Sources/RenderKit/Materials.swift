@@ -278,14 +278,35 @@ public enum Materials {
         radius * 2.1 + 0.0007
     }
 
+    /// The radius a soft glow should be swept at, for a given core.
+    ///
+    /// STRICTLY INSIDE THE CASING, which is the whole point. The
+    /// contrast recipe is light on darkness: a bright core, a dark
+    /// casing around it, and the casing is what keeps a field line
+    /// legible against a cream wall. Electric Fields swept its glow at a
+    /// hand-typed 0.0044 against a casing of 0.00406 — so the halo sat
+    /// OUTSIDE the outline and buried the darkness the recipe depends
+    /// on, which is the same as not having a casing at all.
+    ///
+    /// Derived rather than typed for exactly that reason: the two
+    /// numbers have to move together, and they did not.
+    public static func glowRadius(forCore radius: Float) -> Float {
+        casingRadius(forCore: radius) * 0.88
+    }
+
     /// A self-lit surface that keeps its colour against a bright room:
     /// the tint is deepened and the emissive pushed, so it reads as a
     /// lit object rather than a pastel wash. Used for the objects that
     /// were disappearing into the walls (the Sun, wave sources, smoke).
-    public static func luminous(_ color: UIColor, glow: Float = 1.6) -> UnlitMaterial {
+    /// GRAVE, 2026-08-08: this took a `glow: Float = 1.6` that it
+    /// discarded with `_ = glow` and a comment calling it "kept for
+    /// call-site clarity". A parameter that changes nothing is not
+    /// clarity — it is a call site that looks tuned and is not, and
+    /// every reader who sets it is owed the truth that an `UnlitMaterial`
+    /// is already at full intensity and has no dimmer.
+    public static func luminous(_ color: UIColor) -> UnlitMaterial {
         var material = UnlitMaterial(color: color)
         material.blending = .opaque
-        _ = glow  // Unlit is already full-intensity; kept for call-site clarity.
         return material
     }
 

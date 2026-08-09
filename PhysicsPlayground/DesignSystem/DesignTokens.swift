@@ -63,6 +63,7 @@ enum DesignTokens {
         static let velocityVectorUI: UIColor = VectorPalette.velocity
         static let accelerationVectorUI: UIColor = VectorPalette.acceleration
         static let forceVectorUI: UIColor = VectorPalette.force
+        static let gravityVectorUI: UIColor = VectorPalette.gravity
         static let velocityVector = Color(uiColor: velocityVectorUI)
         static let accelerationVector = Color(uiColor: accelerationVectorUI)
         static let forceVector = Color(uiColor: forceVectorUI)
@@ -108,7 +109,22 @@ enum DesignTokens {
         /// Named for the module id ("electrostatics"), not the domain —
         /// it was `electromagnetismAccent = .yellow`, a stock colour
         /// wearing its neighbour module's subject as a name.
-        static let electrostaticsAccent = Color(red: 1.0, green: 0.84, blue: 0.04) // #FFD60A
+        /// #FFEA05, and it was #FFD60A until 2026-08-08.
+        ///
+        /// (1.0, 0.84, 0.04) against `completionGold` (1.0, 0.84, 0.25) is
+        /// the same red, the same green, and 0.21 of blue between them —
+        /// ΔE 11.6, which is two shades of the same yellow. Gold is
+        /// RESERVED for "you have finished something", so a module whose
+        /// every plate and well wears near-gold is quietly congratulating
+        /// the user for standing in the room.
+        ///
+        /// The shift is the SMALLEST one that clears ΔE 20 from gold and
+        /// from every `VectorPalette` entry — searched rather than
+        /// picked, because any yellow clearly distinct from a gold is
+        /// necessarily a hue change and the honest move is the least of
+        /// them. It travels ΔE 12.2 from the old value and stays
+        /// unmistakably electric yellow.
+        static let electrostaticsAccent = Color(red: 1.0, green: 0.92, blue: 0.02) // #FFEA05
         static let kinematicsAccent = Color(red: 1.00, green: 0.62, blue: 0.04)    // #FF9F0A, the Mechanics door
         static let gravityAccent = Color.indigo
         static let pendulumsAccentUI = UIColor(Color.purple)

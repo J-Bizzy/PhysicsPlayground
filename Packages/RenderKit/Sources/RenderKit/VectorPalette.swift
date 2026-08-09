@@ -28,4 +28,28 @@ public enum VectorPalette {
     public static let velocity: UIColor = .systemBlue
     public static let acceleration: UIColor = .systemOrange
     public static let force: UIColor = .systemRed
+
+    /// GRAVITY IS A FORCE AND STILL NEEDS ITS OWN COLOUR.
+    ///
+    /// Pendulums drew the gravity arrow and the NET force arrow in the
+    /// identical `force` red — reasoning, in a comment, that gravity is
+    /// a force and the vector language should say so. True, and the
+    /// consequence was two arrows from the same bob in the same colour
+    /// with no way to tell which was which. The module's own legend had
+    /// been promising "purple gravity" the whole time.
+    ///
+    /// A component of a sum needs to be distinguishable from the sum.
+    ///
+    /// CYAN, NOT THE PURPLE THE LEGEND PROMISED. `.systemPurple` was the
+    /// obvious first choice and it is ΔE 0.0 from `pendulumsAccent` —
+    /// the accent worn by every plate and label in the one module that
+    /// draws this arrow. Trading "same as the net force" for "same as
+    /// the furniture" is not a fix.
+    ///
+    /// The legend was wrong either way: it had been promising purple
+    /// while the arrow was drawn red, so no wording was being preserved
+    /// by keeping it. #59E5FF is ΔE 79 from the nearest thing it shares
+    /// a room with.
+    public static let gravity: UIColor = UIColor(red: 0.35, green: 0.90,
+                                                 blue: 1.0, alpha: 1)
 }

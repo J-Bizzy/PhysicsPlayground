@@ -590,8 +590,11 @@ final class PendulumsRenderer {
             cable2: cable2, elbow: elbow,
             velocityArrow: Arrow(color: VectorPalette.velocity),
             accelerationArrow: Arrow(color: VectorPalette.acceleration),
-            // Gravity is a force, and the vector language says so.
-            gravityArrow: Arrow(color: DesignTokens.Palette.forceVectorUI),
+            // Gravity is a force AND a component of the net force drawn
+            // beside it, so it cannot be the same red — see
+            // `VectorPalette.gravity`. The legend has said "purple
+            // gravity" since it was written.
+            gravityArrow: Arrow(color: DesignTokens.Palette.gravityVectorUI),
             tensionArrow: Arrow(color: Self.tensionYellow),
             netArrow: Arrow(color: VectorPalette.force))
         [visual.velocityArrow, visual.accelerationArrow, visual.gravityArrow,

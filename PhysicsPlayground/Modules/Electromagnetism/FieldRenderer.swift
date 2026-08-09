@@ -454,7 +454,9 @@ final class FieldRenderer {
             result.tubeCasing = TubeMesh.buffers(
                 lines: lines,
                 radius: Materials.casingRadius(forCore: FieldRenderer.lineRadius))
-            result.tubeGlow = TubeMesh.buffers(lines: lines, radius: 0.0044)
+            result.tubeGlow = TubeMesh.buffers(
+                lines: lines,
+                radius: Materials.glowRadius(forCore: FieldRenderer.lineRadius))
 
             // Arrowheads at regular arc length along every line — the line
             // carries the path, the arrows carry the direction.
