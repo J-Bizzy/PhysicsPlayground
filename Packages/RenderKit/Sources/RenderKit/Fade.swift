@@ -73,6 +73,25 @@ public enum Fade {
             return
         }
 
+        // THE CLOCK SURVIVES AN UNFINISHED RAMP. It did not until
+        // 2026-08-09, and that one line meant this function had never
+        // faded anything in its life.
+        //
+        // The first call on an entity has no clock, so `dt` is 0, so
+        // `step` is 0, so `next` equals `current` — which is an endpoint,
+        // because a settled entity is at 0 or 1. The old code read that
+        // endpoint as "arrived" and deleted the clock. The next call was
+        // therefore also a first call: no clock, dt 0, no movement,
+        // delete. A settled entity could never begin a transition, in
+        // either direction, ever.
+        //
+        // It shipped because `PendulumsRenderer.Arrow.update` sets
+        // `holder.isEnabled = true` itself and the renderer calls it
+        // whenever the layer is on — so switching a vector ON looked
+        // fine, and only switching it OFF revealed that nothing here
+        // works. Reported from the device as an arrow that would not go
+        // away and sat frozen where it was. Every selection halo in the
+        // app was silently relying on the same broken ramp.
         let now = CACurrentMediaTime()
         let dt = min(max(now - (entity.components[Clock.self]?.lastTick ?? now),
                          0), 0.1)
@@ -83,15 +102,20 @@ public enum Fade {
             ? min(current + step, target)
             : max(current - step, target)
 
-        if next <= 0 {
-            entity.isEnabled = false
-            entity.components.remove(OpacityComponent.self)
-            entity.components.remove(Clock.self)
-        } else if next >= 1 {
-            entity.isEnabled = true
+        // ARRIVED IS `next == target`, NOT `next` being an endpoint. The
+        // clamps above return `target` exactly when they clamp, so this
+        // is an exact comparison and not a tolerance. Landing on 1 while
+        // travelling toward 0 is the opposite of arrival — it is not
+        // having moved yet.
+        if next == target {
+            entity.isEnabled = target > 0
             entity.components.remove(OpacityComponent.self)
             entity.components.remove(Clock.self)
         } else {
+            // Enabled at whatever opacity it has reached, including 0 on
+            // the first frame of an appearance: invisible, but present
+            // and now carrying a timestamp, so the next frame has a real
+            // dt to move on.
             entity.isEnabled = true
             entity.components.set(OpacityComponent(opacity: next))
         }
