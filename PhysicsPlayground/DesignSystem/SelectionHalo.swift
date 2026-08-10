@@ -22,6 +22,18 @@ enum SelectionHalo {
     /// How present the veil is, everywhere.
     static let opacity: Float = 0.22
 
+    /// The scene-graph name every halo wears.
+    ///
+    /// Added 2026-08-09 so a halo can be FOUND. Three modules each build
+    /// one, hand it to a private per-object visual, and never name it —
+    /// which meant nothing outside those renderers could tell a halo
+    /// from any other unlit shell, and so nothing ever checked whether
+    /// selection was visible at all. It was not: `Fade.tick` could not
+    /// leave a settled state, and a halo is built disabled, so no halo
+    /// in this app had ever been drawn. `SelectionHaloTests` is what
+    /// this name is for.
+    static let entityName = "selection-halo"
+
     /// A soft unlit shell in the selection colour, disabled until the
     /// caller's selection logic wakes it.
     @MainActor
@@ -29,6 +41,7 @@ enum SelectionHalo {
         var material = UnlitMaterial(color: DesignTokens.Palette.selectionHaloUI)
         material.blending = .transparent(opacity: .init(floatLiteral: opacity))
         let halo = ModelEntity(mesh: mesh, materials: [material])
+        halo.name = entityName
         halo.isEnabled = false
         return halo
     }
