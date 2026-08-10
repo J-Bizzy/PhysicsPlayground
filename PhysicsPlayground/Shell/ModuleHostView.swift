@@ -82,7 +82,7 @@ struct ModuleHostView: View {
                         // accessibility text size overflow its own tile.
                         .frame(width: iconTile, height: iconTile)
                         .background(module.accent.opacity(0.18),
-                                    in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                    in: RoundedRectangle(cornerRadius: DesignTokens.Panel.chipRadius, style: .continuous))
                         .accessibilityHidden(true)
                     Text(module.title)
                         .font(.title2.bold())
@@ -287,7 +287,7 @@ struct ModuleHostView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(.thickMaterial,
-                            in: RoundedRectangle(cornerRadius: 12,
+                            in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cardRadius,
                                                  style: .continuous))
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -311,7 +311,7 @@ struct ModuleHostView: View {
         // what breaks first, which is how it broke at 560.
         .frame(minWidth: 620)
         .glassBackgroundEffect(
-            in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            in: RoundedRectangle(cornerRadius: DesignTokens.Panel.windowRadius, style: .continuous))
     }
 
     // The three cases get three sentences, and they are deliberately not

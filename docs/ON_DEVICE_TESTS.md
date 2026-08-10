@@ -1159,13 +1159,39 @@ proves nothing about the room.
 
 - [ ] **Gravity Lab: reach for Binary and Worlds without stepping.**
       They came in from 1.36 m to 1.13 m.
-- [ ] **While you are there, try the clock tab.** It measures 1.33 m —
-      still past the limit, found by the same test and deliberately not
-      fixed alone, because Gravity Lab's whole right flank wants one
-      pass. Confirm whether it really is a step.
-- [ ] **Projectiles: try to reach the layers bank and the three rails.**
-      Known out of reach at ~1.7 m and recorded as such. This is the
-      module's whole instrument wall, not one anchor.
+- [ ] **And the clock tab, which was a third case at 1.33 m.** It now
+      sits ABOVE the verbs on the same x, which is also what the verbs'
+      own comment always claimed ("under the clock bank, on the same
+      flank") and what the first version of this fix accidentally
+      broke by putting them side by side. Open the fan and check it
+      does not reach into the orrery.
+
+### Corner radii and nameplate sizes
+
+- [ ] **Settings, the Notebook, a module window and the flat catalog,
+      in one sitting.** Four radii are now named steps — window 28,
+      section 20, card 14, chip 9 — and two near-duplicate pairs were
+      collapsed (a hint card 12 → 14, a chip 8 → 9). Sub-2pt each;
+      the question is whether the four steps read as a scale.
+- [ ] **Any bank plate, well mouth, picker disc, rail bead and the
+      multimeter, in one room.** Nine nameplate sizes became two. The
+      biggest single move is the palette's petal labels, 0.014 → 0.0104
+      — about a quarter smaller.
+- [ ] **Projectiles: reach every instrument on the wall.** It was
+      rebuilt from two columns into one — ball well, worlds, g, wind,
+      layers, top to bottom — because a second column beside the rails
+      could not be both inside 1.25 m and inside 48° off axis at any
+      depth. All five now measure 1.09–1.24 m.
+- [ ] **And look at where the LAYERS bank ended up.** It is last in the
+      column at y = 0.90, which is the one placement here chosen by
+      arithmetic rather than by eye: the ball well's reach fails at the
+      bottom of a column and the bank's does not, so they traded ends.
+      A bank at knee height may read as an afterthought, or may be
+      hidden behind real furniture — neither is visible in a synthetic
+      simulator room.
+- [ ] **Throw at each of the four walls with the wall layer on.** The
+      whole instrument column moved 15 cm inboard, to 15 cm clear of the
+      launcher's line. Confirm nothing gets shot.
 
 ### Prediction arc — unreachable from the CLI
 

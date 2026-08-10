@@ -163,7 +163,7 @@ final class Palette {
             // The label: the house nameplate, small, in the lab's own
             // accent — the same treatment the gallery exhibits wear.
             let label = HubScene.namePlate(spec.title, accent: spec.accent,
-                                           size: 0.014)
+                                           size: PlateStyle.labelSize)
             label.position = [0, -Self.slotSize * 0.92, 0.01]
             holder.addChild(label)
 
@@ -172,7 +172,7 @@ final class Palette {
             // below the miniature, outside the sphere, so the words on
             // the one surface that opens a lab were unpinchable.
             let slotLabelSpan = min(
-                HubScene.namePlateWidth(spec.title, size: 0.014),
+                HubScene.namePlateWidth(spec.title, size: PlateStyle.labelSize),
                 Self.slotSize * 1.6)
             holder.components.set(CollisionComponent(shapes: [
                 .generateSphere(radius: Self.slotSize * 0.8),
@@ -459,7 +459,7 @@ final class Palette {
         beadVignette = built
 
         let label = HubScene.namePlate("Labs", accent: UIColor(white: 0.95, alpha: 1),
-                                       size: 0.012)
+                                       size: PlateStyle.labelSize)
         label.position = [0, -(Self.beadRadius + 0.026), 0]
         beadLabel = label
         root.addChild(label)
@@ -510,7 +510,7 @@ final class Palette {
         // viewer" is local +Z with the icon's counter-rotation.)
         let plate = HubScene.namePlate(name.capitalized,
                                        accent: UIColor(white: 0.95, alpha: 1),
-                                       size: 0.010)
+                                       size: PlateStyle.labelSize)
         plate.position = [0, 0.005, 0.047]
         plate.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
         disc.addChild(plate)
@@ -521,7 +521,7 @@ final class Palette {
         // `petalColliderSpan`, and a wider target would overlap the petal
         // beside it.
         let petalLabelSpan = min(
-            HubScene.namePlateWidth(name.capitalized, size: 0.010),
+            HubScene.namePlateWidth(name.capitalized, size: PlateStyle.labelSize),
             Self.petalColliderSpan)
         disc.components.set(CollisionComponent(shapes: [
             .generateSphere(radius: 0.034),

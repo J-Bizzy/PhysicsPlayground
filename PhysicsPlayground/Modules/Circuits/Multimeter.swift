@@ -274,7 +274,7 @@ final class Multimeter {
             probeTip[slot] = anchor + (Self.jack[slot] ?? .zero) + Self.park
         }
 
-        let plate = HubScene.namePlate("Multimeter", accent: accent, size: 0.0108)
+        let plate = HubScene.namePlate("Multimeter", accent: accent, size: PlateStyle.labelSize)
         plate.position = [0, 0.108, 0]
         chassis.addChild(plate)
 

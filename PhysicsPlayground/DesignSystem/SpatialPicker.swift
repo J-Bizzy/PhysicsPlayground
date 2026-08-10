@@ -264,7 +264,7 @@ final class SpatialPicker {
 
         let label = HubScene.namePlate(choice.label,
                                        accent: UIColor(white: 0.95, alpha: 1),
-                                       size: 0.009)
+                                       size: PlateStyle.labelSize)
         label.position = [0, 0.005, 0.042]
         label.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
         disc.addChild(label)
@@ -290,7 +290,7 @@ final class SpatialPicker {
         // would push neighbouring targets into each other and make which
         // disc you hit a matter of hit order. Covering most of a long
         // word beats overlapping the disc beside it.
-        let labelSpan = min(HubScene.namePlateWidth(choice.label, size: 0.009),
+        let labelSpan = min(HubScene.namePlateWidth(choice.label, size: PlateStyle.labelSize),
                             Self.colliderSpan)
         disc.components.set(CollisionComponent(shapes: [
             .generateBox(size: [Self.colliderSpan, 0.038, Self.colliderSpan]),

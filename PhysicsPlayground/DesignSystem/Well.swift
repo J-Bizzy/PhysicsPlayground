@@ -482,7 +482,7 @@ final class Well {
         source.addChild(preview)
 
         // The name, below the object and NOT breathing with it.
-        let plate = HubScene.namePlate(spec.label, accent: spec.tint, size: 0.0132)
+        let plate = HubScene.namePlate(spec.label, accent: spec.tint, size: PlateStyle.labelSize)
         plate.components.set(BillboardComponent())
         source.addChild(plate)
 

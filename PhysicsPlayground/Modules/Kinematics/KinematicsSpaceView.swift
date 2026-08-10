@@ -89,12 +89,56 @@ struct KinematicsSpaceView: View {
     // being carried would shift its own mapping mid-drag; and a rig of
     // four instruments swinging around the room with the launcher is a
     // lot of furniture to drag through a wall.
-    private static let instrumentZ: Float = -1.10
+    // THE WHOLE WALL WAS OUT OF REACH, and had been since it was built.
+    //
+    // Measured 2026-08-09, when every module's anchors were finally put
+    // somewhere a test could see them: bank 1.67 m, worlds 1.31, the g
+    // rail 1.37, the wind rail 1.41, the ball well 1.52 — against
+    // `InstrumentClearance.maximumReach` of 1.25. Five instruments, none
+    // of them touchable without stepping, in the one module whose
+    // apparatus is 1:1 with the room. Nothing had caught it because
+    // these were `SIMD3` literals inside a view, and the clearance rules
+    // had only ever been pointed at Electric Fields.
+    //
+    // ONE COLUMN, NOT TWO, and the second column is what could not be
+    // saved. Three constraints meet here and only two of them can hold
+    // at once for anything standing outboard of the rails:
+    //
+    //   reach       wants it near      (nearest face ≤ 1.25 m)
+    //   off-axis    wants it shallow   (≤ 48°, CircuitsPartsLayout)
+    //   firing line wants it left      (clear of x = −0.6, down −z)
+    //
+    // The rails are 0.26 long, so a second column beside them starts at
+    // x ≈ −1.22 before it has any size of its own — and from there,
+    // every depth that brings it inside reach pushes it past 58° off
+    // axis, and every depth that keeps it on axis puts it past 1.3 m.
+    // That is not a placement to be found; the old layout had simply
+    // chosen the angle and paid 1.67 m for it. Stacking all five in the
+    // single column dissolves the trade.
+    //
+    // DEPTH IS SET BY THE ANGLE, NOT BY REACH. The first attempt at
+    // this pulled the column forward to z = −0.78, which fixed reach and
+    // quietly moved it from 43.7° to 49.1° — past the documented limit,
+    // and visible in a screenshot as the rails running off the left of
+    // the frame. −0.94 holds the original 43.8° and still brings every
+    // instrument inside 1.25 m, because most of the old distance was
+    // being spent on x, not z.
+    //
+    // Order, top down: the ball you throw, the world you throw it in,
+    // that world's g, its wind, and last what the ROOM is made of. The
+    // well is at the head because it is the only one whose reach fails
+    // at the bottom of a column — a small box's near face is far.
+    private static let wallX: Float = -0.90
+    private static let wallZ: Float = -0.94
+
     /// Internal since 2026-08-09 so the reach criterion can measure it.
-    static let bankAnchor = SIMD3<Float>(-1.52, 1.34, instrumentZ)
-    private static let worldsAnchor = SIMD3<Float>(-1.05, 1.50, instrumentZ)
-    private static let gravityCenter = SIMD3<Float>(-1.05, 1.30, instrumentZ)
-    private static let windCenter = SIMD3<Float>(-1.05, 1.10, instrumentZ)
+    static let wellAnchor = SIMD3<Float>(wallX, 1.70, wallZ)
+    static let worldsAnchor = SIMD3<Float>(wallX, 1.50, wallZ)
+    static let gravityCenter = SIMD3<Float>(wallX, 1.30, wallZ)
+    static let windCenter = SIMD3<Float>(wallX, 1.10, wallZ)
+    static let bankAnchor = SIMD3<Float>(wallX, 0.90, wallZ)
+    /// Unchanged: the wall's bearing from a standing viewer is 43.8°,
+    /// which is where it was, so the angle it is turned to should be too.
     private static let instrumentNormal = SIMD3<Float>(0.42, 0, 0.91)
 
     @Environment(AppModel.self) private var appModel
@@ -179,7 +223,7 @@ struct KinematicsSpaceView: View {
                       tint: UIColor(DesignTokens.Palette.kinematicsAccent),
                       label: "Add ball",
                       preview: { KinematicsRenderer.ballPreview() },
-                      position: SIMD3(-1.52, 1.06, Self.instrumentZ),
+                      position: Self.wellAnchor,
                       spawn: { point in
                           let id = model.spawnBall(at: point)
                           // Already in the hand: grabbing it here is

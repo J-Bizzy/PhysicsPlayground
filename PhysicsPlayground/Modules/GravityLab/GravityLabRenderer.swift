@@ -614,7 +614,7 @@ final class GravityLabRenderer {
             scaleReadout.children.forEach { $0.removeFromParent() }
             let plate = HubScene.namePlate(
                 label, accent: UIColor(DesignTokens.Palette.gravityAccent),
-                size: 0.030)
+                size: PlateStyle.exhibitLabelSize)
             plate.components.set(BillboardComponent())
             scaleReadout.addChild(plate)
         }

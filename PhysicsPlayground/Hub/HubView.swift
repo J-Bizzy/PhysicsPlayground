@@ -296,7 +296,7 @@ private struct HubCatalogRow: View {
                     .foregroundStyle(module.accent)
                     .frame(width: 28, height: 28)
                     .background(module.accent.opacity(0.18),
-                                in: RoundedRectangle(cornerRadius: 8,
+                                in: RoundedRectangle(cornerRadius: DesignTokens.Panel.chipRadius,
                                                      style: .continuous))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(module.title)
@@ -328,7 +328,7 @@ private struct HubCatalogRow: View {
         .buttonStyle(.plain)
         .background(
             .regularMaterial,
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cardRadius, style: .continuous))
         .hoverEffect()
         // Named as ONE control. Without this the row exposes only its
         // composed children — an icon, a title, a promise line, a

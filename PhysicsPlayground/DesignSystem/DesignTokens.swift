@@ -216,7 +216,34 @@ enum DesignTokens {
     // MARK: Panel metrics
 
     enum Panel {
+        // THE CORNER RADII ARE A SCALE, NOT A CONSTANT — resolved
+        // 2026-08-09, after an audit reported "six radii for one token"
+        // and the honest answer turned out to be neither "adopt the
+        // token everywhere" nor "delete it".
+        //
+        // 28 / 20 / 14 / 9 are four different SURFACES: a whole window,
+        // a section inside one, a floating card, a chip or icon tile.
+        // Forcing them to one number would make a chip look like a
+        // window; radius tracks the size of the thing it is rounding,
+        // which is why every UI that has more than one panel size has
+        // more than one radius.
+        //
+        // What WAS drift is the near-duplicates. A hint card at 12 beside
+        // readout cards at 14, and a chip at 8 beside an icon tile at 9 —
+        // nobody chose those pairs, they were written on different days,
+        // and each pair is one concept at two values. Naming the four
+        // steps is what makes the difference between the steps legible
+        // and the difference within a step impossible.
+
+        /// A whole flat window's container.
+        static let windowRadius: CGFloat = 28
+        /// A titled section inside a window (`PanelSection`) — Settings
+        /// and the Notebook.
         static let cornerRadius: CGFloat = 20
+        /// A floating card: readouts, catalog entries, the first-run hint.
+        static let cardRadius: CGFloat = 14
+        /// A chip, badge or icon tile.
+        static let chipRadius: CGFloat = 9
         // `hintCornerRadius` (16) was deleted 2026-08-05: minted for a
         // hint card that never adopted it, read by nothing. A token with
         // no callers is unreachable choice, and this project deletes
@@ -303,7 +330,8 @@ struct ReadoutCard: ViewModifier {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(material,
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cardRadius,
+                                             style: .continuous))
             .allowsHitTesting(false)
     }
 }

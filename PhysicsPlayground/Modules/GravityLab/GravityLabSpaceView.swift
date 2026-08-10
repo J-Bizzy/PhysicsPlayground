@@ -205,24 +205,33 @@ struct GravityLabSpaceView: View {
     ///
     /// THE 0.20 OF Z IS FORCED, and it is worth saying why rather than
     /// leaving it looking like a taste. At the system's own depth this
-    /// bank cannot be both reachable and clear of the clock handle: the
-    /// reach limit wants x ≤ 0.60, and the clock stands at x = 0.55, so
-    /// the two want the same air. Coming forward is the only axis left.
-    ///
-    /// It is not free — furniture forward of the apparatus can occlude
-    /// it — which is the trade `clockAnchor` below is already making at
-    /// a smaller scale. 0.20 rather than the 0.16 tried first: at 0.16
-    /// the gap to the clock handle is 0.03, which is `separation`
-    /// EXACTLY, and a rule satisfied to the last millimetre is one bad
-    /// rounding from being broken. `InstrumentReachCriterionTests`
-    /// measures both the reach and that gap.
+    /// flank cannot be both reachable and uncrowded: the reach limit
+    /// wants x ≤ 0.60 and the two instruments here are 0.26 and 0.09
+    /// wide, so they cannot both fit inside that at one depth. Coming
+    /// forward is the only axis left. It is not free — furniture
+    /// forward of the apparatus can occlude it.
     static let verbAnchor = GravityLabRenderer.systemPosition
         + SIMD3<Float>(0.70, -0.05, 0.20)
 
-    /// The clock's folding tab — the verb bank's nearest neighbour, and
-    /// the constraint that decides its depth.
+    /// The clock's folding tab, ABOVE the verbs and sharing their x.
+    ///
+    /// It was `(0.55, -0.09, 0)` — 1.33 m away, so the control that sets
+    /// how fast the whole system runs could not be reached either. That
+    /// was a THIRD failure on this one flank, found by the reach test
+    /// the same day as the verb bank's and left visible for a commit
+    /// rather than quietly folded in.
+    ///
+    /// STACKED RATHER THAN SIDE BY SIDE, which also repairs something
+    /// the first fix broke. The verbs' own note says they belong "under
+    /// the clock bank, on the same flank: the clock decides how fast the
+    /// system runs, these decide what is IN it" — and pulling the verbs
+    /// in to x 0.70 while the clock sat at 0.55 had put them BESIDE it,
+    /// slightly higher, which is neither the documented relationship nor
+    /// any other one. One column, clock at the head, verbs beneath:
+    /// reachable, clear of each other by 8.5 cm, and reading as the pair
+    /// the comment always said they were.
     static let clockAnchor = GravityLabRenderer.systemPosition
-        + SIMD3<Float>(0.55, -0.09, 0)
+        + SIMD3<Float>(0.70, 0.17, 0.20)
 
     @Environment(AppModel.self) private var appModel
 

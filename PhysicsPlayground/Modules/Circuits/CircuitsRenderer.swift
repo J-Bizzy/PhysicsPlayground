@@ -635,7 +635,7 @@ final class CircuitsRenderer {
         skylineRoot.addChild(thread)
         towerThreads.append(thread)
 
-        let label = BackedLabel(size: 0.03)
+        let label = BackedLabel(size: PlateStyle.exhibitLabelSize)
         let pivot = Entity()
         pivot.components.set(BillboardComponent())
         skylineRoot.addChild(pivot)

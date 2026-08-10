@@ -1402,7 +1402,7 @@ final class HubScene {
         // hangs just in front of the puck's edge, below the miniature,
         // so it captions the pedestal rather than the physics.
         let name = Self.namePlate(module.title, accent: UIColor(module.accent),
-                                  size: 0.030)
+                                  size: PlateStyle.exhibitLabelSize)
         let namePivot = Entity()
         namePivot.position = [0, -0.105, 0.11]
         namePivot.components.set(BillboardComponent())

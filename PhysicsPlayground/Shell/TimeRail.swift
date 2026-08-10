@@ -233,7 +233,7 @@ final class TimeRail {
         // and the bead learned that lesson already.
         let plate = HubScene.namePlate("Time capsule",
                                        accent: UIColor(white: 0.95, alpha: 1),
-                                       size: 0.011)
+                                       size: PlateStyle.labelSize)
         plate.position = [0, -0.072, 0]
         reel.addChild(plate)
 

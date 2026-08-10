@@ -83,22 +83,65 @@ final class InstrumentReachCriterionTests: XCTestCase {
         ]
     }
 
+    /// Gravity Lab's right flank, which had TWO instruments out of
+    /// reach and is measured as a flank for the reason Projectiles is
+    /// measured as a wall.
     private var verbBanks: [Instrument] {
         [
             .init(name: "Gravity Lab verbs",
                   anchor: GravityLabSpaceView.verbAnchor,
                   halfExtents: Self.verbHalfExtents),
+            .init(name: "Gravity Lab clock tab",
+                  anchor: GravityLabSpaceView.clockAnchor,
+                  halfExtents: Self.summonTabHalfExtents),
+            // The fan the tab unfolds. A folded instrument that would be
+            // unreachable when opened is still unreachable; it just
+            // waits for a pinch — the same argument
+            // `CircuitsInstrumentClearanceTests` makes for listing the
+            // presets column that only exists while its tab is open.
+            .init(name: "Gravity Lab clock fan",
+                  anchor: GravityLabSpaceView.clockAnchor + SIMD3(0, 0.13, 0),
+                  halfExtents: SIMD3(0.15, 0.10, 0.15)),
         ]
     }
 
-    /// Projectiles' whole instrument wall — bank, three rails and a well
-    /// — stands 1.4–1.9 m out. It is a KNOWN failure, recorded rather
-    /// than excused: fixing it is not moving one anchor, it is a
-    /// placement pass over a module whose launcher is room-scale 1:1 and
-    /// off-axis, and moving the bank alone would split the wall into two
-    /// rows at different distances. Recorded here so the criterion can
-    /// be green and the debt still visible.
-    private static let knownUnreachable = ["Projectiles layers"]
+    /// A `SummonHandle` tab is one `PlateStyle` plate with a nameplate
+    /// under it.
+    private static let summonTabHalfExtents = SIMD3<Double>(
+        Double(PlateStyle.width) / 2,
+        Double(PlateStyle.height) / 2 + 0.010,
+        Double(PlateStyle.depth) / 2)
+
+    /// Projectiles' whole instrument wall, measured as a wall.
+    ///
+    /// A BANK IS NOT A MODULE'S ONLY CONTROL, and checking only banks is
+    /// how this module passed while every one of its five instruments
+    /// was out of reach. The wall was rebuilt on 2026-08-09 — see
+    /// `KinematicsSpaceView` — and these are here so that "the bank is
+    /// reachable" can never again be mistaken for "the module is".
+    private var projectilesWall: [Instrument] {
+        [
+            .init(name: "Projectiles layers",
+                  anchor: KinematicsSpaceView.bankAnchor,
+                  halfExtents: Self.bankHalfExtents),
+            .init(name: "Projectiles ball well",
+                  anchor: KinematicsSpaceView.wellAnchor,
+                  halfExtents: SIMD3(0.10, 0.10, 0.10)),
+            .init(name: "Projectiles worlds picker",
+                  anchor: KinematicsSpaceView.worldsAnchor,
+                  halfExtents: SIMD3(0.15, 0.10, 0.15)),
+            .init(name: "Projectiles g rail",
+                  anchor: KinematicsSpaceView.gravityCenter,
+                  halfExtents: SIMD3(0.16, 0.05, 0.07)),
+            .init(name: "Projectiles wind rail",
+                  anchor: KinematicsSpaceView.windCenter,
+                  halfExtents: SIMD3(0.16, 0.05, 0.07)),
+        ]
+    }
+
+    /// Nothing is exempt any more. The list stays so the shape of the
+    /// test still says exemptions are possible and must be argued.
+    private static let knownUnreachable: [String] = []
 
     func testEveryLayerBankIsWithinReach() {
         for bank in banks where !Self.knownUnreachable.contains(bank.name) {
@@ -125,19 +168,74 @@ final class InstrumentReachCriterionTests: XCTestCase {
         }
     }
 
-    /// The recorded failure has to STAY a recorded failure — if someone
-    /// fixes Projectiles, this fails and tells them to delete the excuse.
-    func testTheKnownUnreachableWallIsStillUnreachable() {
-        for name in Self.knownUnreachable {
-            guard let bank = banks.first(where: { $0.name == name }) else {
-                return XCTFail("\(name) is recorded as unreachable but no longer exists")
-            }
-            XCTAssertGreaterThan(bank.reach, InstrumentClearance.maximumReach, """
-                \(name) is now within reach (\(String(format: "%.3f", bank.reach)) m).
+    func testEveryProjectilesInstrumentIsWithinReach() {
+        for instrument in projectilesWall {
+            XCTAssertLessThanOrEqual(
+                instrument.reach, InstrumentClearance.maximumReach, """
+                \(instrument.name) is \(String(format: "%.3f", instrument.reach)) m \
+                from a standing viewer, past the \(InstrumentClearance.maximumReach) m \
+                limit.
 
-                Good — remove it from `knownUnreachable` in the same commit, so \
-                the list keeps meaning "still broken" rather than becoming a \
-                list of things that used to be.
+                This module's apparatus is 1:1 with the room, which makes it the \
+                easiest one to push its own controls out past the edge of a reach \
+                — every instrument here was out until 2026-08-09.
+                """)
+        }
+    }
+
+    /// Bringing something closer can push it off the side of the frame.
+    ///
+    /// Reach and off-axis angle pull in opposite directions: at a fixed
+    /// x, every metre of depth you give up to get inside arm's reach
+    /// buys degrees of azimuth. The first version of the Projectiles fix
+    /// pulled the wall to z = −0.78, fixed all five reaches, and moved
+    /// it from 43.7° to 49.1° — past the 48° that
+    /// `CircuitsPartsLayout` records as the point where nameplates
+    /// start being clipped, and visible in a screenshot as the rails
+    /// running off the left of the frame.
+    ///
+    /// A test that had only measured reach would have called that a
+    /// success. This is the other half.
+    func testTheWallStaysInsideTheOffAxisLimit() {
+        let limit = 48.0
+        for instrument in projectilesWall {
+            let anchor = SIMD3<Double>(instrument.anchor)
+            // FORWARD IS −Z, so the bearing is measured against −z and
+            // not against z. Written the other way round first, which
+            // reported every instrument at 136° — the third-quadrant
+            // answer to a question nobody asked, and the same shape of
+            // mistake `InstrumentClearance.violations` records making
+            // with nearest-vs-farthest.
+            let degrees = atan2(abs(anchor.x), -anchor.z) * 180 / .pi
+            XCTAssertLessThanOrEqual(degrees, limit, """
+                \(instrument.name) stands \(String(format: "%.1f", degrees))° off \
+                the forward axis, past \(limit)°.
+
+                Out there it is at the edge of vision and its nameplate is the \
+                first thing to be clipped. If this failed after a change that \
+                fixed a REACH, the two were traded rather than both solved.
+                """)
+        }
+    }
+
+    /// The wall must stay out of the shot.
+    ///
+    /// The reach fix moved five instruments toward the user, and the
+    /// launcher opens at x = −0.6 firing down −z. "Closer to the user"
+    /// and "into the firing line" are the same direction for four of
+    /// the five, so the constraint that shapes this module has to be
+    /// asserted next to the one that just moved everything.
+    func testTheWallStaysBesideTheShotNotInFrontOfIt() {
+        let launcherX = Double(KinematicsModel.launcherHome.x)
+        for instrument in projectilesWall {
+            let inboardEdge = instrument.box.maximum.x
+            XCTAssertLessThan(inboardEdge, launcherX - 0.05, """
+                \(instrument.name) reaches x \(String(format: "%.3f", inboardEdge)), \
+                which is inside the launcher's line at x \
+                \(String(format: "%.2f", launcherX)).
+
+                Balls go everywhere in this module. An instrument in front of the \
+                muzzle is one the user shoots.
                 """)
         }
     }
@@ -154,14 +252,9 @@ final class InstrumentReachCriterionTests: XCTestCase {
         let verbs = Instrument(name: "Gravity Lab verbs",
                                anchor: GravityLabSpaceView.verbAnchor,
                                halfExtents: Self.verbHalfExtents)
-        // Derived from the real plate, not guessed: a `SummonHandle`
-        // tab is one `PlateStyle` plate with a nameplate under it.
-        let clock = Instrument(
-            name: "Gravity Lab clock tab",
-            anchor: GravityLabSpaceView.clockAnchor,
-            halfExtents: SIMD3(Double(PlateStyle.width) / 2,
-                               Double(PlateStyle.height) / 2 + 0.010,
-                               Double(PlateStyle.depth) / 2))
+        let clock = Instrument(name: "Gravity Lab clock tab",
+                               anchor: GravityLabSpaceView.clockAnchor,
+                               halfExtents: Self.summonTabHalfExtents)
 
         // ONLY THE GAP BETWEEN THEM. The obvious thing to also assert
         // here — that neither stands inside the orrery — needs a
