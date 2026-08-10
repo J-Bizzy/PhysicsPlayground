@@ -216,9 +216,54 @@ enum HubTitleStyle {
         }
         let total = advance.last ?? 0
 
+        // THE ACCENT BRANCH IS THE TWO DOMAIN SIGNS, and nothing else —
+        // the wordmark passes nil and gets ivory. So this fraction is
+        // only ever asked one question: how much of a domain's hue does
+        // its sign keep?
+        //
+        // 0.30 toward a light grey until 2026-08-10, and that was a
+        // number carried over from making IVORY metal, where the whole
+        // point is to pull a colour toward the alloy. Applied to a
+        // wayfinding hue it does the opposite of the job: the sign is
+        // one of exactly two places domain colour lives (the other is
+        // the hairline in the slab below it), and the rule under these
+        // letters is drawn in the PURE accent. So the pair this file's
+        // own comment says should "read as one lamp" was a grey-green
+        // sign over a green rule.
+        //
+        // 0.14 keeps enough of the alloy to read as anodised metal
+        // rather than painted plastic — the reason the blend exists —
+        // and gives back the hue that makes it signage. Nudge it up if
+        // a photograph ever shows the letters looking dyed; do not take
+        // it back to 0.30 to make them "calmer", because calm is what
+        // the keyline is for.
         let stock = accent.map {
-            blend($0, toward: UIColor(white: 0.72, alpha: 1), by: 0.30)
+            blend($0, toward: UIColor(white: 0.72, alpha: 1), by: 0.14)
         } ?? ivory
+        // A SATIN FINISH FOR THE COLOURED SIGNS WAS TRIED HERE AND DOES
+        // NOTHING. Recorded so it is not tried again.
+        //
+        // The bright, near-white faces down the extruded side of every
+        // glyph look exactly like a blown specular highlight, and
+        // `machined` exposes `roughness` for precisely that. Raising it
+        // to 0.60 — anodised rather than mirror — moved the sampled
+        // letter face by one part in 150, which is noise: (147,108,47)
+        // to (148,108,46).
+        //
+        // It does nothing because that brightness is not a highlight
+        // from a light. It is ENVIRONMENT REFLECTION: the material is
+        // `metallic` 0.62, the extruded sides face out across a room
+        // with a daylit window in it, and metal shows you the room.
+        // Roughness blurs a reflection; it does not dim one this large
+        // and this bright. The only knob that would is `metallic`,
+        // which the recipe pins deliberately — "a call site that wants
+        // 1.0 wants the bug" — and a sign that is not metal is a
+        // different design, not a tuning.
+        //
+        // What DID measurably help was the blend above: 0.30 → 0.14
+        // took the face from (142,110,55) to (147,108,47), which is
+        // seven points of saturation back into the hue that is doing
+        // the wayfinding.
         var metal = Materials.machined(stock)
         metal.emissiveColor = .init(color: stock)
         // BRIGHTER THAN `line`'s 0.16, and this is the one place raising

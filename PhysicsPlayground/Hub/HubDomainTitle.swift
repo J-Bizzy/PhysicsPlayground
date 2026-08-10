@@ -78,9 +78,30 @@ final class HubDomainTitle {
         // The wordmark's lockup math: measure both lines, scale each to
         // the common width, stack with cap-height leading, centre the
         // block on the anchor.
+        // KEYLINED, LIKE THE WORDMARK — 2026-08-10.
+        //
+        // These two signs were the last display type in the app drawn as
+        // bare machined metal, and they had exactly the failure the
+        // wordmark spent 2026-08-08 and -09 solving one storey above
+        // them: metal is mostly REFLECTED light, the gallery is drawn
+        // over whatever room the wearer is standing in, and light-on-
+        // light has no edge. A photograph makes it plain — the floor
+        // lamp's pole reads straight through the I and the S of
+        // MAGNETISM, and MECHANICS & ENERGY dissolves into a bookshelf.
+        //
+        // The wordmark's own note already says what this is: CASINGS
+        // BEAT GLOWS, and the casing has to follow the letterforms
+        // rather than sit behind them as a plate. `keylined` is that,
+        // per glyph, and it takes an accent — so the two signs can wear
+        // their domain colour and still have something dark to be
+        // coloured against.
+        //
+        // It also returns the extents it ACTUALLY BUILT, which is why
+        // the measurement moves here with it: the shell swells each
+        // stroke, so a lockup scaled to `line`'s extents would set these
+        // two lines slightly too wide.
         let built = texts.map { text -> (entity: Entity, extents: SIMD3<Float>) in
-            (HubTitleStyle.line(text, size: Self.reference, accent: accent),
-             HubTitleStyle.extents(text, size: Self.reference))
+            HubTitleStyle.keylined(text, size: Self.reference, accent: accent)
         }
         let scales = built.map { width / max($0.extents.x, 1e-4) }
         let heights = zip(built, scales).map { $0.0.extents.y * $0.1 }
