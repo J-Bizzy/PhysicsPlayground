@@ -18,7 +18,12 @@ struct PhysicsPlaygroundApp: App {
     @State private var appModel = AppModel()
 
     var body: some Scene {
-        WindowGroup {
+        // IDENTIFIED SINCE 2026-08-10, so the shell can put it away and
+        // bring it back. It is still the app's primary window and still
+        // what launches; the id only gives `dismissWindow`/`openWindow`
+        // something to name when the gallery takes over the home screen
+        // (see `PlaygroundSpaceView.syncMainWindow`).
+        WindowGroup(id: MainWindowView.windowID) {
             MainWindowView()
                 .environment(appModel)
         }

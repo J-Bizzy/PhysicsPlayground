@@ -17,6 +17,43 @@ struct PlaygroundSpaceView: View {
     static let spaceID = "PlaygroundSpace"
 
     @Environment(AppModel.self) private var appModel
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
+
+    /// THE FLAT CATALOG DOES NOT STAND BEHIND THE GALLERY (2026-08-10).
+    ///
+    /// The main window has three jobs and only two of them survive the
+    /// gallery opening. Before it opens, it is the front door — the
+    /// wordmark, "Enter the Gallery", and the way back if that fails.
+    /// Inside a lab it is that lab's title bar. But on the HOME SCREEN
+    /// with the gallery up, it was a list of six labs parked a couple
+    /// of metres behind a crescent of six exhibits that say the same
+    /// thing better, and the wordmark had already been lowered twice to
+    /// dodge it (`HubSpaceView`, which also records that "some overlap
+    /// is inherent"). Owner's call: the room is the home screen.
+    ///
+    /// THE COST IS REAL AND IS THE OWNER'S. "Put the Gallery away" is
+    /// the app's only `dismissImmersiveSpace`, and the palette bead that
+    /// carries Home and Dim exists only while a module does — so on the
+    /// home screen there is now no in-app exit, only the Digital Crown.
+    /// That is a documented trade, not an oversight: the button was
+    /// added on 2026-08-07 for discoverability, and a window standing in
+    /// front of the thing it describes costs more than a signpost for a
+    /// gesture the system already provides everywhere.
+    private func syncMainWindow() {
+        // Never in UI tests: XCUITest cannot see into an immersive
+        // space, so the flat catalog is the only surface it has. The
+        // gallery is normally held back under `-uiTesting`, but a test
+        // that opens it must not lose the window it is driving.
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "uiTesting") { return }
+        #endif
+        if appModel.activeModuleID == nil {
+            dismissWindow(id: MainWindowView.windowID)
+        } else {
+            openWindow(id: MainWindowView.windowID)
+        }
+    }
 
     var body: some View {
         // A ZSTACK AROUND THE GROUP, so the flag at the bottom has a
@@ -121,8 +158,26 @@ struct PlaygroundSpaceView: View {
             // view does, whatever the branches inside do.
             Color.clear
                 .frame(width: 0, height: 0)
-                .onAppear { appModel.isImmersiveSpaceOpen = true }
-                .onDisappear { appModel.isImmersiveSpaceOpen = false }
+                .onAppear {
+                    appModel.isImmersiveSpaceOpen = true
+                    syncMainWindow()
+                }
+                .onDisappear {
+                    appModel.isImmersiveSpaceOpen = false
+                    // ALWAYS BRING THE WINDOW BACK. This is the leaf
+                    // that outlives it, and it is the only thing that
+                    // can: once the window is dismissed there is no
+                    // view of it left to notice the space closing. If
+                    // this line is ever removed, closing the gallery
+                    // with the Digital Crown leaves the app with no
+                    // scene at all.
+                    openWindow(id: MainWindowView.windowID)
+                }
+                // The window follows the MODULE, not the space: leaving
+                // a lab by the palette's Home petal returns to the
+                // gallery with the space still open, and that is a
+                // home-screen state like any other.
+                .onChange(of: appModel.activeModuleID) { syncMainWindow() }
 
             // THE ONE PLACE VOICEOVER'S ACTIONS ARRIVE.
             //

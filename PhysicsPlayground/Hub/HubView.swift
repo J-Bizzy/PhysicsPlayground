@@ -105,6 +105,21 @@ struct HubView: View {
                 // Digital Crown. The palette bead's `home` petal leaves
                 // a LAB; this leaves the room entirely, and the two are
                 // different requests.
+                //
+                // WHEN IS THIS BRANCH EVEN SEEN, since 2026-08-10? The
+                // shell dismisses this window while the gallery owns the
+                // home screen (`PlaygroundSpaceView.syncMainWindow`), so
+                // the compact state is no longer what you find parked
+                // behind the terraces. It is what you get when you ASK
+                // for the window back — reopening the app from the Home
+                // View while the gallery is up — plus a frame or two
+                // during the dismissal itself.
+                //
+                // That is the whole reason this branch survived the
+                // change rather than going with the window. The button
+                // below is still the only `dismissImmersiveSpace` in the
+                // app; it is now one deliberate step away instead of
+                // standing in front of the thing it closes.
                 Button {
                     Task {
                         appModel.activeModuleID = nil

@@ -13,6 +13,11 @@
 import SwiftUI
 
 struct MainWindowView: View {
+    /// The app's primary window. Named so the shell can dismiss it while
+    /// the gallery owns the home screen and open it again after — see
+    /// `PlaygroundSpaceView.syncMainWindow`.
+    static let windowID = "main"
+
     @Environment(AppModel.self) private var appModel
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.openWindow) private var openWindow

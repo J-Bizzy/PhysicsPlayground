@@ -1193,6 +1193,27 @@ proves nothing about the room.
       whole instrument column moved 15 cm inboard, to 15 cm clear of the
       launcher's line. Confirm nothing gets shot.
 
+### The home screen is the room now (2026-08-10)
+
+- [ ] **Open the app and let the gallery come up.** The flat catalog
+      shows first (it is the front door, and the way back if the gallery
+      fails to open) and should put itself away once the terraces are
+      in the room. Nothing should be parked behind the crescent.
+- [ ] **Enter a lab, then leave it with the palette's Home petal.** The
+      window should come back as the lab's title bar and go away again
+      when you return to the gallery.
+- [ ] **Close the gallery with the Digital Crown.** The window must
+      come back. This is the one that matters: once it is dismissed,
+      nothing but `PlaygroundSpaceView`'s onDisappear can bring it back,
+      and if that ever breaks the app is left with no scene at all.
+- [ ] **While the gallery is up, reopen the app from the Home View.**
+      That is where "Put the Gallery away" lives now — the only
+      `dismissImmersiveSpace` in the app, one deliberate step away
+      rather than standing in front of the terraces.
+- [ ] **Look at the utility bar under the wordmark.** Settings, Notebook
+      and About were behind the catalog window before and are now the
+      home's only chrome. Confirm all three still open.
+
 ### Prediction arc — unreachable from the CLI
 
 - [ ] **Hold a planet and watch the ghost path.** It is cased now, the
