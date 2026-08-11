@@ -75,9 +75,8 @@ struct MainWindowView: View {
                         circuits.add(.bulb, at: SIMD3(0.35, 1.3, -0.9))
                         circuits.add(.resistor, at: SIMD3(0, 1.5, -0.9))
                         if let part = circuits.components.last {
-                            let pivot = part.terminalPosition(0)
-                            circuits.dragEnd(id: part.id, grabbedEnd: 1, pivot: pivot,
-                                             hand: pivot + SIMD3(0.35, 0.4, 0.05))
+                            circuits.setAxis(id: part.id,
+                                             axis: SIMD3(0.35, 0.4, 0.05))
                         }
                     }
                     // `-circuitVoltageHeights 1` raises the voltage skyline.

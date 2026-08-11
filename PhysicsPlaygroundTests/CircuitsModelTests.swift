@@ -146,24 +146,29 @@ final class CircuitsModelTests: XCTestCase {
 
 
     /// The carry preview and the release do the same thing: what the
-    /// ghost wires promise is exactly what autoConnect creates.
-    func testAutoConnectPreviewMatchesRelease() {
+    /// ghost wires promise is exactly what the release creates.
+    func testPendingJoinPreviewMatchesRelease() {
         let model = CircuitsModel()
         model.clearBench()
         guard let battery = model.add(.battery, at: SIMD3(0, 1.2, -0.9)),
               let bulb = model.add(.bulb, at: SIMD3(0.2, 1.2, -0.9)) else {
             return XCTFail("bench refused parts")
         }
-        // battery t1 at x = 0.085; bulb t0 at 0.115 — a 3 cm gap, inside snap.
-        let pairs = model.autoConnectCandidates(id: bulb)
+        // battery t1 at x = 0.085; bulb t0 at 0.115 — a 3 cm gap,
+        // inside `leadReach`.
+        let pairs = model.pendingJoins(for: bulb)
         XCTAssertEqual(pairs.count, 1)
         XCTAssertEqual(pairs[0].from, CircuitsModel.Terminal(componentID: bulb, end: 0))
         XCTAssertEqual(pairs[0].to, CircuitsModel.Terminal(componentID: battery, end: 1))
 
-        model.autoConnect(id: bulb)
+        model.release(id: bulb)
         XCTAssertEqual(model.wires.count, 1)
-        XCTAssertTrue(model.autoConnectCandidates(id: bulb).isEmpty,
+        // The preview clears for a STRONGER reason than it used to:
+        // not "there is already a wire between exactly these two", but
+        // "these two are already one electrical point".
+        XCTAssertTrue(model.pendingJoins(for: bulb).isEmpty,
                       "once wired, the preview clears")
+        XCTAssertTrue(model.areConnected(pairs[0].from, pairs[0].to))
     }
 
     /// Drag-to-wire lands anywhere: distance-free, duplicate-proof.
@@ -311,30 +316,15 @@ final class CircuitsModelTests: XCTestCase {
     // which loads a saved jumper loop, splices it, and asserts the
     // spliced circuit carries the current the jumper loop carried.
 
-    /// Pulling an end grip swings the part around its opposite end: the
-    /// pivot end stays exactly where it was, the part re-aims toward the
-    /// hand, and the span is preserved for fixed-size parts.
-    func testDragEndPinsTheOppositeEnd() {
-        let model = CircuitsModel()
-        model.clearBench()
-        model.add(.battery)
-        let battery = model.components[0]
-        let pivot = battery.terminalPosition(0)
-
-        // Pull terminal 1's grip straight up from the pivot.
-        model.dragEnd(id: battery.id, grabbedEnd: 1,
-                      pivot: pivot, hand: pivot + SIMD3(0, 0.5, 0))
-
-        let turned = model.components[0]
-        XCTAssertEqual(simd_distance(turned.terminalPosition(0), pivot), 0,
-                       accuracy: 1e-12, "the opposite end must stay pinned")
-        XCTAssertEqual(simd_distance(turned.axis, SIMD3(0, 1, 0)), 0,
-                       accuracy: 1e-12, "the part now points straight up")
-        XCTAssertEqual(
-            simd_distance(turned.terminalPosition(0), turned.terminalPosition(1)),
-            2 * CircuitsModel.terminalOffset, accuracy: 1e-12,
-            "a battery's span must not stretch")
-    }
+    // AND THE GRIP TEST LIVED HERE. `dragEnd` pinned one end and
+    // swung the part toward the hand, and the orange end grip was
+    // what called it — the second grab target at each end, 3 cm from
+    // the copper terminal, with hit volumes that overlapped it. That
+    // is the "2 different nodes at each end" the owner reported, and
+    // the grip is deleted (2026-08-11). Aim is a consequence of
+    // connection now: `CircuitsAlignmentTests.testSwingPinsTheWiredEnd`
+    // makes the same claim about `swing`, which finds its own pivot
+    // instead of being handed one.
 
     /// A twist during a carry is adopted on release: setAxis normalizes,
     /// and rejects a degenerate axis rather than corrupting the part.
@@ -563,15 +553,21 @@ final class CircuitsModelTests: XCTestCase {
         model.add(.bulb, at: near)
         let bulb = model.components[1]
 
-        model.autoConnect(id: bulb.id)
+        model.release(id: bulb.id)
         XCTAssertEqual(model.wires.count, 1, "the close pair self-connects")
+        // And they are now COINCIDENT, not merely wired: the release
+        // aligns as well as connecting.
+        XCTAssertEqual(
+            simd_distance(model.components.first { $0.id == bulb.id }!.terminalPosition(0),
+                          model.components[0].terminalPosition(1)),
+            0, accuracy: 1e-12)
         XCTAssertFalse(model.wires.contains {
             $0.from.end == 1 && $0.to.end == 1
         }, "only the near terminals joined")
 
         // A part released far away connects nothing.
         model.add(.resistor, at: CircuitsModel.buildCenter + SIMD3(0, 0.8, 0))
-        model.autoConnect(id: model.components[2].id)
+        model.release(id: model.components[2].id)
         XCTAssertEqual(model.wires.count, 1)
     }
 
@@ -805,21 +801,22 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertGreaterThan(late, early * 5, "it keeps accelerating toward steady state")
     }
 
-    /// A more forgiving snap radius: parts a few centimeters apart still
-    /// auto-connect on release.
-    func testAutoConnectReachesAcrossTheSnapDistance() {
+    /// Parts released a few centimetres apart still join — the reach
+    /// is forgiving, but it is ONE number now (`leadReach`, 0.06)
+    /// rather than a release radius of 0.13 and a drag radius of 0.09
+    /// that disagreed about the same fact.
+    func testAReleaseJoinsAcrossTheLeadReach() {
         let model = CircuitsModel()
         model.clearBench()
         guard let a = model.add(.battery, at: SIMD3(0, 1.2, -0.9)),
-              let b = model.add(.resistor, at: SIMD3(0.17 + 0.1, 1.2, -0.9)) else {
+              let b = model.add(.resistor, at: SIMD3(0.17 + 0.04, 1.2, -0.9)) else {
             return XCTFail("bench refused parts")
         }
-        // The facing terminals are ~0.1 m apart — inside the 0.13 snap.
         let gap = simd_distance(
             model.components.first { $0.id == a }!.terminalPosition(1),
             model.components.first { $0.id == b }!.terminalPosition(0))
-        XCTAssertLessThan(gap, CircuitsModel.snapDistance)
-        model.autoConnect(id: b)
+        XCTAssertLessThan(gap, CircuitsModel.leadReach)
+        model.release(id: b)
         XCTAssertEqual(model.wires.count, 1, "close-enough terminals magnetise")
     }
 

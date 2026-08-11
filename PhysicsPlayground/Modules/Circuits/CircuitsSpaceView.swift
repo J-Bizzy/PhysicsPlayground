@@ -46,7 +46,6 @@ struct CircuitsSpaceView: View {
     /// Carrying the meter itself: where its case was when the hand closed
     /// on it, and where the hand was, both in the renderer's frame.
     @State private var meterDrag: (start: SIMD3<Float>, hand: SIMD3<Float>)?
-    @State private var gripDrag: (grip: CircuitsModel.Terminal, pivot: SIMD3<Double>)?
     @Environment(AppModel.self) private var appModel
     /// Two-handed zoom on the bench. Electron View is now a FLOOR under
     /// this same number rather than a competing 1x/4x flip, so "get in
@@ -477,6 +476,30 @@ struct CircuitsSpaceView: View {
                let first = model.components.first {
                 ring.openID = first.id
             }
+            // `-circAlign 1` drops two parts a few centimetres apart
+            // and fires the release on the second, so the SNAPPED
+            // chain is what the screenshot holds. The ghost preview is
+            // a carry state and needs a hand; this is the landing.
+            if UserDefaults.standard.bool(forKey: "circAlign") {
+                model.clearBench()
+                let anchor = CircuitsModel.buildCenter
+                model.add(.battery, at: anchor)
+                if let battery = model.components.first {
+                    // The offset is the near LEAD's, not the centre's,
+                    // and it has to stay inside `leadReach` — 3 cm
+                    // along and 2 cm up is 3.6 cm, comfortably inside
+                    // 6, and crooked enough that the rotation has
+                    // something to do. (The first version of this
+                    // used 4 cm and 6 cm, which is 7.2 cm apart: no
+                    // candidate, no snap, and a screenshot of two
+                    // parts sitting near each other doing nothing.)
+                    let landing = battery.terminalPosition(1)
+                        + SIMD3(0.03 + CircuitsModel.terminalOffset, 0.02, 0)
+                    if let bulb = model.add(.bulb, at: landing) {
+                        model.release(id: bulb)
+                    }
+                }
+            }
             // THE THREE SURFACES ADDED ON 2026-08-08, none of which the
             // simulator can reach with a finger, and all of which I have
             // been asking the owner to check on device for want of a
@@ -695,7 +718,6 @@ struct CircuitsSpaceView: View {
                         wireDragFrom = nil
                         partDrag = nil
                         spawnedPartID = nil
-                        gripDrag = nil
                         model.endCarry()
                     }
                     guard let renderer else { return }
@@ -718,11 +740,12 @@ struct CircuitsSpaceView: View {
                     }
                     guard let partDrag else { return }
                     applyCircuitDrag(partDrag, hand: hand)
-                    if let gripDrag {
-                        model.autoConnect(id: gripDrag.grip.componentID)
-                    } else if let id = spawnedPartID ?? UUID(uuidString: partDrag.name) {
-                        model.autoConnect(id: id)
+                    // ONE release path. It used to be two, picked by
+                    // whether a grip or a body had been grabbed.
+                    if let id = spawnedPartID ?? UUID(uuidString: partDrag.name) {
+                        model.release(id: id)
                     }
+                    renderer.flashRelease()
                 }
         )
         .spatialScale(scaleRig)
@@ -802,20 +825,6 @@ struct CircuitsSpaceView: View {
                 wireDragFrom = terminal(on: candidate)
                 return
             }
-            if let grip = stretchTerminal(from: name),
-               let component = model.components.first(
-                where: { $0.id == grip.componentID }) {
-                let sign = grip.end == 0 ? -1.0 : 1.0
-                let gripWorld = component.position + sign
-                    * (CircuitsModel.terminalOffset + CircuitsModel.endGripOffset)
-                    * component.axis
-                gripDrag = (grip, component.terminalPosition(1 - grip.end))
-                partDrag = RelativeDrag(name: name, target: gripWorld, hand: hand)
-                renderer.previewComponentID = grip.componentID
-                model.select(id: grip.componentID)
-                model.beginCarry(id: grip.componentID)
-                return
-            }
             // THE RACK CLAIMS THE DRAG BEFORE IT KNOWS WHAT IT IS.
             //
             // A pinch on a slot means two things now — slide the rack to
@@ -833,6 +842,7 @@ struct CircuitsSpaceView: View {
                 renderer.previewComponentID = id
                 model.select(id: id)
                 model.beginCarry(id: id)
+                renderer.flashPickup(id: id)
                 return
             }
             current = candidate.parent
@@ -841,15 +851,13 @@ struct CircuitsSpaceView: View {
 
     private func applyCircuitDrag(_ drag: RelativeDrag, hand: SIMD3<Double>) {
         let position = drag.position(forHand: hand)
-        if let gripDrag {
-            model.dragEnd(id: gripDrag.grip.componentID,
-                          grabbedEnd: gripDrag.grip.end,
-                          pivot: gripDrag.pivot, hand: position)
-            model.breakOverstretchedWires(id: gripDrag.grip.componentID)
-        } else if let id = spawnedPartID ?? UUID(uuidString: drag.name) {
-            model.move(id: id, to: position)
-            model.breakOverstretchedWires(id: id)
-        }
+        guard let id = spawnedPartID ?? UUID(uuidString: drag.name) else { return }
+        model.move(id: id, to: position)
+        // A part hanging by one lead swings about it while it is
+        // carried — where "aim the part" went when the grip was
+        // deleted.
+        model.swing(id: id, hand: position)
+        model.breakOverstretchedWires(id: id)
     }
 
     /// The terminal an entity (or any ancestor) represents, if any.
@@ -933,19 +941,13 @@ struct CircuitsSpaceView: View {
         ring.openID = nil
     }
 
-    /// The end-grip being pulled, parsed from "s0-"/"s1-" entity names.
-    private func stretchTerminal(from name: String) -> CircuitsModel.Terminal? {
-        guard name.hasPrefix("s0-") || name.hasPrefix("s1-"),
-              let id = UUID(uuidString: String(name.dropFirst(3))) else { return nil }
-        return CircuitsModel.Terminal(componentID: id, end: name.hasPrefix("s0-") ? 0 : 1)
-    }
 
     /// Component bodies (named by UUID, marked by the white center knob)
     /// are carried directly. A palette source makes a part AT THE HAND
     /// and hands it to the same drag, so making one and moving one are
-    /// one gesture. End grips ("s0-"/"s1-") swing the part around its
-    /// opposite end — pinned where it was when the pull began — and set
-    /// a wire's length from the hand's reach.
+    /// one gesture. A part hanging by one lead swings about it as it
+    /// is carried (`CircuitsModel.swing`) — which is where aiming
+    /// went when the orange end grips were deleted.
     ///
     /// The palette resolves by ENTITY, through `Well.pull`, rather than
     /// by parsing a `"tray-<kind>"` prefix off a name. Name-parsing is

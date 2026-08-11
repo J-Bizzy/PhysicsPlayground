@@ -52,15 +52,26 @@ final class CircuitsRenderer {
         subscriptions = []
     }
 
-    var manipulatingComponentID: UUID?
-    /// The part already acknowledged with a pickup pulse — one flash per
-    /// grab, not one per frame.
-    private var pulsedGrabID: UUID?
+    // `manipulatingComponentID` STOOD HERE WITH NO WRITER. Six
+    // references, all reads, zero assignments app-wide — so the pickup
+    // pulse never flashed, `terminalWorld`'s follow-the-live-entity
+    // branch never ran, and the guard in `syncComponents` that claimed
+    // "while the hand carries the holder the system owns its
+    // transform — including any twist, which the model adopts on
+    // release" described a mechanism that never existed and could not:
+    // `DragGesture` carries `location3D` and no rotation at all. The
+    // pulse is an explicit call now (`flashPickup`), which is a thing
+    // that either happens or does not.
     /// Where the release tick plays from when the grab ends.
     private weak var pulsedGrabEntity: Entity?
 
     /// Parent for the selected component's readout attachment.
     let selectedAnchor = Entity()
+
+    /// The lead's touch target. Named because two things are sized
+    /// against it: the bead itself, and the carry target that has to
+    /// stay clear of it.
+    static let terminalTargetRadius: Float = 0.026
 
     private struct ComponentVisual {
         let holder: Entity
@@ -73,9 +84,6 @@ final class CircuitsRenderer {
         var lever: ModelEntity?
         /// Motors only: the propeller that spins with the shaft.
         var rotor: Entity?
-        /// Wires only: the orange end grips ("s0-"/"s1-") pulled to
-        /// change the length.
-        var stretchHandles: [ModelEntity] = []
         var labelText = ""
         var glowBucket = -1
         var resistorCodeKey = ""
@@ -100,9 +108,6 @@ final class CircuitsRenderer {
     /// potential costs no material write.
     private var towerBuckets: [Int] = []
 
-    /// The end grip being pulled right now (system-dragged — don't
-    /// reposition it), if any.
-    var stretchingHandle: CircuitsModel.Terminal?
     /// The bench's own magnetic field, as arrows on a coarse grid.
     ///
     /// Budget and spacing are deliberately modest. This is a field that
@@ -355,7 +360,7 @@ final class CircuitsRenderer {
     private func syncConnectionPreviews(_ model: CircuitsModel) {
         var pairs: [(SIMD3<Float>, SIMD3<Float>, CircuitsModel.Terminal)] = []
         if let id = previewComponentID {
-            for pair in model.autoConnectCandidates(id: id) {
+            for pair in model.pendingJoins(for: id) {
                 if let a = terminalWorld(pair.from, model),
                    let b = terminalWorld(pair.to, model) {
                     pairs.append((a, b, pair.to))
@@ -446,21 +451,24 @@ final class CircuitsRenderer {
         render(model, dt: dt)
     }
 
+    /// Acknowledge a grab: a light pulse and a tick, on the part the
+    /// hand just took. Called once, from the gesture that promoted —
+    /// not diffed per frame off a field nobody wrote.
+    func flashPickup(id: UUID) {
+        guard let holder = visuals[id]?.holder else { return }
+        pulsedGrabEntity = holder
+        PickupPulse.flash(on: holder)
+        SoundPalette.play(.grabTick, on: holder, volume: 0.2)
+    }
+
+    /// Answer a release, on whatever was last picked up.
+    func flashRelease() {
+        guard let entity = pulsedGrabEntity else { return }
+        SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
+        pulsedGrabEntity = nil
+    }
+
     private func render(_ model: CircuitsModel, dt: Double) {
-        if let id = manipulatingComponentID {
-            if pulsedGrabID != id, let holder = visuals[id]?.holder {
-                pulsedGrabID = id
-                pulsedGrabEntity = holder
-                PickupPulse.flash(on: holder)
-                SoundPalette.play(.grabTick, on: holder, volume: 0.2)
-            }
-        } else {
-            if pulsedGrabID != nil, let entity = pulsedGrabEntity {
-                SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
-            }
-            pulsedGrabID = nil
-            pulsedGrabEntity = nil
-        }
         if appliedResistorTextureVersion != CircuitTextures.version {
             appliedResistorTextureVersion = CircuitTextures.version
             for id in visuals.keys { visuals[id]?.resistorCodeKey = "" }
@@ -672,28 +680,23 @@ final class CircuitsRenderer {
         for component in model.components {
             var visual = visuals[component.id] ?? makeVisual(for: component)
 
-            // While the hand carries the holder the system owns its
-            // transform — including any twist, which the model adopts
-            // on release.
-            if component.id != manipulatingComponentID {
-                visual.holder.position = SIMD3<Float>(component.position)
-                // Aim the whole part along its model axis — but only when
-                // the axis actually moved. The hand's roll is legitimate
-                // orientation; snapping it away on release reads as a
-                // shake.
-                let target = simd_normalize(SIMD3<Float>(component.axis))
-                let current = visual.holder.orientation.act([1, 0, 0])
-                if simd_dot(current, target) < 0.99995 {
-                    // A part dragged end-for-end has axis exactly
-                    // [-1,0,0]; the flip has to keep it the right way up.
-                    visual.holder.orientation = rotation(from: [1, 0, 0], to: target)
-                }
+            // The model owns motion; the renderer follows it. (This
+            // was wrapped in a `manipulatingComponentID` guard that
+            // never fired, so the unconditional write is what has
+            // always actually happened.)
+            visual.holder.position = SIMD3<Float>(component.position)
+            // Aim the whole part along its model axis — but only when
+            // the axis actually moved.
+            let target = simd_normalize(SIMD3<Float>(component.axis))
+            let current = visual.holder.orientation.act([1, 0, 0])
+            if simd_dot(current, target) < 0.99995 {
+                // A part dragged end-for-end has axis exactly
+                // [-1,0,0]; the flip has to keep it the right way up.
+                visual.holder.orientation = rotation(from: [1, 0, 0], to: target)
             }
             Fade.tick(visual.halo, visible: component.id == model.selectedID)
 
-            // Terminals and end grips ride the ends of the (possibly
-            // stretched) span; a grip the hand is pulling is
-            // system-dragged — leave it be. Pending terminal glows larger.
+            // One lead at each end, and nothing else to hit there.
             let half = Float(CircuitsModel.terminalOffset)
             for (end, terminal) in visual.terminals.enumerated() {
                 let sign: Float = end == 0 ? -1 : 1
@@ -706,13 +709,6 @@ final class CircuitsRenderer {
                 terminal.scale = SIMD3(repeating: isPending
                     ? Float(1.6 + 0.35 * sin(pendingPulsePhase))
                     : (previewTargets.contains(key) ? 1.5 : (isProbed ? 1.35 : 1.0)))
-
-                let beingPulled = stretchingHandle ==
-                    CircuitsModel.Terminal(componentID: component.id, end: end)
-                if !beingPulled, visual.stretchHandles.count == 2 {
-                    visual.stretchHandles[end].position =
-                        SIMD3(sign * (half + Float(CircuitsModel.endGripOffset)), 0, 0)
-                }
             }
 
             // Live label. `BackedLabel` self-gates on unchanged text.
@@ -813,12 +809,6 @@ final class CircuitsRenderer {
         let holder = Entity()
         holder.name = component.id.uuidString
         holder.position = SIMD3<Float>(component.position)
-        Grabbable.configureTouchTarget(
-            holder, collisionRadius: 0.075,
-            activate: { [weak self, weak holder] in
-                guard let holder else { return }
-                self?.onTap?(holder)
-            })
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = LocalizedStringResource(
@@ -829,6 +819,33 @@ final class CircuitsRenderer {
         // The visible body, shaped per kind.
         let body = Self.makeBody(for: component)
         holder.addChild(body)
+
+        // THE CARRY TARGET IS THE BODY, MEASURED — and it is measured
+        // from `body` rather than `holder` deliberately: the holder
+        // will collect a bulb's 0.055 glow and a 0.085 selection halo,
+        // and a target swollen to cover those would be LARGER than the
+        // 0.075 sphere this replaced.
+        //
+        // The sphere it replaced spanned the inner third of both
+        // terminal colliders, so a pinch aimed at a lead could take
+        // the whole part instead. The x half-extent is therefore
+        // clamped just inside the terminal target's inner edge
+        // (0.085 − 0.026 = 0.059): the battery's 0.11 m body plus the
+        // usual 0.015 of reach would be 0.070, which is back inside
+        // the lead. y and z have nothing to collide with and keep the
+        // full allowance.
+        let bodyExtents = body.visualBounds(relativeTo: holder).extents
+        let clearOfLead = Float(CircuitsModel.terminalOffset) - Self.terminalTargetRadius - 0.002
+        let half = SIMD3<Float>(
+            min(bodyExtents.x / 2 + Grabbable.reach, clearOfLead),
+            bodyExtents.y / 2 + Grabbable.reach,
+            bodyExtents.z / 2 + Grabbable.reach)
+        Grabbable.configureTouchTarget(
+            holder, box: half * 2,
+            activate: { [weak self, weak holder] in
+                guard let holder else { return }
+                self?.onTap?(holder)
+            })
 
         // Terminals: copper spheres, tap targets for wiring.
         var terminals: [ModelEntity] = []
@@ -841,10 +858,13 @@ final class CircuitsRenderer {
             // 0.042 until 2026-08-07, on a 0.013 m bead. It reached
             // past the end grip at 0.115, and on a short wire the two
             // terminals' targets interpenetrated — so which end you
-            // wired was decided by hit order.
+            // wired was decided by hit order. The grip it was shrunk
+            // to clear is gone now (2026-08-11); this is the only
+            // thing to hit at this end, and the nearest other target
+            // is the far lead 0.17 m away.
             terminal.components.set(InputTargetComponent())
             terminal.components.set(CollisionComponent(
-                shapes: [.generateSphere(radius: 0.026)]))
+                shapes: [.generateSphere(radius: Self.terminalTargetRadius)]))
             terminal.components.set(HoverEffectComponent())
             SpatialActions.attach(
                 to: terminal, label: "Terminal",
@@ -869,34 +889,18 @@ final class CircuitsRenderer {
             holder.addChild(lead)
         }
 
-        // Orange end grips just past the terminals: pull one and the part
-        // swings around its other end (wires also take their length from
-        // the pull). Separate from the copper terminals so quick pinches
-        // there still arm tap-tap wiring.
-        let gripMaterial = Materials.energized(
-            UIColor(red: 0.9, green: 0.45, blue: 0.15, alpha: 1),
-            roughness: 0.4, glow: 0.2)
-        var stretchHandles: [ModelEntity] = []
-        for end in 0...1 {
-            let grip = ModelEntity(
-                mesh: .generateSphere(radius: 0.012), materials: [gripMaterial])
-            grip.name = "s\(end)-\(component.id.uuidString)"
-            let half = Float(CircuitsModel.terminalOffset + CircuitsModel.endGripOffset)
-            grip.position = SIMD3(end == 0 ? -half : half, 0, 0)
-            Grabbable.configureTouchTarget(
-                grip, collisionRadius: 0.026,
-                activate: { [weak self, weak grip] in
-                    guard let grip else { return }
-                    self?.onTap?(grip)
-                })
-            var gripAccessibility = AccessibilityComponent()
-            gripAccessibility.isAccessibilityElement = true
-            gripAccessibility.label = LocalizedStringResource(stringLiteral:
-                "End grip. Pull to aim the \(component.kind.displayName) in space.")
-            grip.components.set(gripAccessibility)
-            holder.addChild(grip)
-            stretchHandles.append(grip)
-        }
+        // THE ORANGE END GRIPS STOOD HERE, at ±(0.085 + 0.03), with
+        // 0.026 collision radii — three centimetres from the copper
+        // terminals, which carry 0.026 radii of their own. The hit
+        // volumes OVERLAPPED, so which of the two you grabbed was
+        // decided by hit order, and the comment on the terminal
+        // collider below already recorded a bug from exactly this
+        // crowding. They are the "2 different nodes at each end" the
+        // owner reported (2026-08-11), and they are gone: one lead per
+        // end, the copper one, and it is the only thing to hit there.
+        //
+        // Their job was aiming, which is now a consequence of
+        // connection (`CircuitsModel.swing`) rather than a control.
 
         // The white center knob: the part's carry handle, marking where
         // to grab when you want to move it rather than aim it.
@@ -922,7 +926,6 @@ final class CircuitsRenderer {
         var visual = ComponentVisual(
             holder: holder, body: body, terminals: terminals,
             label: label, halo: halo)
-        visual.stretchHandles = stretchHandles
 
         // Kind-specific extras.
         switch component.kind {
@@ -1262,13 +1265,10 @@ final class CircuitsRenderer {
     private func terminalWorld(_ terminal: CircuitsModel.Terminal, _ model: CircuitsModel) -> SIMD3<Float>? {
         guard let component = model.components.first(where: { $0.id == terminal.componentID })
         else { return nil }
-        // While a component is being carried, follow its actual terminal
-        // entity — it rides the hand-held holder, twist and all.
-        if terminal.componentID == manipulatingComponentID,
-           let visual = visuals[terminal.componentID],
-           visual.terminals.count == 2 {
-            return visual.terminals[terminal.end].position(relativeTo: viewRoot)
-        }
+        // The model owns where a lead is, carried or not. (A branch
+        // here followed the live entity instead, for the case where
+        // the system held the transform — it had no writer and never
+        // ran.)
         return SIMD3<Float>(component.terminalPosition(terminal.end))
     }
 

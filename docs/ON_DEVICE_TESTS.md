@@ -133,11 +133,28 @@ file). What follows is the standing script.
 
 - [ ] **The loop is live on arrival.** Pinch the switch lever: the bulb
       goes out, the electron beads stop.
-- [ ] **Pull a part out of a rack.** Eleven parts stand free on the two
-      flanks, above the furniture row. The part must be born AT YOUR
+- [ ] **Pull a part out of a rack.** Ten parts and the meter stand
+      free, above the furniture row. The part must be born AT YOUR
       FINGERTIPS — not at the rack, then flown to your hand — and
       dropping it with copper ends near another part connects them
       automatically.
+- [ ] **ONE TARGET AT EACH END (2026-08-11).** Pinch each end of a
+      part ten times. **The same thing must happen all ten times.**
+      Until this pass there were two grab targets at every end — a
+      copper terminal and an orange grip, 3 cm apart with 2.6 cm hit
+      radii that OVERLAPPED — so which one you got was decided by hit
+      order. The orange grips are gone. Pinch the copper to wire;
+      pinch the body to carry; there is nothing else there to hit.
+- [ ] **Parts click nose to tail.** Release a part with a lead within
+      ~6 cm of another part's lead: it must MOVE AND TURN so the two
+      leads become one point, and read afterwards as a chain rather
+      than two things near each other. Do it again against the edge of
+      the build volume — there it must stay exactly where your hand
+      left it, wired across the gap but NOT snapped, because a snap
+      the wall would undo is a snap that lies.
+- [ ] **A part hanging by one lead swings about it** as you carry it,
+      the way a component on a wire does. A part wired at both ends,
+      or at neither, must not swing.
 - [ ] **Both racks are fully in frame** from where you naturally
       stand, with every name readable against a real field of view.
 - [ ] **Fill the bench to sixteen parts, then pull a twelfth kind.**

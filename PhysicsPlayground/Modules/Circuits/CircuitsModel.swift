@@ -117,15 +117,27 @@ final class CircuitsModel {
     // convicts elsewhere. The constant is here, in prose, which is
     // where a retired number belongs.
 
-    /// How far beyond a terminal its orange end grip sits.
-    nonisolated static let endGripOffset = 0.03
+    /// How near two leads must come to be one point — whether a HAND
+    /// brought a lead there (a pull) or a hand brought a whole part
+    /// there (a release).
+    ///
+    /// ONE DISTANCE, because "these two ends are together" is one fact
+    /// about the bench and used to be two numbers that disagreed by
+    /// 44%: a `snapDistance` of 0.13 for a release, and a hardcoded
+    /// 0.09 in the SpaceView for a wire drag — the second measured
+    /// hand-to-terminal rather than lead-to-terminal, so it could
+    /// claim a target the ghost had never offered.
+    ///
+    /// 0.06 rather than either: one part's two leads are 0.17 m apart,
+    /// so 0.06 cannot reach past the end it belongs to, and 0.09 was
+    /// wide enough to catch a NEIGHBOURING part's lead you never aimed
+    /// at.
+    nonisolated static let leadReach = 0.06
 
-    /// Terminals this close when a part is released connect themselves.
-    /// How near two terminals must come to snap together — generous so
-    /// bringing parts close is enough (they magnetise).
-    nonisolated static let snapDistance = 0.13
     /// Carry a part until a snapped connection stretches past this and
-    /// it pops off — the same magnet, in reverse.
+    /// it pops off — the magnet, in reverse. Deliberately much larger
+    /// than `leadReach`: joining should need precision and leaving
+    /// should need intent.
     nonisolated static let breakDistance = 0.3
 
     struct Terminal: Equatable, Hashable, Codable {
@@ -307,10 +319,14 @@ final class CircuitsModel {
         selectedID = id
     }
 
-    /// The pairs a release right now would wire up — the renderer draws
-    /// these as ghost wires while a part is carried, so the release
-    /// never surprises: what you preview is what you get.
-    func autoConnectCandidates(id: UUID) -> [(from: Terminal, to: Terminal)] {
+    /// The pairs a release right now would wire up — the renderer
+    /// draws these as ghost wires while a part is carried, so the
+    /// release never surprises: what you preview is what you get.
+    ///
+    /// Renamed from `autoConnectCandidates` because nothing
+    /// auto-connects any more: `release(id:)` is the one place a
+    /// carried part lands, and it aligns as well as wiring.
+    func pendingJoins(for id: UUID) -> [(from: Terminal, to: Terminal)] {
         guard let component = components.first(where: { $0.id == id }) else { return [] }
         let net = topology()
         var pairs: [(from: Terminal, to: Terminal)] = []
@@ -322,7 +338,7 @@ final class CircuitsModel {
                 for otherEnd in 0...1 {
                     let theirs = Terminal(componentID: other.id, end: otherEnd)
                     let distance = simd_distance(minePosition, other.terminalPosition(otherEnd))
-                    guard distance < Self.snapDistance else { continue }
+                    guard distance < Self.leadReach else { continue }
                     // Already one point: a wire here would carry
                     // nothing and say nothing.
                     guard !net.sameNet(mine, theirs) else { continue }
@@ -338,18 +354,130 @@ final class CircuitsModel {
         return pairs
     }
 
-    /// Magnetic connections: when a part is released, any of its
-    /// terminals sitting within snapDistance of another part's free-ish
-    /// terminal wires itself up — bring parts together and they connect.
-    func autoConnect(id: UUID) {
-        let pairs = autoConnectCandidates(id: id)
+    // MARK: Snap-align — parts land nose to tail
+
+    /// The move a release would make: which lead lands on which
+    /// terminal, and where the part ends up to put them together.
+    ///
+    /// PURE — no mutation — so the renderer can ghost the landing
+    /// while the part is still in the hand.
+    struct Alignment: Equatable {
+        let componentID: UUID
+        /// The lead that lands.
+        let end: Int
+        let target: Terminal
+        let position: SIMD3<Double>
+        let axis: SIMD3<Double>
+    }
+
+    /// Where a release would put this part, if anywhere.
+    ///
+    /// The geometry, and the reason for each choice:
+    ///
+    /// THE RELEASED PART MOVES; THE TARGET NEVER DOES. The thing in
+    /// your hand is the thing that just moved, and the bench holds
+    /// still. This is also what stops a cascade — a part nobody
+    /// touched this gesture is never displaced, so an alignment
+    /// cannot propagate past one hop.
+    ///
+    /// ONE END WINS, the closer. Satisfying both leads exactly would
+    /// need the two targets to be exactly `2 * terminalOffset` apart,
+    /// and forcing it would stretch a part that no longer stretches.
+    /// The other end still gets its wire.
+    ///
+    /// IT ROTATES ABOUT THE LANDING LEAD, not the centre. Rotating
+    /// about the centre swings the joint THROUGH the part it is
+    /// joining; rotating about the joint swings the free end, which is
+    /// what a physical chain does.
+    func alignment(for id: UUID) -> Alignment? {
+        guard let component = components.first(where: { $0.id == id }) else { return nil }
+        var best: (end: Int, target: Terminal, position: SIMD3<Double>, distance: Double)?
+        for pair in pendingJoins(for: id) {
+            guard let targetPosition = terminalWorldPosition(pair.to) else { continue }
+            let distance = simd_distance(component.terminalPosition(pair.from.end), targetPosition)
+            if best == nil || distance < best!.distance {
+                best = (pair.from.end, pair.to, targetPosition, distance)
+            }
+        }
+        guard let best else { return nil }
+
+        // Swing the FAR end away from the joint, and put the landing
+        // lead exactly on its target.
+        let far = component.terminalPosition(1 - best.end)
+        var direction = far - best.position
+        let reach = simd_length(direction)
+        // A part released dead-centre on its target has no direction
+        // to point: keep the aim it already had rather than inventing
+        // one. A degenerate hand is a no-op, never a snap.
+        direction = reach > 1e-6
+            ? direction / reach
+            : (best.end == 0 ? component.axis : -component.axis)
+        let axis = best.end == 0 ? direction : -direction
+        let position = best.position + direction * Self.terminalOffset
+
+        // THE CLAMP VETO. If the bench wall would move the part after
+        // the alignment placed it, the leads end up visibly NOT
+        // coincident — the snap silently lying, near the wall, which
+        // is exactly where a beginner works. Abandon the geometry and
+        // let the wire span the gap instead.
+        guard simd_distance(Self.clampToBench(position), position) < 1e-9 else { return nil }
+        return Alignment(componentID: id, end: best.end, target: best.target,
+                         position: position, axis: axis)
+    }
+
+    /// The ONE place a carried part lands: align it, wire it, sound.
+    ///
+    /// Order matters. The alignment is computed from where the hand
+    /// left the part, then applied, then the wires are made from the
+    /// pairs the ALIGNED part sees — so a release cannot wire one pair
+    /// and snap to another.
+    ///
+    /// `breakOverstretchedWires` deliberately does NOT run here: it
+    /// belongs to the carry, and running it after the alignment's own
+    /// translation could yank a NEIGHBOUR's contact off.
+    func release(id: UUID) {
+        guard components.contains(where: { $0.id == id }) else { return }
+        if let alignment = alignment(for: id),
+           let index = components.firstIndex(where: { $0.id == id }) {
+            components[index].position = alignment.position
+            components[index].axis = alignment.axis
+        }
+        let pairs = pendingJoins(for: id)
         guard !pairs.isEmpty,
               let component = components.first(where: { $0.id == id }) else { return }
+        var joined = false
         for pair in pairs {
-            wires.append(Wire(id: UUID(), from: pair.from, to: pair.to))
+            if case .connected = connectTerminals(pair.from, pair.to) { joined = true }
         }
+        guard joined else { return }
         emitSound(.chime, at: component.position, volume: 0.5)
         persistSoon()
+    }
+
+    /// A carried part with ONE wired lead swings about it, the way a
+    /// component hanging off a wire does. Both ends wired, or neither:
+    /// no swing — with both, the chain already decides the aim, and
+    /// with neither there is nothing to hang from.
+    ///
+    /// This is where "aim the part" went when the orange end grip was
+    /// deleted. Aim is a CONSEQUENCE of connection now, not a control:
+    /// with the jumper retired nothing has a length to set, so a
+    /// lead's direction can only honestly mean "where its wire goes".
+    func swing(id: UUID, hand: SIMD3<Double>) {
+        guard let index = components.firstIndex(where: { $0.id == id }) else { return }
+        let ends = (0...1).filter { end in
+            wires.contains { $0.from == Terminal(componentID: id, end: end)
+                          || $0.to == Terminal(componentID: id, end: end) }
+        }
+        guard ends.count == 1, let pinned = ends.first,
+              let pivot = terminalWorldPosition(Terminal(componentID: id, end: pinned))
+        else { return }
+        var direction = hand - pivot
+        let reach = simd_length(direction)
+        guard reach > 1e-4 else { return }
+        direction /= reach
+        components[index].axis = pinned == 0 ? direction : -direction
+        components[index].position = clamp(pivot + direction * Self.terminalOffset)
     }
 
     // MARK: Pull-apart detach (the magnet, in reverse)
@@ -478,21 +606,14 @@ final class CircuitsModel {
     /// ~150 A. Anything past this is a wiring mistake, not a load.
     nonisolated static let overloadAmps = 2.0
 
-    /// Swing a part by one of its end grips: the opposite end stays
-    /// pinned at `pivot`, the grabbed end chases the hand, and the part
-    /// re-aims along the line between them.
-    ///
-    /// The stretch half of this went with the jumper — nothing on the
-    /// bench has an adjustable length any more.
-    func dragEnd(id: UUID, grabbedEnd: Int, pivot: SIMD3<Double>, hand: SIMD3<Double>) {
-        guard let index = components.firstIndex(where: { $0.id == id }) else { return }
-        var direction = hand - pivot
-        let reach = simd_length(direction)
-        guard reach > 1e-4 else { return }
-        direction /= reach
-        components[index].axis = grabbedEnd == 1 ? direction : -direction
-        components[index].position = clamp(pivot + direction * Self.terminalOffset)
-    }
+    // `dragEnd(id:grabbedEnd:pivot:hand:)` LIVED HERE, and it was the
+    // orange end grip's whole reason for existing: pull a grip and the
+    // part swung about its opposite end, taking a wire's length from
+    // the hand's reach. Both halves are gone — the length half with
+    // the jumper, and the swing half into `swing(id:hand:)`, which
+    // finds its own pivot instead of being handed one. The grip is
+    // deleted with it (2026-08-11): two grab targets 3 cm apart with
+    // 2.6 cm hit radii is the defect this whole rebuild answers.
 
     func move(id: UUID, to point: SIMD3<Double>) {
         guard let index = components.firstIndex(where: { $0.id == id }) else { return }

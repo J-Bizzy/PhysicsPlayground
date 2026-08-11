@@ -256,7 +256,7 @@ final class CircuitsNetTests: XCTestCase {
         let a = model.add(.resistor, at: CircuitsModel.buildCenter)!
         let b = model.add(.resistor, at: CircuitsModel.buildCenter + SIMD3(0.17, 0, 0))!
         model.connectTerminals(.init(componentID: a, end: 1), .init(componentID: b, end: 0))
-        let candidates = model.autoConnectCandidates(id: b)
+        let candidates = model.pendingJoins(for: b)
         for pair in candidates {
             XCTAssertFalse(model.areConnected(pair.from, pair.to),
                            "The preview offered a connection the release would refuse.")
