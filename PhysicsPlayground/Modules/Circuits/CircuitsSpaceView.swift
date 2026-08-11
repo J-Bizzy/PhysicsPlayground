@@ -807,7 +807,7 @@ struct CircuitsSpaceView: View {
                 where: { $0.id == grip.componentID }) {
                 let sign = grip.end == 0 ? -1.0 : 1.0
                 let gripWorld = component.position + sign
-                    * (component.terminalHalfSpan + CircuitsModel.endGripOffset)
+                    * (CircuitsModel.terminalOffset + CircuitsModel.endGripOffset)
                     * component.axis
                 gripDrag = (grip, component.terminalPosition(1 - grip.end))
                 partDrag = RelativeDrag(name: name, target: gripWorld, hand: hand)

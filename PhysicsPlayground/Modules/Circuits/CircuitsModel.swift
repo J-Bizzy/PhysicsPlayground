@@ -51,10 +51,10 @@ final class CircuitsModel {
     // MARK: Components
 
     enum ComponentKind: String, CaseIterable, Identifiable, Codable {
-        // Declaration order is drawer order: power, passives, outputs,
-        // control, wire.
+        // Declaration order is drawer order: power, passives,
+        // outputs, control.
         case battery, acSource, resistor, capacitor, inductor
-        case bulb, led, motor, fuse, switcher, wire
+        case bulb, led, motor, fuse, switcher
 
         var id: String { rawValue }
 
@@ -70,7 +70,6 @@ final class CircuitsModel {
             case .motor: "Motor"
             case .fuse: "Fuse"
             case .switcher: "Switch"
-            case .wire: "Wire"
             }
         }
 
@@ -86,7 +85,6 @@ final class CircuitsModel {
             case .motor: 8.0          // Ω coil resistance
             case .fuse: 1.0           // A rating
             case .switcher: 0
-            case .wire: 0.25          // m — a wire's value is its length
             }
         }
     }
@@ -107,14 +105,17 @@ final class CircuitsModel {
     nonisolated static let motorFriction = 0.0008
     nonisolated static let motorInertia = 0.0009
 
-    /// Real 1 mm² copper: R = ρL/A with ρ = 1.68×10⁻⁸ Ω·m, so a wire's
-    /// resistance honestly grows with the length the user gives it
-    /// (~17 mΩ per meter — negligible next to a bulb, but not zero).
-    nonisolated static let wireOhmsPerMeter = 1.68e-8 / 1e-6
-
-    /// How long a wire is allowed to be, whether set by slider or by
-    /// pulling its end grips.
-    nonisolated static let wireLengthRange = 0.1...2.0
+    // A JUMPER USED TO BE A PART, and it had honest copper in it:
+    // R = ρL/A with ρ = 1.68×10⁻⁸ Ω·m for 1 mm² copper, about 17 mΩ
+    // per metre, growing with the length you pulled it to. That is
+    // gone with `ComponentKind.wire` (2026-08-11), and it cost no
+    // physics: 17 mΩ against a 24 Ω bulb is four parts in ten
+    // thousand, and a CONNECTION spans any distance now, so there is
+    // nothing left for a jumper part to do that a wire does not.
+    // `wireResistance` is not parked in PhysicsCore "in case" — an
+    // authored function with no caller is the defect this project
+    // convicts elsewhere. The constant is here, in prose, which is
+    // where a retired number belongs.
 
     /// How far beyond a terminal its orange end grip sits.
     nonisolated static let endGripOffset = 0.03
@@ -126,10 +127,6 @@ final class CircuitsModel {
     /// Carry a part until a snapped connection stretches past this and
     /// it pops off — the same magnet, in reverse.
     nonisolated static let breakDistance = 0.3
-
-    nonisolated static func wireResistance(length: Double) -> Double {
-        max(length, 0.01) * wireOhmsPerMeter
-    }
 
     struct Terminal: Equatable, Hashable, Codable {
         var componentID: UUID
@@ -162,15 +159,12 @@ final class CircuitsModel {
             case id, kind, position, value, axis, isClosed, capacitorVoltage
         }
 
-        /// Half the distance between the two terminals — a wire spans
-        /// its own adjustable length; every other part has the
-        /// standard-size body.
-        var terminalHalfSpan: Double {
-            kind == .wire ? value / 2 : CircuitsModel.terminalOffset
-        }
-
+        /// Where one of this part's two leads sits. Every part is
+        /// the same length now — the jumper was the only one that
+        /// stretched, and it has been retired.
         func terminalPosition(_ end: Int) -> SIMD3<Double> {
-            position + (end == 0 ? -terminalHalfSpan : terminalHalfSpan) * axis
+            let halfSpan = CircuitsModel.terminalOffset
+            return position + (end == 0 ? -halfSpan : halfSpan) * axis
         }
     }
 
@@ -311,15 +305,6 @@ final class CircuitsModel {
         if id != selectedID { scopeSamples = [] }
         guard components.contains(where: { $0.id == id }) else { return }
         selectedID = id
-    }
-
-    /// Live length while a wire's end grip is being pulled. Clamped to
-    /// the same range as the panel slider; ignores non-wires.
-    func setWireLength(id: UUID, length: Double) {
-        guard let index = components.firstIndex(where: { $0.id == id }),
-              components[index].kind == .wire else { return }
-        components[index].value = min(max(length, Self.wireLengthRange.lowerBound),
-                                      Self.wireLengthRange.upperBound)
     }
 
     /// The pairs a release right now would wire up — the renderer draws
@@ -495,18 +480,18 @@ final class CircuitsModel {
 
     /// Swing a part by one of its end grips: the opposite end stays
     /// pinned at `pivot`, the grabbed end chases the hand, and the part
-    /// re-aims along the line between them. Wires also take their new
-    /// length from the hand's reach.
+    /// re-aims along the line between them.
+    ///
+    /// The stretch half of this went with the jumper — nothing on the
+    /// bench has an adjustable length any more.
     func dragEnd(id: UUID, grabbedEnd: Int, pivot: SIMD3<Double>, hand: SIMD3<Double>) {
         guard let index = components.firstIndex(where: { $0.id == id }) else { return }
         var direction = hand - pivot
         let reach = simd_length(direction)
         guard reach > 1e-4 else { return }
         direction /= reach
-        setWireLength(id: id, length: reach - Self.endGripOffset)
-        let halfSpan = components[index].terminalHalfSpan
         components[index].axis = grabbedEnd == 1 ? direction : -direction
-        components[index].position = clamp(pivot + direction * halfSpan)
+        components[index].position = clamp(pivot + direction * Self.terminalOffset)
     }
 
     func move(id: UUID, to point: SIMD3<Double>) {
@@ -596,7 +581,6 @@ final class CircuitsModel {
         case .bulb: 4.0...240.0                     // Ω
         case .motor: 1.0...60.0                     // Ω
         case .fuse: 0.05...5.0                      // A
-        case .wire: 0.08...0.9                      // m
         case .led, .switcher: 0...0
         }
     }
@@ -620,7 +604,6 @@ final class CircuitsModel {
         case .capacitor: PhysicsFormat.metric(value, "F", decimals: 0)
         case .inductor: PhysicsFormat.measurement(value, "H", decimals: 2)
         case .fuse: PhysicsFormat.measurement(value, "A", decimals: 2)
-        case .wire: PhysicsFormat.measurement(value * 100, "cm", decimals: 0)
         case .led, .switcher: ""
         }
     }
@@ -889,8 +872,6 @@ final class CircuitsModel {
                 component.failed ? .open : .resistor(ohms: 0.001)
             case .switcher:
                 component.isClosed ? .conductor : .open
-            case .wire:
-                .resistor(ohms: Self.wireResistance(length: component.value))
             }
             return CircuitElement(nodeA: a, nodeB: b, kind: kind)
         }
@@ -1054,8 +1035,8 @@ final class CircuitsModel {
     /// A real bench ammeter is a shunt of a few milliohms — low enough
     /// not to disturb the circuit it measures, high enough to be a real
     /// element. 1 mΩ against this bench's smallest other resistance
-    /// (`wireResistance`, tens of mΩ) changes the loop current by well
-    /// under a percent, which is the whole design requirement for an
+    /// (a closed switch, 1 mΩ) changes the loop current by well under
+    /// a percent, which is the whole design requirement for an
     /// ammeter.
     ///
     /// NOT `.conductor`: a perfect short carries a current the solver
@@ -1312,7 +1293,6 @@ final class CircuitsModel {
         switch component.kind {
         case .resistor: component.value
         case .bulb, .led, .motor: component.value
-        case .wire: wireResistance(length: component.value)
         case .switcher: component.isClosed ? 0.001 : nil
         case .fuse: component.failed ? nil : 0.001
         case .battery, .acSource: nil
@@ -1423,9 +1403,143 @@ final class CircuitsModel {
 
     // MARK: Persistence (the bench survives relaunch)
 
-    private struct SavedBench: Codable {
+    /// A bench as it is WRITTEN. Not private, because `migrated`
+    /// returns one and the migration tests read it — the splice is the
+    /// part of this file most worth checking directly.
+    struct SavedBench: Codable {
         var components: [Component]
         var wires: [Wire]
+    }
+
+    // MARK: The on-disk row, and why it is not `Component`
+
+    /// A saved component as it comes OFF the disk, with `kind` as a
+    /// raw `String`.
+    ///
+    /// THIS EXISTS BECAUSE RETIRING A KIND MUST NOT DESTROY ANYONE'S
+    /// BENCH. `ComponentKind` is `Codable` by rawValue, so decoding
+    /// straight into `[Component]` throws on the first unrecognised
+    /// kind — and it throws for the WHOLE array, which
+    /// `restoreSavedBench` and `loadSlot` then swallow with `try?`.
+    /// Deleting `.wire` that way would have silently emptied every
+    /// user's bench and all eight named slots on first launch, and
+    /// the app would have looked like it was working.
+    ///
+    /// So a retired kind is DATA to be migrated, not a decode failure.
+    /// Every field past `value` is optional because older files were
+    /// written before those keys existed and a required field here
+    /// would reject them — which is the same bug in a different coat.
+    ///
+    /// The JSON is byte-identical to what `SavedBench` encodes (the
+    /// key names and the rawValue spelling match), so this is a read
+    /// path only: the bench is still written as `[Component]`.
+    struct StoredComponent: Codable {
+        var id: UUID
+        var kind: String
+        var position: SIMD3<Double>
+        var value: Double
+        var axis: SIMD3<Double>?
+        var isClosed: Bool?
+        var capacitorVoltage: Double?
+    }
+
+    struct StoredBench: Codable {
+        var components: [StoredComponent]
+        var wires: [Wire]
+    }
+
+    /// Brings a bench forward across retired component kinds.
+    ///
+    /// A retired part is SPLICED, not dropped: its terminals were an
+    /// electrical point like any other, so everything that was joined
+    /// through it stays joined. The jumper this was written for
+    /// (`.wire`, retired 2026-08-11) was an ideal connection in the
+    /// solve anyway — 17 mΩ of ρL/A against a 24 Ω bulb — so the
+    /// circuit that comes back is the same circuit, not an
+    /// approximation of it.
+    ///
+    /// The splice runs a partition over ALL stored terminals including
+    /// the retired ones, then emits a star over each net's SURVIVING
+    /// terminals. One pass handles jumpers chained end to end, it
+    /// produces the minimal wire set rather than a redundant mesh (so
+    /// the same-net rule accepts the result by construction), and it
+    /// cannot exceed `wireBudget`: a star over T terminals in N nets
+    /// is T − N edges, and T ≤ 32.
+    ///
+    /// An unrecognised kind that is not merely retired — a file from a
+    /// future version, a corrupted row — takes the same path. Dropping
+    /// the row and keeping the bench is the right trade every time.
+    static func migrated(_ stored: StoredBench) -> SavedBench {
+        var partition = NetPartition(slotCount: stored.components.count * 2)
+        var slotOf: [Terminal: Int] = [:]
+        for index in stored.components.indices {
+            for end in 0...1 {
+                slotOf[Terminal(componentID: stored.components[index].id, end: end)]
+                    = NetTopology.slot(componentIndex: index, end: end)
+            }
+        }
+        for wire in stored.wires {
+            guard let a = slotOf[wire.from], let b = slotOf[wire.to] else { continue }
+            partition.union(a, b)
+        }
+        // A RETIRED PART IS A CONDUCTOR BETWEEN ITS OWN TWO ENDS, and
+        // this line is the splice. Without it the partition sees a
+        // jumper's two terminals as separate points, and a
+        // battery → jumper → bulb loop comes back as two dangling
+        // halves — the parts survive, the circuit does not, and
+        // nothing on screen says why.
+        //
+        // Unknown kinds take the same treatment. Keeping what was
+        // joined joined is the safer wrong answer: a bench that
+        // over-connects is visibly wrong and one pinch from fixed,
+        // and a bench that silently opens a loop looks like a bench
+        // somebody built badly.
+        for index in stored.components.indices
+        where ComponentKind(rawValue: stored.components[index].kind) == nil {
+            partition.union(NetTopology.slot(componentIndex: index, end: 0),
+                            NetTopology.slot(componentIndex: index, end: 1))
+        }
+
+        // The survivors, in their original order.
+        var components: [Component] = []
+        var survivingTerminals: [(terminal: Terminal, slot: Int)] = []
+        for index in stored.components.indices {
+            let row = stored.components[index]
+            guard let kind = ComponentKind(rawValue: row.kind) else { continue }
+            var component = Component(id: row.id, kind: kind,
+                                      position: row.position, value: row.value)
+            if let axis = row.axis, simd_length(axis) > 1e-6 {
+                component.axis = simd_normalize(axis)
+            }
+            component.isClosed = row.isClosed ?? true
+            component.capacitorVoltage = row.capacitorVoltage ?? 0
+            components.append(component)
+            for end in 0...1 {
+                survivingTerminals.append((Terminal(componentID: row.id, end: end),
+                                           NetTopology.slot(componentIndex: index, end: end)))
+            }
+        }
+
+        // One star per net over whatever survived it.
+        var firstOfNet: [Int: Terminal] = [:]
+        var wires: [Wire] = []
+        for entry in survivingTerminals {
+            let root = partition.find(entry.slot)
+            if let hub = firstOfNet[root] {
+                wires.append(Wire(id: UUID(), from: hub, to: entry.terminal))
+            } else {
+                firstOfNet[root] = entry.terminal
+            }
+        }
+        return SavedBench(components: components, wires: wires)
+    }
+
+    /// The one decode path — both the auto-save and the named slots
+    /// come through here, so a migration can never cover one and miss
+    /// the other.
+    private static func decodeBench(_ data: Data) -> SavedBench? {
+        guard let stored = try? JSONDecoder().decode(StoredBench.self, from: data) else { return nil }
+        return migrated(stored)
     }
 
     nonisolated static let saveKey = "circuits.savedBench.v1"
@@ -1474,7 +1588,7 @@ final class CircuitsModel {
     /// Restores the auto-saved bench if one exists.
     private func restoreSavedBench() -> Bool {
         guard let data = UserDefaults.standard.data(forKey: Self.saveKey),
-              let bench = try? JSONDecoder().decode(SavedBench.self, from: data)
+              let bench = Self.decodeBench(data)
         else { return false }
         return apply(bench)
     }
@@ -1518,7 +1632,7 @@ final class CircuitsModel {
     @discardableResult
     func loadSlot(named name: String) -> Bool {
         guard let data = readSlots()[name],
-              let bench = try? JSONDecoder().decode(SavedBench.self, from: data),
+              let bench = Self.decodeBench(data),
               apply(bench) else { return false }
         persistSoon()
         return true
@@ -1609,10 +1723,13 @@ final class CircuitsModel {
             connect((capacitor, 0), (resistor, 1))
             connect((resistor, 0), (battery, 0))
         case .shortCircuit:
+            // A battery wired to itself, which is what a dead short
+            // IS. This used to route through a 0.4 m jumper part whose
+            // 7 mΩ was the only thing between the terminals besides
+            // the battery's own 50 mΩ — a rounding error dressed up as
+            // a component. Now the wire is the short.
             let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
-            let jumper = place(.wire, at: SIMD3(0, 1.45, -0.9), value: 0.4)
-            connect((battery, 1), (jumper, 1))
-            connect((jumper, 0), (battery, 0))
+            connect((battery, 1), (battery, 0))
         }
         selectedID = components.first?.id
         solve(dt: 1.0 / 90.0)
@@ -1764,11 +1881,56 @@ final class CircuitsModel {
     /// `restoreSaved` re-opens the user's last bench (AppModel passes
     /// true); tests use the default and always get the starter loop.
     init(restoreSaved: Bool = false) {
+        #if DEBUG
+        Self.seedLegacyBenchIfAsked()
+        #endif
         reset()
         refreshSlotNames()
         if restoreSaved, restoreSavedBench() {
             }
     }
+
+    #if DEBUG
+    /// `-circLegacyBench 1` writes a PRE-MIGRATION bench into the save
+    /// slot before this model reads it, so the splice can be
+    /// photographed. Nothing else can stage a migration: the running
+    /// app cannot mint a retired kind, and by the time any view has
+    /// appeared the bench has already been restored.
+    ///
+    /// The staged bench is battery → jumper → bulb → battery, plus a
+    /// row of a kind that never existed. What must come back is a
+    /// two-part loop that LIGHTS — the jumper spliced out, the unknown
+    /// row dropped, and everything that was joined through them still
+    /// joined.
+    private static func seedLegacyBenchIfAsked() {
+        guard UserDefaults.standard.bool(forKey: "circLegacyBench") else { return }
+        let battery = UUID(), jumper = UUID(), bulb = UUID(), ghost = UUID()
+        let stored = StoredBench(
+            components: [
+                .init(id: battery, kind: "battery",
+                      position: SIMD3(-0.3, 1.25, -0.9), value: 9),
+                .init(id: jumper, kind: "wire",
+                      position: SIMD3(0, 1.45, -0.9), value: 0.4),
+                .init(id: bulb, kind: "bulb",
+                      position: SIMD3(0.3, 1.25, -0.9), value: 24),
+                .init(id: ghost, kind: "flux-capacitor",
+                      position: SIMD3(0, 1.1, -0.9), value: 1),
+            ],
+            wires: [
+                Wire(id: UUID(), from: .init(componentID: battery, end: 1),
+                     to: .init(componentID: jumper, end: 0)),
+                Wire(id: UUID(), from: .init(componentID: jumper, end: 1),
+                     to: .init(componentID: bulb, end: 0)),
+                Wire(id: UUID(), from: .init(componentID: bulb, end: 1),
+                     to: .init(componentID: battery, end: 0)),
+                Wire(id: UUID(), from: .init(componentID: ghost, end: 0),
+                     to: .init(componentID: bulb, end: 1)),
+            ])
+        if let data = try? JSONEncoder().encode(stored) {
+            UserDefaults.standard.set(data, forKey: saveKey)
+        }
+    }
+    #endif
 }
 
 // MARK: - Time Capsule

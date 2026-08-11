@@ -301,41 +301,15 @@ final class CircuitsModelTests: XCTestCase {
                        "moving a part must not interrupt the current")
     }
 
-    /// Wire jumpers are honest copper: a battery–wire–bulb–wire loop
-    /// carries V / (R_bulb + r_internal + 2·R_wire) with R = ρL/A.
-    func testWireJumpersConductTheLoop() {
-        let model = CircuitsModel()
-        model.clearBench()
-        model.add(.battery)
-        model.add(.wire)
-        model.add(.bulb)
-        model.add(.wire)
-        let battery = model.components[0]
-        let wireA = model.components[1]
-        let bulb = model.components[2]
-        let wireB = model.components[3]
-
-        model.tapTerminal(.init(componentID: battery.id, end: 1))
-        model.tapTerminal(.init(componentID: wireA.id, end: 0))
-        model.tapTerminal(.init(componentID: wireA.id, end: 1))
-        model.tapTerminal(.init(componentID: bulb.id, end: 0))
-        model.tapTerminal(.init(componentID: bulb.id, end: 1))
-        model.tapTerminal(.init(componentID: wireB.id, end: 0))
-        model.tapTerminal(.init(componentID: wireB.id, end: 1))
-        model.tapTerminal(.init(componentID: battery.id, end: 0))
-        model.step(dt: 1.0 / 90.0)
-
-        let wireOhms = CircuitsModel.wireResistance(
-            length: CircuitsModel.ComponentKind.wire.defaultValue)
-        let expected = 9.0 / (24 + CircuitsModel.batteryInternalResistance
-                              + 2 * wireOhms)
-        XCTAssertEqual(abs(model.readouts[bulb.id]?.amps ?? 0), expected,
-                       accuracy: expected * 1e-3)
-        // The jumper drops exactly I·R — a millivolt or so, not zero.
-        XCTAssertEqual(abs(model.readouts[wireA.id]?.volts ?? 0),
-                       expected * wireOhms,
-                       accuracy: expected * wireOhms * 0.01)
-    }
+    // THE JUMPER TEST LIVED HERE. `ComponentKind.wire` was a part
+    // you pulled off the rack, with a length and ~17 mΩ/m of honest
+    // ρL/A copper, and this test checked a battery–wire–bulb–wire loop
+    // against V/(R + r + 2·R_wire). The kind was retired 2026-08-11: a
+    // CONNECTION spans any distance now, so a jumper part had nothing
+    // left to do. The physics claim did not go away with it — it moved
+    // to `CircuitsBenchMigrationTests.testAJumperBecomesADirectWire`,
+    // which loads a saved jumper loop, splices it, and asserts the
+    // spliced circuit carries the current the jumper loop carried.
 
     /// Pulling an end grip swings the part around its opposite end: the
     /// pivot end stays exactly where it was, the part re-aims toward the
@@ -362,27 +336,6 @@ final class CircuitsModelTests: XCTestCase {
             "a battery's span must not stretch")
     }
 
-    /// The same pull on a wire aims it AND takes its length from the
-    /// hand's reach (minus the grip's standoff past the terminal).
-    func testDragEndStretchesAndAimsAWire() {
-        let model = CircuitsModel()
-        model.clearBench()
-        model.add(.wire)
-        let wire = model.components[0]
-        let pivot = wire.terminalPosition(0)
-        let direction = simd_normalize(SIMD3(1.0, 1.0, 0))
-
-        model.dragEnd(id: wire.id, grabbedEnd: 1,
-                      pivot: pivot, hand: pivot + direction * 1.0)
-
-        let pulled = model.components[0]
-        XCTAssertEqual(pulled.value, 1.0 - CircuitsModel.endGripOffset,
-                       accuracy: 1e-12, "length = reach minus the grip standoff")
-        XCTAssertEqual(simd_distance(pulled.terminalPosition(0), pivot), 0,
-                       accuracy: 1e-12)
-        XCTAssertEqual(simd_distance(pulled.axis, direction), 0, accuracy: 1e-12)
-    }
-
     /// A twist during a carry is adopted on release: setAxis normalizes,
     /// and rejects a degenerate axis rather than corrupting the part.
     func testSetAxisNormalizesAndRejectsDegenerate() {
@@ -400,19 +353,19 @@ final class CircuitsModelTests: XCTestCase {
                        accuracy: 1e-12, "a zero axis must be ignored")
     }
 
-    /// Shorting a battery through bare wire trips the overload flag; the
+    /// Shorting a battery to itself trips the overload flag; the
     /// healthy starter loop doesn't.
+    ///
+    /// This used to route the short through a jumper PART, whose 7 mΩ
+    /// sat beside the battery's own 50 mΩ and changed the answer by
+    /// nothing. A battery wired to itself is what a dead short is.
     func testShortCircuitTripsTheOverloadWarning() {
         let model = CircuitsModel()
         model.clearBench()
         model.add(.battery)
-        model.add(.wire)
         let battery = model.components[0]
-        let wire = model.components[1]
-        model.tapTerminal(.init(componentID: battery.id, end: 1))
-        model.tapTerminal(.init(componentID: wire.id, end: 0))
-        model.tapTerminal(.init(componentID: wire.id, end: 1))
-        model.tapTerminal(.init(componentID: battery.id, end: 0))
+        model.connectTerminals(.init(componentID: battery.id, end: 1),
+                               .init(componentID: battery.id, end: 0))
         model.step(dt: 1.0 / 90.0)
         XCTAssertTrue(model.hasOverloadedBattery,
                       "9 V through milliohms is a dead short (~150 A)")
@@ -541,53 +494,6 @@ final class CircuitsModelTests: XCTestCase {
         }
     }
 
-    /// Pulling an end grip goes through setWireLength: clamped to the
-    /// slider's range, and a no-op on anything that isn't a wire.
-    func testSetWireLengthClampsAndIgnoresNonWires() {
-        let model = CircuitsModel()
-        model.clearBench()
-        model.add(.wire)
-        model.add(.battery)
-        let wire = model.components[0]
-        let battery = model.components[1]
-
-        model.setWireLength(id: wire.id, length: 0.8)
-        XCTAssertEqual(model.components[0].value, 0.8, accuracy: 1e-12)
-
-        model.setWireLength(id: wire.id, length: 50)
-        XCTAssertEqual(model.components[0].value,
-                       CircuitsModel.wireLengthRange.upperBound, accuracy: 1e-12)
-        model.setWireLength(id: wire.id, length: -1)
-        XCTAssertEqual(model.components[0].value,
-                       CircuitsModel.wireLengthRange.lowerBound, accuracy: 1e-12)
-
-        model.setWireLength(id: battery.id, length: 1.0)
-        XCTAssertEqual(model.components[1].value, 9.0, accuracy: 1e-12,
-                       "a battery's voltage must not be mistaken for a length")
-    }
-
-    /// A wire's length is adjustable: its terminals spread to span it
-    /// and its resistance grows with it (R = ρL/A).
-    func testWireLengthMovesTerminalsAndScalesResistance() {
-        let model = CircuitsModel()
-        model.clearBench()
-        model.add(.wire)
-        let short = model.components[0]
-        XCTAssertEqual(short.terminalPosition(1).x - short.terminalPosition(0).x,
-                       short.value, accuracy: 1e-12,
-                       "terminals span exactly the wire's length")
-
-        model.select(id: short.id)
-        model.selectedValue = 2.0
-        let long = model.components[0]
-        XCTAssertEqual(long.terminalPosition(1).x - long.terminalPosition(0).x,
-                       2.0, accuracy: 1e-12)
-        XCTAssertEqual(CircuitsModel.wireResistance(length: 2.0),
-                       8 * CircuitsModel.wireResistance(length: 0.25),
-                       accuracy: 1e-12,
-                       "resistance is proportional to length")
-    }
-
     /// Reset restores the welcome scene: the lit starter loop, defaults
     /// back, edits gone.
     func testResetRestoresTheStarterLoop() {
@@ -653,7 +559,7 @@ final class CircuitsModelTests: XCTestCase {
         let battery = model.components[0]
         // Drop a bulb so its terminal 0 lands 3 cm from battery terminal 1.
         let near = battery.terminalPosition(1)
-            + SIMD3(0.03 + battery.terminalHalfSpan, 0, 0)
+            + SIMD3(0.03 + CircuitsModel.terminalOffset, 0, 0)
         model.add(.bulb, at: near)
         let bulb = model.components[1]
 

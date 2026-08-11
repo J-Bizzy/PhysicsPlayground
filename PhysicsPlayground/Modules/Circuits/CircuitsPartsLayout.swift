@@ -152,7 +152,7 @@ enum CircuitsPartsLayout {
     /// cannot build with.
     static func kinds(on flank: Flank) -> [CircuitsModel.ComponentKind] {
         switch flank {
-        case .left: [.battery, .acSource, .switcher, .fuse, .wire]
+        case .left: [.battery, .acSource, .switcher, .fuse]
         case .right: [.resistor, .capacitor, .inductor, .bulb, .led, .motor]
         }
     }

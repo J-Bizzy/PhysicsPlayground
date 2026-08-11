@@ -100,8 +100,6 @@ final class CircuitsRenderer {
     /// potential costs no material write.
     private var towerBuckets: [Int] = []
 
-    /// The wire rod's generated mesh length; live length is a scale on top.
-    private static let wireBaseLength: Float = 0.12
     /// The end grip being pulled right now (system-dragged — don't
     /// reposition it), if any.
     var stretchingHandle: CircuitsModel.Terminal?
@@ -696,7 +694,7 @@ final class CircuitsRenderer {
             // Terminals and end grips ride the ends of the (possibly
             // stretched) span; a grip the hand is pulling is
             // system-dragged — leave it be. Pending terminal glows larger.
-            let half = Float(component.terminalHalfSpan)
+            let half = Float(CircuitsModel.terminalOffset)
             for (end, terminal) in visual.terminals.enumerated() {
                 let sign: Float = end == 0 ? -1 : 1
                 terminal.position = SIMD3(sign * half, 0, 0)
@@ -758,13 +756,6 @@ final class CircuitsRenderer {
                         visual.body.model?.materials = [material]
                     }
                 }
-            case .wire:
-                // The rod stretches along its axis to the wire's live
-                // length (terminal/grip placement is handled above).
-                let stretch = Float(component.value) / Self.wireBaseLength
-                if abs(visual.body.scale.y - stretch) > 1e-4 {
-                    visual.body.scale = [1, stretch, 1]
-                }
             default:
                 break
             }
@@ -812,10 +803,6 @@ final class CircuitsRenderer {
         case .fuse: component.failed
             ? "blown"
             : PhysicsFormat.measurement(component.value, "A fuse", decimals: 1)
-        case .wire:
-            component.value >= 0.995
-                ? PhysicsFormat.measurement(component.value, "m", decimals: 2)
-                : PhysicsFormat.measurement(component.value * 100, "cm", decimals: 0)
         }
     }
 
@@ -850,7 +837,7 @@ final class CircuitsRenderer {
             let terminal = ModelEntity(mesh: terminalMesh, materials: [Self.copperMaterial])
             terminal.name = "t\(end)-\(component.id.uuidString)"
             terminal.position = SIMD3(
-                Float(end == 0 ? -component.terminalHalfSpan : component.terminalHalfSpan), 0, 0)
+                Float(end == 0 ? -CircuitsModel.terminalOffset : CircuitsModel.terminalOffset), 0, 0)
             // 0.042 until 2026-08-07, on a 0.013 m bead. It reached
             // past the end grip at 0.115, and on a short wire the two
             // terminals' targets interpenetrated — so which end you
@@ -873,16 +860,13 @@ final class CircuitsRenderer {
             holder.addChild(terminal)
             terminals.append(terminal)
 
-            // A short lead from the body toward the terminal — except on
-            // wires, whose rod already spans terminal to terminal.
-            if component.kind != .wire {
-                let lead = ModelEntity(
-                    mesh: .generateCylinder(height: 0.045, radius: 0.0028),
-                    materials: [Self.copperMaterial])
-                lead.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-                lead.position = SIMD3(Float(end == 0 ? -0.062 : 0.062), 0, 0)
-                holder.addChild(lead)
-            }
+            // A short lead from the body toward the terminal.
+            let lead = ModelEntity(
+                mesh: .generateCylinder(height: 0.045, radius: 0.0028),
+                materials: [Self.copperMaterial])
+            lead.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            lead.position = SIMD3(Float(end == 0 ? -0.062 : 0.062), 0, 0)
+            holder.addChild(lead)
         }
 
         // Orange end grips just past the terminals: pull one and the part
@@ -897,7 +881,7 @@ final class CircuitsRenderer {
             let grip = ModelEntity(
                 mesh: .generateSphere(radius: 0.012), materials: [gripMaterial])
             grip.name = "s\(end)-\(component.id.uuidString)"
-            let half = Float(component.terminalHalfSpan + CircuitsModel.endGripOffset)
+            let half = Float(CircuitsModel.terminalOffset + CircuitsModel.endGripOffset)
             grip.position = SIMD3(end == 0 ? -half : half, 0, 0)
             Grabbable.configureTouchTarget(
                 grip, collisionRadius: 0.026,
@@ -908,8 +892,7 @@ final class CircuitsRenderer {
             var gripAccessibility = AccessibilityComponent()
             gripAccessibility.isAccessibilityElement = true
             gripAccessibility.label = LocalizedStringResource(stringLiteral:
-                "End grip. Pull to aim the \(component.kind.displayName) in space"
-                + (component.kind == .wire ? " and change its length." : "."))
+                "End grip. Pull to aim the \(component.kind.displayName) in space.")
             grip.components.set(gripAccessibility)
             holder.addChild(grip)
             stretchHandles.append(grip)
@@ -1169,20 +1152,6 @@ final class CircuitsRenderer {
                 body.addChild(cap)
             }
             return body
-        case .wire:
-            // A jumper: bare copper rod in an orange insulation sleeve.
-            // Generated at the base length; updateVisuals stretches the
-            // rod along its axis to the component's live length.
-            let body = ModelEntity(
-                mesh: .generateCylinder(height: Self.wireBaseLength, radius: 0.005),
-                materials: [Self.copperMaterial])
-            body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-            let sleeve = ModelEntity(
-                mesh: .generateCylinder(height: 0.07, radius: 0.0095),
-                materials: [Materials.machined(UIColor(red: 0.9, green: 0.45, blue: 0.15, alpha: 1),
-                                               roughness: 0.7)])
-            body.addChild(sleeve)
-            return body
         }
     }
 
@@ -1434,16 +1403,6 @@ final class CircuitsRenderer {
                   let b = terminalWorld(wire.to, model) else { continue }
             driftDots(key: wire.id, from: a, to: b,
                       current: model.wireFlows[wire.id] ?? 0,
-                      model: model, dt: dt, dotIndex: &dotIndex)
-        }
-        // Wire jumper components conduct too — the same drift runs along
-        // their rods (keyed by component id; ids never collide with wires).
-        for component in model.components where component.kind == .wire {
-            guard let a = terminalWorld(.init(componentID: component.id, end: 0), model),
-                  let b = terminalWorld(.init(componentID: component.id, end: 1), model)
-            else { continue }
-            driftDots(key: component.id, from: a, to: b,
-                      current: model.readouts[component.id]?.amps ?? 0,
                       model: model, dt: dt, dotIndex: &dotIndex)
         }
         for index in dotIndex..<electronPool.budget {

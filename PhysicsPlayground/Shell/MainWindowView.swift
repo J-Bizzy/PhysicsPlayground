@@ -62,17 +62,21 @@ struct MainWindowView: View {
                 if UserDefaults.standard.bool(forKey: "notebookOpen") {
                     openWindow(id: NotebookView.windowID)
                 }
-                // `-seedCircuits 1` drops a few parts (one wire aimed off-axis)
-                // so component visuals can be screenshot-checked from the CLI.
+                // `-seedCircuits 1` drops a few parts (one aimed
+                // off-axis) so component visuals can be
+                // screenshot-checked from the CLI. The off-axis part
+                // was a jumper until the jumper was retired; a
+                // resistor aims just as crookedly and is still a part
+                // the bench can hold.
                 if UserDefaults.standard.bool(forKey: "seedCircuits") {
                     let circuits = appModel.circuitsModel
                     if circuits.components.isEmpty {
                         circuits.add(.battery, at: SIMD3(-0.35, 1.3, -0.9))
                         circuits.add(.bulb, at: SIMD3(0.35, 1.3, -0.9))
-                        circuits.add(.wire, at: SIMD3(0, 1.5, -0.9))
-                        if let wire = circuits.components.last {
-                            let pivot = wire.terminalPosition(0)
-                            circuits.dragEnd(id: wire.id, grabbedEnd: 1, pivot: pivot,
+                        circuits.add(.resistor, at: SIMD3(0, 1.5, -0.9))
+                        if let part = circuits.components.last {
+                            let pivot = part.terminalPosition(0)
+                            circuits.dragEnd(id: part.id, grabbedEnd: 1, pivot: pivot,
                                              hand: pivot + SIMD3(0.35, 0.4, 0.05))
                         }
                     }
