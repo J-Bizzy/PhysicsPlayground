@@ -561,7 +561,10 @@ final class CircuitsRenderer {
         skylineRoot.isEnabled = model.showVoltageHeights
         guard model.showVoltageHeights else { return }
 
-        let nodes = model.nodePotentials
+        // One tower per net, in node order — so a tower keeps its
+        // identity between frames instead of being whichever entry a
+        // dictionary happened to hand back.
+        let nodes = model.nets
         let span = max(abs(model.voltageSpan.min), abs(model.voltageSpan.max), 1.0)
         while towers.count < nodes.count { growTower() }
 

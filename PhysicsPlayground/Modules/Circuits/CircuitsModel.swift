@@ -327,6 +327,7 @@ final class CircuitsModel {
     /// never surprises: what you preview is what you get.
     func autoConnectCandidates(id: UUID) -> [(from: Terminal, to: Terminal)] {
         guard let component = components.first(where: { $0.id == id }) else { return [] }
+        let net = topology()
         var pairs: [(from: Terminal, to: Terminal)] = []
         for end in 0...1 {
             let mine = Terminal(componentID: id, end: end)
@@ -337,10 +338,9 @@ final class CircuitsModel {
                     let theirs = Terminal(componentID: other.id, end: otherEnd)
                     let distance = simd_distance(minePosition, other.terminalPosition(otherEnd))
                     guard distance < Self.snapDistance else { continue }
-                    let already = wires.contains {
-                        ($0.from == mine && $0.to == theirs) || ($0.from == theirs && $0.to == mine)
-                    }
-                    guard !already else { continue }
+                    // Already one point: a wire here would carry
+                    // nothing and say nothing.
+                    guard !net.sameNet(mine, theirs) else { continue }
                     if best == nil || distance < best!.distance {
                         best = (theirs, distance)
                     }
@@ -430,21 +430,44 @@ final class CircuitsModel {
         persistSoon()
     }
 
-    /// Direct terminal-to-terminal wiring — the drag-to-wire gesture's
-    /// landing. Same rules as tap-tap: no self-wires, no duplicates.
-    func connectTerminals(_ a: Terminal, _ b: Terminal) {
-        guard a != b,
-              components.contains(where: { $0.id == a.componentID }),
+    /// Why a connection did not happen. The caller shows the
+    /// difference — a refusal is a thing the bench does, not a silent
+    /// `return`, because a wire that does not appear and a wire that
+    /// was declined look identical from two metres.
+    enum ConnectOutcome: Equatable {
+        case connected(UUID)
+        /// The two ends are already the same electrical point.
+        case sameNet
+        case sameTerminal
+        case budgetFull
+        /// One of the terminals is not on the bench.
+        case missing
+    }
+
+    /// Direct terminal-to-terminal wiring — where every wiring gesture
+    /// lands. No self-wires, and no wire between two ends that are
+    /// ALREADY one point.
+    ///
+    /// The same-net rule replaced a duplicate-pair check, and it is
+    /// strictly stronger: the old rule caught a second wire between
+    /// exactly A and B, and missed a second PATH from A to B through
+    /// anything else. That is the defect `fanOut` was dividing current
+    /// across — redundant wires each showed a fraction of a current
+    /// that was really flowing through one branch.
+    @discardableResult
+    func connectTerminals(_ a: Terminal, _ b: Terminal) -> ConnectOutcome {
+        guard a != b else { return .sameTerminal }
+        guard components.contains(where: { $0.id == a.componentID }),
               let target = components.first(where: { $0.id == b.componentID })
-        else { return }
-        let exists = wires.contains {
-            ($0.from == a && $0.to == b) || ($0.from == b && $0.to == a)
-        }
-        guard !exists, wires.count < Self.wireBudget else { return }
-        wires.append(Wire(id: UUID(), from: a, to: b))
+        else { return .missing }
+        guard !areConnected(a, b) else { return .sameNet }
+        guard wires.count < Self.wireBudget else { return .budgetFull }
+        let wire = Wire(id: UUID(), from: a, to: b)
+        wires.append(wire)
         pendingTerminal = nil
         emitSound(.pop, at: target.terminalPosition(b.end), volume: 0.8)
         persistSoon()
+        return .connected(wire.id)
     }
 
     /// Adopt the aim a carry left the part with (the hand can twist a
@@ -671,65 +694,169 @@ final class CircuitsModel {
         }
     }
 
+    // MARK: Nets — which terminals are the same electrical point
+
+    /// The bench's connectivity, resolved. Everything that needs to
+    /// know whether two terminals are one point reads this: the solve
+    /// (what to call each node), the wiring (refusing a wire that
+    /// would be redundant), the meter (continuity), the skyline (where
+    /// to stand a tower).
+    struct NetTopology {
+        /// `slot = 2 * componentIndex + end`. LOAD-BEARING: it is what
+        /// lets the stamping loop stay index-parallel with
+        /// `components` without a lookup table between them.
+        static func slot(componentIndex: Int, end: Int) -> Int { 2 * componentIndex + end }
+
+        /// What the cache was built from — and, because comparing
+        /// these against the live bench is how staleness is detected,
+        /// the whole invalidation mechanism. See `topology()`.
+        let componentIDs: [UUID]
+        let wires: [Wire]
+
+        let nodeOfSlot: [Int]
+        let nodeCount: Int
+        private let slotOf: [Terminal: Int]
+        /// Indexed by node id; each list sorted by slot.
+        let terminalsByNode: [[Terminal]]
+
+        init(components: [Component], wires: [Wire]) {
+            componentIDs = components.map(\.id)
+            self.wires = wires
+
+            var slots: [Terminal: Int] = [:]
+            slots.reserveCapacity(components.count * 2)
+            for index in components.indices {
+                for end in 0...1 {
+                    slots[Terminal(componentID: components[index].id, end: end)]
+                        = Self.slot(componentIndex: index, end: end)
+                }
+            }
+            slotOf = slots
+
+            var partition = NetPartition(slotCount: components.count * 2)
+            for wire in wires {
+                guard let a = slots[wire.from], let b = slots[wire.to] else { continue }
+                partition.union(a, b)
+            }
+
+            // Ground is the first battery's − end, or the first
+            // terminal on the bench when nothing sources anything.
+            let ground = components.firstIndex { $0.kind == .battery }
+                .map { Self.slot(componentIndex: $0, end: 1) } ?? 0
+            guard !components.isEmpty else {
+                nodeOfSlot = []; nodeCount = 0; terminalsByNode = []
+                return
+            }
+            (nodeOfSlot, nodeCount) = partition.numbering(ground: ground)
+
+            var byNode = [[Terminal]](repeating: [], count: nodeCount)
+            for index in components.indices {
+                for end in 0...1 {
+                    let slot = Self.slot(componentIndex: index, end: end)
+                    byNode[nodeOfSlot[slot]]
+                        .append(Terminal(componentID: components[index].id, end: end))
+                }
+            }
+            terminalsByNode = byNode
+        }
+
+        func node(of terminal: Terminal) -> Int? {
+            slotOf[terminal].map { nodeOfSlot[$0] }
+        }
+
+        /// Whether two terminals are already the same electrical point
+        /// — so a wire between them would carry nothing and mean
+        /// nothing. Two terminals nothing knows about are not "the
+        /// same point"; they are not points at all.
+        func sameNet(_ a: Terminal, _ b: Terminal) -> Bool {
+            guard let nodeA = node(of: a), let nodeB = node(of: b) else { return false }
+            return nodeA == nodeB
+        }
+    }
+
+    @ObservationIgnored private var netCache: NetTopology?
+    #if DEBUG
+    /// How many times the topology has actually been rebuilt. Exists
+    /// so a test can assert that MOVING a part does not — the whole
+    /// point of the cache is that geometry is not topology.
+    @ObservationIgnored private(set) var netRebuildCount = 0
+    #endif
+
+    /// The bench's connectivity, rebuilt only when the bench's
+    /// TOPOLOGY changed — not when a part moved, not when a value was
+    /// dialled, not when a switch opened (a switch is an ELEMENT
+    /// between two nets, never a break in one).
+    ///
+    /// THERE IS NO INVALIDATION CALL, DELIBERATELY. No
+    /// `topologyVersion`, no `invalidateNets()` sprinkled through
+    /// fourteen mutators — that is the same act of attention that
+    /// forgets the fifteenth, and this file has already paid for that
+    /// lesson twice (see `ResetCoverageTests`, and the six modules
+    /// whose `reset()` dropped a flag). Instead the cache is keyed on
+    /// the thing itself: it compares the component ids and the wires
+    /// it was built from against the ones on the bench now. A mutator
+    /// invalidates it whether or not its author knew it existed.
+    ///
+    /// The comparison is ≤16 UUID compares plus ≤36 `Wire` compares,
+    /// with no allocation, against a Gaussian elimination over ≤33
+    /// nodes on the other side of the decision. It is not close.
+    private func topology() -> NetTopology {
+        if let netCache, netCache.componentIDs.count == components.count,
+           netCache.wires.count == wires.count {
+            var matches = true
+            for index in components.indices where netCache.componentIDs[index] != components[index].id {
+                matches = false
+                break
+            }
+            if matches {
+                for index in wires.indices where netCache.wires[index] != wires[index] {
+                    matches = false
+                    break
+                }
+            }
+            if matches { return netCache }
+        }
+        let fresh = NetTopology(components: components, wires: wires)
+        netCache = fresh
+        #if DEBUG
+        netRebuildCount += 1
+        #endif
+        return fresh
+    }
+
+    /// Whether two terminals are already one electrical point.
+    func areConnected(_ a: Terminal, _ b: Terminal) -> Bool {
+        topology().sameNet(a, b)
+    }
+
     private func solve(dt: Double) {
         guard !components.isEmpty else {
             readouts = [:]
             wireFlows = [:]
             totalSourcePower = 0
+            nets = []
             return
         }
         let timeStep = min(max(dt, 1e-4), 1.0 / 30.0)
 
-        // 1. Union–find terminals into nodes across the wires.
-        var terminalIndex: [Terminal: Int] = [:]
-        var parents: [Int] = []
-        for component in components {
-            for end in 0...1 {
-                terminalIndex[Terminal(componentID: component.id, end: end)] = parents.count
-                parents.append(parents.count)
-            }
-        }
-        func find(_ i: Int) -> Int {
-            var root = i
-            while parents[root] != root { root = parents[root] }
-            var current = i
-            while parents[current] != root {
-                let next = parents[current]
-                parents[current] = root
-                current = next
-            }
-            return root
-        }
-        for wire in wires {
-            guard let a = terminalIndex[wire.from], let b = terminalIndex[wire.to] else { continue }
-            parents[find(a)] = find(b)
-        }
-
-        // 2. Compact node numbering, ground = the first battery's − end
-        // (or the first terminal if there's no battery).
-        let groundTerminal = components.first { $0.kind == .battery }
-            .map { Terminal(componentID: $0.id, end: 1) }
-            ?? Terminal(componentID: components[0].id, end: 0)
-        var nodeOf: [Int: Int] = [:]
-        let groundRoot = find(terminalIndex[groundTerminal]!)
-        nodeOf[groundRoot] = 0
-        var nodeCount = 1
-        for index in parents.indices {
-            let root = find(index)
-            if nodeOf[root] == nil {
-                nodeOf[root] = nodeCount
-                nodeCount += 1
-            }
-        }
-        func node(_ terminal: Terminal) -> Int {
-            nodeOf[find(terminalIndex[terminal]!)]!
+        // 1–2. Which terminals are the same point, and what the solver
+        // should call each of those points. Cached across frames —
+        // see `topology()`.
+        let net = topology()
+        let nodeCount = net.nodeCount
+        @inline(__always) func node(_ index: Int, _ end: Int) -> Int {
+            net.nodeOfSlot[NetTopology.slot(componentIndex: index, end: end)]
         }
 
         // 3. Stamp one element per component and solve.
         if !isPaused { simTime += timeStep }
-        let elements = components.map { component -> CircuitElement in
-            let a = node(Terminal(componentID: component.id, end: 0))
-            let b = node(Terminal(componentID: component.id, end: 1))
+        // `elements[i]` is `components[i]` — the index parity every
+        // readout below reads back through. `NetTopology.slot` is what
+        // keeps it true without a lookup table; `CircuitsNetTests`
+        // asserts it rather than leaving it to be noticed.
+        let elements = components.enumerated().map { (index, component) -> CircuitElement in
+            let a = node(index, 0)
+            let b = node(index, 1)
             let kind: CircuitElement.Kind = switch component.kind {
             case .battery:
                 .battery(volts: component.value,
@@ -781,8 +908,8 @@ final class CircuitsModel {
         var meterElementIndex: Int?
         var stamped = elements
         if multimeterArmed, meterMode == .ampsDC,
-           let probeA, let probeB {
-            let a = node(probeA), b = node(probeB)
+           let probeA, let probeB,
+           let a = net.node(of: probeA), let b = net.node(of: probeB) {
             if a != b {
                 meterElementIndex = stamped.count
                 stamped.append(CircuitElement(
@@ -797,32 +924,28 @@ final class CircuitsModel {
         // Terminal voltages for the warm↔cool gradient the renderer
         // paints across the bench.
         var terminalVolts: [Terminal: Double] = [:]
-        for component in components {
+        for index in components.indices {
             for end in 0...1 {
-                let terminal = Terminal(componentID: component.id, end: end)
-                terminalVolts[terminal] = solution.nodeVoltages[node(terminal)]
+                terminalVolts[Terminal(componentID: components[index].id, end: end)]
+                    = solution.nodeVoltages[node(index, end)]
             }
         }
         terminalVoltages = terminalVolts
         let span = solution.nodeVoltages.dropFirst()
         voltageSpan = (min(span.min() ?? 0, 0), max(span.max() ?? 0, 0))
 
-        // Node potentials with a representative position (the centroid
-        // of the node's terminals) — the voltage skyline reads these:
-        // each node's potential becomes a height you can compare, so
-        // Kirchhoff's loop law becomes a walk over the terrain.
-        var nodeAccum: [Int: (sum: SIMD3<Double>, count: Int)] = [:]
-        for component in components {
-            for end in 0...1 {
-                let nd = node(Terminal(componentID: component.id, end: end))
-                let pos = component.terminalPosition(end)
-                let current = nodeAccum[nd] ?? (.zero, 0)
-                nodeAccum[nd] = (current.sum + pos, current.count + 1)
+        // The nets, given their potentials and a place to stand: each
+        // one's position is the centroid of its terminals, which is
+        // where the voltage skyline raises its tower.
+        nets = net.terminalsByNode.enumerated().map { (id, terminals) in
+            var sum = SIMD3<Double>.zero
+            for terminal in terminals {
+                sum += terminalWorldPosition(terminal) ?? .zero
             }
-        }
-        nodePotentials = nodeAccum.map { (nd, acc) in
-            NodePotential(position: acc.sum / Double(acc.count),
-                          voltage: solution.nodeVoltages[nd])
+            return Net(id: id,
+                       terminals: terminals,
+                       position: terminals.isEmpty ? .zero : sum / Double(terminals.count),
+                       voltage: solution.nodeVoltages[id])
         }
 
         // 4. Publish readouts; advance capacitor state (unless frozen).
@@ -1076,7 +1199,10 @@ final class CircuitsModel {
         let bracketsOneComponent = probeA.componentID == probeB.componentID
             && probeA.end != probeB.end
         let component = components.first { $0.id == probeA.componentID }
-        let sameNode = abs(vA - vB) < 1e-3 && isProbePairConnected(probeA, probeB)
+        // Continuity is a topology question, and it used to be
+        // answered by a BFS over the wire list that existed only for
+        // the meter. It is one lookup now.
+        let sameNode = abs(vA - vB) < 1e-3 && areConnected(probeA, probeB)
 
         switch meterMode {
         case .voltsDC:
@@ -1217,26 +1343,6 @@ final class CircuitsModel {
         return PhysicsFormat.metric(value, unit, decimals: 3)
     }
 
-    /// True when the two probes share a node through wires alone.
-    private func isProbePairConnected(_ a: Terminal, _ b: Terminal) -> Bool {
-        var frontier = [a]
-        var seen: Set<Terminal> = [a]
-        while let current = frontier.popLast() {
-            if current == b { return true }
-            for wire in wires {
-                let next: Terminal?
-                if wire.from == current { next = wire.to }
-                else if wire.to == current { next = wire.from }
-                else { next = nil }
-                if let next, !seen.contains(next) {
-                    seen.insert(next)
-                    frontier.append(next)
-                }
-            }
-        }
-        return false
-    }
-
     // MARK: Workshop state
 
     /// The AC sources' shared clock.
@@ -1252,13 +1358,24 @@ final class CircuitsModel {
     private(set) var terminalVoltages: [Terminal: Double] = [:]
     private(set) var voltageSpan: (min: Double, max: Double) = (0, 0)
 
-    /// A circuit node's potential and where it sits — the voltage
-    /// skyline draws a tower of this height at this spot.
-    struct NodePotential: Equatable {
+    /// One electrical point on the bench: the terminals that are the
+    /// same point, where that point sits, and what potential it is at.
+    ///
+    /// POSITION is the centroid of the net's terminals — the voltage
+    /// skyline draws a tower of this height at this spot, so potential
+    /// becomes terrain and Kirchhoff's loop law becomes a walk over
+    /// it. VOLTAGE is a solve result, so `nets` is rebuilt every
+    /// frame, cheaply, on top of a TOPOLOGY that is not (see
+    /// `topology()`).
+    struct Net: Identifiable, Equatable {
+        /// The compact node number the solver used. 0 is ground.
+        let id: Int
+        /// Sorted by slot, so this is deterministic.
+        let terminals: [Terminal]
         var position: SIMD3<Double>
         var voltage: Double
     }
-    private(set) var nodePotentials: [NodePotential] = []
+    private(set) var nets: [Net] = []
     /// The signature 3-D view: raise every node to a height equal to
     /// its voltage, so potential becomes terrain.
     var showVoltageHeights = false
