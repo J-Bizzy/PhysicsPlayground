@@ -190,7 +190,6 @@ final class CircuitsModel {
     private(set) var wires: [Wire] = []
     private(set) var selectedID: UUID?
     /// The half-made connection: first terminal tapped, awaiting its mate.
-    private(set) var pendingTerminal: Terminal?
 
     var selectedComponent: Component? {
         guard let selectedID else { return nil }
@@ -307,7 +306,7 @@ final class CircuitsModel {
               let component = components.first(where: { $0.id == selectedID }) else { return }
         wires.removeAll { $0.from.componentID == selectedID || $0.to.componentID == selectedID }
         components.removeAll { $0.id == selectedID }
-        if pendingTerminal?.componentID == selectedID { pendingTerminal = nil }
+        if leadPull?.source.componentID == selectedID { cancelLeadPull() }
         self.selectedID = components.last?.id
         emitSound(.thud, at: component.position, volume: 0.4)
         persistSoon()
@@ -577,7 +576,6 @@ final class CircuitsModel {
         guard wires.count < Self.wireBudget else { return .budgetFull }
         let wire = Wire(id: UUID(), from: a, to: b)
         wires.append(wire)
-        pendingTerminal = nil
         emitSound(.pop, at: target.terminalPosition(b.end), volume: 0.8)
         persistSoon()
         return .connected(wire.id)
@@ -634,31 +632,192 @@ final class CircuitsModel {
         Self.clampToBench(point)
     }
 
-    // MARK: Wiring (tap one terminal, then another)
+    // MARK: Wiring — pull a lead
 
-    func tapTerminal(_ terminal: Terminal) {
-        guard components.contains(where: { $0.id == terminal.componentID }) else { return }
-        guard let pending = pendingTerminal else {
-            pendingTerminal = terminal
-            return
+    /// A half-made wire, in flight.
+    ///
+    /// It lives in the MODEL, not in the gesture, for the reason
+    /// everything else in this app does: the model owns motion, and a
+    /// wire being drawn is bench state rather than view state. It also
+    /// means `removeComponent` can cancel one, which is where the
+    /// zombie-wire defect used to live.
+    struct LeadPull: Equatable {
+        /// The lead the wire is coming from.
+        var source: Terminal
+        /// Set when this pull took an EXISTING wire off a terminal
+        /// rather than starting a new one — a rewire. The wire is
+        /// already out of `wires` by then.
+        var detached: UUID?
+        /// Where the hand is, in bench coordinates.
+        var hand: SIMD3<Double>
+        /// What a release right now would land on.
+        var target: Terminal?
+        /// Why a release right now would refuse — nil when it would
+        /// connect. Computed every frame, BEFORE the release, so what
+        /// you preview is what you get.
+        var refusal: ConnectOutcome?
+    }
+
+    /// What a released lead did.
+    enum LeadOutcome: Equatable {
+        case connected(UUID)
+        case refused(ConnectOutcome)
+        /// Let go in open air: the lead springs back, nothing changes.
+        case retracted
+        /// A rewire dropped in open air — the wire it came from is gone.
+        case deleted(UUID)
+        case none
+    }
+
+    private(set) var leadPull: LeadPull?
+
+    /// Start drawing a wire from a lead.
+    func beginLeadPull(from source: Terminal, hand: SIMD3<Double>) {
+        guard components.contains(where: { $0.id == source.componentID }) else { return }
+        leadPull = LeadPull(source: source, hand: hand)
+        updateLeadPull(hand: hand)
+    }
+
+    /// Follow the hand, and work out what a release would do.
+    func updateLeadPull(hand: SIMD3<Double>) {
+        guard var pull = leadPull else { return }
+        pull.hand = hand
+        // The target is found from the LEAD TIP — which is the hand —
+        // against other leads, and it is the same `leadReach` a
+        // release uses. The old drag-to-wire measured hand-to-terminal
+        // at a different distance entirely, so the band could snap to
+        // something the release would then ignore.
+        var best: (terminal: Terminal, distance: Double)?
+        for component in components {
+            for end in 0...1 {
+                let candidate = Terminal(componentID: component.id, end: end)
+                guard candidate != pull.source else { continue }
+                let distance = simd_distance(component.terminalPosition(end), hand)
+                guard distance < Self.leadReach else { continue }
+                if best == nil || distance < best!.distance { best = (candidate, distance) }
+            }
         }
-        defer { pendingTerminal = nil }
-        // The PENDING end is re-validated too, not just the new one.
-        // Belt and braces against the zombie wire above: `removeComponent`
-        // clears the arming, and this refuses to build a wire onto a
-        // part that has gone however it went.
-        guard components.contains(where: { $0.id == pending.componentID }) else { return }
-        guard pending != terminal else { return }  // tapped again: cancel
-        // No duplicate wires between the same two terminals.
-        let exists = wires.contains {
-            ($0.from == pending && $0.to == terminal) || ($0.from == terminal && $0.to == pending)
+        pull.target = best?.terminal
+        pull.refusal = best.map { candidate -> ConnectOutcome? in
+            if areConnected(pull.source, candidate.terminal) { return .sameNet }
+            if wires.count >= Self.wireBudget { return .budgetFull }
+            return nil
+        } ?? nil
+        leadPull = pull
+    }
+
+    /// Let go. Lands the wire, refuses it, or retracts.
+    @discardableResult
+    func endLeadPull() -> LeadOutcome {
+        guard let pull = leadPull else { return .none }
+        defer { leadPull = nil }
+        guard let target = pull.target else {
+            // Open air. A new lead springs back; a rewire that came
+            // off a wire takes that wire with it.
+            if let detached = pull.detached {
+                emitSound(.thud, at: pull.hand, volume: 0.5)
+                persistSoon()
+                return .deleted(detached)
+            }
+            emitSound(.releaseTick, at: pull.hand, volume: 0.2)
+            return .retracted
         }
-        guard !exists, wires.count < Self.wireBudget else { return }
-        wires.append(Wire(id: UUID(), from: pending, to: terminal))
-        if let component = components.first(where: { $0.id == terminal.componentID }) {
-            emitSound(.pop, at: component.terminalPosition(terminal.end), volume: 0.8)
+        let outcome = connectTerminals(pull.source, target)
+        switch outcome {
+        case .connected(let id):
+            return .connected(id)
+        default:
+            // A REFUSAL IS A THING THE BENCH DOES. The renderer recoils
+            // the lead toward its source; there is no text, because a
+            // paragraph is the wrong shape for this room and the
+            // gesture can say it itself.
+            emitSound(.thud, at: pull.hand, volume: 0.35)
+            if let detached = pull.detached {
+                // A rewire that lands somewhere it cannot go is not a
+                // deletion — put the wire back where it was.
+                restore(wireID: detached, from: pull.source)
+            }
+            return .refused(outcome)
         }
-        persistSoon()
+    }
+
+    /// Abandon a pull without landing it — the part went away, the
+    /// bench was cleared, the lab was reset.
+    ///
+    /// THIS IS WHERE THE ZOMBIE WIRE DIED. Its ancestor was
+    /// `pendingTerminal`, which named a terminal on a part that could
+    /// then be deleted underneath it; the next tap built a wire onto a
+    /// component that no longer existed.
+    func cancelLeadPull() {
+        guard let pull = leadPull else { return }
+        leadPull = nil
+        if let detached = pull.detached {
+            restore(wireID: detached, from: pull.source)
+        }
+    }
+
+    /// Put a detached wire back on the terminal it came off.
+    private func restore(wireID: UUID, from source: Terminal) {
+        guard let anchor = detachedWireAnchors[wireID] else { return }
+        detachedWireAnchors[wireID] = nil
+        guard components.contains(where: { $0.id == anchor.componentID }),
+              components.contains(where: { $0.id == source.componentID }),
+              !wires.contains(where: { $0.id == wireID }) else { return }
+        wires.append(Wire(id: wireID, from: anchor, to: source))
+    }
+
+    /// The far end of each wire currently lifted off a terminal, so it
+    /// can be put back exactly as it was.
+    @ObservationIgnored private var detachedWireAnchors: [UUID: Terminal] = [:]
+
+    // MARK: The accessibility door
+
+    /// The lead VoiceOver is wiring from, if any.
+    ///
+    /// Pulling a lead needs a sustained pinch and a hand that travels,
+    /// which is not a gesture every user has. So a terminal's
+    /// `SpatialAction` arms it and the next terminal's action lands
+    /// it — tap-tap wiring, reintroduced deliberately through the
+    /// accessibility door and NOWHERE ELSE.
+    ///
+    /// It is called `voiceWireSource` and not `pendingTerminal` so the
+    /// distinction lives in the identifier. The pinch path never reads
+    /// it. That matters: the old `pendingTerminal` was armed by a bare
+    /// tap, and because the drag gesture has `minimumDistance: 0`
+    /// every tap ALSO ran the drag — so a tap could arm the wiring and
+    /// complete a different wire in the same event, in an order
+    /// nothing defined.
+    private(set) var voiceWireSource: Terminal?
+
+    /// The VoiceOver action on a terminal: arm, or land.
+    @discardableResult
+    func voiceOverWire(_ terminal: Terminal) -> LeadOutcome {
+        guard components.contains(where: { $0.id == terminal.componentID }) else { return .none }
+        guard let source = voiceWireSource else {
+            voiceWireSource = terminal
+            return .none
+        }
+        voiceWireSource = nil
+        guard source != terminal,
+              components.contains(where: { $0.id == source.componentID }) else { return .none }
+        let outcome = connectTerminals(source, terminal)
+        if case .connected(let id) = outcome { return .connected(id) }
+        return .refused(outcome)
+    }
+
+    /// Tapping a wire says "this one" — it does not destroy it.
+    ///
+    /// Until 2026-08-11 a tap on a wire DELETED it, immediately, with
+    /// no confirmation, on a bench that survives relaunch. Every other
+    /// destructive verb in this app arms and then fires; this one did
+    /// not even ask. A wire comes off by being pulled off now, which
+    /// is both reversible mid-gesture and the thing a hand expects.
+    func selectWire(id: UUID) {
+        guard let wire = wires.first(where: { $0.id == id }) else { return }
+        selectedID = wire.from.componentID
+        if let component = components.first(where: { $0.id == wire.from.componentID }) {
+            emitSound(.releaseTick, at: component.terminalPosition(wire.from.end), volume: 0.2)
+        }
     }
 
     func deleteWire(id: UUID) {
@@ -748,7 +907,7 @@ final class CircuitsModel {
         // A HALF-DRAWN WIRE CANNOT SURVIVE ITS OWN PART.
         //
         // Pinch a terminal (which arms it), open that part's ring, tap
-        // Delete: `pendingTerminal` still named the destroyed part, and
+        // Delete: the half-made wire still named the destroyed part, and
         // the next terminal tap anywhere on the bench appended a `Wire`
         // whose `from` component does not exist. It is invisible
         // (`isEnabled = false`), therefore un-pinchable and impossible
@@ -756,7 +915,7 @@ final class CircuitsModel {
         // and is written straight to `UserDefaults` — so it survives
         // relaunches. `connectTerminals` validated both ends; this, the
         // path the Bloom's Delete petal actually calls, cleared neither.
-        if pendingTerminal?.componentID == id { pendingTerminal = nil }
+        if leadPull?.source.componentID == id { cancelLeadPull() }
         persistSoon()
     }
 
@@ -1701,7 +1860,8 @@ final class CircuitsModel {
                 && bench.components.contains { $0.id == wire.to.componentID }
         }
         selectedID = nil
-        pendingTerminal = nil
+        cancelLeadPull()
+        voiceWireSource = nil
         solve(dt: 1.0 / 90.0)
         return true
     }
@@ -1933,7 +2093,8 @@ final class CircuitsModel {
         components = []
         wires = []
         selectedID = nil
-        pendingTerminal = nil
+        cancelLeadPull()
+        voiceWireSource = nil
         readouts = [:]
         wireFlows = [:]
         totalSourcePower = 0
@@ -2068,7 +2229,7 @@ extension CircuitsModel: TimeCapsuleRecording {
     /// A blown LED un-blows when you scrub before its failure and blows
     /// again on resume. That is the demonstration, not a bug.
     ///
-    /// Out: `pendingTerminal` and the meter's arming — an instrument's
+    /// Out: a half-made wire and the meter's arming — an instrument's
     /// state is the observer's, and the meter re-reads the restored
     /// circuit anyway.
     struct CapsuleSnapshot: Equatable {
@@ -2091,7 +2252,8 @@ extension CircuitsModel: TimeCapsuleRecording {
         scopeSamples.removeAll { $0.time > snapshot.simTime }
         if let selectedID, !components.contains(where: { $0.id == selectedID }) {
             self.selectedID = nil
-            pendingTerminal = nil
+            cancelLeadPull()
+        voiceWireSource = nil
         }
     }
 }

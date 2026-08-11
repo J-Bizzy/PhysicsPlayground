@@ -155,6 +155,22 @@ file). What follows is the standing script.
 - [ ] **A part hanging by one lead swings about it** as you carry it,
       the way a component on a wire does. A part wired at both ends,
       or at neither, must not swing.
+- [ ] **PULL A LEAD (2026-08-11).** Pinch a copper lead and draw it
+      across the bench: copper follows your hand. Bring it near
+      another lead — it snaps to it and goes green. Let go: wired.
+- [ ] **Let a lead go in open air.** It springs back. Nothing is made
+      and nothing is destroyed.
+- [ ] **Pull a lead onto one it is ALREADY joined to.** It must go RED
+      and visibly recoil toward where it came from. No wire, no text.
+      A silent no-op is the thing this replaced.
+- [ ] **Tap a terminal. NO WIRE MAY APPEAR.** A tap selects. Until
+      this pass a tap could arm the wiring and — through the
+      overlapping drag — complete a different wire in the same event.
+- [ ] **Tap a wire. IT MUST NOT VANISH.** It used to delete on the
+      first tap, with no confirmation, on a bench that persists.
+- [ ] **VoiceOver: two terminal activations make one wire.** This is
+      the only surviving tap-tap path, and it is deliberate — pulling
+      a lead needs a sustained pinch that travels.
 - [ ] **Both racks are fully in frame** from where you naturally
       stand, with every name readable against a real field of view.
 - [ ] **Fill the bench to sixteen parts, then pull a twelfth kind.**

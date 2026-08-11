@@ -36,6 +36,16 @@ final class CircuitsRenderer {
     /// purely by entity name, so pointing VoiceOver at the same function
     /// the pinch calls costs one property and cannot drift from it.
     var onTap: ((Entity) -> Void)?
+    /// THE ACCESSIBILITY DOOR, and the only one.
+    ///
+    /// Pulling a lead needs a sustained pinch and a hand that travels.
+    /// A terminal's VoiceOver action arms a wire from it, and the next
+    /// terminal's lands it — tap-tap wiring, kept for exactly the
+    /// users who cannot pull, and reachable from nowhere else.
+    /// `SpatialActionComponent` carries one `activate`, so this cannot
+    /// be a second action on the same entity; it IS the terminal's
+    /// activate, and the pinch path never calls it.
+    var onTerminalAction: ((CircuitsModel.Terminal) -> Void)?
 
     /// Called from the SpaceView's `onDisappear`, and the reason it has
     /// to be called explicitly is that neither of the things it releases
@@ -77,6 +87,9 @@ final class CircuitsRenderer {
         let holder: Entity
         let body: ModelEntity
         var terminals: [ModelEntity]
+        /// What each lead's accessibility value currently says, so an
+        /// unchanged state costs no component write.
+        var terminalValues: [String] = ["", ""]
         let label: BackedLabel
         let halo: ModelEntity
         var glow: ModelEntity?
@@ -318,24 +331,58 @@ final class CircuitsRenderer {
     var previewComponentID: UUID?
     /// Terminals currently highlighted as connection targets.
     private(set) var previewTargets: Set<CircuitsModel.Terminal> = []
-    /// The terminal the drag-to-wire rubber band is hovering.
-    var rubberTargetTerminal: CircuitsModel.Terminal?
-
     private var previewWireEntities: [ModelEntity] = []
-    private lazy var rubberBand: ModelEntity = {
-        let band = ModelEntity(
-            mesh: .generateCylinder(height: 1, radius: 0.0045),
-            materials: [Self.previewMaterial])
-        band.isEnabled = false
-        viewRoot.addChild(band)
-        return band
+
+    /// THE LEAD IN FLIGHT: copper drawn out of a terminal toward the
+    /// hand, in one of three states.
+    ///
+    /// It reads as the wire it is about to become — not as a green
+    /// gesture line — because that is what it will be if you let go.
+    /// FATTER THAN A WIRE, AND THAT IS LOAD-BEARING. The first build
+    /// used the ghost wires' 0.0045, which is thinner than a wire's
+    /// 0.0062 jacket — so a lead lying along an existing wire was
+    /// swallowed by it completely. That is not a rare case: it is the
+    /// REFUSAL case, which happens exactly when a wire already joins
+    /// the two ends, and a screenshot of the refusal showed no lead at
+    /// all. A lead in your hand should also simply be the most
+    /// present thing in the room.
+    private static let flyingLeadRadius: Float = 0.008
+
+    private lazy var flyingLead: ModelEntity = {
+        let lead = ModelEntity(
+            mesh: .generateCylinder(height: 1, radius: Self.flyingLeadRadius),
+            materials: [Self.leadMaterial])
+        lead.isEnabled = false
+        viewRoot.addChild(lead)
+        return lead
     }()
+
+    /// Neutral: reaching, nothing under it yet.
+    private static let leadMaterial = Materials.machined(
+        DesignTokens.Palette.copperUI, roughness: 0.35)
+    /// Armed: a release right now lands a wire. Same green the ghost
+    /// wires use, so "this will connect" is one colour on this bench.
     private static let previewMaterial: UnlitMaterial = {
         var material = UnlitMaterial(color: UIColor(
             red: 0.35, green: 1.0, blue: 0.55, alpha: 1))
         material.blending = .transparent(opacity: 0.65)
         return material
     }()
+    /// Refusing: a release right now would be declined.
+    ///
+    /// NO TEXT — the refusal is the RECOIL. The lead shortens back
+    /// toward its source and goes red, which says "not there" without
+    /// a paragraph. Three cards of words have been rejected in this
+    /// room in three days; a fourth explaining why a wire did not
+    /// appear would be the same mistake in a smaller font.
+    private static let refusalMaterial: UnlitMaterial = {
+        var material = UnlitMaterial(color: DesignTokens.Palette.destructiveUI)
+        material.blending = .transparent(opacity: 0.8)
+        return material
+    }()
+    /// How far back a refused lead pulls — most of the way home, so
+    /// the recoil is unmistakable without the lead vanishing.
+    private static let refusalRecoil: Float = 0.65
 
     private func stretch(_ entity: ModelEntity, from a: SIMD3<Float>, to b: SIMD3<Float>) {
         let direction = b - a
@@ -347,14 +394,38 @@ final class CircuitsRenderer {
         entity.scale = SIMD3(1, length, 1)
     }
 
-    /// The live rubber band from a terminal to the hand (or its target).
-    func showRubberBand(from a: SIMD3<Float>, to b: SIMD3<Float>) {
-        stretch(rubberBand, from: a, to: b)
-    }
-
-    func hideRubberBand() {
-        rubberBand.isEnabled = false
-        rubberTargetTerminal = nil
+    /// Draw the lead a hand is pulling, in whichever of its three
+    /// states the model says it is in.
+    private func syncFlyingLead(_ model: CircuitsModel) {
+        guard let pull = model.leadPull,
+              let source = terminalWorld(pull.source, model) else {
+            flyingLead.isEnabled = false
+            return
+        }
+        let hand = SIMD3<Float>(pull.hand)
+        // Armed leads snap to the target they would land on, so the
+        // picture and the outcome cannot disagree.
+        let landing: SIMD3<Float>
+        let material: RealityKit.Material
+        // A refused lead also thickens, so the blunt red stub cannot
+        // hide inside the wire it lies along.
+        var girth: Float = 1
+        if pull.refusal != nil {
+            // Recoil: pull most of the way back to the source.
+            landing = source + (hand - source) * (1 - Self.refusalRecoil)
+            material = Self.refusalMaterial
+            girth = 1.5
+        } else if let target = pull.target,
+                  let targetPoint = terminalWorld(target, model) {
+            landing = targetPoint
+            material = Self.previewMaterial
+        } else {
+            landing = hand
+            material = Self.leadMaterial
+        }
+        stretch(flyingLead, from: source, to: landing)
+        flyingLead.scale = SIMD3(girth, flyingLead.scale.y, girth)
+        flyingLead.model?.materials = [material]
     }
 
     private func syncConnectionPreviews(_ model: CircuitsModel) {
@@ -368,7 +439,12 @@ final class CircuitsRenderer {
             }
         }
         previewTargets = Set(pairs.map(\.2))
-        if let rubber = rubberTargetTerminal { previewTargets.insert(rubber) }
+        // A lead in flight swells whatever it would land on — but not
+        // one it would be REFUSED by: a terminal that swells and then
+        // declines is worse than one that never invited the drop.
+        if let pull = model.leadPull, pull.refusal == nil, let target = pull.target {
+            previewTargets.insert(target)
+        }
 
         while previewWireEntities.count < pairs.count {
             let ghost = ModelEntity(
@@ -474,6 +550,7 @@ final class CircuitsRenderer {
             for id in visuals.keys { visuals[id]?.resistorCodeKey = "" }
         }
         syncConnectionPreviews(model)
+        syncFlyingLead(model)
         if let event = model.soundEvent, event.id != lastSoundID {
             lastSoundID = event.id
             audioEmitter.position = SIMD3<Float>(event.position)
@@ -702,11 +779,19 @@ final class CircuitsRenderer {
                 let sign: Float = end == 0 ? -1 : 1
                 terminal.position = SIMD3(sign * half, 0, 0)
                 let key = CircuitsModel.Terminal(componentID: component.id, end: end)
-                let isPending = model.pendingTerminal == key
+                let isSource = model.leadPull?.source == key
+                    || model.voiceWireSource == key
                 // The armed terminal breathes, and preview targets swell,
                 // so there's never doubt what the next action will wire.
                 let isProbed = model.probeA == key || model.probeB == key
-                terminal.scale = SIMD3(repeating: isPending
+                // The armed state is AUDIBLE as well as visible: a
+                // VoiceOver user cannot see a bead breathing.
+                let spokenValue = isSource ? "armed" : ""
+                if visual.terminalValues[end] != spokenValue {
+                    visual.terminalValues[end] = spokenValue
+                    SpatialActions.republish(value: spokenValue, on: terminal)
+                }
+                terminal.scale = SIMD3(repeating: isSource
                     ? Float(1.6 + 0.35 * sin(pendingPulsePhase))
                     : (previewTargets.contains(key) ? 1.5 : (isProbed ? 1.35 : 1.0)))
             }
@@ -866,12 +951,10 @@ final class CircuitsRenderer {
             terminal.components.set(CollisionComponent(
                 shapes: [.generateSphere(radius: Self.terminalTargetRadius)]))
             terminal.components.set(HoverEffectComponent())
+            let key = CircuitsModel.Terminal(componentID: component.id, end: end)
             SpatialActions.attach(
-                to: terminal, label: "Terminal",
-                activate: { [weak self, weak terminal] in
-                    guard let terminal else { return }
-                    self?.onTap?(terminal)
-                })
+                to: terminal, label: "Terminal. Activate to wire from here.",
+                activate: { [weak self] in self?.onTerminalAction?(key) })
             var terminalAccessibility = AccessibilityComponent()
             terminalAccessibility.isAccessibilityElement = true
             terminalAccessibility.label = LocalizedStringResource(stringLiteral:

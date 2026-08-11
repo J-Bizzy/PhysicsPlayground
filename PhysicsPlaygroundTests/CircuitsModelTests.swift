@@ -209,12 +209,9 @@ final class CircuitsModelTests: XCTestCase {
         let toggle = model.components[1]
         let bulb = model.components[2]
 
-        model.tapTerminal(.init(componentID: battery.id, end: 1))
-        model.tapTerminal(.init(componentID: toggle.id, end: 0))
-        model.tapTerminal(.init(componentID: toggle.id, end: 1))
-        model.tapTerminal(.init(componentID: bulb.id, end: 0))
-        model.tapTerminal(.init(componentID: bulb.id, end: 1))
-        model.tapTerminal(.init(componentID: battery.id, end: 0))
+        model.connectTerminals(.init(componentID: battery.id, end: 1), .init(componentID: toggle.id, end: 0))
+        model.connectTerminals(.init(componentID: toggle.id, end: 1), .init(componentID: bulb.id, end: 0))
+        model.connectTerminals(.init(componentID: bulb.id, end: 1), .init(componentID: battery.id, end: 0))
 
         model.step(dt: 1.0 / 90.0)
         return (battery, toggle, bulb)
@@ -247,7 +244,7 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertTrue(model.components.isEmpty)
         XCTAssertTrue(model.wires.isEmpty)
         XCTAssertEqual(model.totalSourcePower, 0)
-        XCTAssertNil(model.pendingTerminal)
+        XCTAssertNil(model.leadPull)
         XCTAssertNil(model.selectedID)
     }
 
@@ -365,35 +362,20 @@ final class CircuitsModelTests: XCTestCase {
                        "the starter loop draws well under an amp")
     }
 
-    /// Tap–tap wiring: first tap arms, second connects, tapping the same
-    /// terminal cancels, duplicates are refused.
-    func testTapTapWiring() {
-        let model = CircuitsModel()
-        model.clearBench()
-        model.add(.battery)
-        model.add(.resistor)
-        let battery = model.components[0]
-        let resistor = model.components[1]
-        let a = CircuitsModel.Terminal(componentID: resistor.id, end: 0)
-        let b = CircuitsModel.Terminal(componentID: battery.id, end: 0)
-
-        model.tapTerminal(a)
-        XCTAssertEqual(model.pendingTerminal, a)
-        model.tapTerminal(b)
-        XCTAssertNil(model.pendingTerminal)
-        XCTAssertEqual(model.wires.count, 1)
-
-        // Duplicate refused (in either direction).
-        model.tapTerminal(b)
-        model.tapTerminal(a)
-        XCTAssertEqual(model.wires.count, 1)
-
-        // Same-terminal tap cancels.
-        model.tapTerminal(a)
-        model.tapTerminal(a)
-        XCTAssertNil(model.pendingTerminal)
-        XCTAssertEqual(model.wires.count, 1)
-    }
+    // TAP-TAP WIRING LIVED HERE, and it is deleted (2026-08-11).
+    // Tap a terminal to arm it, tap another to wire them. It was
+    // invisible from two metres — the armed state was a bead one and a
+    // half times its usual size — it had no cancel except tapping
+    // something else wireable, and it was the path that COLLIDED with
+    // the drag gesture: this view carries one
+    // `DragGesture(minimumDistance: 0)`, so every tap also ran the
+    // drag, and a tap could arm the wiring here AND complete a
+    // different wire there, in an order nothing defined.
+    //
+    // Wiring is one gesture now: pull a lead. The tap-tap SHAPE
+    // survives for VoiceOver, where a sustained pinch that travels is
+    // not available — `CircuitsModel.voiceOverWire`, tested in
+    // `CircuitsLeadPullTests`, and reachable from nowhere else.
 
     /// Removing a component takes its wires with it.
     func testRemovingComponentRemovesItsWires() {
@@ -423,12 +405,9 @@ final class CircuitsModelTests: XCTestCase {
 
         // Battery → resistor → capacitor → battery, for a visible
         // time constant.
-        model.tapTerminal(.init(componentID: battery.id, end: 0))
-        model.tapTerminal(.init(componentID: resistor.id, end: 0))
-        model.tapTerminal(.init(componentID: resistor.id, end: 1))
-        model.tapTerminal(.init(componentID: capacitor.id, end: 0))
-        model.tapTerminal(.init(componentID: capacitor.id, end: 1))
-        model.tapTerminal(.init(componentID: battery.id, end: 1))
+        model.connectTerminals(.init(componentID: battery.id, end: 0), .init(componentID: resistor.id, end: 0))
+        model.connectTerminals(.init(componentID: resistor.id, end: 1), .init(componentID: capacitor.id, end: 0))
+        model.connectTerminals(.init(componentID: capacitor.id, end: 1), .init(componentID: battery.id, end: 1))
 
         for _ in 0..<300 {
             model.step(dt: 1.0 / 90.0)
@@ -505,7 +484,7 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertEqual(model.wires.count, 3)
         XCTAssertTrue(model.showElectronFlow)
         XCTAssertFalse(model.isPaused)
-        XCTAssertNil(model.pendingTerminal)
+        XCTAssertNil(model.leadPull)
         XCTAssertGreaterThan(model.totalSourcePower, 3, "the loop comes back lit")
 
         // Every lamp standing beside this bench, back where it started.
@@ -630,8 +609,7 @@ final class CircuitsModelTests: XCTestCase {
         let resistor = model.components[1]
         model.select(id: resistor.id)
         model.selectedValue = 2200
-        model.tapTerminal(.init(componentID: battery.id, end: 1))
-        model.tapTerminal(.init(componentID: resistor.id, end: 0))
+        model.connectTerminals(.init(componentID: battery.id, end: 1), .init(componentID: resistor.id, end: 0))
         model.setAxis(id: resistor.id, axis: SIMD3(0, 1, 0))
         model.persistNow()
 
@@ -663,8 +641,7 @@ final class CircuitsModelTests: XCTestCase {
         model.add(.bulb)
         let battery = model.components[0]
         let bulb = model.components[1]
-        model.tapTerminal(.init(componentID: battery.id, end: 1))
-        model.tapTerminal(.init(componentID: bulb.id, end: 0))
+        model.connectTerminals(.init(componentID: battery.id, end: 1), .init(componentID: bulb.id, end: 0))
         XCTAssertTrue(model.saveSlot(named: "  My loop  "),
                       "names are trimmed and accepted")
         XCTAssertEqual(model.slotNames, ["My loop"])
@@ -946,8 +923,9 @@ final class CircuitsModelTests: XCTestCase {
 
     /// DELETING AN ARMED PART LEFT A WIRE THAT COULD NEVER BE REMOVED.
     ///
-    /// Pinch a terminal (arms it), open that part's ring, tap Delete.
-    /// `pendingTerminal` still named the destroyed part, so the next
+    /// Pinch a terminal (arming it, in the tap-tap era), open that
+    /// part's ring, tap Delete.
+    /// The half-made wire still named the destroyed part, so the next
     /// terminal tap anywhere appended a `Wire` whose `from` component
     /// does not exist. The renderer disables it, so it is invisible and
     /// un-pinchable; it permanently consumes one of the 36 budget slots;
@@ -963,12 +941,16 @@ final class CircuitsModelTests: XCTestCase {
         let bulb = try XCTUnwrap(model.add(.bulb))
         let before = model.wires.count
 
-        // Arm a terminal on the battery, then delete the battery.
-        model.tapTerminal(.init(componentID: battery, end: 0))
+        // Start a wire from the battery, then delete the battery.
+        model.beginLeadPull(from: .init(componentID: battery, end: 0),
+                            hand: model.components.first { $0.id == battery }!
+                                .terminalPosition(0))
         model.removeComponent(id: battery)
 
-        // The next tap must not build anything.
-        model.tapTerminal(.init(componentID: bulb, end: 0))
+        // The release must not build anything.
+        model.updateLeadPull(hand: model.components.first { $0.id == bulb }!
+                                .terminalPosition(0))
+        model.endLeadPull()
 
         XCTAssertEqual(model.wires.count, before,
                        "a wire was created onto a component that no longer exists")
@@ -991,9 +973,9 @@ final class CircuitsModelTests: XCTestCase {
 
         let before = model.wires.count
 
-        model.tapTerminal(.init(componentID: battery, end: 0))
+        model.voiceOverWire(.init(componentID: battery, end: 0))
         // A terminal on a component that was never added at all.
-        model.tapTerminal(.init(componentID: UUID(), end: 1))
+        model.voiceOverWire(.init(componentID: UUID(), end: 1))
         XCTAssertEqual(model.wires.count, before,
                        "a wire was built onto a component that never existed")
     }
@@ -1002,19 +984,16 @@ final class CircuitsModelTests: XCTestCase {
     /// ordinary one — a fix that simply stopped wiring anything would
     /// pass the test above.
     ///
-    /// Its own fixture, because the refusal path deliberately returns
-    /// before `tapTerminal`'s `defer` and so leaves the first terminal
-    /// still armed. That is reasonable behaviour — a tap on nothing
-    /// should not throw away what you had selected — but it means the
-    /// two cases cannot share a sequence.
+    /// Its own fixture, because the refusal above consumes the arming
+    /// on its way out and the two cases cannot share a sequence.
     func testTheOrdinaryWireIsStillBuilt() throws {
         let model = CircuitsModel()
         model.clearBench()
         let battery = try XCTUnwrap(model.add(.battery))
         let bulb = try XCTUnwrap(model.add(.bulb))
 
-        model.tapTerminal(.init(componentID: battery, end: 0))
-        model.tapTerminal(.init(componentID: bulb, end: 1))
+        model.voiceOverWire(.init(componentID: battery, end: 0))
+        model.voiceOverWire(.init(componentID: bulb, end: 1))
         XCTAssertEqual(model.wires.count, 1)
     }
 
@@ -1038,12 +1017,9 @@ final class CircuitsModelTests: XCTestCase {
         let battery = try XCTUnwrap(model.add(.battery))
         let switcher = try XCTUnwrap(model.add(.switcher))
         let bulb = try XCTUnwrap(model.add(.bulb))
-        model.tapTerminal(.init(componentID: battery, end: 0))
-        model.tapTerminal(.init(componentID: switcher, end: 0))
-        model.tapTerminal(.init(componentID: switcher, end: 1))
-        model.tapTerminal(.init(componentID: bulb, end: 0))
-        model.tapTerminal(.init(componentID: bulb, end: 1))
-        model.tapTerminal(.init(componentID: battery, end: 1))
+        model.connectTerminals(.init(componentID: battery, end: 0), .init(componentID: switcher, end: 0))
+        model.connectTerminals(.init(componentID: switcher, end: 1), .init(componentID: bulb, end: 0))
+        model.connectTerminals(.init(componentID: bulb, end: 1), .init(componentID: battery, end: 1))
         if model.components.first(where: { $0.id == switcher })?.isClosed == true {
             model.toggleSwitch(id: switcher)
         }
@@ -1097,12 +1073,9 @@ final class CircuitsModelTests: XCTestCase {
         let battery = try XCTUnwrap(model.add(.battery))
         let switcher = try XCTUnwrap(model.add(.switcher))
         let bulb = try XCTUnwrap(model.add(.bulb))
-        model.tapTerminal(.init(componentID: battery, end: 0))
-        model.tapTerminal(.init(componentID: switcher, end: 0))
-        model.tapTerminal(.init(componentID: switcher, end: 1))
-        model.tapTerminal(.init(componentID: bulb, end: 0))
-        model.tapTerminal(.init(componentID: bulb, end: 1))
-        model.tapTerminal(.init(componentID: battery, end: 1))
+        model.connectTerminals(.init(componentID: battery, end: 0), .init(componentID: switcher, end: 0))
+        model.connectTerminals(.init(componentID: switcher, end: 1), .init(componentID: bulb, end: 0))
+        model.connectTerminals(.init(componentID: bulb, end: 1), .init(componentID: battery, end: 1))
 
         // Closed switch, no meter: the reference loop.
         if model.components.first(where: { $0.id == switcher })?.isClosed == false {
@@ -1136,10 +1109,8 @@ final class CircuitsModelTests: XCTestCase {
         model.clearBench()
         let battery = try XCTUnwrap(model.add(.battery))
         let bulb = try XCTUnwrap(model.add(.bulb))
-        model.tapTerminal(.init(componentID: battery, end: 0))
-        model.tapTerminal(.init(componentID: bulb, end: 0))
-        model.tapTerminal(.init(componentID: bulb, end: 1))
-        model.tapTerminal(.init(componentID: battery, end: 1))
+        model.connectTerminals(.init(componentID: battery, end: 0), .init(componentID: bulb, end: 0))
+        model.connectTerminals(.init(componentID: bulb, end: 1), .init(componentID: battery, end: 1))
         model.step(dt: 1.0 / 60)
         let before = try XCTUnwrap(model.readouts[bulb]?.amps)
 
@@ -1164,10 +1135,8 @@ final class CircuitsModelTests: XCTestCase {
 
         let battery = try XCTUnwrap(model.add(.battery))
         let bulb = try XCTUnwrap(model.add(.bulb))
-        model.tapTerminal(.init(componentID: battery, end: 0))
-        model.tapTerminal(.init(componentID: bulb, end: 0))
-        model.tapTerminal(.init(componentID: bulb, end: 1))
-        model.tapTerminal(.init(componentID: battery, end: 1))
+        model.connectTerminals(.init(componentID: battery, end: 0), .init(componentID: bulb, end: 0))
+        model.connectTerminals(.init(componentID: bulb, end: 1), .init(componentID: battery, end: 1))
         model.step(dt: 1.0 / 60)
 
         model.multimeterArmed = true

@@ -27,7 +27,21 @@ struct CircuitsSpaceView: View {
     /// Which component's ring is open — shared by the tap gesture and
     /// the render loop (see RingState's header).
     @State private var ring = RingState()
-    @State private var wireDragFrom: CircuitsModel.Terminal?
+    /// PRESS-BEFORE-DRAG, and it is the fix for a real race.
+    ///
+    /// This view carries ONE `DragGesture(minimumDistance: 0)` — it has
+    /// to, because the rack pull must claim the very first frame — so
+    /// every TAP also runs the drag's `onChanged` and `onEnded`. A tap
+    /// on a terminal used to arm `pendingTerminal` through the tap
+    /// gesture AND, if any other terminal happened to be within reach,
+    /// complete a wire through the drag, in an order nothing defined.
+    ///
+    /// A latch presses on contact and only PROMOTES once the hand has
+    /// travelled `PressLatch.tapTravel`. `onEnded` acts only on a
+    /// promoted latch, so a zero-travel press can no longer wire
+    /// anything at all.
+    @State private var leadPress = PressLatch<CircuitsModel.Terminal>()
+    @State private var partPress = PressLatch<UUID>()
     @State private var partDrag: RelativeDrag?
     /// The part a pull off the palette just made, so the drag that made
     /// it can go on moving it. It outlives the `RelativeDrag`'s name,
@@ -166,6 +180,7 @@ struct CircuitsSpaceView: View {
         RealityView { content, attachments in
             let renderer = CircuitsRenderer()
             renderer.onTap = { handleTap(on: $0) }
+            renderer.onTerminalAction = { model.voiceOverWire($0) }
             content.add(renderer.root)
 
             // What the selected part is doing, on the part. The anchor
@@ -476,6 +491,43 @@ struct CircuitsSpaceView: View {
                let first = model.components.first {
                 ring.openID = first.id
             }
+            // A LEAD IN FLIGHT IS A GESTURE STATE, so the simulator
+            // can only reach it by being handed one. Both of these
+            // build a pull and leave it standing, unreleased.
+            //
+            // `-circLead <componentIndex>,<end>` pulls a lead from
+            // that terminal out toward open air — the neutral copper
+            // state, reaching for nothing.
+            if let spec = UserDefaults.standard.string(forKey: "circLead") {
+                let parts = spec.split(separator: ",")
+                if let index = parts.first.flatMap({ Int($0) }),
+                   index < model.components.count {
+                    let end = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
+                    let source = CircuitsModel.Terminal(
+                        componentID: model.components[index].id, end: end)
+                    let from = model.components[index].terminalPosition(end)
+                    model.beginLeadPull(from: source, hand: from + SIMD3(0.18, 0.16, 0.05))
+                }
+            }
+            // `-circSameNet 1` holds the REFUSAL on screen: a lead
+            // pulled from one end of a wired pair onto the other,
+            // which is already the same electrical point. The lead
+            // recoils and goes red, and no wire appears.
+            if UserDefaults.standard.bool(forKey: "circSameNet") {
+                model.clearBench()
+                let anchor = CircuitsModel.buildCenter
+                if let battery = model.add(.battery, at: anchor),
+                   let bulb = model.add(.bulb, at: anchor + SIMD3(0.3, 0, 0)) {
+                    model.connectTerminals(.init(componentID: battery, end: 1),
+                                           .init(componentID: bulb, end: 0))
+                    // Now pull from the battery's + lead onto the
+                    // bulb's — already one net through that wire.
+                    let source = CircuitsModel.Terminal(componentID: battery, end: 1)
+                    let target = model.components
+                        .first { $0.id == bulb }!.terminalPosition(0)
+                    model.beginLeadPull(from: source, hand: target)
+                }
+            }
             // `-circAlign 1` drops two parts a few centimetres apart
             // and fires the release on the second, so the SNAPPED
             // chain is what the screenshot holds. The ghost preview is
@@ -676,18 +728,21 @@ struct CircuitsSpaceView: View {
                     }
 
                     if bloom.updateGrip(hand: handF) { return }
-                    if wireDragFrom == nil, partDrag == nil {
+                    if model.leadPull == nil, partDrag == nil,
+                       !leadPress.isPending, !partPress.isPending {
                         if bloom.beginGrip(value.entity, hand: handF) { return }
                         beginCircuitDrag(entity: value.entity, hand: hand, renderer: renderer)
                     }
-                    if let source = wireDragFrom,
-                       let sourceComponent = model.components.first(
-                         where: { $0.id == source.componentID }) {
-                        let target = nearestTerminal(to: handF, excluding: source)
-                        renderer.rubberTargetTerminal = target?.terminal
-                        renderer.showRubberBand(
-                            from: SIMD3<Float>(sourceComponent.terminalPosition(source.end)),
-                            to: target.map { SIMD3<Float>($0.position) } ?? handF)
+                    // A pressed lead becomes a PULL only once the hand
+                    // has moved; until then it is still a tap.
+                    if let source = leadPress.promote(hand: hand) {
+                        model.beginLeadPull(from: source, hand: hand)
+                    }
+                    if let id = partPress.promote(hand: hand) {
+                        beginCarrying(id, hand: hand, renderer: renderer)
+                    }
+                    if model.leadPull != nil {
+                        model.updateLeadPull(hand: hand)
                     } else if let palette, palette.isDragging {
                         // Browsing, or the frame a pull commits on. The
                         // slot comes back exactly once — returning it
@@ -713,9 +768,9 @@ struct CircuitsSpaceView: View {
                     palette?.endDrag()
                     bloom.endGrip()
                     defer {
-                        renderer?.hideRubberBand()
                         renderer?.previewComponentID = nil
-                        wireDragFrom = nil
+                        leadPress.cancel()
+                        partPress.cancel()
                         partDrag = nil
                         spawnedPartID = nil
                         model.endCarry()
@@ -732,10 +787,12 @@ struct CircuitsSpaceView: View {
                             value.location3D, from: .local, to: .scene)),
                         from: nil)
                     let hand = SIMD3<Double>(handF)
-                    if let source = wireDragFrom {
-                        if let target = nearestTerminal(to: handF, excluding: source) {
-                            model.connectTerminals(source, target.terminal)
-                        }
+                    // A lead in flight lands here — or refuses, or
+                    // springs back. A lead that never promoted was a
+                    // TAP, and taps do not wire.
+                    if model.leadPull != nil {
+                        model.updateLeadPull(hand: hand)
+                        model.endLeadPull()
                         return
                     }
                     guard let partDrag else { return }
@@ -815,38 +872,104 @@ struct CircuitsSpaceView: View {
                      viewer: viewer, revealTarget: 1, dt: dt)
     }
 
+    /// What a pinch landed on.
+    ///
+    /// A PURE STATIC over entity NAMES, following
+    /// `FieldSpaceView.resolveCharge`, so the priority order is
+    /// testable without a headset — which matters because nothing
+    /// automated can touch a RealityKit entity, and "which of six
+    /// things claimed this drag" is exactly the question that used to
+    /// be answerable only by reading a closure.
+    ///
+    /// `names` is the entity's own name followed by its ancestors',
+    /// nearest first: a pinch lands on a child and the meaning lives
+    /// on a parent.
+    ///
+    /// THERE IS NO DISTANCE FALLBACK, deliberately. Electric Fields
+    /// has one — a pinch within 12 cm of a charge grabs that charge —
+    /// and it is right there, where the things being grabbed are far
+    /// apart. On this bench one part's two leads are 17 cm apart and a
+    /// fallback is how you wire the wrong end.
+    enum Grab: Equatable {
+        case lead(CircuitsModel.Terminal)
+        case body(UUID)
+        case wire(UUID)
+        case lever(UUID)
+        case none
+    }
+
+    static func resolveGrab(names: [String], on model: CircuitsModel) -> Grab {
+        for name in names {
+            if name.hasPrefix("t0-") || name.hasPrefix("t1-"),
+               let id = UUID(uuidString: String(name.dropFirst(3))),
+               model.components.contains(where: { $0.id == id }) {
+                return .lead(.init(componentID: id, end: name.hasPrefix("t0-") ? 0 : 1))
+            }
+            if name.hasPrefix("w-"), let id = UUID(uuidString: String(name.dropFirst(2))),
+               model.wires.contains(where: { $0.id == id }) {
+                return .wire(id)
+            }
+            if name.hasPrefix("k-"), let id = UUID(uuidString: String(name.dropFirst(2))),
+               model.components.contains(where: { $0.id == id }) {
+                return .lever(id)
+            }
+            if let id = UUID(uuidString: name),
+               model.components.contains(where: { $0.id == id }) {
+                return .body(id)
+            }
+        }
+        return .none
+    }
+
+    /// The entity's name and its ancestors', nearest first.
+    private static func nameChain(from entity: Entity) -> [String] {
+        var names: [String] = []
+        var current: Entity? = entity
+        while let candidate = current {
+            names.append(candidate.name)
+            current = candidate.parent
+        }
+        return names
+    }
+
     private func beginCircuitDrag(
         entity: Entity, hand: SIMD3<Double>, renderer: CircuitsRenderer
     ) {
+        switch Self.resolveGrab(names: Self.nameChain(from: entity), on: model) {
+        case .lead(let terminal):
+            // PRESSED, not pulled. It becomes a lead pull only once
+            // the hand travels; a press that never moves is a tap.
+            leadPress.press(terminal, at: hand)
+            return
+        case .body(let id):
+            partPress.press(id, at: hand)
+            return
+        case .wire, .lever, .none:
+            break
+        }
+        // THE RACK CLAIMS THE DRAG BEFORE IT KNOWS WHAT IT IS.
+        //
+        // A pinch on a slot means two things — slide the rack to see
+        // the others, or take this one — and which cannot be known
+        // until the hand has travelled (`ScrollGesture`). So the drag
+        // opens here and resolves in `onChanged`; the part is still
+        // born AT THE FINGERTIPS when it comes, which is the whole
+        // reason a well beat the old tray.
         var current: Entity? = entity
         while let candidate = current {
-            let name = candidate.name
-            if name.hasPrefix("t0-") || name.hasPrefix("t1-") {
-                wireDragFrom = terminal(on: candidate)
-                return
-            }
-            // THE RACK CLAIMS THE DRAG BEFORE IT KNOWS WHAT IT IS.
-            //
-            // A pinch on a slot means two things now — slide the rack to
-            // see the other six, or take this one — and which cannot be
-            // known until the hand has travelled (`ScrollGesture`). So
-            // the drag opens here and resolves in `onChanged`; the part
-            // is still born AT THE FINGERTIPS when it comes, which is
-            // the whole reason a well beat the old tray.
-            if palette?.beginDrag(candidate, hand: SIMD3<Float>(hand)) == true {
-                return
-            }
-            if let id = UUID(uuidString: name),
-               let component = model.components.first(where: { $0.id == id }) {
-                partDrag = RelativeDrag(name: name, target: component.position, hand: hand)
-                renderer.previewComponentID = id
-                model.select(id: id)
-                model.beginCarry(id: id)
-                renderer.flashPickup(id: id)
-                return
-            }
+            if palette?.beginDrag(candidate, hand: SIMD3<Float>(hand)) == true { return }
             current = candidate.parent
         }
+    }
+
+    /// A body press that travelled: start carrying it.
+    private func beginCarrying(_ id: UUID, hand: SIMD3<Double>, renderer: CircuitsRenderer) {
+        guard let component = model.components.first(where: { $0.id == id }) else { return }
+        partDrag = RelativeDrag(name: id.uuidString, target: component.position, hand: hand)
+        renderer.previewComponentID = id
+        model.select(id: id)
+        model.beginCarry(id: id)
+        renderer.flashPickup(id: id)
     }
 
     private func applyCircuitDrag(_ drag: RelativeDrag, hand: SIMD3<Double>) {
@@ -860,80 +983,45 @@ struct CircuitsSpaceView: View {
         model.breakOverstretchedWires(id: id)
     }
 
-    /// The terminal an entity (or any ancestor) represents, if any.
-    private func terminal(on entity: Entity) -> CircuitsModel.Terminal? {
-        var current: Entity? = entity
-        while let candidate = current {
-            let name = candidate.name
-            if name.hasPrefix("t0-") || name.hasPrefix("t1-"),
-               let id = UUID(uuidString: String(name.dropFirst(3))) {
-                return CircuitsModel.Terminal(
-                    componentID: id, end: name.hasPrefix("t0-") ? 0 : 1)
-            }
-            current = candidate.parent
-        }
-        return nil
-    }
-
-    /// The closest connectable terminal within reach of the hand.
-    private func nearestTerminal(
-        to hand: SIMD3<Float>, excluding source: CircuitsModel.Terminal
-    ) -> (terminal: CircuitsModel.Terminal, position: SIMD3<Double>)? {
-        var best: (CircuitsModel.Terminal, SIMD3<Double>, Float)?
-        for component in model.components {
-            for end in 0...1 {
-                let terminal = CircuitsModel.Terminal(componentID: component.id, end: end)
-                guard terminal != source else { continue }
-                let position = component.terminalPosition(end)
-                let distance = simd_distance(SIMD3<Float>(position), hand)
-                guard distance < 0.09 else { continue }
-                if best == nil || distance < best!.2 {
-                    best = (terminal, position, distance)
-                }
-            }
-        }
-        return best.map { ($0.0, $0.1) }
-    }
-
-    /// Terminals ("t0-"/"t1-"), wires ("w-"), and levers ("k-") are tap
-    /// targets; walk up the hierarchy to find whichever was hit.
+    /// A TAP NEVER WIRES ANYTHING AND NEVER DELETES ANYTHING.
+    ///
+    /// It used to do both. A tap on a terminal armed tap-tap wiring
+    /// (and, through the overlapping drag, could complete a different
+    /// wire in the same event); a tap on a wire deleted it outright,
+    /// with no confirmation, on a bench that persists across launches.
+    /// Wiring is a pull now, and a wire comes off by being pulled off.
+    ///
+    /// What a tap does is SELECT: it says "this one", and the room
+    /// answers with the readout and the ring.
     private func handleTap(on entity: Entity) {
-        var current: Entity? = entity
-        while let candidate = current {
-            let name = candidate.name
-            if name.hasPrefix("t0-") || name.hasPrefix("t1-") {
-                let end = name.hasPrefix("t0-") ? 0 : 1
-                if let id = UUID(uuidString: String(name.dropFirst(3))) {
-                    let terminal = CircuitsModel.Terminal(componentID: id, end: end)
-                    if model.multimeterArmed {
-                        model.probeTap(terminal)
-                    } else {
-                        model.tapTerminal(terminal)
-                    }
-                }
-                return
+        switch Self.resolveGrab(names: Self.nameChain(from: entity), on: model) {
+        case .lead(let terminal):
+            // The probes are the one thing that still consumes a
+            // terminal tap, because an armed meter is a question you
+            // are asking and the terminal is the answer.
+            if model.multimeterArmed {
+                model.probeTap(terminal)
+            } else {
+                model.select(id: terminal.componentID)
             }
-            if name.hasPrefix("w-"), let id = UUID(uuidString: String(name.dropFirst(2))) {
-                model.deleteWire(id: id)
-                return
+            return
+        case .wire(let id):
+            model.selectWire(id: id)
+            return
+        case .lever(let id):
+            model.toggleSwitch(id: id)
+            return
+        case .body(let id):
+            if ring.openID == id {
+                ring.openID = nil
+                SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
+            } else {
+                ring.openID = id
+                SoundPalette.play(.pop, on: entity, volume: 0.35)
             }
-            if name.hasPrefix("k-"), let id = UUID(uuidString: String(name.dropFirst(2))) {
-                model.toggleSwitch(id: id)
-                return
-            }
-            // A tap on a component body toggles its control ring.
-            if let id = UUID(uuidString: name),
-               model.components.contains(where: { $0.id == id }) {
-                if ring.openID == id {
-                    ring.openID = nil
-                    SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
-                } else {
-                    ring.openID = id
-                    SoundPalette.play(.pop, on: entity, volume: 0.35)
-                }
-                return
-            }
-            current = candidate.parent
+            return
+        case .none:
+            break
         }
         if ring.openID != nil {
             SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
