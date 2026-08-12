@@ -171,6 +171,16 @@ file). What follows is the standing script.
 - [ ] **VoiceOver: two terminal activations make one wire.** This is
       the only surviving tap-tap path, and it is deliberate — pulling
       a lead needs a sustained pinch that travels.
+- [ ] **UNPLUG A WIRE (2026-08-11).** Grab a wire near one end and
+      pull: that end comes off into your hand and **the bulb goes
+      out**, immediately, while you are still holding it. Land it on a
+      third terminal — rewired. Land it back where it came from — the
+      bulb lights again, and there must be exactly ONE wire, not two.
+      Drop it in open air — gone.
+- [ ] **Grab the wire in the MIDDLE.** It must still take the nearer
+      end, not do nothing. And a pinch at the joint must take the
+      LEAD, not the wire — the bead is fatter than the cable and sits
+      at its endpoint, which is the whole rule.
 - [ ] **Both racks are fully in frame** from where you naturally
       stand, with every name readable against a real field of view.
 - [ ] **Fill the bench to sixteen parts, then pull a twelfth kind.**

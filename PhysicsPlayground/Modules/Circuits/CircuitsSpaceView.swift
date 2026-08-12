@@ -42,6 +42,9 @@ struct CircuitsSpaceView: View {
     /// anything at all.
     @State private var leadPress = PressLatch<CircuitsModel.Terminal>()
     @State private var partPress = PressLatch<UUID>()
+    /// A wire end being lifted off its terminal. The payload is the
+    /// wire and which of its two ends the hand was nearer to.
+    @State private var wirePress = PressLatch<CircuitsModel.WireEnd>()
     @State private var partDrag: RelativeDrag?
     /// The part a pull off the palette just made, so the drag that made
     /// it can go on moving it. It outlives the `RelativeDrag`'s name,
@@ -509,6 +512,26 @@ struct CircuitsSpaceView: View {
                     model.beginLeadPull(from: source, hand: from + SIMD3(0.18, 0.16, 0.05))
                 }
             }
+            // `-circUnplug <wireIndex>,<end>` lifts that end of that
+            // wire into the air and leaves it there. The circuit goes
+            // DARK in the frame, which is the whole point of taking
+            // the wire out immediately rather than on release.
+            if let spec = UserDefaults.standard.string(forKey: "circUnplug") {
+                let parts = spec.split(separator: ",")
+                if let index = parts.first.flatMap({ Int($0) }),
+                   index < model.wires.count {
+                    let end = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
+                    let wire = model.wires[index]
+                    let lifted = end == 0 ? wire.from : wire.to
+                    if let component = model.components
+                        .first(where: { $0.id == lifted.componentID }) {
+                        model.beginRewire(
+                            wire: wire.id, grabbing: end,
+                            hand: component.terminalPosition(lifted.end)
+                                + SIMD3(0.05, 0.22, 0.04))
+                    }
+                }
+            }
             // `-circSameNet 1` holds the REFUSAL on screen: a lead
             // pulled from one end of a wired pair onto the other,
             // which is already the same electrical point. The lead
@@ -729,7 +752,7 @@ struct CircuitsSpaceView: View {
 
                     if bloom.updateGrip(hand: handF) { return }
                     if model.leadPull == nil, partDrag == nil,
-                       !leadPress.isPending, !partPress.isPending {
+                       !leadPress.isPending, !partPress.isPending, !wirePress.isPending {
                         if bloom.beginGrip(value.entity, hand: handF) { return }
                         beginCircuitDrag(entity: value.entity, hand: hand, renderer: renderer)
                     }
@@ -740,6 +763,10 @@ struct CircuitsSpaceView: View {
                     }
                     if let id = partPress.promote(hand: hand) {
                         beginCarrying(id, hand: hand, renderer: renderer)
+                    }
+                    if let grabbed = wirePress.promote(hand: hand) {
+                        model.beginRewire(wire: grabbed.wire,
+                                          grabbing: grabbed.end, hand: hand)
                     }
                     if model.leadPull != nil {
                         model.updateLeadPull(hand: hand)
@@ -771,6 +798,7 @@ struct CircuitsSpaceView: View {
                         renderer?.previewComponentID = nil
                         leadPress.cancel()
                         partPress.cancel()
+                        wirePress.cancel()
                         partDrag = nil
                         spawnedPartID = nil
                         model.endCarry()
@@ -944,7 +972,16 @@ struct CircuitsSpaceView: View {
         case .body(let id):
             partPress.press(id, at: hand)
             return
-        case .wire, .lever, .none:
+        case .wire(let id):
+            // Grab the CABLE to move a wire, the copper to make one.
+            // The bead (r 0.026) is fatter than the cable (r 0.016)
+            // and sits at its endpoint, so a pinch at the joint takes
+            // the lead and a pinch along the run takes the wire.
+            if let end = model.nearerEnd(of: id, to: hand) {
+                wirePress.press(.init(wire: id, end: end), at: hand)
+            }
+            return
+        case .lever, .none:
             break
         }
         // THE RACK CLAIMS THE DRAG BEFORE IT KNOWS WHAT IT IS.

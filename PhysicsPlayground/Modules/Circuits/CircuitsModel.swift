@@ -658,6 +658,13 @@ final class CircuitsModel {
         var refusal: ConnectOutcome?
     }
 
+    /// One end of one wire — what a hand takes hold of when it grabs
+    /// a cable near its plug.
+    struct WireEnd: Equatable, Sendable {
+        let wire: UUID
+        let end: Int
+    }
+
     /// What a released lead did.
     enum LeadOutcome: Equatable {
         case connected(UUID)
@@ -676,6 +683,43 @@ final class CircuitsModel {
         guard components.contains(where: { $0.id == source.componentID }) else { return }
         leadPull = LeadPull(source: source, hand: hand)
         updateLeadPull(hand: hand)
+    }
+
+    /// Take an existing wire's END off its terminal and put it in the
+    /// hand — the same lead pull, starting from the wire's other end.
+    ///
+    /// THE WIRE COMES OUT OF `wires` IMMEDIATELY, and that is the
+    /// teach: the circuit goes dark in your hand, so a bulb going out
+    /// as you lift the wire says what the wire was doing better than
+    /// any label on it. Put it back and the bulb lights again.
+    ///
+    /// This is the gesture the bench never had. Before it, moving a
+    /// connection from one terminal to another meant deleting it (by
+    /// TAPPING it, which destroyed it with no confirmation) and
+    /// drawing a new one.
+    func beginRewire(wire id: UUID, grabbing end: Int, hand: SIMD3<Double>) {
+        guard let index = wires.firstIndex(where: { $0.id == id }) else { return }
+        let wire = wires[index]
+        // The end you grabbed comes off; the other end stays put and
+        // becomes the source the lead is drawn from.
+        let anchor = end == 0 ? wire.to : wire.from
+        let lifted = end == 0 ? wire.from : wire.to
+        wires.remove(at: index)
+        detachedWireAnchors[id] = anchor
+        leadPull = LeadPull(source: anchor, detached: id, hand: hand)
+        updateLeadPull(hand: hand)
+        if let component = components.first(where: { $0.id == lifted.componentID }) {
+            emitSound(.grabTick, at: component.terminalPosition(lifted.end), volume: 0.25)
+        }
+        persistSoon()
+    }
+
+    /// Which end of a wire a hand is nearer to — the end it would take.
+    func nearerEnd(of id: UUID, to hand: SIMD3<Double>) -> Int? {
+        guard let wire = wires.first(where: { $0.id == id }),
+              let from = terminalWorldPosition(wire.from),
+              let to = terminalWorldPosition(wire.to) else { return nil }
+        return simd_distance(from, hand) <= simd_distance(to, hand) ? 0 : 1
     }
 
     /// Follow the hand, and work out what a release would do.
@@ -713,8 +757,10 @@ final class CircuitsModel {
         defer { leadPull = nil }
         guard let target = pull.target else {
             // Open air. A new lead springs back; a rewire that came
-            // off a wire takes that wire with it.
+            // off a wire takes that wire with it — you pulled the
+            // plug and dropped it on the floor.
             if let detached = pull.detached {
+                detachedWireAnchors[detached] = nil
                 emitSound(.thud, at: pull.hand, volume: 0.5)
                 persistSoon()
                 return .deleted(detached)
@@ -725,6 +771,10 @@ final class CircuitsModel {
         let outcome = connectTerminals(pull.source, target)
         switch outcome {
         case .connected(let id):
+            // A landed rewire is no longer detached — including the
+            // case where it landed back where it came from, which
+            // costs a new wire id and nothing else.
+            if let detached = pull.detached { detachedWireAnchors[detached] = nil }
             return .connected(id)
         default:
             // A REFUSAL IS A THING THE BENCH DOES. The renderer recoils
