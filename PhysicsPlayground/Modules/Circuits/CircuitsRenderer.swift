@@ -1286,12 +1286,140 @@ final class CircuitsRenderer {
     }
     private var wireVoltBuckets: [UUID: Int] = [:]
 
+    /// The polyline each wire is currently drawn along, so the
+    /// electrons can ride the same path rather than the chord.
+    private var wireCurves: [UUID: [SIMD3<Float>]] = [:]
+
+    /// How many segments a hanging cable is drawn from.
+    ///
+    /// A STRAIGHT WIRE IS ONE SEGMENT, which matters more than it
+    /// sounds: after a snap-align most joints are coincident and most
+    /// remaining wires are short and taut, so a tidy bench costs
+    /// exactly what it cost before sag existed. Only a genuine span
+    /// pays for its own curve.
+    private static let sagSegments = 7
+
+    /// The path a wire hangs along, in bench coordinates.
+    private func wireCurve(from a: SIMD3<Float>, to b: SIMD3<Float>,
+                           span: Double) -> [SIMD3<Float>] {
+        var slack = CircuitsModel.slack(span: span)
+        #if DEBUG
+        // `-circSag <ratio>` overrides the policy so a still frame can
+        // show the curve at a chosen depth — and `-circSag 0` proves
+        // the straight fallback, which is otherwise only reachable by
+        // building a bench with every joint snapped.
+        // `as? NSNumber`, not `as? Double`: `-circSag 0` is stored as
+        // an integer, so a Double cast silently fails and the override
+        // does nothing — which is exactly how the first attempt at
+        // photographing the straight fallback produced two identical
+        // pictures of a sagging one.
+        if let forced = UserDefaults.standard.object(forKey: "circSag") as? NSNumber {
+            slack = forced.doubleValue * span
+        }
+        #endif
+        guard slack > 1e-5 else { return [a, b] }
+        return Catenary.points(from: SIMD3<Double>(a), to: SIMD3<Double>(b),
+                               slack: slack, samples: Self.sagSegments + 1)
+            .map { SIMD3<Float>($0) }
+    }
+
+    /// Where each wire's collider was last shaped, so a wire that is
+    /// not moving does not rebuild shapes it already has.
+    private var wireColliderAnchors: [UUID: (SIMD3<Float>, SIMD3<Float>)] = [:]
+
+    /// How far an end must move before the grab volume is rebuilt.
+    /// Shapes are allocations, and a bench of stationary wires should
+    /// cost none — only the one or two on a carried part pay.
+    private static let colliderRebuildEpsilon: Float = 0.002
+
+    /// Give the wire a grab volume that FOLLOWS THE CURVE, in three
+    /// capsules rather than one along the chord.
+    ///
+    /// On a long hanging span the chord passes through open air a
+    /// hand's width above the cable, so a single straight capsule
+    /// would put the grab volume where the wire visibly is not.
+    private func reshapeCollider(_ entity: ModelEntity, id: UUID,
+                                 along curve: [SIMD3<Float>]) {
+        guard let first = curve.first, let last = curve.last else { return }
+        if let previous = wireColliderAnchors[id],
+           simd_distance(previous.0, first) < Self.colliderRebuildEpsilon,
+           simd_distance(previous.1, last) < Self.colliderRebuildEpsilon {
+            return
+        }
+        wireColliderAnchors[id] = (first, last)
+
+        // Three, whatever the curve was sampled at: enough to follow a
+        // sag, few enough that a moving wire is cheap.
+        var shapes: [ShapeResource] = []
+        let pieces = 3
+        for piece in 0..<pieces {
+            let a = curve[piece * (curve.count - 1) / pieces]
+            let b = curve[(piece + 1) * (curve.count - 1) / pieces]
+            let direction = b - a
+            let length = simd_length(direction)
+            guard length > 1e-4 else { continue }
+            shapes.append(ShapeResource
+                .generateCapsule(height: length, radius: 0.016)
+                .offsetBy(rotation: VectorFieldArrows.rotationFromYAxis(to: direction / length),
+                          translation: (a + b) / 2))
+        }
+        guard !shapes.isEmpty else { return }
+        entity.components.set(CollisionComponent(shapes: shapes))
+        entity.components.set(InputTargetComponent())
+        entity.components.set(HoverEffectComponent())
+    }
+
+    /// Point a wire's segment children along a polyline, growing the
+    /// pool of segments if the curve needs more than it has.
+    ///
+    /// Each segment is a copper core with a dark jacket child, the
+    /// same two-layer cable the straight version drew — the jacket
+    /// carries the silhouette, the core carries the live voltage
+    /// colour, and the electrons ride inside.
+    private func layOut(segmentsOf entity: ModelEntity, along curve: [SIMD3<Float>]) {
+        let needed = max(curve.count - 1, 1)
+        while entity.children.count < needed {
+            let core = ModelEntity(
+                mesh: .generateCylinder(height: 1, radius: 0.0032),
+                materials: [Self.copperMaterial])
+            let jacket = ModelEntity(
+                mesh: .generateCylinder(height: 1, radius: 0.0062),
+                materials: [Self.wireJacketMaterial])
+            jacket.name = "jacket"
+            core.addChild(jacket)
+            // SEGMENTS ARE PURE VISUALS — no collider, deliberately.
+            // A segment carries its own length as a Y scale, and a
+            // 45 mm piece of a curve therefore has a world scale of
+            // 0.045; `ColliderCriterionTests` reads any collider under
+            // a scale below 0.05 as a FOLDED instrument it cannot
+            // honestly measure, and says so rather than passing. It is
+            // right to. The grab volume lives on the parent instead,
+            // which is unscaled — see `reshapeCollider`.
+            entity.addChild(core)
+        }
+        for (index, child) in entity.children.enumerated() {
+            guard index < needed else { child.isEnabled = false; continue }
+            let a = curve[index], b = curve[index + 1]
+            let direction = b - a
+            let length = simd_length(direction)
+            guard length > 1e-6 else { child.isEnabled = false; continue }
+            child.isEnabled = true
+            // The parent is at the origin of `viewRoot`, so segment
+            // transforms are bench coordinates directly.
+            child.position = (a + b) / 2
+            child.orientation = VectorFieldArrows.rotationFromYAxis(to: direction / length)
+            child.scale = SIMD3(1, length, 1)
+        }
+    }
+
     private func syncWires(_ model: CircuitsModel) {
         let liveIDs = Set(model.wires.map(\.id))
         for id in wireEntities.keys where !liveIDs.contains(id) {
             wireEntities[id]?.removeFromParent()
             wireEntities[id] = nil
             wirePhases[id] = nil
+            wireCurves[id] = nil
+            wireColliderAnchors[id] = nil
         }
 
         for wire in model.wires {
@@ -1307,29 +1435,27 @@ final class CircuitsRenderer {
                 // conductor inside, so that is what gets built — the
                 // jacket carries the silhouette, the core carries the
                 // live voltage colour, and the electrons ride inside.
-                entity = ModelEntity(
-                    mesh: .generateCylinder(height: 1, radius: 0.0032),
-                    materials: [Self.copperMaterial])
-                let jacket = ModelEntity(
-                    mesh: .generateCylinder(height: 1, radius: 0.0062),
-                    materials: [Self.wireJacketMaterial])
-                jacket.name = "jacket"
-                entity.addChild(jacket)
+                // A CABLE THAT HANGS IS BUILT FROM SEGMENTS, not
+                // from a regenerated mesh. The house rule is that the
+                // per-frame path touches only entity transforms and
+                // that mesh generation goes through
+                // `GeometryPipeline`'s worker — and a sagging wire
+                // moves every frame while its part is carried, so a
+                // `TubeMesh` rebuilt inline would break exactly that
+                // rule. Segments share one unit-cylinder mesh and
+                // move by transform alone.
+                entity = ModelEntity()
                 entity.name = "w-\(wire.id.uuidString)"
-                entity.components.set(InputTargetComponent())
-                entity.components.set(CollisionComponent(
-                    shapes: [.generateCapsule(height: 1, radius: 0.016)]))
-                entity.components.set(HoverEffectComponent())
+                var accessibility = AccessibilityComponent()
+                accessibility.isAccessibilityElement = true
+                accessibility.label = "Wire. Pinch an end and pull to move it."
+                entity.components.set(accessibility)
                 SpatialActions.attach(
-                    to: entity, label: "Wire. Pinch to remove it.",
+                    to: entity, label: "Wire. Activate to remove it.",
                     activate: { [weak self, weak entity] in
                         guard let entity else { return }
                         self?.onTap?(entity)
                     })
-                var accessibility = AccessibilityComponent()
-                accessibility.isAccessibilityElement = true
-                accessibility.label = "Wire. Pinch to remove it."
-                entity.components.set(accessibility)
                 viewRoot.addChild(entity)
                 wireEntities[wire.id] = entity
                 wirePhases[wire.id] = 0
@@ -1341,12 +1467,16 @@ final class CircuitsRenderer {
                 continue
             }
             entity.isEnabled = true
-            let direction = b - a
-            let length = simd_length(direction)
+            let length = simd_distance(a, b)
+            // Two leads snapped into one point need no cable between
+            // them, which is what keeps a tidy chained bench from
+            // sprouting droops at every joint.
             guard length > 1e-4 else { entity.isEnabled = false; continue }
-            entity.position = (a + b) / 2
-            entity.orientation = VectorFieldArrows.rotationFromYAxis(to: direction / length)
-            entity.scale = SIMD3(1, length, 1)
+
+            let curve = wireCurve(from: a, to: b, span: Double(length))
+            wireCurves[wire.id] = curve
+            layOut(segmentsOf: entity, along: curve)
+            reshapeCollider(entity, id: wire.id, along: curve)
 
             // The wire wears its potential: warm = high, cool = low —
             // voltage differences readable at a glance across the bench.
@@ -1362,9 +1492,12 @@ final class CircuitsRenderer {
             let bucket = lit ? -1 : min(max(Int(t * 7.999), 0), 7)
             if wireVoltBuckets[wire.id] != bucket {
                 wireVoltBuckets[wire.id] = bucket
-                entity.model?.materials = [lit
+                let material: RealityKit.Material = lit
                     ? Self.netHighlightMaterial
-                    : Self.voltageMaterials[bucket]]
+                    : Self.voltageMaterials[bucket]
+                for segment in entity.children {
+                    (segment as? ModelEntity)?.model?.materials = [material]
+                }
             }
         }
     }
@@ -1508,7 +1641,7 @@ final class CircuitsRenderer {
             guard let entity = wireEntities[wire.id], entity.isEnabled,
                   let a = terminalWorld(wire.from, model),
                   let b = terminalWorld(wire.to, model) else { continue }
-            driftDots(key: wire.id, from: a, to: b,
+            driftDots(key: wire.id, along: wireCurves[wire.id] ?? [a, b],
                       current: model.wireFlows[wire.id] ?? 0,
                       model: model, dt: dt, dotIndex: &dotIndex)
         }
@@ -1520,13 +1653,37 @@ final class CircuitsRenderer {
     /// Lays a run of drifting electron dots between two points, advancing
     /// their shared phase by the current's drift speed (− to +, opposite
     /// the conventional arrow) over the real elapsed time.
+    /// Where a given distance along the polyline lands.
+    private func point(onCurve curve: [SIMD3<Float>], arc: [Float],
+                       at distance: Float) -> SIMD3<Float> {
+        var index = 1
+        while index < arc.count - 1 && arc[index] < distance { index += 1 }
+        let spanStart = arc[index - 1]
+        let spanLength = max(arc[index] - spanStart, 1e-6)
+        let t = min(max((distance - spanStart) / spanLength, 0), 1)
+        return curve[index - 1] + (curve[index] - curve[index - 1]) * t
+    }
+
+    /// Beads riding a wire, spaced along its ARC — so on a hanging
+    /// cable they follow the droop rather than cutting through the
+    /// air beneath it.
     private func driftDots(
-        key: UUID, from a: SIMD3<Float>, to b: SIMD3<Float>,
+        key: UUID, along curve: [SIMD3<Float>],
         current: Double, model: CircuitsModel, dt: Double, dotIndex: inout Int
     ) {
-        guard abs(current) > 5e-4 else { return }
+        guard abs(current) > 5e-4, curve.count >= 2 else { return }
 
-        let length = Double(simd_distance(a, b))
+        // Cumulative arc length, so `t` is a fraction of the distance
+        // TRAVELLED and the beads stay evenly spaced around the curve
+        // instead of bunching where it bends.
+        var arc: [Float] = [0]
+        arc.reserveCapacity(curve.count)
+        for index in 1..<curve.count {
+            arc.append(arc[index - 1] + simd_distance(curve[index - 1], curve[index]))
+        }
+        let total = arc[arc.count - 1]
+        guard total > 1e-6 else { return }
+        let length = Double(total)
         // Bead count grows with the zoom, but SUBLINEARLY, and the
         // exponent is the whole subtlety here.
         //
@@ -1562,7 +1719,7 @@ final class CircuitsRenderer {
             if t < 0 { t += 1 }
             let slot = electronPool.slots[dotIndex]
             slot.entity.isEnabled = true
-            slot.entity.position = a + (b - a) * Float(t)
+            slot.entity.position = point(onCurve: curve, arc: arc, at: Float(t) * total)
             dotIndex += 1
         }
     }

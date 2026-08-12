@@ -134,6 +134,25 @@ final class CircuitsModel {
     /// at.
     nonisolated static let leadReach = 0.06
 
+    /// How much longer than the straight line a wire's cable is —
+    /// the slack that makes it hang instead of standing as a rod.
+    ///
+    /// ZERO FOR A SHORT SPAN, and that is what stops sag undoing the
+    /// tidiness snap-align just bought: a joint whose two leads
+    /// snapped together has no cable to hang at all, and a taut
+    /// centimetre of wire between neighbouring parts should look
+    /// taut.
+    ///
+    /// Past that it is generous but bounded — a proportion of the
+    /// span, so a metre-long reach across the bench droops like a
+    /// metre of cable rather than like a metre of rope, and the
+    /// bottom of the curve never falls far enough to reach the floor
+    /// from bench height.
+    nonisolated static func slack(span: Double) -> Double {
+        guard span > leadReach else { return 0 }
+        return min(0.02 + 0.06 * (span - leadReach), 0.18 * span)
+    }
+
     /// Carry a part until a snapped connection stretches past this and
     /// it pops off — the magnet, in reverse. Deliberately much larger
     /// than `leadReach`: joining should need precision and leaving
@@ -228,12 +247,20 @@ final class CircuitsModel {
     /// The loop an electron would have to walk, metres — the summed
     /// length of every carrying wire, in the bench's own display
     /// metres, which is what the user is actually looking at.
+    ///
+    /// ARC, NOT CHORD. A hanging cable is longer than the gap it
+    /// crosses, and an electron walks the cable. The difference is
+    /// small — a few percent — but this number feeds the true-speed
+    /// readout, which makes an extraordinary claim about thirteen
+    /// orders of magnitude, and a readout that rounds off the easy
+    /// part has no business asserting the hard part.
     var conductingPathLength: Double {
         var total = 0.0
         for wire in wires where abs(wireFlows[wire.id] ?? 0) > 5e-4 {
             guard let a = terminalWorldPosition(wire.from),
                   let b = terminalWorldPosition(wire.to) else { continue }
-            total += simd_distance(a, b)
+            let span = simd_distance(a, b)
+            total += Catenary.arcLength(from: a, to: b, slack: Self.slack(span: span))
         }
         return total
     }
