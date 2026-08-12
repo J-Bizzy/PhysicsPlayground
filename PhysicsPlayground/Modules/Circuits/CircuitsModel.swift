@@ -822,6 +822,47 @@ final class CircuitsModel {
 
     // MARK: The accessibility door
 
+    // MARK: Net highlighting — what is this connected to?
+
+    /// The net the bench is currently showing, if any.
+    ///
+    /// AN `Int?`, NOT A `Bool`, and that is deliberate:
+    /// `ResetCoverageTests` reflects over every `Bool` on this model
+    /// and demands a `flip` case for each, and this is not a display
+    /// LAYER — it is a selection, like `selectedID`. It is cleared in
+    /// the same places `selectedID` is.
+    ///
+    /// SELECTION-DRIVEN, NOT HOVER. `HoverEffectComponent` is drawn by
+    /// the system with no callback, and there is no hover event
+    /// without `SpatialEventGesture` — so "light up what my gaze is
+    /// on" is not reachable from where this module stands. Tap a lead
+    /// or a wire and its whole net lights; tap empty space and it
+    /// clears, symmetric with the ring fold.
+    private(set) var highlightedNet: Int?
+
+    /// Light the net this terminal belongs to.
+    func highlightNet(containing terminal: Terminal) {
+        highlightedNet = topology().node(of: terminal)
+    }
+
+    func clearNetHighlight() { highlightedNet = nil }
+
+    /// The terminals currently lit — empty when nothing is.
+    var highlightedTerminals: [Terminal] {
+        guard let highlightedNet else { return [] }
+        let net = topology()
+        guard highlightedNet < net.terminalsByNode.count else { return [] }
+        return net.terminalsByNode[highlightedNet]
+    }
+
+    /// Whether a wire lies inside the lit net. Both its ends do, by
+    /// definition — a wire IS a statement that its two ends are one
+    /// point — so either one answers.
+    func isHighlighted(wire: Wire) -> Bool {
+        guard let highlightedNet else { return false }
+        return topology().node(of: wire.from) == highlightedNet
+    }
+
     /// The lead VoiceOver is wiring from, if any.
     ///
     /// Pulling a lead needs a sustained pinch and a hand that travels,
@@ -865,6 +906,7 @@ final class CircuitsModel {
     func selectWire(id: UUID) {
         guard let wire = wires.first(where: { $0.id == id }) else { return }
         selectedID = wire.from.componentID
+        highlightNet(containing: wire.from)
         if let component = components.first(where: { $0.id == wire.from.componentID }) {
             emitSound(.releaseTick, at: component.terminalPosition(wire.from.end), volume: 0.2)
         }
@@ -1912,6 +1954,7 @@ final class CircuitsModel {
         selectedID = nil
         cancelLeadPull()
         voiceWireSource = nil
+        highlightedNet = nil
         solve(dt: 1.0 / 90.0)
         return true
     }
@@ -2145,6 +2188,7 @@ final class CircuitsModel {
         selectedID = nil
         cancelLeadPull()
         voiceWireSource = nil
+        highlightedNet = nil
         readouts = [:]
         wireFlows = [:]
         totalSourcePower = 0
@@ -2304,6 +2348,7 @@ extension CircuitsModel: TimeCapsuleRecording {
             self.selectedID = nil
             cancelLeadPull()
         voiceWireSource = nil
+        highlightedNet = nil
         }
     }
 }

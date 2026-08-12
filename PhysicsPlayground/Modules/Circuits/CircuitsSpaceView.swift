@@ -494,44 +494,6 @@ struct CircuitsSpaceView: View {
                let first = model.components.first {
                 ring.openID = first.id
             }
-            // A LEAD IN FLIGHT IS A GESTURE STATE, so the simulator
-            // can only reach it by being handed one. Both of these
-            // build a pull and leave it standing, unreleased.
-            //
-            // `-circLead <componentIndex>,<end>` pulls a lead from
-            // that terminal out toward open air — the neutral copper
-            // state, reaching for nothing.
-            if let spec = UserDefaults.standard.string(forKey: "circLead") {
-                let parts = spec.split(separator: ",")
-                if let index = parts.first.flatMap({ Int($0) }),
-                   index < model.components.count {
-                    let end = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
-                    let source = CircuitsModel.Terminal(
-                        componentID: model.components[index].id, end: end)
-                    let from = model.components[index].terminalPosition(end)
-                    model.beginLeadPull(from: source, hand: from + SIMD3(0.18, 0.16, 0.05))
-                }
-            }
-            // `-circUnplug <wireIndex>,<end>` lifts that end of that
-            // wire into the air and leaves it there. The circuit goes
-            // DARK in the frame, which is the whole point of taking
-            // the wire out immediately rather than on release.
-            if let spec = UserDefaults.standard.string(forKey: "circUnplug") {
-                let parts = spec.split(separator: ",")
-                if let index = parts.first.flatMap({ Int($0) }),
-                   index < model.wires.count {
-                    let end = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
-                    let wire = model.wires[index]
-                    let lifted = end == 0 ? wire.from : wire.to
-                    if let component = model.components
-                        .first(where: { $0.id == lifted.componentID }) {
-                        model.beginRewire(
-                            wire: wire.id, grabbing: end,
-                            hand: component.terminalPosition(lifted.end)
-                                + SIMD3(0.05, 0.22, 0.04))
-                    }
-                }
-            }
             // `-circSameNet 1` holds the REFUSAL on screen: a lead
             // pulled from one end of a wired pair onto the other,
             // which is already the same electrical point. The lead
@@ -589,6 +551,64 @@ struct CircuitsSpaceView: View {
                let preset = CircuitsModel.Preset(rawValue: name) {
                 model.loadPreset(preset)
                 lastPreset = preset
+            }
+
+            // THESE THREE COME AFTER THE BENCH-SHAPING ARGUMENTS, and
+            // that ordering is load-bearing rather than tidy. They act
+            // ON a bench — they name a component index, a wire index,
+            // a terminal — and `-circPreset` starts with `clearBench`,
+            // so run earlier they would name parts that a preset then
+            // deleted. A screenshot combining `-circPreset series` with
+            // `-circHighlight` showed no highlight at all for exactly
+            // that reason, with the whole suite green.
+            // A LEAD IN FLIGHT IS A GESTURE STATE, so the simulator
+            // can only reach it by being handed one. Both of these
+            // build a pull and leave it standing, unreleased.
+            //
+            // `-circLead <componentIndex>,<end>` pulls a lead from
+            // that terminal out toward open air — the neutral copper
+            // state, reaching for nothing.
+            if let spec = UserDefaults.standard.string(forKey: "circLead") {
+                let parts = spec.split(separator: ",")
+                if let index = parts.first.flatMap({ Int($0) }),
+                   index < model.components.count {
+                    let end = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
+                    let source = CircuitsModel.Terminal(
+                        componentID: model.components[index].id, end: end)
+                    let from = model.components[index].terminalPosition(end)
+                    model.beginLeadPull(from: source, hand: from + SIMD3(0.18, 0.16, 0.05))
+                }
+            }
+            // `-circHighlight <componentIndex>,<end>` lights that
+            // terminal's whole net.
+            if let spec = UserDefaults.standard.string(forKey: "circHighlight") {
+                let parts = spec.split(separator: ",")
+                if let index = parts.first.flatMap({ Int($0) }),
+                   index < model.components.count {
+                    let end = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
+                    model.highlightNet(containing: .init(
+                        componentID: model.components[index].id, end: end))
+                }
+            }
+            // `-circUnplug <wireIndex>,<end>` lifts that end of that
+            // wire into the air and leaves it there. The circuit goes
+            // DARK in the frame, which is the whole point of taking
+            // the wire out immediately rather than on release.
+            if let spec = UserDefaults.standard.string(forKey: "circUnplug") {
+                let parts = spec.split(separator: ",")
+                if let index = parts.first.flatMap({ Int($0) }),
+                   index < model.wires.count {
+                    let end = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
+                    let wire = model.wires[index]
+                    let lifted = end == 0 ? wire.from : wire.to
+                    if let component = model.components
+                        .first(where: { $0.id == lifted.componentID }) {
+                        model.beginRewire(
+                            wire: wire.id, grabbing: end,
+                            hand: component.terminalPosition(lifted.end)
+                                + SIMD3(0.05, 0.22, 0.04))
+                    }
+                }
             }
             // `-circPresetsOpen 1` unfolds the presets tab. Its five
             // plates are behind a `SummonHandle` and a handle is a
@@ -1040,6 +1060,9 @@ struct CircuitsSpaceView: View {
                 model.probeTap(terminal)
             } else {
                 model.select(id: terminal.componentID)
+                // WHAT IS THIS CONNECTED TO? Answered by the bench
+                // rather than by a sentence about the bench.
+                model.highlightNet(containing: terminal)
             }
             return
         case .wire(let id):
@@ -1049,6 +1072,7 @@ struct CircuitsSpaceView: View {
             model.toggleSwitch(id: id)
             return
         case .body(let id):
+            model.clearNetHighlight()
             if ring.openID == id {
                 ring.openID = nil
                 SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
@@ -1060,10 +1084,14 @@ struct CircuitsSpaceView: View {
         case .none:
             break
         }
-        if ring.openID != nil {
+        // Tapping nothing puts the room back: the ring folds and the
+        // lit net goes out, which is the same gesture meaning the same
+        // thing about two different things.
+        if ring.openID != nil || model.highlightedNet != nil {
             SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
         }
         ring.openID = nil
+        model.clearNetHighlight()
     }
 
 

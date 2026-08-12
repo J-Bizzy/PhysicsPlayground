@@ -745,7 +745,12 @@ final class CircuitsRenderer {
         }
     }
 
+    /// The lit net's terminals, recomputed once a frame rather than
+    /// once per lead — `highlightedTerminals` walks the topology.
+    private var highlightedTerminals: Set<CircuitsModel.Terminal> = []
+
     private func syncComponents(_ model: CircuitsModel) {
+        highlightedTerminals = Set(model.highlightedTerminals)
         // Remove visuals whose components are gone.
         let liveIDs = Set(model.components.map(\.id))
         for id in visuals.keys where !liveIDs.contains(id) {
@@ -791,9 +796,11 @@ final class CircuitsRenderer {
                     visual.terminalValues[end] = spokenValue
                     SpatialActions.republish(value: spokenValue, on: terminal)
                 }
+                let isLit = highlightedTerminals.contains(key)
                 terminal.scale = SIMD3(repeating: isSource
                     ? Float(1.6 + 0.35 * sin(pendingPulsePhase))
-                    : (previewTargets.contains(key) ? 1.5 : (isProbed ? 1.35 : 1.0)))
+                    : (previewTargets.contains(key) ? 1.5
+                        : ((isProbed || isLit) ? 1.35 : 1.0)))
             }
 
             // Live label. `BackedLabel` self-gates on unchanged text.
@@ -1256,6 +1263,17 @@ final class CircuitsRenderer {
     }()
 
     /// Eight-step warm↔cool palette for the live voltage gradient.
+    /// THE LIT NET. One material, the module's own accent — no new
+    /// hue, and no permanent tint on anything: a net's identity is
+    /// shown ON DEMAND, because the standing colour language on this
+    /// bench already means voltage (warm high, cool low) and a second
+    /// permanent colour would be arguing with it.
+    private static let netHighlightMaterial: UnlitMaterial = {
+        var material = UnlitMaterial(color: UIColor(DesignTokens.Palette.circuitsAccent))
+        material.blending = .transparent(opacity: 0.95)
+        return material
+    }()
+
     private static let voltageMaterials: [UnlitMaterial] = (0..<8).map { step in
         let t = Double(step) / 7
         var material = UnlitMaterial(color: UIColor(
@@ -1337,10 +1355,16 @@ final class CircuitsRenderer {
             let vA = model.terminalVoltages[wire.from] ?? 0
             let vB = model.terminalVoltages[wire.to] ?? 0
             let t = ((vA + vB) / 2 - span.min) / width
-            let bucket = min(max(Int(t * 7.999), 0), 7)
+            // A lit net overrides the voltage ramp for as long as it
+            // is lit. `-1` is the "currently wearing the highlight"
+            // bucket, so dropping the highlight repaints exactly once.
+            let lit = model.isHighlighted(wire: wire)
+            let bucket = lit ? -1 : min(max(Int(t * 7.999), 0), 7)
             if wireVoltBuckets[wire.id] != bucket {
                 wireVoltBuckets[wire.id] = bucket
-                entity.model?.materials = [Self.voltageMaterials[bucket]]
+                entity.model?.materials = [lit
+                    ? Self.netHighlightMaterial
+                    : Self.voltageMaterials[bucket]]
             }
         }
     }

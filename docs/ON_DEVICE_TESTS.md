@@ -177,6 +177,10 @@ file). What follows is the standing script.
       third terminal — rewired. Land it back where it came from — the
       bulb lights again, and there must be exactly ONE wire, not two.
       Drop it in open air — gone.
+- [ ] **Tap a lead: its whole net lights** — every terminal at that
+      potential and every wire between them, in the module's green.
+      Tap a lead three hops away from anything and confirm the far end
+      lights too. Tap empty space: it goes out with the ring.
 - [ ] **Grab the wire in the MIDDLE.** It must still take the nearer
       end, not do nothing. And a pinch at the joint must take the
       LEAD, not the wire — the bead is fatter than the cable and sits
