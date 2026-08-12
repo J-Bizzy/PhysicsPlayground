@@ -163,41 +163,68 @@ final class CircuitsRewireTests: XCTestCase {
     /// the wire goes back where it was. Losing a connection because
     /// you aimed at an illegal target would be the harshest possible
     /// reading of a refusal.
-    func testARefusedRewireRestoresTheWire() {
+    ///
+    /// THE ASSERTION IS ON THE ENDPOINTS, NOT THE COUNT, and that is
+    /// the whole lesson of this test. The first version checked only
+    /// `wires.count` and passed against a `restore` that rebuilt the
+    /// wire as `anchor → anchor`: a zero-length self-wire, which keeps
+    /// the count identical while silently dropping the far part out of
+    /// the circuit and leaving something invisible, un-grabbable and
+    /// persisted behind. A count is not a connection.
+    func testARefusedRewireRestoresTheWireWhereItWas() {
         let model = CircuitsModel()
         model.clearBench()
-        let a = model.add(.battery, at: CircuitsModel.buildCenter - SIMD3(0.35, 0, 0))!
-        let b = model.add(.bulb, at: CircuitsModel.buildCenter + SIMD3(0.35, 0, 0))!
-        // Two wires between the same pair of parts, so lifting one
-        // leaves the other making them the same net.
+        let a = model.add(.battery, at: CircuitsModel.buildCenter - SIMD3(0.4, 0, 0))!
+        let b = model.add(.bulb, at: CircuitsModel.buildCenter)!
+        let c = model.add(.resistor, at: CircuitsModel.buildCenter + SIMD3(0.4, 0, 0))!
+        // W1 joins a.1–b.0; W2 joins a.1–c.0. Lifting W1 leaves a.1 and
+        // c.0 one net through W2, so dropping W1's end on c.0 refuses.
         model.connectTerminals(.init(componentID: a, end: 1), .init(componentID: b, end: 0))
-        model.connectTerminals(.init(componentID: a, end: 0), .init(componentID: b, end: 1))
-        let wire = model.wires[0].id
+        let w1 = model.wires[0].id
+        model.connectTerminals(.init(componentID: a, end: 1), .init(componentID: c, end: 0))
         let before = model.wires.count
 
-        model.beginRewire(wire: wire, grabbing: 1, hand: lead(model, b, 0))
-        // Land it on a terminal already on the source's net through
-        // the OTHER wire and the two parts.
-        model.updateLeadPull(hand: lead(model, b, 1))
-        if model.leadPull?.refusal != nil {
-            XCTAssertEqual(model.endLeadPull(), .refused(.sameNet))
-            XCTAssertEqual(model.wires.count, before,
-                           "A refused rewire lost the wire it was carrying.")
+        model.beginRewire(wire: w1, grabbing: 1, hand: lead(model, b, 0))
+        model.updateLeadPull(hand: lead(model, c, 0))
+        XCTAssertEqual(model.leadPull?.refusal, .sameNet,
+                       "the fixture did not actually produce a refusal")
+        XCTAssertEqual(model.endLeadPull(), .refused(.sameNet))
+
+        XCTAssertEqual(model.wires.count, before)
+        let restored = try? XCTUnwrap(model.wires.first { $0.id == w1 })
+        XCTAssertNotNil(restored, "the lifted wire did not come back at all")
+        if let restored {
+            XCTAssertNotEqual(restored.from, restored.to, "restored as a self-wire")
+            XCTAssertEqual(Set([restored.from, restored.to]),
+                           [.init(componentID: a, end: 1), .init(componentID: b, end: 0)],
+                           "restored between the wrong terminals")
         }
+        XCTAssertTrue(model.areConnected(.init(componentID: a, end: 1),
+                                         .init(componentID: b, end: 0)),
+                      "the part the wire was carrying fell out of the circuit")
     }
 
-    /// Cancelling a rewire — the part went away, the lab reset — puts
-    /// the wire back rather than silently eating it.
-    func testCancellingARewirePutsTheWireBack() {
+    /// No wire on the bench may ever join a terminal to itself. A
+    /// self-wire is invisible, un-grabbable, budget-consuming and
+    /// persisted — there is no way for a user to get rid of one.
+    func testNoPathEverProducesASelfWire() {
         let model = CircuitsModel()
-        let (_, bulb, _, wire) = loop(model)
-        let before = model.wires.count
-
-        model.beginRewire(wire: wire, grabbing: 1, hand: lead(model, bulb, 0))
-        XCTAssertEqual(model.wires.count, before - 1)
-        model.cancelLeadPull()
-        XCTAssertEqual(model.wires.count, before, "A cancelled rewire ate the wire.")
-        XCTAssertNil(model.leadPull)
+        let (_, bulb, spare, wire) = loop(model)
+        // Lift, refuse, cancel, land, land back, drop — every landing
+        // the rewire has.
+        for landing in [lead(model, bulb, 0), lead(model, spare, 0),
+                        CircuitsModel.buildCenter + SIMD3(0, 0.5, 0)] {
+            if let live = model.wires.first?.id {
+                model.beginRewire(wire: live, grabbing: 1, hand: lead(model, bulb, 0))
+                model.updateLeadPull(hand: landing)
+                model.endLeadPull()
+            }
+            for candidate in model.wires {
+                XCTAssertNotEqual(candidate.from, candidate.to,
+                                  "a self-wire reached the bench")
+            }
+        }
+        _ = wire
     }
 
     /// Deleting the part the lifted wire was anchored to cancels the
@@ -216,6 +243,23 @@ final class CircuitsRewireTests: XCTestCase {
     }
 
     // MARK: The old behaviour, refused
+
+    /// A second pull cannot silently eat the wire a rewire is
+    /// carrying — the model, not the view, owns that invariant.
+    func testStartingASecondPullRestoresTheFirstsWire() {
+        let model = CircuitsModel()
+        let (battery, bulb, _, wire) = loop(model)
+        let before = model.wires.count
+
+        model.beginRewire(wire: wire, grabbing: 1, hand: lead(model, bulb, 0))
+        XCTAssertEqual(model.wires.count, before - 1)
+        // A fresh lead pull from somewhere else entirely.
+        model.beginLeadPull(from: .init(componentID: battery, end: 0),
+                            hand: lead(model, battery, 0))
+        XCTAssertEqual(model.wires.count, before,
+                       "the lifted wire vanished when a second pull began")
+        XCTAssertTrue(model.wires.contains { $0.id == wire })
+    }
 
     /// A TAP ON A WIRE NEVER DELETES IT. It used to, on the first tap,
     /// with no confirmation, on a bench that persists across launches.

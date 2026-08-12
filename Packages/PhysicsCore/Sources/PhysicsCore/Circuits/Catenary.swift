@@ -47,9 +47,24 @@ public enum Catenary {
 
         // The horizontal frame. A vertical span has none — every
         // direction is equally "sideways" — so it stays straight.
+        //
+        // THE TEST IS RELATIVE, NOT ABSOLUTE, and the difference is
+        // not cosmetic. An absolute floor of 1e-4 lets a span that is
+        // 0.2 mm across and 0.4 m tall through, and the solve below is
+        // then asked to hang 4 cm of slack across 0.2 mm of horizontal
+        // run. Five Newton steps from a small-sag guess do not come
+        // close to that root, and the unconverged value is not merely
+        // wrong — it produced mid-span drops of 10^23 m in review,
+        // which reach a vertex buffer as infinities.
+        //
+        // A cable is only "hanging across" a span if the span is
+        // meaningfully horizontal at all; below a fifth of the chord
+        // it is a drop, and a drop is straight.
         let horizontal = SIMD3(delta.x, 0, delta.z)
         let horizontalLength = simd_length(horizontal)
-        guard horizontalLength > 1e-4 else { return straight(from: from, to: to, count: count) }
+        guard horizontalLength > 0.2 * chord else {
+            return straight(from: from, to: to, count: count)
+        }
         let alongChord = horizontal / horizontalLength
         let rise = delta.y
 
@@ -119,7 +134,7 @@ public enum Catenary {
         var a = sqrt(24 * (ratio - 1)) / span
         guard a.isFinite, a > 0 else { return nil }
 
-        for _ in 0..<5 {
+        for _ in 0..<8 {
             let half = a * span / 2
             let value = 2 * sinh(half) / a - target
             // d/da [2·sinh(aL/2)/a] = L·cosh(aL/2)/a − 2·sinh(aL/2)/a²
@@ -129,6 +144,20 @@ public enum Catenary {
             guard next.isFinite, next > 0 else { break }
             a = next
         }
-        return a.isFinite && a > 0 ? a : nil
+
+        // THE RESIDUAL IS CHECKED, and returning nil is a real answer.
+        //
+        // Newton is not guaranteed here — a very deep sag across a
+        // very short run needs an enormous root that a fixed iteration
+        // count from a small-sag guess will not reach. Without this
+        // check the loop returns whatever it happens to be holding,
+        // and an unconverged `a` does not draw a slightly-wrong curve:
+        // it draws one kilometres deep. A caller that gets nil draws
+        // the chord, which is wrong by centimetres instead.
+        guard a.isFinite, a > 0 else { return nil }
+        let achieved = 2 * sinh(a * span / 2) / a
+        guard achieved.isFinite,
+              abs(achieved - target) <= max(target * 1e-3, 1e-9) else { return nil }
+        return a
     }
 }

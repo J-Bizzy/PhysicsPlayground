@@ -17,10 +17,14 @@
 //  — so "light what my gaze is on" is not reachable from where this
 //  module stands today.
 //
-//  `highlightedNet` is an `Int?` and not a `Bool` on purpose:
-//  `ResetCoverageTests` reflects over every `Bool` and demands a flip
-//  case for each, and this is a SELECTION, not a display layer. The
-//  tests below cover it by hand instead.
+//  WHAT IS STORED IS THE TAPPED TERMINAL, and the node is resolved on
+//  read. Node ids come from slot numbers, so deleting any part
+//  renumbers every net after it — held as an `Int`, the highlight
+//  silently re-pointed at a net it had never been asked for. Neither
+//  form is a `Bool`, which is also deliberate: `ResetCoverageTests`
+//  reflects over every `Bool` and demands a flip case for each, and
+//  this is a selection rather than a display layer, so the tests
+//  below cover reset, clear and the capsule by hand.
 //
 
 import XCTest
@@ -197,19 +201,40 @@ final class CircuitsNetHighlightTests: XCTestCase {
         XCTAssertEqual(model.readouts[bulb]?.amps ?? 0, before, accuracy: 1e-12)
     }
 
-    /// A highlight on a part that then goes away must not light a net
-    /// that no longer exists, or trap reaching for it.
-    func testDeletingTheLitPartIsSafe() {
+    /// DELETING A PART MUST NOT RE-POINT THE HIGHLIGHT AT A
+    /// DIFFERENT NET.
+    ///
+    /// Node ids are assigned by lowest slot, and slots are
+    /// `2 * componentIndex + end` — so removing any part renumbers
+    /// every net after it. Held as an `Int`, the highlight silently
+    /// followed the NUMBER rather than the net: light the switch–bulb
+    /// net on the starter loop, delete the battery, and the bench went
+    /// on lighting "net 2", which by then was a terminal that had
+    /// never been in the net and was not connected to it. It holds the
+    /// tapped TERMINAL now and resolves the node on read.
+    func testDeletingAPartDoesNotRepointTheHighlight() {
+        let model = CircuitsModel()
+        let (battery, bulb, resistor) = loop(model)
+        model.highlightNet(containing: .init(componentID: bulb, end: 1))
+        let litBefore = Set(model.highlightedTerminals)
+        XCTAssertEqual(litBefore, [.init(componentID: bulb, end: 1),
+                                   .init(componentID: resistor, end: 0)])
+
+        model.removeComponent(id: battery)
+        model.step(dt: 1.0 / 90.0)
+        XCTAssertEqual(Set(model.highlightedTerminals), litBefore,
+                       "the highlight moved to a different net when a part was deleted")
+    }
+
+    /// Deleting the lit part itself puts the highlight out rather than
+    /// leaving it pointing at whatever inherited the number.
+    func testDeletingTheLitPartClearsTheHighlight() {
         let model = CircuitsModel()
         let (battery, _, _) = loop(model)
         model.highlightNet(containing: .init(componentID: battery, end: 1))
         model.removeComponent(id: battery)
         model.step(dt: 1.0 / 90.0)
-
-        // Whatever it now names, reaching for it must be safe and the
-        // terminals it returns must all still be on the bench.
-        for terminal in model.highlightedTerminals {
-            XCTAssertTrue(model.components.contains { $0.id == terminal.componentID })
-        }
+        XCTAssertNil(model.highlightedNet)
+        XCTAssertTrue(model.highlightedTerminals.isEmpty)
     }
 }

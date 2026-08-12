@@ -259,8 +259,14 @@ final class CircuitsModel {
         for wire in wires where abs(wireFlows[wire.id] ?? 0) > 5e-4 {
             guard let a = terminalWorldPosition(wire.from),
                   let b = terminalWorldPosition(wire.to) else { continue }
+            // Closed form, not a resample. `Catenary.points` is
+            // CONSTRUCTED to have arc length chord + slack, so summing
+            // a 12-point polyline of it would allocate an array and a
+            // Newton solve per wire per call in order to return a
+            // slightly worse answer than the arithmetic. This property
+            // is read three times a frame while true speed is on.
             let span = simd_distance(a, b)
-            total += Catenary.arcLength(from: a, to: b, slack: Self.slack(span: span))
+            total += span + Self.slack(span: span)
         }
         return total
     }
@@ -334,6 +340,7 @@ final class CircuitsModel {
         wires.removeAll { $0.from.componentID == selectedID || $0.to.componentID == selectedID }
         components.removeAll { $0.id == selectedID }
         if leadPull?.source.componentID == selectedID { cancelLeadPull() }
+        if voiceWireSource?.componentID == selectedID { voiceWireSource = nil }
         self.selectedID = components.last?.id
         emitSound(.thud, at: component.position, volume: 0.4)
         persistSoon()
@@ -502,8 +509,15 @@ final class CircuitsModel {
         let reach = simd_length(direction)
         guard reach > 1e-4 else { return }
         direction /= reach
+        // THE SAME CLAMP VETO `alignment(for:)` uses. The algebra
+        // keeps the wired lead exactly on its pivot only while the
+        // clamp is a no-op; against a bench wall it would shift the
+        // body and the "pinned" lead would visibly leave the joint it
+        // is supposed to hinge on.
+        let position = pivot + direction * Self.terminalOffset
+        guard simd_distance(Self.clampToBench(position), position) < 1e-9 else { return }
         components[index].axis = pinned == 0 ? direction : -direction
-        components[index].position = clamp(pivot + direction * Self.terminalOffset)
+        components[index].position = position
     }
 
     // MARK: Pull-apart detach (the magnet, in reverse)
@@ -708,6 +722,9 @@ final class CircuitsModel {
     /// Start drawing a wire from a lead.
     func beginLeadPull(from source: Terminal, hand: SIMD3<Double>) {
         guard components.contains(where: { $0.id == source.componentID }) else { return }
+        // See `beginRewire`: a pull that replaces another silently
+        // eats whatever the first one was carrying.
+        cancelLeadPull()
         leadPull = LeadPull(source: source, hand: hand)
         updateLeadPull(hand: hand)
     }
@@ -725,6 +742,12 @@ final class CircuitsModel {
     /// TAPPING it, which destroyed it with no confirmation) and
     /// drawing a new one.
     func beginRewire(wire id: UUID, grabbing end: Int, hand: SIMD3<Double>) {
+        guard wires.contains(where: { $0.id == id }) else { return }
+        // One pull at a time. Without this a second `begin` would
+        // overwrite a rewire in flight, and the wire it was carrying —
+        // already out of `wires` — would simply cease to exist, with
+        // no sound and no outcome.
+        cancelLeadPull()
         guard let index = wires.firstIndex(where: { $0.id == id }) else { return }
         let wire = wires[index]
         // The end you grabbed comes off; the other end stays put and
@@ -732,7 +755,7 @@ final class CircuitsModel {
         let anchor = end == 0 ? wire.to : wire.from
         let lifted = end == 0 ? wire.from : wire.to
         wires.remove(at: index)
-        detachedWireAnchors[id] = anchor
+        detachedWires[id] = wire
         leadPull = LeadPull(source: anchor, detached: id, hand: hand)
         updateLeadPull(hand: hand)
         if let component = components.first(where: { $0.id == lifted.componentID }) {
@@ -787,7 +810,7 @@ final class CircuitsModel {
             // off a wire takes that wire with it — you pulled the
             // plug and dropped it on the floor.
             if let detached = pull.detached {
-                detachedWireAnchors[detached] = nil
+                detachedWires[detached] = nil
                 emitSound(.thud, at: pull.hand, volume: 0.5)
                 persistSoon()
                 return .deleted(detached)
@@ -801,7 +824,7 @@ final class CircuitsModel {
             // A landed rewire is no longer detached — including the
             // case where it landed back where it came from, which
             // costs a new wire id and nothing else.
-            if let detached = pull.detached { detachedWireAnchors[detached] = nil }
+            if let detached = pull.detached { detachedWires[detached] = nil }
             return .connected(id)
         default:
             // A REFUSAL IS A THING THE BENCH DOES. The renderer recoils
@@ -812,7 +835,7 @@ final class CircuitsModel {
             if let detached = pull.detached {
                 // A rewire that lands somewhere it cannot go is not a
                 // deletion — put the wire back where it was.
-                restore(wireID: detached, from: pull.source)
+                restore(wireID: detached)
             }
             return .refused(outcome)
         }
@@ -828,24 +851,32 @@ final class CircuitsModel {
     func cancelLeadPull() {
         guard let pull = leadPull else { return }
         leadPull = nil
-        if let detached = pull.detached {
-            restore(wireID: detached, from: pull.source)
-        }
+        if let detached = pull.detached { restore(wireID: detached) }
     }
 
-    /// Put a detached wire back on the terminal it came off.
-    private func restore(wireID: UUID, from source: Terminal) {
-        guard let anchor = detachedWireAnchors[wireID] else { return }
-        detachedWireAnchors[wireID] = nil
-        guard components.contains(where: { $0.id == anchor.componentID }),
-              components.contains(where: { $0.id == source.componentID }),
+    /// Put a lifted wire back exactly as it was.
+    ///
+    /// THE WHOLE WIRE IS KEPT, not just the end that stayed. The first
+    /// version stored only the anchor and rebuilt
+    /// `Wire(from: anchor, to: source)` — but `source` IS the anchor,
+    /// so a refused or cancelled rewire replaced a real connection
+    /// with a zero-length self-wire: the far part silently dropped out
+    /// of the circuit, and the self-wire was invisible, un-grabbable,
+    /// budget-consuming and persisted. That is precisely the zombie
+    /// wire this file's own history is about, rebuilt by the code that
+    /// claimed to have retired it.
+    private func restore(wireID: UUID) {
+        guard let wire = detachedWires[wireID] else { return }
+        detachedWires[wireID] = nil
+        guard components.contains(where: { $0.id == wire.from.componentID }),
+              components.contains(where: { $0.id == wire.to.componentID }),
               !wires.contains(where: { $0.id == wireID }) else { return }
-        wires.append(Wire(id: wireID, from: anchor, to: source))
+        wires.append(wire)
     }
 
-    /// The far end of each wire currently lifted off a terminal, so it
-    /// can be put back exactly as it was.
-    @ObservationIgnored private var detachedWireAnchors: [UUID: Terminal] = [:]
+    /// Every wire currently lifted off a terminal, whole, so it can be
+    /// put back exactly as it was.
+    @ObservationIgnored private var detachedWires: [UUID: Wire] = [:]
 
     // MARK: The accessibility door
 
@@ -865,29 +896,52 @@ final class CircuitsModel {
     /// on" is not reachable from where this module stands. Tap a lead
     /// or a wire and its whole net lights; tap empty space and it
     /// clears, symmetric with the ring fold.
-    private(set) var highlightedNet: Int?
+    /// WHICH TERMINAL WAS TAPPED, NOT WHICH NODE IT RESOLVED TO.
+    ///
+    /// Node ids are assigned by lowest slot and slots are
+    /// `2 * componentIndex + end`, so DELETING ANY PART RENUMBERS
+    /// every net after it. Stored as an `Int` this highlight silently
+    /// re-pointed: light the switch–bulb net on the starter loop,
+    /// delete the battery, and the bench went on lighting "net 2",
+    /// which was now a different terminal entirely — one that had
+    /// never been in the net and was not connected to it.
+    ///
+    /// A terminal is stable under renumbering, so the node is resolved
+    /// on READ and the highlight follows the bench.
+    private(set) var highlightedSource: Terminal?
+
+    /// The lit node, resolved now — nil when nothing is lit or when
+    /// the terminal that was tapped has since left the bench.
+    var highlightedNet: Int? {
+        guard let highlightedSource else { return nil }
+        return topology().node(of: highlightedSource)
+    }
 
     /// Light the net this terminal belongs to.
     func highlightNet(containing terminal: Terminal) {
-        highlightedNet = topology().node(of: terminal)
+        highlightedSource = components.contains { $0.id == terminal.componentID }
+            ? terminal : nil
     }
 
-    func clearNetHighlight() { highlightedNet = nil }
+    func clearNetHighlight() { highlightedSource = nil }
 
     /// The terminals currently lit — empty when nothing is.
     var highlightedTerminals: [Terminal] {
-        guard let highlightedNet else { return [] }
+        guard let highlightedSource else { return [] }
         let net = topology()
-        guard highlightedNet < net.terminalsByNode.count else { return [] }
-        return net.terminalsByNode[highlightedNet]
+        guard let node = net.node(of: highlightedSource),
+              node < net.terminalsByNode.count else { return [] }
+        return net.terminalsByNode[node]
     }
 
     /// Whether a wire lies inside the lit net. Both its ends do, by
     /// definition — a wire IS a statement that its two ends are one
     /// point — so either one answers.
     func isHighlighted(wire: Wire) -> Bool {
-        guard let highlightedNet else { return false }
-        return topology().node(of: wire.from) == highlightedNet
+        guard let highlightedSource else { return false }
+        let net = topology()
+        guard let lit = net.node(of: highlightedSource) else { return false }
+        return net.node(of: wire.from) == lit
     }
 
     /// The lead VoiceOver is wiring from, if any.
@@ -1035,6 +1089,8 @@ final class CircuitsModel {
         // relaunches. `connectTerminals` validated both ends; this, the
         // path the Bloom's Delete petal actually calls, cleared neither.
         if leadPull?.source.componentID == id { cancelLeadPull() }
+        if voiceWireSource?.componentID == id { voiceWireSource = nil }
+        if highlightedSource?.componentID == id { highlightedSource = nil }
         persistSoon()
     }
 
@@ -1869,6 +1925,14 @@ final class CircuitsModel {
     /// future version, a corrupted row — takes the same path. Dropping
     /// the row and keeping the bench is the right trade every time.
     static func migrated(_ stored: StoredBench) -> SavedBench {
+        // A duplicate id would collapse two rows onto one set of
+        // slots and splice the wrong things together. The app cannot
+        // mint one, but this function is the hardening layer for files
+        // it did not write.
+        var stored = stored
+        var seenIDs = Set<UUID>()
+        stored.components.removeAll { !seenIDs.insert($0.id).inserted }
+
         var partition = NetPartition(slotCount: stored.components.count * 2)
         var slotOf: [Terminal: Int] = [:]
         for index in stored.components.indices {
@@ -1917,6 +1981,17 @@ final class CircuitsModel {
                 survivingTerminals.append((Terminal(componentID: row.id, end: end),
                                            NetTopology.slot(componentIndex: index, end: end)))
             }
+        }
+
+        // NOTHING RETIRED, NOTHING REROUTED. The star below is a
+        // re-derivation of connectivity, and re-deriving a bench that
+        // needs no migration MOVES CABLES: a chain wired A–B, B–C
+        // comes back as A–B, A–C, electrically identical and visibly
+        // different, on every single launch. Wires are objects the
+        // user placed. If every row survived, the file is already
+        // current and is returned verbatim.
+        if components.count == stored.components.count {
+            return SavedBench(components: components, wires: stored.wires)
         }
 
         // One star per net over whatever survived it.
@@ -1981,7 +2056,7 @@ final class CircuitsModel {
         selectedID = nil
         cancelLeadPull()
         voiceWireSource = nil
-        highlightedNet = nil
+        highlightedSource = nil
         solve(dt: 1.0 / 90.0)
         return true
     }
@@ -2215,7 +2290,7 @@ final class CircuitsModel {
         selectedID = nil
         cancelLeadPull()
         voiceWireSource = nil
-        highlightedNet = nil
+        highlightedSource = nil
         readouts = [:]
         wireFlows = [:]
         totalSourcePower = 0
@@ -2371,11 +2446,17 @@ extension CircuitsModel: TimeCapsuleRecording {
         // simTime — so scrubbing back cuts the future off it rather than
         // leaving a trace that runs past the instant on screen.
         scopeSamples.removeAll { $0.time > snapshot.simTime }
+        // A RESTORE REPLACES THE WHOLE BENCH, so every piece of
+        // in-flight observer state goes with it — unconditionally.
+        // These three sat inside the `selectedID` check below for a
+        // few hours, which meant a scrub with nothing selected (the
+        // common case) left a half-made wire pointing into a topology
+        // that had just been swapped underneath it.
+        cancelLeadPull()
+        voiceWireSource = nil
+        highlightedSource = nil
         if let selectedID, !components.contains(where: { $0.id == selectedID }) {
             self.selectedID = nil
-            cancelLeadPull()
-        voiceWireSource = nil
-        highlightedNet = nil
         }
     }
 }

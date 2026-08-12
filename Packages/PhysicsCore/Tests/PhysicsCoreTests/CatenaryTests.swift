@@ -138,6 +138,58 @@ final class CatenaryTests: XCTestCase {
         }
     }
 
+    /// NEAR-VERTICAL, NOT JUST VERTICAL — the case the first version
+    /// of this file got catastrophically wrong.
+    ///
+    /// The degeneracy guard was an ABSOLUTE 1e-4 on the horizontal
+    /// run, so a span 0.2 mm across and 0.4 m tall went to the Newton
+    /// solve, which was asked to hang 4 cm of slack across 0.2 mm of
+    /// horizontal distance. Five iterations from a small-sag guess do
+    /// not reach that root, and the unconverged value produced
+    /// mid-span drops of 10^23 metres — numbers that reach a vertex
+    /// buffer as infinities. `testAVerticalSpanDegradesToTheChord`
+    /// missed it because it used an offset of EXACTLY zero, and
+    /// `testNothingProducesANaN` missed it because its sweep never
+    /// went near vertical.
+    func testNearVerticalSpansStayBounded() {
+        let top = SIMD3<Double>(0, 1.6, -0.9)
+        for offset in [1e-6, 1e-5, 1e-4, 5e-4, 1e-3, 2e-3, 5e-3, 0.01, 0.05, 0.1] {
+            let bottom = SIMD3<Double>(offset, 1.2, -0.9)
+            let curve = Catenary.points(from: top, to: bottom, slack: 0.04)
+            let chord = simd_distance(top, bottom)
+            for point in curve {
+                XCTAssertTrue(point.x.isFinite && point.y.isFinite && point.z.isFinite,
+                              "offset \(offset) produced \(point)")
+                // Nothing may end up further from an endpoint than the
+                // cable is long. A curve that cannot honour its slack
+                // must fall back to the chord, not run away.
+                XCTAssertLessThan(simd_distance(point, top), chord + 0.05 + 1e-9,
+                                  "offset \(offset) flung a point \(simd_distance(point, top)) m away")
+            }
+        }
+    }
+
+    /// The same claim as a property, over every direction: no sampled
+    /// point is ever further from an end than the arc length.
+    func testNoPointEverExceedsTheCableLength() {
+        var seed: UInt64 = 99
+        func random() -> Double {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Double(seed >> 11) / Double(1 << 53)
+        }
+        for _ in 0..<3000 {
+            let to = a + SIMD3((random() * 2 - 1) * 1.5,
+                               (random() * 2 - 1) * 1.5,
+                               (random() * 2 - 1) * 1.5)
+            let slack = random() * 0.6
+            let bound = simd_distance(a, to) + slack + 1e-6
+            for point in Catenary.points(from: a, to: to, slack: slack) {
+                XCTAssertLessThanOrEqual(simd_distance(point, a), bound,
+                                         "to \(to), slack \(slack): point \(point)")
+            }
+        }
+    }
+
     /// The sample count is honoured — the renderer sizes a tube from
     /// it.
     func testTheSampleCountIsHonoured() {
