@@ -194,7 +194,7 @@ final class TimeRail {
     /// becomes nothing is worse than a plain one.
     private func buildReel(accent: UIColor) {
         reel.name = "time-reel"
-        if let loaded = try? Entity.load(named: "TimeReel") {
+        if let loaded = PropCache.instance(named: "TimeReel") {
             spindle.addChild(loaded)
         } else {
             let fallback = ModelEntity(

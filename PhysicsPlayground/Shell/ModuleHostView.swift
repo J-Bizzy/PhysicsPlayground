@@ -191,6 +191,9 @@ struct ModuleHostView: View {
                         withAnimation(.easeOut(duration: 0.2)) {
                             showInRoomFailed = false
                         }
+                        // Same order as the gallery door: assets warm
+                        // off-main before the space opens.
+                        await PropCache.warmUp()
                         let result = await openImmersiveSpace(
                             id: PlaygroundSpaceView.spaceID)
                         if case .error = result {

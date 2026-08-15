@@ -190,6 +190,14 @@ struct HubView: View {
 
     private func openGallery() async {
         withAnimation(.easeOut(duration: 0.2)) { openFailed = false }
+        // Assets first, THEN the door. The gallery's build parses every
+        // prop it can't find in the cache synchronously on the main
+        // thread — warming here means the parsing happens while only
+        // this task is waiting, instead of as a multi-second Thread-1
+        // hang inside the space's first frames. The window is already
+        // up, so the wait reads as the room opening, not the app
+        // freezing.
+        await PropCache.warmUp()
         let result = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
         if case .error = result {
             withAnimation(.easeOut(duration: 0.2)) { openFailed = true }

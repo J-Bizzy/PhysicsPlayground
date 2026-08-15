@@ -784,8 +784,8 @@ final class HubScene {
         // if the asset does not load, the gallery must still have
         // terraces, because a missing floor under six exhibits is not a
         // degraded look, it is six labs hanging in the air.
-        guard let bay = Self.platform("GalleryBay"),
-              let cap = Self.platform("GalleryCap") else {
+        guard let bay = PropCache.prototype(named: "GalleryBay"),
+              let cap = PropCache.prototype(named: "GalleryCap") else {
             let box = ModelEntity(
                 mesh: .generateBox(width: terrace.width,
                                    height: GalleryLayout.slabThickness,
@@ -817,21 +817,12 @@ final class HubScene {
         }
     }
 
-    /// A modelled platform, or nil. Prototypes are loaded once and
-    /// cloned: six mounts and three bays per terrace are the same mesh,
-    /// and `Entity.load` re-parses the asset every call.
-    private static var platformCache: [String: Entity] = [:]
-
-    private static func platform(_ name: String) -> Entity? {
-        if let cached = platformCache[name] { return cached }
-        guard let loaded = try? Entity.load(named: name) else { return nil }
-        platformCache[name] = loaded
-        return loaded
-    }
-
+    /// A modelled platform, cloned from the shared `PropCache`: six
+    /// mounts and three bays per terrace are the same mesh, and the
+    /// cache is what stops that being six parses.
     private static func loadPlatform(_ name: String,
                                      fallback: () -> Entity) -> Entity {
-        platform(name).map { $0.clone(recursive: true) } ?? fallback()
+        PropCache.instance(named: name) ?? fallback()
     }
 
     // MARK: The podium — where a lab is brought to be opened
@@ -1040,7 +1031,7 @@ final class HubScene {
     /// ring angle θ is yawed by π/2 − θ to point at the centre.
     private func buildLatches(on podium: Entity, at plateTop: Float) {
         latchPivots.removeAll()
-        guard let finger = Self.platform("GalleryLatch") else { return }
+        guard let finger = PropCache.prototype(named: "GalleryLatch") else { return }
 
         for index in 0..<3 {
             let theta = Float.pi / 2 + Float(index) * 2 * .pi / 3

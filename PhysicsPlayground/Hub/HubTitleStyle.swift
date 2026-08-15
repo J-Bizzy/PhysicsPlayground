@@ -194,9 +194,9 @@ enum HubTitleStyle {
         "& Energy": "HubTitle_Energy",
     ]
 
-    /// Loaded once and cloned. `Entity.load` re-parses the asset every
-    /// call, and the wordmark alone asks for two lines on every build.
-    private static var milledCache: [String: Entity] = [:]
+    // The local `milledCache` went with the shared `PropCache`
+    // (2026-08-15): one prototype cache for the whole app, warmed
+    // off-main before the space opens.
 
     /// ONE LINE OF DISPLAY TYPE, MILLED RATHER THAN GENERATED — same
     /// contract as `keylined`, and nil when there is no asset for these
@@ -231,14 +231,7 @@ enum HubTitleStyle {
                        accent: UIColor?) -> (entity: Entity,
                                              extents: SIMD3<Float>)? {
         guard let asset = milledAssets[text] else { return nil }
-        let prototype: Entity
-        if let cached = milledCache[asset] {
-            prototype = cached
-        } else {
-            guard let loaded = try? Entity.load(named: asset) else { return nil }
-            milledCache[asset] = loaded
-            prototype = loaded
-        }
+        guard let prototype = PropCache.prototype(named: asset) else { return nil }
         // THE RETURNED ENTITY'S OWN SCALE MUST STAY 1, and this wrapper
         // is the whole reason for it. Both lockups above finish with
         //

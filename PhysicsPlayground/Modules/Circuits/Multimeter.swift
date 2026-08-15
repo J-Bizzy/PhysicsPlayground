@@ -142,7 +142,7 @@ final class Multimeter {
         self.accent = accent
         self.anchor = anchor
 
-        if let mesh = try? Entity.load(named: "Multimeter") {
+        if let mesh = PropCache.instance(named: "Multimeter") {
             // STOOD UP. The Blender script builds the case in the XY
             // plane with its face along +Z, and the exporter's Z-up →
             // Y-up conversion turns that +Z into RealityKit's +Y — so
@@ -232,7 +232,7 @@ final class Multimeter {
 
         for slot in [CircuitsModel.ProbeSlot.red, .black] {
             let probe = Entity()
-            if let mesh = try? Entity.load(named: "MeterProbe") {
+            if let mesh = PropCache.instance(named: "MeterProbe") {
                 let tinted = mesh
                 probe.addChild(tinted)
             }

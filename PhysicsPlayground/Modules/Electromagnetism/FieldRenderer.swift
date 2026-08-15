@@ -395,7 +395,7 @@ final class FieldRenderer {
             // painted in anodised accent metal here so the palette stays
             // the one authority on what +/− look like. The translucent
             // box survives as the fallback.
-            let prototype = try? Entity.load(named: "CapacitorPlate")
+            let prototype = PropCache.prototype(named: "CapacitorPlate")
             let mesh = MeshResource.generateBox(
                 size: [0.012, Float(FieldModel.plateSize), Float(FieldModel.plateSize)],
                 cornerRadius: 0.004)
@@ -509,7 +509,7 @@ final class FieldRenderer {
             // rather than a child the slab's non-uniform stretch would
             // distort. It shares the slab's name so a pinch on either
             // routes to the same drag.
-            if let handle = try? Entity.load(named: "SlabHandle") {
+            if let handle = PropCache.instance(named: "SlabHandle") {
                 let holder = Entity()
                 holder.name = "dielectric-slab"
                 holder.addChild(handle)

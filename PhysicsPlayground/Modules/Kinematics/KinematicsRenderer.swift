@@ -228,7 +228,7 @@ final class KinematicsRenderer {
             mesh: .generateCylinder(height: Self.barrelLength, radius: 0.02),
             materials: [launcherMaterial]
         )
-        if let loaded = try? Entity.load(named: "LauncherBarrel") {
+        if let loaded = PropCache.instance(named: "LauncherBarrel") {
             // Blender-authored barrel: 0.30 m base-to-muzzle along +Y.
             // Centered and scaled onto the aiming entity; the procedural
             // cylinder bows out.

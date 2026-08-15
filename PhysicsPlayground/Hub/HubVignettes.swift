@@ -256,28 +256,17 @@ enum HubVignettes {
 
     // MARK: Modeled props
 
-    /// One loaded prototype per asset; every use gets a clone. Same
-    /// arrangement `CircuitsRenderer.modeledBody` uses, for the same
-    /// reason: `Entity.load` is synchronous, and the gallery builds every
-    /// exhibit in a single pass.
-    ///
-    /// Failures are cached too. A missing asset should cost one failed
-    /// load, not one per exhibit per rebuild — and every call site below
-    /// keeps the geometry it used to draw as its fallback, so a miniature
-    /// degrades instead of vanishing.
-    private static var prototypes: [String: Entity?] = [:]
-
     /// A prop, centred on its own origin and scaled so its longest
-    /// dimension is `longest`.
+    /// dimension is `longest`. Prototypes come from the shared
+    /// `PropCache` (warmed off-main before the space opens); every call
+    /// site below keeps the geometry it used to draw as its fallback,
+    /// so a miniature degrades instead of vanishing.
     ///
     /// Measured rather than assumed: these assets were authored at real
     /// bench sizes, and a miniature has no business knowing which of them
     /// happens to be 30 cm long.
     private static func prop(_ name: String, longest: Float) -> Entity? {
-        if prototypes[name] == nil {
-            prototypes[name] = try? Entity.load(named: name)
-        }
-        guard let prototype = prototypes[name] ?? nil else { return nil }
+        guard let prototype = PropCache.prototype(named: name) else { return nil }
 
         let model = prototype.clone(recursive: true)
         let box = model.visualBounds(relativeTo: nil)

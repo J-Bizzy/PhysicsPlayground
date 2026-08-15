@@ -1137,10 +1137,9 @@ final class CircuitsRenderer {
 
     // MARK: Modeled bodies (Blender-authored USDZ, procedural fallback)
 
-    /// One loaded prototype per kind; each part gets a clone. The
-    /// resistor (live color-band texture) and wire (stretching rod)
-    /// deliberately stay procedural.
-    private static var bodyPrototypes: [CircuitsModel.ComponentKind: Entity] = [:]
+    /// Each part clones the shared `PropCache` prototype. The resistor
+    /// (live color-band texture) and wire (stretching rod) deliberately
+    /// stay procedural.
     private static let bodyAssetNames: [CircuitsModel.ComponentKind: String] = [
         .battery: "CircuitBattery", .bulb: "CircuitBulb",
         .capacitor: "CircuitCapacitor", .switcher: "CircuitSwitch",
@@ -1148,10 +1147,7 @@ final class CircuitsRenderer {
 
     private static func modeledBody(for kind: CircuitsModel.ComponentKind) -> ModelEntity? {
         guard let name = bodyAssetNames[kind] else { return nil }
-        if bodyPrototypes[kind] == nil, let loaded = try? Entity.load(named: name) {
-            bodyPrototypes[kind] = loaded
-        }
-        guard let prototype = bodyPrototypes[kind] else { return nil }
+        guard let prototype = PropCache.prototype(named: name) else { return nil }
         let shell = ModelEntity()
         shell.addChild(prototype.clone(recursive: true))
         return shell

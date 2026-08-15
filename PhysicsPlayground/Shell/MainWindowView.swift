@@ -28,12 +28,17 @@ struct MainWindowView: View {
                 // Synthesize the sound set no matter how the app was
                 // entered (the debug -openModule path skips the hub).
                 SoundPalette.warmUp()
+                // Start parsing the modelled assets immediately — the
+                // gallery door awaits this same pass before opening, so
+                // the head start is pure profit on the launch path.
+                Task { await PropCache.warmUp() }
                 #if DEBUG
                 // Companion to AppModel's `-openModule` debug hook: a module
                 // launched from the command line needs its space opened too
                 // (normally the hub does this before any module is entered).
                 if UserDefaults.standard.string(forKey: "openModule") != nil,
                    !appModel.isImmersiveSpaceOpen {
+                    await PropCache.warmUp()
                     let result = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
                     print("openModule debug hook: openImmersiveSpace -> \(result)")
                 }
