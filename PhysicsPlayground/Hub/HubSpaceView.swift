@@ -82,10 +82,20 @@ struct HubSpaceView: View {
             // is not an arrival — so the flight, the cascade and the
             // bell play once per session and every later entry opens
             // on the finished room.
+            //
+            // MARKED PLAYED WHEN THE INTRO FINISHES, NOT HERE. This
+            // closure can run for a view the system then discards
+            // while presenting the space — marking at build time let
+            // that invisible first pass consume the session's one
+            // arrival, and the pass the wearer actually saw opened on
+            // the finished room. That was the launch-day symptom:
+            // title already at the wall, everything "loaded in too
+            // soon". A ceremony only counts once somebody has seen it
+            // land.
             scene.arrivalAlreadyPlayed = appModel.hasPlayedArrival
+            scene.onArrivalPlayed = { appModel.hasPlayedArrival = true }
             SoundPalette.warmUp()
             scene.build(modules: modules)
-            appModel.hasPlayedArrival = true
             scene.placement = appModel.galleryPlacement
             content.add(scene.root)
 
@@ -425,6 +435,10 @@ final class HubScene {
     /// A frozen screenshot intro overrides it: `-hubIntro` exists to
     /// photograph the flight, and a skip would photograph its absence.
     var arrivalAlreadyPlayed = false
+    /// Fired the frame the ceremony completes — the view marks the
+    /// session's `hasPlayedArrival` off this, and ONLY this, so a
+    /// discarded pre-presentation build can never spend the arrival.
+    var onArrivalPlayed: (() -> Void)?
 
     /// The intro's clock: frozen for screenshots, infinite (= finished)
     /// under stillness, live otherwise.
@@ -634,6 +648,12 @@ final class HubScene {
             for title in domainTitles.values {
                 title.root.components.remove(OpacityComponent.self)
             }
+            // The bar sat out the flight; the mark has landed, so the
+            // controls may take their seat under it.
+            titleBar?.isEnabled = true
+            // The ceremony has been SEEN — only now does it count
+            // against the session.
+            onArrivalPlayed?()
             return
         }
         titleAnchor.components.set(
@@ -1448,6 +1468,11 @@ final class HubScene {
 
     /// Local position under the wordmark for the utility bar.
     private var titleBarSeat = SIMD3<Float>(0, -0.35, 0.01)
+    /// The seated bar, held so the intro can bench it: window controls
+    /// riding the wordmark's opening flight read as loose UI swooping
+    /// through the room, so the bar sits out the ceremony and appears
+    /// with the landing.
+    private var titleBar: Entity?
 
     /// Parents the utility-bar attachment under the wordmark, so it
     /// inherits the title's bob and breathe — part of the lockup, not
@@ -1460,7 +1485,12 @@ final class HubScene {
     func seatTitleBar(_ entity: Entity) {
         entity.position = titleBarSeat
         entity.scale = SIMD3(repeating: 2.2)
+        // Benched while the arrival plays (and for a frozen screenshot
+        // intro, which never finishes): the flight is the wordmark
+        // alone. `updateIntro`'s landing re-enables it.
+        entity.isEnabled = introPhase != .running
         titleAnchor.addChild(entity)
+        titleBar = entity
     }
 
     /// Opens a lab. Set by the view, and reached from the exhibit's
@@ -1878,6 +1908,15 @@ final class HubScene {
     var placement: GalleryPlacement?
 
     func animate(dt: Double, lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?) {
+        // CLAMPED, because the first event after the space presents
+        // can carry everything the renderer swallowed while opening —
+        // seconds, in one delta. Unclamped, that single frame spent
+        // the arrival's entire centred beat before anyone saw a frame:
+        // the launch-day symptom was a room already cascading, title
+        // already at the wall, on the first visible frame. A ceiling
+        // of a thirtieth of a second means a stall shows up as slow
+        // motion for one frame instead of as time travel.
+        let dt = min(dt, 1.0 / 30.0)
         time += dt
         if let placement {
             root.position = placement.offset
