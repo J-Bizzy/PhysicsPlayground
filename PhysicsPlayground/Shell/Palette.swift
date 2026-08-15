@@ -70,6 +70,11 @@ final class Palette {
 
     /// 0 folded, 1 open. Everything else is derived from this.
     private(set) var openness: Float = 0
+    /// The bead label opacity last written. The label follows the fold,
+    /// but the fold is parked at 0 for most of a session — and this is
+    /// the one object present in every lab, so an ungated write here was
+    /// a component set per frame, forever, carrying a constant.
+    private var appliedBeadLabelOpacity: Float = -1
     private var isOpen = false
     private var time: Double = 0
 
@@ -296,7 +301,12 @@ final class Palette {
         // What stops is the idle life nobody asked for.
         let breath = stillness ? 1 : 1 + 0.05 * Float(sin(time * 1.6))
         bead.scale = SIMD3(repeating: breath * (1 - 0.45 * openness))
-        beadLabel?.components.set(OpacityComponent(opacity: 1 - openness))
+        // Written only while the fold is actually moving — see the note
+        // on `appliedBeadLabelOpacity`.
+        if abs((1 - openness) - appliedBeadLabelOpacity) > 0.0005 {
+            appliedBeadLabelOpacity = 1 - openness
+            beadLabel?.components.set(OpacityComponent(opacity: 1 - openness))
+        }
 
         // The rotor spins whatever else is paused, and the gimbals need
         // to know how far the ring has come to lay flat into it.

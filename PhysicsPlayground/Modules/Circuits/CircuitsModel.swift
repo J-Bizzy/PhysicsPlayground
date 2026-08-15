@@ -266,7 +266,20 @@ final class CircuitsModel {
             // slightly worse answer than the arithmetic. This property
             // is read three times a frame while true speed is on.
             let span = simd_distance(a, b)
-            total += span + Self.slack(span: span)
+            // Only a span that actually HANGS is longer than its
+            // chord. `Catenary.path` draws a near-vertical span as a
+            // straight drop — horizontal run under a fifth of the
+            // chord — and the electron walks what is drawn, so adding
+            // slack to a vertical wire would overstate the very number
+            // this comment demands be honest. Same threshold, same
+            // fact, one policy.
+            let delta = b - a
+            let horizontal = simd_length(SIMD2(delta.x, delta.z))
+            if horizontal > 0.2 * span {
+                total += span + Self.slack(span: span)
+            } else {
+                total += span
+            }
         }
         return total
     }
@@ -320,6 +333,7 @@ final class CircuitsModel {
     /// when the component budget is full).
     @discardableResult
     func add(_ kind: ComponentKind, at point: SIMD3<Double>? = nil) -> UUID? {
+        guard scrubTime == nil else { return nil }
         guard components.count < Self.componentBudget else { return nil }
         let angle = Double(components.count) * 2.4
         let fallback = Self.buildCenter
@@ -335,6 +349,7 @@ final class CircuitsModel {
     }
 
     func removeSelected() {
+        guard scrubTime == nil else { return }
         guard let selectedID,
               let component = components.first(where: { $0.id == selectedID }) else { return }
         wires.removeAll { $0.from.componentID == selectedID || $0.to.componentID == selectedID }
@@ -469,6 +484,7 @@ final class CircuitsModel {
     /// belongs to the carry, and running it after the alignment's own
     /// translation could yank a NEIGHBOUR's contact off.
     func release(id: UUID) {
+        guard scrubTime == nil else { return }
         guard components.contains(where: { $0.id == id }) else { return }
         if let alignment = alignment(for: id),
            let index = components.firstIndex(where: { $0.id == id }) {
@@ -497,6 +513,7 @@ final class CircuitsModel {
     /// with the jumper retired nothing has a length to set, so a
     /// lead's direction can only honestly mean "where its wire goes".
     func swing(id: UUID, hand: SIMD3<Double>) {
+        guard scrubTime == nil else { return }
         guard let index = components.firstIndex(where: { $0.id == id }) else { return }
         let ends = (0...1).filter { end in
             wires.contains { $0.from == Terminal(componentID: id, end: end)
@@ -542,6 +559,7 @@ final class CircuitsModel {
     /// Call when a part starts being carried or stretched: remember
     /// which of its connections are short contacts (poppable).
     func beginCarry(id: UUID) {
+        guard scrubTime == nil else { return }
         poppableWires = Set(wires.filter { wire in
             (wire.from.componentID == id || wire.to.componentID == id)
                 && wireLength(wire) < Self.breakDistance
@@ -572,6 +590,7 @@ final class CircuitsModel {
     /// Detach a whole component at once — every wire touching it drops.
     /// The clean "take it out of the circuit" action for the readout.
     func detachComponent(id: UUID) {
+        guard scrubTime == nil else { return }
         let touching = wires.filter {
             $0.from.componentID == id || $0.to.componentID == id
         }
@@ -625,6 +644,7 @@ final class CircuitsModel {
     /// Adopt the aim a carry left the part with (the hand can twist a
     /// held part). Ignores degenerate axes; normalizes the rest.
     func setAxis(id: UUID, axis: SIMD3<Double>) {
+        guard scrubTime == nil else { return }
         guard let index = components.firstIndex(where: { $0.id == id }) else { return }
         let length = simd_length(axis)
         guard length > 1e-6 else { return }
@@ -655,6 +675,7 @@ final class CircuitsModel {
     // 2.6 cm hit radii is the defect this whole rebuild answers.
 
     func move(id: UUID, to point: SIMD3<Double>) {
+        guard scrubTime == nil else { return }
         guard let index = components.firstIndex(where: { $0.id == id }) else { return }
         components[index].position = clamp(point)
     }
@@ -721,6 +742,7 @@ final class CircuitsModel {
 
     /// Start drawing a wire from a lead.
     func beginLeadPull(from source: Terminal, hand: SIMD3<Double>) {
+        guard scrubTime == nil else { return }
         guard components.contains(where: { $0.id == source.componentID }) else { return }
         // See `beginRewire`: a pull that replaces another silently
         // eats whatever the first one was carrying.
@@ -742,6 +764,7 @@ final class CircuitsModel {
     /// TAPPING it, which destroyed it with no confirmation) and
     /// drawing a new one.
     func beginRewire(wire id: UUID, grabbing end: Int, hand: SIMD3<Double>) {
+        guard scrubTime == nil else { return }
         guard wires.contains(where: { $0.id == id }) else { return }
         // One pull at a time. Without this a second `begin` would
         // overwrite a rewire in flight, and the wire it was carrying —
@@ -804,7 +827,10 @@ final class CircuitsModel {
     @discardableResult
     func endLeadPull() -> LeadOutcome {
         guard let pull = leadPull else { return .none }
-        defer { leadPull = nil }
+        // Whatever the outcome, the pull is over and the bench is
+        // stable again — save it. A mid-pull debounce was refused by
+        // `persistNow`, so this is also the save that one deferred.
+        defer { leadPull = nil; persistSoon() }
         guard let target = pull.target else {
             // Open air. A new lead springs back; a rewire that came
             // off a wire takes that wire with it — you pulled the
@@ -852,6 +878,9 @@ final class CircuitsModel {
         guard let pull = leadPull else { return }
         leadPull = nil
         if let detached = pull.detached { restore(wireID: detached) }
+        // The pull `persistNow` was waiting out is gone; flush the
+        // save it deferred.
+        persistSoon()
     }
 
     /// Put a lifted wire back exactly as it was.
@@ -964,6 +993,7 @@ final class CircuitsModel {
     /// The VoiceOver action on a terminal: arm, or land.
     @discardableResult
     func voiceOverWire(_ terminal: Terminal) -> LeadOutcome {
+        guard scrubTime == nil else { return .none }
         guard components.contains(where: { $0.id == terminal.componentID }) else { return .none }
         guard let source = voiceWireSource else {
             voiceWireSource = terminal
@@ -994,6 +1024,7 @@ final class CircuitsModel {
     }
 
     func deleteWire(id: UUID) {
+        guard scrubTime == nil else { return }
         guard let wire = wires.first(where: { $0.id == id }) else { return }
         wires.removeAll { $0.id == id }
         if let component = components.first(where: { $0.id == wire.from.componentID }) {
@@ -1003,6 +1034,7 @@ final class CircuitsModel {
     }
 
     func toggleSwitch(id: UUID) {
+        guard scrubTime == nil else { return }
         guard let index = components.firstIndex(where: { $0.id == id }),
               components[index].kind == .switcher else { return }
         components[index].isClosed.toggle()
@@ -1066,6 +1098,7 @@ final class CircuitsModel {
     }
 
     func setComponentValue(id: UUID, _ value: Double) {
+        guard scrubTime == nil else { return }
         guard let index = components.firstIndex(where: { $0.id == id }) else { return }
         let range = Self.valueRange(for: components[index].kind)
         guard range.upperBound > range.lowerBound else { return }
@@ -1074,6 +1107,7 @@ final class CircuitsModel {
     }
 
     func removeComponent(id: UUID) {
+        guard scrubTime == nil else { return }
         components.removeAll { $0.id == id }
         wires.removeAll { $0.from.componentID == id || $0.to.componentID == id }
         if selectedID == id { selectedID = components.last?.id }
@@ -1787,6 +1821,14 @@ final class CircuitsModel {
 
     @ObservationIgnored var capsule = TimeCapsule<CapsuleSnapshot>()
     @ObservationIgnored var capsuleClock = 0.0
+    /// Non-nil while the room is parked in its own past — and while it
+    /// is, THE BENCH IS READ-ONLY. `restoreCapsuleSnapshot` overwrites
+    /// `components` and `wires` on every scrub change, so an edit made
+    /// while scrubbed would hold for a moment and then silently vanish
+    /// under the next restore — the worst kind of "no", one that
+    /// arrives after the gesture succeeded. Every bench-mutating entry
+    /// point guards on this; selection, probing and the net highlight
+    /// stay live, because looking around the past is the whole point.
     var scrubTime: Double?
     var scrubNonce = 0
     /// Live node voltages by terminal, for the voltage-gradient wires.
@@ -1830,6 +1872,7 @@ final class CircuitsModel {
 
     /// Puts a burned/blown part back in service.
     func replaceFailed(id: UUID) {
+        guard scrubTime == nil else { return }
         guard let index = components.firstIndex(where: { $0.id == id }) else { return }
         components[index].failed = false
         emitSound(.chime, at: components[index].position, volume: 0.5)
@@ -2036,6 +2079,14 @@ final class CircuitsModel {
         // saving it would let a rewind you were only inspecting become
         // the bench you find on next launch.
         guard scrubTime == nil else { return }
+        // And never save one with a wire in the hand. `beginRewire`
+        // takes the wire out of `wires` and parks it in the in-memory
+        // `detachedWires`; if the debounce fires mid-pull, the save
+        // would omit a connection that a cancel or refusal was about
+        // to put back — and a force-quit at that moment would make the
+        // omission permanent. Every path that resolves the pull
+        // schedules its own save, so nothing is lost by waiting.
+        guard leadPull == nil else { return }
         let bench = SavedBench(components: components, wires: wires)
         if let data = try? JSONEncoder().encode(bench) {
             UserDefaults.standard.set(data, forKey: Self.saveKey)

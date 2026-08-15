@@ -242,6 +242,33 @@ final class CircuitsRewireTests: XCTestCase {
         }
     }
 
+    // MARK: The save waits for the hand
+
+    /// A save that fires while a wire is IN THE HAND must not write
+    /// the bench without it. `beginRewire` schedules the debounced
+    /// save the moment it lifts the wire; if that save landed
+    /// mid-pull, a force-quit before the release would lose a
+    /// connection that a cancel would have restored.
+    func testAMidRewireSaveDoesNotLoseTheWire() {
+        defer { UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey) }
+        let model = CircuitsModel()
+        let (_, bulb, _, wire) = loop(model)
+        model.persistNow()
+        let wiresOnDisk = { CircuitsModel(restoreSaved: true).wires.count }
+        let before = wiresOnDisk()
+
+        model.beginRewire(wire: wire, grabbing: 1, hand: lead(model, bulb, 0))
+        model.persistNow()  // the debounce firing mid-pull
+        XCTAssertEqual(wiresOnDisk(), before,
+                       "a bench with a wire in the hand is not a bench to save")
+
+        // And once the pull resolves, saving works again — including
+        // the restored wire.
+        model.cancelLeadPull()
+        model.persistNow()
+        XCTAssertEqual(wiresOnDisk(), before)
+    }
+
     // MARK: The old behaviour, refused
 
     /// A second pull cannot silently eat the wire a rewire is

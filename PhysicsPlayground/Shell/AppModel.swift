@@ -67,6 +67,14 @@ final class AppModel {
         resetNonce &+= 1
     }
 
+    /// Whether the hub's arrival choreography has run this SESSION.
+    /// The ceremony is for arriving; the hub scene is rebuilt on every
+    /// return from a lab, and before this flag each return replayed
+    /// the full title flight, cascade and chime — a 2.6 s toll on the
+    /// most-travelled path in the app. Session-lived on purpose: a
+    /// fresh launch is an arrival, a walk back from Circuits is not.
+    var hasPlayedArrival = false
+
     // MARK: Visit history — powers "New" badges.
 
     private(set) var visitedModuleIDs: Set<String> =

@@ -66,6 +66,27 @@ final class FieldModelTests: XCTestCase {
         XCTAssertNil(model.selectedChargeID)
     }
 
+    /// THE CLEAR PLATE'S ACTUAL PROMISE: an empty room. It fired
+    /// `removeAllCharges` for months and the probe — placed content
+    /// with its own lifecycle — survived every clear, orbiting nothing.
+    /// The plate fires `clearEverything` now, and this holds it to the
+    /// name on the plate.
+    func testClearEverythingRemovesTheProbeToo() {
+        let model = FieldModel()
+        model.addCharge(positive: true)
+        model.addCharge(positive: false)
+        model.dropProbe()
+        XCTAssertNotNil(model.probe, "no probe to clear — test is vacuous")
+
+        model.clearEverything()
+        XCTAssertTrue(model.charges.isEmpty)
+        XCTAssertNil(model.selectedChargeID)
+        XCTAssertNil(model.probe, "the placed test charge must clear with "
+                     + "everything else")
+        XCTAssertEqual(model.probeStatus, .none)
+        XCTAssertTrue(model.probeTrail.isEmpty)
+    }
+
     func testSelectedBindingsEditOnlyTheSelectedCharge() {
         let model = FieldModel()
         let firstID = model.charges[0].id
@@ -315,18 +336,29 @@ final class FieldModelTests: XCTestCase {
         XCTAssertEqual(model.plateVoltage, 2_000, accuracy: 1e-9)
     }
 
-    /// One arithmetic for E = V/d everywhere it is shown: the helper
-    /// equals V/d to the displayed tenth across the separation range.
-    func testPlateFieldReadsVOverDToTheDisplayedTenth() {
+    /// One arithmetic for the E line everywhere it is shown — and since
+    /// the plates became real (2026-08-14), that number is the MEASURED
+    /// centre field: honestly below the ideal V/d, because a finite
+    /// capacitor leaks field out its sides, and more so as the gap
+    /// opens relative to the plates.
+    func testPlateFieldReadsTheMeasuredCentreField() {
         let model = FieldModel()
+        model.capacitorOn = true
         for (volts, separation) in [(2_000.0, 0.15), (20_000.0, 0.44),
                                     (40_000.0, 1.0), (13_500.0, 0.62)] {
             model.plateVoltage = volts
             model.plateSeparation = separation
-            let exact = volts / separation / 1000
-            XCTAssertEqual(model.plateFieldkVPerM, (exact * 10).rounded() / 10,
-                           accuracy: 1e-9,
-                           "\(volts) V over \(separation) m")
+            let ideal = volts / separation / 1000
+            XCTAssertLessThan(model.plateFieldkVPerM, ideal,
+                              "finite plates cannot reach the ideal V/d")
+            XCTAssertGreaterThan(model.plateFieldkVPerM, ideal * 0.35,
+                                 "\(volts) V over \(separation) m")
+            // And it is the same number the capacitor itself measures,
+            // to the displayed tenth.
+            let measured = model.capacitorField(at: model.capacitorCenter).x
+            XCTAssertEqual(model.plateFieldkVPerM,
+                           ((measured / 1000) * 10).rounded() / 10,
+                           accuracy: 1e-9)
         }
     }
 
@@ -342,16 +374,22 @@ final class FieldModelTests: XCTestCase {
         model.holdProbe(at: model.samplingRegion.center)
         model.releaseProbe()
 
+        // The MEASURED centre field, not V/d: the plates are real and
+        // open, so the ideal formula overstates E. The probe stays on
+        // the symmetry axis while it drifts, where the field varies
+        // slowly — a 10% window covers the variation over 0.3 s.
         let expectedAcceleration = model.probeChargeMagnitude
-            * model.plateVoltage / model.plateSeparation / FieldModel.probeMass
+            * model.capacitorField(at: model.capacitorCenter).x
+            / FieldModel.probeMass
         for _ in 0..<27 {  // 0.3 s
             model.stepProbe(dt: 1.0 / 90.0)
         }
         let probe = try! XCTUnwrap(model.probe)
         XCTAssertEqual(probe.velocity.x, expectedAcceleration * 0.3,
-                       accuracy: expectedAcceleration * 0.3 * 0.02,
+                       accuracy: expectedAcceleration * 0.3 * 0.10,
                        "a + probe drifts toward the negative plate at qE/m")
-        XCTAssertEqual(probe.velocity.y, 0, accuracy: 1e-9)
+        XCTAssertEqual(probe.velocity.y, 0, accuracy: 1e-9,
+                       "on the symmetry axis the sideways field is zero")
 
         // Grab the negative plate and pull it outward: the gap grows,
         // the other plate stays put, and E = V/d falls.
@@ -481,9 +519,86 @@ final class FieldModelTests: XCTestCase {
                              "the plates should make a field here")
         XCTAssertEqual(
             readout.potential,
-            -simd_dot(model.capacitorField(at: model.capacitorCenter + offset), offset),
+            model.capacitorPotential(at: model.capacitorCenter + offset),
             accuracy: 1e-9)
-        XCTAssertNotEqual(readout.potential, 0,
-                          "a strong E beside 0.00 V is not a thing a field can do")
+        XCTAssertLessThan(readout.potential, 0,
+                          "downhill toward the negative plate — and not the "
+                          + "0.00 V beside a strong E that started all this")
+    }
+
+    /// The slab's coverage is physics state (it rides the Time Capsule
+    /// snapshot), and it is a Double — outside `ResetCoverageTests`'s
+    /// Bool reflection — so its reset is held by hand, the same
+    /// arrangement `CircuitsNetHighlightTests` uses for the net
+    /// selection.
+    func testResetParksTheDielectric() {
+        let model = FieldModel()
+        model.capacitorOn = true
+        model.dielectricCoverage = 0.7
+        model.reset()
+        XCTAssertEqual(model.dielectricCoverage, 0,
+                       "reset must pull the slab back out")
+        XCTAssertFalse(model.capacitorOn)
+    }
+
+    /// Sliding the slab in raises the capacitance monotonically toward
+    /// κ·C₀ — the classic partial-insertion demo, live on the bench.
+    func testSlidingTheSlabRaisesCapacitance() throws {
+        let model = FieldModel()
+        model.capacitorOn = true
+        let bare = try XCTUnwrap(model.capacitor).capacitance
+        model.moveDielectric(toWorld: model.capacitorCenter
+                             - SIMD3(0, 0, FieldModel.plateSize / 2))
+        XCTAssertEqual(model.dielectricCoverage, 0.5, accuracy: 1e-9)
+        let half = try XCTUnwrap(model.capacitor).capacitance
+        model.moveDielectric(toWorld: model.capacitorCenter)
+        XCTAssertEqual(model.dielectricCoverage, 1, accuracy: 1e-9)
+        let full = try XCTUnwrap(model.capacitor).capacitance
+        XCTAssertGreaterThan(half, bare)
+        XCTAssertGreaterThan(full, half)
+        XCTAssertEqual(full, bare * FieldModel.dielectricConstant,
+                       accuracy: full * 1e-6)
+    }
+
+    /// The deflection launch: in through the +z fringe, a parabola
+    /// between the plates, and the bend follows the probe's sign.
+    func testTheDeflectionLaunchBendsWithTheProbeSign() throws {
+        let model = FieldModel()
+        model.removeAllCharges()
+        model.capacitorOn = true
+
+        model.launchProbeThroughGap()
+        for _ in 0..<90 { model.stepProbe(dt: 1.0 / 90.0) }
+        let positive = try XCTUnwrap(model.probe)
+        XCTAssertLessThan(positive.position.z,
+                          model.capacitorCenter.z + FieldModel.plateSize / 2,
+                          "the probe should have entered the gap")
+        XCTAssertGreaterThan(positive.velocity.x, 0.01,
+                             "a + probe bends toward the − plate (+x)")
+
+        model.probeIsPositive = false
+        model.launchProbeThroughGap()
+        for _ in 0..<90 { model.stepProbe(dt: 1.0 / 90.0) }
+        let negative = try XCTUnwrap(model.probe)
+        XCTAssertLessThan(negative.velocity.x, -0.01,
+                          "a − probe bends the other way")
+    }
+
+    /// Re-firing is the point of the launch verb, and each shot is its
+    /// own flight: the trail restarts at the muzzle instead of drawing
+    /// a straight bridge back to wherever the last parabola ended.
+    func testRefiringTheDeflectionShotStartsAFreshTrail() {
+        let model = FieldModel()
+        model.removeAllCharges()
+        model.capacitorOn = true
+
+        model.launchProbeThroughGap()
+        for _ in 0..<60 { model.stepProbe(dt: 1.0 / 90.0) }
+        XCTAssertFalse(model.probeTrail.isEmpty,
+                       "the first flight should have left a trail")
+
+        model.launchProbeThroughGap()
+        XCTAssertTrue(model.probeTrail.isEmpty,
+                      "the old flight must not leak into the new one")
     }
 }

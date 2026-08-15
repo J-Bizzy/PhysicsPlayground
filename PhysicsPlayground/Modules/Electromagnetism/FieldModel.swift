@@ -132,24 +132,67 @@ final class FieldModel {
     // MARK: Parallel-plate capacitor
 
     /// Two square plates bracketing the region: left (−x) positive,
-    /// right (+x) negative, uniform E = V/d between them (fringing
-    /// ignored, as every textbook does).
+    /// right (+x) negative — REAL finite plates since 2026-08-14
+    /// (`PlateField.Capacitor`), not a hard-edged uniform box. The
+    /// field genuinely fringes past the edges, the traced lines pass
+    /// through the gap, and the plate charge is CALIBRATED so the line
+    /// integral across the gap equals the set ΔV — which at this open
+    /// geometry takes up to twice the textbook σ = ε₀V/d, because the
+    /// field leaks out the sides. The old model's uniform-box cutoff
+    /// showed a strong E one millimetre inside an invisible boundary
+    /// and zero one millimetre outside it, which is not a thing a
+    /// field can do.
     var capacitorOn = false
     /// Plate voltage difference, V. kV-scale, like a real demo bench.
     var plateVoltage = 20_000.0
     /// Where the gap's midpoint sits — grab a plate to carry it.
     var capacitorCenter = SIMD3<Double>(0, 1.3, -1.0)
-    /// Gap width, m — grab a plate and pull: E = V/d follows live.
+    /// Gap width, m — grab a plate and pull; the calibration follows.
     var plateSeparation = 0.44
+    /// How far the dielectric slab is slid in, 0 (parked clear of the
+    /// −z edge) … 1 (covering the plate). The slab fills the gap, so
+    /// sliding it in raises C toward κ·C₀ and visibly CROWDS the plate
+    /// charge under itself — the covered band's σ beats the open one's.
+    var dielectricCoverage = 0.0
     nonisolated static let plateSize = 0.5
     nonisolated static let plateVoltageRange = 2_000.0...40_000.0
     nonisolated static let plateSeparationRange = 0.15...1.0
+    /// Soda-lime glass, the slab a demo bench actually has.
+    nonisolated static let dielectricConstant = 4.7
 
-    /// The gap's uniform field strength in kV/m, quantised to the tenth
-    /// every surface displays — ONE arithmetic for the ΔV rail's E line
-    /// and the readout card, so the two can never disagree.
+    /// The calibrated plates for the current bench. Rebuilt only when
+    /// an input moves — calibration is a few hundred closed-form
+    /// evaluations, cheap but not per-probe-substep cheap.
+    /// `@ObservationIgnored`, because a cache written during a tracked
+    /// read would re-arm the renderer's observation loop forever.
+    @ObservationIgnored private var cachedCapacitor: PlateField.Capacitor?
+    var capacitor: PlateField.Capacitor? {
+        guard capacitorOn else { return nil }
+        if let cached = cachedCapacitor,
+           cached.center == capacitorCenter,
+           cached.separation == plateSeparation,
+           cached.voltage == plateVoltage,
+           cached.dielectricCoverage == dielectricCoverage {
+            return cached
+        }
+        let built = PlateField.Capacitor.calibrated(
+            center: capacitorCenter, separation: plateSeparation,
+            plateSize: Self.plateSize, voltage: plateVoltage,
+            dielectricConstant: Self.dielectricConstant,
+            dielectricCoverage: dielectricCoverage)
+        cachedCapacitor = built
+        return built
+    }
+
+    /// The measured field at the gap's centre in kV/m, quantised to the
+    /// tenth every surface displays — ONE arithmetic for the ΔV rail's
+    /// E line and the readout card, so the two can never disagree. This
+    /// is the REAL centre field now, honestly below the V/d the ideal
+    /// formula promises, because the plates are open.
     var plateFieldkVPerM: Double {
-        ((plateVoltage / plateSeparation / 1000) * 10).rounded() / 10
+        let field = capacitor.map { $0.field(at: capacitorCenter).x }
+            ?? plateVoltage / plateSeparation
+        return ((field / 1000) * 10).rounded() / 10
     }
 
     /// Sets ΔV snapped to 500 V steps, clamped to the range. The rail
@@ -222,16 +265,49 @@ final class FieldModel {
         capacitorCenter = center
     }
 
-    /// The uniform field between the plates (zero outside them).
+    /// The plates' field ANYWHERE — between them, in the fringe past
+    /// their edges, behind them. The κ scaling inside the slab is the
+    /// capacitor's own.
     func capacitorField(at point: SIMD3<Double>) -> SIMD3<Double> {
-        guard capacitorOn else { return .zero }
-        let offset = point - capacitorCenter
-        guard abs(offset.x) < plateSeparation / 2,
-              abs(offset.y) < Self.plateSize / 2,
-              abs(offset.z) < Self.plateSize / 2 else { return .zero }
-        // + plate on the −x side: E points +x, from + toward −.
-        return SIMD3(plateVoltage / plateSeparation, 0, 0)
+        capacitor?.field(at: point) ?? .zero
     }
+
+    /// Where the slab's centre sits, for the hand and the renderer:
+    /// parked flush against the plates' −z edge at coverage 0, fully
+    /// between them at 1.
+    var dielectricSlabCenter: SIMD3<Double> {
+        capacitorCenter + SIMD3(0, 0, -(1 - dielectricCoverage) * Self.plateSize)
+    }
+
+    /// Sliding the slab: only the z of the hand matters, mapped onto
+    /// the coverage — the slab rides the capacitor's frame on the
+    /// other two axes.
+    func moveDielectric(toWorld world: SIMD3<Double>) {
+        dielectricCoverage = min(max(
+            1 - (capacitorCenter.z - world.z) / Self.plateSize, 0), 1)
+    }
+
+    /// Fires the probe through the gap sideways — the CRT deflection
+    /// demo: straight through the fringe, a parabola between the
+    /// plates, straight again on the way out, with the bend's sign
+    /// following the probe's. The entry is on the +z side, which is
+    /// also the side the slab is NOT parked on.
+    func launchProbeThroughGap() {
+        guard capacitorOn else { return }
+        var state = TestChargeDynamics.ProbeState(
+            position: capacitorCenter + SIMD3(0, 0, Self.plateSize / 2 + 0.18))
+        state.velocity = SIMD3(0, 0, -Self.deflectionLaunchSpeed)
+        probe = state
+        probeStatus = .running
+        // Re-firing is the point, and each shot is its own flight —
+        // without this the new trail's first point bridges straight
+        // back to wherever the last parabola ended.
+        probeTrail = []
+    }
+
+    /// Fast enough to cross before drifting into a plate at full ΔV,
+    /// slow enough that the parabola is unmistakable.
+    nonisolated static let deflectionLaunchSpeed = 0.9
 
     /// The full field the probe feels: point charges + plates.
     func fieldVector(at point: SIMD3<Double>) -> SIMD3<Double> {
@@ -427,6 +503,7 @@ final class FieldModel {
         plateVoltage = 20_000
         capacitorCenter = samplingRegion.center
         plateSeparation = 0.44
+        dielectricCoverage = 0
         probeChargeMagnitude = Self.defaultProbeCharge
         magneticFieldOn = false
         magneticFieldTesla = 5e4
@@ -562,6 +639,18 @@ final class FieldModel {
     func removeAllCharges() {
         charges.removeAll()
         selectedChargeID = nil
+    }
+
+    /// What the Clear plate actually promises: an EMPTY room. It fired
+    /// `removeAllCharges` for months, and the probe — placed content
+    /// with its own lifecycle, not a display layer — survived every
+    /// clear: tap the plate twice and a test charge went on orbiting
+    /// nothing. Everything the wearer placed goes; the toggles (the
+    /// capacitor, the magnetic field) stay, because a layer switch is a
+    /// setting, not an object in the room.
+    func clearEverything() {
+        removeAllCharges()
+        removeProbe()
     }
 
     /// A dragged charge follows the hand exactly. The floor is the only
@@ -780,13 +869,11 @@ final class FieldModel {
     }
 
     /// The plates' contribution to the potential, V, taking the
-    /// capacitor's centre as the datum — the same convention
-    /// `ElectricField.potential` uses for a point charge at infinity, in
-    /// the only place a uniform field allows one.
+    /// capacitor's centre as the datum — the same datum as always, but
+    /// integrated along the real field now rather than assumed uniform,
+    /// so it keeps meaning something out in the fringe.
     func capacitorPotential(at point: SIMD3<Double>) -> Double {
-        let field = capacitorField(at: point)
-        guard field != .zero else { return 0 }
-        return -simd_dot(field, point - capacitorCenter)
+        capacitor?.potential(at: point) ?? 0
     }
 
     // MARK: Selected-charge bindings for the charge's control ring
@@ -832,6 +919,7 @@ extension FieldModel: TimeCapsuleRecording {
         var plateVoltage: Double
         var plateSeparation: Double
         var capacitorCenter: SIMD3<Double>
+        var dielectricCoverage: Double
         var magneticFieldOn: Bool
         var magneticFieldTesla: Double
     }
@@ -844,6 +932,7 @@ extension FieldModel: TimeCapsuleRecording {
             chargesRespond: chargesRespond, capacitorOn: capacitorOn,
             plateVoltage: plateVoltage, plateSeparation: plateSeparation,
             capacitorCenter: capacitorCenter,
+            dielectricCoverage: dielectricCoverage,
             magneticFieldOn: magneticFieldOn,
             magneticFieldTesla: magneticFieldTesla)
     }
@@ -870,6 +959,7 @@ extension FieldModel: TimeCapsuleRecording {
         plateVoltage = snapshot.plateVoltage
         plateSeparation = snapshot.plateSeparation
         capacitorCenter = snapshot.capacitorCenter
+        dielectricCoverage = snapshot.dielectricCoverage
         magneticFieldOn = snapshot.magneticFieldOn
         magneticFieldTesla = snapshot.magneticFieldTesla
         probeTrail = recordedProbeTrail(upTo: scrubTime)

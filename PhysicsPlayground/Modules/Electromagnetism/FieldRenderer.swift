@@ -122,6 +122,10 @@ final class FieldRenderer {
     }()
     // Change detection: the expensive paths only run when these differ.
     private var lastCharges: [PointCharge]?
+    /// The calibrated capacitor the lines and dressing were last drawn
+    /// for — Equatable, so a static bench is one compare and a carried
+    /// plate re-draws live, the same contract `lastCharges` has.
+    private var lastCapacitor: PlateField.Capacitor?
     private var lastRegion: FieldModel.SamplingRegion?
     private var lastShowLines: Bool?
 
@@ -188,6 +192,8 @@ final class FieldRenderer {
                 capacitorOn: model.capacitorOn,
                 capacitorCenter: model.capacitorCenter,
                 plateSeparation: model.plateSeparation,
+                capacitor: model.capacitor,
+                slabCenter: model.dielectricSlabCenter,
                 magneticFieldOn: model.magneticFieldOn,
                 room: room
         )
@@ -204,6 +210,8 @@ final class FieldRenderer {
         capacitorOn: Bool = false,
         capacitorCenter: SIMD3<Double> = .zero,
         plateSeparation: Double = 0.44,
+        capacitor: PlateField.Capacitor? = nil,
+        slabCenter: SIMD3<Double> = .zero,
         magneticFieldOn: Bool = false,
         room: RoomBox = .unscanned
     ) {
@@ -225,6 +233,9 @@ final class FieldRenderer {
         syncChargeEntities(charges, selectedID: selectedID)
         syncProbeEntity(probe, isPositive: probeIsPositive)
         syncPlates(on: capacitorOn, center: capacitorCenter, separation: plateSeparation)
+        let capacitorChanged = capacitor != lastCapacitor
+        syncCapacitorDressing(capacitor, slabCenter: slabCenter,
+                              changed: capacitorChanged)
         syncBField(on: magneticFieldOn)
         syncFieldFlowWarp(charges)
 
@@ -232,27 +243,33 @@ final class FieldRenderer {
 
         // Expensive path — lines (with their riding arrowheads)
         // rebuild on the geometry pipeline.
-        linesEntity.isEnabled = showLines && !charges.isEmpty
-        lineCasingEntity.isEnabled = showLines && !charges.isEmpty
-        lineGlowEntity.isEnabled = showLines && !charges.isEmpty
-        if !showLines || charges.isEmpty {
+        // A bare capacitor is a field source in its own right now —
+        // the gap draws its bundle with no point charges in the room.
+        let hasSources = !charges.isEmpty || capacitor != nil
+        linesEntity.isEnabled = showLines && hasSources
+        lineCasingEntity.isEnabled = showLines && hasSources
+        lineGlowEntity.isEnabled = showLines && hasSources
+        if !showLines || !hasSources {
             arrowHeads.hideAll()
         }
         let visibilityChanged = showLines != lastShowLines
         let roomChanged = room != lastRoom
         if showLines
-            && (chargesChanged || visibilityChanged || roomChanged)
-            && !charges.isEmpty {
+            && (chargesChanged || capacitorChanged || visibilityChanged
+                || roomChanged)
+            && hasSources {
             geometryPipeline?.submit(GeometryJob(
                 charges: charges,
                 region: region,
                 wantLines: showLines,
-                room: room
+                room: room,
+                capacitor: capacitor
             ))
         }
         lastRoom = room
         lastShowLines = showLines
         lastCharges = charges
+        lastCapacitor = capacitor
         lastRegion = region
     }
 
@@ -268,6 +285,8 @@ final class FieldRenderer {
         /// picture is concerned, and an infinite straight ray shooting
         /// through the ceiling is the least field-like thing there is.
         var room: RoomBox
+        /// The calibrated plates, joining the same trace as the charges.
+        var capacitor: PlateField.Capacitor?
     }
 
     private var lastRoom: RoomBox?
@@ -354,21 +373,63 @@ final class FieldRenderer {
     // MARK: Capacitor plates
 
     private var plateEntities: [ModelEntity] = []
+    /// The surface-charge dots on the plates' inner faces — density per
+    /// band follows σ·A, so raising ΔV, closing the gap, or sliding the
+    /// slab in visibly packs more charge. Rebuilt only when the
+    /// calibrated capacitor changes.
+    private var chargeDots: [ModelEntity] = []
+    private var dielectricSlab: ModelEntity?
+    private var slabHandle: Entity?
+    /// Which sign each dot last wore, so a rebuild repaints only the
+    /// dots that actually flipped plates.
+    private var chargeDotSigns: [Bool] = []
+    /// C, Q, U and the measured E, floating over the + plate.
+    private var capacitorCallout: Callout?
     /// The plate a hand is dragging (system-owned; don't reposition it).
     var manipulatingPlateIndex: Int?
 
     private func syncPlates(on: Bool, center: SIMD3<Double>, separation: Double) {
         if plateEntities.isEmpty {
+            // The machined plate from `Tools/fieldprops.py` — chamfered
+            // square, corner bosses, corona-ball terminal on its back —
+            // painted in anodised accent metal here so the palette stays
+            // the one authority on what +/− look like. The translucent
+            // box survives as the fallback.
+            let prototype = try? Entity.load(named: "CapacitorPlate")
             let mesh = MeshResource.generateBox(
                 size: [0.012, Float(FieldModel.plateSize), Float(FieldModel.plateSize)],
                 cornerRadius: 0.004)
             for isPositive in [true, false] {
-                var material = PhysicallyBasedMaterial()
-                material.baseColor = .init(tint: isPositive
-                    ? DesignTokens.Palette.positiveUI : DesignTokens.Palette.negativeUI)
-                material.roughness = 0.4
-                material.blending = .transparent(opacity: .init(floatLiteral: 0.35))
-                let plate = ModelEntity(mesh: mesh, materials: [material])
+                let accent = isPositive
+                    ? DesignTokens.Palette.positiveUI
+                    : DesignTokens.Palette.negativeUI
+                let plate: ModelEntity
+                if let prototype {
+                    let holder = ModelEntity()
+                    let body = prototype.clone(recursive: true)
+                    let metal = Materials.machined(accent, roughness: 0.34)
+                    func paint(_ entity: Entity) {
+                        if var model = entity.components[ModelComponent.self] {
+                            model.materials = [metal]
+                            entity.components.set(model)
+                        }
+                        for child in entity.children { paint(child) }
+                    }
+                    paint(body)
+                    // The furniture is authored on the −x face; the −
+                    // plate turns about Y so its terminal faces outward.
+                    if !isPositive {
+                        body.orientation = simd_quatf(angle: .pi, axis: [0, 1, 0])
+                    }
+                    holder.addChild(body)
+                    plate = holder
+                } else {
+                    var material = PhysicallyBasedMaterial()
+                    material.baseColor = .init(tint: accent)
+                    material.roughness = 0.4
+                    material.blending = .transparent(opacity: .init(floatLiteral: 0.35))
+                    plate = ModelEntity(mesh: mesh, materials: [material])
+                }
                 plate.name = isPositive ? "plate-0" : "plate-1"
                 // The plates wear the same sign glyphs as the charges —
                 // the shared builder, with the bar length the plate's
@@ -412,6 +473,170 @@ final class FieldRenderer {
         for plate in plateEntities { plate.isEnabled = on }
     }
 
+    /// Everything the real capacitor wears beyond the plates: the
+    /// dielectric slab, the surface-charge dots, and the instrument
+    /// callout. Transforms are written every frame (the slab rides a
+    /// hand); everything with a cost — dot layout, callout text — is
+    /// gated on the calibrated capacitor actually changing.
+    private func syncCapacitorDressing(_ capacitor: PlateField.Capacitor?,
+                                       slabCenter: SIMD3<Double>,
+                                       changed: Bool) {
+        if dielectricSlab == nil {
+            // Frosted glass, procedural until the Blender asset lands —
+            // built as a UNIT cube so the per-frame path is transforms
+            // only while the gap stretches around it.
+            var glass = PhysicallyBasedMaterial()
+            glass.baseColor = .init(tint: UIColor(red: 0.72, green: 0.84,
+                                                  blue: 0.88, alpha: 1))
+            glass.roughness = .init(floatLiteral: 0.65)
+            glass.blending = .transparent(opacity: .init(floatLiteral: 0.3))
+            let slab = ModelEntity(
+                mesh: .generateBox(size: [1, 1, 1], cornerRadius: 0.015),
+                materials: [glass])
+            slab.name = "dielectric-slab"
+            Grabbable.configureTouchTarget(slab, box: [1, 1, 1])
+            var accessibility = AccessibilityComponent()
+            accessibility.isAccessibilityElement = true
+            accessibility.label = LocalizedStringResource(
+                stringLiteral: "Dielectric slab. Slide it into the gap "
+                + "to raise the capacitance.")
+            slab.components.set(accessibility)
+            viewRoot.addChild(slab)
+            dielectricSlab = slab
+
+            // The brass T-handle the slab is slid by (`fieldprops.py`) —
+            // fixed size, so it is a SIBLING the dressing positions
+            // rather than a child the slab's non-uniform stretch would
+            // distort. It shares the slab's name so a pinch on either
+            // routes to the same drag.
+            if let handle = try? Entity.load(named: "SlabHandle") {
+                let holder = Entity()
+                holder.name = "dielectric-slab"
+                holder.addChild(handle)
+                Grabbable.configureTouchTarget(
+                    holder, box: [0.11, 0.05, 0.09],
+                    offset: [0, 0, -0.05])
+                viewRoot.addChild(holder)
+                slabHandle = holder
+            }
+        }
+        guard let capacitor else {
+            dielectricSlab?.isEnabled = false
+            slabHandle?.isEnabled = false
+            capacitorCallout?.isEnabled = false
+            for dot in chargeDots { dot.isEnabled = false }
+            return
+        }
+
+        if let slab = dielectricSlab {
+            slab.isEnabled = true
+            slab.position = SIMD3<Float>(slabCenter)
+            slab.scale = SIMD3(Float(capacitor.separation) * 0.94,
+                               Float(capacitor.plateSize) * 0.96,
+                               Float(capacitor.plateSize) * 0.99)
+        }
+        if let handle = slabHandle {
+            handle.isEnabled = true
+            handle.position = SIMD3<Float>(slabCenter)
+                + SIMD3(0, 0, -Float(capacitor.plateSize) * 0.99 / 2)
+        }
+
+        if capacitorCallout == nil {
+            let callout = Callout(color: UIColor(white: 0.95, alpha: 1),
+                                  textSize: 0.020, offset: SIMD3(0, 0.09, 0))
+            callout.setAccessibilityName("Capacitor readout")
+            viewRoot.addChild(callout.root)
+            capacitorCallout = callout
+        }
+        capacitorCallout?.isEnabled = true
+        capacitorCallout?.anchor(at: SIMD3<Float>(
+            capacitor.center + SIMD3(-capacitor.separation / 2,
+                                     capacitor.plateSize / 2 + 0.06, 0)))
+        if changed {
+            // Real units, measured off the calibrated model: honest C
+            // (above the textbook ε₀A/d — the plates are open), the
+            // charge that honesty costs, the energy it stores, and the
+            // same centre field the ΔV rail's E line shows.
+            let text = String(
+                format: "C %.1f pF · Q %.2f µC\nU %.2f mJ · E %.1f kV/m",
+                capacitor.capacitance * 1e12,
+                capacitor.chargeOnPositivePlate * 1e6,
+                capacitor.storedEnergy * 1e3,
+                capacitor.field(at: capacitor.center).x / 1000)
+            capacitorCallout?.setText(text)
+            syncChargeDots(capacitor)
+        }
+    }
+
+    /// Surface charge, drawn: dots on each plate's inner face, budgeted
+    /// per band by σ·A exactly as the tracer seeds are — so the same
+    /// crowding that bends the line density packs the dots under the
+    /// slab. Gauss's law twice over, once in lines and once in charge.
+    private func syncChargeDots(_ capacitor: PlateField.Capacitor) {
+        let budgetPerPlate = 30
+        var wanted: [(position: SIMD3<Float>, positive: Bool)] = []
+        for positive in [true, false] {
+            let bands = capacitor.rectangles.filter {
+                positive ? $0.sigma > 0 : $0.sigma < 0
+            }
+            let weights = bands.map { abs($0.sigma) * $0.area }
+            let total = weights.reduce(0, +)
+            guard total > 0 else { continue }
+            for (band, weight) in zip(bands, weights) {
+                let share = max(Int((Double(budgetPerPlate) * weight / total)
+                                    .rounded()), 1)
+                let ySpan = band.yRange.upperBound - band.yRange.lowerBound
+                let zSpan = band.zRange.upperBound - band.zRange.lowerBound
+                let columns = max(Int((Double(share) * zSpan
+                                       / max(ySpan, 1e-6)).squareRoot()
+                                        .rounded()), 1)
+                let rows = max((share + columns - 1) / columns, 1)
+                // The inner face: the + plate's is its +x side.
+                let face = band.x + (positive ? 0.008 : -0.008)
+                for row in 0..<rows {
+                    for column in 0..<columns {
+                        let y = band.yRange.lowerBound
+                            + ySpan * (Double(row) + 0.5) / Double(rows)
+                        let z = band.zRange.lowerBound
+                            + zSpan * (Double(column) + 0.5) / Double(columns)
+                        wanted.append((SIMD3<Float>(SIMD3(face, y, z)),
+                                       positive))
+                    }
+                }
+            }
+        }
+
+        while chargeDots.count < wanted.count && chargeDots.count < 96 {
+            let dot = ModelEntity(
+                mesh: .generateSphere(radius: 0.007),
+                materials: [Materials.energized(
+                    DesignTokens.Palette.positiveUI, glow: 0.5)])
+            dot.scale = [0.4, 1, 1]   // a bead flattened against the face
+            viewRoot.addChild(dot)
+            chargeDots.append(dot)
+        }
+        // Freshly made dots wear the positive material, so their cached
+        // sign starts true.
+        if chargeDotSigns.count < chargeDots.count {
+            chargeDotSigns.append(contentsOf: Array(
+                repeating: true, count: chargeDots.count - chargeDotSigns.count))
+        }
+        for (index, dot) in chargeDots.enumerated() {
+            guard index < wanted.count else { dot.isEnabled = false; continue }
+            dot.isEnabled = true
+            dot.position = wanted[index].position
+            // One material write per dot per REBUILD, not per frame —
+            // and only for the dots whose sign actually flipped.
+            if chargeDotSigns[index] != wanted[index].positive {
+                chargeDotSigns[index] = wanted[index].positive
+                dot.model?.materials = [Materials.energized(
+                    wanted[index].positive
+                        ? DesignTokens.Palette.positiveUI
+                        : DesignTokens.Palette.negativeUI, glow: 0.5)]
+            }
+        }
+    }
+
     private nonisolated struct GeometryResult: Sendable {
         var sourceCharges: [PointCharge] = []
         var tube = TubeBuffers()
@@ -443,7 +668,9 @@ final class FieldRenderer {
             // the tracer's default, so drags re-trace at a higher rate.
             config.stepSize = 0.012
             config.maxSteps = 220
-            let traced = FieldLineTracer.trace(charges: job.charges, config: config)
+            let traced = FieldLineTracer.trace(charges: job.charges,
+                                               capacitor: job.capacitor,
+                                               config: config)
             // Clip to the room, then drop the crumbs: a two-point stub
             // left over from a clip carries no shape and only adds
             // overdraw.

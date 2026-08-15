@@ -2,9 +2,10 @@
 //  VignettePropTests.swift
 //  Physics Playground — app tests
 //
-//  The five props `Tools/vignetteprops.py` authors for the hub
-//  miniatures, and the one thing about them that cannot be checked by
-//  looking at either side on its own: which way round they come out.
+//  The props the hub miniatures load — `Tools/moduleprops.py` for the
+//  six modules' apparatus, `Tools/vignetteprops.py` for the labs emblem
+//  — and the one thing about them that cannot be checked by looking at
+//  either side on its own: which way round they come out.
 //
 //  Blender is Z-up and RealityKit is Y-up, and the exporter is told to
 //  convert with forward −Z and up +Y, which lands on
@@ -33,7 +34,7 @@ final class VignettePropTests: XCTestCase {
     private func extents(of name: String) throws -> SIMD3<Float> {
         let loaded = try XCTUnwrap(try? Entity.load(named: name),
                                    "\(name).usdz is not in the bundle — run "
-                                   + "Tools/vignetteprops.py")
+                                   + "Tools/moduleprops.py / vignetteprops.py")
         let box = loaded.visualBounds(relativeTo: nil).extents
         XCTAssertGreaterThan(min(box.x, min(box.y, box.z)), 0,
                              "\(name) has no thickness on some axis")
@@ -45,9 +46,13 @@ final class VignettePropTests: XCTestCase {
     /// and also completely silent — so the only way a dropped file gets
     /// noticed is here.
     func testEveryPropTheMiniaturesAskForExists() throws {
-        for name in ["BarMagnet", "PendulumGantry", "GyroGimbalOuter",
-                     "GyroGimbalInner", "GyroRotor",
-                     "CircuitBattery", "CircuitBulb", "LauncherBarrel"] {
+        for name in ["BarMagnet", "PendulumStand", "PendulumBob",
+                     "CompassBody", "CompassNeedle",
+                     "LauncherCarriage", "QuadrantPointer", "TargetStand",
+                     "CometNucleus", "ChargePlus", "ChargeMinus",
+                     "GyroGimbalOuter", "GyroGimbalInner", "GyroRotor",
+                     "CircuitBattery", "CircuitBulb", "CircuitSwitch",
+                     "LauncherBarrel"] {
             _ = try extents(of: name)
         }
     }
@@ -63,16 +68,100 @@ final class VignettePropTests: XCTestCase {
                        "the magnet's section should be near square")
     }
 
-    /// The gantry is wider than it is tall, and stands up Y. It hangs
-    /// three pendulums off a crossbeam; on its side it hangs them off
-    /// nothing.
-    func testTheGantryStandsUp() throws {
-        let box = try extents(of: "PendulumGantry")
+    /// The stand is wider than it is tall and taller than it is deep —
+    /// beam along X, standing up Y. On its back, the pendulums would
+    /// hang out of the exhibit toward the reader.
+    func testTheStandStandsUp() throws {
+        let box = try extents(of: "PendulumStand")
         XCTAssertGreaterThan(box.x, box.y,
-                             "the gantry should be wider than it is tall")
+                             "the stand should be wider than it is tall")
         XCTAssertGreaterThan(box.y, box.z,
-                             "the gantry is deeper than it is tall — it has "
+                             "the stand is deeper than it is tall — it has "
                              + "probably arrived lying on its back")
+    }
+
+    /// The bob hangs up Y: sphere below, stem and eye above. Its height
+    /// is its longest span, which is also what the importer normalises
+    /// on — `hang` computes the eye's position from exactly that ratio.
+    func testTheBobHangsUpY() throws {
+        let box = try extents(of: "PendulumBob")
+        XCTAssertGreaterThan(box.y, box.x,
+                             "the bob's stem and eye should make Y its "
+                             + "longest axis")
+        XCTAssertEqual(box.x, box.z, accuracy: box.x * 0.1,
+                       "the bob is not round in plan")
+    }
+
+    /// The compass is a dish lying dial-up: thin on Y, round in XZ. On
+    /// edge, the needle would sweep through the bowl.
+    func testTheCompassLiesDialUp() throws {
+        let box = try extents(of: "CompassBody")
+        XCTAssertLessThan(box.y, min(box.x, box.z) * 0.5,
+                          "the compass bowl is on edge — its axis is not Y")
+        XCTAssertEqual(box.x, box.z, accuracy: box.x * 0.08,
+                       "the bowl is not round")
+    }
+
+    /// The needle lies along X — north at +X, the handedness
+    /// `magnetism()` steers by — and is symmetric about its pivot, which
+    /// is the property that lets the importer's box-centring BE the
+    /// pivot.
+    func testTheNeedleLiesAlongX() throws {
+        let box = try extents(of: "CompassNeedle")
+        XCTAssertGreaterThan(box.x, box.z * 3, "the needle is not a needle")
+        XCTAssertGreaterThan(box.x, box.y * 3,
+                             "the needle stands on end")
+    }
+
+    /// The pointer is a long X spike too: its authored origin is its
+    /// hinge, and `projectile()` un-centres it after import on the
+    /// assumption that the long axis arrives along X.
+    func testThePointerLiesAlongX() throws {
+        let box = try extents(of: "QuadrantPointer")
+        XCTAssertGreaterThan(box.x, box.y * 3, "the pointer is not a spike")
+        XCTAssertGreaterThan(box.x, box.z * 3,
+                             "the pointer is fatter than it is long in Z")
+    }
+
+    /// The target's ring is HORIZONTAL — the ball falls through it — so
+    /// the stand's width (mast plus ring reach) beats its height, and
+    /// its height beats its depth.
+    func testTheTargetRingIsHorizontal() throws {
+        let box = try extents(of: "TargetStand")
+        XCTAssertGreaterThan(box.x, box.y,
+                             "the ring should reach sideways off the mast")
+        XCTAssertGreaterThan(box.y, box.z * 0.9,
+                             "the stand has fallen over")
+    }
+
+    /// The comet is bilobed ALONG X: two overlapping lobes, so X is the
+    /// long axis and neither of the others comes close. A sphere here
+    /// would mean the displacement or the second lobe went missing.
+    func testTheCometIsBilobedAlongX() throws {
+        let box = try extents(of: "CometNucleus")
+        XCTAssertGreaterThan(box.x, box.y * 1.25,
+                             "the nucleus is round — the second lobe is missing")
+        XCTAssertGreaterThan(box.x, box.z * 1.25,
+                             "the nucleus is round — the second lobe is missing")
+    }
+
+    /// Each charge is a round conductor whose moulded sign stands proud
+    /// on +Z, the reader's side. The sign is sub-millimetre proud, but
+    /// it is the only thing that breaks the sphere's symmetry — so Z
+    /// strictly beats both other axes, and equality here means the sign
+    /// is buried or facing the wall.
+    func testTheChargeSignsFaceTheReader() throws {
+        for name in ["ChargePlus", "ChargeMinus"] {
+            let box = try extents(of: name)
+            XCTAssertEqual(box.x, box.y, accuracy: box.x * 0.03,
+                           "\(name) is not round")
+            XCTAssertGreaterThan(box.z, box.x * 1.005,
+                                 "\(name)'s sign does not stand proud toward "
+                                 + "the reader")
+            XCTAssertLessThan(box.z, box.x * 1.1,
+                              "\(name)'s Z span is far beyond a moulded sign "
+                              + "— something else is sticking out")
+        }
     }
 
     /// Both gimbal rings and the rotor FACE the reader: their axis is Z,

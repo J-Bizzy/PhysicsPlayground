@@ -74,6 +74,11 @@ final class GravityLabRenderer {
     /// beside its open control ring, and falls quiet when it folds.
     private var lookCallout: Callout?
     private var calloutReveal: Float = 0
+    /// The reveal last written and the reading last formatted — both
+    /// gates on per-frame work that used to run whether or not anything
+    /// displayed had changed. NaN keys force the first write.
+    private var appliedCalloutReveal: Float = -1
+    private var lookCalloutKey: (String, Double, Double) = ("", .nan, .nan)
 
     // MARK: Predict-then-run — the ghost, its countdown, the verdict
     private let ghostEntity: ModelEntity = {
@@ -961,14 +966,30 @@ final class GravityLabRenderer {
             lookCallout = callout
         }
         lookCallout?.isEnabled = true
-        lookCallout?.root.components.set(OpacityComponent(opacity: calloutReveal))
+        // Opacity written only while the reveal is actually easing;
+        // the anchor is a transform and stays per-frame.
+        if abs(calloutReveal - appliedCalloutReveal) > 0.0005 {
+            appliedCalloutReveal = calloutReveal
+            lookCallout?.root.components.set(
+                OpacityComponent(opacity: calloutReveal))
+        }
         lookCallout?.anchor(at: SIMD3<Float>(orbiting.body.position) * toDisplay)
+        // Formatted only when a DISPLAYED digit moves — `Callout`
+        // dedupes the mesh, but the string was built every frame for a
+        // reading that changes at one decimal.
         if let readout = model.readout(for: orbiting) {
-            lookCallout?.setText(String(
-                format: "%@\n%.1f km/s · %.2f AU",
-                orbiting.body.name, readout.speedKmPerS, readout.distanceAU))
-        } else {
+            let key = (orbiting.body.name,
+                       (readout.speedKmPerS * 10).rounded(),
+                       (readout.distanceAU * 100).rounded())
+            if key != lookCalloutKey {
+                lookCalloutKey = key
+                lookCallout?.setText(String(
+                    format: "%@\n%.1f km/s · %.2f AU",
+                    key.0, readout.speedKmPerS, readout.distanceAU))
+            }
+        } else if lookCalloutKey != (orbiting.body.name, -1, -1) {
             // The primary has no orbit to report; it reports itself.
+            lookCalloutKey = (orbiting.body.name, -1, -1)
             lookCallout?.setText(orbiting.body.name)
         }
     }

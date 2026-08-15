@@ -111,9 +111,15 @@ enum HubTitleStyle {
         // promoted: `Materials.machined` IS this recipe, and the
         // reasoning behind every number lives on it now. The labs' metal
         // is the same alloy as the signage.
+        //
+        // ANODISED DARK since 2026-08-13, matching `milled` — the same
+        // legibility finding, applied to the fallback so a missing asset
+        // degrades in tone rather than in voice. The generated prism has
+        // no rim mesh to cut bright, so this path leans entirely on the
+        // dark face.
         let stock = accent.map {
-            blend($0, toward: UIColor(white: 0.72, alpha: 1), by: 0.30)
-        } ?? UIColor(white: 0.78, alpha: 1)
+            blend($0, toward: .black, by: 0.32)
+        } ?? graphite
         var metal = Materials.machined(stock)
         // An emissive floor so the letters never fall to pure black in
         // the shaded parts of the extrusion — the anodised colour stays
@@ -151,217 +157,235 @@ enum HubTitleStyle {
         return group
     }
 
-    // MARK: The keyline
-
-    /// A LINE OF DISPLAY TYPE WITH A DARK SHELL HUGGING EVERY GLYPH,
-    /// and its measured extents, because the lockup math must measure
-    /// what it will actually build.
+    /// A generated line and its extents — the shape `milled` returns,
+    /// for the words it has no asset for.
     ///
-    /// WHY THIS SHAPE, AND NOT THE TWO OBVIOUS ONES.
-    ///
-    /// The problem is fixed and specific: the mark is ivory machined
-    /// metal drawn over whatever wall the wearer is standing in front
-    /// of, and light-on-light has no contrast. Raising the emissive
-    /// floor was tried on 2026-08-08 and did nothing — a brighter light
-    /// against a bright wall is still no edge. DECISIONS.md settled the
-    /// principle on 2026-07-26 in four words: CASINGS BEAT GLOWS.
-    ///
-    /// The first casing was a rectangular backing plate, and it worked.
-    /// It was also a black slab hanging in the room behind the words,
-    /// which the owner cut on 2026-08-09: the contrast is wanted, the
-    /// panel is not.
-    ///
-    /// So the casing follows the letterforms. Two ways to build that
-    /// have already failed here and both are worth naming:
-    ///
-    /// · A DARK COPY OFFSET BACK — tried when this file was written.
-    ///   The type is deeply extruded, so any offset small enough to read
-    ///   as a shadow is smaller than the extrusion is deep, and the two
-    ///   solids share a volume: letters looked doubled, lines looked
-    ///   like they had collided.
-    /// · A DARK COPY SCALED UP — `HubScene.namePlate` records why it
-    ///   cannot work. Scaling a whole STRING moves every glyph outward
-    ///   from the string's centre, so the shell letters land between
-    ///   their own neighbours and the word reads as if printed twice.
-    ///
-    /// Both fail for the same underlying reason: they treat a line of
-    /// text as one object. This builds it as glyphs. Each letter is
-    /// generated, placed, and given its own shell scaled about ITS OWN
-    /// centre — so the swell is a thicker stroke rather than a wider
-    /// word, and shell and letter cannot misregister because the same
-    /// transform places both.
-    ///
-    /// The shell is also DEEPER and set back, so the letter is contained
-    /// inside it rather than intersecting it. Nothing is coplanar, which
-    /// is what the first attempt's doubling actually was.
+    /// This is what is left of `keylined`, which was deleted on
+    /// 2026-08-11 along with the casing it existed to build. That
+    /// builder laid a line out glyph by glyph for one reason: a shell
+    /// scaled about a whole STRING lands each letter's swell between
+    /// its neighbours, so it had to swell each glyph about its own
+    /// centre instead. With no shell there is nothing to misregister,
+    /// and a line of text is one mesh again — which is what `line` has
+    /// always made.
     @MainActor
-    static func keylined(_ text: String, size: CGFloat,
-                         accent: UIColor?) -> (entity: Entity,
-                                               extents: SIMD3<Float>) {
-        let group = Entity()
-        let characters = Array(display(text))
+    static func generated(_ text: String, size: CGFloat,
+                          accent: UIColor?) -> (entity: Entity,
+                                                extents: SIMD3<Float>) {
+        (line(text, size: size, accent: accent), extents(text, size: size))
+    }
 
-        // WHERE EACH GLYPH GOES, asked of the font rather than guessed.
-        //
-        // `advance[i]` is the inked width of the first i characters laid
-        // out together, so kerning is in the number by construction —
-        // "PL" is measured as a pair, and whatever the face does between
-        // that pair is what comes back. The right edge of glyph i is the
-        // right edge of the prefix ending at glyph i, which makes the
-        // placement exact rather than an accumulation of guessed
-        // advances.
-        var advance: [Float] = [0]
-        for index in characters.indices {
-            advance.append(extents(String(characters[0...index]), size: size).x)
+    // MARK: The milled line
+
+    /// The lines that were milled in Blender, and the asset each became.
+    ///
+    /// A BAKED ASSET ONLY KNOWS THE WORDS IT WAS BAKED WITH, which is
+    /// the one real cost of this route and the reason `milled` returns
+    /// an optional rather than trusting a lookup. The home says exactly
+    /// these six things and has since the two doors landed; anything
+    /// else falls through to `keylined` and is merely generated, which
+    /// is what every line was until now.
+    private static let milledAssets: [String: String] = [
+        "Physics": "HubTitle_Physics",
+        "Playground": "HubTitle_Playground",
+        "Electricity": "HubTitle_Electricity",
+        "& Magnetism": "HubTitle_Magnetism",
+        "Mechanics": "HubTitle_Mechanics",
+        "& Energy": "HubTitle_Energy",
+    ]
+
+    /// Loaded once and cloned. `Entity.load` re-parses the asset every
+    /// call, and the wordmark alone asks for two lines on every build.
+    private static var milledCache: [String: Entity] = [:]
+
+    /// ONE LINE OF DISPLAY TYPE, MILLED RATHER THAN GENERATED — same
+    /// contract as `keylined`, and nil when there is no asset for these
+    /// words.
+    ///
+    /// WHAT THE ASSET BUYS, IN ONE WORD: THE CHAMFER.
+    /// `MeshResource.generateText` extrudes a flat prism — a face,
+    /// straight sides, and a sharp ninety-degree edge between them. The
+    /// note on `line` says the plaque's depth cue is its extruded sides
+    /// catching the light at a different angle from its face, and that
+    /// is true, but a square edge catches it in a hard line, which is
+    /// what a stamped part looks like. `blenderprops.bevel` states the
+    /// house position: a machined part has no sharp corners, and the
+    /// highlight running along a bevel is most of what makes a shape
+    /// read as a solid object rather than as a box. This is the plaque
+    /// finally being milled instead of claiming to be.
+    ///
+    /// THE TYPEFACE DID NOT CHANGE. Blender cannot read SF Pro's Bold —
+    /// `SFNS.ttf` is a variable font and its default instance is
+    /// Regular — so `Tools/hubtitles.py` snapshots it at wght 700 with
+    /// fontTools before building. It also pins the optical size to SF
+    /// Pro's DISPLAY cut, which is the right face for type set this
+    /// large and which `.systemFont(ofSize:weight:)` cannot ask for.
+    ///
+    /// THE COLOUR IS STILL SWIFT'S. The asset carries two meshes named
+    /// for their role and nothing else; the alloy, the accent blend and
+    /// the casing are assigned here, so `Materials.machined` and
+    /// `DesignTokens.Palette` remain the one authority on what the home
+    /// is coloured. Bake geometry, never bake the design system.
+    @MainActor
+    static func milled(_ text: String, size: CGFloat,
+                       accent: UIColor?) -> (entity: Entity,
+                                             extents: SIMD3<Float>)? {
+        guard let asset = milledAssets[text] else { return nil }
+        let prototype: Entity
+        if let cached = milledCache[asset] {
+            prototype = cached
+        } else {
+            guard let loaded = try? Entity.load(named: asset) else { return nil }
+            milledCache[asset] = loaded
+            prototype = loaded
         }
-        let total = advance.last ?? 0
+        // THE RETURNED ENTITY'S OWN SCALE MUST STAY 1, and this wrapper
+        // is the whole reason for it. Both lockups above finish with
+        //
+        //     item.entity.scale = SIMD3(repeating: scale)
+        //
+        // — an ASSIGNMENT, not a multiply, because `keylined` hands back
+        // a line whose size is already in its geometry. Putting `size`
+        // on the entity here instead means that assignment silently
+        // throws it away, the asset reverts to its nominal point size of
+        // ONE METRE, and the wordmark comes up about six times too big
+        // and swallows the room.
+        //
+        // Which is exactly what it did. Every test still passed —
+        // they inspect what this function returns, and what it returns
+        // was correct; the defect only exists once the caller composes
+        // with it. A screenshot found it in one frame.
+        //
+        // So `size` goes on a CHILD and the wrapper stays free for the
+        // caller to scale.
+        let group = Entity()
+        let model = prototype.clone(recursive: true)
+        group.addChild(model)
 
-        // THE ACCENT BRANCH IS THE TWO DOMAIN SIGNS, and nothing else —
-        // the wordmark passes nil and gets ivory. So this fraction is
-        // only ever asked one question: how much of a domain's hue does
-        // its sign keep?
-        //
-        // 0.30 toward a light grey until 2026-08-10, and that was a
-        // number carried over from making IVORY metal, where the whole
-        // point is to pull a colour toward the alloy. Applied to a
-        // wayfinding hue it does the opposite of the job: the sign is
-        // one of exactly two places domain colour lives (the other is
-        // the hairline in the slab below it), and the rule under these
-        // letters is drawn in the PURE accent. So the pair this file's
-        // own comment says should "read as one lamp" was a grey-green
-        // sign over a green rule.
-        //
-        // 0.14 keeps enough of the alloy to read as anodised metal
-        // rather than painted plastic — the reason the blend exists —
-        // and gives back the hue that makes it signage. Nudge it up if
-        // a photograph ever shows the letters looking dyed; do not take
-        // it back to 0.30 to make them "calmer", because calm is what
-        // the keyline is for.
+        // ANODISED DARK, CUT BRIGHT (2026-08-13). Three generations of
+        // this sign chased legibility with LIGHT — ivory letters, a
+        // raised emissive floor, a keyline, a backing plate — and every
+        // one ran into the same wall: the gallery is drawn over the
+        // wearer's own room, and light-on-light has no edge. This build
+        // goes the other way round. The faces and extrusion walls are
+        // anodised dark — the wordmark in graphite, a door sign in its
+        // accent pulled a third toward black, which keeps the hue that
+        // does the wayfinding while giving the letters real weight —
+        // and the chamfer band is a SEPARATE mesh left bright champagne
+        // alloy, the way a diamond-cut badge shows bare metal exactly
+        // where the tool touched the stock. A dark face holds the mark
+        // against a bright wall; the bright rim holds it against a dark
+        // one; and the rake finally has a real edge to walk light along.
         let stock = accent.map {
-            blend($0, toward: UIColor(white: 0.72, alpha: 1), by: 0.14)
-        } ?? ivory
-        // A SATIN FINISH FOR THE COLOURED SIGNS WAS TRIED HERE AND DOES
-        // NOTHING. Recorded so it is not tried again.
-        //
-        // The bright, near-white faces down the extruded side of every
-        // glyph look exactly like a blown specular highlight, and
-        // `machined` exposes `roughness` for precisely that. Raising it
-        // to 0.60 — anodised rather than mirror — moved the sampled
-        // letter face by one part in 150, which is noise: (147,108,47)
-        // to (148,108,46).
-        //
-        // It does nothing because that brightness is not a highlight
-        // from a light. It is ENVIRONMENT REFLECTION: the material is
-        // `metallic` 0.62, the extruded sides face out across a room
-        // with a daylit window in it, and metal shows you the room.
-        // Roughness blurs a reflection; it does not dim one this large
-        // and this bright. The only knob that would is `metallic`,
-        // which the recipe pins deliberately — "a call site that wants
-        // 1.0 wants the bug" — and a sign that is not metal is a
-        // different design, not a tuning.
-        //
-        // What DID measurably help was the blend above: 0.30 → 0.14
-        // took the face from (142,110,55) to (147,108,47), which is
-        // seven points of saturation back into the hue that is doing
-        // the wayfinding.
+            blend($0, toward: .black, by: 0.32)
+        } ?? graphite
+        // A small emissive floor so the anodise never crushes to pure
+        // black in the shaded parts of the extrusion.
         var metal = Materials.machined(stock)
         metal.emissiveColor = .init(color: stock)
-        // BRIGHTER THAN `line`'s 0.16, and this is the one place raising
-        // it is not the mistake it was on 2026-08-08.
+        metal.emissiveIntensity = 0.16
+
+        // The cut edge. A higher floor than the face on purpose: the rim
+        // is a thin line doing the silhouette's work, and it must not
+        // die in shade — while staying a floor, not a glow, so the
+        // specular walk of the rake still shapes it.
+        var rimMetal = Materials.machined(champagne)
+        rimMetal.emissiveColor = .init(color: champagne)
+        rimMetal.emissiveIntensity = 0.30
+
+        // Found by the MESH's name, which is what the USD exporter
+        // writes the prim from — naming only the Blender object ships a
+        // file whose part comes back as `Text_007`, and that file loads
+        // and renders perfectly while quietly defeating this lookup.
+        // `Tools/hubtitles.py` names both object and mesh.
         //
-        // That day's failure was lifting the floor to 0.34 with nothing
-        // behind the letters: light-on-light has no contrast, and a
-        // brighter light against a bright wall is still no edge. The
-        // keyline supplies the edge. What is left is a separate
-        // complaint the first screenshot of this build showed plainly —
-        // the faces read GREY, because machined metal is mostly
-        // reflected light and the gallery's lighting is composed for
-        // instruments sitting in a room, not for signage two metres up.
-        // With a dark casing holding the silhouette, the face is free to
-        // carry its own light and land where ivory should.
-        metal.emissiveIntensity = 0.32
-        // MATTE AND UNLIT-DARK, deliberately. The shell is the thing the
-        // letter is read against, so it must not catch a highlight of
-        // its own — a glossy casing under a metal letter is two
-        // specular objects competing at the same edge, which is the
-        // contrast problem again one layer in.
-        let casing = Materials.machined(Self.keylineStock)
-
-        let depth = Float(size) * extrusionFactor
-        let recess = Float(size) * keylineRecess
-
-        for (index, character) in characters.enumerated() {
-            guard !character.isWhitespace else { continue }
-            let glyph = String(character)
-            let letterMesh = mesh(glyph, size: size)
-            let bounds = letterMesh.bounds
-            // Placed by its RIGHT edge, and vertically not at all: every
-            // glyph is generated the same way, so they already share a
-            // baseline. Re-centring each one on its own ink is how "O"
-            // and "S" — which overshoot the cap line — end up sitting a
-            // millimetre off it.
-            let x = advance[index + 1] - total / 2 - bounds.max.x
-
-            let letter = ModelEntity(mesh: letterMesh, materials: [metal])
-            letter.position.x = x
-            group.addChild(letter)
-
-            let shellMesh = mesh(glyph, size: size,
-                                 extrusion: depth + recess * 2)
-            let shellBounds = shellMesh.bounds
-            let shell = ModelEntity(mesh: shellMesh, materials: [casing])
-            // Swollen in the PLANE only. A uniform scale would deepen it
-            // too, and the depth is already chosen.
-            let swell = 1 + keylineSwell
-            shell.scale = SIMD3(swell, swell, 1)
-            // About the glyph's own centre, so the outline is even all
-            // the way round rather than growing off one corner.
-            let centre = SIMD3(x, 0, 0) + bounds.center
-            shell.position = SIMD3(
-                centre.x - shellBounds.center.x * swell,
-                centre.y - shellBounds.center.y * swell,
-                // Face set back behind the letter's face: the keyline is
-                // seen past the letter's edge, never in front of it.
-                (bounds.max.z - recess) - shellBounds.max.z)
-            group.addChild(shell)
+        // Read off ModelComponent rather than casting to ModelEntity:
+        // `Entity.load` is under no obligation to hand back that
+        // subclass, and a cast that quietly fails would paint nothing
+        // and look like a missing asset.
+        var paintedLetters = false
+        var paintedRim = false
+        func paint(_ entity: Entity) {
+            if var model = entity.components[ModelComponent.self] {
+                if entity.name.contains("Rim") {
+                    model.materials = [rimMetal]
+                    entity.components.set(model)
+                    paintedRim = true
+                } else if entity.name.contains("Letters") {
+                    model.materials = [metal]
+                    entity.components.set(model)
+                    paintedLetters = true
+                }
+            }
+            for child in entity.children { paint(child) }
         }
+        paint(group)
+        // An unrecognised asset would render in Blender's preview greys
+        // — near enough to shippable to go unnoticed, and wrong. And an
+        // asset carrying only `Letters` is from before the rim split:
+        // its chamfer would anodise dark along with the face and the
+        // silhouette would go with it. Rather than show a mark this app
+        // does not own the look of, fall back to the generated line,
+        // which is always current.
+        guard paintedLetters && paintedRim else { return nil }
 
-        // Centred on its own origin, from what was built — the same
-        // contract `line` offers, so the lockup stacking above is
-        // unchanged.
-        let built = group.visualBounds(relativeTo: nil)
-        for child in group.children {
-            child.position.y -= built.center.y
-            child.position.x -= built.center.x
-        }
+        // Built at a nominal point size of 1, so `size` IS the scale.
+        // On the child, per the note above.
+        model.scale = SIMD3(repeating: Float(size))
+        // Measured in the WRAPPER's space, which is where the caller
+        // will read it — so these extents describe the object that
+        // actually gets stacked.
+        let built = group.visualBounds(relativeTo: group)
+        // Centred on its own origin, the same contract `line` and
+        // `keylined` offer, so the lockup stacking above is unchanged.
+        // The child moves; the wrapper stays at the origin with an
+        // untouched transform.
+        model.position -= built.center
         return (group, built.extents)
     }
 
-    /// How much wider the shell's strokes are than the letter's, as a
-    /// fraction.
-    ///
-    /// 0.12 IN THE FIRST BUILD, AND IT WAS TOO TIMID. On a face this
-    /// bold, a 12% swell puts barely a pixel of casing past the letter's
-    /// own extruded side, so the two merged and read as a drop shadow
-    /// falling bottom-right rather than as an outline holding the shape.
-    /// A drop shadow is a direction; a keyline is a silhouette, and the
-    /// silhouette is the whole point on a wall of unknown brightness.
-    ///
-    /// Still a keyline and not a slab: at 0.22 the casing is visible all
-    /// the way round and stops well short of closing the counters — the
-    /// holes in P, R, O and D stay open, which is what keeps this
-    /// reading as set type rather than as a stencil.
-    static let keylineSwell: Float = 0.22
+    // MARK: The rake
 
-    /// How far the shell's face sits behind the letter's, and how much
-    /// deeper it runs, in fractions of point size.
-    static let keylineRecess: Float = 0.05
+    /// A slow turn, so the light walks across the letterforms.
+    ///
+    /// THIS IS AN ANIMATION THAT ONLY WORKS BECAUSE THE TYPE IS MILLED,
+    /// which is why it is the one that got built. The letters carry a
+    /// real chamfer around every stroke; turning the line a degree and a
+    /// half moves where that chamfer catches the key light, so the
+    /// highlight travels along the edge of each glyph and the mark reads
+    /// as a metal object sitting in a lit room. Flat extruded type doing
+    /// the same thing just looks like a sign wobbling — there is no edge
+    /// for the light to run along.
+    ///
+    /// So nothing here is animating an EFFECT. It moves the geometry a
+    /// little and lets the material do what a material does, which is
+    /// also why it costs one transform per line and no per-frame
+    /// material work.
+    ///
+    /// DELIBERATELY NOT A KINETIC BODY. An electron lapped the E&M sign
+    /// and a ball crossed the Mechanics rule through two full redesigns,
+    /// and the owner cut both on 2026-08-04 — "still is pretty bad".
+    /// Those put a PROP next to the type. This animates the type.
+    ///
+    /// Yaw and pitch run at rates that do not divide into each other, so
+    /// the pair never repeats on a short cycle and the motion has no
+    /// findable beat — the fastest way to make slow movement look
+    /// mechanical is to let the reader catch its period.
+    static func rake(time: Double, phase: Double) -> simd_quatf {
+        let yaw = rakeAmplitude * Float(sin(time * rakeRate + phase))
+        let pitch = rakeAmplitude * 0.34
+            * Float(sin(time * rakeRate * 0.61 + phase * 1.7))
+        return simd_quatf(angle: yaw, axis: [0, 1, 0])
+            * simd_quatf(angle: pitch, axis: [1, 0, 0])
+    }
 
-    /// The casing's stock. Near-black rather than black: the labs'
-    /// instruments are dark machined metal and the signage is the same
-    /// alloy, so a true black would be the one object in the room that
-    /// is not made of anything.
-    static let keylineStock = UIColor(white: 0.08, alpha: 1)
+    /// About 1.6 degrees. Small enough that nobody catches the sign
+    /// moving; large enough that the highlight does. On a 0.6 m line
+    /// this swings the ends by roughly 8 mm in depth.
+    static let rakeAmplitude: Float = 0.028
+    /// Roughly a twelve-second cycle. Slower than the wordmark's bob so
+    /// the two never lock into one motion.
+    static let rakeRate: Double = 0.52
 
     // MARK: Shared tones
 
@@ -375,6 +399,14 @@ enum HubTitleStyle {
     /// podium rim and the title rule (also champagne) keep matching.
     static let ivory = UIColor(red: 0.99, green: 0.98, blue: 0.95, alpha: 1)
     static let champagne = UIColor(red: 1.0, green: 0.88, blue: 0.70, alpha: 1)
+    /// The anodise the faces wear since 2026-08-13 — dark enough to hold
+    /// against a lit wall, warm enough to stay in the ivory/champagne
+    /// family rather than reading as printer black. The champagne now
+    /// lives on the CUT: the rim mesh is the one place the bare alloy
+    /// shows, which is what ties the dark plaque back to the podium rim
+    /// and the title rule.
+    static let graphite = UIColor(red: 0.155, green: 0.150, blue: 0.140,
+                                  alpha: 1)
 
     /// A derived tint of a canonical colour, never a new hue.
     static func blend(_ color: UIColor, toward target: UIColor,

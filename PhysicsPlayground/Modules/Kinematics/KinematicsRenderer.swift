@@ -718,6 +718,11 @@ final class KinematicsRenderer {
     /// required. (This replaced a gaze-revealed callout, which the
     /// simulator could never show and a device user never found.)
     private var flightCalloutReveal: Float = 0
+    /// The reveal last written and the reading last formatted — gates on
+    /// per-frame work that used to run regardless of whether anything
+    /// displayed had changed. NaN keys force the first write.
+    private var appliedFlightCalloutReveal: Float = -1
+    private var flightCalloutKey: (Double, Double) = (.nan, .nan)
 
     private func tickFlightCallout(_ model: KinematicsModel) {
         let flight = model.flights.last { $0.status == .flying || $0.status == .rolling }
@@ -735,11 +740,25 @@ final class KinematicsRenderer {
             lookCallout = callout
         }
         lookCallout?.isEnabled = true
-        lookCallout?.root.components.set(OpacityComponent(opacity: flightCalloutReveal))
+        // Opacity written only while the reveal eases; the anchor is a
+        // transform and stays per-frame.
+        if abs(flightCalloutReveal - appliedFlightCalloutReveal) > 0.0005 {
+            appliedFlightCalloutReveal = flightCalloutReveal
+            lookCallout?.root.components.set(
+                OpacityComponent(opacity: flightCalloutReveal))
+        }
         lookCallout?.anchor(at: SIMD3<Float>(flight.state.position))
-        lookCallout?.setText(String(
-            format: "%.1f m/s · %.1f m up",
-            simd_length(flight.state.velocity), max(flight.state.position.y, 0)))
+        // Formatted only when a displayed decimal moves — the mesh is
+        // deduped downstream, the string was not.
+        let key = ((Double(simd_length(flight.state.velocity)) * 10).rounded(),
+                   (Double(max(flight.state.position.y, 0)) * 10).rounded())
+        if key != flightCalloutKey {
+            flightCalloutKey = key
+            lookCallout?.setText(String(
+                format: "%.1f m/s · %.1f m up",
+                simd_length(flight.state.velocity),
+                max(flight.state.position.y, 0)))
+        }
     }
 
     private func syncFlights(_ flights: [KinematicsModel.Flight]) {

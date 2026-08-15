@@ -21,13 +21,17 @@
 //
 //  Assets came back after that, on those terms. A few of these
 //  miniatures load the SAME usdz the room loads — the launcher barrel,
-//  the battery, the bulb — because the miniature is the map you arrive
-//  holding, and a map drawn from different geometry than the place is
-//  worse than none. They are static props parented under entities the
-//  closure moves, so the failure above cannot recur: nothing is looked
-//  up, and nothing loaded is asked to flex. The things that must flex —
-//  field lines, the trajectory, the orbits, the wire loop, the cables —
-//  stay procedural for exactly that reason.
+//  the battery, the bulb, the switch — because the miniature is the map
+//  you arrive holding, and a map drawn from different geometry than the
+//  place is worse than none. The rest of the solid apparatus comes from
+//  `Tools/moduleprops.py`, and anything that rotates on its own — the
+//  compass needle, the quadrant pointer — ships as a separate file so
+//  the closure can capture the moving part directly. They are static
+//  props parented under entities the closure moves, so the failure
+//  above cannot recur: nothing is looked up, and nothing loaded is
+//  asked to flex. The things that must flex — field lines, the
+//  trajectory, the orbits, the wire loop, the cables, the comet's tail
+//  — stay procedural for exactly that reason.
 //
 //  Three rules hold the file together:
 //
@@ -399,53 +403,89 @@ enum HubVignettes {
         // moves here: arrowheads riding the lines from + to −.
         let separation: Float = 0.042
         let chargeRadius: Float = 0.019
-        let positive = ball(chargeRadius, DesignTokens.Palette.positiveUI, glow: 0.6)
-        let negative = ball(chargeRadius, DesignTokens.Palette.negativeUI, glow: 0.6)
+
+        // The charges as PHYSICAL conductors — polished metal spheres in
+        // the palette's own red and blue, the sign moulded proud of the
+        // surface on the reader's side (`Tools/moduleprops.py`). The
+        // glowing ball with white bars floating beside it survives only
+        // as the fallback: a sign that is part of the object catches the
+        // key light the way UI stuck next to it never did.
+        func charge(_ name: String, _ tint: UIColor, vertical: Bool) -> Entity {
+            // Authored: a 0.038 sphere whose sign stands 0.0009 proud,
+            // so the longest span is 0.0389 — normalising to 0.039
+            // reproduces the 0.019 radius the layout was composed for.
+            if let modeled = prop(name, longest: 0.039) { return modeled }
+            let orb = ball(chargeRadius, tint, glow: 0.6)
+            let barMesh = MeshResource.generateBox(size: [0.016, 0.0038, 0.0038],
+                                                   cornerRadius: 0.0019)
+            let signMaterial = UnlitMaterial(color: .white)
+            let across = ModelEntity(mesh: barMesh, materials: [signMaterial])
+            across.position.z = chargeRadius - 0.001
+            orb.addChild(across)
+            if vertical {
+                let up = ModelEntity(mesh: barMesh, materials: [signMaterial])
+                up.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+                up.position.z = chargeRadius - 0.001
+                orb.addChild(up)
+            }
+            return orb
+        }
+        let positive = charge("ChargePlus", DesignTokens.Palette.positiveUI,
+                              vertical: true)
+        let negative = charge("ChargeMinus", DesignTokens.Palette.negativeUI,
+                              vertical: false)
         positive.position.x = -separation
         negative.position.x = separation
         frame.addChild(positive)
         frame.addChild(negative)
 
-        // The signs, so a glance says "dipole" and not "two dots".
-        let barMesh = MeshResource.generateBox(size: [0.016, 0.0038, 0.0038],
-                                               cornerRadius: 0.0019)
-        let signMaterial = UnlitMaterial(color: .white)
-        for (parent, vertical) in [(positive, true), (negative, false)] {
-            let across = ModelEntity(mesh: barMesh, materials: [signMaterial])
-            across.position.z = chargeRadius - 0.001
-            parent.addChild(across)
-            if vertical {
-                let up = ModelEntity(mesh: barMesh, materials: [signMaterial])
-                up.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-                up.position.z = chargeRadius - 0.001
-                parent.addChild(up)
-            }
-        }
+        let plus = SIMD3<Float>(-separation, 0, 0)
+        let minus = SIMD3<Float>(separation, 0, 0)
+        let poles = [Pole(at: plus, strength: 1),
+                     Pole(at: minus, strength: -1)]
+        // Tracing BACKWARD means following the field of the negated
+        // charges — same integrator, opposite arrows.
+        let reversedPoles = poles.map { Pole(at: $0.at, strength: -$0.strength) }
 
-        let poles = [Pole(at: [-separation, 0, 0], strength: 1),
-                     Pole(at: [separation, 0, 0], strength: -1)]
-        let sinks = [(at: SIMD3<Float>(separation, 0, 0),
-                      radius: chargeRadius + 0.001)]
-
-        // Seeded evenly in polar angle on the + charge's surface, in two
-        // perpendicular planes. The steep seeds close onto the −; the
-        // ones aimed backwards run off to the escape radius and are cut,
-        // which is what a real dipole does and what the four hand-drawn
-        // cosine arcs could never show.
+        // Seeded by FLUX: uniform angles around BOTH charges, in two
+        // perpendicular planes. Out of the + along the field; into the −
+        // AGAINST the field, keeping only the lines that escape — a
+        // backward trace that lands on the + is a line the forward pass
+        // already drew. Seeding one charge alone left the other visibly
+        // barer: every line out of the + that escaped to infinity has an
+        // incoming mirror at the −, and nothing was drawing those. (The
+        // old hand-picked tilts also skipped two flip lines outright,
+        // which is where the lopsidedness came from.) Equal charges,
+        // equal flux, equal lines — drawn once each.
         var paths: [[SIMD3<Float>]] = []
+        let tiltCount = 4
         for roll in [Float(0), .pi / 2] {
-            for tilt in [Float(0.42), 0.95, 1.55, 2.15] {
+            for index in 0..<tiltCount {
+                let tilt = (Float(index) + 0.5) * .pi / Float(tiltCount)
                 for flip in [Float(1), -1] {
                     let out = SIMD3<Float>(cos(tilt),
                                            sin(tilt) * cos(roll) * flip,
                                            sin(tilt) * sin(roll) * flip)
-                    let seed = SIMD3<Float>(-separation, 0, 0)
-                        + out * (chargeRadius + 0.0015)
-                    let path = fieldLine(from: seed, poles: poles,
-                                         step: 0.0022, escape: 0.088,
-                                         sinks: sinks)
-                    if path.count > 3 { paths.append(path) }
-                    if roll == 0 && (tilt == 0.42 || tilt == 2.15) { break }
+                    let outgoing = fieldLine(
+                        from: plus + out * (chargeRadius + 0.0015),
+                        poles: poles, step: 0.0022, escape: 0.088,
+                        sinks: [(at: minus, radius: chargeRadius + 0.001)])
+                    if outgoing.count > 3 { paths.append(outgoing) }
+
+                    // The mirrored seed on the −, so its incoming fan
+                    // sits at the same angles as the +'s outgoing one.
+                    let incoming = fieldLine(
+                        from: minus + SIMD3(-out.x, out.y, out.z)
+                            * (chargeRadius + 0.0015),
+                        poles: reversedPoles, step: 0.0022, escape: 0.088,
+                        sinks: [(at: plus, radius: chargeRadius + 0.001)])
+                    if incoming.count > 3, let far = incoming.last,
+                       simd_distance(far, plus) > chargeRadius + 0.004 {
+                        // Escaped rather than landed on the + — kept,
+                        // and REVERSED so the stored order runs along
+                        // the field, the direction the arrowheads ride.
+                        paths.append(incoming.reversed())
+                    }
                 }
             }
         }
@@ -598,19 +638,65 @@ enum HubVignettes {
             barrel.position.y = barrelLength / 2
             aim.addChild(barrel)
         }
-        let base = ModelEntity(
-            mesh: .generateCylinder(height: reach * 0.062,
-                                    radius: reach * 0.085),
-            materials: [Materials.machined(UIColor(white: 0.55, alpha: 1),
-                                           roughness: 0.4)])
-        base.position.y = -reach * 0.031
-        frame.addChild(base)
+        // The carriage the barrel sits in, with its elevation quadrant
+        // (`Tools/moduleprops.py`). Authored numbers, mapped through one
+        // scale: the box spans z 0...0.1082 (the quadrant rim is the top
+        // of the part), the trunnion is at z 0.068, and the tick face is
+        // at y -0.0246. The importer centres the box, so the trunnion is
+        // placed by its offset from that centre.
+        let carriageScale = reach * 0.16 / 0.104
+        if let carriage = prop("LauncherCarriage",
+                               longest: 0.1082 * carriageScale) {
+            carriage.position.y = -(0.068 - 0.1082 / 2) * carriageScale
+            frame.addChild(carriage)
 
-        // The hoop, where the real arc actually lands — so the target is
-        // a consequence of the physics rather than a decision.
+            // The pointer rides the launch angle, so whatever angle this
+            // miniature actually fires at is the angle the instrument
+            // reads — a baked pointer would lie the day the angle
+            // changed. Its authored ORIGIN is its hinge, so the import
+            // centring is undone rather than trusted: zeroing the inner
+            // model puts the authored origin back on the holder's.
+            if let pointer = prop("QuadrantPointer",
+                                  longest: 0.0503 * carriageScale) {
+                pointer.children.first?.position = .zero
+                pointer.position.z = 0.0252 * carriageScale
+                pointer.orientation = simd_quatf(angle: angle, axis: [0, 0, 1])
+                frame.addChild(pointer)
+            }
+        } else {
+            let base = ModelEntity(
+                mesh: .generateCylinder(height: reach * 0.062,
+                                        radius: reach * 0.085),
+                materials: [Materials.machined(UIColor(white: 0.55, alpha: 1),
+                                               roughness: 0.4)])
+            base.position.y = -reach * 0.031
+            frame.addChild(base)
+        }
+
+        // The target, where the real arc actually lands — a ring on a
+        // mast standing on the floor the ball falls to, with the ring's
+        // centre ON the trajectory: the placement walks the flown arc
+        // back to the ring's own height, so the shot threads the ring as
+        // a consequence of the physics rather than a decision. (The
+        // drag-free ghost misses it, which is the drag made visible.)
         let landing = flown.last?.at ?? .zero
-        if let hoop = ring(radius: reach * 0.095, tube: reach * 0.012,
-                           UIColor(red: 0.35, green: 0.95, blue: 0.6, alpha: 1)) {
+        let standScale = reach * 0.095 / 0.0265   // ring inner radius
+        if let target = prop("TargetStand", longest: 0.0782 * standScale) {
+            // Base bottom sits 0.060 below the ring plane (authored), so
+            // a base on the floor puts the ring at this height:
+            let ringHeight = floor + 0.060 * standScale
+            var through = landing
+            for sample in stride(from: 1.0, through: 0.0, by: -0.01) {
+                let point = at(Float(sample))
+                if point.y >= ringHeight { through = point; break }
+            }
+            // Authored ring centre (-0.029, 0, 0.060) against a box
+            // centred at (-0.0202, 0, 0.0311).
+            target.position = [through.x + 0.00885 * standScale,
+                               through.y - 0.02895 * standScale, 0]
+            frame.addChild(target)
+        } else if let hoop = ring(radius: reach * 0.095, tube: reach * 0.012,
+                                  UIColor(red: 0.35, green: 0.95, blue: 0.6, alpha: 1)) {
             hoop.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
             hoop.position = landing + SIMD3(0, reach * 0.095, 0)
             frame.addChild(hoop)
@@ -677,22 +763,24 @@ enum HubVignettes {
         // agree about hue.
         CelestialTextures.warmUp()
 
-        let sun = world("Sun", radius: 0.015)
+        let sun = world("Sun", radius: 0.018)
         system.addChild(sun)
         var coronaMaterial = UnlitMaterial(color: DesignTokens.Palette.celestialUI("Sun"))
         coronaMaterial.blending = .transparent(opacity: 0.22)
-        let corona = ModelEntity(mesh: .generateSphere(radius: 0.024),
+        let corona = ModelEntity(mesh: .generateSphere(radius: 0.029),
                                  materials: [coronaMaterial])
         system.addChild(corona)
 
         /// True anomaly from mean anomaly, by Newton on Kepler's
-        /// equation. Five iterations is convergence to well under a
-        /// pixel at this eccentricity, and it is the whole reason the
-        /// outer planet visibly races at periapsis and crawls at
-        /// apoapsis instead of sliding round at a constant rate.
+        /// equation. Eight iterations is convergence to well under a
+        /// pixel even at the comet's e = 0.62 — five was enough for the
+        /// planets, but Newton slows near periapsis as e climbs — and it
+        /// is the whole reason the outer bodies visibly race at
+        /// periapsis and crawl at apoapsis instead of sliding round at a
+        /// constant rate.
         func trueAnomaly(meanAnomaly: Double, eccentricity: Double) -> Double {
             var E = meanAnomaly
-            for _ in 0..<5 {
+            for _ in 0..<8 {
                 let f = E - eccentricity * sin(E) - meanAnomaly
                 E -= f / (1 - eccentricity * cos(E))
             }
@@ -727,10 +815,14 @@ enum HubVignettes {
         // overhang piled onto one edge of the square. Turning the outer
         // one across the frame spreads its reach over both axes, so a
         // star-centred exhibit still fills its bubble.
+        // Sizes are up a fifth on the pre-comet exhibit: the comet's
+        // apoapsis grew the swept bounds by half again, so the whole
+        // system shrinks in the fit and the worlds pay for it unless
+        // they grow to compensate.
         let plan: [(semiMajor: Double, eccentricity: Double, argument: Float,
                     name: String, size: Float)] = [
-            (0.042, 0.10, 0, "Earth", 0.0080),
-            (0.072, 0.30, 2.2, "Mars", 0.0064),
+            (0.042, 0.10, 0, "Earth", 0.0096),
+            (0.072, 0.30, 2.2, "Mars", 0.0078),
         ]
         let baseSemiMajor = plan[0].semiMajor
         let basePeriod = 5.2
@@ -769,7 +861,55 @@ enum HubVignettes {
                     * pow(spec.semiMajor / baseSemiMajor, 1.5)))
         }
 
-        let cycle = orbits.map(\.period).max() ?? basePeriod
+        // The comet: the one body that shows Kepler's second law at a
+        // glance, racing through periapsis and crawling out to apoapsis
+        // on the same third-law clock as the planets. Its nucleus is the
+        // one modeled prop here (`Tools/moduleprops.py`, bilobed and
+        // 67P-dark); its tail is the fact the addition exists to get
+        // right, and it flexes, so it stays procedural: a comet's tail
+        // points AWAY FROM THE SUN — pushed out by light and wind — not
+        // behind the motion, and it grows as the ice gets close enough
+        // to boil.
+        // The argument of periapsis does the same compositional work as
+        // Mars's: an e = 0.62 ellipse is nearly all apoapsis, and with
+        // that long axis along X the exhibit came out 0.17 x 0.066 — a
+        // streak. At 2.27 the apoapsis crosses the frame at ~50°, so its
+        // reach lands on depth as well as width, and the 28° lean turns
+        // that depth into height.
+        let cometA: Float = 0.088, cometE: Float = 0.62
+        let cometSemiLatus = cometA * (1 - cometE * cometE)
+        let cometPivot = Entity()
+        cometPivot.orientation = simd_quatf(angle: 2.27, axis: [0, 1, 0])
+        system.addChild(cometPivot)
+        let cometTrack = (0...96).map { step -> SIMD3<Float> in
+            let nu = Float(step) / 96 * 2 * .pi
+            let r = cometSemiLatus / (1 + cometE * cos(nu))
+            return SIMD3(r * cos(nu), 0, r * sin(nu))
+        }
+        if let track = line(cometTrack, radius: 0.0011, .white, opacity: 0.30) {
+            cometPivot.addChild(track)
+        }
+        let cometHolder = Entity()
+        cometPivot.addChild(cometHolder)
+        let rock = Entity()
+        cometHolder.addChild(rock)
+        if let nucleus = prop("CometNucleus", longest: 0.008) {
+            rock.addChild(nucleus)
+        } else {
+            rock.addChild(ball(0.0030, UIColor(white: 0.35, alpha: 1), glow: 0.1))
+        }
+        var tailMaterial = UnlitMaterial(
+            color: UIColor(red: 0.75, green: 0.88, blue: 1.0, alpha: 1))
+        tailMaterial.blending = .transparent(opacity: 0.4)
+        let tailBaseLength: Float = 0.02
+        let tail = ModelEntity(
+            mesh: .generateCone(height: tailBaseLength, radius: 0.0022),
+            materials: [tailMaterial])
+        cometHolder.addChild(tail)
+        let tumbleAxis = simd_normalize(SIMD3<Float>(0.3, 1, 0.45))
+        let cometPeriod = basePeriod * pow(Double(cometA) / baseSemiMajor, 1.5)
+
+        let cycle = max(cometPeriod, orbits.map(\.period).max() ?? basePeriod)
         // CENTRED ON THE STAR, not on the box. The outer orbit is
         // genuinely eccentric and the star sits at its focus, so the
         // bounding box's middle is out in the empty half of the ellipse —
@@ -803,6 +943,35 @@ enum HubVignettes {
                 orbit.planet.orientation = orbit.tilt
                     * simd_quatf(angle: Float(time) * 0.8, axis: [0, 1, 0])
             }
+            // The comet, by the same Kepler solve as the planets — and
+            // the tail re-aimed anti-sunward every frame. The pivot is a
+            // rotation about Y, so in its own frame the Sun is at the
+            // origin and the radial direction is just the position.
+            let cometMean = 2 * Double.pi
+                * (time / cometPeriod).truncatingRemainder(dividingBy: 1)
+            let cometNu = Float(trueAnomaly(meanAnomaly: cometMean,
+                                            eccentricity: Double(cometE)))
+            let cometR = cometSemiLatus / (1 + cometE * cos(cometNu))
+            let local = SIMD3<Float>(cometR * cos(cometNu), 0,
+                                     cometR * sin(cometNu))
+            cometHolder.position = local
+            let outward = simd_normalize(local)
+            // Longer the closer the ice gets: sublimation scales hard
+            // with insolation, so the length runs on r — near-nothing at
+            // apoapsis, a real banner through periapsis.
+            let tailLength = min(
+                0.030, 0.016 * pow(cometA * (1 - cometE) / cometR, 1.2))
+            // The cone's apex (+Y) is turned back toward the nucleus so
+            // the tail widens and fades DOWNSTREAM.
+            tail.orientation = rotation(from: [0, 1, 0], to: -outward)
+            tail.position = outward * (tailLength / 2 + 0.002)
+            let tailWidth = max(0.45, tailLength / tailBaseLength * 0.8)
+            tail.scale = [tailWidth, tailLength / tailBaseLength, tailWidth]
+            tail.components.set(OpacityComponent(
+                opacity: min(1, tailLength / 0.012)))
+            rock.orientation = simd_quatf(angle: Float(time) * 0.7,
+                                          axis: tumbleAxis)
+
             // The star breathes, the way a light source should.
             corona.scale = SIMD3(repeating: 1 + 0.05 * Float(sin(time * 1.3)))
         }
@@ -862,6 +1031,40 @@ enum HubVignettes {
                                materials: [haloMaterial])
         bulbHolder.addChild(halo)
 
+        // The switch the workshop itself uses, spliced into the loop's
+        // right side — the same asset the room loads, with the same
+        // procedural lever `CircuitsRenderer` builds over it, because
+        // the miniature is the map and the map's switch is the room's.
+        // The lever is the moving part, so it is built HERE and captured
+        // by the closure rather than pulled out of the asset by name.
+        let switchScale: Float = 0.026 / 0.075   // miniature over room size
+        let switchMount = Entity()
+        switchMount.position = [width, 0, 0]
+        switchMount.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+        frame.addChild(switchMount)
+        if let body = prop("CircuitSwitch", longest: 0.026) {
+            switchMount.addChild(body)
+        } else {
+            switchMount.addChild(ModelEntity(
+                mesh: .generateBox(size: [0.026, 0.006, 0.011],
+                                   cornerRadius: 0.002),
+                materials: [Materials.graphite(UIColor(white: 0.25, alpha: 1))]))
+        }
+        // The lever, at the same pivot the room's renderer puts it:
+        // [-0.028, 0.008, 0] on the component's origin, arm reaching
+        // +X — everything times the miniature's scale.
+        let lever = Entity()
+        lever.position = [-0.028 * switchScale, 0.008 * switchScale, 0]
+        let arm = ModelEntity(
+            mesh: .generateBox(size: [0.06 * switchScale, 0.008 * switchScale,
+                                      0.014 * switchScale],
+                               cornerRadius: 0.003 * switchScale),
+            materials: [Materials.machined(UIColor(white: 0.75, alpha: 1),
+                                           roughness: 0.3)])
+        arm.position.x = 0.028 * switchScale
+        lever.addChild(arm)
+        switchMount.addChild(lever)
+
         // Charge carriers, evenly spaced round the loop. They used to lap
         // once every five and a half seconds, which reads as drift rather
         // than current.
@@ -875,17 +1078,41 @@ enum HubVignettes {
             carriers.append(dot)
         }
 
-        let period = 2.9
+        // The story is the switch. A loop of charge that never answers
+        // to anything reads as decoration; current as the response to a
+        // CLOSED PATH is this module's first teach, so the cycle is:
+        // throw the switch, the carriers pull away and the filament
+        // warms; open it, they coast to a stop and the room's light dies
+        // with them. The carriers hold their places while stopped —
+        // charge does not drain out of an open circuit.
+        let period = 7.0
+        let lapTime: Float = 2.9
+        var progress: Float = 0
+        var speed: Float = 0
+        var leverAngle: Float = 0.62
+        var lastTime = 0.0
         return fit(root: root, frame: frame, cycle: period) { time in
+            let phase = time.truncatingRemainder(dividingBy: period)
+            let closed = phase >= 0.9 && phase < 4.9
+            let dt = Float(max(0, min(time - lastTime, 0.1)))
+            lastTime = time
+
+            leverAngle += ((closed ? 0 : 0.62) - leverAngle) * min(1, dt * 14)
+            lever.orientation = simd_quatf(angle: leverAngle, axis: [0, 0, 1])
+
+            // The current follows the switch with a short ease — not the
+            // nanoseconds a real circuit takes, but the direction of
+            // truth: the response belongs to the path being closed.
+            speed += ((closed ? 1 : 0) - speed) * min(1, dt * 6)
+            progress += dt * speed / lapTime
             for (index, carrier) in carriers.enumerated() {
-                let t = Float((time / period
-                               + Double(index) / Double(carriers.count))
-                    .truncatingRemainder(dividingBy: 1))
+                let t = (progress + Float(index) / Float(carriers.count))
+                    .truncatingRemainder(dividingBy: 1)
                 carrier.position = onLoop(t)
             }
-            // The filament breathes as if the supply were alive.
-            let glow = 0.78 + 0.22 * Float(sin(time * 2.1))
-            halo.scale = SIMD3(repeating: 0.9 + glow * 0.22)
+            // The filament follows the current, not a clock.
+            let glow = speed * (0.85 + 0.15 * Float(sin(time * 2.1)))
+            halo.scale = SIMD3(repeating: 0.9 + glow * 0.28)
             halo.components.set(OpacityComponent(opacity: glow * 0.5))
         }
     }
@@ -937,6 +1164,33 @@ enum HubVignettes {
         frame.addChild(left)
         frame.addChild(right)
 
+        // The compass, tilted up toward the reader, its needle aimed
+        // every frame along the TRUE local field of the two bars — the
+        // same magnetic-charge model the traced lines integrate, so the
+        // needle and the lines cannot disagree. The needle ships as its
+        // own asset (`Tools/moduleprops.py`) because it is the moving
+        // part: the closure captures it directly, and it is authored
+        // symmetric about its pivot so the importer's box-centring IS
+        // the pivot.
+        let compassTilt = simd_quatf(angle: 0.96, axis: [1, 0, 0])
+        let compassAt = SIMD3<Float>(0, -0.056, 0.020)
+        var needleHolder: Entity?
+        if let bowl = prop("CompassBody", longest: 0.030) {
+            let compass = Entity()
+            compass.position = compassAt
+            compass.orientation = compassTilt
+            frame.addChild(compass)
+            compass.addChild(bowl)
+            if let needle = prop("CompassNeedle", longest: 0.021) {
+                // Just clear of the dial furniture: the ticks top out
+                // 0.0001 above the bowl's box centre and the needle is
+                // 0.0011 thick at its cap.
+                needle.position.y = 0.0012
+                compass.addChild(needle)
+                needleHolder = needle
+            }
+        }
+
         // Three traced field sets, one per stop of the approach, cross
         // faded as the gap changes.
         //
@@ -959,41 +1213,69 @@ enum HubVignettes {
                 Pole(at: [centre - halfLength, 0, 0], strength: -1),
                 Pole(at: [centre + halfLength, 0, 0], strength: 1),
             ]
-            let sinks: [(at: SIMD3<Float>, radius: Float)] = [
+            let southSinks: [(at: SIMD3<Float>, radius: Float)] = [
                 (at: poles[0].at, radius: 0.010),
                 (at: poles[2].at, radius: 0.010),
             ]
+            let northSinks: [(at: SIMD3<Float>, radius: Float)] = [
+                (at: poles[1].at, radius: 0.010),
+                (at: poles[3].at, radius: 0.010),
+            ]
+            let reversedPoles = poles.map {
+                Pole(at: $0.at, strength: -$0.strength)
+            }
 
-            // Seeded on BOTH norths. Tracing only the left magnet's put
-            // every line on one side of the picture: correct as far as
-            // it went — those really are field lines — but it read as one
-            // magnet doing all the work and another sitting next to it.
-            // A field between two magnets is symmetric, and the exhibit
-            // should look it.
+            // Seeded by FLUX: uniform angles around EVERY pole. Out of
+            // both norths along the field; into both souths against it,
+            // keeping only the lines that escape — a backward trace that
+            // lands on a north is a line the forward pass already drew.
+            // Seeding the norths alone drew every north-side line and
+            // only the south-side lines that happened to connect, so the
+            // outboard south ends sat visibly barer than the norths —
+            // the field of two equal bars is even and the picture
+            // wasn't. Hand-picked tilts are gone for the same reason:
+            // uniform angles are what equal flux per line means.
             var paths: [[SIMD3<Float>]] = []
-            for source in [poles[1].at, poles[3].at] {
-                let outward: Float = source.x < 0 ? 1 : -1
+            let tiltCount = 3
+            func fan(_ source: SIMD3<Float>, along: Float,
+                     trace: (SIMD3<Float>) -> Void) {
                 for roll in [Float(0), .pi / 2] {
-                    for tilt in [Float(0.5), 1.05, 1.62, 2.2] {
+                    for index in 0..<tiltCount {
+                        let tilt = (Float(index) + 0.5) * .pi / Float(tiltCount)
                         for flip in [Float(1), -1] {
-                            let out = SIMD3<Float>(cos(tilt) * outward,
+                            let out = SIMD3<Float>(cos(tilt) * along,
                                                    sin(tilt) * cos(roll) * flip,
                                                    sin(tilt) * sin(roll) * flip)
-                            let seed = source + out * 0.0085
-                            // Cut short. A dipole's outermost lines run a
-                            // long way for very little, and `fit` measures
-                            // every millimetre of them — at an escape
-                            // radius of 0.11 the far tails were half the
-                            // exhibit's width, so the magnets themselves
-                            // were scaled down to a third of their bubble
-                            // and the thing the module is ABOUT became
-                            // the small part.
-                            let path = fieldLine(from: seed, poles: poles,
-                                                 step: 0.0022, escape: 0.072,
-                                                 sinks: sinks)
-                            if path.count > 3 { paths.append(path) }
+                            trace(source + out * 0.0085)
                         }
                     }
+                }
+            }
+            // Cut short. A dipole's outermost lines run a long way for
+            // very little, and `fit` measures every millimetre of them —
+            // at an escape radius of 0.11 the far tails were half the
+            // exhibit's width, so the magnets themselves were scaled
+            // down to a third of their bubble and the thing the module
+            // is ABOUT became the small part.
+            for north in [poles[1].at, poles[3].at] {
+                fan(north, along: north.x < 0 ? 1 : -1) { seed in
+                    let path = fieldLine(from: seed, poles: poles,
+                                         step: 0.0022, escape: 0.072,
+                                         sinks: southSinks)
+                    if path.count > 3 { paths.append(path) }
+                }
+            }
+            for south in [poles[0].at, poles[2].at] {
+                fan(south, along: south.x < 0 ? -1 : 1) { seed in
+                    let path = fieldLine(from: seed,
+                                         poles: reversedPoles,
+                                         step: 0.0022, escape: 0.072,
+                                         sinks: northSinks)
+                    guard path.count > 3, let far = path.last,
+                          northSinks.allSatisfy({
+                              simd_distance(far, $0.at) > $0.radius + 0.002
+                          }) else { return }
+                    paths.append(path.reversed())
                 }
             }
             // THE MAGNET'S OWN LAVENDER, not the electric field's.
@@ -1021,6 +1303,8 @@ enum HubVignettes {
         }
 
         let period = 5.7
+        var needleAngle: Float = 0
+        var lastTime = 0.0
         return fit(root: root, frame: frame, cycle: period) { time in
             // The approach, the almost-snap, the ease apart — the pull
             // between opposite poles as a loop of motion. The gap never
@@ -1037,6 +1321,31 @@ enum HubVignettes {
                 set.entity.components.set(
                     OpacityComponent(opacity: weight * (0.45 + 0.5 * breath)))
             }
+
+            // The needle: evaluate the four moving poles at the compass,
+            // project the field onto the tilted dial, and steer toward
+            // it with a little lag — a real needle has inertia, and an
+            // instantaneous one reads as painted on.
+            if let needle = needleHolder {
+                let poles = [
+                    Pole(at: [-centre - halfLength, 0, 0], strength: -1),
+                    Pole(at: [-centre + halfLength, 0, 0], strength: 1),
+                    Pole(at: [centre - halfLength, 0, 0], strength: -1),
+                    Pole(at: [centre + halfLength, 0, 0], strength: 1),
+                ]
+                if let field = fieldDirection(at: compassAt, poles: poles) {
+                    let planar = compassTilt.inverse.act(field)
+                    let target = atan2(-planar.z, planar.x)
+                    let dt = Float(max(0, min(time - lastTime, 0.1)))
+                    var delta = target - needleAngle
+                    while delta > .pi { delta -= 2 * .pi }
+                    while delta < -.pi { delta += 2 * .pi }
+                    needleAngle += delta * min(1, dt * 9)
+                    needle.orientation = simd_quatf(angle: needleAngle,
+                                                    axis: [0, 1, 0])
+                }
+                lastTime = time
+            }
         }
     }
 
@@ -1047,44 +1356,67 @@ enum HubVignettes {
         let frame = Entity()
         root.addChild(frame)
 
-        let span: Float = 0.115
-        let beamY: Float = 0.052
-        if let gantry = prop("PendulumGantry", longest: span) {
-            gantry.position.y = beamY - span * 0.16
-            frame.addChild(gantry)
+        // The precision stand from `Tools/moduleprops.py`: cast base,
+        // two columns, a crossbeam carrying three clevis pivots. All the
+        // numbers below are that file's, mapped through one scale — the
+        // importer normalises the longest dimension, the 0.400 beam, and
+        // centres the authored box (z -0.006...0.2652, pins at 0.2355,
+        // pivots at x 0 and ±0.124).
+        let standWidth: Float = 0.148
+        let standScale = standWidth / 0.400
+        let pivotY: Float = 0.052
+        let pivotXs: [Float] = [-0.124 * standScale, 0, 0.124 * standScale]
+        if let stand = prop("PendulumStand", longest: standWidth) {
+            let boxCentre: Float = (0.2652 - 0.006) / 2
+            stand.position.y = pivotY - (0.2355 - boxCentre) * standScale
+            frame.addChild(stand)
         } else {
             let beam = ModelEntity(
-                mesh: .generateBox(size: [span, 0.006, 0.010], cornerRadius: 0.003),
+                mesh: .generateBox(size: [standWidth, 0.006, 0.010],
+                                   cornerRadius: 0.003),
                 materials: [Materials.energized(UIColor(white: 0.62, alpha: 1),
                                                 metallic: 1, glow: 0)])
-            beam.position.y = beamY
+            beam.position.y = pivotY
             frame.addChild(beam)
         }
 
-        /// A pendulum: a taut cable and a bob, both hanging off a pivot
-        /// whose ORIENTATION is the whole state. Rotating the pivot keeps
-        /// the cable straight without ever remeshing it.
+        /// A pendulum: a taut cable and a turned-brass bob, both hanging
+        /// off a pivot whose ORIENTATION is the whole state. Rotating the
+        /// pivot keeps the cable straight without ever remeshing it.
+        ///
+        /// The bob hangs by its EYE — authored 0.02265 above its own box
+        /// centre in a 0.0537 span — so the holder is pushed down until
+        /// the eye lands on the cable's end.
         func hang(at x: Float, length: Float) -> Entity {
             let pivot = Entity()
-            pivot.position = [x, beamY - 0.004, 0]
+            pivot.position = [x, pivotY, 0]
             frame.addChild(pivot)
             if let cable = line([[0, 0, 0], [0, -length, 0]], radius: 0.0009,
                                 UIColor(white: 0.68, alpha: 1)) {
                 pivot.addChild(cable)
             }
-            let bob = ball(0.0095, DesignTokens.Palette.pendulumsAccentUI, glow: 0.15)
-            bob.position.y = -length
-            pivot.addChild(bob)
+            let bobSpan: Float = 0.0255
+            if let bob = prop("PendulumBob", longest: bobSpan) {
+                bob.position.y = -length - 0.02265 * (bobSpan / 0.0537)
+                pivot.addChild(bob)
+            } else {
+                let bob = ball(0.0095, DesignTokens.Palette.pendulumsAccentUI,
+                               glow: 0.15)
+                bob.position.y = -length
+                pivot.addChild(bob)
+            }
             return pivot
         }
 
         // Two lengths a few per cent apart: they leave together, drift
         // out of step and re-align. Real pendulum timing, so T grows as
-        // the square root of the length.
-        let planarLengths: [Float] = [0.072, 0.088]
+        // the square root of the length. The lengths are bounded by the
+        // apparatus now: the longest cable plus its bob must clear the
+        // base plate, which tops out 0.083 under the pins.
+        let planarLengths: [Float] = [0.044, 0.054]
         var planar: [(pivot: Entity, period: Double)] = []
         for (index, length) in planarLengths.enumerated() {
-            let pivot = hang(at: (Float(index) * 2 - 1) * 0.036, length: length)
+            let pivot = hang(at: pivotXs[index * 2], length: length)
             planar.append((pivot, Double(length.squareRoot()) * 6.2))
         }
 
@@ -1092,7 +1424,7 @@ enum HubVignettes {
         // true three-dimensional orbit. A spherical pendulum released off
         // axis traces an ellipse that slowly precesses, and every bob in
         // this miniature used to swing in the same flat plane instead.
-        let orbitLength: Float = 0.080
+        let orbitLength: Float = 0.049
         let orbiter = hang(at: 0, length: orbitLength)
         let orbitPeriod = Double(orbitLength.squareRoot()) * 6.2
 

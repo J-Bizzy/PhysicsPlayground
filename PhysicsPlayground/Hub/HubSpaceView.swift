@@ -60,9 +60,33 @@ struct HubSpaceView: View {
     var body: some View {
         RealityView { content, attachments in
             let modules = ModuleCatalog.all(appModel: appModel)
-            scene.build(modules: modules)
-            scene.placement = appModel.galleryPlacement
+            // Stillness FIRST: `build` ends by starting the arrival
+            // intro, and Reduce Motion's answer to it is a plain
+            // dissolve — the decision has to exist before the decider.
             scene.stillness = systemReduceMotion
+            #if DEBUG
+            // `-hubIntro <seconds>` freezes the arrival at that instant
+            // — the intro is wall-clock and gone in four seconds, which
+            // no simctl invocation can reliably catch mid-flight. Read
+            // BEFORE `build`, because `build` ends by starting the
+            // intro and `beginIntro` decides both the once-per-session
+            // skip and the chime off this value.
+            // `double(forKey:)` coerces the argument domain's string.
+            let frozenIntro = UserDefaults.standard.double(forKey: "hubIntro")
+            if frozenIntro > 0 {
+                scene.introFrozenAt = frozenIntro
+            }
+            #endif
+            // The ceremony is for ARRIVING. This scene is rebuilt on
+            // every return from a lab, and a walk back from Circuits
+            // is not an arrival — so the flight, the cascade and the
+            // bell play once per session and every later entry opens
+            // on the finished room.
+            scene.arrivalAlreadyPlayed = appModel.hasPlayedArrival
+            SoundPalette.warmUp()
+            scene.build(modules: modules)
+            appModel.hasPlayedArrival = true
+            scene.placement = appModel.galleryPlacement
             content.add(scene.root)
 
             // There is no focus PANEL any more (owner, 2026-08-04): the
@@ -337,9 +361,6 @@ final class HubScene {
         let pulser: Entity      // scale pulse on selection
         let vignette: Entity    // slowly rotating miniature
         let namePivot: Entity   // billboarded name plate
-        /// The one-line "what you actually do here", shown only while
-        /// this exhibit is the focused one — see `HubDomain.promise`.
-        let promisePivot: Entity
         let halo: Entity        // accent glow, focused only
         let basePosition: SIMD3<Float>
         /// The animation the miniature was built with — captured
@@ -359,6 +380,16 @@ final class HubScene {
         /// Set by updateFocus: whether the exhibit is near enough to the
         /// look direction to be worth animating.
         var inView: Bool = true
+        /// The focus value the opacity components were last WRITTEN at.
+        /// `-1` forces a rewrite — the idle loop used to push three
+        /// `OpacityComponent`s per exhibit per frame (eighteen a frame,
+        /// forever, mostly carrying values that had long settled), and
+        /// now writes only when focus has actually moved. The special
+        /// states (carried, gliding home, docked) park this at -1 so
+        /// their first idle frame always repaints, which is what keeps
+        /// the "stale invisible label" bug this replaced from coming
+        /// back.
+        var appliedFocus: Float = -1
     }
 
     /// True stills all idle motion — the bob, the sway, the running
@@ -372,6 +403,34 @@ final class HubScene {
     private(set) var focusedModuleID: String?
     private var exhibits: [Exhibit] = []
     private var time = 0.0
+
+    // MARK: The arrival
+
+    /// Everything that is not the wordmark, under one entity so the
+    /// intro can raise the room as a unit while the title holds the
+    /// stage. Identity transform — reparenting changes no coordinates.
+    private let stageRoot = Entity()
+    private enum IntroPhase { case pending, running, done }
+    /// Once per scene: a placement rebuild must not replay the theatre.
+    private var introPhase: IntroPhase = .pending
+    private var introStart = 0.0
+    /// `-hubIntro <seconds>` pins the intro clock here — the arrival is
+    /// wall-clock and over in under four seconds, which no `simctl`
+    /// invocation can reliably catch mid-flight. Frozen, it never
+    /// finishes; that is the point of a photograph.
+    var introFrozenAt: Double?
+    /// True when this SESSION has already seen the ceremony — set from
+    /// `AppModel` before `build`, because the scene itself is remade
+    /// on every hub entry and cannot remember across its own lifetime.
+    /// A frozen screenshot intro overrides it: `-hubIntro` exists to
+    /// photograph the flight, and a skip would photograph its absence.
+    var arrivalAlreadyPlayed = false
+
+    /// The intro's clock: frozen for screenshots, infinite (= finished)
+    /// under stillness, live otherwise.
+    private var introTime: Double {
+        stillness ? .infinity : (introFrozenAt ?? (time - introStart))
+    }
     /// The 3-D bubble title the exhibits ring, bobbing at the centre.
     private let titleAnchor = Entity()
 
@@ -495,6 +554,114 @@ final class HubScene {
                 buildExhibit(for: module,
                              at: terrace.exhibitPositions[index])
             }
+        }
+
+        // THE STAGE: the furniture — terraces, podium, rail — under one
+        // entity so the arrival can raise it as a unit (`HubIntro`).
+        // The exhibits and the door signs deliberately STAY top-level:
+        // they cascade on their own components, and the tap chain and
+        // `GalleryDoorTests` both resolve exhibits as direct children
+        // of the root — a contract worth keeping over a tidier tree.
+        // Reparenting after the build touches no coordinates (the stage
+        // sits at identity) and no stored reference.
+        stageRoot.children.removeAll()
+        let independents = Set(
+            [ObjectIdentifier(titleAnchor), ObjectIdentifier(stageRoot)]
+            + exhibits.map { ObjectIdentifier($0.anchor) }
+            + domainTitles.values.map { ObjectIdentifier($0.root) })
+        for child in Array(root.children)
+        where !independents.contains(ObjectIdentifier(child)) {
+            stageRoot.addChild(child)
+        }
+        root.addChild(stageRoot)
+        beginIntro()
+    }
+
+    /// Starts the arrival — once per scene, and never under Reduce
+    /// Motion, whose entrance is the root dissolve `fadeIn` already
+    /// provides: no flying title, no wave.
+    private func beginIntro() {
+        guard introPhase == .pending else { return }
+        guard !stillness else { introPhase = .done; return }
+        if arrivalAlreadyPlayed && introFrozenAt == nil {
+            introPhase = .done
+            return
+        }
+        introPhase = .running
+        introStart = time
+        // Hidden before the first frame draws, so nothing pops in
+        // ahead of its cue.
+        titleAnchor.components.set(OpacityComponent(opacity: 0))
+        stageRoot.components.set(OpacityComponent(opacity: 0))
+        for exhibit in exhibits {
+            exhibit.anchor.components.set(OpacityComponent(opacity: 0))
+        }
+        for title in domainTitles.values {
+            title.root.components.set(OpacityComponent(opacity: 0))
+        }
+        // The room's clock, made audible: the swell under the beat and
+        // the bell at the landing are baked into one file whose timing
+        // HubIntroTests pins to this choreography. Played from the
+        // title, so the sound stands where the eye is — and not at all
+        // for a frozen screenshot intro, where the visuals hold still
+        // and a real-time WAV playing under them belongs to nothing.
+        if introFrozenAt == nil {
+            SoundPalette.play(.calibration, on: titleAnchor, volume: 0.55)
+        }
+    }
+
+    /// Drives every intro curve, then removes its components and goes
+    /// quiet — the per-frame path stops touching what stopped changing.
+    private func updateIntro() {
+        guard introPhase == .running else { return }
+        // Reduce Motion arriving mid-flight parks everything at rest.
+        // A FROZEN intro never finishes — that is the point of a
+        // photograph. Without this exemption, `-hubIntro` past the
+        // landing (~2.6 s) fell through `isFinished` and shot the
+        // completed room instead of the held pose the argument
+        // promised. Stillness still wins: its answer to the intro is
+        // the plain dissolve, frozen or not.
+        let t = introTime
+        if introFrozenAt == nil || stillness,
+           HubIntro.isFinished(at: t, exhibitCount: exhibits.count) {
+            introPhase = .done
+            titleAnchor.components.remove(OpacityComponent.self)
+            stageRoot.components.remove(OpacityComponent.self)
+            for exhibit in exhibits {
+                exhibit.anchor.components.remove(OpacityComponent.self)
+                exhibit.anchor.scale = .one
+            }
+            for title in domainTitles.values {
+                title.root.components.remove(OpacityComponent.self)
+            }
+            return
+        }
+        titleAnchor.components.set(
+            OpacityComponent(opacity: HubIntro.titleOpacity(at: t)))
+        stageRoot.components.set(
+            OpacityComponent(opacity: HubIntro.stageOpacity(at: t)))
+        for (index, exhibit) in exhibits.enumerated() {
+            // The idle loop's own exemption, mirrored: a lab the hand
+            // has docked or is carrying belongs to that interaction.
+            // Without this, a lab tapped mid-intro was forced back to
+            // arrival opacity every frame and landed on the pad
+            // invisible, popping in only when the ceremony ended. The
+            // scale write is the handover — nothing else restores it
+            // once this loop stops owning the exhibit.
+            if exhibit.moduleID == dockedModuleID
+                || exhibit.moduleID == draggingID {
+                exhibit.anchor.components.remove(OpacityComponent.self)
+                exhibit.anchor.scale = .one
+                continue
+            }
+            exhibit.anchor.components.set(OpacityComponent(
+                opacity: HubIntro.exhibitOpacity(slot: index, at: t)))
+            exhibit.anchor.scale = SIMD3(
+                repeating: HubIntro.exhibitScale(slot: index, at: t))
+        }
+        for title in domainTitles.values {
+            title.root.components.set(
+                OpacityComponent(opacity: HubIntro.signOpacity(at: t)))
         }
     }
 
@@ -1174,17 +1341,21 @@ final class HubScene {
         let lines = ["Physics", "Playground"]
         // Build at a reference size, then scale each to the common width.
         //
-        // MEASURED FROM WHAT IS BUILT. This used to build with `line`
-        // and measure with `extents` — two calls that agreed only
-        // because both wrapped the same single text mesh. The keylined
-        // builder lays the line out glyph by glyph and swells a shell
-        // around each one, so its real extents are its own business;
-        // asking `extents` would measure a narrower object than the one
-        // standing in the room, and the flush-width lockup would set
-        // both lines to the wrong scale.
+        // MEASURED FROM WHAT IS BUILT, which both builders below
+        // guarantee by returning their own extents. It matters most for
+        // the milled line, whose numbers come out of an asset rather
+        // than out of the font: ask `extents` instead and the lockup
+        // scales a line by a width nothing in the room actually has.
         let reference: CGFloat = 0.17
+        // MILLED IF THE ASSET IS THERE, generated if it is not. Both
+        // return the same (entity, extents) pair and both come back
+        // centred on their own origin, so everything below this line is
+        // indifferent to which one answered — which is the point. The
+        // generated builder is not a stub: it is what shipped, it is
+        // what the tests drive, and it stays correct.
         let built = lines.map { text in
-            HubTitleStyle.keylined(text, size: reference, accent: nil)
+            HubTitleStyle.milled(text, size: reference, accent: nil)
+                ?? HubTitleStyle.generated(text, size: reference, accent: nil)
         }
         let scales = built.map { Self.titleWidth / max($0.extents.x, 1e-4) }
         // Cap heights AFTER scaling — a wider scale makes taller letters.
@@ -1209,6 +1380,11 @@ final class HubScene {
             titleAnchor.addChild(item.entity)
             cursor -= height + gap
         }
+        // Kept for the rake. The LINES turn, not the anchor: the utility
+        // bar is parented to `titleAnchor` (see `seatTitleBar`), and
+        // swinging a row of buttons through a degree and a half would
+        // make them harder to hit for the sake of a highlight.
+        titleLines = built.map(\.entity)
 
         // THE BACKING PLATE STOOD HERE FOR ONE DAY, and what replaced it
         // is the same idea with the rectangle taken out.
@@ -1228,11 +1404,19 @@ final class HubScene {
         // owner cut it the next day: the contrast was wanted, a black
         // panel hanging in the room was not.
         //
-        // The casing is now PART OF THE LETTERS — a dark shell swelled
-        // around each glyph inside `HubTitleStyle.keylined`, which is
-        // why nothing is added here. Same contrast, at the only place
-        // the eye actually needs it, and no edge in the room that is not
-        // a letterform.
+        // The casing then became PART OF THE LETTERS — a dark shell
+        // swelled around each glyph — and on 2026-08-11 the owner cut
+        // that too. Three answers to one question in four days: a plate,
+        // an outline, nothing.
+        //
+        // Nothing is the right one now, and it was not before, because
+        // the letters changed underneath the question. The mark is
+        // milled (`Tools/hubtitles.py`), so every stroke carries a
+        // chamfer, and a chamfer holds a bright rim against a wall of
+        // any brightness — which is the job the plate and the outline
+        // were both hired to do. The contrast is still wanted. It is
+        // just in the letterform now, where it costs nothing and reads
+        // from every angle.
 
         // A thin champagne rule under the lockup — the jeweller's line
         // that makes the mark read as set type rather than floating
@@ -1258,6 +1442,9 @@ final class HubScene {
     }
 
     // MARK: Attachment seats — SwiftUI riding the scene
+
+    /// The wordmark's two lines, held so the rake can turn them.
+    private var titleLines: [Entity] = []
 
     /// Local position under the wordmark for the utility bar.
     private var titleBarSeat = SIMD3<Float>(0, -0.35, 0.01)
@@ -1398,58 +1585,38 @@ final class HubScene {
         pulser.addChild(vignette)
 
         // The floating name, always facing the user — the same 3-D
-        // bubble type as the title, tinted in the module's accent. It
-        // hangs just in front of the puck's edge, below the miniature,
-        // so it captions the pedestal rather than the physics.
+        // bubble type as the title, tinted in the module's accent.
+        // UNBACKED (owner, 2026-08-14): the dark card behind each name
+        // blocked the view through the gallery — a row of floating
+        // smudges in the one place the eye sweeps across. The bubble
+        // type carries its own emissive floor.
+        // AND A HEADER, NOT A CAPTION (owner, same day, next breath):
+        // it hung at the miniature's foot, in front of the pedestal,
+        // which put it exactly in the sightline that sweeps the shelf.
+        // Above the model the only thing behind it is the wearer's own
+        // wall. The y clears the tallest normalized miniature
+        // (`exhibitSize / 2` = 0.12) plus the type's cap height; the
+        // small z keeps the billboarded text from shearing into a tall
+        // model's crown when seen from above.
         let name = Self.namePlate(module.title, accent: UIColor(module.accent),
-                                  size: PlateStyle.exhibitLabelSize)
+                                  size: PlateStyle.exhibitLabelSize,
+                                  backed: false)
         let namePivot = Entity()
-        namePivot.position = [0, -0.105, 0.11]
+        namePivot.position = [0, 0.165, 0.06]
         namePivot.components.set(BillboardComponent())
         namePivot.addChild(name)
         pulser.addChild(namePivot)
 
-        // WHAT YOU ACTUALLY DO HERE, under the name.
-        //
-        // `HubDomain.promise` is six hand-written lines that had ZERO
-        // readers — written for the focus panel, orphaned when the panel
-        // was deleted on 2026-08-04, and never rehomed. Without them the
-        // gallery is six unexplained objects: a visitor can see that one
-        // of them is a solar system, but not that they can grow it, walk
-        // into it, and hear its orbits as a chord.
-        //
-        // GATED ON FOCUS, which is what makes it affordable. Six
-        // permanent sentences would be six more things standing in a
-        // room this project is already trying to quieten; one sentence
-        // under the one exhibit you are facing is a caption.
-        let promise = HubDomain.promise(for: module.id)
-        let promisePivot = Entity()
-        if !promise.isEmpty {
-            // Narrower than the puck pitch, so a caption can only ever
-            // belong to the exhibit it is under.
-            let line = Self.namePlate(promise,
-                                      accent: UIColor(white: 0.88, alpha: 1),
-                                      size: Self.promiseSize,
-                                      wrapWidth: Self.promiseWrapWidth)
-            // Tucked close under the name. THIS STACK IS THE THING TO
-            // LOOK AT IN THE SCREENSHOT: miniature, name (y −0.105),
-            // promise (−0.142), and the ENTER plaque standing forward
-            // on the terrace (−0.160, z 0.165). All three billboard, so
-            // they are separated in depth as well as height and the
-            // arithmetic alone cannot say whether they read as one tidy
-            // caption or as three things piled up. Placement is what
-            // this project has got wrong three times with the numbers
-            // looking fine.
-            // Left at its own depth. Moving it into the plaque's
-            // plane — so the vertical arithmetic would be valid under
-            // billboarding — is the right idea and is NOT what shipped;
-            // see the plaque comment below.
-            promisePivot.position = [0, Self.promiseTop, 0.11]
-            promisePivot.components.set(BillboardComponent())
-            promisePivot.components.set(OpacityComponent(opacity: 0))
-            promisePivot.addChild(line)
-            pulser.addChild(promisePivot)
-        }
+        // THE PROMISE CAPTION IS GONE (owner, 2026-08-14). The one-line
+        // "what you actually do here" faded in under a focused exhibit
+        // from 2026-08-04 until today, and the owner asked for it off:
+        // the gaze answer is already the lift, the growth and the halo,
+        // and a sentence appearing under whatever you look at reads as
+        // a tooltip in a room that has none. The TEXT survives where it
+        // still works — the flat catalog's rows and every exhibit's
+        // VoiceOver label both keep speaking it; what is gone is the
+        // floating box. Git history holds the caption stack, including
+        // the billboard-depth lesson its comments carried.
 
         // MEASURED FROM THE MINIATURE, and from nothing else.
         //
@@ -1515,15 +1682,15 @@ final class HubScene {
         // What replaces it is `sendToPad`: the tap that used to be
         // "wrong object, nothing happens" now flies the lab to the pad,
         // so the door needs no furniture on the terrace at all. The
-        // caption stack is two billboarded objects now instead of three,
+        // caption stack is ONE billboarded object now — the name alone,
+        // since the promise caption came off on 2026-08-14 —
         // which is also the end of the y-arithmetic-between-different-
         // depths trap that this file warned about twice and fell into
         // anyway.
 
         exhibits.append(Exhibit(
             moduleID: module.id, anchor: anchor, pulser: pulser,
-            vignette: vignette, namePivot: namePivot,
-            promisePivot: promisePivot, halo: glow,
+            vignette: vignette, namePivot: namePivot, halo: glow,
             basePosition: basePosition, animate: built.animate))
     }
 
@@ -1554,16 +1721,6 @@ final class HubScene {
     /// and every label longer than 14 mm straddled the switch it named.
     /// One formula, two callers — a second copy of the padding arithmetic
     /// would drift the moment either changed.
-    /// Where the promise caption's CENTRE sits under the exhibit name.
-    static let promiseTop: Float = -0.142
-
-    /// The caption's type size, and the width it wraps at — narrower than
-    /// the puck pitch, so a caption can only belong to one exhibit.
-    static let promiseSize: CGFloat = 0.016
-    static var promiseWrapWidth: CGFloat {
-        CGFloat(GalleryLayout.basePuckPitch * 0.84)
-    }
-
     static func namePlateWidth(_ text: String, size: CGFloat = 0.036) -> Float {
         textExtents(text, size: size).x + Float(size) * 0.72 * 2
     }
@@ -1595,7 +1752,8 @@ final class HubScene {
     /// with the numbers looking fine.
     static func namePlate(_ text: String, accent: UIColor,
                           size: CGFloat = 0.036,
-                          wrapWidth: CGFloat = 0) -> Entity {
+                          wrapWidth: CGFloat = 0,
+                          backed: Bool = true) -> Entity {
         let plate = Entity()
 
         let extents = wrapWidth > 0
@@ -1611,18 +1769,25 @@ final class HubScene {
             : namePlateWidth(text, size: size)
         let height = extents.y + padY * 2
 
-        var backing = UnlitMaterial(color: UIColor(white: 0.02, alpha: 1))
-        backing.blending = .transparent(opacity: 0.58)
-        // Same lesson as `BackedLabel.backing`: `height / 2` is a pill
-        // for one line and a lozenge for several, and a lozenge's curved
-        // ends eat the first and last words of every line.
-        let card = ModelEntity(
-            mesh: .generatePlane(width: width, height: height,
-                                 cornerRadius: min(height / 2,
-                                                   Float(size) * 1.2)),
-            materials: [backing])
-        card.position.z = -0.006
-        plate.addChild(card)
+        // `backed: false` is the exhibit titles' setting (owner,
+        // 2026-08-14: the card behind each gallery name read as a smear
+        // that blocked the room). The card stays right for the small
+        // apparatus labels, which sit ON instruments rather than
+        // floating in the space the eye looks through.
+        if backed {
+            var backing = UnlitMaterial(color: UIColor(white: 0.02, alpha: 1))
+            backing.blending = .transparent(opacity: 0.58)
+            // Same lesson as `BackedLabel.backing`: `height / 2` is a pill
+            // for one line and a lozenge for several, and a lozenge's curved
+            // ends eat the first and last words of every line.
+            let card = ModelEntity(
+                mesh: .generatePlane(width: width, height: height,
+                                     cornerRadius: min(height / 2,
+                                                       Float(size) * 1.2)),
+                materials: [backing])
+            card.position.z = -0.006
+            plate.addChild(card)
+        }
 
         if wrapWidth > 0 {
             // Wrapped runs use a flat mesh: the bubble builder extrudes
@@ -1719,6 +1884,7 @@ final class HubScene {
             root.orientation = simd_quatf(angle: placement.yaw, axis: [0, 1, 0])
         }
         fadeIn(dt: dt)
+        updateIntro()
         updateFocus(lookRay: lookRay, dt: dt)
 
         for index in exhibits.indices {
@@ -1729,9 +1895,15 @@ final class HubScene {
             // the podium owns its own position — the idle life must
             // not fight the carry, stomp the glide, or yank it off
             // the pedestal.
-            if exhibit.moduleID == draggingID { continue }
+            if exhibit.moduleID == draggingID {
+                exhibits[index].appliedFocus = -1
+                continue
+            }
             if let until = returningIDs[exhibit.moduleID] {
-                if time < until { continue }
+                if time < until {
+                    exhibits[index].appliedFocus = -1
+                    continue
+                }
                 returningIDs[exhibit.moduleID] = nil
             }
             if exhibit.moduleID == dockedModuleID {
@@ -1745,9 +1917,14 @@ final class HubScene {
                 // Standing centre stage, it says its own name — without
                 // this the label keeps whatever opacity it happened to
                 // have when it was carried off the arc, which for an
-                // unfocused exhibit is invisible.
-                exhibit.namePivot.components.set(OpacityComponent(opacity: 1))
-                exhibit.halo.components.set(OpacityComponent(opacity: focus))
+                // unfocused exhibit is invisible. Written when focus
+                // moves (or on the first frame after a carry, which
+                // parks appliedFocus at -1), not on every frame.
+                if abs(focus - exhibits[index].appliedFocus) > 0.0005 {
+                    exhibits[index].appliedFocus = focus
+                    exhibit.namePivot.components.set(OpacityComponent(opacity: 1))
+                    exhibit.halo.components.set(OpacityComponent(opacity: focus))
+                }
                 exhibits[index].animTime += dt
                 exhibit.animate(exhibits[index].animTime)
                 continue
@@ -1770,19 +1947,21 @@ final class HubScene {
             let scale = resting + (Self.focusedScale - resting) * focus
             exhibit.pulser.scale = SIMD3(repeating: scale)
 
-            exhibit.halo.components.set(OpacityComponent(opacity: focus))
-            // The promise, on the other hand, IS focus-gated — see where
-            // it is built. It trails the halo slightly so the sentence
-            // arrives after the exhibit has clearly been chosen, rather
-            // than flickering at every glance across the crescent.
-            exhibit.promisePivot.components.set(
-                OpacityComponent(opacity: max(focus * 1.4 - 0.4, 0)))
-            // Every name stays legible ALL the time (owner, 2026-08-04,
-            // reversing the materialise-on-gaze fade): a gallery whose
-            // captions vanish until you stare at them cannot be read at
-            // a glance, and the focus answer is already carried by the
-            // lift, the growth and the halo.
-            exhibit.namePivot.components.set(OpacityComponent(opacity: 1))
+            // Opacity follows focus, but is WRITTEN only when focus has
+            // actually moved: once the ease settles, rewriting the same
+            // three components per exhibit per frame is pure churn —
+            // eighteen component sets a frame across the gallery,
+            // forever, carrying values that had stopped changing.
+            if abs(focus - exhibits[index].appliedFocus) > 0.0005 {
+                exhibits[index].appliedFocus = focus
+                exhibit.halo.components.set(OpacityComponent(opacity: focus))
+                // Every name stays legible ALL the time (owner,
+                // 2026-08-04, reversing the materialise-on-gaze fade): a
+                // gallery whose captions vanish until you stare at them
+                // cannot be read at a glance, and the focus answer is
+                // already carried by the lift, the growth and the halo.
+                exhibit.namePivot.components.set(OpacityComponent(opacity: 1))
+            }
 
             if stillness { continue }
 
@@ -1803,11 +1982,27 @@ final class HubScene {
                 exhibit.animate(exhibits[index].animTime)
             }
         }
-        // The title floats and breathes, like a balloon on a string.
+        // The title floats and breathes, like a balloon on a string —
+        // and during the arrival it rides `HubIntro`'s flight from its
+        // centred opening pose back to this anchor, a shade oversized
+        // so landing reads as settling into place.
         let bob = stillness ? 0 : 0.02 * Float(sin(time * 0.6))
-        titleAnchor.position = titlePosition + SIMD3(0, bob, 0)
+        let blend = introPhase == .running
+            ? HubIntro.titleBlend(at: introTime) : 1
+        let rest = titlePosition + SIMD3(0, bob, 0)
+        titleAnchor.position = rest + (HubIntro.titlePose - rest) * (1 - blend)
         let titleBreathe = stillness ? 1 : 1 + 0.015 * Float(sin(time * 0.9))
-        titleAnchor.scale = SIMD3(repeating: titleBreathe)
+        let introSwell = 1 + (HubIntro.titlePoseScale - 1) * (1 - blend)
+        titleAnchor.scale = SIMD3(repeating: titleBreathe * introSwell)
+
+        // Each line rakes on its own phase, so the wordmark reads as two
+        // milled plates catching the light rather than one board turning.
+        // Under stillness they PARK square to the reader, which is where
+        // the mark looks composed — not frozen mid-turn.
+        for (index, line) in titleLines.enumerated() {
+            line.orientation = stillness ? simd_quatf(angle: 0, axis: [0, 1, 0])
+                : HubTitleStyle.rake(time: time, phase: Double(index) * 1.3)
+        }
 
         // The hairlines shimmer slowly, each on its own phase — the
         // terraces are lit, not painted.

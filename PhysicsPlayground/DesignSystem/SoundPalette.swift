@@ -40,7 +40,18 @@ enum SoundPalette {
         /// set-down, and closes a control ring (open keeps its pop, so
         /// the pair reads as unfold/fold rather than two unfolds).
         case grabTick, releaseTick
+        /// The home's arrival (2026-08-14): a warm swell under the
+        /// centred wordmark that resolves into a soft bell exactly as
+        /// the mark lands on the wall, then dies away with the cascade.
+        /// Its bell time and `HubIntro.landingTime` are pinned to each
+        /// other in `HubIntroTests` — the sound is the choreography's
+        /// clock made audible, and the two must not drift.
+        case calibration
     }
+
+    /// When `calibration`'s bell strikes, seconds into the file — the
+    /// moment the wordmark lands. See `HubIntro.landingTime`.
+    nonisolated static let calibrationLanding = 2.65
 
     private static var resources: [Sound: AudioFileResource] = [:]
     private static var warmed = false
@@ -335,6 +346,29 @@ enum SoundPalette {
                 let noise = Double.random(in: -1...1)
                 lowPassed += 0.05 * (noise - lowPassed)
                 return (sin(2 * .pi * 55 * t) + 1.6 * lowPassed) * exp(-t * 7)
+            }
+        case .calibration:
+            // The arrival. A warm low fifth (A2 + E3, with an octave
+            // shade) swelling in over the beat, a soft A4/E5 bell at
+            // the landing, a shared tail out under the cascade. The
+            // pad's slow square-law swell is what makes it read as an
+            // instrument warming rather than a note starting.
+            let landing = calibrationLanding
+            return render(duration: 3.4) { t, _ in
+                let swell = min(t / 2.0, 1)
+                let pad = (sin(2 * .pi * 110 * t)
+                           + 0.7 * sin(2 * .pi * 165.05 * t)
+                           + 0.35 * sin(2 * .pi * 220.3 * t))
+                    * 0.2 * swell * swell * exp(-max(t - landing, 0) * 2.2)
+                var bell = 0.0
+                if t > landing {
+                    let struck = t - landing
+                    bell = (0.5 * sin(2 * .pi * 440 * struck)
+                            + 0.3 * sin(2 * .pi * 659.26 * struck)
+                            + 0.15 * sin(2 * .pi * 880 * struck))
+                        * exp(-struck * 4.5) * 0.8
+                }
+                return pad + bell
             }
         case .grabTick:
             // A short bright pluck: 1200 → 900 Hz over 40 ms, gone

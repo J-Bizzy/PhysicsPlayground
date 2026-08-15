@@ -50,6 +50,8 @@ final class HubDomainTitle {
     /// The rule under the lockup — shimmerable, like the hairline
     /// below it on the slab.
     private let rule: ModelEntity
+    /// The two lines, held so the rake can turn them.
+    private var lines: [Entity] = []
 
     /// The signage face, built at this size and scaled per line.
     private static let reference: CGFloat = 0.12
@@ -78,30 +80,35 @@ final class HubDomainTitle {
         // The wordmark's lockup math: measure both lines, scale each to
         // the common width, stack with cap-height leading, centre the
         // block on the anchor.
-        // KEYLINED, LIKE THE WORDMARK — 2026-08-10.
+        // KEYLINED FROM 2026-08-10 TO 2026-08-11, AND NO LONGER.
         //
         // These two signs were the last display type in the app drawn as
-        // bare machined metal, and they had exactly the failure the
-        // wordmark spent 2026-08-08 and -09 solving one storey above
-        // them: metal is mostly REFLECTED light, the gallery is drawn
-        // over whatever room the wearer is standing in, and light-on-
-        // light has no edge. A photograph makes it plain — the floor
-        // lamp's pole reads straight through the I and the S of
-        // MAGNETISM, and MECHANICS & ENERGY dissolves into a bookshelf.
+        // bare machined metal, and they had a real failure: metal is
+        // mostly REFLECTED light, the gallery is drawn over whatever
+        // room the wearer is standing in, and light-on-light has no
+        // edge. A photograph made it plain — the floor lamp's pole read
+        // straight through the I and the S of MAGNETISM, and MECHANICS &
+        // ENERGY dissolved into a bookshelf. A dark shell round every
+        // glyph fixed it, and the owner removed it the next day.
         //
-        // The wordmark's own note already says what this is: CASINGS
-        // BEAT GLOWS, and the casing has to follow the letterforms
-        // rather than sit behind them as a plate. `keylined` is that,
-        // per glyph, and it takes an accent — so the two signs can wear
-        // their domain colour and still have something dark to be
-        // coloured against.
+        // What makes that removal survivable is that the signs are
+        // MILLED now. The shell was compensating for a letterform with a
+        // square edge, which is all `generateText` can extrude; a
+        // chamfered edge carries its own bright rim all the way round
+        // every stroke, at every angle, so the silhouette is in the
+        // letter rather than behind it. Put the generated type back and
+        // the bookshelf wins again — which is what `generated` below is,
+        // and why it is a fallback and not an equal.
         //
-        // It also returns the extents it ACTUALLY BUILT, which is why
-        // the measurement moves here with it: the shell swells each
-        // stroke, so a lockup scaled to `line`'s extents would set these
-        // two lines slightly too wide.
+        // MILLED IF THE ASSET IS THERE — see `HubTitleStyle.milled`.
+        // The signs take the accent either way: only the geometry came
+        // out of Blender, so a door still speaks in its domain's colour
+        // and `DesignTokens.Palette` is still the one place that decides
+        // what that colour is.
         let built = texts.map { text -> (entity: Entity, extents: SIMD3<Float>) in
-            HubTitleStyle.keylined(text, size: Self.reference, accent: accent)
+            HubTitleStyle.milled(text, size: Self.reference, accent: accent)
+                ?? HubTitleStyle.generated(text, size: Self.reference,
+                                           accent: accent)
         }
         let scales = built.map { width / max($0.extents.x, 1e-4) }
         let heights = zip(built, scales).map { $0.0.extents.y * $0.1 }
@@ -121,6 +128,7 @@ final class HubDomainTitle {
             root.addChild(item.entity)
             cursor -= heights[index] + gap
         }
+        lines = built.map(\.entity)
 
         // The rule, in the domain accent — the same lit line as the
         // slab hairline below it, so sign and shelf read as one lamp.
@@ -141,11 +149,20 @@ final class HubDomainTitle {
 
     // MARK: Per-frame
 
-    /// Drive the sign — which is now just the rule's slow shimmer, on
-    /// the same clock as the slab hairlines, so lamp and lamp agree.
-    /// `stillness` (reduce-motion, or the room asleep) parks it at its
-    /// composed rest opacity.
+    /// Drive the sign: the rule's slow shimmer, on the same clock as the
+    /// slab hairlines so lamp and lamp agree, and the type's rake.
+    /// `stillness` (reduce-motion, or the room asleep) parks both at
+    /// their composed rest — square to the reader, at rest opacity.
     func animate(time: Double, stillness: Bool) {
+        // The type turns a degree and a half so the chamfer walks its
+        // highlight along every stroke — see `HubTitleStyle.rake`. This
+        // is the door sign's only motion now that the kinetic bodies are
+        // gone, and it is a different KIND of motion: those animated a
+        // prop beside the words, this animates the words.
+        for (index, line) in lines.enumerated() {
+            line.orientation = stillness ? simd_quatf(angle: 0, axis: [0, 1, 0])
+                : HubTitleStyle.rake(time: time, phase: Double(index) * 1.3)
+        }
         guard !stillness else {
             rule.components.set(OpacityComponent(opacity: 0.7))
             return

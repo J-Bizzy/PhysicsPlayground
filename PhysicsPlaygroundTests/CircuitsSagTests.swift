@@ -120,6 +120,62 @@ final class CircuitsSagTests: XCTestCase {
         _ = battery
     }
 
+    /// A DEAD-VERTICAL WIRE CONTRIBUTES ITS CHORD, not chord + slack.
+    /// `Catenary.path` draws a near-vertical span as a straight drop
+    /// (horizontal run under a fifth of the chord), so the electron
+    /// walks the chord — and the path the readout divides by must be
+    /// the path the electron actually walks.
+    func testAVerticalWireContributesItsChordExactly() {
+        let model = CircuitsModel()
+        model.clearBench()
+        let battery = model.add(.battery, at: CircuitsModel.buildCenter)!
+        // Offset by twice the terminal reach in x so the bulb's LEFT
+        // terminal sits exactly above the battery's RIGHT one: the
+        // wire between them is dead vertical.
+        let bulb = model.add(.bulb, at: CircuitsModel.buildCenter
+                                + SIMD3(2 * CircuitsModel.terminalOffset, 0.5, 0))!
+        model.connectTerminals(.init(componentID: battery, end: 1),
+                               .init(componentID: bulb, end: 0))
+        model.connectTerminals(.init(componentID: bulb, end: 1),
+                               .init(componentID: battery, end: 0))
+        model.step(dt: 1.0 / 90.0)
+
+        var expected = 0.0
+        for wire in model.wires {
+            let a = model.components.first { $0.id == wire.from.componentID }!
+                .terminalPosition(wire.from.end)
+            let b = model.components.first { $0.id == wire.to.componentID }!
+                .terminalPosition(wire.to.end)
+            let span = simd_distance(a, b)
+            let delta = b - a
+            let horizontal = simd_length(SIMD2(delta.x, delta.z))
+            if horizontal > 0.2 * span {
+                expected += span + CircuitsModel.slack(span: span)
+            } else {
+                // The vertical drop: chord only. This is the branch
+                // under test — one of the two wires must land here.
+                XCTAssertLessThan(horizontal, 1e-9,
+                                  "the staged wire should be dead vertical")
+                expected += span
+            }
+        }
+        XCTAssertEqual(model.conductingPathLength, expected, accuracy: 1e-12)
+        // The old policy — slack on every span — measurably overshoots.
+        let slackOnEverything = model.wires.reduce(0.0) { sum, wire in
+            let a = model.components.first { $0.id == wire.from.componentID }!
+                .terminalPosition(wire.from.end)
+            let b = model.components.first { $0.id == wire.to.componentID }!
+                .terminalPosition(wire.to.end)
+            let span = simd_distance(a, b)
+            return sum + span + CircuitsModel.slack(span: span)
+        }
+        XCTAssertLessThan(model.conductingPathLength, slackOnEverything - 1e-3,
+                          "a vertical drop must not be credited with slack")
+        // And the vertical wire genuinely spans something, so this is
+        // not the snapped-joint case in disguise.
+        XCTAssertGreaterThan(expected, 0.5)
+    }
+
     /// The true-speed claim survives: whatever the path length, the
     /// RATIO between the field and the drift is thirteen-odd orders of
     /// magnitude, because both are computed over the same path.

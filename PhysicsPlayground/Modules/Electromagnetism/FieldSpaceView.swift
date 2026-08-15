@@ -281,9 +281,26 @@ struct FieldSpaceView: View {
                       // `isAvailable` every frame rather than at build
                       // time, which is the whole reason it takes a
                       // closure instead of a Bool.
-                      isAvailable: { !model.charges.isEmpty },
+                      //
+                      // Available while ANYTHING placed is in the room —
+                      // the probe counts. It read `!charges.isEmpty` and
+                      // fired `removeAllCharges` for months, so a probe
+                      // both survived every clear and, alone in the
+                      // room, couldn't even arm the plate that should
+                      // have removed it.
+                      isAvailable: { !model.charges.isEmpty || model.probe != nil },
                       confirms: true,
-                      fire: { model.removeAllCharges() }),
+                      fire: { model.clearEverything() }),
+                // The CRT demo: fire the test charge crosswise through
+                // the gap and watch the parabola. Lives with the verbs
+                // because it PLACES the probe — it is a launch, not a
+                // display layer — but it does not confirm: re-firing is
+                // the point, and nothing is destroyed but the previous
+                // flight.
+                .init(id: "deflect", label: "Deflect shot",
+                      symbol: "arrow.turn.down.right",
+                      isAvailable: { model.capacitorOn },
+                      fire: { model.launchProbeThroughGap() }),
             ])
         renderer.root.addChild(verbs.root)
         self.verbs = verbs
@@ -581,6 +598,12 @@ struct FieldSpaceView: View {
     private func beginDrag(entity: Entity, hand: SIMD3<Double>) -> RelativeDrag? {
         let names = Self.ancestorNames(of: entity)
         for name in names {
+            if name == "dielectric-slab" {
+                return RelativeDrag(
+                    name: name,
+                    target: model.dielectricSlabCenter,
+                    hand: hand)
+            }
             if name == "plate-0" || name == "plate-1" {
                 let index = name == "plate-0" ? 0 : 1
                 let offset = (index == 0 ? -1.0 : 1.0) * model.plateSeparation / 2
@@ -607,7 +630,9 @@ struct FieldSpaceView: View {
 
     private func apply(drag: RelativeDrag, hand: SIMD3<Double>) {
         let position = drag.position(forHand: hand)
-        if drag.name == "plate-0" || drag.name == "plate-1" {
+        if drag.name == "dielectric-slab" {
+            model.moveDielectric(toWorld: position)
+        } else if drag.name == "plate-0" || drag.name == "plate-1" {
             model.movePlate(drag.name == "plate-0" ? 0 : 1, toWorld: position)
         } else if drag.name == FieldRenderer.probeEntityName {
             model.holdProbe(at: position)
@@ -652,6 +677,26 @@ struct FieldSpaceView: View {
         // safety argument for putting a destructive verb in the room.
         if defaults.bool(forKey: "emClear") {
             verbs?.arm("clear", holds: true)
+        }
+
+        // `-emDielectric 0.5` slides the slab half in — the value arg
+        // matters more than an on/off: a slab parked at zero coverage
+        // photographs identically to no slab feature at all, and the
+        // charge crowding it causes only exists at partial insertion.
+        // `double(forKey:)` coerces the STRING the launch-argument
+        // domain stores, exactly as `-viewScale` below already
+        // documents — an `object as? NSNumber` cast fails silently, and
+        // did, with C reading the bare 11.2 pF in the first screenshot.
+        // Zero-if-absent is the parked default, so no presence check.
+        let coverage = defaults.double(forKey: "emDielectric")
+        if coverage > 0 {
+            model.dielectricCoverage = min(coverage, 1)
+        }
+        // `-emLaunch 1` fires the deflection shot at launch, because a
+        // parabola is a MOTION and the simulator cannot pinch the verb;
+        // with `-startPaused` and `-pauseAfter` it freezes mid-bend.
+        if defaults.bool(forKey: "emLaunch") {
+            model.launchProbeThroughGap()
         }
 
         // `-viewScale 2.5` bakes a committed scale in at launch so the

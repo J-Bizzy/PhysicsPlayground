@@ -140,6 +140,11 @@ final class MagnetismRenderer {
     private let handCompass = Entity()
     private var handCompassNeedle: Entity?
     private var handCompassCallout: Callout?
+    /// The reading last pushed to the callout, at the one decimal it
+    /// displays. `Callout.setText` already dedupes the MESH, but the
+    /// format call was building the string ninety times a second for a
+    /// value that mostly reads the same — NaN so the first frame writes.
+    private var lastCompassReading: Double = .nan
 
     private func buildHandCompass() {
         handCompass.name = Self.handCompassName
@@ -283,7 +288,14 @@ final class MagnetismRenderer {
             // is the antiparallel case.
             handCompassNeedle?.orientation = rotation(from: [0, 1, 0], to: direction)
         }
-        handCompassCallout?.setText(PhysicsFormat.measurement(model.compassMicroTesla, "µT", decimals: 1))
+        // Formatted only when the displayed decimal actually moves; the
+        // anchor is a transform and stays per-frame.
+        let reading = (model.compassMicroTesla * 10).rounded()
+        if reading != lastCompassReading {
+            lastCompassReading = reading
+            handCompassCallout?.setText(
+                PhysicsFormat.measurement(model.compassMicroTesla, "µT", decimals: 1))
+        }
         handCompassCallout?.anchor(at: SIMD3(0, 0.05, 0))
     }
 
@@ -333,15 +345,30 @@ final class MagnetismRenderer {
     private var contactPairs: Set<ContactPair> = []
 
     private func tickSounds(_ model: MagnetismModel) {
-        let ids = Set(model.magnets.map(\.id))
-        for id in ids.subtracting(knownMagnetIDs) {
-            // Skip the opening scene: three pops at once is a fanfare
-            // nobody asked for.
-            if !knownMagnetIDs.isEmpty, let entity = magnetEntities[id] {
-                SoundPalette.play(.pop, on: entity, volume: 0.5)
+        // The arrival set is rebuilt only when the census changes —
+        // but "unchanged count means unchanged roster" is false across
+        // a reset, which swaps the lone default magnet for a fresh id
+        // at the same count. Left stale, the roster then mis-pops the
+        // NEXT genuine add. The membership sweep below allocates
+        // nothing on the idle path; the Sets are only built on a
+        // change.
+        let rosterChanged = model.magnets.count != knownMagnetIDs.count
+            || model.magnets.contains { !knownMagnetIDs.contains($0.id) }
+        if rosterChanged {
+            let ids = Set(model.magnets.map(\.id))
+            // Pop only for a roster that GREW: an add is an arrival,
+            // while a reset's identity swap is furniture being put
+            // back. And skip the opening scene: three pops at once is
+            // a fanfare nobody asked for.
+            if ids.count > knownMagnetIDs.count, !knownMagnetIDs.isEmpty {
+                for id in ids.subtracting(knownMagnetIDs) {
+                    if let entity = magnetEntities[id] {
+                        SoundPalette.play(.pop, on: entity, volume: 0.5)
+                    }
+                }
             }
+            knownMagnetIDs = ids
         }
-        knownMagnetIDs = ids
 
         let contact = MagnetismModel.magnetLength * 0.98
         var current: Set<ContactPair> = []
@@ -360,13 +387,15 @@ final class MagnetismRenderer {
     }
 
     private func syncMagnets(_ model: MagnetismModel) {
-        let live = Set(model.magnets.map(\.id))
-        for (id, entity) in magnetEntities where !live.contains(id) {
-            entity.removeFromParent()
-            magnetEntities[id] = nil
-            magnetHalos[id] = nil
-        }
+        // The removal sweep only has work when an entity outlives its
+        // magnet. A count mismatch is one tell; a fresh id at an
+        // UNCHANGED count (a reset swapping the lone default magnet)
+        // is the other — the follow loop below notices that one for
+        // free when it mints the entity, so the swap's orphan is swept
+        // this frame instead of flashing as a doubled magnet for one.
+        var mintedNew = false
         for magnet in model.magnets {
+            if magnetEntities[magnet.id] == nil { mintedNew = true }
             let entity = magnetEntities[magnet.id] ?? makeMagnet(magnet)
             // The model owns motion (relative drag, no system manipulation),
             // so the entity follows it EVERY frame — including while held,
@@ -377,6 +406,14 @@ final class MagnetismRenderer {
                 from: [0, 1, 0], to: SIMD3<Float>(magnet.axis))
             if let halo = magnetHalos[magnet.id] {
                 Fade.tick(halo, visible: magnet.id == model.selectedID)
+            }
+        }
+        if mintedNew || magnetEntities.count != model.magnets.count {
+            let live = Set(model.magnets.map(\.id))
+            for (id, entity) in magnetEntities where !live.contains(id) {
+                entity.removeFromParent()
+                magnetEntities[id] = nil
+                magnetHalos[id] = nil
             }
         }
     }

@@ -30,6 +30,14 @@ public enum StreamlineTracer {
         /// ("off to infinity" as far as the room is concerned).
         public var boundsCenter: SIMD3<Double> = .zero
         public var boundsRadius = 0.85
+        /// Lines also end where this says they have landed — for
+        /// termination sites that are SURFACES rather than points
+        /// (a capacitor plate is a rectangle, and a sphere around its
+        /// centre either misses the corners or swallows the gap).
+        /// Without it a line that reaches a conductor integrates on
+        /// through the far side at full step cost until `maxSteps` or
+        /// the bounds catch it, for a caller to trim afterwards.
+        public var stopWhere: (@Sendable (SIMD3<Double>) -> Bool)?
 
         public init() {}
     }
@@ -73,6 +81,9 @@ public enum StreamlineTracer {
                 break
             }
             if simd_distance(p, config.boundsCenter) > config.boundsRadius {
+                break
+            }
+            if config.stopWhere?(p) == true {
                 break
             }
         }

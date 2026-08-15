@@ -116,6 +116,9 @@ final class CircuitsRenderer {
     private var towerCaps: [ModelEntity] = []
     private var towerThreads: [ModelEntity] = []
     private var towerLabels: [BackedLabel] = []
+    /// Each tower's last-formatted reading, at the decimal it displays —
+    /// NaN until first write. See the gate in `syncVoltageSkyline`.
+    private var towerReadings: [Double] = []
     private var towerLabelPivots: [Entity] = []
     /// The colour step each tower is currently wearing, so an unchanged
     /// potential costs no material write.
@@ -142,6 +145,10 @@ final class CircuitsRenderer {
     private let electronPool: EntityPool<Void>
     private var electronsVisible = false
     private var fieldArrowsVisible = false
+    /// The segments the field arrows were last drawn from — nil when the
+    /// layer is off, so re-enabling always redraws. See
+    /// `syncMagneticField` for the gate this feeds.
+    private var lastFieldSegments: [WireField.Segment]?
 
     private let audioEmitter = Entity()
     private var lastSoundID = 0
@@ -231,11 +238,24 @@ final class CircuitsRenderer {
                 fieldArrows.hideAll()
                 fieldArrowsVisible = false
             }
+            // Invalidated, not remembered: toggling the layer back on
+            // must redraw even if nothing on the bench moved meanwhile.
+            lastFieldSegments = nil
             return
         }
         fieldArrowsVisible = true
 
+        // CHANGE-GATED (2026-08-13), the same way `FieldRenderer` gates
+        // its charges: everything below — the ranking, the ring layout,
+        // and ~240 Biot–Savart sums — is a pure function of the
+        // segments, and it was re-running every frame whether anything
+        // had moved or not. A static bench now costs one array compare;
+        // a carried part still updates every frame, because carrying it
+        // changes the segments.
         let segments = model.currentSegments
+        guard segments != lastFieldSegments else { return }
+        lastFieldSegments = segments
+
         guard !segments.isEmpty else {
             fieldArrows.hideAll()
             return
@@ -698,8 +718,16 @@ final class CircuitsRenderer {
             let pivot = towerLabelPivots[index]
             pivot.isEnabled = true
             pivot.position = base + SIMD3(0, height + (height >= 0 ? 0.05 : -0.06), 0)
-            towerLabels[index].setText(PhysicsFormat.measurement(node.voltage, "V", decimals: 1),
-                                       color: Self.skylineTint(bucket))
+            // Formatted only when the displayed decimal (or the tint
+            // bucket) moves — `BackedLabel` dedupes the mesh, but the
+            // string was being built per tower per frame regardless.
+            let reading = (node.voltage * 10).rounded()
+            if towerReadings[index] != reading || colorMoved {
+                towerReadings[index] = reading
+                towerLabels[index].setText(
+                    PhysicsFormat.measurement(node.voltage, "V", decimals: 1),
+                    color: Self.skylineTint(bucket))
+            }
         }
     }
 
@@ -727,6 +755,7 @@ final class CircuitsRenderer {
         skylineRoot.addChild(pivot)
         pivot.addChild(label.root)
         towerLabels.append(label)
+        towerReadings.append(.nan)
         towerLabelPivots.append(pivot)
         towerBuckets.append(-1)
     }
@@ -1289,6 +1318,13 @@ final class CircuitsRenderer {
     /// The polyline each wire is currently drawn along, so the
     /// electrons can ride the same path rather than the chord.
     private var wireCurves: [UUID: [SIMD3<Float>]] = [:]
+    /// The endpoints each wire's segments were last laid out for, and
+    /// the cumulative arc table the drift dots walk. Both are pure
+    /// functions of the endpoints, so both are rebuilt only when an end
+    /// actually moves — an idle bench used to re-solve every catenary
+    /// and rewrite every segment transform every frame for nothing.
+    private var wireLaidEndpoints: [UUID: (a: SIMD3<Float>, b: SIMD3<Float>)] = [:]
+    private var wireArcs: [UUID: [Float]] = [:]
 
     /// How many segments a hanging cable is drawn from.
     ///
@@ -1419,6 +1455,8 @@ final class CircuitsRenderer {
             wireEntities[id] = nil
             wirePhases[id] = nil
             wireCurves[id] = nil
+            wireLaidEndpoints[id] = nil
+            wireArcs[id] = nil
             wireColliderAnchors[id] = nil
         }
 
@@ -1473,10 +1511,37 @@ final class CircuitsRenderer {
             // sprouting droops at every joint.
             guard length > 1e-4 else { entity.isEnabled = false; continue }
 
-            let curve = wireCurve(from: a, to: b, span: Double(length))
-            wireCurves[wire.id] = curve
-            layOut(segmentsOf: entity, along: curve)
-            reshapeCollider(entity, id: wire.id, along: curve)
+            // Re-laid ONLY when an end moved. The curve, the segment
+            // transforms, the collider and the arc table are all pure
+            // functions of the two endpoints; on an idle bench the
+            // endpoints are bit-identical frame to frame, and a carried
+            // part changes them every frame — so this gate costs the
+            // moving case nothing and saves the still case everything.
+            if wireLaidEndpoints[wire.id].map({ $0.a != a || $0.b != b }) ?? true {
+                wireLaidEndpoints[wire.id] = (a, b)
+                let curve = wireCurve(from: a, to: b, span: Double(length))
+                wireCurves[wire.id] = curve
+                layOut(segmentsOf: entity, along: curve)
+                reshapeCollider(entity, id: wire.id, along: curve)
+                // The arc table the drift dots walk, built beside the
+                // curve it measures rather than once per frame in
+                // `driftDots`.
+                var arc: [Float] = [0]
+                arc.reserveCapacity(curve.count)
+                for index in 1..<curve.count {
+                    arc.append(arc[index - 1]
+                        + simd_distance(curve[index - 1], curve[index]))
+                }
+                wireArcs[wire.id] = arc
+                // A re-lay can GROW the segment pool, and `layOut`
+                // mints new cores in bare copper. The repaint below
+                // only fires on a bucket change, and stretching a wire
+                // changes no voltage — so without this the six fresh
+                // segments of a newly hanging cable stay copper beside
+                // one painted one. Forgetting the bucket forces the
+                // repaint to cover them on this same pass.
+                wireVoltBuckets[wire.id] = nil
+            }
 
             // The wire wears its potential: warm = high, cool = low —
             // voltage differences readable at a glance across the bench.
@@ -1675,11 +1740,21 @@ final class CircuitsRenderer {
 
         // Cumulative arc length, so `t` is a fraction of the distance
         // TRAVELLED and the beads stay evenly spaced around the curve
-        // instead of bunching where it bends.
-        var arc: [Float] = [0]
-        arc.reserveCapacity(curve.count)
-        for index in 1..<curve.count {
-            arc.append(arc[index - 1] + simd_distance(curve[index - 1], curve[index]))
+        // instead of bunching where it bends. Cached beside the curve in
+        // `syncWires` and rebuilt only when an end moves; built here
+        // only for a run with no cache entry (or a stale one — the
+        // count check catches the `?? [a, b]` fallback curve).
+        let arc: [Float]
+        if let cached = wireArcs[key], cached.count == curve.count {
+            arc = cached
+        } else {
+            var built: [Float] = [0]
+            built.reserveCapacity(curve.count)
+            for index in 1..<curve.count {
+                built.append(built[index - 1]
+                    + simd_distance(curve[index - 1], curve[index]))
+            }
+            arc = built
         }
         let total = arc[arc.count - 1]
         guard total > 1e-6 else { return }
