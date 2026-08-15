@@ -868,7 +868,12 @@ final class HubScene {
     /// 0.20 → 0.23 when the button grew a badge and a second line: the
     /// gap that matters is to the button's BOTTOM EDGE, and that edge
     /// dropped ~1.5 cm when the card got taller.
-    private static let podiumButtonLift: Float = 0.23
+    /// 0.23 → 0.30 on 2026-08-15: the exhibit names became headers
+    /// riding 0.215 above a docked lab, and the button's bottom edge
+    /// sat inside the raised text. The gap that matters is still to
+    /// the bottom edge — now measured from the header's top, not the
+    /// miniature's.
+    private static let podiumButtonLift: Float = 0.30
     /// How near the cap counts as offering the exhibit to it. Shares no
     /// constant with the button's lift — the two were the same number by
     /// coincidence, in five places, which is how one of them silently
@@ -1615,15 +1620,23 @@ final class HubScene {
         // it hung at the miniature's foot, in front of the pedestal,
         // which put it exactly in the sightline that sweeps the shelf.
         // Above the model the only thing behind it is the wearer's own
-        // wall. The y clears the tallest normalized miniature
-        // (`exhibitSize / 2` = 0.12) plus the type's cap height; the
-        // small z keeps the billboarded text from shearing into a tall
-        // model's crown when seen from above.
+        // wall.
+        //
+        // THE Y IS SIGHTLINE ARITHMETIC, NOT BOX ARITHMETIC — the first
+        // pass cleared the tallest miniature's BOX (0.12 half-extent)
+        // by a couple of centimetres and the owner still saw the names
+        // clipping the models, because a standing wearer looks DOWN at
+        // the shelf: a billboarded label in front of the model
+        // projects onto it from above, so the clearance that matters
+        // is measured along that ray, not straight up. 0.215 buys the
+        // tallest model ~5 cm of visual daylight from a standing
+        // eye height; the small z keeps the text from shearing into a
+        // crown when seen from steeper above.
         let name = Self.namePlate(module.title, accent: UIColor(module.accent),
                                   size: PlateStyle.exhibitLabelSize,
                                   backed: false)
         let namePivot = Entity()
-        namePivot.position = [0, 0.165, 0.06]
+        namePivot.position = [0, 0.215, 0.06]
         namePivot.components.set(BillboardComponent())
         namePivot.addChild(name)
         pulser.addChild(namePivot)
