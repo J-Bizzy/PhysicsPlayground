@@ -1,17 +1,7 @@
 //
 //  MagnetismInertiaTests.swift
-//  PhysicsPlaygroundTests
-//
-//  The bench half of `DipoleDynamicsTests`. That file proves the physics
-//  in isolation — the magnetometer period, the overshoot, the energy.
-//  This one proves the MODEL is wired to it: that `-magInertia 1`
-//  actually changes how the room behaves, and that the default is still
-//  the glide.
-//
-//  Both benches ship at once on purpose. This reverses a decision
-//  `MagnetismModel`'s own header records, and a reversal made on feel
-//  has to be judged on feel, in a headset, against the thing it
-//  replaces. See DECISIONS.md 2026-08-03.
+//  The bench half of `DipoleDynamicsTests`: `-magInertia 1` actually changes the
+//  room and the default is still the glide. Both benches ship; see DECISIONS.md.
 //
 
 import XCTest
@@ -22,30 +12,20 @@ import simd
 @MainActor
 final class MagnetismInertiaTests: XCTestCase {
 
-    /// A needle held at right angles to a strong neighbour's field, then
-    /// let go. Returns the angle between the two moments each frame.
+    /// Releases a needle in a strong neighbour's field; returns the angle between the two moments each frame.
     private func release(inertia: Bool, frames: Int) -> [Double] {
         let model = MagnetismModel()
         model.reset()
         model.inertiaOn = inertia
 
-        // Two magnets: one to make the field, one to swing in it. The
-        // maker is held so it stays put and only the other one moves.
+        // One magnet makes the field (held still), the other swings in it.
         while model.magnets.count < 2 { model.addMagnet() }
         let anchor = model.magnets[0]
         let swinger = model.magnets[1]
         model.setStrength(id: anchor.id, 12)
         model.move(id: anchor.id, to: MagnetismModel.regionCenter)
-        // OFF THE ANCHOR'S AXIS, at 45°, and that is not incidental.
-        // Both magnets are born with their moment along +x, so a swinger
-        // placed straight out along +x sits where the anchor's field is
-        // ALSO along +x — m × B is identically zero and nothing swings.
-        // The first draft of this test did exactly that and read as the
-        // inertial bench failing to overshoot.
-        //
-        // At 45° the dipole field runs about 72° off the swinger's own
-        // moment (B ∝ 3(m·r̂)r̂ − m gives (0.5, 1.5) for m along x̂), which
-        // is a real release angle.
+        // OFF THE ANCHOR'S AXIS at 45°: straight out along +x the field is parallel
+        // to the swinger's moment, m × B ≡ 0 and nothing swings (the first draft did exactly that).
         let reach = 0.30 / 2.0.squareRoot()
         model.move(id: swinger.id,
                    to: MagnetismModel.regionCenter + SIMD3(reach, reach, 0))
@@ -63,13 +43,8 @@ final class MagnetismInertiaTests: XCTestCase {
         return angles
     }
 
-    /// **The difference, stated as a behaviour rather than a flag.**
-    ///
-    /// Without inertia the angle between two magnets can only shrink —
-    /// the mobility law turns the moment toward the field and explicitly
-    /// clamps the step so it never goes past. With inertia it must
-    /// overshoot at least once: the needle carries through alignment and
-    /// comes back.
+    /// Without inertia the angle can only shrink (the step is clamped at alignment);
+    /// with inertia it must overshoot at least once.
     func testOnlyTheInertialBenchOvershootsAlignment() {
         let glide = release(inertia: false, frames: 900)
         let inertial = release(inertia: true, frames: 900)
@@ -93,8 +68,7 @@ final class MagnetismInertiaTests: XCTestCase {
                              """)
     }
 
-    /// Counts direction reversals in a sequence that should otherwise
-    /// decrease monotonically. A reversal IS an overshoot.
+    /// Counts direction reversals — a reversal IS an overshoot.
     private func overshoots(in angles: [Double]) -> Int {
         var count = 0
         for index in 2..<max(angles.count, 2) where index < angles.count {
@@ -105,42 +79,17 @@ final class MagnetismInertiaTests: XCTestCase {
         return count
     }
 
-    /// **The glide is still the default.** A fresh model must not have
-    /// inertia unless the launch argument asked for it, because the
-    /// owner has not yet judged the two side by side.
+    /// The glide is still the default: no inertia unless the launch argument asked.
     func testTheDefaultBenchIsStillTheGlide() {
         XCTAssertFalse(UserDefaults.standard.bool(forKey: "magInertia"),
                        "Precondition: the test runner has no -magInertia.")
         XCTAssertFalse(MagnetismModel().inertiaOn)
     }
 
-    /// **A KNOWN LIMITATION, PINNED AS ONE.**
-    ///
-    /// A pair of inertial magnets in CONTACT does not come to rest. It
-    /// was measured rather than suspected: the angle's variation over
-    /// the last second grows from 1.28 rad at t = 10 s to 2.82 rad at
-    /// t = 300 s. The motion is not decaying, and the damping is not the
-    /// reason — at 0.9 s⁻¹ over five minutes any free rotation is gone
-    /// many times over.
-    ///
-    /// What drives it is the contact itself. `separated()` resolves an
-    /// overlap by MOVING a magnet, which does work against an attraction
-    /// that is enormous at that range, and the field pulls it straight
-    /// back. `killVelocityIntoContacts` takes out the closing velocity
-    /// and does not stop the positional pump. This is the same standoff
-    /// `softenedAtContact` was written to defeat for the glide, in the
-    /// regime where a projection-based contact and a real inertia meet.
-    ///
-    /// So the inertial bench is honest in FREE FIELD — every claim in
-    /// `DipoleDynamicsTests` holds, including that a needle settles — and
-    /// unfinished at contact. That is precisely why it ships behind
-    /// `-magInertia 1` with the glide as the default, and it is the first
-    /// thing to watch on device.
-    ///
-    /// This test asserts what IS true: it may not settle, but it must not
-    /// run away. Bounded by the room-scale SAFETY box (the old drag
-    /// walls came out on 2026-08-03), finite. If somebody fixes the
-    /// contact, this test should be replaced by a settling one.
+    /// KNOWN LIMITATION, pinned as one: an inertial pair in CONTACT does not settle —
+    /// `separated()` moves a magnet, doing work the field claws back (a positional pump).
+    /// This asserts what IS true: bounded and finite, not settled. If the contact is
+    /// fixed, replace this with a settling test.
     func testTheInertialBenchIsBoundedEvenWhereItDoesNotSettle() {
         let model = MagnetismModel()
         model.reset()
@@ -163,9 +112,7 @@ final class MagnetismInertiaTests: XCTestCase {
                     offset.y, MagnetismModel.safetyHalfExtents.y + 1e-6)
                 XCTAssertLessThanOrEqual(
                     offset.z, MagnetismModel.safetyHalfExtents.z + 1e-6)
-                // The moment's LENGTH is a property of the magnet and must
-                // survive any amount of rotation — `DipoleDynamics.step`
-                // renormalises for exactly this reason.
+                // The moment's length must survive rotation — `DipoleDynamics.step` renormalises for this.
                 XCTAssertEqual(magnet.strength, MagnetismModel.defaultStrength,
                                accuracy: 1e-6,
                                "A magnet's strength drifted while it turned.")
@@ -173,9 +120,7 @@ final class MagnetismInertiaTests: XCTestCase {
         }
     }
 
-    /// Switching modes must not smuggle a velocity across. The glide's
-    /// "speed" is a mobility, not a momentum, and inheriting it as one
-    /// would launch a magnet across the bench.
+    /// Switching modes must not smuggle a velocity across: the glide's "speed" is a mobility, not a momentum.
     func testSwitchingModesStartsFromRest() {
         let model = MagnetismModel()
         model.reset()
@@ -190,9 +135,7 @@ final class MagnetismInertiaTests: XCTestCase {
         let after = model.magnets.map(\.position)
 
         for (a, b) in zip(before, after) {
-            // One frame of a body starting from rest moves it by
-            // (F/m)·dt² — vanishing beside a carried-over glide speed,
-            // which is capped at 0.5 m/s and would move it ~5 mm.
+            // From rest one frame moves (F/m)·dt² — vanishing beside a carried-over glide speed (~5 mm).
             XCTAssertLessThan(simd_distance(a, b), 1e-3,
                               "A magnet jumped on the frame the mode changed.")
         }

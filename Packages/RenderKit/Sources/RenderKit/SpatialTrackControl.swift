@@ -1,36 +1,15 @@
 //
 //  SpatialTrackControl.swift
-//  RenderKit
+//  RenderKit — a labelled rail with a bead for a continuous quantity.
 //
-//  The app's instrument for a continuous quantity: a labelled rail with a
-//  bead you put where you want it.
+//  The value lives in the model; `refresh()` reads it but nothing here
+//  ticks — a mounting view must call `refresh()` in its own update loop or
+//  the bead shows a stale value after a reset.
 //
-//  Replaces `SpatialDial`, which the owner rejected (2026-07-29). See
-//  `TrackLayout` for why an absolute control beats a relative one — the
-//  short version is that a bead's position shows the setting and a
-//  needle's rotation does not.
-//
-//  Clears the same bar the interaction law sets for anything replacing a
-//  slider: visible without being looked for (it is always there, and its
-//  value is legible from across the room), operable without being
-//  discovered (a bead on a rail affords dragging with no instruction), and
-//  reachable in the simulator (a mouse drag along the rail is exactly the
-//  gesture).
-//
-//  The value lives in the model, and `refresh()` reads it — but note that
-//  is a promise about the CALLER: nothing here ticks. A mounting view must
-//  call `refresh()` in its own update loop or the bead will keep showing
-//  the value it was last dragged to while a reset moves the model out from
-//  under it.
-//
-//  `adjust(hand:)` takes the hand in the track's PARENT space and applies
-//  no scale term, which is correct as long as nothing scales the track's
-//  own `root`. A scale on an ANCESTOR cancels — the hand and
-//  `root.position` are both expressed in the parent's frame, so they shrink
-//  together — but scaling the root itself would stretch the rail on screen
-//  without stretching the range it maps, and the far half of a visibly 2×
-//  rail would clamp at the top of the range. Do not scale a track.
-//
+//  `adjust(hand:)` takes the hand in the track's PARENT space with no
+//  scale term. A scale on an ancestor cancels, but scaling the root itself
+//  stretches the rail without stretching the range it maps. Do not scale a
+//  track.
 
 import Foundation
 import RealityKit
@@ -48,15 +27,13 @@ public final class SpatialTrackControl {
     private let write: (Double) -> Void
     private let format: (Double) -> String
     /// A second, quieter line under the rail — for a rail whose value
-    /// DERIVES something the apparatus teaches (the ΔV rail's E = V/d).
-    /// Re-evaluated every refresh, because the derived quantity can
-    /// move without the value moving (drag a plate: d changes, V does
-    /// not). Most rails pass nothing.
+    /// DERIVES something (the ΔV rail's E = V/d). Re-evaluated every
+    /// refresh, since the derived quantity can move without the value
+    /// moving. Most rails pass nothing.
     private let subtitle: ((Double) -> String)?
     private var subtitleLabel: BackedLabel?
-    /// What VoiceOver last heard — value plus subtitle, merged, so the
-    /// spoken reading never drops the derived line when only the value
-    /// changed.
+    /// Value plus subtitle merged, so the spoken reading never drops the
+    /// derived line when only the value changed.
     private var lastSpokenValue = ""
 
     private let bead = ModelEntity()
@@ -97,18 +74,14 @@ public final class SpatialTrackControl {
 
         let length = Float(layout.length)
 
-        // The rail: a dark glass casing so the lit fill reads against it,
-        // per the house rule that casings beat glows indoors. Frosted
-        // rather than lacquered — same dark scrim, now scattering, so it
-        // belongs to the same family as the plates and discs it stands
-        // beside.
+        // The rail: a dark frosted-glass casing so the lit fill reads
+        // against it (casings beat glows indoors).
         let rail = ModelEntity(
             mesh: .generateBox(size: [length, 0.010, 0.010], cornerRadius: 0.005),
             materials: [Materials.frostedGlass(opacity: 0.64)])
         root.addChild(rail)
 
-        // The travelled part, lit: how far along the range you are, readable
-        // without finding the bead first.
+        // The travelled part, lit: how far along the range you are.
         var lit = UnlitMaterial(color: accent)
         lit.blending = .transparent(opacity: 0.85)
         filled.model = ModelComponent(
@@ -116,7 +89,7 @@ public final class SpatialTrackControl {
             materials: [lit])
         root.addChild(filled)
 
-        // End ticks — the range has ends, and they should look like ends.
+        // End ticks.
         var tickMaterial = UnlitMaterial(color: .white)
         tickMaterial.blending = .transparent(opacity: 0.45)
         for side in [-1, 1] as [Float] {
@@ -127,7 +100,7 @@ public final class SpatialTrackControl {
             root.addChild(tick)
         }
 
-        // The bead: the value, as an object, in the shared grip recipe.
+        // The bead: the value as an object.
         bead.model = ModelComponent(mesh: .generateSphere(radius: 0.016),
                                     materials: [Materials.grip(accent,
                                                                roughness: 0.18)])
@@ -139,9 +112,8 @@ public final class SpatialTrackControl {
         textPivot.addChild(valueText)
         root.addChild(textPivot)
 
-        // The derived line hangs UNDER the rail — the space beneath an
-        // instrument that itself hangs under its apparatus is the one
-        // direction guaranteed clear of both.
+        // The derived line hangs UNDER the rail — the one direction clear
+        // of both the rail and the apparatus above it.
         if subtitle != nil {
             let pivot = Entity()
             pivot.components.set(BillboardComponent())
@@ -152,21 +124,12 @@ public final class SpatialTrackControl {
             subtitleLabel = label
         }
 
-        // Whole-track target: grabbing anywhere on the rail is a legitimate
-        // way to set a value, and hunting for a 1.6 cm bead is not.
-        //
-        // A BOX, not a sphere, and this is the part that took a bug to
-        // learn. `Grabbable.configureTouchTarget` only makes spheres, and
-        // the radius that covers a 26 cm rail end-to-end is 14 cm — a 29 cm
-        // ball around an object 1 cm thick. Hit-testing uses colliders and
-        // not visible geometry, so that ball shields everything within a
-        // hand's width of the rail in EVERY direction, including the
-        // apparatus it is bolted to. That is the `SpatialScaleHandle`
-        // failure (DECISIONS, 2026-07-29 "the invisible scale plate is
-        // banned") at one-eighth the size, and the rule it left behind is
-        // absolute: an input-targetable collider must be no larger than the
-        // thing it represents. Generous ALONG the rail is the affordance;
-        // generous across it is a trap.
+        // Whole-track target so grabbing anywhere on the rail sets a value.
+        // A BOX, not a sphere: a sphere covering a 26 cm rail is a 29 cm
+        // ball that (hit-testing uses colliders, not visible geometry)
+        // shields the apparatus behind it. An input-targetable collider
+        // must be no larger than the thing it represents — generous along
+        // the rail, never across it.
         root.components.set(InputTargetComponent())
         root.components.set(CollisionComponent(shapes: [
             .generateBox(size: [length + 0.03, 0.05, 0.05])
@@ -174,23 +137,9 @@ public final class SpatialTrackControl {
         root.components.set(HoverEffectComponent())
         root.components.set(GroundingShadowComponent(castsShadow: true))
 
-        // ADJUSTABLE AT LAST. This file's own header has carried the
-        // complaint since it was written:
-        //
-        //     // a track replaces a `Slider`, and a slider is already an
-        //     // adjustable element that speaks its value. Migrating
-        //     // without this trades a control someone could operate
-        //     // blind for one they cannot.
-        //
-        // The `value` was added then and the adjustability was not,
-        // because `SpatialActions` lived in the app target and RenderKit
-        // cannot see up a layer. It moved down on 2026-08-08 for exactly
-        // this.
-        //
-        // A twentieth of the range per step, the same resolution the
-        // Bloom bead uses, and written through `write` — the same
-        // function the drag calls — so a hand and a keystroke cannot
-        // disagree about the ends.
+        // VoiceOver adjust: a twentieth of the range per step, written
+        // through `write` — the same function the drag calls — so a hand
+        // and a keystroke cannot disagree about the ends.
         SpatialActions.attach(
             to: root, label: "\(name). Drag the bead along the rail to set it.",
             value: format(read()),
@@ -199,14 +148,10 @@ public final class SpatialTrackControl {
         refresh()
     }
 
-    /// Whether the track is present and live.
-    ///
-    /// An instrument that belongs to an apparatus disappears with it, and
-    /// `root.isEnabled` alone is not enough: hit-testing stops, but `owns`
-    /// and `adjust` are plain function calls a caller can still make. The
-    /// case that bites is a drag already IN FLIGHT when the apparatus is
-    /// switched off — the gesture keeps delivering `onChanged`, and without
-    /// this guard the track keeps writing to a model nobody is looking at.
+    /// Whether the track is present and live. Guards a drag already IN
+    /// FLIGHT when the apparatus is switched off: the gesture keeps
+    /// delivering `onChanged`, so without this the track writes to a model
+    /// nobody is looking at.
     public var isEnabled: Bool {
         get { root.isEnabled }
         set {
@@ -228,16 +173,12 @@ public final class SpatialTrackControl {
     public var isAdjusting: Bool { isDragging }
 
     /// Where the bead currently sits, in the track's own frame. The bead's
-    /// place IS the value — this is the claim the whole control rests on,
-    /// so it is worth being able to ask, both for a caller wanting to hang
-    /// something off the bead and for a test wanting to check it.
+    /// place IS the value.
     public var beadOffset: SIMD3<Float> { bead.position }
 
     /// Sets the value from a hand position in the track's PARENT space.
-    ///
     /// Absolute: wherever along the rail the hand is, that is the value —
-    /// no start offset, nothing to accumulate, so a drag that begins in the
-    /// middle of the rail does not shift the mapping.
+    /// no start offset, so a drag beginning mid-rail does not shift the map.
     @discardableResult
     public func adjust(hand: SIMD3<Double>) -> Bool {
         guard root.isEnabled else { return false }
@@ -265,8 +206,7 @@ public final class SpatialTrackControl {
         let fraction = layout.fraction(forValue: read(), in: range)
         bead.position = SIMD3<Float>(layout.offset(forFraction: fraction))
 
-        // The fill grows from the low end, so it is scaled and shifted
-        // rather than redrawn.
+        // The fill grows from the low end: scaled and shifted, not redrawn.
         let length = Float(layout.length)
         let travelled = max(length * Float(fraction), 1e-4)
         filled.scale = [travelled, 1, 1]
@@ -275,9 +215,6 @@ public final class SpatialTrackControl {
         setLabel(format(read()))
 
         // The spoken reading, whether or not there is a derived line.
-        // This used to be inside `if let subtitle`, so a rail WITHOUT one
-        // — most of them — announced the value it was built with for the
-        // rest of the session, however far the bead had since travelled.
         let spoken = subtitle.map { "\(lastLabel), \($0(read()))" } ?? lastLabel
         if let subtitle {
             subtitleLabel?.setText(subtitle(read()),
@@ -286,25 +223,19 @@ public final class SpatialTrackControl {
         if spoken != lastSpokenValue {
             lastSpokenValue = spoken
             // REPUBLISH, never rebuild: a fresh `AccessibilityComponent`
-            // carries empty `systemActions` and would strip the
-            // increment this file just gained.
+            // carries empty `systemActions` and would strip the increment.
             SpatialActions.republish(value: spoken, on: root)
         }
     }
 
-    /// Rewrites the value text, and only when it has actually changed —
-    /// `refresh()` runs every frame, and both the text mesh and the
-    /// accessibility component are far too expensive to rebuild at 90 Hz
-    /// for a number that reads the same.
+    /// Rewrites the value text, only when it changed — `refresh()` runs
+    /// every frame and the mesh and accessibility component are too
+    /// expensive to rebuild at 90 Hz for an unchanged number.
     private func setLabel(_ string: String) {
         guard string != lastLabel else { return }
         lastLabel = string
 
-        // VoiceOver reads the setting, not just the name. This matters more
-        // than it looks: a track replaces a `Slider`, and a slider is
-        // already an adjustable element that speaks its value. Migrating
-        // without this trades a control someone could operate blind for one
-        // they cannot — a capability lost rather than moved.
+        // VoiceOver reads the setting, not just the name.
         if var accessibility = root.components[AccessibilityComponent.self] {
             accessibility.value = LocalizedStringResource(stringLiteral: string)
             root.components.set(accessibility)
@@ -324,11 +255,8 @@ public final class SpatialTrackControl {
         let bounds = mesh.bounds
         valueText.position = [-(bounds.min.x + bounds.max.x) / 2, 0, 0]
 
-        // The house dark plate behind the number (2026-08-06) — this is
-        // the value under EVERY rail in the app, and it was accent type
-        // floating naked over passthrough. A sibling of the glyphs,
-        // lifted to the run's vertical centre, because the text is
-        // x-centred only (its baseline rides the pivot).
+        // Dark plate behind the number. A sibling of the glyphs, lifted to
+        // the run's vertical centre (the text is x-centred only).
         valueBacking?.removeFromParent()
         let plate = BackedLabel.backing(behind: bounds, size: 0.028)
         plate.position.y = (bounds.min.y + bounds.max.y) / 2

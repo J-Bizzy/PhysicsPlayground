@@ -2,22 +2,9 @@
 //  PodButtonStyle.swift
 //  Physics Playground — DesignSystem
 //
-//  The house button styles the shell windows share, so the few flat
-//  buttons that remain read as one crafted set rather than stock iOS
-//  capsules. Two roles:
-//
-//  · .podProminent — a filled accent capsule with a soft top sheen, for
-//    a window's one primary action ("Show in room", Capture, Enter).
-//  · .podQuiet — a tinted glass capsule with a hairline border, for
-//    secondary actions (the notebook's per-row Delete…).
-//
-//  A caller that wants the active module's colour passes it explicitly
-//  to .podProminent(_:); with no argument the button wears the system
-//  accent. (These styles once read a `podAccent` environment value set
-//  by ControlPod — deleted with the panels on 2026-08-01. The key
-//  outlived its only writers, so every button was already rendering
-//  the default; it is gone now.) Destructive buttons colour themselves
-//  red from the button role.
+//  House button styles for the shell windows: .podProminent (filled accent
+//  capsule, a window's one primary action) and .podQuiet (tinted glass,
+//  secondary actions). Destructive buttons go red from the button role.
 //
 
 import SwiftUI
@@ -40,8 +27,7 @@ struct PodProminentButtonStyle: ButtonStyle {
             .padding(.horizontal, 16)
             .background(Capsule(style: .continuous).fill(fill.gradient))
             .overlay(
-                // A thin top-lit rim so the capsule reads as a solid,
-                // lit key rather than a flat swatch.
+                // Top-lit rim so the capsule reads as a lit key, not a swatch.
                 Capsule(style: .continuous)
                     .strokeBorder(.white.opacity(0.22), lineWidth: 0.75)
             )

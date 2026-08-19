@@ -2,20 +2,9 @@
 //  Callout.swift
 //  RenderKit
 //
-//  Spatial annotation done properly: a number that belongs to a place
-//  in the room is anchored TO that place — a dot on the thing, a thin
-//  leader line, and the text floating at the end of it, billboarded so
-//  it always faces the reader.
-//
-//  Before this, every module billboarded bare text at some offset and
-//  hoped: labels drifted away from what they described, collided with
-//  the title bar, and read as free-floating index cards. A callout is
-//  one entity you re-point each frame; the leader keeps the meaning
-//  attached no matter where the reader is standing.
-//
-//  Text meshes are cached by (string, size) — generating them per frame
-//  is the classic way to tank a scene, and several modules update their
-//  readouts every frame.
+//  A billboarded label tethered to a point by a dot and leader line.
+//  Text meshes are cached by (string, size) — per-frame generation is
+//  the classic way to tank a scene.
 //
 
 import QuartzCore
@@ -26,8 +15,8 @@ import simd
 /// A billboarded label tethered to a point in space by a leader line.
 @MainActor
 public final class Callout {
-    /// Add this to the scene. Positioned at the ANCHOR point; the label
-    /// hangs at `offset` from it with the leader drawn between.
+    /// Add this to the scene. Positioned at the anchor; the label hangs
+    /// at `offset` with the leader drawn between.
     public let root = Entity()
 
     private let dot = Entity()
@@ -41,53 +30,26 @@ public final class Callout {
     private var lastText: String?
     private var lastTextTime: Double = -1
 
-    /// Whether the text wears the house dark backing plate
-    /// (`BackedLabel.backing`). ON by default as of 2026-08-06: the
-    /// staged rollout's first module (Circuits) passed its screenshot
-    /// verdict, and every callout in the app is a live number floating
-    /// over passthrough — the exact case the plate exists for. The
-    /// property survives as an opt-out for a future bespoke case.
-    /// Takes effect on the next text change.
+    /// Whether the text wears the house dark backing plate. On by
+    /// default; takes effect on the next text change.
     public var showsBacking = true
 
     /// Wrap the label at this width, metres; 0 keeps it on one line.
-    ///
-    /// A reading is two words and a paragraph is not. Every callout in
-    /// this app was the former until Gravity Lab needed to explain what
-    /// an L-point is at the moment a body is captured by one — five
-    /// authored paragraphs that had no reader because there was no
-    /// surface that could hold a sentence.
     public var wrapWidth: CGFloat = 0 {
         didSet {
             guard wrapWidth != oldValue else { return }
-            // The cached mesh is keyed on width, so the next `setText`
-            // would be a no-op against a stale string.
+            // Cached mesh is keyed on width; force the next setText through.
             lastText = nil
         }
     }
     private var backingEntity: ModelEntity?
 
     /// What VoiceOver calls this readout — the quantity, not the number.
-    ///
-    /// A `Callout` is a text MESH, and a mesh is invisible to VoiceOver
-    /// unless something says otherwise. `ARCHITECTURE.md` names the
-    /// callout as one of the app's two readout forms, and `DECISIONS.md`
-    /// claimed on 2026-08-01 that "VoiceOver reach is preserved by
-    /// `AccessibilityComponent` on every plate, petal, disc and card" —
-    /// a callout is none of those four, so the claim stayed technically
-    /// true while every tethered live number in the app went unread:
-    /// flux, µT, catch speed, sweep area, the prediction countdown, the
-    /// orbital chord.
-    ///
-    /// Fixed here rather than at the six call sites, because putting it
-    /// in the shared type is what stops it being adopted by four of them.
+    /// A text mesh is invisible to VoiceOver unless something says otherwise.
     private var accessibilityName: String?
 
-    /// - Parameters:
-    ///   - color: accent for the dot, leader, and type. Saturated module
-    ///     accents survive white walls; pale tints do not.
-    ///   - textSize: glyph height in metres.
-    ///   - offset: where the label sits relative to the anchor point.
+    /// - color: accent for dot/leader/type (saturated survives white walls);
+    ///   textSize: glyph height in metres; offset: label position from anchor.
     public init(color: UIColor,
                 textSize: CGFloat = 0.035,
                 offset: SIMD3<Float> = SIMD3(0, 0.11, 0)) {
@@ -95,7 +57,6 @@ public final class Callout {
         self.textSize = textSize
         self.offset = offset
 
-        // The anchor dot: small, bright, sits exactly on the subject.
         let dotMesh = MeshResource.generateSphere(radius: 0.006)
         let dotModel = ModelEntity(mesh: dotMesh,
                                    materials: [Materials.energized(color, glow: 0.8)])
@@ -116,28 +77,9 @@ public final class Callout {
         root.position = worldPosition
     }
 
-    // `setOffset(_:)` was deleted 2026-08-09 — public RenderKit API with
-    // no consumer in the app or the tests. Every caller sets its offset
-    // once at construction and lives with it; the dodge-other-content
-    // case it was written for is handled by the eight hand-picked
-    // offsets at the call sites instead, which is its own small problem
-    // and a Phase 2 one.
-
-    /// How often a changing readout may regenerate its glyphs.
-    ///
-    /// `MeshResource.generateText` builds a whole mesh, on the main
-    /// thread. "Skip when unchanged" is no protection at all for a
-    /// LIVE number — 12.3 µT becomes 12.4 µT becomes 12.2 µT, so the
-    /// text differs every single frame and every single frame paid for
-    /// a new mesh. At 90 Hz that is ninety text meshes a second, per
-    /// callout, and it is the kind of cost that shows up as the whole
-    /// app hitching rather than as one slow thing.
-    ///
-    /// Eight updates a second is faster than anyone can read a changing
-    /// number and a tenth of the work.
-    /// Shared with `BackedLabel`, which has the same problem for the
-    /// same reason — one number, so the two cannot drift into "the
-    /// callouts update at one rate and the numerals at another".
+    /// How often a changing readout may regenerate glyphs — a LIVE number
+    /// differs every frame, and "skip when unchanged" protects nothing.
+    /// 8 Hz is faster than reading. Shared with `BackedLabel` so the two rates cannot drift.
     static let minimumLabelInterval: Double = 1.0 / 8
     private static var minimumInterval: Double { minimumLabelInterval }
 
@@ -145,13 +87,7 @@ public final class Callout {
     /// changes, because generating glyphs is not free.
     public func setText(_ text: String) {
         guard text != lastText else { return }
-        // Clearing jumps the queue — see `BackedLabel.setText`, where
-        // the same exemption is spelled out at length. It was latent
-        // here from the day the limit landed: a callout whose subject
-        // disappears could keep describing it for an eighth of a
-        // second. Nothing caught it because `Callout`'s tests set a
-        // value and read it, and only `BackedLabel` had a test that
-        // cleared one.
+        // Clearing jumps the queue — same exemption as `BackedLabel.setText`.
         if !text.isEmpty {
             let now = CACurrentMediaTime()
             guard now - lastTextTime >= Self.minimumInterval else { return }
@@ -174,11 +110,8 @@ public final class Callout {
         model.position = [-(bounds.min.x + bounds.max.x) / 2,
                           -(bounds.min.y + bounds.max.y) / 2, 0]
         if showsBacking {
-            // A SIBLING of the centred glyphs, never a child: the model
-            // above is shifted to centre its run on the pivot, so a
-            // plate parented to it would land at pivot-minus-centre —
-            // off the text by exactly the centring shift. (Latent from
-            // the flag's first landing; caught when the default flipped.)
+            // A SIBLING of the centred glyphs, never a child — parenting to
+            // the shifted model lands the plate off by the centring shift.
             let plate = BackedLabel.backing(behind: bounds, size: textSize)
             labelPivot.addChild(plate)
             backingEntity = plate
@@ -190,9 +123,8 @@ public final class Callout {
         publishAccessibility()
     }
 
-    /// Names the quantity this callout reports, for VoiceOver. The VALUE
-    /// is whatever `setText` last wrote, so a caller sets this once and
-    /// the reading follows by itself.
+    /// Names the quantity for VoiceOver; the VALUE is whatever `setText`
+    /// last wrote, so set once and the reading follows.
     public func setAccessibilityName(_ name: String) {
         guard name != accessibilityName else { return }
         accessibilityName = name
@@ -200,9 +132,8 @@ public final class Callout {
     }
 
     private func publishAccessibility() {
-        // Label and value BOTH, which is the omission `SpatialTrackControl`
-        // was caught making on its first flight: a control VoiceOver can
-        // name but not read is not reachable, it is merely listed.
+        // Label and value BOTH — a readout VoiceOver can name but not
+        // read is merely listed.
         guard let text = lastText, !text.isEmpty else {
             root.components.remove(AccessibilityComponent.self)
             return
@@ -231,9 +162,8 @@ public final class Callout {
         let rod = ModelEntity(
             mesh: .generateCylinder(height: length, radius: 0.0011),
             materials: [material])
-        // generateCylinder runs along +Y; aim it down the offset. Every
-        // Bloom grip hangs its callout straight down, which is exactly
-        // the antiparallel case `rotation(from:to:)` exists for.
+        // generateCylinder runs along +Y; a straight-down offset is the
+        // antiparallel case `rotation(from:to:)` exists for.
         rod.orientation = rotation(from: [0, 1, 0], to: offset / length)
         rod.position = offset / 2
         leader.addChild(rod)
@@ -243,26 +173,14 @@ public final class Callout {
 
     private static var cache: [String: MeshResource] = [:]
 
-    /// Generated text meshes are expensive; modules re-request the same
-    /// strings constantly ("9.0 V", "45°"). Cache keyed by content+size.
-    /// `wrapWidth` in metres wraps the run at word boundaries; 0 leaves
-    /// it on one line.
-    ///
-    /// A SENTENCE NEEDS THIS AND A READING DOES NOT. Every caller until
-    /// 2026-08-08 passed a number or two words, so one line was always
-    /// right — and then Circuit Workshop's `insightText`, which is two
-    /// sentences of teaching, needed a surface. Unwrapped it renders as
-    /// a single run several metres wide, which is not a small problem
-    /// with the layout but a different object entirely.
+    /// Cached text meshes keyed by content+size+wrap. `wrapWidth` in
+    /// metres wraps at word boundaries; 0 leaves one line.
     public static func textMesh(_ text: String, size: CGFloat,
                                 wrapWidth: CGFloat = 0) -> MeshResource {
         let key = "\(size)|\(wrapWidth)|\(text)"
         if let cached = cache[key] { return cached }
-        // The container has to be TALL, not tight: `generateText` clips
-        // to the frame rather than growing it, so a height guessed too
-        // small silently drops the last line of a paragraph. Ten lines'
-        // worth is more than any reading in this app and costs nothing —
-        // the mesh is bounded by the glyphs, not by the frame.
+        // The container must be TALL: `generateText` clips to the frame,
+        // silently dropping the last line if the height is guessed small.
         let frame = wrapWidth > 0
             ? CGRect(x: -wrapWidth / 2, y: -size * 14,
                      width: wrapWidth, height: size * 14)
@@ -274,8 +192,7 @@ public final class Callout {
             containerFrame: frame,
             alignment: .center,
             lineBreakMode: wrapWidth > 0 ? .byWordWrapping : .byTruncatingTail)
-        // Bounded so a module that formats a continuously-varying number
-        // can't grow the cache without limit.
+        // Bounded so a varying number can't grow the cache without limit.
         if cache.count > 400 { cache.removeAll(keepingCapacity: true) }
         cache[key] = mesh
         return mesh

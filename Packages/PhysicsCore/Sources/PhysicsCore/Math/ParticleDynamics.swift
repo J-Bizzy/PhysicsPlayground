@@ -1,22 +1,8 @@
 //
 //  ParticleDynamics.swift
-//  PhysicsCore — Math
-//
-//  Domain-agnostic particle kinematics: velocity Verlet over an arbitrary
-//  acceleration field a(r). Every simulation that moves a particle under a
-//  position-dependent conservative force uses this one integrator —
-//  electrostatics passes (q/m)·E(r), orbital mechanics passes Σ Gm·r̂/r².
-//
-//  Velocity Verlet is the standard symplectic scheme for conservative
-//  forces. Per step:
-//      v(t+½h) = v(t) + ½h·a(r(t))
-//      r(t+h)  = r(t) + h·v(t+½h)
-//      v(t+h)  = v(t+½h) + ½h·a(r(t+h))
-//  Unlike naive Euler it doesn't systematically pump energy into the orbit,
-//  so trajectories stay physically plausible over many frames.
-//
-//  NOTE: not suitable for velocity-dependent forces (e.g. magnetic v×B) —
-//  the magnetism module uses a Boris pusher instead.
+//  PhysicsCore — Math: velocity Verlet over an arbitrary a(r) field —
+//  symplectic, energy-stable for conservative forces. NOT suitable for
+//  velocity-dependent forces (v×B); magnetism uses a Boris pusher.
 //
 
 import Foundation

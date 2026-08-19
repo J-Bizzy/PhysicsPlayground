@@ -1,22 +1,6 @@
-//
-//  Lagrange.swift
-//  PhysicsCore — Gravitation
-//
-//  The five Lagrange points of a circular two-body system: the places
-//  where a small third body can co-rotate with the pair. L4 and L5 are
-//  exactly the equilateral-triangle points (and are stable when the mass
-//  ratio is extreme enough, as for Earth–Moon). L1, L2, L3 lie on the
-//  line through both bodies and have no closed form — they are roots of
-//  a quintic — so this solves the rotating-frame force balance
-//
-//      a_grav,axial(x) + ω²·x = 0,   ω² = G(m₁+m₂)/R³
-//
-//  by bisection in the three brackets that each contain one root
-//  (origin at the barycenter, x along the primary→secondary axis).
-//
-//  Everything is exact for circular orbits; for the mildly eccentric
-//  real Moon these are the standard instantaneous points.
-//
+//  Lagrange.swift — five Lagrange points of a circular two-body pair. L4/L5 exact equilateral;
+//  L1–L3 have no closed form (quintic roots): bisection on a_grav,axial(x) + ω²x = 0, ω² = G(m₁+m₂)/R³,
+//  one bracket per root, origin at the barycenter, x along primary→secondary.
 
 import Foundation
 import simd
@@ -47,7 +31,7 @@ public enum Lagrange {
         let separation = simd_length(offset)
         let axis = offset / separation
 
-        // In-plane direction of the secondary's motion (defines "leading").
+        // In-plane motion direction defines "leading".
         let relativeVelocity = secondary.velocity - primary.velocity
         var motion = relativeVelocity - simd_dot(relativeVelocity, axis) * axis
         if simd_length(motion) < 1e-9 {
@@ -96,9 +80,8 @@ public enum Lagrange {
         return Points(l1: onAxis(l1x), l2: onAxis(l2x), l3: onAxis(l3x), l4: l4, l5: l5)
     }
 
-    /// The velocity a small body needs at `point` to co-rotate with the
-    /// pair — the rotating frame made concrete: v = v_bary + ω × (r − r_bary),
-    /// with ω taken from the pair's actual instantaneous rotation.
+    /// Velocity to co-rotate with the pair at `point`: v = v_bary + ω × (r − r_bary),
+    /// ω from the pair's actual instantaneous rotation.
     public static func corotatingVelocity(
         at point: SIMD3<Double>,
         primary: CelestialBody,
@@ -114,8 +97,7 @@ public enum Lagrange {
         return barycenterVelocity + simd_cross(omega, point - barycenter)
     }
 
-    /// Earth and Moon on their real mutual circular orbit about the
-    /// barycenter — the clean starting state for a Lagrange laboratory.
+    /// Earth and Moon on their real mutual circular orbit about the barycenter.
     public static func earthMoonSystem(
         gravitationalConstant G: Double = NBody.gravitationalConstant
     ) -> (earth: CelestialBody, moon: CelestialBody) {

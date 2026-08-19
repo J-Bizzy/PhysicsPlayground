@@ -1,11 +1,6 @@
 //
 //  TestChargeDynamics.swift
-//  PhysicsCore — Electromagnetism
-//
-//  Electrostatics flavor of the shared velocity-Verlet integrator: the
-//  acceleration of a probe charge is a = (q/m)·E(r), so this wrapper takes
-//  the charge-to-mass ratio and an E-field closure and delegates the actual
-//  stepping to Math's ParticleDynamics.
+//  Probe-charge integration a = (q/m)·E(r): velocity-Verlet via ParticleDynamics, plus a Boris pusher for the full Lorentz force.
 //
 
 import Foundation
@@ -25,8 +20,7 @@ public enum TestChargeDynamics {
         ParticleDynamics.step(state, dt: dt) { chargeToMassRatio * field($0) }
     }
 
-    /// Advances by `dt` split into `substeps` Verlet steps — call this per
-    /// rendered frame so accuracy doesn't depend on the display frame rate.
+    /// Advances by `dt` split into `substeps` Verlet steps — accuracy independent of frame rate.
     public static func step(
         _ state: ProbeState,
         chargeToMassRatio: Double,
@@ -37,12 +31,8 @@ public enum TestChargeDynamics {
         ParticleDynamics.step(state, dt: dt, substeps: substeps) { chargeToMassRatio * field($0) }
     }
 
-    /// Full Lorentz force a = (q/m)(E + v×B) via the Boris pusher —
-    /// the standard plasma-physics integrator: half an electric kick,
-    /// an exact magnetic rotation, half an electric kick. A pure
-    /// magnetic field rotates the velocity WITHOUT changing its
-    /// magnitude, to machine precision, so cyclotron circles never
-    /// spiral artificially.
+    /// Full Lorentz force a = (q/m)(E + v×B) via the Boris pusher (half E kick, exact B rotation,
+    /// half E kick) — a pure B field preserves |v| to machine precision, so cyclotron circles never spiral.
     public static func stepLorentz(
         _ state: ProbeState,
         chargeToMassRatio: Double,

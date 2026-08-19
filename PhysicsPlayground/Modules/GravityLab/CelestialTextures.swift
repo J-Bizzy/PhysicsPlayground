@@ -1,13 +1,6 @@
 //
 //  CelestialTextures.swift
-//  Physics Playground — Gravity Lab module
-//
-//  Procedurally generated equirectangular textures for every body — no
-//  bundled assets. Banded Jupiter with its red spot, a blotchy blue
-//  Earth with polar caps and cloud streaks, cratered Mercury and Moon,
-//  Mars with dark maria, granulated Sun. Generated once off the main
-//  path (512×256 CGContext each), cached, and applied by the renderer
-//  as they arrive (the `version` counter tells it to refresh).
+//  Procedural equirectangular textures for every body — generated once off the main path, cached, applied as they arrive via `version`.
 //
 
 import Foundation
@@ -18,8 +11,7 @@ import RealityKit
 @MainActor
 enum CelestialTextures {
     private static var cache: [String: TextureResource] = [:]
-    /// Bumped as each texture finishes loading; renderers re-apply
-    /// materials when they see it change.
+    /// Bumped as each texture finishes loading; renderers re-apply materials on change.
     private(set) static var version = 0
     private static var warmed = false
 
@@ -112,7 +104,6 @@ enum CelestialTextures {
             }
         case "Earth":
             fill(0.16, 0.35, 0.62)
-            // Continent splotches: clusters of overlapping green-brown blobs.
             for _ in 0..<15 {
                 let cx = CGFloat.random(in: 0...w), cy = CGFloat.random(in: h * 0.18...h * 0.82)
                 for _ in 0..<9 {
@@ -121,7 +112,6 @@ enum CelestialTextures {
                          radius: .random(in: 8...22), green * 0.8, green, green * 0.45, alpha: 0.9)
                 }
             }
-            // Polar caps and cloud streaks.
             context.setFillColor(CGColor(red: 0.95, green: 0.96, blue: 1.0, alpha: 0.95))
             context.fill(CGRect(x: 0, y: 0, width: w, height: h * 0.07))
             context.fill(CGRect(x: 0, y: h * 0.93, width: w, height: h * 0.07))
@@ -154,14 +144,12 @@ enum CelestialTextures {
                 context.setFillColor(CGColor(red: band.0, green: band.1, blue: band.2, alpha: 1))
                 context.fill(CGRect(x: 0, y: CGFloat(index) * bandHeight,
                                     width: w, height: bandHeight + 1))
-                // Soften edges with a wandering overlay.
                 for _ in 0..<10 {
                     blob(x: .random(in: 0...w),
                          y: CGFloat(index) * bandHeight + .random(in: -4...4),
                          radius: .random(in: 6...14), band.0, band.1, band.2, alpha: 0.4)
                 }
             }
-            // The Great Red Spot.
             context.setFillColor(CGColor(red: 0.72, green: 0.3, blue: 0.2, alpha: 0.95))
             context.fillEllipse(in: CGRect(x: w * 0.6, y: h * 0.6, width: 60, height: 30))
         case "Asteroid":

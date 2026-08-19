@@ -1,20 +1,10 @@
 //
 //  GravityLabRenderer.swift
-//  Physics Playground — Gravity Lab module
+//  Renders the solar system diorama: Sun light, pooled planets, trails, prediction, arrows.
 //
-//  Renders the solar system diorama: a glowing Sun that actually lights
-//  nearby bodies (PointLight), pooled planets (grabbable, hover-lit by
-//  the system), per-body orbit trails, the held-body orbit prediction,
-//  velocity/acceleration/force arrows on the selected body, and a soft
-//  flash when bodies merge.
-//
-//  Frame-rate contract: pools built once; per-frame work is transform
-//  writes. Every tube — orbit trails, the held-body prediction (a
-//  1200-step n-body integration), and the spacetime grid — is computed
-//  on a GeometryPipeline worker; the main thread only uploads finished
-//  buffers. Materials are created once and cached. Ticked per frame
-//  from SceneEvents.Update (observation loops starve during grabs —
-//  house rule since the EM module's device findings).
+//  Frame-rate contract: pools built once; per-frame work is transform writes. Every tube is
+//  computed on a GeometryPipeline worker; the main thread only uploads finished buffers.
+//  Ticked from SceneEvents.Update — observation loops starve during grabs.
 //
 
 import Foundation
@@ -30,16 +20,8 @@ final class GravityLabRenderer {
     let root = Entity()
     var subscriptions: [EventSubscription] = []
 
-    /// Called from the SpaceView's `onDisappear`, and the reason it has
-    /// to be called explicitly is that neither of the things it releases
-    /// is tied to this object's lifetime.
-    ///
-    /// An `EventSubscription` outlives the view that made it — cancelled
-    /// nowhere, it keeps calling into a renderer for a scene that is no
-    /// longer on screen and holds the whole entity graph alive behind
-    /// it. And a `GeometryPipeline` job in flight ran to completion and
-    /// then uploaded a mesh and enabled an entity in a scene being torn
-    /// down (see `GeometryPipeline.cancel`).
+    /// Called from the SpaceView's `onDisappear`: subscriptions and pipeline jobs
+    /// outlive this object and must be cancelled explicitly.
     func teardown() {
         subscriptions.forEach { $0.cancel() }
         subscriptions = []
@@ -51,8 +33,7 @@ final class GravityLabRenderer {
 
     /// Set by the space view's router while the hand owns a body.
     var manipulatingBodyID: UUID?
-    /// The body already acknowledged with a pickup pulse — one flash per
-    /// grab, not one per frame.
+    /// The body already acknowledged with a pickup pulse — one flash per grab.
     private var pulsedGrabID: UUID?
     /// Where the release tick plays from when the grab ends.
     private weak var pulsedGrabEntity: Entity?
@@ -60,23 +41,17 @@ final class GravityLabRenderer {
     /// Where the system center sits in the room.
     static let systemPosition = SIMD3<Float>(0, 1.25, -1.2)
 
-    /// Parent for the selected body's floating data panel (the space view
-    /// attaches the SwiftUI attachment here; we move it each render).
+    /// Parent for the selected body's floating data panel; moved each render.
     let selectedAnchor = Entity()
 
-    /// The scaled, placed root the bodies live under — blooms and
-    /// wells convert through it like every hand does.
+    /// The scaled, placed root the bodies live under — blooms and wells convert through it.
     let systemRoot = Entity()
-    /// Freeze sculpts: pausing materialises velocity and net-force
-    /// arrows on every body, in the app-wide frozen-vector language.
+    /// Pausing materialises velocity/net-force arrows on every body.
     private let frozenVectors = FrozenVectors(budget: GravityLabModel.bodyBudget * 2)
-    /// The tapped body introduces itself — name, speed, distance —
-    /// beside its open control ring, and falls quiet when it folds.
+    /// The tapped body's callout — name, speed, distance — beside its open ring.
     private var lookCallout: Callout?
     private var calloutReveal: Float = 0
-    /// The reveal last written and the reading last formatted — both
-    /// gates on per-frame work that used to run whether or not anything
-    /// displayed had changed. NaN keys force the first write.
+    /// Gates on per-frame work; NaN keys force the first write.
     private var appliedCalloutReveal: Float = -1
     private var lookCalloutKey: (String, Double, Double) = ("", .nan, .nan)
 
@@ -93,20 +68,11 @@ final class GravityLabRenderer {
         ghost.isEnabled = false
         return ghost
     }()
-    /// The ghost is aimed by dragging, so like the apsis beads its one
-    /// hands-free verb is a step in or out along its own radius.
+    /// Aimed by dragging; its one hands-free verb is a step along its own radius.
     var onGhostAdjust: ((Double) -> Void)?
 
-    /// The SpaceView's tap router, so a carried body can be operated
-    /// without hands — see `Grabbable`'s `activate`.
-    ///
-    /// BEHIND A BOX, for the same reason `KinematicsRenderer`'s is: the
-    /// body pool is built inside `init`, before the last stored property
-    /// is set, and a closure written there cannot capture `self` at all.
-    /// Capturing a local that happens to be a reference type sidesteps
-    /// it — `init` makes the box, hands it to the closures, and stores
-    /// it, so setting `onObjectTap` later writes through the same box
-    /// they are already holding.
+    /// The SpaceView's tap router. BEHIND A BOX: the body pool is built in `init` before
+    /// `self` exists, so closures capture this box and `onObjectTap` writes through it.
     private final class TapRouter { var route: ((Entity) -> Void)? }
     private let tapRouter: TapRouter
     var onObjectTap: ((Entity) -> Void)? {
@@ -114,18 +80,15 @@ final class GravityLabRenderer {
         set { tapRouter.route = newValue }
     }
     private var ghostCallout: Callout?
-    /// The paragraph that appears when a release parks a body at a
-    /// Lagrange point — see `syncLagrangeCapture`.
+    /// Paragraph shown when a release parks a body at a Lagrange point — see `syncLagrangeCapture`.
     private(set) var lagrangeCallout: Callout?
     private var verdictLine = Entity()
     private var verdictCallout: Callout?
     private var verdictShownWall: Double?
     private var lastVerdict: GravityLabModel.PredictionVerdict?
 
-    /// The ghost while the clock runs; the guess-to-truth line when it
-    /// stops. Being wrong is drawn, measured, and then allowed to fade
-    /// — the point is the gap, not the grade. (Distinct from
-    /// syncPrediction, the held-body trajectory preview.)
+    /// The ghost while the clock runs; the guess-to-truth line when it stops.
+    /// (Distinct from syncPrediction, the held-body trajectory preview.)
     private func syncPredictionGhost(_ model: GravityLabModel) {
         let toDisplay = Float(model.simToDisplay)
         if let prediction = model.prediction {
@@ -193,40 +156,24 @@ final class GravityLabRenderer {
     private var sweepCurrentLabel: Callout?
     private var sweepHeldLabel: Callout?
     private static let sweepGold = UIColor(red: 1.0, green: 0.80, blue: 0.30, alpha: 1)
-    /// A pure VIEW transform between the scene root and the system: the
-    /// two-handed scale/turn rig drives this and nothing else, so the
-    /// simulation keeps running in true SI units at its own scale while
-    /// the user changes how big it looks. Pinch with both hands and pull
-    /// apart to go from a tabletop orrery to a solar system you stand
-    /// inside — the one gesture that only exists in a headset, and the
-    /// module that most needed it, since at 1 AU = 0.5 m the inner
-    /// planets are a disc you could cover with a dinner plate.
+    /// Pure VIEW transform between scene root and system: the two-hand rig drives this and
+    /// nothing else, so the simulation keeps running in true SI units while apparent size changes.
     let viewRoot = Entity()
-    /// Mode-dependent (AU scale vs. Earth–Moon scale); refreshed per render.
+    /// Refreshed per render.
     private var scale: Float = 1
 
     private let bodyPool: EntityPool<ModelEntity>
     private var bodyMaterialKeys: [String]
-    /// Which body each pooled slot is currently named for.
-    ///
-    /// The slot's entity `.name` has to BE the uuidString — that is how
-    /// a manipulation event finds its model object — but deciding
-    /// whether it already is one cost a fresh 36-character String per
-    /// slot per frame, because `UUID.uuidString` allocates on every
-    /// access. Sixteen bodies meant sixteen Strings a frame built only
-    /// to be compared and thrown away. Comparing the UUIDs answers the
-    /// same question for nothing, and the String is built on the frame
-    /// a slot actually changes hands.
+    /// Which body each pooled slot is named for. The entity `.name` must BE the uuidString
+    /// (manipulation events resolve by it); compare UUIDs, not strings — `uuidString` allocates.
     private var bodySlotIDs: [UUID?]
     /// The scale each pooled body's touch target was last sized for.
     private var bodyColliderScales: [Int: Float] = [:]
     private var bodyNames: [String]
     private static let baseBodyRadius: Float = 0.05
 
-    /// The sun's halo mesh, and the star radius its scale is expressed
-    /// against: `sunGlow.scale = displayRadius / glowReferenceRadius`, so
-    /// the halo reaches `glowBaseRadius / glowReferenceRadius` times the
-    /// star. Named because `calloutAnchor` has to clear it.
+    /// Sun halo and the reference radius its scale is expressed against
+    /// (`sunGlow.scale = displayRadius / glowReferenceRadius`). Named because `calloutAnchor` must clear it.
     static let glowBaseRadius: Double = 0.105
     static let glowReferenceRadius: Double = 0.075
 
@@ -250,25 +197,11 @@ final class GravityLabRenderer {
     private var appliedTextureVersion = -1
     private let predictionEntity = ModelEntity()
     private let predictionMaterial: UnlitMaterial
-    /// THE SAME ARC, CASED — 2026-08-09.
-    ///
-    /// Projectiles draws a predicted arc too, from the same
-    /// `predictedArcUI` token, and cases it with `Materials.contrastLine`
-    /// (`KinematicsRenderer`). This one was a bare translucent white
-    /// tube, which is the exact case `Materials`' own note names: "if
-    /// you are adding lines to a module, this is the pass that is
-    /// probably missing." One idea, one colour, two treatments.
-    ///
-    /// Only the prediction. The orbit TRAILS are the same shape of
-    /// problem and are deliberately left alone: there are sixteen of
-    /// them, they rebuild as the bodies move, and casing them would
-    /// double the module's hottest geometry to fix a line that is on
-    /// screen while a planet is held. The grid is a judgement for the
-    /// owner to make on a photograph, not one to make from a rule.
+    /// Cased with `Materials.contrastLine` like Projectiles' arc — same token, same treatment.
+    /// Trails are deliberately left uncased: sixteen of them rebuild as bodies move.
     private let predictionCasingEntity = ModelEntity()
     private let predictionCasingMaterial: UnlitMaterial
-    /// Shared by the core tube and by `casingRadius`, so the two cannot
-    /// be changed apart.
+    /// Shared by the core tube and `casingRadius`, so the two cannot change apart.
     private static let predictionRadius: Float = 0.002
     private let flashEntity: ModelEntity
     private var platform: ModelEntity!
@@ -281,22 +214,15 @@ final class GravityLabRenderer {
     private var particleAges: [Double] = []
     private var particlesVisible = false
 
-    // Spacetime grid. Constants live in a plain enum so the background
-    // grid computation can read them without actor hops.
+    // Spacetime grid constants; plain enum so the worker reads them without actor hops.
     private nonisolated enum GridSpec {
         static let floorHeight: Float = -0.42
-        /// Out past Jupiter's 2.6 m ring. It was 1.4 m, which stops at
-        /// Mars — so the four biggest wells in the scene had no floor
-        /// under them at all, and the rubber sheet ended in mid-air
-        /// exactly where the interesting orbits begin.
+        /// Out past Jupiter's 2.6 m ring, so the biggest wells have floor under them.
         static let extent: Float = 2.9
         static let lineCount = 17
         static let samples = 33
-        /// Above this view scale the grid is switched off. At 3x the
-        /// sheet is 1.3 m below your feet and stretches 17 m out; you are
-        /// standing INSIDE the inner system by then, and a rubber sheet
-        /// under the floorboards is neither visible nor meaningful. It is
-        /// also the module's second most expensive rebuild.
+        /// Above this view scale the grid is off — invisible under the floorboards,
+        /// and it is the module's second most expensive rebuild.
         static let maximumViewScale: Float = 2.5
     }
     private let gridEntity = ModelEntity()
@@ -326,8 +252,7 @@ final class GravityLabRenderer {
         viewRoot.addChild(systemRoot)
         root.addChild(viewRoot)
 
-        // The floating platform under the system — a quiet glass disc.
-        // Hidden while the spacetime grid takes over as the floor.
+        // Floating platform — hidden while the spacetime grid takes over as the floor.
         var platformMaterial = UnlitMaterial(color: .black)
         platformMaterial.blending = .transparent(opacity: 0.35)
         platform = ModelEntity(
@@ -340,9 +265,7 @@ final class GravityLabRenderer {
         // The spacetime grid (rubber-sheet picture), rebuilt as bodies move.
         systemRoot.addChild(gridEntity)
 
-        // Field particles: a fixed pool of faint dots that drift along the
-        // local gravitational field. Density near masses emerges from the
-        // flow itself — strong fields pull the streamlines together.
+        // Field particles: a fixed pool of faint dots drifting along the local field.
         var particleMaterial = UnlitMaterial(color: .white)
         particleMaterial.blending = .transparent(opacity: 0.32)
         let particleMesh = MeshResource.generateSphere(radius: 0.0028)
@@ -363,10 +286,7 @@ final class GravityLabRenderer {
                 mesh: bodyMesh,
                 materials: [Materials.machined(.white, roughness: 0.6)]
             )
-            // 1.5× until 2026-08-07. The factor survives the per-body
-            // scale, so it was 1.5× at every size — and an apsis bead
-            // drawn in the 1.0–1.5 r annulus around a planet was visible,
-            // hover-lit and completely unpinchable.
+            // 1.15×: a larger factor makes an apsis bead near the surface unpinchable.
             Grabbable.configureTouchTarget(
                 sphere, collisionRadius: Self.baseBodyRadius * 1.15,
                 activate: { [weak sphere] in
@@ -390,14 +310,8 @@ final class GravityLabRenderer {
             systemRoot.addChild(sector)
         }
 
-        // The Sun's light: warm, following the heaviest body — plus a
-        // soft corona shell so it reads as incandescent, not painted.
-        // 40 m, not 5. Neptune's orbit is a 15 m ring at 1x, so a 5 m
-        // attenuation radius meant the Sun lit as far as Saturn and no
-        // further: from there out the planets were lit only by the room's
-        // own key light, which comes from the wrong direction entirely.
-        // The one cue this scene cannot afford to lose is which side of a
-        // planet faces the Sun.
+        // Warm light following the heaviest body. Attenuation 40 m: Neptune's ring is 15 m
+        // at 1×, and the one cue the scene cannot lose is which side of a planet faces the Sun.
         sunLight.components.set(PointLightComponent(
             color: UIColor(red: 1.0, green: 0.9, blue: 0.75, alpha: 1),
             intensity: 12_000,
@@ -426,11 +340,8 @@ final class GravityLabRenderer {
         trailBuiltCounts = Array(repeating: -1, count: trailPool.budget)
         systemRoot.addChild(trailPool.root)
 
-        // Held-body orbit prediction.
-        // Two passes from the one recipe, so the casing's near-black and
-        // the core's opacity stay the house numbers rather than this
-        // file's. `coreOpacity` keeps the 0.55 the arc already had — a
-        // ghost of a path, not a drawn one.
+        // Held-body orbit prediction: two passes from one recipe so the casing and core
+        // opacities stay the house numbers.
         let (predictionCasing, predictionCore) = Materials.contrastLine(
             DesignTokens.Palette.predictedArcUI, coreOpacity: 0.55)
         self.predictionMaterial = predictionCore
@@ -457,16 +368,13 @@ final class GravityLabRenderer {
         selectedAnchor.components.set(BillboardComponent())
         systemRoot.addChild(selectedAnchor)
 
-        // Lagrange point markers: five small diamonds with labels,
-        // co-rotating with the Moon (positions written every render).
+        // Lagrange point markers; positions written every render.
         let markerMesh = MeshResource.generateSphere(radius: 0.009)
         var markerMaterial = UnlitMaterial(color: DesignTokens.Palette.targetUI)
         markerMaterial.blending = .transparent(opacity: 0.85)
         for name in ["L1", "L2", "L3", "L4", "L5"] {
             let marker = ModelEntity(mesh: markerMesh, materials: [markerMaterial])
-            // The house dark plate behind the name (2026-08-06); the
-            // pivot lifts to where the run's centre sat when the text
-            // was baseline-anchored.
+            // House dark plate behind the name; the pivot lifts to the run's centre.
             let label = BackedLabel(size: 0.02)
             label.setText(name, color: DesignTokens.Palette.targetUI)
             lagrangeLabels.append(label)
@@ -501,36 +409,27 @@ final class GravityLabRenderer {
             apply: { [weak self] in self?.applyGrid($0) }
         )
 
-        // LAST, because `self` is not available until every stored
-        // property is initialised — the ghost is built in a
-        // stored-property closure that has no `self` to capture, so this
-        // is the first point its action can be attached at all.
+        // LAST: `self` is unavailable until every stored property is set, so this is
+        // the first point the ghost's action can be attached.
         SpatialActions.attach(
             to: ghostEntity, label: "Predicted path",
             adjust: { [weak self] steps in self?.onGhostAdjust?(steps) })
     }
 
     private var lagrangeMarkers: [ModelEntity] = []
-    /// Retains the markers' BackedLabels (the entity graph holds only
-    /// their roots).
+    /// Retains the markers' BackedLabels (the entity graph holds only their roots).
     private var lagrangeLabels: [BackedLabel] = []
 
     // MARK: The orbit ring — the selected body's conic, as an object
-    //
-    // Under `systemRoot`, like the wells and the bloom, and for the same
-    // reason: a hand arrives here through `displayPoint(fromWorld:)`, and
-    // an anchor parented in one frame while positioned in another lands
-    // nowhere near the thing it belongs to.
+    // Under `systemRoot`: a hand arrives via `displayPoint(fromWorld:)`, and an anchor
+    // parented in another frame lands nowhere near the thing it belongs to.
     private let orbitRing = OrbitRing(
         accent: UIColor(DesignTokens.Palette.gravityAccent))
 
-    /// Which apsis bead an entity is, if any — the renderer owns the
-    /// beads, so the renderer answers whether a pinch landed on one.
-    /// Mirrors `Well.pull(_:at:)` in shape.
+    /// Which apsis bead an entity is, if any — the renderer owns the beads.
     func apsis(for entity: Entity) -> Apsis? { orbitRing.apsis(for: entity) }
 
-    /// Forwards a VoiceOver step on an apsis bead to whoever owns the
-    /// model — see `OrbitRing.onAdjust`.
+    /// Forwards a VoiceOver step on an apsis bead — see `OrbitRing.onAdjust`.
     var onApsisAdjust: ((Apsis, Double) -> Void)? {
         get { orbitRing.onAdjust }
         set { orbitRing.onAdjust = newValue }
@@ -540,35 +439,14 @@ final class GravityLabRenderer {
         orbitRing.beadDisplayPoint(apsis)
     }
 
-    /// The viewer, needed for the beads' reach rule. Written by the space
-    /// view each frame, already converted into the system's own frame.
+    /// The viewer, for the beads' reach rule — already converted into the system's own frame.
     var viewerInSystem: SIMD3<Float>?
     /// The two-hand rig's live scale, so the beads can compensate for it.
     var rigScale: Float = 1
 
-    /// EVERYTHING THAT IS READ RATHER THAN SIMULATED HOLDS ITS SIZE.
-    ///
-    /// The rig scales `systemRoot`, and it has to: the planets, their
-    /// orbits, the trails and the rings are the thing being resized, and
-    /// resizing them is the whole gesture. But the LABELS are not part of
-    /// the solar system. A 22 mm name plate parented in that frame is
-    /// 20 cm tall at 9x and 9 mm at 0.4x — unreadable at both ends, for
-    /// opposite reasons — and the spawn well, which is an instrument and
-    /// not an object in the sky, ends up a 29 cm ball five metres to your
-    /// left at full zoom.
-    ///
-    /// Counter-scaling by 1/rig cancels the rig exactly. Note what it
-    /// does for a child whose POSITION is set on the compensated entity
-    /// itself (a name plate follows its planet, because the plate's
-    /// position is on the holder and the scale only reaches its
-    /// children) versus one set on a child (the well stays put in the
-    /// room, because both its offset and its size are inside the
-    /// compensated root). Both behaviours are the ones wanted, and they
-    /// fall out of where the position is written.
-    ///
-    /// `Bloom` already does this for itself, by distance rather than by
-    /// rig — see its `update`. This is the same rule for everything that
-    /// is not a bloom.
+    /// Everything READ rather than simulated holds its size: counter-scaling by 1/rig cancels
+    /// the rig exactly. A child positioned on the compensated entity follows its planet; one
+    /// positioned inside it stays put in the room — both wanted, both fall out of where position is written.
     private func applyRigCompensation() {
         let compensation = SIMD3<Float>(repeating: 1 / max(rigScale, 0.001))
         for label in bodyLabels { label.scale = compensation }
@@ -581,9 +459,7 @@ final class GravityLabRenderer {
         }
     }
 
-    /// Instruments parented under `systemRoot` that must keep their size
-    /// and their place in the room — the spawn well, chiefly. Registered
-    /// by the space view, which owns them.
+    /// Instruments under `systemRoot` that must keep size and place — chiefly the spawn well.
     private var rigCompensatedInstruments: [Entity] = []
 
     func compensateForRig(_ entity: Entity) {
@@ -591,22 +467,12 @@ final class GravityLabRenderer {
     }
 
     // MARK: The scale readout
-    //
-    // The rig is the module's signature gesture and it had no readout at
-    // all: nothing anywhere said whether you were at 1x or 6x, so "how
-    // big is this now" could only be answered by recognising a planet.
-    // Under `root`, so the readout does not resize along with the thing
-    // it is reporting on.
+    // Under `root`, so the readout does not resize with the thing it reports on.
 
     private let scaleReadout = Entity()
     private var scaleReadoutText: String?
 
-    /// Shows "3.4x" beside the clock bank, or nothing at 1x — the
-    /// affordance only means something once the view has been changed.
-    ///
-    /// It took a `viewer:` and discarded it: the plate carries a
-    /// `BillboardComponent`, so RealityKit aims it at the camera every
-    /// frame and there is nothing for a head position to do here.
+    /// Shows "3.4x" beside the clock bank, or nothing at 1x.
     func showScaleReadout(_ label: String?, anchor: SIMD3<Float>) {
         guard let label else {
             scaleReadout.isEnabled = false
@@ -625,25 +491,7 @@ final class GravityLabRenderer {
         }
     }
 
-    /// THE PARAGRAPH THAT EXPLAINS WHY YOUR THROW WAS IGNORED.
-    ///
-    /// `release()` snaps a body dropped near a Lagrange point onto the
-    /// point and OVERWRITES its velocity with
-    /// `Lagrange.corotatingVelocity`. That is the right physics — a body
-    /// parked at L4 has to move with the rotating frame or it is not
-    /// parked — and with nothing said it looks exactly like the throw
-    /// was discarded. `GravityLabModel.lagrangeExplanations` has had a
-    /// paragraph ready for each of the five points since they were
-    /// written, and no surface to appear on: five strings, zero readers,
-    /// beside a `capturedPointName` written in four places and read in
-    /// none.
-    ///
-    /// IT FOLLOWS THE BODY rather than sitting on the point, and that is
-    /// the whole lesson rather than a placement detail. L1, L2 and L3
-    /// are saddles, so the captured body slides off over the next few
-    /// days — with the sentence saying it would travelling alongside.
-    /// L4 and L5 hold, and the paragraph stays put. The text makes a
-    /// prediction and the object either keeps it or does not, in view.
+    /// The paragraph explaining a Lagrange capture. It follows the body: L1–L3 saddles slide off, L4/L5 hold — the callout tracks whichever, so the text's prediction plays out in view.
     private func syncLagrangeCapture(_ model: GravityLabModel) {
         guard let name = model.capturedPointName,
               let text = GravityLabModel.lagrangeExplanations[name],
@@ -655,8 +503,7 @@ final class GravityLabRenderer {
         if lagrangeCallout == nil {
             let callout = Callout(color: Self.sweepGold, textSize: 0.020,
                                   offset: SIMD3(0, 0.10, 0))
-            // A paragraph, so it wraps — every other callout in this app
-            // is a number and never needed to.
+            // A paragraph, so it wraps — every other callout here is a number.
             callout.wrapWidth = 0.46
             callout.setAccessibilityName("Lagrange point \(name)")
             systemRoot.addChild(callout.root)
@@ -667,22 +514,7 @@ final class GravityLabRenderer {
         lagrangeCallout?.setText(text)
     }
 
-    /// Where the paragraph stands: on the body, then FORWARD ALONG THE
-    /// VIEW RAY far enough to clear the star.
-    ///
-    /// Following the body is the point (above) and this does not change
-    /// it — the callout still tracks a saddle-point escape. What it fixes
-    /// is what the first photograph of the paragraph showed: an inner
-    /// planet's L-points sit close in (Mercury's are 0.387 AU out, and
-    /// the star's halo is 0.31 m of that at display scale), so the text
-    /// was standing INSIDE the star. Half its glyphs rendered in front of
-    /// the sphere and half behind, and the last three lines were cut off
-    /// mid-word.
-    ///
-    /// A backing plate is no help against that, which is worth saying
-    /// because the plate was already there and already on — it was inside
-    /// the star as well. Depth is not contrast, and the fix for one is
-    /// not the fix for the other.
+    /// Where the paragraph stands: on the body, pushed forward along the view ray far enough to clear the star's halo (inner planets' L-points sit inside the star otherwise).
     private func calloutAnchor(for body: GravityLabModel.OrbitingBody,
                                in model: GravityLabModel) -> SIMD3<Float> {
         let scale = Float(model.simToDisplay)
@@ -691,20 +523,11 @@ final class GravityLabRenderer {
             return seat
         }
         let centre = SIMD3<Float>(star.body.position) * scale
-        // How far the halo actually reaches, asked of the same two
-        // numbers that build it rather than of a ratio typed in here: a
-        // standoff derived by hand from constants somewhere else is one
-        // that silently stops clearing the star the day either moves.
+        // Halo reach derived from the same two numbers that build it, so it stays correct if either moves.
         let halo = Float(star.displayRadius)
             * Float(Self.glowBaseRadius / Self.glowReferenceRadius)
 
-        // IN FRONT OF THE STAR'S NEAR SURFACE, not merely "pushed a bit
-        // toward the reader". The first attempt moved the text by
-        // `halo + margin` along the seat-to-viewer ray and clamped it to
-        // half the viewer distance; the photograph after it had four of
-        // five lines clear and a circular bite out of the fifth, because
-        // the clamp bound before the text was out. Solving for the plane
-        // says how far is enough instead of guessing.
+        // Solve for the plane in front of the star's near surface rather than nudging toward the reader.
         let axis = viewer - centre
         let reach = length(axis)
         guard reach > 1e-4 else { return seat }
@@ -712,8 +535,7 @@ final class GravityLabRenderer {
         let clearance = halo + 0.05
         let depth = dot(seat - centre, toward)
         guard depth < clearance else { return seat }
-        // …but never into the reader's face: stop short of arm's length
-        // even if that leaves the star clipping a line.
+        // …but never into the reader's face: stop short of arm's length.
         let room = max(0, reach - 0.25 - depth)
         return seat + toward * min(clearance - depth, room)
     }
@@ -727,12 +549,7 @@ final class GravityLabRenderer {
                              occluders: [], head: viewerInSystem)
             return
         }
-        // IN THE RING'S FRAME, not the system's. `OrbitRing.root` sits on
-        // the primary and its beads are placed relative to it, so an
-        // absolute centre here is offset from the beads by the primary's
-        // own position — wrong by 0.2 AU the moment "Twin suns" moves the
-        // primary off the origin, and invisible before that because
-        // `reset()` puts the Sun at exactly zero.
+        // In the ring's frame, not the system's: `OrbitRing.root` sits on the primary, so occluders must be offset by the primary's own position (a Twin-suns primary is off origin).
         let primaryDisplay = SIMD3<Float>(primary.body.position) * scale
         let occluders = model.bodies.map {
             (center: SIMD3<Float>($0.body.position) * scale - primaryDisplay,
@@ -749,8 +566,7 @@ final class GravityLabRenderer {
 
 
     private static func makeArrow(color: UIColor) -> Arrow {
-        // Clean bright shaft (a line), glossy self-lit head (a crafted tip
-        // that catches the key light) — a confident vector, not a wire.
+        // Clean bright shaft, glossy self-lit head that catches the key light.
         let shaftMaterial = UnlitMaterial(color: color)
         let headMaterial = Materials.energized(color, roughness: 0.2, glow: 0.35)
         let shaft = ModelEntity(
@@ -766,49 +582,25 @@ final class GravityLabRenderer {
 
     // MARK: Per-frame tick (from SceneEvents.Update)
 
-    /// Room coordinates → display coordinates relative to the system
-    /// centre.
-    ///
-    /// This used to subtract a constant, which was correct only while
-    /// the system sat at 1× with no turn. Now that the view root can be
-    /// scaled and rotated by the two-handed gesture, the conversion has
-    /// to go through the actual transform — otherwise grabbing a planet
-    /// in a zoomed-in view would fling it, because the hand's motion
-    /// would be read as a much larger motion in simulation space.
-    /// `convert` inverts whatever the view rig has done, exactly.
+    /// Room coordinates → display coordinates relative to the system centre.
+    /// Goes through the actual transform so a scaled/rotated view rig is inverted exactly — a constant offset would fling a grabbed planet in a zoomed view.
     func displayPoint(fromWorld world: SIMD3<Float>) -> SIMD3<Double> {
         SIMD3<Double>(systemRoot.convert(position: world, from: nil))
     }
 
     // MARK: The orbital chord — Kepler's third law, heard
 
-    /// One voice per body, pitched by its orbital period.
-    ///
-    /// Kepler's harmonices mundi, made literal: a period maps to a
-    /// frequency, so the solar system is a CHORD. Earth's year is the
-    /// reference note; Mercury's 88-day year sings about two octaves
-    /// above it, Neptune's 165 years growls at the floor. The point is
-    /// what happens when you interfere: throw a planet into a new orbit
-    /// and you HEAR its note slide, and hear the chord go out of tune,
-    /// while you are still looking at your hands. T² ∝ a³ stops being a
-    /// formula and becomes an interval you can recognise.
+    /// One voice per body, pitched by its orbital period — Kepler's T² ∝ a³ heard as a chord (Earth's year the reference note).
     private var chordVoices: [UUID: ToneVoice] = [:]
     private var chordEmitters: [UUID: Entity] = [:]
 
-    /// The note each body is currently singing, so the per-frame work is
-    /// "keep singing it from over there" rather than "work out what a
-    /// year is here". See `tickOrbitalChord`.
+    /// The note each body is currently singing, so per-frame work is "keep singing it from over there". See `tickOrbitalChord`.
     private var chordNotes: [UUID: (pitch: Double, loudness: Double)] = [:]
 
-    /// How often orbital periods are re-derived. An orbit's period is a
-    /// property of the whole orbit, not of this instant — it changes when
-    /// you add mass or drag a planet, not between one frame and the next.
+    /// How often orbital periods are re-derived — a property of the whole orbit, not of this instant.
     private static let chordAnalysisInterval = 12
 
-    /// The frozen readout: every body's velocity, and the net
-    /// gravitational pull on it summed over every other body — the same
-    /// law the integrator uses, evaluated at the frozen instant. The
-    /// pairwise sum is O(n²) and runs ONLY while the arrows are shown.
+    /// The frozen readout: every body's velocity and the net gravitational pull on it (the integrator's own law). The O(n²) sum runs only while the arrows are shown.
     private static func frozenSamples(model: GravityLabModel) -> [FrozenVectors.Sample] {
         let bodies = model.bodies.map(\.body)
         guard bodies.count > 1 else { return [] }
@@ -835,8 +627,7 @@ final class GravityLabRenderer {
                 samples.append(.init(
                     position: position,
                     direction: SIMD3<Float>(body.velocity / speed),
-                    // sqrt spreads the slow outer planets off the floor
-                    // of the scale instead of vanishing next to Mercury.
+                    // sqrt spreads the slow outer planets off the floor of the scale.
                     magnitude01: Float((speed / maxSpeed).squareRoot()),
                     kind: .velocity))
             }

@@ -1,39 +1,15 @@
 //
 //  DoublePendulum.swift
-//  PhysicsCore
+//  PhysicsCore — planar double pendulum, exact Euler–Lagrange EOM by RK4.
 //
-//  The planar double pendulum: two point masses on two rigid massless
-//  rods, solved from the exact Lagrangian equations of motion by RK4.
-//
-//  WHY PLANAR, in a module whose single pendulum is fully
-//  three-dimensional. Two reasons, and the second is the real one.
-//
-//  The equations below are exact — they are the Euler–Lagrange equations
-//  of the two-rod system with nothing dropped and no small-angle
-//  approximation anywhere — which means this can be CHECKED. A 3-D
-//  double pendulum has no comparable closed form to be right about, so
-//  "exact" would quietly become "plausible", and this project's whole
-//  claim is the difference between those two words.
-//
-//  And the double pendulum is famous for one image: the chaotic trace of
-//  the lower bob, drawn in a plane. Out of plane it reads as tangle
-//  rather than as chaos.
-//
-//  THE ANGLES ARE MEASURED FROM STRAIGHT DOWN, both of them, and both
-//  from the VERTICAL rather than from the rod above. That convention is
-//  what makes the equations below match the ones in every textbook; the
-//  other convention (second angle relative to the first) gives a
-//  different-looking but equivalent system, and mixing the two is the
-//  classic way to get a double pendulum that looks almost right.
-//
-//  CHAOS IS NOT A BUG, AND IT DEFEATS THE OBVIOUS TEST. Two runs from
-//  imperceptibly different starts diverge exponentially, so "does it
-//  match a reference trajectory" is not a test that can pass. What CAN
-//  be tested is what chaos does not touch: energy is conserved, the
-//  small-angle normal modes have their analytic frequencies, and the
-//  system reduces to a simple pendulum when the lower mass vanishes.
-//  Those are the three in `DoublePendulumTests`.
-//
+//  PLANAR so the result has a closed form to be checked against (a 3-D
+//  double pendulum has none). BOTH ANGLES ARE MEASURED FROM STRAIGHT DOWN
+//  (the vertical, not the rod above) — the textbook convention; measuring
+//  θ₂ relative to θ₁ gives an equivalent but different-looking system, the
+//  classic way to get a pendulum that looks almost right. Chaos defeats a
+//  reference-trajectory test, so the checks are what chaos leaves alone:
+//  energy conservation, small-angle normal-mode frequencies, and reduction
+//  to a simple pendulum as the lower mass vanishes.
 
 import Foundation
 
@@ -62,9 +38,8 @@ public struct DoublePendulum: Equatable, Sendable {
         public var length2: Double
         public var mass1: Double
         public var mass2: Double
-        /// Linear drag on each bob, N·s/m. Zero is the ideal system, and
-        /// the ideal system is the one that conserves energy exactly —
-        /// which is what the energy test runs against.
+        /// Linear drag on each bob, N·s/m. Zero is the ideal
+        /// energy-conserving system the energy test runs against.
         public var damping: Double
 
         public init(length1: Double, length2: Double,
@@ -115,14 +90,9 @@ public struct DoublePendulum: Equatable, Sendable {
                 a2 - rig.damping * s.omega2 / m2)
     }
 
-    /// One RK4 step.
-    ///
-    /// RK4 rather than the Verlet the single pendulum uses, because this
-    /// system is not separable — the accelerations depend on BOTH
-    /// angular velocities, so there is no position-only force to do a
-    /// kick-drift-kick around. RK4's error is O(h⁵) per step, which at
-    /// 1/90 s keeps the energy drift below anything a person can see over
-    /// a session.
+    /// One RK4 step. RK4 (not Verlet) because the system is not separable:
+    /// accelerations depend on BOTH angular velocities, so there is no
+    /// position-only force for a kick-drift-kick.
     public static func step(_ s: DoublePendulum, dt: Double,
                             rig: Rig, gravity: Double) -> DoublePendulum {
         guard dt > 0 else { return s }
@@ -179,28 +149,15 @@ public struct DoublePendulum: Equatable, Sendable {
     }
 
     /// How fast the lower bob is moving, relative to the pivot.
-    ///
-    /// THIS EXISTS BECAUSE NOTHING COULD SEE THE CHAOTIC BOB MOVE.
-    /// `DoublePendulum` solved the dynamics correctly from the day it
-    /// was written and reported only where the bobs ARE; every consumer
-    /// that wanted a speed — a trail's "is it moving" gate, a velocity
-    /// arrow, a readout card, a freeze sculpt — had nothing to ask, so
-    /// Pendulums' double rig drew no trail, showed `v 0.00 m/s`
-    /// permanently, and stamped a constant `mg` on a bob that is visibly
-    /// accelerating hard. The one image the rig exists for was
-    /// undrawable.
     public func lowerBobVelocity(rig: Rig) -> SIMD2<Double> {
         let upper = upperBobVelocity(rig: rig)
         return SIMD2(upper.x + rig.length2 * omega2 * cos(theta2),
                      upper.y + rig.length2 * omega2 * sin(theta2))
     }
 
-    /// Total mechanical energy, J, with the pivot as the datum.
-    ///
-    /// The cross term `2L₁L₂θ₁'θ₂'cos(θ₁−θ₂)` in the kinetic energy is
-    /// the whole reason this system is interesting: it is the coupling
-    /// through which the two rods trade energy, and dropping it gives two
-    /// independent pendulums that never do anything surprising.
+    /// Total mechanical energy, J, with the pivot as the datum. The KE
+    /// cross term `2L₁L₂θ₁'θ₂'cos(θ₁−θ₂)` is the coupling through which the
+    /// rods trade energy; dropping it gives two independent pendulums.
     public func energy(rig: Rig, gravity: Double) -> Double {
         let (l1, l2) = (rig.length1, rig.length2)
         let (m1, m2) = (rig.mass1, rig.mass2)
@@ -213,13 +170,9 @@ public struct DoublePendulum: Equatable, Sendable {
         return kinetic + potential
     }
 
-    /// The two small-angle normal-mode angular frequencies, rad/s.
-    ///
-    /// For equal lengths and equal masses these are the textbook
-    /// ω² = (2 ∓ √2)·g/L — the in-phase mode slower, the out-of-phase
-    /// mode faster. Exposed because it is what the linearised system is
-    /// checked against, and because a rig that cannot reproduce its own
-    /// normal modes has an error in the coupling term.
+    /// The two small-angle normal-mode angular frequencies, rad/s. For
+    /// equal lengths and masses these are the textbook ω² = (2 ∓ √2)·g/L.
+    /// A rig that cannot reproduce them has an error in the coupling term.
     public static func normalModeFrequencies(rig: Rig,
                                              gravity: Double) -> (Double, Double)? {
         let (l1, l2) = (rig.length1, rig.length2)

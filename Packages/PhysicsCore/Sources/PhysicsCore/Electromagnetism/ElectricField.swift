@@ -1,32 +1,19 @@
 //
 //  ElectricField.swift
-//  PhysicsCore — Electromagnetism
-//
-//  Coulomb's Law and superposition, as pure functions. This file is the
-//  physics core of the app: the renderer only ever *asks* this layer for
-//  field vectors — it never computes physics itself.
+//  Coulomb's Law and superposition as pure functions (SI) — the renderer only asks this layer, never computes physics itself.
 //
 
 import Foundation
 import simd
 
 public enum ElectricField {
-    /// Coulomb constant k = 1/(4πε₀) in N·m²/C².
-    /// Derived from ε₀ rather than typed — see `Constants`. It was
-    /// 8.9875517923e9 here, the pre-2019 value, disagreeing with the
-    /// ε₀ two files away in the 10th significant figure.
+    /// Coulomb constant k = 1/(4πε₀), N·m²/C² — derived from ε₀ in `Constants`, never typed by hand.
     public static let k = Constants.coulomb
 
-    /// Separations below this (meters) are treated as "at the charge itself,"
-    /// where the 1/r² field is singular. We return a zero vector there and let
-    /// the rendering layer decide how to present it (it hides those arrows).
+    /// Below this separation (m) the 1/r² field is singular: return zero and let the renderer hide it.
     public static let singularityRadius = 1e-6
 
-    /// Electric field at `point` due to a single point charge.
-    ///
-    /// Coulomb's Law: **E** = k·q/r² · r̂, where r̂ points from the charge
-    /// toward the field point. Computed as k·q·**r** / |r|³ to avoid a
-    /// separate normalization step.
+    /// E at `point` from one point charge (N/C): E = k·q/r²·r̂, computed as k·q·r/|r|³.
     public static func vector(at point: SIMD3<Double>, dueTo charge: PointCharge) -> SIMD3<Double> {
         let r = point - charge.position
         let distanceSquared = simd_length_squared(r)
@@ -37,22 +24,15 @@ public enum ElectricField {
         return (k * charge.charge / (distanceSquared * distance)) * r
     }
 
-    /// Electric field at `point` due to any number of charges, by vector
-    /// superposition: the total field is the sum of each charge's field.
+    /// E at `point` from any number of charges, by vector superposition.
     public static func vector(at point: SIMD3<Double>, dueTo charges: [PointCharge]) -> SIMD3<Double> {
         charges.reduce(.zero) { total, charge in
             total + vector(at: point, dueTo: charge)
         }
     }
 
-    /// E at `point` from every charge except the one at `index`.
-    ///
-    /// The free-charge flock asks this per charge per frame, and the
-    /// spelling it replaces —
-    /// `charges.enumerated().filter { $0.offset != j }.map(\.element)`
-    /// — allocated two arrays each time to say "not this one". Same sum,
-    /// no temporaries. (`MagneticField` gained the twin of this on the
-    /// same day, for the same loop shape.)
+    /// E at `point` from every charge except the one at `index` — allocation-free
+    /// (called per charge per frame; `MagneticField` has the twin).
     public static func vector(at point: SIMD3<Double>,
                               dueTo charges: [PointCharge],
                               excluding index: Int) -> SIMD3<Double> {
@@ -68,9 +48,7 @@ public enum ElectricField {
         simd_length(vector(at: point, dueTo: charges))
     }
 
-    /// Electric potential (volts) at `point` due to a single point charge:
-    /// V = k·q/r, with the zero reference at infinity. Unlike the field this
-    /// is a scalar, so superposition is a plain sum — no vectors involved.
+    /// Potential (V) from one point charge: V = k·q/r, zero reference at infinity.
     public static func potential(at point: SIMD3<Double>, dueTo charge: PointCharge) -> Double {
         let distance = simd_distance(point, charge.position)
         guard distance > singularityRadius else { return 0 }

@@ -2,19 +2,10 @@
 //  EntityPool.swift
 //  RenderKit
 //
-//  The pooling contract behind every "many identical things" visualization:
-//  a fixed budget of container entities is built ONCE under a shared root,
-//  and updates only enable/disable slots and touch their transforms —
-//  nothing is created or destroyed per frame. Arrow grids, particle trace
-//  points, and orbit bodies all pool through this.
-//
-//  The budget is the degrade-gracefully knob: callers size it to what the
-//  frame rate comfortably supports and thin out their data to fit (extra
-//  data beyond the budget is simply not shown), rather than dropping frames.
-//
-//  Each slot carries a caller-defined Payload — whatever per-slot handles
-//  the visualization needs (e.g. the shaft and head ModelEntities of an
-//  arrow) so updates never search the entity hierarchy.
+//  Pooling contract: a fixed budget of entities built ONCE; updates only
+//  toggle isEnabled and touch transforms — nothing created per frame.
+//  The budget is the degrade knob (extra data is simply not shown), and
+//  each slot's Payload holds handles so updates never search the hierarchy.
 //
 
 import Foundation

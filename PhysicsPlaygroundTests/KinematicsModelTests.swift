@@ -1,11 +1,6 @@
 //
 //  KinematicsModelTests.swift
-//  PhysicsPlaygroundTests
-//
-//  Tests for the room-scale kinematics app state: firing from the
-//  launcher, hand-throw velocity estimation, bounce-to-rest lifecycle,
-//  hoop scoring, slow motion, budgets, and reset. Trajectory math itself
-//  is covered in PhysicsCore's ProjectileMotionTests.
+//  Kinematics app state; trajectory math is covered in PhysicsCore's ProjectileMotionTests.
 //
 
 import XCTest
@@ -16,16 +11,12 @@ import simd
 @MainActor
 final class KinematicsModelTests: XCTestCase {
 
-    /// A model with the welcome scene swept away: the module now opens
-    /// alive (hoops, staged balls, one shot in flight), but these tests
-    /// reason about exact counts from a bare bench.
+    /// A model with the welcome scene swept away, for tests that reason about exact counts.
     private func bareModel() -> KinematicsModel {
         let model = KinematicsModel()
         model.clearFlights()
         while !model.rings.isEmpty { model.removeLastRing() }
-        // Neutralise the always-on room: these tests reason about pure
-        // floor physics and exact trajectories. Wall behaviour has its
-        // own tests, which set their own walls and bounds.
+        // Neutralise the always-on room; wall tests set their own walls and bounds.
         model.roomWalls = []
         model.roomBounds = RoomBox(center: SIMD3(0, 50, 0),
                                    halfExtents: SIMD3(100, 50, 100))
@@ -47,8 +38,7 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertFalse(flight.wasThrown)
     }
 
-    /// Feeding the hold pipeline a synthetic straight-line hand motion
-    /// must release the ball with exactly that hand velocity.
+    /// A synthetic straight-line hand motion must release the ball with exactly that velocity.
     func testThrowVelocityEstimatedFromHandMotion() {
         let model = bareModel()
         model.spawnBall()
@@ -88,10 +78,7 @@ final class KinematicsModelTests: XCTestCase {
                        "1 m/s hand motion × boost 2 = 2 m/s release")
     }
 
-    /// The well's spawn: a ball born AT THE HAND, staged, and inert —
-    /// it hangs exactly where it was made until a throw gives it a
-    /// velocity. The launcher used to be the only way a ball entered
-    /// the room (owner, 2026-08-04).
+    /// A well-spawned ball is born AT THE HAND, staged and inert until thrown.
     func testAWellSpawnedBallIsBornAtTheHandAndHangsStill() {
         let model = bareModel()
         let hand = SIMD3<Double>(0.4, 1.3, -0.7)
@@ -101,7 +88,6 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(flight?.status, .staged)
         XCTAssertEqual(flight?.state.position, hand,
                        "the ball was not born at the fingertips")
-        // It wears the fan's current kind — well and launcher agree.
         XCTAssertEqual(flight?.projectile.name, model.projectile.name)
 
         for _ in 0..<180 { model.step(dt: 1.0 / 90.0) }
@@ -110,8 +96,7 @@ final class KinematicsModelTests: XCTestCase {
                        "a staged ball moved with nobody touching it")
     }
 
-    /// A grabbed-and-stationary release leaves the ball hovering (staged),
-    /// not falling — no meaningful hand motion means no throw.
+    /// A stationary release leaves the ball staged — no hand motion, no throw.
     func testStillReleaseLeavesBallHovering() {
         let model = bareModel()
         model.spawnBall()
@@ -142,11 +127,8 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertFalse(summary.wasThrown)
     }
 
-    /// The reliability claim, as arithmetic (2026-08-06): at hand-throw
-    /// speeds and real frame times, a ball never spends a frame past a
-    /// wall — the WALL contains it, not the safety box behind it. The
-    /// box is parked far away so a tunnel would be caught red-handed
-    /// as a position beyond the plane, not silently clamped.
+    /// At hand-throw speeds and real frame times a ball never ends a frame past a wall —
+    /// the safety box is parked far away so a tunnel is caught, not silently clamped.
     func testFastFlightsNeverEndAFramePastAWall() {
         for speed in [4.0, 8.0, 12.0] {
             for dt in [1.0 / 90.0, 1.0 / 30.0] {
@@ -169,23 +151,20 @@ final class KinematicsModelTests: XCTestCase {
                         model.flights[0].state.position.x, wallX - radius + 1e-6,
                         "\(speed) m/s at dt \(dt): a frame ended past the wall")
                 }
-                // The invariant means nothing if the ball never got
-                // there — floor bounces alone must not pass this test.
+                // The invariant means nothing if the ball never reached the wall.
                 XCTAssertGreaterThan(reach, wallX - radius - 0.3,
                                      "\(speed) m/s at dt \(dt): never reached the wall")
             }
         }
     }
 
-    /// A ball fired down through a hoop scores exactly once; one that
-    /// misses the rim scores nothing.
+    /// One pass through a hoop scores exactly once; a miss scores nothing.
     func testBallThroughHoopScoresOnceAndMissesDoNot() {
         let model = bareModel()
         model.addRing()
         let ringPosition = SIMD3<Double>(0.5, 1.0, -1.0)
         model.moveRing(id: model.rings[0].id, to: ringPosition)
 
-        // Fire straight down from directly above the rim's center.
         model.moveLauncher(to: ringPosition + SIMD3(0, 1.0, 0))
         model.setAim(elevationDegrees: -85, azimuthDegrees: 0)
         model.launchSpeed = 1
@@ -196,7 +175,6 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(model.rings[0].score, 1, "one pass through the hoop = one point")
         XCTAssertEqual(model.totalScore, 1)
 
-        // A drop well to the side must not score.
         model.clearFlights()
         model.moveLauncher(to: ringPosition + SIMD3(1.0, 1.0, 0))
         model.fire()
@@ -206,8 +184,7 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(model.rings[0].score, 1, "a miss must not score")
     }
 
-    /// Slow motion halves simulated progress: after the same wall time,
-    /// a 0.5× flight has advanced half as far.
+    /// Slow motion halves simulated progress per wall-time frame.
     func testTimeScaleScalesSimulatedTime() {
         func elapsedAfterSteps(timeScale: Double) -> Double {
             let model = bareModel()
@@ -243,8 +220,7 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(model.flights.count, KinematicsModel.flightBudget)
     }
 
-    /// Moving hoops circle their anchors at the set radius, and snap back
-    /// when the mode turns off.
+    /// Orbiting hoops circle their anchors at the set radius and snap back when off.
     func testHoopsOrbitMovesRingsAroundAnchors() {
         let model = bareModel()
         model.addRing()
@@ -265,8 +241,7 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(model.rings[0].position, anchor)
     }
 
-    /// A scoring flight grows the streak (and best); a landed miss with
-    /// hoops up resets it.
+    /// A score grows the streak (and best); a landed miss with hoops up resets it.
     func testStreakGrowsOnScoresAndDiesOnMisses() {
         UserDefaults.standard.removeObject(forKey: "kinematics.bestStreak")
         let model = bareModel()
@@ -295,18 +270,13 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(model.bestStreak, 2, "the best survives")
     }
 
-    /// The model publishes spatial sound events for launches.
-    /// The containment invariant: with room bounds set, no ball ever
-    /// ends a frame outside the room — flying, bouncing, or ROLLING —
-    /// whatever the wall list is doing. This is the guarantee behind
-    /// "bounce off my walls": the segment test gives the honest
-    /// bounce, this promises no escape.
+    /// Containment: with room bounds set, no ball ever ends a frame outside the
+    /// room — flying, bouncing, or ROLLING — whatever the wall list is doing.
     func testBallNeverEndsAFrameOutsideTheRoom() {
         let model = bareModel()
         let box = RoomBox(center: SIMD3(0, 1.5, -1), halfExtents: SIMD3(2, 1.5, 2))
         model.roomBounds = box
-        // No wall rects at all — the WORST case for the old code, and
-        // exactly what anchor churn can produce mid-flight.
+        // No wall rects at all — the worst case, and what anchor churn can produce mid-flight.
         model.roomWalls = []
         model.launchSpeed = 15
         model.setAim(elevationDegrees: 15, azimuthDegrees: 0)
@@ -328,8 +298,7 @@ final class KinematicsModelTests: XCTestCase {
         }
     }
 
-    /// A rolling ball meets a wall and stays inside — it used to roll
-    /// straight through.
+    /// A rolling ball meets a wall and stays inside.
     func testRollingBallRespectsWalls() {
         let model = bareModel()
         model.roomWalls = [RoomWalls.Wall(
@@ -352,8 +321,7 @@ final class KinematicsModelTests: XCTestCase {
     }
 
     func testFirePublishesSoundEvent() {
-        // The welcome scene fires once in init, so an event may already
-        // exist — what matters is that OUR fire publishes a fresh one.
+        // The welcome scene fires once in init — what matters is that OUR fire publishes a fresh event.
         let model = bareModel()
         let before = model.soundEvent?.id
         model.fire()
@@ -363,11 +331,8 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(simd_distance(event.position, model.muzzlePoint), 0, accuracy: 1e-9)
     }
 
-    /// Wind only blows through air. The wind rail is hidden and disabled
-    /// unless `airResistance` is on, so the model must agree: a wind
-    /// speed left over from an earlier gust must do nothing at all once
-    /// the air is switched off, or the rail would be hiding a force that
-    /// is still bending trajectories.
+    /// Wind only blows through air: with `airResistance` off, a leftover wind speed
+    /// must do nothing at all, or the hidden rail hides a force still bending trajectories.
     func testWindDoesNothingWithoutAirResistance() {
         func landing(air: Bool, wind: Double) -> SIMD3<Double> {
             let model = bareModel()
@@ -377,24 +342,17 @@ final class KinematicsModelTests: XCTestCase {
             for _ in 0..<400 { model.step(dt: 1.0 / 90.0) }
             return model.flights[0].state.position
         }
-        // With no air, the wind setting is inert — the same flight, to
-        // the last bit, whatever the rail was left at.
         XCTAssertEqual(
             simd_distance(landing(air: false, wind: 0),
                           landing(air: false, wind: 12)),
             0, accuracy: 1e-12, "wind blew a ball through vacuum")
-        // With air it is emphatically not inert, or the rail would be a
-        // control over nothing.
         XCTAssertGreaterThan(
             simd_distance(landing(air: true, wind: 0),
                           landing(air: true, wind: 12)),
             0.05, "12 m/s of wind moved the ball less than 5 cm")
     }
 
-    /// The standing bank lights whichever world's g you are on, by this
-    /// comparison — the same one the panel prints. Zero-g is a world
-    /// here and not in Pendulums: a pendulum in zero-g has no period,
-    /// but a projectile in zero-g flies dead straight, which is a lesson.
+    /// The worlds bank lights whichever world's g you are on, by this exact comparison.
     func testTheWorldBankLightsTheMatchingDisc() {
         let model = bareModel()
         func lit() -> String? {
@@ -429,8 +387,7 @@ final class KinematicsModelTests: XCTestCase {
 
         model.reset()
 
-        // The opening scene: no hoops, no staged mid-air balls — one
-        // shot already flying, born at the launcher's muzzle.
+        // The opening scene: no hoops, one shot already flying from the muzzle.
         XCTAssertTrue(model.rings.isEmpty, "hoops are retired from the opening scene")
         XCTAssertEqual(model.flights.count, 1)
         XCTAssertTrue(model.flights.contains { $0.status == .flying },
@@ -443,12 +400,7 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(model.launchSpeed, KinematicsModel.roomFittingSpeed, accuracy: 1e-12)
         XCTAssertEqual(model.gravity, 9.81)
         XCTAssertFalse(model.airResistance)
-        // The two states the switch bank shows, and this one used to
-        // escape reset entirely — walls off plus Reset handed back a room
-        // that balls flew straight out of, under a dark plate. Third
-        // instance of the same defect in one day (Pendulums' `frictionOn`,
-        // Magnetism's `dynamicsOn`); a flag with no visible control drifts
-        // out of reset and nothing in the room contradicts it.
+        // `respectRoomWalls` once escaped reset() — a flag with no visible control drifts out of reset.
         XCTAssertTrue(model.respectRoomWalls, "the room stopped being real")
         XCTAssertEqual(model.windSpeed, 0)
         XCTAssertEqual(model.timeScale, 1.0)

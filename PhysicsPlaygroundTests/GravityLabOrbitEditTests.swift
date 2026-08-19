@@ -1,16 +1,7 @@
 //
 //  GravityLabOrbitEditTests.swift
-//  Physics Playground — app tests
-//
-//  The model half of "the orbit is the object": which bodies earn a ring,
-//  what a bead drag writes back onto the system, and what happens at the
-//  edges of the gesture. The MATH is pinned next door in
-//  `PhysicsCoreTests/OrbitalElementsTests`; what is pinned here is the
-//  wiring — display space in, sim state out, and a body that stays put
-//  while the rest of the system keeps running.
-//
-//  Nothing here needs a simulator, and nothing here can pinch a bead. The
-//  gesture itself is in `docs/ON_DEVICE_TESTS.md`, where it belongs.
+//  Orbit-edit wiring: display space in, sim state out. The math is in
+//  PhysicsCoreTests/OrbitalElementsTests; the pinch itself is on-device only.
 //
 
 import XCTest
@@ -38,10 +29,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
         }
     }
 
-    /// A ring is a TWO-BODY statement, so it needs a body that dominates.
-    /// Two equal suns is exactly the case where a planet's osculating
-    /// ellipse about one of them describes nothing, and the ring going
-    /// out is the scene saying so.
+    /// A ring is a TWO-BODY statement: with twin suns no body dominates, so the ring goes out.
     func testTwinSunsExtinguishTheRing() {
         let model = GravityLabModel()
         let earthID = earth(in: model).id
@@ -51,8 +39,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
                      "a ring survived the primary being split in half")
     }
 
-    /// The ring reports the orbit the body is actually on. Earth's is
-    /// nearly circular at 1 AU, and its period is a year.
+    /// The ring reports the orbit the body is actually on: Earth at 1 AU, period one year.
     func testTheRingAgreesWithTheOrbitTheBodyIsOn() {
         let model = GravityLabModel()
         let elements = model.orbitElements(for: earth(in: model).id)!
@@ -71,8 +58,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
         let before = model.orbitFrame(for: id)!
         XCTAssertTrue(model.beginOrbitEdit(bodyID: id, holding: .far))
 
-        // Pull the far bead out to twice its radius, straight along the
-        // apse line. Display space: the model converts.
+        // Far bead to twice its radius along the apse line, in display space.
         let target = -before.periapsisDirection * (before.apoapsisRadius * 2)
         model.dragApsis(toDisplayPoint: target * model.simToDisplay)
 
@@ -85,11 +71,8 @@ final class GravityLabOrbitEditTests: XCTestCase {
                              "stretching one end did not make it more eccentric")
     }
 
-    /// The drag is expressed in DISPLAY space, and the renderer hands it
-    /// a point that has already had the two-hand rig inverted out of it.
-    /// So the same display point must mean the same orbit whatever the
-    /// scale — if this ever fails, `displayPoint(fromWorld:)` has stopped
-    /// undoing the rig and every bead drag is silently scale-dependent.
+    /// The same display point must mean the same orbit whatever the view scale —
+    /// a failure means `displayPoint(fromWorld:)` stopped undoing the two-hand rig.
     func testTheDragIsIndependentOfTheViewScale() {
         func orbitAfterDrag() -> ApsisFrame {
             let model = GravityLabModel()
@@ -106,9 +89,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
         XCTAssertEqual(a.periapsisRadius, b.periapsisRadius)
     }
 
-    /// Lifting a bead out of the ecliptic tilts the whole orbit — the
-    /// gesture that turns a flat solar system into a three-dimensional
-    /// one without a single control for inclination.
+    /// Lifting a bead out of the ecliptic tilts the whole orbit.
     func testLiftingABeadTiltsTheOrbit() {
         let model = GravityLabModel()
         let id = earth(in: model).id
@@ -134,8 +115,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
 
     // MARK: What the edit does to the rest of the system
 
-    /// The edited body holds still while everything else keeps orbiting —
-    /// the same contract `heldID` already carried for a grabbed body.
+    /// The edited body holds still while everything else keeps orbiting.
     func testTheEditedBodyIsFrozenWhileTheSystemRuns() {
         let model = GravityLabModel()
         let id = earth(in: model).id
@@ -156,8 +136,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
             "the rest of the system stopped")
     }
 
-    /// Letting go leaves the body on exactly the orbit the ring showed,
-    /// and it stays on it.
+    /// Letting go leaves the body on exactly the orbit the ring showed.
     func testReleasingLeavesTheBodyOnTheOrbitItWasGiven() {
         let model = GravityLabModel()
         let id = earth(in: model).id
@@ -174,8 +153,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
 
         for _ in 0..<400 { model.step(dt: 1.0 / 90.0) }
         let after = model.orbitElements(for: id)!
-        // Perturbed by the other planets, so not exact — but the same
-        // orbit, which is the claim the ring makes.
+        // Perturbed by the other planets, so 2% tolerance — but the same orbit.
         XCTAssertEqual(after.semiMajorAxis! / authored.semiMajorAxis!, 1,
                        accuracy: 0.02, "the authored orbit did not hold")
         XCTAssertEqual(after.eccentricity, authored.eccentricity, accuracy: 0.02)
@@ -198,12 +176,8 @@ final class GravityLabOrbitEditTests: XCTestCase {
     func testTheFarBeadCannotBeGrabbedOnAnUnboundOrbit() {
         let model = GravityLabModel()
         let id = earth(in: model).id
-        // Throw it hard enough to escape, WITHOUT moving it far: `hold`
-        // teleports the body to the hand, so a big display displacement
-        // would fling it several AU out and change the escape speed it
-        // is being measured against. Earth sits at 0.5 display metres;
-        // 5 cm of hand in 30 ms is 1.7 m/s, which the module's 8.6e4
-        // scale turns into about 140 km/s against a 42 km/s escape.
+        // Escape WITHOUT moving far — `hold` teleports the body, and a big displacement
+        // changes the escape speed being measured. 5 cm in 30 ms × 8.6e4 ≈ 140 km/s vs 42.
         let start = SIMD3<Double>(0.5, 0, 0)
         model.grab(id: id, at: start, timestamp: 0)
         model.hold(id: id, at: start, timestamp: 0)
@@ -226,8 +200,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
             "the Sun accepted an orbit edit")
     }
 
-    /// Deleting the body under the hand must not leave the model holding
-    /// a gesture on something that no longer exists.
+    /// Deleting the edited body must not leave a gesture holding nothing.
     func testDeletingTheEditedBodyEndsTheEdit() {
         let model = GravityLabModel()
         let id = earth(in: model).id
@@ -247,9 +220,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
 
     // MARK: The readout's one μ
 
-    /// Semi-major axis, period and escape speed all used to be computed
-    /// about slightly different two-body problems — GM in two places and
-    /// G(M+m) in the third. Cross-check them against each other.
+    /// Period and escape speed must share one gravitational parameter — GM vs G(M+m) drift is the trap.
     func testTheReadoutUsesOneGravitationalParameter() {
         let model = GravityLabModel()
         let jupiter = model.bodies.first { $0.body.name == "Jupiter" }!
@@ -270,11 +241,8 @@ final class GravityLabOrbitEditTests: XCTestCase {
 
     // MARK: A body in the hand
 
-    /// While a planet is held, `hold` has zeroed its velocity, so its
-    /// osculating conic is a degenerate radial line. There is no honest
-    /// ring to draw — the white prediction tube is the instrument for
-    /// that moment, because it answers the question you are actually
-    /// asking while holding something: what happens if I let go.
+    /// A held body's velocity is zeroed, so its osculating conic is a degenerate
+    /// radial line — no honest ring; the prediction tube is the instrument for that moment.
     func testAHeldBodyHasNoOrbitRing() {
         let model = GravityLabModel()
         let id = earth(in: model).id
@@ -289,9 +257,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
         XCTAssertNil(model.heldBodyID)
     }
 
-    /// …but an orbit EDIT is not a hold, even though it borrows `heldID`
-    /// to keep the body still. The ring is the thing being manipulated,
-    /// so it has to survive the gesture that manipulates it.
+    /// …but an orbit EDIT borrows `heldID` without being a hold: the ring must survive the gesture that reshapes it.
     func testAnOrbitEditKeepsItsRing() {
         let model = GravityLabModel()
         let id = earth(in: model).id
@@ -303,10 +269,8 @@ final class GravityLabOrbitEditTests: XCTestCase {
         XCTAssertNotNil(model.orbitFrame(for: id))
     }
 
-    /// The physics the tap bug was masquerading as, pinned so nobody
-    /// "fixes" it later: a body released at rest has no angular momentum
-    /// and falls straight down its own radius into the primary. That is
-    /// correct, and it is what the white prediction line draws.
+    /// A body released at rest has no angular momentum and falls straight in —
+    /// correct physics, pinned so nobody "fixes" it later.
     func testABodyReleasedAtRestFallsStraightIn() {
         let model = GravityLabModel()
         let id = earth(in: model).id
@@ -320,9 +284,8 @@ final class GravityLabOrbitEditTests: XCTestCase {
 
         for _ in 0..<400 { model.step(dt: 1.0 / 90.0) }
         let now = model.bodies.first { $0.id == id }!.body.position
-        // Closer to the Sun...
+        // Closer to the Sun, and still on the same ray: a radial fall, not an orbit.
         XCTAssertLessThan(simd_length(now - sun), simd_length(start - sun) * 0.99)
-        // ...and still on the same ray out of it: a radial fall, not an orbit.
         XCTAssertEqual(simd_dot(simd_normalize(now - sun), bearing), 1,
                        accuracy: 1e-6,
                        "a body released at rest should fall straight in")
@@ -331,37 +294,14 @@ final class GravityLabOrbitEditTests: XCTestCase {
 
     // MARK: Occlusion is measured in the ring's own frame
 
-    /// A BEAD BURIED IN A PLANET MUST HIDE WHEREVER THE SYSTEM SITS.
-    ///
-    /// `OrbitRing.root` sits on the primary and places its beads
-    /// relative to it, so occluders handed in ABSOLUTE display
-    /// coordinates are offset from the beads by the primary's own
-    /// position. `reset()` puts the Sun at exactly the origin, where the
-    /// two frames coincide and the arithmetic is accidentally right —
-    /// which is why this survived. Press "Twin suns" and the primaries
-    /// go to ±0.2 AU: beads inside a planet stayed targetable, beads in
-    /// open space were hidden and stripped of their input target.
-    ///
-    /// WHAT THIS TEST DOES AND DOES NOT COVER, said plainly because it
-    /// looks like more than it is. `isOccluded` was always correct in
-    /// isolation — it compares two points and two radii. The defect was
-    /// at the CALL SITE, in `GravityLabRenderer.syncOrbitRing`, which
-    /// built the occluder list in system coordinates and handed it to a
-    /// function whose beads are in the ring's. That function is private
-    /// and its renderer cannot be driven far enough from a test to reach
-    /// it, so the fix itself is verified on device — see the Gravity Lab
-    /// entry in `docs/ON_DEVICE_TESTS.md`.
-    ///
-    /// What this pins is the CONTRACT the call site now has to meet: the
-    /// answer depends only on the relative arrangement, so anybody
-    /// passing coordinates in the wrong frame is making a claim this
-    /// spells out.
+    /// Occlusion depends only on the relative arrangement in the RING's frame — the call site
+    /// (`GravityLabRenderer.syncOrbitRing`) must pass ring-frame coordinates, not system ones;
+    /// the renderer half cannot be driven from a test and is verified on device.
     func testOcclusionDoesNotDependOnWhereTheSystemSits() {
         let beadInRingFrame = SIMD3<Float>(0.30, 0, 0)
         let beadRadius: Float = 0.01
 
-        // A planet sitting exactly on the bead, expressed in the ring's
-        // frame — the same relative arrangement in both cases.
+        // A planet sitting exactly on the bead, in the ring's frame.
         let planetInRingFrame = (center: beadInRingFrame, radius: Float(0.05))
 
         for primary in [SIMD3<Float>.zero,
@@ -373,7 +313,6 @@ final class GravityLabOrbitEditTests: XCTestCase {
                 "a bead inside a planet must hide with the primary at \(primary)")
         }
 
-        // And a bead well clear of every body must stay visible.
         XCTAssertFalse(
             OrbitRing.isOccluded(bead: SIMD3(0.30, 0, 0), radius: beadRadius,
                                  by: [(center: SIMD3(-0.30, 0, 0), radius: 0.05)]),

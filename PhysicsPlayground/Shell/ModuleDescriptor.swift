@@ -94,7 +94,6 @@ struct TimeScrubControls {
 struct LegendItem: Identifiable {
     enum Swatch {
         case fill(Color)
-        case translucent(Color)
         case stroke(Color)
         case line(Color)
         case symbol(String, Color)

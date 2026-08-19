@@ -1,26 +1,6 @@
 //
 //  GaussSurface.swift
-//  PhysicsCore — Electromagnetism
-//
-//  Gauss's law as something you can hold.
-//
-//  ∮E·dA = Q_enclosed/ε₀ is the most important statement in
-//  electrostatics and the hardest to picture on a page, because the
-//  page cannot show you a surface being moved through a field. A
-//  headset can: carry a disc (or a closed sphere) around the charges
-//  and watch the flux through it change — and watch the CLOSED surface
-//  report exactly the enclosed charge, no matter how you contort it or
-//  where the outside charges sit.
-//
-//  Two exact integrators here, both plain quadrature over the surface:
-//
-//    • `flux(throughDisc:)`   — an open disc: ∫E·n̂ dA, polar quadrature.
-//    • `flux(throughSphere:)` — a closed surface: the Gauss check, over a
-//      Fibonacci-distributed set of patches of equal area.
-//
-//  The sphere case has an exact answer to compare against, which is what
-//  makes this testable rather than merely plausible: whatever the field
-//  outside, the closed-surface flux is Q_enc/ε₀ to quadrature accuracy.
+//  Flux quadrature for Gauss's law ∮E·dA = Q_enc/ε₀: open disc (polar quadrature) and closed sphere (equal-area Fibonacci patches, testable against the exact Q_enc/ε₀).
 //
 
 import Foundation
@@ -30,11 +10,8 @@ public enum GaussSurface {
     /// Vacuum permittivity, F/m.
     public static let epsilonZero = Constants.vacuumPermittivity
 
-    /// Electric flux through a flat circular disc, N·m²/C.
-    ///
-    /// Polar quadrature: rings of equal radial spacing weighted by their
-    /// own area, which converges quickly for a smooth field and is exact
-    /// for a uniform one at any resolution.
+    /// Electric flux through a flat disc, N·m²/C — polar quadrature, area-weighted rings;
+    /// exact for a uniform field at any resolution.
     public static func flux(
         throughDiscAt center: SIMD3<Double>,
         normal: SIMD3<Double>,
@@ -48,7 +25,7 @@ public enum GaussSurface {
         let (u, v) = basis(perpendicularTo: n)
         var total = 0.0
         for ring in 0..<radialSamples {
-            // Mid-point of the ring, and the ring's true annular area.
+            // Ring mid-point, weighted by the true annular area.
             let inner = radius * Double(ring) / Double(radialSamples)
             let outer = radius * Double(ring + 1) / Double(radialSamples)
             let r = (inner + outer) / 2
@@ -64,12 +41,8 @@ public enum GaussSurface {
         return total
     }
 
-    /// Outward electric flux through a closed sphere, N·m²/C.
-    ///
-    /// Equal-area patches from a Fibonacci sphere, so no pole is
-    /// over-sampled. Charges sitting exactly ON the surface are
-    /// ambiguous by definition and are excluded from the enclosed count
-    /// by `enclosedCharge`, which uses a strict interior test.
+    /// Outward flux through a closed sphere, N·m²/C — equal-area Fibonacci patches;
+    /// on-surface charges are excluded by `enclosedCharge`'s strict interior test.
     public static func flux(
         throughSphereAt center: SIMD3<Double>,
         radius: Double,
@@ -87,8 +60,7 @@ public enum GaussSurface {
         return total
     }
 
-    /// The charge strictly inside a sphere — the right-hand side of
-    /// Gauss's law for that surface.
+    /// Charge strictly inside a sphere — the right-hand side of Gauss's law.
     public static func enclosedCharge(
         inSphereAt center: SIMD3<Double>,
         radius: Double,
@@ -111,8 +83,7 @@ public enum GaussSurface {
     /// Any two unit vectors completing `n` into a right-handed basis.
     static func basis(perpendicularTo n: SIMD3<Double>)
     -> (SIMD3<Double>, SIMD3<Double>) {
-        // Pick the world axis least aligned with n, so the cross product
-        // is never near-degenerate.
+        // Helper = world axis least aligned with n, so the cross product is never near-degenerate.
         let helper: SIMD3<Double> = abs(n.y) < 0.9 ? SIMD3(0, 1, 0) : SIMD3(1, 0, 0)
         let u = simd_normalize(simd_cross(helper, n))
         return (u, simd_cross(n, u))

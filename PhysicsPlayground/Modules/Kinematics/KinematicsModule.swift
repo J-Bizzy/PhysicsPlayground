@@ -1,9 +1,6 @@
 //
 //  KinematicsModule.swift
-//  Physics Playground — Kinematics module
-//
-//  Catalog registration for projectile motion: descriptor, legend, and
-//  the readings this bench writes into the lab notebook.
+//  Physics Playground — Kinematics: catalog registration — descriptor, legend, notebook readings.
 //
 
 import SwiftUI
@@ -21,29 +18,14 @@ enum KinematicsModule {
             blurb: "Throw real balls across your room — they ricochet off your actual walls, you can catch them out of the air, and gravity runs from zero-g to Jupiter.",
             icon: "paperplane.fill",
             accent: DesignTokens.Palette.kinematicsAccent,
-            // The room clause PRIMES the ARKit prompt, and this is the
-            // module it belongs in: Projectiles is the one whose physics
-            // visibly changes without world sensing, because the walls it
-            // bounces off are yours.
-            //
-            // Where the prompt actually fires decided this. `retain()` is
-            // called from `RoomSensingView.task`, and that view is
-            // mounted only inside the `activeModule` branch of
-            // `PlaygroundSpaceView` — so the prompt arrives as a module
-            // opens, which is exactly when this window and its hint
-            // appear. A launch-time prompt could not have been primed
-            // this way and would have needed a surface of its own; this
-            // one is already on screen.
+            // The room clause primes the ARKit prompt, which fires as the module
+            // opens (RoomSensingView.task) — exactly when this hint is on screen.
             firstRunHint: "Grab any ball and throw it — physics takes over the instant you let go. For precise launches, drag the launcher anywhere and pinch its orange bead to aim. Balls bounce off your real walls and floor, so visionOS will ask to use your room.",
-            // The house dimming — see `PendulumsModule` for the whole
-            // argument. Five of six modules sit here now; Gravity Lab's
-            // 0.85 is the one exception.
+            // The house dimming (Gravity Lab's 0.85 is the one exception).
             preferredDimming: 0.35,
             legend: legend,
             isPaused: { appModel.kinematicsModel.isPaused },
-            // Through the capsule, not a bare toggle: un-pausing from a
-            // scrubbed instant resumes FROM it, truncating the rejected
-            // future.
+            // Through the capsule: un-pausing from a scrubbed instant resumes FROM it.
             togglePause: { appModel.kinematicsModel.togglePauseRespectingScrub() },
             makeScene: {
                 AnyView(KinematicsSpaceView().environment(appModel.kinematicsModel))
@@ -55,7 +37,6 @@ enum KinematicsModule {
     }
 
     /// The readings this bench writes into the lab notebook.
-    /// Shared with the world that now hosts it.
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
             let model = appModel.kinematicsModel
             var rows: [NotebookEntry.Reading] = [
@@ -72,26 +53,12 @@ enum KinematicsModule {
                 rows.append(.init("Flight time", PhysicsFormat.fixed(last.flightTime, decimals: 3), "s"))
                 rows.append(.init("Launched by", last.wasThrown ? "hand" : "launcher"))
             }
-            // No Score row. Hoops left the surface in 6b2508c and
-            // `addRing` has no caller outside tests, so the score was
-            // structurally always 0 — a column of zeroes in every
-            // exported notebook, implying a game that isn't there.
-            //
-            // CLASSIFIED, since the project's rule is that every
-            // caller-less thing must say which it is: this is a
-            // MOTHBALL, and it is the third category. Not a missing
-            // door (the surface existed and worked), not a grave (the
-            // code was not decided against — the SURFACE was, because
-            // hoops read as clutter around a bench about trajectories).
-            // Model, renderer, scoring and tests are all intact and
-            // exercised; only the way to make one is gone. Restoring it
-            // is one call from a Bloom petal on the launcher, and that
-            // is a decision for the owner, not a cleanup.
+            // No Score row: hoops are a MOTHBALL — the surface is gone, `addRing`
+            // has no caller outside tests, so the score is structurally 0.
             return rows
     }
 
-    /// The bench's full legend. The world curates a shorter key
-    /// from this and the pendulum rig's.
+    /// The bench's full legend.
     static let legend: [LegendItem] = [
         LegendItem(
             swatch: .fill(DesignTokens.Palette.projectile),

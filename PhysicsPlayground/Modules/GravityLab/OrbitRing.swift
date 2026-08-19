@@ -1,45 +1,8 @@
 //
 //  OrbitRing.swift
-//  Physics Playground — Gravity Lab module
-//
-//  THE ORBIT, AS A THING IN THE ROOM.
-//
-//  A selected body's osculating conic, drawn as a ring around its
-//  primary, with one grabbable bead at each end of the apse line. Pull a
-//  bead and the ellipse reshapes under your hand: outward and it
-//  stretches, sideways and the whole orbit swings about the Sun, upward
-//  and the orbital plane tilts. The math is `PhysicsCore.ApsisFrame`;
-//  this file is only the geometry and the two rules about when a bead is
-//  allowed to be a target.
-//
-//  ZERO PER-FRAME MESH WORK, and the trick is worth stating because it
-//  is the whole reason this can be redrawn every frame. A conic is
-//
-//      r(ν) = p / (1 + e·cos ν)
-//
-//  and `p` enters as a plain multiplier — so every orbit of a given
-//  ECCENTRICITY is the same curve at a different UNIFORM SCALE. One mesh
-//  per eccentricity bucket, cached, and the per-frame cost is a transform
-//  write. Thirty-four buckets at a step of 0.03 covers e ∈ [0, 1), which
-//  is the same "a continuous quantity does not need a continuous asset"
-//  argument the material canon makes about banked opacity ramps.
-//
-//  Note what is NOT done: the ring is not a circle squashed on one axis.
-//  An anisotropic scale would squash the tube's cross-section with it —
-//  2.3× fatter on one axis at e = 0.9 — and the ring would visibly change
-//  thickness as it went round. Scaling a p = 1 conic keeps the tube
-//  circular for free.
-//
-//  THE BEADS ARE CONTROLS, AND CONTROLS OBEY THE COLLIDER RULE. Their
-//  collision radius equals their visual radius — no generosity, because
-//  "an input-targetable collider must be no larger than the thing it
-//  represents" is absolute (DECISIONS.md, the invisible scale plate). And
-//  they are counter-scaled against the two-hand rig, which matters more
-//  than it sounds: this module's rig runs to 9×, so an uncompensated
-//  14 mm bead would be a 12.6 cm sphere at full zoom — a region collider,
-//  the banned pattern, at full size. THE RING ITSELF CARRIES NO COLLIDER
-//  AT ALL: a collision shape wrapped around a metre-wide circle is that
-//  same ban with a different name.
+//  The selected body's osculating conic as a grabbable ring; math in PhysicsCore.ApsisFrame.
+//  Meshes cache per eccentricity bucket, so per-frame cost is a transform write; never an anisotropic squash (it fattens the tube's cross-section).
+//  Bead collider equals visual radius, counter-scaled against the 9× rig; the ring carries no collider.
 //
 
 import Foundation
@@ -51,15 +14,12 @@ import simd
 
 @MainActor
 final class OrbitRing {
-    /// Add this to `systemRoot` — the same frame the bodies live in, and
-    /// the same frame a hand arrives in via `displayPoint(fromWorld:)`.
+    /// Add this to `systemRoot` — the frame the bodies and hand points live in.
     let root = Entity()
 
     private let conicCasing = ModelEntity()
     private let conicCore = ModelEntity()
-    /// One VoiceOver step on an apsis bead: which end, and how many
-    /// increments (negative for decrements). Set by the SpaceView, which
-    /// is the only place that can reach the model.
+    /// One VoiceOver adjust step on an apsis bead: which end, signed increments. Set by the SpaceView.
     var onAdjust: ((Apsis, Double) -> Void)?
 
     private let nearBead: ModelEntity
@@ -78,13 +38,10 @@ final class OrbitRing {
     private var pendingBucket: Int?
     private var pipeline: GeometryPipeline<RingJob, RingResult>?
 
-    /// Abandons any ring rebuild in flight. See
-    /// `GravityLabRenderer.teardown`.
+    /// Abandons any ring rebuild in flight. See `GravityLabRenderer.teardown`.
     func teardown() { pipeline?.cancel() }
 
-    /// Whether each bead was a target last frame, for the reach
-    /// hysteresis. Without it a bead sitting exactly at arm's length
-    /// blinks in and out with the user's breathing.
+    /// Last-frame reachability per bead, for the reach hysteresis.
     private var nearWasReachable = false
     private var farWasReachable = false
 
@@ -103,11 +60,7 @@ final class OrbitRing {
 
         nearBead = Self.makeBead(name: Self.nearBeadName, accent: accent)
         farBead = Self.makeBead(name: Self.farBeadName, accent: accent)
-        // A BEAD IS PULLED, and a pull has no keyboard equivalent — so
-        // the one verb these get is increment and decrement, which is
-        // exactly what `-apsisDrag near|far,<factor>` already does from
-        // the CLI. Attached after construction because `makeBead` is
-        // static and the closure needs to reach `onAdjust`.
+        // VoiceOver verb is increment/decrement — the same reach `-apsisDrag` has from the CLI.
         for (bead, apsis) in [(nearBead, Apsis.near), (farBead, Apsis.far)] {
             SpatialActions.attach(
                 to: bead,
@@ -129,20 +82,7 @@ final class OrbitRing {
 
     // MARK: Per frame
 
-    /// Points the ring at one orbit, or hides it.
-    ///
-    /// - Parameters:
-    ///   - frame: the conic to draw, or nil for "no honest ring here".
-    ///   - primaryDisplay: the focus, in display metres.
-    ///   - simToDisplay: display metres per simulation metre.
-    ///   - rigScale: the two-hand rig's current scale, for bead
-    ///     compensation.
-    ///   - occluders: every body's display centre and radius IN THE
-    ///     RING'S OWN FRAME — that is, relative to `primaryDisplay`, so a bead
-    ///     buried inside a planet stops being a target.
-    ///   - head: the viewer in `root`'s own frame, or nil in the
-    ///     simulator (where every bead stays reachable so the CLI can
-    ///     still drive them).
+    /// Points the ring at one orbit (nil hides it). `occluders` are in the ring's own frame (relative to `primaryDisplay`); `head` nil = simulator, beads stay reachable for the CLI.
     func update(frame: ApsisFrame?,
                 primaryDisplay: SIMD3<Float>,
                 simToDisplay: Double,
@@ -174,10 +114,7 @@ final class OrbitRing {
     private func orientConic(to frame: ApsisFrame, scale: Float) {
         let p = SIMD3<Float>(frame.periapsisDirection)
         let h = SIMD3<Float>(frame.orbitNormal)
-        // The cached mesh is built with p̂ = +x, ĥ = +y (so q̂ = ĥ × p̂ is
-        // −z). A rotation's columns are where it sends the basis vectors,
-        // and the third must be the cross of the first two for the matrix
-        // to be a rotation rather than a reflection: p̂ × ĥ = −q̂.
+        // Cached mesh is built with p̂ = +x, ĥ = +y. The third column must be the cross of the first two so the matrix is a rotation, not a reflection: p̂ × ĥ = −q̂.
         let basis = simd_float3x3(columns: (p, h, simd_cross(p, h)))
         let orientation = simd_quatf(basis)
         let size = Float(frame.semiLatusRectum) * scale
@@ -210,36 +147,15 @@ final class OrbitRing {
         wasReachable = reachable
 
         bead.isEnabled = !hidden && reachable
-        // A hidden bead is not merely invisible, it stops being a target:
-        // an unhittable collider floating in front of a planet is exactly
-        // the contention the collider rule exists to prevent.
+        // A hidden bead must also stop being a target — the collider rule.
         Self.setTargetable(bead, bead.isEnabled)
     }
 
     // MARK: The two suppression rules
-    //
-    // Pure statics, because both are geometry and both deserve a test
-    // that does not need a headset to run.
+    // Pure statics so the geometry is testable without a headset.
 
-    /// Whether a bead is buried inside a body.
-    ///
-    /// This is not cosmetic. A circular orbit has no periapsis of its
-    /// own, so `ApsisFrame` points the apse line at the BODY — which puts
-    /// the near bead exactly on the planet. Hiding it costs nothing,
-    /// because when r_p = r_a the two beads do the same thing and the far
-    /// one is a complete substitute.
-    /// BOTH ARGUMENTS ARE IN THE RING'S OWN FRAME. `place` positions a
-    /// bead relative to `root`, which sits on the primary — so an
-    /// occluder list in ABSOLUTE display coordinates is offset from the
-    /// beads by exactly the primary's position, and every test is wrong
-    /// by that much.
-    ///
-    /// It was, until 2026-08-07, and `reset()` hid it: with the Sun at
-    /// the origin the two frames coincide and the arithmetic is
-    /// accidentally right. Press "Twin suns" — which puts the primaries
-    /// at ±0.2 AU — and beads sitting inside a planet stayed targetable
-    /// while beads in open space were hidden and stripped of their
-    /// input target, intermittently, as the pair orbited.
+    /// Whether a bead is buried inside a body (a circular orbit parks the near bead on the planet).
+    /// Both arguments are in the ring's own frame — an absolute-coordinate occluder list is offset by the primary's position.
     nonisolated static func isOccluded(
         bead: SIMD3<Float>, radius: Float,
         by occluders: [(center: SIMD3<Float>, radius: Float)]
@@ -247,21 +163,13 @@ final class OrbitRing {
         occluders.contains { simd_distance($0.center, bead) < $0.radius + radius }
     }
 
-    /// Whether a bead is close enough to a head to be pinched, with
-    /// hysteresis so one sitting at arm's length cannot flicker.
-    ///
-    /// A bead exists only where a hand could actually reach it. The outer
-    /// solar system is genuinely out of arm's reach at any scale the room
-    /// allows, and the honest answer there is a ring you can read and not
-    /// touch — not a proxy handle, and certainly not a tether that fakes
-    /// the distance away.
+    /// Whether a bead is close enough to pinch, with hysteresis so one at arm's length cannot flicker.
     nonisolated static let reachOn: Float = 1.15
     nonisolated static let reachOff: Float = 1.35
 
     nonisolated static func isWithinReach(bead: SIMD3<Float>, head: SIMD3<Float>?,
                                           wasReachable: Bool) -> Bool {
-        // No head pose means the simulator, where nothing can be pinched
-        // anyway and the debug arguments still have to drive this path.
+        // nil head = simulator: stays reachable so the debug arguments can drive this path.
         guard let head else { return true }
         let distance = simd_distance(bead, head)
         return wasReachable ? distance <= reachOff : distance <= reachOn
@@ -315,16 +223,11 @@ final class OrbitRing {
     }
 
     nonisolated static func bucket(forEccentricity e: Double) -> Int {
-        // Everything at or past parabolic shares one open-curve bucket:
-        // a hyperbola's drawn arc is dominated by where it is clipped,
-        // not by its eccentricity, so the extra buckets would be meshes
-        // nobody could tell apart.
+        // At/past parabolic shares one open-curve bucket: a hyperbola's drawn arc is dominated by clipping, not e.
         e >= 1 ? -1 : Int(max(e, 0) / eccentricityStep)
     }
 
-    /// The canonical conic for a bucket: semi-latus rectum 1, periapsis
-    /// on +x, normal on +y. Everything else is a uniform scale and a
-    /// rotation.
+    /// Canonical conic for a bucket: p = 1, periapsis +x, normal +y; everything else is scale + rotation.
     nonisolated static func canonicalFrame(forBucket bucket: Int) -> ApsisFrame {
         let e = bucket < 0 ? 1.6 : (Double(bucket) + 0.5) * eccentricityStep
         return ApsisFrame(
@@ -361,15 +264,12 @@ final class OrbitRing {
     // MARK: Building
 
     private static func makeBead(name: String, accent: UIColor) -> ModelEntity {
-        // Bright and solid, for the same reason the Bloom's value bead
-        // is: this is the handle, not the surface the handle sits on.
-        // A dark translucent pea 14 mm across, two metres away, against
-        // a starfield, would be a target you could not find.
+        // Bright and solid: this is the handle, not the surface it sits on.
         let bead = ModelEntity(
             mesh: .generateSphere(radius: beadRadius),
             materials: [Materials.grip(emissive: accent, glow: 0.55)])
         bead.name = name
-        // Collider EQUALS the visual radius. See the file header.
+        // Collider EQUALS the visual radius.
         bead.components.set(CollisionComponent(
             shapes: [.generateSphere(radius: beadRadius)]))
         bead.components.set(HoverEffectComponent())

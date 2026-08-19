@@ -1,14 +1,6 @@
 //
 //  PointCharge.swift
-//  PhysicsCore — Electromagnetism
-//
-//  Pure model type for the physics layer. No RealityKit or SwiftUI imports —
-//  everything in PhysicsCore is plain Swift + simd so it can be unit tested
-//  without a simulator or any rendering machinery.
-//
-//  Units are SI throughout the physics layer:
-//    position — meters
-//    charge   — Coulombs
+//  Pure model type for the physics layer (no RealityKit/SwiftUI). SI: position in meters, charge in Coulombs.
 //
 
 import Foundation
@@ -27,7 +19,6 @@ public struct PointCharge: Identifiable, Equatable, Sendable {
 
     public var isPositive: Bool { charge >= 0 }
 
-    /// Magnitude in microcoulombs — convenient for UI display, since
-    /// tabletop-scale demos use µC-order charges.
+    /// Magnitude in microcoulombs, for UI display.
     public var magnitudeMicroCoulombs: Double { abs(charge) * 1e6 }
 }

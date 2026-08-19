@@ -2,44 +2,14 @@
 //  Multimeter.swift
 //  Physics Playground — Circuit Workshop
 //
-//  The bench's meter: a real instrument, with a rotary dial you turn and
-//  two probes on leads you carry to the terminals.
+//  The bench's meter: a rotary dial you turn and two probes on leads you
+//  carry to the terminals. Mesh from `Tools/multimeter.py`, real
+//  dimensions (case 86 × 168 × 32 mm).
 //
-//  It was a `Toggle` in a collapsed panel section, then a lit slab you
-//  armed with a tap and aimed by tapping two terminals. Both were the
-//  same compromise — a meter shaped like a control rather than like a
-//  meter. A multimeter is a TOOL: the one thing on this bench you use to
-//  ASK the circuit a question instead of building it, and the asking is
-//  physical. You turn the dial to choose what you want to know, and you
-//  put the probes where you want to know it.
-//
-//  THE MESH IS BUILT IN BLENDER, from `Tools/multimeter.py` — case,
-//  holster, recessed LCD, eight-detent dial, two banana jacks — and the
-//  probe is a second asset with a tapered handle, a finger guard and 44
-//  mm of steel. Real dimensions: the body is 86 × 168 × 32 mm, which is
-//  a handheld DMM, because this app is 1:1 everywhere else.
-//
-//  THE FOUR MODES ARE NOT FOUR FORMATS OF ONE NUMBER. `CircuitsModel`
-//  carries the physics and the reasoning; the short version is that a
-//  voltmeter goes ACROSS and an ammeter goes IN SERIES, and a simulated
-//  meter that quietly printed a current for probes placed across a live
-//  component would be teaching one of the most common mistakes in an
-//  introductory lab.
-//
-//  A NOTE ON THE COLLIDERS, because this object stands among terminals
-//  1 cm apart. Every one here is matched to what it represents: the
-//  dial's is the dial, each probe's is its HANDLE, and the case's is the
-//  CASE. An oversized grab box would shield the very terminals you are
-//  trying to probe — the `SpatialScaleHandle` failure, in the module
-//  where it would be hardest to notice.
-//
-//  The case had no collider at all for a while, which honoured that rule
-//  by giving up something the rule never asked for: the meter could not
-//  be picked up. A tool you cannot put where you want it is furniture.
-//  The box below is the case's own 86 × 168 × 32 mm and not a millimetre
-//  more, and the meter stands 15 cm clear of the nearest terminal, so it
-//  shields nothing. The dial keeps its own collider and protrudes 3 cm in
-//  front of the case, so it still wins the taps aimed at it.
+//  COLLIDERS ARE MATCHED TO WHAT THEY REPRESENT (dial, probe HANDLE,
+//  case) — this stands among terminals 1 cm apart, and an oversized grab
+//  box would shield the terminals you are trying to probe. The dial
+//  protrudes 3 cm in front of the case so it wins the taps aimed at it.
 //
 
 import QuartzCore
@@ -51,41 +21,19 @@ import SwiftUI
 final class Multimeter {
     let root = Entity()
 
-    /// Where the two probe tips currently are, in `root`'s frame — which
-    /// is the renderer's own frame, and which nothing moves. Not the
-    /// bench's space, which this said until 2026-08-03, and not the
-    /// case's: the case is a separate object that goes where it is put.
-    ///
-    /// Owned HERE rather than in a `@State`: the render loop reads them
-    /// every frame, and a `@State` read from inside a RealityKit closure
-    /// comes back stale — the same reason `RingState` is a class.
+    /// The probe tips, in `root`'s (the renderer's) frame — which
+    /// nothing moves. Owned here, not in `@State`: the render loop reads
+    /// them every frame and a `@State` read inside a RealityKit closure
+    /// comes back stale.
     private(set) var probeTip: [CircuitsModel.ProbeSlot: SIMD3<Float>] = [:]
 
     private let accent: UIColor
-    /// The instrument itself — case, dial, face, nameplate. It carries
-    /// BOTH of the meter's own movements: the anchor a hand drags it to,
-    /// and the yaw that turns its face toward whoever is reading it.
-    ///
-    /// `root` carries neither. It sits at the identity of the renderer's
-    /// frame and exists only to hold the meter's two halves side by side,
-    /// so that everything under it — the probes — is expressed in a frame
-    /// nothing moves.
-    ///
-    /// THIS IS THE WHOLE DESIGN. A probe is not part of the meter; it is
-    /// a thing on the end of a lead, and the only thing in the world that
-    /// moves it is a hand holding it. Two rounds of this bug came from
-    /// the probes living under an entity that had a job of its own:
-    ///
-    ///   • the case turned to face the viewer, and the probes turned with
-    ///     it, so turning your head slid a placed probe off its terminal;
-    ///   • the case moved when you dragged it, and the probes moved with
-    ///     it, so tidying the instrument dragged your measurement along.
-    ///
-    /// Both times the reading went on claiming the terminal it had
-    /// latched — the latch is by terminal id, not by position — so the
-    /// meter reported a measurement at a contact it was visibly no longer
-    /// touching. Nothing that a hand can place may live in a frame that
-    /// something else moves or turns.
+    /// The instrument — case, dial, face, nameplate. Carries BOTH the
+    /// meter's own movements (drag anchor and viewer-facing yaw); `root`
+    /// carries neither and stays at identity, so the probes under it live
+    /// in a frame nothing moves. A probe is moved only by a hand holding
+    /// it: nothing a hand can place may live in a frame something else
+    /// moves or turns (the latch is by terminal id, not position).
     private let chassis = Entity()
     private let body = Entity()
     private let dial = Entity()
@@ -109,19 +57,12 @@ final class Multimeter {
         .red: UIColor(red: 0.80, green: 0.16, blue: 0.12, alpha: 1),
         .black: UIColor(white: 0.10, alpha: 1),
     ]
-    /// Where a probe hangs when nobody has picked it up: below its jack
-    /// and a little proud of the case, in the METER's frame.
-    ///
-    /// Far enough below that the handles do not cross the dial — the
-    /// probe is drawn from its tip back toward the jack, so a short park
-    /// length lays both handles straight over the one control on the
-    /// front of the instrument.
+    /// Where a probe hangs uncarried, in the meter's frame: below its
+    /// jack, far enough down that the handles do not cross the dial.
     private static let park = SIMD3<Float>(0, -0.125, 0.03)
-    /// How near a probe tip must get before it latches onto a terminal.
-    ///
-    /// Generous, because a 3 mm terminal is not a target anyone hits
-    /// exactly in mid-air — and still unambiguous, because the two
-    /// terminals of one component are further apart than this.
+    /// How near a probe tip must get to latch a terminal. Generous (a
+    /// 3 mm terminal is not hit exactly in mid-air) but still under the
+    /// spacing of one component's two terminals.
     static let snapRadius: Double = 0.035
 
     /// The SpaceView's tap router, so the dial, case and probes can be
@@ -143,32 +84,14 @@ final class Multimeter {
         self.anchor = anchor
 
         if let mesh = PropCache.instance(named: "Multimeter") {
-            // STOOD UP. The Blender script builds the case in the XY
-            // plane with its face along +Z, and the exporter's Z-up →
-            // Y-up conversion turns that +Z into RealityKit's +Y — so
-            // the meter arrives lying on its back with the screen
-            // pointing at the ceiling, which is exactly how it first
-            // photographed. Rotating −90° about X puts the face back on
-            // +Z, which is what every hard-coded offset in this file
-            // (jacks, dial, screen) is written against.
-            //
-            // Done here rather than in the exporter because the probe
-            // asset wants the OTHER convention: it is built along +Z so
-            // that it arrives pointing along +Y, which is what
-            // `rotationFromYAxis` aims. One asset per convention, each
-            // stated where it is used.
-            // +90°, not −90°. Rotating about X by θ sends (0,1,0) to
-            // (0, cos θ, sin θ), so +90° is what brings the face from +Y
-            // round to +Z; −90° sends it to −Z and points the meter's
-            // BACK at the reader, which is a flat grey slab and reads as
-            // a missing texture rather than as a wrong angle.
+            // Stand the case up: the export arrives face-up along +Y, and
+            // +90° about X brings the face to +Z, which every hard-coded
+            // offset here (jacks, dial, screen) is written against. −90°
+            // would point the meter's back at the reader.
             mesh.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
             body.addChild(mesh)
         } else {
-            // The asset is generated by a checked-in script, so a missing
-            // one is a build problem rather than a runtime condition —
-            // but a meter that vanished silently would be worse than a
-            // plain one.
+            // Fallback so a missing (script-generated) asset is visible.
             body.addChild(ModelEntity(
                 mesh: .generateBox(size: [0.086, 0.168, 0.032], cornerRadius: 0.006),
                 materials: [Materials.machined(UIColor(white: 0.24, alpha: 1))]))
@@ -193,15 +116,9 @@ final class Multimeter {
         root.addChild(chassis)
         chassis.addChild(body)
 
-        // The dial is its own entity so it can TURN — what the user sees
-        // rotate is this pointer riding the case's moulded knob.
-        //
-        // IT HAS TO CLEAR THE KNOB. At z = 0 the pointer sat at
-        // 0.0174…0.0196 while the mesh's knob occupies 0.0155…0.0235 at
-        // the same radius — so the one moving part of this instrument was
-        // buried four millimetres inside the one static part, and the
-        // dial read as dead. Turning it worked the whole time; the mode
-        // changed, the reading changed, and nothing appeared to move.
+        // The dial is its own entity so it can turn; the pointer sits
+        // proud of the mesh's moulded knob (which occupies z up to 0.0235)
+        // so the rotation is visible.
         dial.name = "meter-dial"
         dial.position = [0, -0.020, 0.0185]
         let pointer = ModelEntity(
@@ -213,9 +130,7 @@ final class Multimeter {
         dial.components.set(CollisionComponent(
             shapes: [.generateSphere(radius: 0.030)]))
         dial.components.set(HoverEffectComponent())
-        // The dial CYCLES, so activate is the honest verb: one step per
-        // activation through the same `handleTap` a pinch takes, which
-        // is where the mode order lives.
+        // The dial cycles: activate steps one mode through `handleTap`.
         SpatialActions.attach(
             to: dial, label: "Meter mode",
             activate: { [weak self, weak dial] in
@@ -267,10 +182,8 @@ final class Multimeter {
             root.addChild(lead)
             leads[slot] = lead
 
-            // Parked hanging below the jacks until a hand takes one.
-            // `update` keeps re-parking it there — following the case
-            // wherever it is put and however it is turned — for as long
-            // as it stays uncarried.
+            // Parked below the jacks until a hand takes one; `update`
+            // re-parks it there while it stays uncarried.
             probeTip[slot] = anchor + (Self.jack[slot] ?? .zero) + Self.park
         }
 
@@ -308,30 +221,18 @@ final class Multimeter {
     }
 
     /// Carries a probe to a point and latches it onto whatever terminal
-    /// is within reach.
-    ///
-    /// The latch happens DURING the drag rather than on release, so the
-    /// reading appears while you are still holding the probe there —
-    /// which is what a real meter does, and which is the difference
-    /// between an instrument and a form you submit.
-    /// TWO points, and they are in different spaces on purpose. The
-    /// meter stands under the renderer's `root` — unscaled, because an
-    /// instrument that grew with an 8× Electron View would be useless —
-    /// while the bench's terminals live under `viewRoot`, which is the
-    /// zoom. So the probe is DRAWN at `local` in the meter's own `root`
-    /// frame and LATCHED against `bench` in the terminals' frame. Using
-    /// one for both would put the tip where the terminal looks rather
-    /// than where it is, and the error would grow with the zoom.
+    /// is within reach. The latch happens DURING the drag, not on
+    /// release, so the reading appears while you hold the probe.
+    /// `local` and `bench` are two different frames on purpose: the meter
+    /// is DRAWN at `local` in the unscaled `root` frame, LATCHED against
+    /// `bench` in the terminals' zoomed `viewRoot` frame — using one for
+    /// both would grow the tip error with the zoom.
     func moveProbe(_ slot: CircuitsModel.ProbeSlot,
                    local: SIMD3<Float>, bench: SIMD3<Double>,
                    model: CircuitsModel) {
         probeTip[slot] = local
-        // From here on this probe is somewhere a hand chose, and nothing
-        // but another hand moves it. Before this flag existed there was
-        // nothing to distinguish "hanging in its holster" from "placed on
-        // a terminal", so re-parking had to be either always or never —
-        // and it was never, which is why a placed probe had to ride the
-        // case's facing to stay attached to its own lead.
+        // From here on a hand chose this probe's place; `carried`
+        // distinguishes "placed" from "parked" so `update` stops re-parking it.
         carried.insert(slot)
         model.setProbe(slot, to: model.nearestTerminal(
             to: bench, within: Self.snapRadius))
@@ -343,22 +244,9 @@ final class Multimeter {
 
     // MARK: Render
 
-    /// Where the case stands, in the renderer's own (unscaled) frame.
-    ///
-    /// Owned HERE for the same reason `probeTip` is: `update` runs every
-    /// frame, so anything it writes unconditionally cannot be dragged.
-    /// A SMALL STAND-IN FOR THE SLOT IT PARKS IN, not the meter itself.
-    ///
-    /// The rack builds a preview per slot and the real instrument is one
-    /// object that has to keep its own position, its dial and its two
-    /// probes. Putting the live meter in the rack would mean the rack
-    /// owning its transform, which is exactly the fight
-    /// `place(at:)` exists to settle — the anchor was re-applied sixty
-    /// times a second once already, and a drag on the case had no
-    /// visible effect at all.
-    ///
-    /// So the slot shows a miniature and `handOver` moves the real one
-    /// to your hand.
+    /// A small stand-in shown in the rack slot; `handOver` moves the real
+    /// instrument to the hand. The live meter cannot live in the rack —
+    /// the rack would own its transform, the fight `place(at:)` settles.
     @MainActor
     static func miniature() -> Entity {
         let holder = Entity()
@@ -368,9 +256,7 @@ final class Multimeter {
             materials: [Materials.machined(UIColor(white: 0.24, alpha: 1))])
         holder.addChild(body)
 
-        // The screen, so it reads as a meter at a glance rather than as
-        // a block — the one feature that distinguishes it in a rack of
-        // components at this size.
+        // The screen, so it reads as a meter rather than a block at this size.
         var screen = UnlitMaterial(color: UIColor(red: 0.10, green: 0.16,
                                                   blue: 0.13, alpha: 1))
         screen.blending = .opaque
@@ -390,10 +276,7 @@ final class Multimeter {
         return holder
     }
 
-    /// The anchor used to be a `private static let` in the view and was
-    /// re-applied sixty times a second, which is why a drag on the case
-    /// would have had no visible effect even once the case had a
-    /// collider to be dragged BY.
+    /// Where the case stands, in the renderer's own (unscaled) frame.
     private(set) var anchor: SIMD3<Float>
 
     func place(at position: SIMD3<Float>) {
@@ -402,9 +285,8 @@ final class Multimeter {
 
     func update(viewer: SIMD3<Float>?, model: CircuitsModel) {
         let anchor = self.anchor
-        // ON THE CHASSIS, NOT ON `root` — see `chassis`. Both of these
-        // are the CASE moving. `root` stays at identity so that the
-        // probes hanging off it are unmoved by either.
+        // On the chassis, not `root` (see `chassis`): the case moves, the
+        // probes hanging off `root` do not.
         chassis.position = anchor
 
         // Yaw only: a meter that pitched to meet a viewer looking down on
@@ -432,14 +314,9 @@ final class Multimeter {
 
         for slot in [CircuitsModel.ProbeSlot.red, .black] {
             guard let probe = probes[slot], let lead = leads[slot] else { continue }
-            // The jack is a point ON THE CASE, so it goes wherever the
-            // case has been put and turns however the case is turned.
-            // The tip is in `root`'s frame — the renderer's — and the
-            // lead is drawn between them, so it is the LEAD that absorbs
-            // every move of the instrument. That is the right object to
-            // absorb it: a lead is the slack between a fixed jack and a
-            // hand-held point, and it is the only part of this assembly
-            // that is supposed to change shape.
+            // The jack rides the case; the tip is in `root`'s frame. The
+            // lead is drawn between them and absorbs every move of the
+            // instrument — the one part meant to change shape.
             let jack = anchor + chassis.orientation.act(Self.jack[slot] ?? .zero)
             if !carried.contains(slot) {
                 probeTip[slot] = jack + chassis.orientation.act(Self.park)
@@ -455,10 +332,8 @@ final class Multimeter {
             let direction = toJack / span
             probe.orientation = VectorFieldArrows.rotationFromYAxis(to: direction)
 
-            // A straight run. A real lead sags, and a catenary would be
-            // honest decoration — but it would also be a mesh rebuilt
-            // every frame while a probe is moving, which is the one thing
-            // the per-frame path may not do.
+            // A straight run: a sagging catenary would be a per-frame mesh
+            // rebuild while a probe moves, which the render path may not do.
             lead.position = (jack + tip) / 2
             lead.orientation = VectorFieldArrows.rotationFromYAxis(to: direction)
             lead.scale = SIMD3(1, span, 1)
@@ -467,26 +342,16 @@ final class Multimeter {
 
     // MARK: Display
 
-    /// How often the face may redraw. A live meter reading changes in
-    /// its last digit every frame, and every change bought a fresh
-    /// `generateText` plus a material — ninety of each per second while
-    /// probing, in the module that already carries the app's heaviest
-    /// renderer.
-    ///
-    /// `Callout` solved exactly this and says why: eight updates a
-    /// second is faster than anyone can read a changing number and a
-    /// tenth of the work. A real bench meter samples a few times a
-    /// second too, so this reads as an instrument rather than a
-    /// compromise.
+    /// How often the face may redraw. A changing last digit bought a
+    /// fresh `generateText` plus material every frame; 8 Hz is faster
+    /// than a number can be read for a tenth of the work.
     private static let minimumInterval: Double = 1.0 / 8
     private var lastScreenTime: Double = 0
 
     private func setScreen(_ display: String, note: String, fault: Bool) {
         let colour = fault
             ? UIColor(red: 0.95, green: 0.45, blue: 0.2, alpha: 1) : accent
-        // A FAULT IS NOT RATE-LIMITED. Everything else here is a number
-        // ticking; a fault is the meter telling you it is being misused,
-        // and that has to land on the frame it happens.
+        // A fault is not rate-limited — it must land on the frame it happens.
         let changed = display != lastDisplay || note != lastNote
         if changed, fault == lastFault {
             let now = CACurrentMediaTime()

@@ -1,27 +1,6 @@
-//
-//  GalleryLayout.swift
-//  Physics Playground — Hub
-//
-//  The Gallery's geometry, as pure math: one terrace per domain — floating
-//  slabs arcing around the user in a crescent — each carrying its
-//  domain's modules on pedestal pucks. Domains stop being a colour
-//  legend and become physical structure: where a lab sits tells you
-//  what kind of physics it is, and one sweep of the head reads the
-//  whole room.
-//
-//  Everything here is a value computation with no RealityKit in it, so
-//  the layout — widths from module counts, no terrace collisions across
-//  the whole settings range, a ninth module extending its domain's slab
-//  rather than wrapping onto someone else's spot — is unit-testable on
-//  its own.
-//
-//  Scaling: the distance setting scales the crescent's plan (radials,
-//  slab widths, puck pitch) uniformly, so the layout's proportions are
-//  scale-invariant in XZ and a clearance proven at the default holds at
-//  every slider position. The height setting scales terrace heights
-//  only. Exhibits themselves keep a constant world size — distance
-//  stays something you read, not something you are told.
-//
+//  GalleryLayout.swift — Gallery terrace geometry as pure math, no RealityKit.
+//  Distance setting scales the XZ plan uniformly (clearances proven at default hold at
+//  every slider position); height scales terrace heights only; exhibits keep constant world size.
 
 import simd
 
@@ -44,16 +23,8 @@ enum GalleryLayout {
         let exhibitPositions: [SIMD3<Float>]
     }
 
-    // Authored per domain: azimuth (degrees, 0 = dead ahead, + right),
-    // radial distance at the 2.0 m default, slab-top height at the
-    // 1.4 m default. The two slabs share ONE height (owner, 2026-08-04:
-    // the staggered tops read as uneven, not architectural); the slight
-    // radius variation stays, and carries the not-a-poster depth cue on
-    // its own.
-    //
-    // Two doors now, so two slots, each carrying three experiences —
-    // wide enough (~1.16 m of slab) that ±28° is as close together as
-    // the collision tests allow across the whole settings range.
+    // Per domain: azimuth (degrees, 0 = dead ahead, + right), radial at the 2.0 m default,
+    // slab-top at the 1.4 m default. Slabs share ONE height; ±28° is the collision-test minimum.
     private static let slots: [HubDomain: (azimuth: Float, radial: Float, top: Float)] = [
         .electricity: (azimuth: -28, radial: 1.95, top: 0.96),
         .mechanics:   (azimuth:  28, radial: 2.05, top: 0.96),
@@ -94,8 +65,7 @@ enum GalleryLayout {
             let center = SIMD3(radial * sin(azimuth),
                                top - slabThickness / 2,
                                -radial * cos(azimuth))
-            // Along the crescent, toward increasing azimuth — the
-            // user's left-to-right.
+            // Along the crescent toward increasing azimuth — the user's left-to-right.
             let tangent = SIMD3<Float>(cos(azimuth), 0, sin(azimuth))
             let puckTops = ids.indices.map { index -> SIMD3<Float> in
                 let offset = (Float(index) - Float(ids.count - 1) / 2) * pitch

@@ -1,13 +1,5 @@
-//
 //  CapacitorTraceTests.swift
-//  PhysicsCore tests
-//
-//  The capacitor joining the traced field picture: lines seed on the
-//  + plate by Gauss-honest σ·A weighting, run the REAL fringing field,
-//  and end where they land on a conductor. The old bench drew the
-//  capacitor as two slabs and no lines at all — the gap looked empty
-//  while the probe visibly accelerated through it.
-//
+//  Capacitor in the traced field picture: σ·A-weighted seeding, real fringing, lines end on conductors.
 
 import XCTest
 import simd
@@ -31,9 +23,7 @@ final class CapacitorTraceTests: XCTestCase {
         return config
     }
 
-    /// With no charges in the room the capacitor still draws a field:
-    /// a healthy bundle, every point finite, and most lines LANDING on
-    /// the − plate — a field line ends on a conductor, not in mid-air.
+    /// No charges in the room: a healthy finite bundle, most lines landing on the − plate.
     func testTheGapDrawsLinesThatLandOnTheNegativePlate() {
         let capacitor = bench()
         let lines = FieldLineTracer.trace(charges: [], capacitor: capacitor,
@@ -55,8 +45,7 @@ final class CapacitorTraceTests: XCTestCase {
                              "most of the bundle should terminate on the − plate")
     }
 
-    /// The fringe is drawn: at least one line reaches past the plates'
-    /// edges, which the uniform box's hard cutoff could never show.
+    /// At least one line reaches past the plate edges — the fringe a uniform box cannot show.
     func testTheBundleIncludesFringeLines() {
         let capacitor = bench()
         let lines = FieldLineTracer.trace(charges: [], capacitor: capacitor,
@@ -71,8 +60,7 @@ final class CapacitorTraceTests: XCTestCase {
         XCTAssertTrue(escapes, "no line ever left the gap — the fringe is gone")
     }
 
-    /// Gauss drawn: slide the slab half in and the covered band's seeds
-    /// outnumber the open band's, because its σ does.
+    /// Half-inserted slab: the covered band's seeds outnumber the open band's, because its σ does.
     func testTheSlabCrowdsTheSeeding() {
         let bare = FieldLineTracer.plateSeeds(for: bench(), config: config())
         let slabbed = FieldLineTracer.plateSeeds(for: bench(coverage: 0.5),
@@ -87,9 +75,7 @@ final class CapacitorTraceTests: XCTestCase {
                              "σ crowds under the slab and the seeding should show it")
     }
 
-    /// A point charge parked beside the gap joins the same picture: the
-    /// trace runs both sources through one field, so its lines exist
-    /// and get cut where they land on a plate.
+    /// A point charge and the capacitor trace through one combined field.
     func testAChargeAndTheCapacitorShareOneTrace() {
         let capacitor = bench()
         let charge = PointCharge(

@@ -1,16 +1,6 @@
-//
-//  MagneticField.swift
-//  PhysicsCore — Magnetism
-//
-//  The exact ideal-dipole field, and the dipole–dipole force and torque
-//  that make two magnets attract, repel, and snap into alignment. Pure
-//  functions the renderer and model only ever *ask* — physics lives here.
-//
-//  Dipole field:  B(r) = (μ₀/4π)[ 3(m·r̂)r̂ − m ] / r³
-//  Torque:        τ = m × B          (turns a magnet to align with B)
-//  Dipole force:  F = (3μ₀/4π r⁴)[ (m₁·r̂)m₂ + (m₂·r̂)m₁
-//                                    + (m₁·m₂)r̂ − 5(m₁·r̂)(m₂·r̂)r̂ ]
-//
+//  MagneticField.swift — exact ideal-dipole field, force and torque; pure functions, SI.
+//  B(r) = (μ₀/4π)[3(m·r̂)r̂ − m]/r³;  τ = m × B;
+//  F = (3μ₀/4π r⁴)[(m₁·r̂)m₂ + (m₂·r̂)m₁ + (m₁·m₂)r̂ − 5(m₁·r̂)(m₂·r̂)r̂]
 
 import Foundation
 import simd
@@ -18,8 +8,7 @@ import simd
 public enum MagneticField {
     /// μ₀/4π in T·m/A.
     public static let mu0over4pi = Constants.permeabilityOver4Pi
-    /// Separations below this (m) are treated as "at the dipole," where
-    /// the 1/r³ field is singular — return zero and let the renderer hide it.
+    /// Separations below this (m) are "at the dipole", where 1/r³ is singular — return zero, let the renderer hide it.
     public static let singularityRadius = 1e-4
 
     // MARK: Field
@@ -46,18 +35,8 @@ public enum MagneticField {
     }
 
     // MARK: Every magnet but one
-    //
-    // A bench integrating itself asks, for each magnet, what the OTHERS
-    // do to it. Spelled at the call site that is
-    // `magnets.enumerated().filter { $0.offset != i }.map(\.element)`,
-    // which allocates two arrays — the filter's tuples and the map's
-    // elements — for every magnet, on every substep. Magnetism runs
-    // four substeps a frame in the inertial mode, so eight magnets cost
-    // sixty-four array allocations a frame to express "skip index i".
-    //
-    // These take the whole array and the index to leave out. Same
-    // arithmetic, same results — `MagneticFieldTests` pins the numbers
-    // against the materialising form.
+    // Allocation-free "skip index i" forms — the enumerated/filter/map spelling allocates
+    // two arrays per magnet per substep. Same arithmetic; MagneticFieldTests pins it.
 
     /// B at `point` from every magnet except the one at `index`.
     public static func vector(at point: SIMD3<Double>,
@@ -82,38 +61,12 @@ public enum MagneticField {
     }
 
     // MARK: The finite bar
-    //
-    // Everything above treats a magnet as a POINT dipole, which is exact
-    // — for a point dipole. The expansion it comes from is the leading
-    // term in L/r, so it is right to within a percent or so once you are
-    // a few bar-lengths away, and it is simply not the field of a bar
-    // magnet any nearer than that.
-    //
-    // Which would be an academic footnote if anything sampled B near a
-    // magnet. Something does: the FIELD LINE TRACER. It seeds curves a
-    // few centimetres off a 16 cm bar and integrates them right past its
-    // flanks — the region where L/r is of order one and the expansion
-    // has no claim at all. That is why the loops looked subtly wrong on
-    // device: they were the correct picture of the wrong object, drawn
-    // over the top of a bar they did not belong to.
-    //
-    // So the tracer asks for this instead. A uniformly magnetised bar is
-    // equivalent to two magnetic poles of strength q = |m|/L at its
-    // ends, and
-    //
-    //     B(r) = (μ₀/4π) q [ (r−r₊)/|r−r₊|³ − (r−r₋)/|r−r₋|³ ]
-    //
-    // is exact for THAT object. It carries the same total moment, so it
-    // converges to the point dipole above as r/L grows — which is a
-    // property worth testing, and MagneticFieldTests does.
-    //
-    // Force, torque and induction stay on the point dipole deliberately.
-    // They are pinned by tests, they are what the module's numbers have
-    // always meant, and unlike the tracer they are evaluated where a
-    // dipole is a fair model of a magnet.
+    // A point dipole is not a bar magnet within ~one bar length — exactly where the field
+    // line tracer samples. A uniformly magnetised bar ≡ two poles q = |m|/L at its ends:
+    // B(r) = (μ₀/4π) q [(r−r₊)/|r−r₊|³ − (r−r₋)/|r−r₋|³], exact for that object and
+    // converging to the point dipole as r/L grows (tested).
 
-    /// The pole-pair field of a bar of length `length`, exact for a
-    /// uniformly magnetised bar rather than for a point.
+    /// Pole-pair field of a bar of length `length` — exact for a uniformly magnetised bar.
     public static func barVector(at point: SIMD3<Double>,
                                  dueTo magnet: BarMagnet,
                                  length: Double) -> SIMD3<Double> {
@@ -129,9 +82,7 @@ public enum MagneticField {
                              (-1.0, magnet.position - 0.5 * length * axis)] {
             let r = point - pole
             let d2 = simd_length_squared(r)
-            // A pole is a 1/r² singularity. Inside the core the field is
-            // meaningless and unbounded, so it is clamped rather than
-            // allowed to dominate the superposition.
+            // A pole is a 1/r² singularity — clamped inside the core rather than allowed to dominate.
             let clamped = max(d2, poleCoreRadius * poleCoreRadius)
             let d = clamped.squareRoot()
             field += sign * mu0over4pi * q * r / (clamped * d)
@@ -165,41 +116,16 @@ public enum MagneticField {
         return coeff * (m1r * m2 + m2r * m1 + m1m2 * rHat - 5 * m1r * m2r * rHat)
     }
 
-    /// Net force on `b` from all the `others`, as POINT DIPOLES.
-    ///
-    /// Correct a few bar-lengths out and badly wrong nearer than that —
-    /// see `barForce`, which is what a bench of real bars should use.
+    /// Net force on `b` as POINT DIPOLES — badly wrong nearer than a few bar lengths; a bench of real bars should use `barForce`.
     public static func netForce(on b: BarMagnet, from others: [BarMagnet]) -> SIMD3<Double> {
         others.reduce(.zero) { $0 + force(on: b, dueTo: $1) }
     }
 
     // MARK: The finite bar, again — this time for the force
-    //
-    // THE DYNAMICS WERE COMPUTED IN THE REGIME THIS FILE'S OWN HEADER
-    // RULES OUT. The tracer was moved onto `barVector` because the point
-    // dipole "is simply not the field of a bar magnet" close in; the
-    // FORCE was left on the dipole expansion, and the force is what
-    // decides where the magnets go. Measured, dipole against pole-pair,
-    // head-to-tail on the axis:
-    //
-    //     r/L = 0.92   50.3 % low     ← `contactDistance`
-    //     r/L = 1.5    21 %
-    //     r/L = 3      5.5 %
-    //     r/L = 5      2.0 %
-    //
-    // Magnetism's `contactDistance` is `magnetLength * 0.92`. So the
-    // single most repeated interaction in the module — two magnets
-    // snapping together — was driven by a field reporting HALF its real
-    // value, while the loops drawn over the top were traced from the
-    // right one. The picture and the motion disagreed, and the picture
-    // was correct.
-    //
-    // A uniformly magnetised bar is two poles of strength q = |m|/L at
-    // its ends, so the force on it is `q·B` at its north pole minus the
-    // same at its south. That is a sum of pole-pole central forces, so
-    // Newton's third law holds exactly rather than approximately, and it
-    // converges on the dipole answer as the bars separate — which is the
-    // property `testBarForceMeetsTheDipoleForceFarAway` pins.
+    // Pole-pair force = q·B(north) − q·B(south), q = |m|/L. The dipole force is 50% low at
+    // r/L = 0.92 (Magnetism's contactDistance), 2% at r/L = 5. A sum of central pole-pole
+    // forces, so Newton's third law holds exactly; converges on the dipole answer far away
+    // (pinned by testBarForceMeetsTheDipoleForceFarAway).
 
     /// Force on bar `b` from bar `a`, both treated as pole pairs.
     public static func barForce(on b: BarMagnet, dueTo a: BarMagnet,

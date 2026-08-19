@@ -2,16 +2,8 @@
 //  DoublePendulumTests.swift
 //  PhysicsCoreTests
 //
-//  Chaos defeats the obvious test. Two runs from imperceptibly different
-//  starts diverge exponentially, so "does the trajectory match a stored
-//  reference" is not a test that can pass — and a test that pins a
-//  chaotic trajectory is really pinning the floating-point behaviour of
-//  one machine.
-//
-//  What chaos does NOT touch is checked instead, and all three are
-//  results this code shares no arithmetic with: energy is conserved, the
-//  small-angle normal modes have their analytic frequencies, and the
-//  system degenerates to a simple pendulum when the lower mass vanishes.
+//  Chaos defeats trajectory-pinning, so these check what chaos does not touch:
+//  energy conservation, analytic normal modes, degenerate limits.
 //
 
 import XCTest
@@ -26,15 +18,8 @@ final class DoublePendulumTests: XCTestCase {
 
     // MARK: Energy
 
-    /// The undamped system conserves energy. This is the single most
-    /// informative test here: almost any error in the equations of
-    /// motion — a wrong sign, a dropped coupling term, a mismatched
-    /// angle convention — shows up as energy drifting, because the wrong
-    /// system is not the Euler–Lagrange system of ANY Lagrangian.
-    ///
-    /// Run hard, from a genuinely chaotic start (both rods near
-    /// horizontal), for 20 s at 1/240 s. RK4's O(h⁵) local error leaves
-    /// well under a tenth of a percent over that.
+    /// Undamped energy conservation through a chaotic start — catches any
+    /// non-Lagrangian error; RK4 at 1/240 s holds well under 0.1% over 20 s.
     func testEnergyIsConservedThroughChaoticMotion() {
         var state = DoublePendulum(theta1: 1.6, theta2: 1.5)
         let initial = state.energy(rig: rig, gravity: g)
@@ -43,27 +28,14 @@ final class DoublePendulumTests: XCTestCase {
             state = DoublePendulum.step(state, dt: dt, rig: rig, gravity: g)
         }
         let final = state.energy(rig: rig, gravity: g)
-        // Referenced to the ENERGY SCALE of the system, not to `initial`,
-        // which passes through zero for some rigs.
+        // Tolerance on the system's energy scale, not `initial`, which can be zero.
         let scale = (rig.mass1 + rig.mass2) * g * (rig.length1 + rig.length2)
         XCTAssertEqual(final, initial, accuracy: scale * 1e-3,
                        "energy drifted; the equations of motion are not conservative")
     }
 
-    /// …and it really is chaotic, which is worth pinning too: a double
-    /// pendulum that did NOT diverge would mean the coupling term was
-    /// lost and this is secretly two independent pendulums.
-    ///
-    /// The assertion is on the AMPLIFICATION, not on an absolute
-    /// separation, and that distinction is the point. Exponential
-    /// divergence is a statement about a ratio — this rig's Lyapunov
-    /// exponent is around 0.6 per second, so a micro-radian becomes a
-    /// milliradian in twelve seconds and would need about nineteen to
-    /// reach a tenth of a radian. The first version of this test asked
-    /// for 0.1 after twelve seconds and failed on a system that was
-    /// diverging perfectly well — a test measuring the wrong quantity
-    /// rather than a physics fault. A thousandfold growth from a
-    /// perturbation this small cannot happen in a linear system.
+    /// Divergence proves the coupling survived. Assert on AMPLIFICATION, not
+    /// absolute separation: Lyapunov ≈ 0.6/s, so 1e-6 rad grows ~1000x in 12 s.
     func testNearbyStartsDivergeExponentially() {
         let perturbation = 1e-6
         var a = DoublePendulum(theta1: 1.6, theta2: 1.5)
@@ -83,10 +55,7 @@ final class DoublePendulumTests: XCTestCase {
 
     // MARK: The linear limit
 
-    /// At small angles the system must oscillate at the two analytic
-    /// normal-mode frequencies. For equal lengths and equal masses those
-    /// are ω² = (2 ∓ √2)g/L, which is a textbook result derived
-    /// independently of anything in `acceleration`.
+    /// Small-angle normal modes: for equal lengths and masses, ω² = (2 ∓ √2)g/L.
     func testEqualRigNormalModesMatchTheTextbookFrequencies() throws {
         let modes = try XCTUnwrap(
             DoublePendulum.normalModeFrequencies(rig: rig, gravity: g))
@@ -97,11 +66,8 @@ final class DoublePendulumTests: XCTestCase {
         XCTAssertEqual(modes.1, fast, accuracy: fast * 1e-9)
     }
 
-    /// The frequencies are not just algebra — the SIMULATION runs at
-    /// them. Started exactly in the slow (in-phase) mode, both rods must
-    /// return to their start after one period of that mode.
-    ///
-    /// The in-phase mode for the equal rig has θ₂ = √2·θ₁.
+    /// The simulation itself runs at the slow mode; the equal rig's in-phase
+    /// mode has θ₂ = √2·θ₁.
     func testTheSimulationOscillatesAtItsSlowNormalMode() throws {
         let modes = try XCTUnwrap(
             DoublePendulum.normalModeFrequencies(rig: rig, gravity: g))
@@ -122,8 +88,7 @@ final class DoublePendulumTests: XCTestCase {
 
     // MARK: The degenerate limit
 
-    /// With a vanishing lower mass the upper rod is a simple pendulum,
-    /// and must keep the simple pendulum's small-angle period 2π√(L/g).
+    /// Vanishing lower mass leaves a simple pendulum with period 2π√(L/g).
     func testAVanishingLowerMassLeavesASimplePendulum() {
         let light = DoublePendulum.Rig(length1: 0.5, length2: 0.5,
                                        mass1: 1.0, mass2: 1e-9)
@@ -181,15 +146,8 @@ final class DoublePendulumTests: XCTestCase {
 
     // MARK: The bobs' velocities
 
-    /// THE ACCESSOR THE WHOLE RIG WAS MISSING. `DoublePendulum` reported
-    /// only where the bobs ARE, so nothing downstream could ask how fast
-    /// the chaotic bob was moving — and Pendulums' trail, velocity
-    /// arrow, readout card and freeze sculpt all silently believed the
-    /// answer was zero.
-    ///
-    /// Checked against a finite difference of the POSITION accessor
-    /// rather than against a second copy of the algebra, so this cannot
-    /// pass by making the same differentiation mistake twice.
+    /// Bob velocities checked against a finite difference of the POSITION
+    /// accessor, so this cannot pass by repeating the same algebra mistake.
     func testBobVelocitiesMatchTheDerivativeOfTheirPositions() {
         let rig = DoublePendulum.Rig(length1: 0.42, length2: 0.31,
                                      mass1: 0.8, mass2: 1.3, damping: 0)
@@ -208,9 +166,7 @@ final class DoublePendulumTests: XCTestCase {
             ("lower", { (s: DoublePendulum) in s.lowerBob(rig: rig) },
              state.lowerBobVelocity(rig: rig)),
         ] as [(String, (DoublePendulum) -> SIMD2<Double>, SIMD2<Double>)] {
-            // Advance the ANGLES analytically by h at the current rates;
-            // over an interval this short that is the definition of the
-            // derivative the accessor claims to compute.
+            // Advance the angles analytically by h at the current rates.
             var ahead = state
             ahead.theta1 += state.omega1 * h
             ahead.theta2 += state.omega2 * h
@@ -226,8 +182,7 @@ final class DoublePendulumTests: XCTestCase {
         }
     }
 
-    /// A rig at rest has bobs at rest — the degenerate case the trail
-    /// gate actually tests against.
+    /// A rig at rest has bobs at rest — the trail gate's degenerate case.
     func testBobsAtRestReportNoSpeed() {
         let rig = DoublePendulum.Rig(length1: 0.5, length2: 0.5,
                                      mass1: 1, mass2: 1, damping: 0)
@@ -236,9 +191,8 @@ final class DoublePendulumTests: XCTestCase {
                        accuracy: 1e-12)
     }
 
-    /// And a moving one reports a speed the energy agrees with: at the
-    /// instant both rods are straight down, all the kinetic energy is in
-    /// the bobs and the two calculations must meet.
+    /// With both rods straight down all kinetic energy is in the bobs, so
+    /// speed and energy must agree.
     func testSpeedAgreesWithKineticEnergyAtTheBottom() {
         let rig = DoublePendulum.Rig(length1: 0.5, length2: 0.5,
                                      mass1: 1, mass2: 1, damping: 0)

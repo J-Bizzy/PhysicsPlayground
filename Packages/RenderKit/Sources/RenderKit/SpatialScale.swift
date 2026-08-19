@@ -1,21 +1,10 @@
 //
 //  SpatialScale.swift
-//  RenderKit
+//  RenderKit — two-handed scale and turn of a module's display root.
 //
-//  Two-handed scale and turn — the gesture the whole app was missing.
-//
-//  Every module had exactly one verb: gaze, pinch, drag one object.
-//  That is the verb of a mouse. The verb that only exists in a headset
-//  is BOTH HANDS: pinch with two hands and pull apart to grow the solar
-//  system from a tabletop orrery into an orrery you stand inside, or
-//  turn your hands to look at a magnetic loop from the side.
-//
-//  The rig is deliberately a pure *presentation* transform: it scales
-//  and turns a display root, and never touches the model. The physics
-//  keeps running in true SI units at its own scale — the user is
-//  changing their viewpoint, not the universe. Modules that publish
-//  numbers in metres therefore need no changes at all.
-//
+//  A pure PRESENTATION transform: it scales and turns a display root and
+//  never touches the model. The physics keeps running in true SI units at
+//  its own scale — the user changes their viewpoint, not the universe.
 
 import QuartzCore
 import RealityKit
@@ -89,17 +78,9 @@ public final class SpatialScaleRig {
     }
 
     /// ABANDONS the in-flight gesture, restoring the view to where it
-    /// stood when the hands closed.
-    ///
-    /// The two are not interchangeable and were used as if they were.
-    /// `SpatialScaleModifier` suppresses the rig while the pinch ledger
-    /// says the hands are on two different objects — the same-object
-    /// rule — and it did that by calling `endGesture()`, which is the
-    /// COMMIT. `MagnifyGesture` fires before the ledger has resolved
-    /// both owners, so grabbing two magnets landed a frame or two of
-    /// partial swell and then committed it: the bench was left
-    /// permanently scaled by exactly the gesture the rule exists to
-    /// suppress.
+    /// stood when the hands closed. NOT interchangeable with endGesture:
+    /// the same-object rule must cancel (not commit) a suppressed pinch,
+    /// or grabbing two objects leaves the bench permanently scaled.
     public func cancelGesture() {
         guard isGesturing else { return }
         isGesturing = false
@@ -141,32 +122,16 @@ public final class SpatialScaleRig {
 }
 
 /// Tracks which entities are currently being pinched, so a two-hand
-/// gesture can tell "both hands on ONE object" from "one object in each
-/// hand". The distinction is the owner's same-object rule (2026-08-03):
-/// two hands pinching the same object (or empty space) mean resize; two
-/// hands each holding a different object mean two grabs, and the scale
-/// rig must stay out of it — grabbing two magnets used to swell the
-/// whole bench.
-///
-/// Fed from a passive `SpatialEventGesture` that the `spatialScale`
-/// modifier attaches alongside the magnify/rotate pair: each spatial
-/// event carries the entity it targeted, and the ledger resolves every
-/// live pinch to its owning object.
+/// gesture can tell "both hands on ONE object" (resize) from "one object
+/// in each hand" (two grabs — rig stays out). Fed from a passive
+/// `SpatialEventGesture` that carries each pinch's targeted entity.
 @MainActor
 public final class PinchLedger {
-    /// How long an unmentioned pinch stays on the books.
-    ///
-    /// THE LEDGER ONLY EVER LEARNED, NEVER FORGOT. An entry was removed
-    /// by an event naming its own id, so a hand that left the tracking
-    /// volume mid-pinch — walked out of frame, dropped behind the body,
-    /// occluded by the apparatus — left its owner in the dictionary
-    /// permanently. From that moment `allowsScale` was false for the
-    /// rest of the module session and two-hand zoom silently stopped
-    /// working, with nothing on screen to say why and no way back but
-    /// leaving the space. `clear()` existed for this and had no callers.
-    ///
-    /// Half a second is far longer than the gap between frames of a live
-    /// pinch and far shorter than a user notices.
+    /// How long an unmentioned pinch stays on the books. A hand that
+    /// leaves the tracking volume mid-pinch never emits its removing
+    /// event, so without expiry its owner sticks forever and two-hand
+    /// zoom silently dies for the session. Longer than a frame gap, far
+    /// shorter than a user notices.
     public static let staleAfter: Double = 0.5
 
     private var owners: [SpatialEventCollection.Event.ID: (owner: Entity, seen: Double)] = [:]
@@ -227,39 +192,21 @@ public final class PinchLedger {
 }
 
 public extension View {
-    /// Attaches two-handed scale (and optional turn) to a module scene.
-    /// Target it at the whole scene: MagnifyGesture and RotateGesture3D
-    /// both need an entity with an InputTargetComponent under the hands,
-    /// which every module's grabbable objects already provide — the
-    /// gesture works when the user pinches any two physics objects.
-    /// (There is deliberately NO region-covering invisible input plate:
-    /// hit-testing uses colliders, not visible geometry, so a plate
-    /// shields every object inside it from every pinch. One shipped;
-    /// it silently killed all interaction in two modules.)
-    ///
-    /// THE SAME-OBJECT RULE: the modifier also watches raw spatial
-    /// events through a `PinchLedger`, and while two live pinches rest
-    /// on two different objects the rig is suppressed — that gesture is
-    /// two grabs, not a resize.
+    /// Attaches two-handed scale (and optional turn) to a module scene,
+    /// firing on any two grabbable objects the hands pinch. Deliberately
+    /// NO region-covering input plate: hit-testing uses colliders, so a
+    /// plate would shield every object inside it from every pinch. The
+    /// same-object rule (via `PinchLedger`) suppresses the rig while two
+    /// pinches rest on two different objects — that is two grabs.
     func spatialScale(_ rig: SpatialScaleRig) -> some View {
         modifier(SpatialScaleModifier(rig: rig))
     }
 
-    /// The same gesture for a scene holding MORE THAN ONE apparatus.
-    ///
-    /// `spatialScale(_:)` targets any entity, so two of them stacked on
-    /// one view both fire on every two-handed pinch — grab the circuit
-    /// bench and the magnets across the room would swell with it. Here
-    /// the pinched entity chooses: `route` walks whatever was hit up to
-    /// the station that owns it and returns that station's rig, and only
-    /// that rig moves.
-    ///
-    /// `rigs` is every rig the scene owns. A gesture that ends is ended
-    /// on all of them rather than on the re-resolved one — if the hands
-    /// drift off the entity they started on, re-resolving would leave
-    /// the original rig stuck mid-gesture, with its committed scale
-    /// never catching up to the live one. `endGesture()` on a rig that
-    /// is not gesturing is already a no-op, so the sweep is free.
+    /// The same gesture for a scene holding MORE THAN ONE apparatus:
+    /// `route` walks the pinched entity up to the station that owns it and
+    /// only that rig moves. A gesture end is applied to ALL `rigs` (a
+    /// no-op on any not gesturing), so a hand drifting off its start
+    /// entity can't leave the original rig stuck mid-gesture.
     func spatialScale(
         rigs: [SpatialScaleRig],
         routing route: @escaping (Entity) -> SpatialScaleRig?
@@ -298,10 +245,9 @@ public struct SpatialScaleModifier: ViewModifier {
 
     public func body(content: Content) -> some View {
         content
-            // Passive observer: SpatialEventGesture does not claim the
-            // pinches, it only reports them — each with the entity it
-            // targeted, which is exactly the fact the magnify gesture
-            // cannot see (it reports one entity for a two-hand gesture).
+            // Passive observer: reports each pinch with its targeted
+            // entity — the fact MagnifyGesture cannot see (it reports one
+            // entity for a two-hand gesture).
             .simultaneousGesture(
                 SpatialEventGesture()
                     .onChanged { events in ledger.update(events) }

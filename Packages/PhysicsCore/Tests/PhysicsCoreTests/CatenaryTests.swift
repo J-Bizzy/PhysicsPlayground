@@ -1,14 +1,5 @@
-//
 //  CatenaryTests.swift
-//  PhysicsCoreTests
-//
-//  A hanging cable is a catenary, not a parabola and not a Bézier
-//  that looks about right. The shape parameter comes out of a Newton
-//  solve, so the thing worth testing is that the curve it produces
-//  actually has the ARC LENGTH it was asked for — that is the claim
-//  the solve makes, and a wrong root still draws a plausible-looking
-//  droop.
-//
+//  True catenary for hanging cables — the load-bearing claim is that the Newton solve's curve has the requested arc length.
 
 import XCTest
 import simd
@@ -32,8 +23,6 @@ final class CatenaryTests: XCTestCase {
         }
     }
 
-    /// The endpoints are the endpoints, always — a curve that misses
-    /// its own terminals would leave a visible gap at every joint.
     func testTheCurveStartsAndEndsWhereItWasTold() {
         for slack in [0.0, 0.01, 0.1, 0.5] {
             let curve = Catenary.points(from: a, to: b, slack: slack)
@@ -42,11 +31,8 @@ final class CatenaryTests: XCTestCase {
         }
     }
 
-    /// THE CLAIM THE SOLVE MAKES: the curve is as long as it was asked
-    /// to be. Sampled arc length underestimates a smooth curve
-    /// slightly, so this is checked to a part in a thousand rather
-    /// than exactly — but a wrong root misses by percent, not
-    /// per-mille.
+    /// The solve's claim: arc length equals the request. Tolerance 1e-3 relative because
+    /// sampling underestimates a smooth curve slightly; a wrong root misses by percent.
     func testArcLengthMatchesTheRequestedSlack() {
         for slack in [0.02, 0.05, 0.1, 0.3] {
             let requested = simd_distance(a, b) + slack
@@ -56,7 +42,6 @@ final class CatenaryTests: XCTestCase {
         }
     }
 
-    /// It hangs DOWN, and its lowest point is below both ends.
     func testTheLowestPointIsBelowBothEnds() {
         let curve = Catenary.points(from: a, to: b, slack: 0.1)
         let lowest = curve.map(\.y).min()!
@@ -64,7 +49,6 @@ final class CatenaryTests: XCTestCase {
         XCTAssertLessThan(lowest, b.y - 1e-4)
     }
 
-    /// A level span sags symmetrically about its midpoint.
     func testTheCurveIsSymmetricAboutMidSpan() {
         let curve = Catenary.points(from: a, to: b, slack: 0.12, samples: 21)
         for index in 0..<curve.count {
@@ -74,7 +58,6 @@ final class CatenaryTests: XCTestCase {
         }
     }
 
-    /// More slack, more sag — monotonically.
     func testMoreSlackSagsFurther() {
         var previous = a.y
         for slack in [0.02, 0.05, 0.12, 0.3] {
@@ -84,9 +67,7 @@ final class CatenaryTests: XCTestCase {
         }
     }
 
-    /// A vertical span has no horizontal frame to sag across — every
-    /// direction is equally sideways — so it degrades to the chord
-    /// rather than inventing one.
+    /// A vertical span has no horizontal frame to sag across, so it degrades to the chord.
     func testAVerticalSpanDegradesToTheChord() {
         let top = SIMD3<Double>(0, 1.6, -0.9)
         let bottom = SIMD3<Double>(0, 1.2, -0.9)
@@ -94,7 +75,6 @@ final class CatenaryTests: XCTestCase {
         XCTAssertEqual(length(curve), simd_distance(top, bottom), accuracy: 1e-12)
     }
 
-    /// A sloped span still hangs, and still lands on both ends.
     func testASlopedSpanHangsAndStillMeetsItsEnds() {
         let low = SIMD3<Double>(-0.3, 1.15, -0.9)
         let high = SIMD3<Double>(0.3, 1.45, -0.9)
@@ -110,9 +90,7 @@ final class CatenaryTests: XCTestCase {
         XCTAssertLessThan(nearestToMid.y, midpoint.y)
     }
 
-    /// A zero-length span does not divide by zero, and neither does a
-    /// pair of coincident points — which a snapped joint produces on
-    /// purpose.
+    /// Coincident endpoints — which a snapped joint produces on purpose — must not divide by zero.
     func testDegenerateSpansAreSafe() {
         let curve = Catenary.points(from: a, to: a, slack: 0.1)
         XCTAssertFalse(curve.contains { $0.x.isNaN || $0.y.isNaN || $0.z.isNaN })
@@ -121,7 +99,6 @@ final class CatenaryTests: XCTestCase {
         }
     }
 
-    /// Nothing produces a NaN, over a wide sweep of spans and slacks.
     /// A single NaN in a vertex buffer takes the whole mesh with it.
     func testNothingProducesANaN() {
         for spanIndex in 0...20 {
@@ -138,19 +115,8 @@ final class CatenaryTests: XCTestCase {
         }
     }
 
-    /// NEAR-VERTICAL, NOT JUST VERTICAL — the case the first version
-    /// of this file got catastrophically wrong.
-    ///
-    /// The degeneracy guard was an ABSOLUTE 1e-4 on the horizontal
-    /// run, so a span 0.2 mm across and 0.4 m tall went to the Newton
-    /// solve, which was asked to hang 4 cm of slack across 0.2 mm of
-    /// horizontal distance. Five iterations from a small-sag guess do
-    /// not reach that root, and the unconverged value produced
-    /// mid-span drops of 10^23 metres — numbers that reach a vertex
-    /// buffer as infinities. `testAVerticalSpanDegradesToTheChord`
-    /// missed it because it used an offset of EXACTLY zero, and
-    /// `testNothingProducesANaN` missed it because its sweep never
-    /// went near vertical.
+    /// Regression: an absolute 1e-4 horizontal-run guard sent near-vertical spans to an
+    /// unconverged Newton solve (mid-span drops of 1e23 m); exactly-vertical tests miss this.
     func testNearVerticalSpansStayBounded() {
         let top = SIMD3<Double>(0, 1.6, -0.9)
         for offset in [1e-6, 1e-5, 1e-4, 5e-4, 1e-3, 2e-3, 5e-3, 0.01, 0.05, 0.1] {
@@ -160,17 +126,14 @@ final class CatenaryTests: XCTestCase {
             for point in curve {
                 XCTAssertTrue(point.x.isFinite && point.y.isFinite && point.z.isFinite,
                               "offset \(offset) produced \(point)")
-                // Nothing may end up further from an endpoint than the
-                // cable is long. A curve that cannot honour its slack
-                // must fall back to the chord, not run away.
+                // A curve that cannot honour its slack must fall back to the chord, not run away.
                 XCTAssertLessThan(simd_distance(point, top), chord + 0.05 + 1e-9,
                                   "offset \(offset) flung a point \(simd_distance(point, top)) m away")
             }
         }
     }
 
-    /// The same claim as a property, over every direction: no sampled
-    /// point is ever further from an end than the arc length.
+    /// Property form over random spans: no sampled point further from an end than the arc length.
     func testNoPointEverExceedsTheCableLength() {
         var seed: UInt64 = 99
         func random() -> Double {
@@ -190,8 +153,7 @@ final class CatenaryTests: XCTestCase {
         }
     }
 
-    /// The sample count is honoured — the renderer sizes a tube from
-    /// it.
+    /// The renderer sizes a tube from the sample count.
     func testTheSampleCountIsHonoured() {
         XCTAssertEqual(Catenary.points(from: a, to: b, slack: 0.1, samples: 5).count, 5)
         XCTAssertEqual(Catenary.points(from: a, to: b, slack: 0, samples: 9).count, 9)

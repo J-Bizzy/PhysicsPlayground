@@ -1,47 +1,7 @@
 //
 //  FluidGrid.swift
-//  PhysicsCore — Fluids
-//
-//  A real incompressible flow solver on a 3-D staggered (MAC) grid —
-//  the machinery a wind tunnel actually needs. Where CylinderFlow gives
-//  the exact analytic answer for one special shape, this solves the
-//  Euler equations numerically for ANY shape you put in the stream:
-//
-//      ∂u/∂t + (u·∇)u = −∇p/ρ ,      ∇·u = 0
-//
-//  by the standard operator-split method (Stam, "Stable Fluids"):
-//
-//    1. ADVECT   — semi-Lagrangian: trace each face's velocity backward
-//                  along the flow and resample. Unconditionally stable,
-//                  so the solver can take a whole frame in one step.
-//    2. CONFINE  — vorticity confinement (Fedkiw et al.): semi-Lagrangian
-//                  advection is numerically dissipative and smears the
-//                  eddies a wake is made of; this feeds energy back into
-//                  the vorticity that is already there, restoring the
-//                  curl the discretisation lost. It creates no rotation
-//                  that the flow did not have.
-//    3. PROJECT  — solve ∇²p = (ρ/Δt)∇·u and subtract ∇p, which is the
-//                  step that makes the field divergence-free. This is
-//                  what bends the flow around obstacles: mass simply
-//                  cannot pass through a solid cell, so it must go
-//                  around, and the pressure solve works out exactly how.
-//
-//  Solids are per-cell, so the obstacle can be a car, a chair, or a
-//  hand — anything that can be voxelised. Faces between a fluid cell and
-//  a solid cell carry zero flux (free-slip walls), and the pressure
-//  Poisson equation drops those neighbours (homogeneous Neumann), which
-//  is the discrete statement of "the wall is a streamline".
-//
-//  Boundaries: the −x face is the INFLOW, held at the free-stream speed
-//  (Dirichlet on velocity, Neumann on pressure); the +x face is the open
-//  OUTFLOW (p = 0); the four side walls are free-slip — a wind tunnel's
-//  working section.
-//
-//  (This said the opposite until 2026-08-03: inflow at +x, outflow at
-//  −x. The code was right — `applyBoundaries` sets `u[uIndex(0, …)]` and
-//  `project` puts the p = 0 outlet at `uIndex(nx, …)` — and flow runs
-//  along +x, as the header says twenty lines above. Only the sentence
-//  was reversed.)
+//  Incompressible Euler solver (∂u/∂t + (u·∇)u = −∇p/ρ, ∇·u = 0) on a 3-D staggered MAC grid, operator-split per Stam "Stable Fluids": semi-Lagrangian ADVECT (unconditionally stable) → vorticity CONFINE (Fedkiw; restores curl the discretisation lost, never invents rotation) → pressure PROJECT (∇²p = (ρ/Δt)∇·u), which is what bends flow around solids.
+//  Boundaries: −x face is the inflow (Dirichlet velocity), +x the open outflow (p = 0), side walls free-slip; per-cell solids carry zero face flux and the Poisson solve drops them (homogeneous Neumann — "the wall is a streamline").
 //
 
 import Foundation
@@ -67,8 +27,7 @@ public struct FluidGrid: Sendable {
     public private(set) var w: [Double]
     /// Solid occupancy per cell, nx·ny·nz.
     public private(set) var solid: [Bool]
-    /// Pressure per cell (kept between frames — it warm-starts the
-    /// iterative solve, which is why a settled flow stays settled).
+    /// Pressure per cell — kept between frames to warm-start the iterative solve.
     public private(set) var pressure: [Double]
 
     // MARK: Parameters
@@ -141,8 +100,7 @@ public struct FluidGrid: Sendable {
         for index in solid.indices { solid[index] = false }
     }
 
-    /// Marks the cell containing `point` solid. Returns false if it lies
-    /// outside the grid.
+    /// Marks the cell containing `point` solid; false if outside the grid.
     @discardableResult
     public mutating func addSolid(atWorld point: SIMD3<Double>) -> Bool {
         let g = (point - origin) / h
@@ -175,8 +133,7 @@ public struct FluidGrid: Sendable {
 
     // MARK: Sampling
 
-    /// Trilinearly interpolated velocity at a world point. Each component
-    /// is sampled from its own staggered lattice.
+    /// Trilinear velocity at a world point — each component sampled from its own staggered lattice.
     public func velocity(at point: SIMD3<Double>) -> SIMD3<Double> {
         let g = (point - origin) / h
         return SIMD3(
@@ -225,8 +182,7 @@ public struct FluidGrid: Sendable {
         project(dt: dt)
     }
 
-    /// Runs the solver until the field is developed — used when the scene
-    /// changes and the flow should already be established.
+    /// Runs the solver until the field is developed — for scene changes.
     public mutating func prime(steps: Int, dt: Double) {
         for _ in 0..<max(0, steps) { step(dt: dt) }
     }
@@ -311,8 +267,7 @@ public struct FluidGrid: Sendable {
             }
         }
 
-        // f = ε·h·(N × ω), N = ∇|ω| / |∇|ω|| — points from low to high
-        // vorticity, so the force spins the existing eddy back up.
+        // f = ε·h·(N × ω), N = ∇|ω|/|∇|ω|| — spins the existing eddy back up.
         var force = [SIMD3<Double>](repeating: .zero, count: count)
         for k in 1..<(nz - 1) {
             for j in 1..<(ny - 1) {
@@ -350,17 +305,14 @@ public struct FluidGrid: Sendable {
 
     // MARK: 3. Boundaries
 
-    /// Inlet holds the free stream; the outlet is open; the side walls are
-    /// free-slip; and no face touching a solid carries any flux.
+    /// Inlet holds the free stream; outlet open; side walls free-slip; solid faces carry no flux.
     private mutating func applyBoundaries() {
-        // Inlet / outlet on x.
         for k in 0..<nz {
             for j in 0..<ny {
                 u[uIndex(0, j, k)] = inflowSpeed
                 u[uIndex(nx, j, k)] = u[uIndex(nx - 1, j, k)]   // zero-gradient
             }
         }
-        // Free-slip side walls: no flow through them.
         for k in 0..<nz {
             for i in 0..<nx {
                 v[vIndex(i, 0, k)] = 0
@@ -376,8 +328,7 @@ public struct FluidGrid: Sendable {
         enforceSolidFaces()
     }
 
-    /// Zero every face between a fluid cell and a solid one — the
-    /// no-penetration condition that makes the flow go around.
+    /// Zero every fluid–solid face — the no-penetration condition that makes the flow go around.
     private mutating func enforceSolidFaces() {
         for k in 0..<nz {
             for j in 0..<ny {
@@ -402,8 +353,7 @@ public struct FluidGrid: Sendable {
             + w[wIndex(i, j, k + 1)] - w[wIndex(i, j, k)]) / h
     }
 
-    /// Largest |divergence| over the fluid cells — the residual the tests
-    /// hold to zero.
+    /// Largest |divergence| over the fluid cells — the residual the tests hold to zero.
     public var maxDivergence: Double {
         var worst = 0.0
         for k in 0..<nz {
@@ -427,10 +377,7 @@ public struct FluidGrid: Sendable {
                     let index = cellIndex(i, j, k)
                     guard !solid[index] else { pressure[index] = 0; continue }
                     rhs[index] = scale * divergence(i, j, k) * h * h
-                    // Count the neighbours the pressure can talk to. A
-                    // solid neighbour and the inlet wall are Neumann (drop
-                    // them); the open outlet is Dirichlet p = 0 (keep it,
-                    // contributing a zero term).
+                    // Neighbours: solids and the inlet wall are Neumann (dropped); the open outlet is Dirichlet p = 0 (kept, contributing zero).
                     var n = 0.0
                     if i > 0, !solid[cellIndex(i - 1, j, k)] { n += 1 }
                     if i < nx - 1 { if !solid[cellIndex(i + 1, j, k)] { n += 1 } } else { n += 1 }
@@ -443,10 +390,7 @@ public struct FluidGrid: Sendable {
             }
         }
 
-        // Successive over-relaxation: the Gauss–Seidel update, then
-        // deliberately overshot. Plain Gauss–Seidel converges on a Poisson
-        // problem far too slowly to finish inside a frame; ω ≈ 1.8 cuts
-        // the residual by orders of magnitude for the same sweep count.
+        // SOR (ω ≈ 1.8): plain Gauss–Seidel converges far too slowly to finish inside a frame.
         let omega = 1.8
         for _ in 0..<pressureIterations {
             for k in 0..<nz {
@@ -478,9 +422,7 @@ public struct FluidGrid: Sendable {
                     guard !solid[a], !solid[b] else { continue }
                     u[uIndex(i, j, k)] -= gradientScale * (pressure[b] - pressure[a])
                 }
-                // The outlet face closes the same way, against the open
-                // boundary's p = 0. Copying the interior value here instead
-                // would put divergence straight back into the last column.
+                // Outlet face closes against p = 0 — copying the interior value would put divergence back into the last column.
                 let last = cellIndex(nx - 1, j, k)
                 if !solid[last] {
                     u[uIndex(nx, j, k)] -= gradientScale * (0 - pressure[last])
@@ -509,12 +451,8 @@ public struct FluidGrid: Sendable {
         enforceSolidFaces()
     }
 
-    /// Wipes the flow back to a clean uniform stream. When an obstacle
-    /// MOVES, the pattern already in the grid describes where it used to
-    /// be, and letting that drain away naturally takes a full domain
-    /// crossing (L/U — about two seconds here), which reads as the
-    /// visualization lagging behind your hand. Resetting and re-priming
-    /// re-establishes the flow around the new position immediately.
+    /// Wipes back to a uniform stream. A moved obstacle's stale wake takes a full domain crossing
+    /// (~L/U) to drain naturally; reset + re-prime re-establishes the flow immediately.
     public mutating func resetFlow() {
         for index in u.indices { u[index] = inflowSpeed }
         for index in v.indices { v[index] = 0 }
@@ -525,12 +463,8 @@ public struct FluidGrid: Sendable {
 
     // MARK: Export
 
-    /// A cheap, immutable copy of the solved field: one velocity per cell
-    /// centre plus the solid mask. Handing this to a renderer lets the
-    /// visuals ride the flow EVERY frame while the (far more expensive)
-    /// solve refreshes the field at its own slower pace. The field itself
-    /// changes slowly; what must never look stepped is the motion of the
-    /// things drifting through it.
+    /// Cheap immutable copy of the solved field (cell-centre velocities + solid mask) so the
+    /// renderer can sample every frame while the expensive solve refreshes at its own pace.
     public func exportField() -> FlowField {
         var cells = [SIMD3<Float>](repeating: .zero, count: nx * ny * nz)
         for k in 0..<nz {
@@ -545,10 +479,8 @@ public struct FluidGrid: Sendable {
     }
 }
 
-/// A sampled snapshot of a solved flow — velocity at every cell centre
-/// plus the solid mask, and nothing else. Sendable and self-contained, so
-/// it can cross to the main thread and be sampled per frame without
-/// touching the solver.
+/// Sampled snapshot of a solved flow (cell-centre velocities + solid mask) — Sendable and
+/// self-contained, sampled per frame without touching the solver.
 public struct FlowField: Sendable {
     public let nx: Int, ny: Int, nz: Int
     public let h: Double

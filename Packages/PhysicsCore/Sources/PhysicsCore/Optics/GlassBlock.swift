@@ -1,30 +1,19 @@
 //
 //  GlassBlock.swift
-//  PhysicsCore — Optics
-//
-//  A rectangular glass slab traced with real 3D refraction: the ray
-//  bends at the entry face (Snell), crosses the glass, and either
-//  refracts out or — past the critical angle — mirrors off the inside
-//  of a face and tries the next one, bouncing along like light in a
-//  fiber. The textbook results emerge: a slab passes the ray PARALLEL
-//  to how it arrived (only laterally shifted), and steep entries turn
-//  the slab into a light pipe. Both pinned by the tests.
+//  PhysicsCore — Optics: exact 3D Snell trace through a rectangular slab; past the critical angle faces mirror internally (light pipe).
 //
 
 import Foundation
 import simd
 
 public enum GlassBlock {
-    /// One face hit on an axis-aligned box: entry point and the
-    /// OUTWARD unit normal of the struck face.
+    /// A face hit: point and the struck face's OUTWARD unit normal.
     public struct FaceHit: Sendable {
         public var point: SIMD3<Double>
         public var normal: SIMD3<Double>
     }
 
-    /// First intersection of a ray with the box surface from OUTSIDE,
-    /// or nil if it misses. Standard slab method; the normal comes
-    /// from whichever axis produced the entry time.
+    /// First hit from OUTSIDE (slab method), or nil on a miss.
     public static func entry(
         from origin: SIMD3<Double>, direction: SIMD3<Double>,
         center: SIMD3<Double>, halfExtents: SIMD3<Double>
@@ -79,9 +68,7 @@ public enum GlassBlock {
         return FaceHit(point: origin + tExit * d, normal: normal)
     }
 
-    /// Traces a ray at the slab: polyline from the origin, through
-    /// refraction and any internal reflections, to `escape` beyond the
-    /// last surface. A miss flies straight.
+    /// Traces a ray: polyline through refraction and internal reflections, to `escape` past the last surface. A miss flies straight.
     public static func trace(
         from origin: SIMD3<Double>, direction: SIMD3<Double>,
         center: SIMD3<Double>, halfExtents: SIMD3<Double>,
@@ -114,7 +101,6 @@ public enum GlassBlock {
                 points.append(p + out * escape)
                 return points
             }
-            // Total internal reflection: the wall is a perfect mirror.
             d = Refraction.reflect(direction: d, normal: wall.normal)
         }
         points.append(p + d * escape)

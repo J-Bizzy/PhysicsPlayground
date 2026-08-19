@@ -1,11 +1,6 @@
 //
 //  BallTextures.swift
-//  Physics Playground — Kinematics module
-//
-//  Procedural ball textures — no bundled assets: a seamed basketball,
-//  a dimple-speckled golf ball, a scuffed iron cannonball. Generated
-//  once (512×256 equirectangular CGContext), cached, applied by the
-//  renderer as they arrive via the `version` counter.
+//  Physics Playground — Kinematics: procedural ball textures (no bundled assets), drawn once as 512×256 equirectangular CGImages, cached, applied via the `version` counter.
 //
 
 import Foundation
@@ -60,7 +55,6 @@ enum BallTextures {
             fill(0.85, 0.4, 0.13)
             context.setStrokeColor(CGColor(red: 0.1, green: 0.08, blue: 0.07, alpha: 1))
             context.setLineWidth(5)
-            // Four meridian seams + the equator.
             for fraction in [0.0, 0.25, 0.5, 0.75] {
                 context.move(to: CGPoint(x: w * fraction, y: 0))
                 context.addLine(to: CGPoint(x: w * fraction, y: h))
@@ -68,7 +62,6 @@ enum BallTextures {
             context.move(to: CGPoint(x: 0, y: h / 2))
             context.addLine(to: CGPoint(x: w, y: h / 2))
             context.strokePath()
-            // The two curved side seams.
             for offset in [0.32, 0.68] {
                 context.move(to: CGPoint(x: 0, y: h * offset))
                 for step in 0...64 {
@@ -78,7 +71,6 @@ enum BallTextures {
                 }
                 context.strokePath()
             }
-            // Pebble grain.
             for _ in 0..<600 {
                 let v = CGFloat.random(in: -0.05...0.05)
                 context.setFillColor(CGColor(red: 0.85 + v, green: 0.4 + v, blue: 0.13, alpha: 0.5))
@@ -87,7 +79,6 @@ enum BallTextures {
             }
         case "Golf ball":
             fill(0.95, 0.95, 0.93)
-            // Dimples in a loose hex-ish scatter.
             context.setFillColor(CGColor(red: 0.8, green: 0.8, blue: 0.79, alpha: 0.9))
             for row in 0..<12 {
                 for column in 0..<24 {

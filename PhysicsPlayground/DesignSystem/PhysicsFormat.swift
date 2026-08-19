@@ -2,38 +2,10 @@
 //  PhysicsFormat.swift
 //  Physics Playground — Design system
 //
-//  How a number is written, once, for the whole app.
-//
-//  This was 35 lines with two functions and 21 call sites in two modules,
-//  against 107 hand-rolled `String(format:)` calls everywhere else — the
-//  shape `Materials.swift` was convicted of on 2026-07-30. A canon with
-//  one recipe is a default, not a canon, and the tell is a grep for
-//  hand-typed values: each one marks a call site the shared layer failed
-//  to serve.
-//
-//  What the scattering cost was not hypothetical. The same physical
-//  quantity was written to different precision in different rooms —
-//  gravity `%.2f` in Projectiles against `%.3f` in Pendulums, a length
-//  `%.3f` against `%.4f`, and a fifth style `%.4g` in Electric Fields —
-//  and a boolean reading came out as "on/off", "free/frozen" and
-//  "yes/no — unbound" depending on which module wrote it. A lab notebook
-//  is a comparison surface; three spellings of the same fact is the one
-//  thing it must not do.
-//
-//  ── THE QUANTISATION RULE IS THE REAL REASON THIS FILE GREW ──
-//
-//  An in-room readout is a RealityKit attachment or a text mesh, and
-//  what costs is how often the RENDERED OUTPUT changes, not how often
-//  `body` runs. So every live value has to be quantised to the precision
-//  it is displayed at, or the string differs every frame and the texture
-//  is rebuilt every frame.
-//
-//  Four files remembered that and hand-rolled `(x * 100).rounded() / 100`
-//  before formatting. The rest did not. Making it the formatter's job is
-//  what turns a rule people remember into a rule the code enforces —
-//  every function here returns a string that is stable under a
-//  perturbation smaller than its own displayed precision, and
-//  `PhysicsFormatTests` asserts exactly that.
+//  How a number is written, once, for the whole app. Every function returns
+//  a string stable under a perturbation smaller than its displayed precision
+//  (quantise before formatting), so per-frame readouts don't rebuild their
+//  textures — `PhysicsFormatTests` asserts exactly that.
 //
 
 import Foundation
@@ -41,26 +13,16 @@ import Foundation
 nonisolated enum PhysicsFormat {
 
     // MARK: The house precisions
-    //
-    // Named rather than passed, so "how many decimals does a length get"
-    // has one answer instead of one per call site.
 
-    /// Metres, seconds, kilograms, m/s — the everyday quantities.
-    /// Millimetre resolution is finer than anything in these rooms is
-    /// placed to.
+    /// Metres, seconds, kilograms, m/s — millimetre resolution.
     static let standardDecimals = 3
-    /// Angles in degrees, where a tenth is already past what a hand can
-    /// set.
+    /// Angles in degrees — a tenth is past what a hand can set.
     static let angleDecimals = 1
 
     // MARK: Fixed-point
 
-    /// A value at a stated number of decimals, quantised first.
-    ///
-    /// The quantisation is not decoration: `String(format:)` alone would
-    /// round for display while the caller went on comparing unrounded
-    /// values, and any caller caching "has the text changed" would see it
-    /// change every frame.
+    /// A value at a stated number of decimals, quantised first — so a
+    /// caller caching "has the text changed" doesn't see it change per frame.
     static func fixed(_ value: Double, decimals: Int = 2) -> String {
         guard value.isFinite else { return "—" }
         let quantised = quantise(value, decimals: decimals)
@@ -69,15 +31,8 @@ nonisolated enum PhysicsFormat {
         return typographic(String(format: Self.fixedSpecifier(decimals), cleaned))
     }
 
-    /// `"%.<n>f"` without building it each time.
-    ///
-    /// The interpolated form allocated a format String on every call —
-    /// and this is called dozens of times a frame across the renderers
-    /// (skyline labels, callouts, component labels, every readout row),
-    /// so the app was allocating a throwaway String to describe how to
-    /// build a String. Seven entries cover every precision the house
-    /// uses; anything past them falls back to the old path rather than
-    /// growing a table nobody reads.
+    /// `"%.<n>f"` without allocating a format String per call — this runs
+    /// dozens of times a frame across the renderers.
     private static let fixedSpecifiers = [
         "%.0f", "%.1f", "%.2f", "%.3f", "%.4f", "%.5f", "%.6f",
     ]
@@ -89,20 +44,8 @@ nonisolated enum PhysicsFormat {
             : "%.\(clamped)f"
     }
 
-    /// U+2212 MINUS SIGN, not the hyphen `%f` emits.
-    ///
-    /// THE APP ALREADY DECIDED THIS and only authored strings got the
-    /// memo. Eight hand-written labels use `−`, including the Time
-    /// Capsule's "−%.2f s" — which puts a typographic minus in front of
-    /// a number whose OWN sign, when it has one, is a hyphen. So a
-    /// negative potential renders "-12.00 V" a few centimetres from a
-    /// scrub reading "−1.50 s", in two different glyphs, at two
-    /// different widths, because one came from a keyboard and one from
-    /// `printf`.
-    ///
-    /// A hyphen is also the wrong character: it is a word-joiner, drawn
-    /// short and high to sit between letters. The minus sign is drawn to
-    /// the width and height of the digits beside it.
+    /// U+2212 MINUS SIGN, not the hyphen `%f` emits — matching the authored
+    /// labels, and drawn to the width and height of the digits beside it.
     static func typographic(_ string: String) -> String {
         string.replacingOccurrences(of: "-", with: "\u{2212}")
     }
@@ -123,18 +66,13 @@ nonisolated enum PhysicsFormat {
         "\(fixed(value, decimals: decimals)) \(unit)"
     }
 
-    /// Degrees, with the symbol closed up against the number as typography
-    /// wants.
+    /// Degrees, with the symbol closed up against the number.
     static func angle(_ degrees: Double, decimals: Int = angleDecimals) -> String {
         "\(fixed(degrees, decimals: decimals))°"
     }
 
     /// A quantity with an SI prefix chosen so the mantissa reads in the
     /// 1…999 band: 4.7e-5 T becomes "47.0 µT" rather than "0.0000470 T".
-    ///
-    /// This is what the app was spelling four different ways. Magnetism
-    /// hand-wrote µT, Electric Fields hand-wrote mT and kT in separate
-    /// places, and each carried its own multiply-and-round.
     static func metric(_ value: Double, _ unit: String,
                        decimals: Int = 1) -> String {
         guard value.isFinite else { return "— \(unit)" }
@@ -145,16 +83,12 @@ nonisolated enum PhysicsFormat {
             (0, ""), (3, "k"), (6, "M"), (9, "G"), (12, "T"),
         ]
         let magnitude = log10(abs(value))
-        // Step DOWN to the prefix whose band this sits in, so 999 stays
-        // 999 and 1000 becomes 1 k.
+        // Step DOWN to the prefix whose band this sits in: 999 stays 999,
+        // 1000 becomes 1 k.
         var index = prefixes.lastIndex { Double($0.exponent) <= magnitude }
             ?? prefixes.startIndex
-        // AND STEP UP AGAIN IF ROUNDING PUSHED IT OUT OF THE BAND. The
-        // prefix is chosen from the unrounded magnitude, but what gets
-        // shown is rounded — so 999.97 V at one decimal picked the empty
-        // prefix and then printed "1000.0 V", which is the one string
-        // this function exists to prevent. Nothing about it looks wrong
-        // until you notice the app can also say "1.0 kV".
+        // Step up again if ROUNDING pushed it out of the band — otherwise
+        // 999.97 V at one decimal prints "1000.0 V".
         if abs(quantise(value / pow(10, Double(prefixes[index].exponent)),
                         decimals: decimals)) >= 1000,
            index + 1 < prefixes.endIndex {
@@ -173,16 +107,8 @@ nonisolated enum PhysicsFormat {
         guard value.isFinite, value != 0 else { return "0" }
         let exponent = Int(floor(log10(abs(value))))
         guard abs(exponent) >= 3 else { return fixed(value, decimals: 2) }
-        // THROUGH `fixed`, not `String(format:)` directly. Building the
-        // mantissa here bypassed both house rules this file exists to
-        // enforce — the quantisation AND the minus sign — so a negative
-        // value came out of the canon wearing a hyphen. Caught by
-        // `testEveryNegativeReadingUsesTheTypographicMinus` on its first
-        // run, which is the argument for asserting over every entry
-        // point rather than the one being edited.
-        //
-        // (The superscript table already maps "-" to "⁻", so a negative
-        // EXPONENT was always right. It was only the mantissa.)
+        // THROUGH `fixed`, not `String(format:)` — it enforces both the
+        // quantisation and the typographic minus for the mantissa.
         let mantissa = value / pow(10, Double(exponent))
         return "\(fixed(mantissa, decimals: 2)) × 10\(superscript(exponent))"
     }
@@ -190,10 +116,6 @@ nonisolated enum PhysicsFormat {
     // MARK: States
 
     /// One spelling for a switched state, everywhere.
-    ///
-    /// The notebook had three: "on"/"off", "free"/"frozen" and
-    /// "yes"/"no — unbound". A reader comparing two captured moments
-    /// should not have to notice which room wrote them.
     static func state(_ isOn: Bool) -> String { isOn ? "on" : "off" }
 
     private static func superscript(_ exponent: Int) -> String {

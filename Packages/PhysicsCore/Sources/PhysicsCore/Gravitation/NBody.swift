@@ -1,17 +1,5 @@
-//
-//  NBody.swift
-//  PhysicsCore — Gravitation
-//
-//  Newtonian n-body gravity: every pair attracts with F = G·m₁·m₂/r²,
-//  integrated with velocity Verlet in kick–drift–kick form. Verlet is the
-//  right integrator here — gravity is a conservative a(r) force, and the
-//  symplectic property keeps orbital energy from drifting over thousands
-//  of periods (naive Euler spirals outward; see the unit tests, which
-//  pin energy drift and Kepler's third law).
-//
-//  A small softening length keeps close encounters finite before the
-//  app-level collision/merge logic takes over.
-//
+//  NBody.swift — Newtonian n-body gravity via velocity Verlet (kick–drift–kick): symplectic, so
+//  energy does not drift (tests pin drift + Kepler III); softening keeps close encounters finite.
 
 import Foundation
 import simd
@@ -20,8 +8,7 @@ public enum NBody {
     /// CODATA G, N·m²/kg².
     public static let gravitationalConstant = Constants.gravitational
 
-    /// Minimum effective separation (m) — far smaller than any orbit we
-    /// simulate, but keeps a near-overlap from producing infinite force.
+    /// Minimum effective separation, m — keeps a near-overlap from producing infinite force.
     public static let softeningLength = 1e8
 
     // MARK: Forces
@@ -39,7 +26,6 @@ public enum NBody {
                 let distanceSquared = max(simd_length_squared(offset),
                                           softeningLength * softeningLength)
                 let inverseCube = 1 / (distanceSquared * distanceSquared.squareRoot())
-                // a_i = G·m_j·r̂/r², computed as G·m_j·r/r³ (and mirrored).
                 result[i] += (G * bodies[j].mass * inverseCube) * offset
                 result[j] -= (G * bodies[i].mass * inverseCube) * offset
             }
@@ -70,8 +56,7 @@ public enum NBody {
         0.5 * body.mass * simd_length_squared(body.velocity)
     }
 
-    /// Gravitational potential energy of one body against all others
-    /// (zero reference at infinity, so bound orbits have negative totals).
+    /// PE of one body against all others; zero at infinity, so bound totals are negative.
     public static func potentialEnergy(
         of index: Int,
         in bodies: [CelestialBody],
@@ -104,16 +89,8 @@ public enum NBody {
 
     // MARK: Two-body orbit math (planet vs. a dominant central mass)
 
-    /// μ = G(M + m) — the parameter every two-body formula is actually
-    /// written in terms of.
-    ///
-    /// The textbook shorthand μ = GM quietly assumes m ≪ M, which is fine
-    /// for a spacecraft and not fine for Jupiter: dropping the planet's
-    /// own mass shifts its period by about 0.05 %. More to the point,
-    /// mixing the two conventions inside one readout makes a body's
-    /// semi-major axis and its period describe slightly different orbits,
-    /// which is exactly the kind of error that hides forever because both
-    /// numbers look right.
+    /// μ = G(M + m), m³/s² — NOT the shorthand GM: dropping m shifts Jupiter's period ~0.05%,
+    /// and mixing the two conventions makes a and T describe different orbits in one readout.
     public static func standardGravitationalParameter(
         primaryMass: Double, bodyMass: Double = 0,
         gravitationalConstant G: Double = gravitationalConstant
@@ -137,8 +114,7 @@ public enum NBody {
         (2 * G * centralMass / distance).squareRoot()
     }
 
-    /// Semi-major axis from the vis-viva equation: a = 1/(2/r − v²/μ).
-    /// nil when the orbit is unbound (v ≥ escape speed).
+    /// Vis-viva: a = 1/(2/r − v²/μ); nil when unbound (v ≥ escape speed).
     public static func semiMajorAxis(
         distance: Double, speed: Double, centralMass: Double,
         gravitationalConstant G: Double = gravitationalConstant
@@ -159,8 +135,7 @@ public enum NBody {
 
     // MARK: Collisions
 
-    /// Perfectly inelastic merge: total mass, momentum-conserving velocity,
-    /// mass-weighted position, volume-additive radius, heavier body's name.
+    /// Perfectly inelastic merge: momentum-conserving velocity, mass-weighted position, volume-additive radius, heavier body's name.
     public static func merged(_ a: CelestialBody, _ b: CelestialBody) -> CelestialBody {
         let mass = a.mass + b.mass
         let heavier = a.mass >= b.mass ? a : b
@@ -175,9 +150,7 @@ public enum NBody {
 
     // MARK: Prediction
 
-    /// The path one body will trace through a frozen-rule copy of the
-    /// system (everything simulates forward together; nothing is actually
-    /// mutated). Powers the "orbit you'd get if you let go now" preview.
+    /// Path one body traces through a cloned system (nothing mutated) — the "orbit if you let go now" preview.
     public static func predictedPath(
         bodies: [CelestialBody],
         of index: Int,

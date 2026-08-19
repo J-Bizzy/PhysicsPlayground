@@ -1,29 +1,13 @@
-//
-//  Induction.swift
-//  PhysicsCore
-//
-//  Faraday's law, the missing bridge of the app's electromagnetism:
-//  ε = −N dΦ/dt. Everything else in the Magnetism lab is statics —
-//  fields that ARE; this is the law about fields that CHANGE, and it
-//  is the reason power stations spin. Carry a magnet through a coil
-//  and the changing flux drives a voltage; nothing else in classical
-//  physics turns motion into electricity.
-//
-//  The flux integral is numeric — concentric-ring sampling of B·n̂
-//  over the coil's disc — because the magnets move freely and no
-//  closed form covers an arbitrary pose. The closed form that DOES
-//  exist (a dipole coaxial with the loop: Φ = μ₀mR²/(2(R²+z²)^{3/2}))
-//  is kept here as the test's measuring stick, not the implementation.
-//
+//  Induction.swift — Faraday's law, ε = −N dΦ/dt. Flux is numeric (ring sampling of B·n̂;
+//  magnets move freely, no closed form for an arbitrary pose); the coaxial-dipole closed
+//  form is kept as the tests' measuring stick, not the implementation.
 
 import Foundation
 import simd
 
 public enum Induction {
-    /// Magnetic flux through a disc, webers: Σ B·n̂ dA over
-    /// concentric-ring samples. Exact as sampling tightens; the
-    /// default 12×24 grid lands within ~1% of the closed form at
-    /// coil-scale geometry.
+    /// Magnetic flux through a disc, Wb: Σ B·n̂ dA over concentric-ring samples. Exact as
+    /// sampling tightens; the default 12×24 grid is within ~1% of the closed form at coil scale.
     public static func flux(throughDiscAt center: SIMD3<Double>,
                             normal: SIMD3<Double>,
                             radius: Double,
@@ -32,7 +16,6 @@ public enum Induction {
                             spokes: Int = 24) -> Double {
         guard radius > 0, !magnets.isEmpty else { return 0 }
         let n = simd_normalize(normal)
-        // An orthonormal frame in the disc's plane.
         let seed = abs(n.x) < 0.9 ? SIMD3<Double>(1, 0, 0) : SIMD3<Double>(0, 1, 0)
         let u = simd_normalize(simd_cross(n, seed))
         let v = simd_cross(n, u)
@@ -51,9 +34,8 @@ public enum Induction {
         return total
     }
 
-    /// The closed form the numeric integral must recover: flux of a
-    /// dipole ON the loop's axis, moment along the axis.
-    /// Φ = μ₀ m R² / (2 (R² + z²)^{3/2}), with μ₀/2 = 2π×10⁻⁷.
+    /// Closed form the numeric integral must recover — coaxial dipole:
+    /// Φ = μ₀mR²/(2(R²+z²)^{3/2}), with μ₀/2 = 2π×10⁻⁷.
     public static func axialDipoleFlux(moment: Double,
                                        distance z: Double,
                                        discRadius R: Double) -> Double {

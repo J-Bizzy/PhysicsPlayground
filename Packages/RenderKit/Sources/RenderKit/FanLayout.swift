@@ -2,21 +2,8 @@
 //  FanLayout.swift
 //  RenderKit
 //
-//  Where the petals of an unfolding fan sit, as pure arithmetic.
-//
-//  The Wind Tunnel's shape picker established the grammar the app now
-//  uses for every N-way choice — pinch a petal, a fan of labelled discs
-//  unfolds in the room, pick one, it folds — and it replaced a blind
-//  "next shape" cycle button that walked the user through a flat disc and
-//  a spinning cylinder with no warning of either. It read as the model
-//  glitching rather than as a choice being offered.
-//
-//  That fan's geometry was welded into the Wind Tunnel. Split out here it
-//  becomes testable and reusable: `SpatialPicker` builds the entities and
-//  asks this where to put them. The interaction law (DECISIONS.md,
-//  2026-07-29) makes the fan the app's ONLY picker, so its layout is worth
-//  pinning — a fan that overlaps itself or opens through the floor is the
-//  kind of thing that only shows up on device, late.
+//  Pure arithmetic for where an unfolding picker fan's petals sit — the
+//  app's only picker shape (DECISIONS.md 2026-07-29), split out to be testable.
 //
 
 import Foundation
@@ -65,20 +52,14 @@ public struct FanLayout: Sendable {
         public var isVisible: Bool
     }
 
-    /// Where item `index` of `count` sits when the fan is `openness` open.
-    ///
-    /// `openness` is the whole fan's 0…1 progress; each item subtracts its
-    /// stagger from that and renormalises, so item 0 leads and the last
-    /// arrives last. A single item sits dead centre rather than at one end
-    /// of the span — an N-of-1 fan is still a legal fan.
+    /// Where item `index` of `count` sits at fan `openness` 0…1; each item
+    /// subtracts its stagger and renormalises. A single item sits dead centre.
     public func placement(index: Int, count: Int, openness: Double) -> Placement {
         let clampedOpenness = min(max(openness, 0), 1)
         let delay = Double(index) * stagger
         let progress = min(max((clampedOpenness - delay) / max(1 - delay, 0.01), 0), 1)
 
-        // With one item there is no spread to divide, so it goes to the
-        // middle. Dividing by count−1 = 0 would be a NaN through every
-        // transform downstream.
+        // One item goes to the middle; count−1 = 0 would be NaN downstream.
         let angle: Double
         if count <= 1 {
             angle = 0
@@ -90,8 +71,7 @@ public struct FanLayout: Sendable {
         let offset = SIMD3(sin(angle) * extended,
                            cos(angle) * extended * verticalScale + lift,
                            0)
-        // A touch of overshoot at the midpoint of the arrival, easing back
-        // to exactly 1 — the item lands rather than inflating.
+        // Slight overshoot easing back to exactly 1 — the item lands.
         let pop = 1 + 0.14 * sin(progress * .pi)
         return Placement(offset: offset,
                          scale: max(progress, 0.001) * pop,
@@ -99,12 +79,8 @@ public struct FanLayout: Sendable {
                          isVisible: progress > 0.02)
     }
 
-    /// The closest any two ADJACENT items come, centre to centre, at
-    /// full openness. Below the width of an item's touch target, the two
-    /// cannot be aimed at separately however clearly they read.
-    ///
-    /// Adjacent is the only pair worth measuring: the fan is convex, so
-    /// nothing further apart in index is closer in space.
+    /// Closest ADJACENT centre-to-centre spacing at full openness — the
+    /// fan is convex, so no farther-apart pair is closer in space.
     public func minimumAdjacentSpacing(count: Int) -> Double {
         guard count > 1 else { return .infinity }
         let offsets = (0..<count).map {
@@ -115,27 +91,10 @@ public struct FanLayout: Sendable {
             .min() ?? .infinity
     }
 
-    /// The narrowest fan that keeps `count` items whose touch targets are
-    /// `itemSpan` metres across from overlapping.
-    ///
-    /// WHY THIS EXISTS RATHER THAN A HAND-TYPED SPAN. Gravity Lab's clock
-    /// bank was tuned by eye and by screenshot for FOUR discs — "four
-    /// discs at ±75° and ±25°", says the comment that is still there —
-    /// and then the time scales grew to six on 2026-08-07. The layout
-    /// did not, because a hand-typed span has no idea how many things
-    /// are being laid out. End-pair centres landed 0.0494 m apart
-    /// against a 0.068 m target: aim at 1×, hit −1×, and the solar
-    /// system runs backwards.
-    ///
-    /// A span derived FROM the count cannot drift out of step with it.
-    /// Add a seventh scale and the bank widens; take one away and it
-    /// tightens. The one thing it will not do is silently overlap.
-    ///
-    /// Widening the arc is tried first, up to `maxSpan`, because that
-    /// keeps the fan the same distance from the hand. Past that there is
-    /// nowhere left to go but outward, so `reach` grows instead — six
-    /// targets 68 mm across simply do not fit in a 25 cm row, and no
-    /// choice of angle makes them.
+    /// The narrowest fan keeping `count` items of `itemSpan` metres from
+    /// overlapping — derived FROM the count so a grown bank cannot silently
+    /// overlap. Widens the arc first (keeps the fan the same distance from
+    /// the hand), then grows `reach` when even `maxSpan` cannot fit.
     public static func spread(count: Int,
                               itemSpan: Double,
                               reach: Double,
@@ -153,12 +112,10 @@ public struct FanLayout: Sendable {
         }
         let required = itemSpan * (1 + clearance)
 
-        // Spacing grows with span over the range a fan can legally
-        // occupy, so bisection settles on the narrowest one that fits.
+        // Spacing grows with span, so bisection finds the narrowest fit.
         var low = 0.0, high = maxSpan
         if layout(span: high, reach: reach).minimumAdjacentSpacing(count: count) < required {
-            // Even the widest legal arc is too tight — push it outward
-            // by exactly the shortfall.
+            // Widest legal arc still too tight — push reach out by the shortfall.
             let widest = layout(span: high, reach: reach)
             let spacing = widest.minimumAdjacentSpacing(count: count)
             guard spacing > 0 else { return widest }
@@ -175,16 +132,7 @@ public struct FanLayout: Sendable {
         return layout(span: high, reach: reach)
     }
 
-    // `FanLayout.ease` WAS HERE, and it is `Motion.ease` now
-    // (2026-08-07). It was a correct exponential ease with a snap, and
-    // three primitives used it — the picker and both banks — which is
-    // exactly why it had to go: it did not honour the system Reduce
-    // Motion switch, so being the shared helper made it the shared way
-    // of getting that wrong. Two eases in one app is one too many when
-    // only one of them obeys an accessibility setting.
-    //
-    // Its tests moved to `MotionTests`. `MotionCriterionTests` now fails
-    // the build on any hand-rolled ease in RenderKit or the design
-    // system, so this cannot quietly come back.
+    // `FanLayout.ease` moved to `Motion.ease` (Reduce Motion);
+    // `MotionCriterionTests` bans hand-rolled eases.
 
 }

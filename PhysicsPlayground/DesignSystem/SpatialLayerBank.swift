@@ -2,24 +2,10 @@
 //  SpatialLayerBank.swift
 //  Physics Playground — Design System
 //
-//  One bank of layer switches per module: the physical home for the 35
-//  display toggles that were living on the window panels.
-//
-//  It is deliberately BOTH a control and a readout, which is why it never
-//  folds. Which layers are showing is information the user needs while
-//  looking at the physics — "am I seeing the pressure skin or not" is a
-//  question about what is in front of you — so a bank that hid its state
-//  behind a pinch would fail the standard the interaction law sets:
-//  visible without being looked for, operable without being discovered
-//  (DECISIONS.md, 2026-07-29).
-//
-//  A lit plate is on, a dark one is off. That is the whole grammar, and it
-//  is the one part of this app's control vocabulary that a real instrument
-//  panel already taught everyone.
-//
-//  State lives in the MODEL, as everything here does: each switch reads a
-//  closure every frame, so a reset or an experiment flipping a layer moves
-//  the plate too.
+//  One bank of layer switches per module. Deliberately BOTH control and
+//  readout, so it never folds: a lit plate is on, a dark one is off.
+//  State lives in the MODEL — each switch reads a closure every frame, so
+//  a reset or an experiment flipping a layer moves the plate too.
 //
 
 import RealityKit
@@ -78,12 +64,9 @@ final class SpatialLayerBank {
 
     var isEmpty: Bool { plates.isEmpty }
 
-    /// Per frame: hang beside `anchor`, face the viewer, and repaint any
-    /// plate whose model state changed.
-    /// `nearestHand` drives recession — see `Recession`. A bank is a
-    /// READOUT as well as a control, which is exactly why it recedes to
-    /// 0.45 rather than disappearing: which layers are on stays legible
-    /// across the room, and reaching toward it brings it up.
+    /// Per frame: hang beside `anchor`, face the viewer, repaint changed
+    /// plates. `nearestHand` drives recession — a readout recedes to 0.45
+    /// rather than disappearing, so the state stays legible across the room.
     func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?, dt: Double,
                 nearestHand: SIMD3<Float>? = nil) {
         reveal = Motion.ease(reveal, toward: plates.isEmpty ? 0 : 1, dt: dt)
@@ -91,8 +74,7 @@ final class SpatialLayerBank {
         guard root.isEnabled else { return }
         root.position = anchor
 
-        // Yaw only. A bank that pitched to meet a viewer looking down on it
-        // would turn its plates edge-on.
+        // Yaw only — pitching would turn the plates edge-on.
         if let viewer, let facing = yaw(facing: viewer, from: anchor) {
             root.orientation = facing
         }
@@ -104,17 +86,12 @@ final class SpatialLayerBank {
             plates[index].entity.scale = SIMD3(repeating: Float(placement.scale))
             plates[index].entity.isEnabled = placement.isVisible
 
-            // The lamp EASES between its lit and dark paint rather than
-            // snapping, and still repaints only while moving: `approach`
-            // returns the target exactly once settled, so a resting lamp
-            // rebuilds nothing — the same 90-times-a-second discipline
-            // the instant repaint kept.
+            // The lamp EASES yet repaints only while moving — `approach`
+            // returns the target once settled, so a resting lamp rebuilds
+            // nothing.
             let on = plates[index].layer.isOn()
-            // THE SPOKEN VALUE FOLLOWS THE LAMP. It was written once at
-            // construction and never again, so VoiceOver read the launch
-            // state of thirty-five display toggles forever — the one
-            // thing `SpatialActionBank` next door gets right, and has a
-            // test for.
+            // The spoken value FOLLOWS the lamp — republished on change,
+            // or VoiceOver reads the launch state forever.
             if plates[index].spokenOn != on {
                 plates[index].spokenOn = on
                 SpatialActions.republish(value: on ? "showing" : "hidden",
@@ -131,13 +108,9 @@ final class SpatialLayerBank {
             }
         }
 
-        // ANCHOR IN WORLD SPACE, NOT THE ARGUMENT. `anchor` is expressed
-        // in the parent's frame — labs place their apparatus under a root
-        // carrying a placement offset, and Gravity Lab's carries a scale
-        // too — while a fingertip from `RoomModel` is world space.
-        // Comparing the two directly measures a distance that does not
-        // exist. `root.position(relativeTo: nil)` is the same point in
-        // the frame the hand is already in.
+        // Anchor in WORLD space: `anchor` is in the parent's (possibly
+        // scaled) frame while the hand is world space — `position(relativeTo: nil)`
+        // puts both in the same frame.
         Recession.apply(to: root, anchor: root.position(relativeTo: nil),
                         nearestHand: nearestHand)
     }
@@ -164,19 +137,16 @@ final class SpatialLayerBank {
         return material
     }
 
-    /// Plate geometry comes from `PlateStyle` — one silhouette for both
-    /// banks; the lozenge derivation and the drift story live there.
-    /// The label is placed relative to the width, so the two must not
-    /// be able to disagree.
+    /// Geometry from `PlateStyle` — one silhouette for both banks. The
+    /// label is placed relative to the width, so the two cannot disagree.
     private static let plateWidth = PlateStyle.width
     private static let plateHeight = PlateStyle.height
     private static let plateCorner = PlateStyle.corner
     private static let labelSize = PlateStyle.labelSize
     private static let labelGap = PlateStyle.labelGap
 
-    /// How far this bank's widest label reaches from a plate's centre —
-    /// what a caller needs to keep the bank clear of its apparatus.
-    /// `FieldInstrumentLayout` asserts against it rather than guessing.
+    /// How far the widest label reaches from a plate's centre — for keeping
+    /// the bank clear of the apparatus; `FieldInstrumentLayout` asserts on it.
     static func reach(forLabels labels: [String]) -> Float {
         let widest = labels
             .map { HubScene.namePlateWidth($0, size: labelSize) }
@@ -186,30 +156,18 @@ final class SpatialLayerBank {
 
     private func makePlate(_ layer: LayerSwitch) -> (ModelEntity, ModelEntity) {
         let labelSpan = HubScene.namePlateWidth(layer.label, size: Self.labelSize)
-        // A pane of frosted glass, dark enough to hold its shape against
-        // a lit wall — the plate still reads as one object when every
-        // layer on it is switched off.
+        // Frosted glass, dark enough to hold its shape against a lit wall.
         let plate = ModelEntity(
             mesh: .generateBox(size: [Self.plateWidth, Self.plateHeight,
                                       PlateStyle.depth],
                                cornerRadius: Self.plateCorner),
             materials: [Materials.frostedGlass()])
         plate.name = "layer-\(layer.id)"
-        // The contact shadow every grabbable already casts, so a floating
-        // plate reads as present in the room rather than pasted onto it.
         plate.components.set(GroundingShadowComponent(castsShadow: true))
 
-        // The edge hairline: a slightly larger pane behind this one, so
-        // its border shows all the way round. This is the part that
-        // makes the pane read as glass rather than as a dark tile.
-        //
-        // Its radius takes the SAME inset the box does, or the two
-        // outlines stop being concentric: grow a rounded rectangle by a
-        // constant on every side and its corner radius grows by exactly
-        // that constant too. Add the inset to the size and not to the
-        // radius and the border pinches in at the corners while bulging
-        // along the flats, which reads as a bad drop shadow rather than
-        // as an edge.
+        // The edge hairline: a slightly larger pane behind this one. Its
+        // radius takes the SAME inset the box does, or the two outlines
+        // stop being concentric and the border pinches at the corners.
         let edge = Materials.glassEdgeInset
         let border = ModelEntity(
             mesh: .generateBox(
@@ -238,13 +196,9 @@ final class SpatialLayerBank {
             plate.addChild(icon)
         }
 
-        // The label sits BESIDE the switch, and has to be placed by its
-        // own left edge rather than by a fixed offset. `namePlate` returns
-        // a pill centred on its origin, so parking that origin 0.050 out —
-        // just 0.007 clear of a plate 0.086 wide — put half of every pill
-        // back on top of the switch it named. "Parallel plates" straddled
-        // its own icon. The label now starts where the plate ends, however
-        // long the words are.
+        // The label sits BESIDE the switch, placed by its own left edge —
+        // `namePlate` returns a pill centred on its origin, so a fixed
+        // offset put half of every pill back on top of the switch.
         let labelWidth = HubScene.namePlateWidth(layer.label, size: Self.labelSize)
         let label = HubScene.namePlate(layer.label,
                                        accent: UIColor(white: 0.94, alpha: 1),
@@ -258,12 +212,8 @@ final class SpatialLayerBank {
         plate.components.set(CollisionComponent(
             shapes: [
                 .generateBox(size: [0.092, 0.056, 0.016]),
-                // THE LABEL IS A HOLE WITHOUT THIS. The pill is placed
-                // OUTSIDE the plate — `labelGap` past its edge — and
-                // carried no collider, so the word "Field lines" was
-                // scenery you could pinch straight through while the
-                // plate it names sat next to it. A second box over the
-                // label's own extent, offset to where the label is.
+                // The label is a pinch-through HOLE without its own box —
+                // the pill sits `labelGap` past the plate's edge.
                 .generateBox(size: [labelSpan + 0.010,
                                     Self.plateHeight * 0.8, 0.016])
                     .offsetBy(translation: [

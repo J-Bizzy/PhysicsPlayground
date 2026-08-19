@@ -1,11 +1,6 @@
 //
 //  OscillationsTests.swift
-//  PhysicsCoreTests
-//
-//  The oscillation core against the textbook: small-angle pendulum
-//  period, the nonlinear large-angle correction, energy conservation,
-//  damping decay, the taut-cable constraint, spring period, and the
-//  coupled-oscillator beat.
+//  Pendulum, spring, and coupled-oscillator physics against the textbook.
 //
 
 import XCTest
@@ -16,8 +11,7 @@ final class OscillationsTests: XCTestCase {
 
     private let dt = 1.0 / 1000.0
 
-    /// Measure a full period by timing successive same-direction zero
-    /// crossings of x.
+    /// Period measured via successive same-direction zero crossings of x.
     private func measuredPendulumPeriod(angle: Double, length: Double = 1.0,
                                         gravity: Double = 9.81) -> Double {
         var state = SphericalPendulum(length: length, angle: angle)
@@ -37,16 +31,14 @@ final class OscillationsTests: XCTestCase {
         return crossings[1] - crossings[0]
     }
 
-    /// At 5° the simulated period matches 2π√(L/g) to a fraction of a
-    /// percent — the small-angle limit falls out naturally.
+    /// At 5° the simulated period matches 2π√(L/g).
     func testSmallAnglePeriodMatchesAnalytic() {
         let analytic = SphericalPendulum.smallAnglePeriod(length: 1, gravity: 9.81)
         let measured = measuredPendulumPeriod(angle: .pi / 36)
         XCTAssertEqual(measured, analytic, accuracy: analytic * 0.004)
     }
 
-    /// At 60° the nonlinear period runs ~7.3% longer than small-angle —
-    /// the exact series 1 + θ²/16 + 11θ⁴/3072 predicts it.
+    /// At 60° the period runs ~7.3% long, per the series 1 + θ²/16 + 11θ⁴/3072.
     func testLargeAnglePeriodShowsNonlinearity() {
         let theta = Double.pi / 3
         let analytic = SphericalPendulum.smallAnglePeriod(length: 1, gravity: 9.81)
@@ -58,8 +50,7 @@ final class OscillationsTests: XCTestCase {
                              "large swings must run measurably slow")
     }
 
-    /// Undamped, total energy holds to a tiny fraction over thousands of
-    /// steps, and the cable never stretches.
+    /// Undamped energy holds over thousands of steps, and the cable never stretches.
     func testEnergyConservationAndTautCable() {
         let length = 0.8
         var state = SphericalPendulum(length: length, angle: 1.0)
@@ -75,7 +66,6 @@ final class OscillationsTests: XCTestCase {
                        accuracy: total0 * 0.01)
     }
 
-    /// Damping bleeds energy monotonically toward zero.
     func testDampingDecays() {
         let length = 1.0
         var state = SphericalPendulum(length: length, angle: 0.8)
@@ -88,8 +78,7 @@ final class OscillationsTests: XCTestCase {
                           "most of the initial energy must be gone")
     }
 
-    /// A sideways throw makes a genuinely 3D orbit: the bob leaves the
-    /// launch plane while staying on the sphere.
+    /// A sideways throw leaves the launch plane while staying on the sphere.
     func testSidewaysThrowGoesThreeDimensional() {
         let length = 1.0
         var state = SphericalPendulum(length: length, angle: 0.5)
@@ -104,7 +93,7 @@ final class OscillationsTests: XCTestCase {
         XCTAssertEqual(simd_length(state.position), length, accuracy: 1e-9)
     }
 
-    /// Spring period matches 2π√(m/k) and undamped energy holds.
+    /// Period = 2π√(m/k); undamped energy holds.
     func testSpringPeriodAndEnergy() {
         let stiffness = 40.0, mass = 0.5
         var state = SpringOscillator(displacement: 0.1)
@@ -128,7 +117,7 @@ final class OscillationsTests: XCTestCase {
                        0.5 * stiffness * 0.01, accuracy: 0.5 * stiffness * 0.01 * 0.01)
     }
 
-    /// Gravity along the axis just shifts the equilibrium to mg/k.
+    /// Axial gravity shifts the equilibrium to mg/k.
     func testSpringBiasForceShiftsEquilibrium() {
         var state = SpringOscillator(displacement: 0)
         for _ in 0..<40000 {
@@ -138,8 +127,7 @@ final class OscillationsTests: XCTestCase {
         XCTAssertEqual(state.displacement, -9.81 / 20, accuracy: 1e-3)
     }
 
-    /// The showcase: displace mass 1 only, and the energy migrates to
-    /// mass 2 and back — a beat, straight from the equations.
+    /// Displace mass 1 only: the energy migrates to mass 2 and back — the beat.
     func testCoupledSpringsExchangeEnergy() {
         let stiffness = 30.0, coupling = 4.0
         let masses = SIMD2(1.0, 1.0)
@@ -147,7 +135,7 @@ final class OscillationsTests: XCTestCase {
         let start = state.massEnergies(stiffness: stiffness, coupling: coupling, masses: masses)
         XCTAssertGreaterThan(start.x, start.y * 5, "energy starts on mass 1")
 
-        // The full transfer takes half a beat: T = 2π/(ω2−ω1).
+        // Full transfer takes half a beat: T = 2π/(ω2−ω1).
         let omega1 = (stiffness / masses.x).squareRoot()
         let omega2 = ((stiffness + 2 * coupling) / masses.x).squareRoot()
         let halfBeat = .pi / (omega2 - omega1)

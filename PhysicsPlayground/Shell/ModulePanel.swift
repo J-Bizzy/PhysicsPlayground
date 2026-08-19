@@ -85,10 +85,6 @@ struct LegendView: View {
         switch swatch {
         case .fill(let color):
             Circle().fill(color).frame(width: 14, height: 14)
-        case .translucent(let color):
-            Circle().fill(color.opacity(0.35))
-                .overlay(Circle().stroke(color.opacity(0.6), lineWidth: 1))
-                .frame(width: 14, height: 14)
         case .stroke(let color):
             Circle().stroke(color, lineWidth: 2).frame(width: 13, height: 13)
         case .line(let color):

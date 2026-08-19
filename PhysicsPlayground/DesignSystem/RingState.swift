@@ -2,12 +2,9 @@
 //  RingState.swift
 //  Physics Playground — Design System
 //
-//  Which object's control ring is open, shared between a module's tap
-//  gesture and its render loop. A reference type ON PURPOSE: a SwiftUI
-//  @State value read from a RealityKit update closure comes back stale
-//  (the trap documented in Bloom's header) — the tap and the per-frame
-//  sync must share one live object. Hold it as @State in the SpaceView;
-//  the reference never changes, only its `openID`.
+//  Which object's control ring is open. A reference type ON PURPOSE: a
+//  @State value read from a RealityKit update closure comes back stale —
+//  tap gesture and per-frame sync must share one live object.
 //
 
 import Foundation

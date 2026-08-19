@@ -2,22 +2,9 @@
 //  FrozenVectors.swift
 //  RenderKit
 //
-//  Frozen time is where spatial computing beats every flat screen: a
-//  thrown ball stopped mid-arc is a sculpture you can walk around. But
-//  pausing used to just stop the animation — nothing materialized,
-//  nothing invited you closer.
-//
-//  This is the shared "freeze sculpts" primitive: when a module pauses,
-//  every moving body grows its vectors — velocity and force as arrows
-//  you read by walking up to them — eased in like frost forming, eased
-//  out the moment time restarts. One primitive, one colour language,
-//  every lab, in the VectorPalette canon — velocity blue, force red —
-//  so an arrow learned frozen reads identically live, and vice versa.
-//
-//  Callers pass a unit direction plus a 0…1 magnitude they normalise
-//  themselves — each module knows its own dynamic range, and pretending
-//  one metre of arrow means the same newtons in an orrery and on a
-//  spring bench would be a lie.
+//  Pause sculpts: pooled velocity/force arrows eased in on freeze, in
+//  the VectorPalette canon. Callers pass a unit direction plus a 0…1
+//  magnitude they normalise themselves — each module knows its own range.
 //
 
 import RealityKit
@@ -26,8 +13,7 @@ import simd
 
 @MainActor
 public final class FrozenVectors {
-    /// What a frozen arrow is showing. The colours are fixed app-wide —
-    /// this consistency IS the feature.
+    /// What a frozen arrow is showing; colours fixed app-wide.
     public enum Kind: Int, CaseIterable {
         case velocity
         case force
@@ -55,8 +41,8 @@ public final class FrozenVectors {
         }
     }
 
-    /// Add to the same root the bodies live under, so lab placement and
-    /// scale carry the arrows along with what they annotate.
+    /// Add to the same root the bodies live under, so placement and
+    /// scale carry the arrows with what they annotate.
     public let root = Entity()
 
     private struct Arrow {
@@ -66,10 +52,8 @@ public final class FrozenVectors {
         var paletteIndex: Int = -1
     }
 
-    /// Opacity-stepped materials per kind, built once. Allocating a
-    /// material per arrow per frame is the exact churn the profiler
-    /// caught elsewhere in this app; a palette swap is a reference
-    /// assignment, and only happens when the step actually changes.
+    /// Opacity-stepped materials per kind, built once — a palette swap is
+    /// a reference assignment, never a per-frame material allocation.
     private static let opacitySteps = 10
     private let palettes: [[UnlitMaterial]] = Kind.allCases.map { kind in
         (0..<opacitySteps).map { step in
@@ -82,17 +66,11 @@ public final class FrozenVectors {
 
     private var arrows: [Arrow] = []
     private let budget: Int
-    /// 0 = invisible, 1 = fully materialised. Eased toward the frozen
-    /// state every frame, which is what makes the arrows form like frost
-    /// rather than pop like UI.
+    /// 0 = invisible, 1 = fully materialised; eased every frame.
     private var reveal: Float = 0
 
-    /// Arrow length for magnitude01 = 0 and 1. Sized to be read from a
-    /// step away, not to be geometrically proportional to the scene —
-    /// and per-instance, because a handful of arrows on orbiting bodies
-    /// wants length while a dense field lattice wants restraint. The
-    /// wind tunnel's first lattice used the default and became a wall
-    /// of blue: arrows 24 cm long on a 32 cm grid touch each other.
+    /// Arrow length at magnitude01 = 0 and 1 — per-instance: a few orbit
+    /// arrows want length, a dense lattice wants restraint.
     private let minLength: Float
     private let maxLength: Float
 
@@ -106,8 +84,7 @@ public final class FrozenVectors {
 
         for _ in 0..<budget {
             let container = Entity()
-            // Unit-height parts, scaled per frame: one mesh for every
-            // arrow of a kind, transforms only in the update path.
+            // Unit-height parts scaled per frame: one mesh, transforms only.
             let shaft = ModelEntity(
                 mesh: .generateCylinder(height: 1, radius: 0.0035),
                 materials: [UnlitMaterial(color: Kind.velocity.color)])
@@ -130,8 +107,7 @@ public final class FrozenVectors {
             if root.isEnabled { root.isEnabled = false }
             return
         }
-        // The freeze sculpt GROWS out of the body as it appears, and
-        // under Reduce Motion it simply arrives — see `Motion.ease`.
+        // Grows out of the body; under Reduce Motion it simply arrives.
         reveal = Motion.ease(reveal, toward: target, dt: dt, rate: 6)
         root.isEnabled = reveal > 0.01
         guard root.isEnabled else { return }
@@ -151,12 +127,11 @@ public final class FrozenVectors {
             arrow.container.isEnabled = true
 
             let clamped = min(max(sample.magnitude01, 0), 1)
-            // The reveal doubles as a growth animation: arrows extend
-            // out of the body as they fade in.
+            // Reveal doubles as growth: arrows extend as they fade in.
             let length = (minLength + (maxLength - minLength) * clamped) * reveal
 
             arrow.container.position = sample.position
-            // A frozen gravity arrow points exactly straight down.
+            // Antiparallel-safe: a gravity arrow points exactly straight down.
             arrow.container.orientation = rotation(
                 from: [0, 1, 0], to: sample.direction / lengthUnit)
             arrow.shaft.scale = [1, length, 1]

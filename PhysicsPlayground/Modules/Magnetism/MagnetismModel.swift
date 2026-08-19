@@ -2,17 +2,9 @@
 //  MagnetismModel.swift
 //  Physics Playground — Magnetism module
 //
-//  The magnetic sandbox: bar magnets (ideal dipoles) you carry around a
-//  room-scale region. Every FREE magnet glides and turns under the exact
-//  dipole force and torque from the others (PhysicsCore.MagneticField),
-//  so two magnets brought close attract head-to-tail, repel N-to-N, and
-//  swing to align — the whole field, its looping lines, and a grid of
-//  compass needles reorganise live. The held magnet is the one your hand
-//  owns: its position is yours, and the rest of the world responds.
-//
-//  Motion is overdamped and speed-capped (not momentum dynamics): the
-//  magnets settle into equilibrium instead of oscillating, and the tiny
-//  SI force/torque magnitudes are turned into a pleasing bounded glide.
+//  Bar magnets (ideal dipoles) carried around a room-scale region; free
+//  magnets glide and turn under exact dipole force/torque from the others.
+//  Motion is overdamped and speed-capped (not momentum dynamics).
 //
 
 import Foundation
@@ -26,16 +18,9 @@ final class MagnetismModel {
     // MARK: Region (immersive-space coordinates)
 
     nonisolated static let regionCenter = SIMD3<Double>(0, 1.35, -0.7)
-    /// Isotropic reach of the region's nominal home — where reset lays
-    /// the bench out and where the instruments take their bearings.
-    nonisolated static let regionHalfExtent = 0.72
-    /// The physics SAFETY bounds — room-scale, not a wall a hand ever
-    /// meets. The old drag clamp (0.62 × 0.85 × 0.55) came out on
-    /// 2026-08-03 at the owner's direction: this is a room-scale app,
-    /// and an invisible box that stops a carried magnet mid-air reads as
-    /// broken. What remains binds only the FREE simulation, so a gliding
-    /// or flicked magnet settles somewhere in the room rather than
-    /// sailing off to infinity.
+    /// The physics SAFETY bounds — room-scale, not a wall a hand meets.
+    /// Binds only the FREE simulation, so a flicked magnet settles in the
+    /// room rather than sailing off.
     nonisolated static let safetyHalfExtents = SIMD3<Double>(2.6, 1.6, 2.6)
     nonisolated static let regionFloor = 0.35
     /// Visual length of a bar magnet (m); also the touching distance.
@@ -44,8 +29,7 @@ final class MagnetismModel {
     nonisolated static let strengthRange = 1.0...12.0
     nonisolated static let defaultStrength = 6.0
 
-    // Overdamped glide tuning (decoupled from the tiny SI magnitudes —
-    // direction from the physics, speed capped for a good feel).
+    // Overdamped glide tuning — direction from the physics, speed capped.
     private static let forceGain = 6.0e3
     private static let torqueGain = 9.0e4
     private static let maxLinearSpeed = 0.5     // m/s
@@ -54,19 +38,15 @@ final class MagnetismModel {
     private static let contactDistance = magnetLength * 0.92
     /// Rotation below this in one step is not motion, it is noise.
     private static let restAngle = 2.0e-5   // rad
-    /// How far above contact a magnet begins to slow — the cushion that
-    /// turns an impact into a landing. See `softenedAtContact`.
+    /// How far above contact a magnet begins to slow. See `softenedAtContact`.
     private static let contactBand = 0.030
-    /// Below this glide speed a magnet is simply at rest. Without it the
-    /// last hundredth of a millimetre per second never quite runs out.
+    /// Below this glide speed a magnet is simply at rest.
     private static let restSpeed = 3.0e-4    // m/s
 
     private(set) var magnets: [BarMagnet] = []
     private(set) var selectedID: UUID?
-    /// Every magnet a hand is currently holding — a SET, because the
-    /// wearer has two hands and carrying a magnet in each is the
-    /// module's best demonstration (owner, 2026-08-04; it was a single
-    /// `heldID`, which could only ever mean one hand).
+    /// Every magnet a hand is currently holding — a SET, because two
+    /// hands can each carry one.
     private(set) var heldIDs: Set<UUID> = []
 
     var isPaused = false
@@ -74,12 +54,8 @@ final class MagnetismModel {
 
     // MARK: The compass you carry
 
-    /// A single hand-held compass. (A 245-needle lattice of them —
-    /// `showCompasses` — stood alongside until 2026-08-03; the loops
-    /// carry the field's shape now, and one compass in the hand is the
-    /// experience everyone actually remembers: you walk it around a
-    /// magnet and watch the needle swing. τ = m × B aligning a dipole
-    /// with the local field, at the end of your arm.)
+    /// A single hand-held compass, walked around the magnets to watch the
+    /// needle swing (τ = m × B aligning a dipole with the local field).
     var compassOn = true
     var compassPosition = MagnetismModel.regionCenter + SIMD3(0.0, -0.42, 0.55)
 
@@ -91,23 +67,9 @@ final class MagnetismModel {
 
     // MARK: Earth's own field
 
-    /// Whether the room is standing on a planet.
-    ///
-    /// COMPASSES ONLY. Earth's field really does pull on the bar magnets
-    /// too — that is how a compass needle works, and a lone bar magnet
-    /// left alone on a bench really does creep round to north. It is
-    /// deliberately not applied to them here (owner's call, 2026-08-01):
-    /// at these strengths it is strong enough to matter, and a sandbox
-    /// where every magnet you park slowly swings north is a different
-    /// toy from the one this module is. The compasses get the whole
-    /// truth; the magnets get each other.
-    ///
-    /// The FIELD LINES are left alone for the same reason and a stronger
-    /// one: adding a uniform background to a dipole does not decorate the
-    /// picture, it changes its topology — the closed loops open out and
-    /// run off to infinity, with a pair of neutral points where the two
-    /// fields cancel. That is real and it is beautiful, but it is a
-    /// different demonstration and nobody asked for it.
+    /// Whether the room is standing on a planet. COMPASSES ONLY: Earth's
+    /// field is deliberately not applied to the bar magnets or the field
+    /// lines, only to the compasses.
     var earthFieldOn = true
 
     /// Earth's field in the room, T — zero when switched off.
@@ -125,9 +87,7 @@ final class MagnetismModel {
     var compassField: SIMD3<Double> { compassField(at: compassPosition) }
 
     /// True when Earth is the bigger part of what the hand compass feels
-    /// — i.e. it has been carried clear of the magnets and is reading
-    /// the planet. The readout says which, because "48.3 µT" means two
-    /// completely different things on either side of that line.
+    /// — carried clear of the magnets, reading the planet.
     var compassIsReadingEarth: Bool {
         guard earthFieldOn else { return false }
         let fromMagnets = MagneticField.vector(at: compassPosition, dueTo: magnets)
@@ -145,34 +105,16 @@ final class MagnetismModel {
     // MARK: Clock — the overdamped magnetic dynamics
 
     /// Whether the magnets translate and turn under their mutual forces.
-    /// On (the default), the bench is alive: bring two magnets near and
-    /// they attract, repel, and swing into alignment. Off, every magnet
-    /// holds exactly where you park it — a frozen arrangement whose
-    /// field you can study, mirroring the electric bench's stationary
-    /// charges.
+    /// Off, every magnet holds exactly where you park it.
     var dynamicsOn = true
 
     // MARK: Inertia — the alternative bench, behind a launch argument
 
-    /// Whether the magnets have MASS AND ROTATIONAL INERTIA.
-    ///
-    /// Off by default (the glide below), on with `-magInertia 1`, and
-    /// the two exist side by side on purpose: this reverses a decision
-    /// this file's own header records ("the magnets settle into
-    /// equilibrium instead of oscillating"), and a reversal made on
-    /// feel has to be judged on feel, in a headset, against the thing
-    /// it replaces. See DECISIONS.md.
-    ///
-    /// What changes: with inertia a needle released at an angle swings
-    /// PAST alignment and rings back, which is the single most
-    /// recognisable thing a magnetism bench can show and which nothing
-    /// without inertia can do. What does not change: the fields, forces
-    /// and torques, which were always exact.
-    ///
-    /// DEBUG-only, like every other launch-argument read in the app: a
-    /// release build has no way to set the flag, and the mode carries a
-    /// known defect (a touching pair never settles — DECISIONS.md
-    /// 2026-08-03), so the glide is the only bench a wearer can reach.
+    /// Whether the magnets have MASS AND ROTATIONAL INERTIA. Off by
+    /// default (the glide), on with `-magInertia 1`; both ship (a needle
+    /// released at an angle overshoots and rings). See DECISIONS.md.
+    /// DEBUG-only: a release build cannot set the flag, and the mode
+    /// carries a known defect (a touching pair never settles).
     #if DEBUG
     var inertiaOn = UserDefaults.standard.bool(forKey: "magInertia")
     #else
@@ -180,8 +122,7 @@ final class MagnetismModel {
     #endif
 
     /// Per-magnet velocity and angular velocity. Empty while the glide
-    /// is driving, so switching modes starts from rest rather than
-    /// inheriting a mobility "velocity" that was never one.
+    /// drives, so switching modes starts from rest.
     private var bodies: [UUID: DipoleBody] = [:]
 
     // MARK: Time Capsule
@@ -191,9 +132,7 @@ final class MagnetismModel {
     var scrubTime: Double?
     var scrubNonce = 0
 
-    /// Linear drag, 1/s. The one tunable number in the inertial path.
-    /// Air alone would take minutes to still a needle; a lab pivots it
-    /// in oil so a demonstration settles in a few swings.
+    /// Linear drag, 1/s — the one tunable in the inertial path.
     private static let inertialDamping = 0.9
 
     func step(dt: Double) {
@@ -217,11 +156,8 @@ final class MagnetismModel {
     /// The inertial bench: F = ma and τ = Iα, with the exact dipole
     /// force and torque, integrated by `PhysicsCore.DipoleDynamics`.
     private func stepWithInertia(dt: Double) {
-        // Substepped: the torque on a magnet close to another is large,
-        // and a frame-length step through it would resolve a swing into
-        // a staircase. Four substeps at 90 Hz is 360 Hz of physics,
-        // which is comfortably inside the stiffest period the bench can
-        // produce.
+        // Substepped: the torque close in is large; four substeps at
+        // 90 Hz is 360 Hz of physics.
         let substeps = 4
         let h = min(dt, 1.0 / 60.0) / Double(substeps)
         for _ in 0..<substeps {
@@ -229,50 +165,20 @@ final class MagnetismModel {
             for i in magnets.indices {
                 let id = magnets[i].id
                 guard !heldIDs.contains(id) else {
-                    // A held magnet is the hand's, not the physics'. Its
-                    // stored motion is cleared so releasing it does not
-                    // hand back a velocity from before the grab.
+                    // A held magnet is the hand's, not the physics'; its
+                    // stored motion is cleared.
                     bodies[id] = DipoleBody()
                     continue
                 }
                 guard magnets.count > 1 else { continue }
 
-                // STILL THE POINT DIPOLE, AND IT IS MEASURABLY THE WRONG
-                // MODEL HERE. Read this before "fixing" it, because the
-                // obvious change has been made and reverted.
-                //
-                // These bars meet at `contactDistance` = 0.92
-                // bar-lengths, and at that separation the dipole
-                // expansion reports HALF the real field — 50.3 % low,
-                // measured, against the pole-pair model this file's own
-                // header says is exact for a bar. The tracer was moved
-                // onto `barVector` for exactly that reason, so the loops
-                // drawn over these magnets are computed from one model
-                // and their motion from another, and the loops are the
-                // correct one.
-                //
-                // AND THE OBVIOUS REMEDY IS WORSE, which is the part
-                // worth knowing. `MagneticField.netBarForce` exists and
-                // is tested, and switching to it was tried: it breaks
-                // `testASettledPairDoesNotJitter` and
-                // `testOnlyTheInertialBenchOvershootsAlignment`. That
-                // alone would just be a retune — but measuring it showed
-                // the real reason not to. The pole-pair model puts A's
-                // north pole and B's south pole at THE SAME POINT when
-                // the bars are one length apart, so at and inside
-                // contact it is not merely inaccurate, it is
-                // pathological: at r/L = 1.0 it reports REPULSION for a
-                // pair that must attract, and at 1.2 it is seven times
-                // the dipole value.
-                //
-                // So both models are unusable where these magnets
-                // actually meet, in opposite directions, and the dipole
-                // at least has the sign right and stays smooth. A force
-                // that is genuinely correct near contact needs the
-                // magnetised VOLUME integrated, which is a piece of
-                // physics neither model contains and nobody has written.
-                // `testTheBarForceIsUnusableWhereThePolesMeet` pins the
-                // measurement so this is not rediscovered.
+                // STILL THE POINT DIPOLE, AND IT IS THE WRONG MODEL HERE,
+                // measured 50% low at contact — but the pole-pair remedy
+                // (`netBarForce`) is worse: pathological at/inside contact
+                // (repulsion at r/L = 1.0). Both models are unusable where
+                // the magnets meet; the dipole keeps the sign right.
+                // `testTheBarForceIsUnusableWhereThePolesMeet` pins it. Do
+                // not "fix" without reading.
                 let force = MagneticField.netForce(on: magnets, at: i)
                 let field = MagneticField.vector(
                     at: magnets[i].position, dueTo: magnets, excluding: i)
@@ -291,9 +197,7 @@ final class MagnetismModel {
                     damping: Self.inertialDamping,
                     dt: h)
 
-                // The station's walls are inelastic: a magnet that
-                // reaches one stops rather than bouncing off a boundary
-                // that is a display limit and not a physical object.
+                // Inelastic walls: a magnet that reaches one stops.
                 let clamped = clamp(position)
                 if clamped != position { body.velocity = .zero }
                 next[i].position = clamped
@@ -309,20 +213,9 @@ final class MagnetismModel {
     }
 
     /// Takes the APPROACHING component out of two touching magnets'
-    /// velocities — an inelastic contact.
-    ///
-    /// Without this the inertial bench reproduces, exactly, the standoff
-    /// that `softenedAtContact` was written to fix for the glide. The
-    /// dipole force at contact is enormous, so a pair that has come
-    /// together keeps accelerating INTO each other; `separated` then
-    /// hard-projects them apart every substep while the bodies retain
-    /// the inward velocity that put them there. The pair sits buzzing at
-    /// the frame rate, apparently at rest and visibly vibrating.
-    ///
-    /// Real magnets snapping together lose that energy to the click, so
-    /// this is the honest model and not a damping fudge: only the
-    /// component along the line of centres is removed, and only when
-    /// they are actually closing. Sliding across each other is untouched.
+    /// velocities — an inelastic contact, so a snapped-together pair does
+    /// not sit buzzing. Only the component along the line of centres, and
+    /// only while closing; sliding is untouched.
     private func killVelocityIntoContacts() {
         for a in magnets.indices {
             for b in (a + 1)..<magnets.count {
@@ -352,10 +245,8 @@ final class MagnetismModel {
         for i in magnets.indices where !heldIDs.contains(magnets[i].id) {
             guard magnets.count > 1 else { continue }
 
-            // Translate down the net force (direction exact; speed capped).
-            // Point dipole, matching the site above — see the long
-                // note there on why the correct pole-pair force is not
-                // in yet.
+            // Translate down the net force (direction exact; speed
+            // capped). Point dipole — see the note in `stepWithInertia`.
                 let force = MagneticField.netForce(on: magnets, at: i)
             let fMag = simd_length(force)
             if fMag > 1e-22 {
@@ -368,24 +259,9 @@ final class MagnetismModel {
                 }
             }
             // Turn the moment toward the local field (τ = m × B), and
-            // NEVER PAST IT.
-            //
-            // This is where the residual jitter lived. `softenedAtContact`
-            // below fixed the translational half of the same standoff and
-            // the rotational half was left alone, so a pair that had come
-            // together and stopped moving went on twitching: the torque at
-            // contact is enormous, `torqueGain` saturates it at
-            // `maxAngularSpeed`, and a fixed 3 rad/s step overshoots
-            // alignment every frame. Past alignment the torque reverses,
-            // the next step overshoots back, and the pair sits in a
-            // rotational limit cycle locked to the frame rate — visibly
-            // buzzing while apparently at rest.
-            //
-            // The fix is the honest one rather than a damping fudge: the
-            // rotation carries m onto B, so the most it can ever need is
-            // the angle between them. Clamp the step to that and an
-            // aligned pair lands exactly on alignment and stops dead,
-            // which is what real magnets do.
+            // NEVER PAST IT: clamp the step to the angle remaining so an
+            // aligned pair lands on alignment and stops dead, instead of
+            // overshooting into a frame-rate limit cycle.
             let field = MagneticField.vector(
                 at: magnets[i].position, dueTo: magnets, excluding: i)
             let torque = simd_cross(magnets[i].moment, field)
@@ -397,9 +273,7 @@ final class MagnetismModel {
                 let cosine = simd_dot(magnets[i].moment / momentMag, field / fieldMag)
                 let remaining = acos(min(max(cosine, -1), 1))
                 let stepAngle = min(rate * h, remaining)
-                // Below this the pair is aligned to well under a pixel of
-                // rotation, and stepping anyway is how numerical noise
-                // becomes visible movement.
+                // Below this the rotation is sub-pixel; stepping is noise.
                 if stepAngle > Self.restAngle {
                     let q = simd_quatd(angle: stepAngle, axis: torque / tMag)
                     next[i].moment = q.act(magnets[i].moment)
@@ -409,26 +283,10 @@ final class MagnetismModel {
         magnets = separated(next)
     }
 
-    /// Takes the INWARD component out of a magnet's glide as it closes
-    /// on one it is already touching, so a pair that has come together
-    /// stops instead of buzzing.
-    ///
-    /// Two aligned magnets never came to rest, and the mechanism was a
-    /// standoff between the two halves of `step`. The dipole force at
-    /// contact is ~0.05 N, which `forceGain` turns into a speed well
-    /// past `maxLinearSpeed` — so each magnet drove a full 8 mm inward
-    /// every frame, at the cap, and `separated` then hard-projected it
-    /// straight back out to exactly where it started. Identical force
-    /// next frame, identical 8 mm, identical projection: a limit cycle
-    /// locked to the frame rate, running forever, with the visible
-    /// symptom of two magnets vibrating against each other. The speed
-    /// cap was making it worse rather than better — it removed the only
-    /// mechanism by which an approaching magnet would ever slow down.
-    ///
-    /// Only the closing component is removed, and only in proportion to
-    /// how little gap is left. A magnet at contact can still slide
-    /// along its neighbour, and can still be pulled away from it; it
-    /// simply cannot keep charging into a wall. Real magnets stick.
+    /// Takes the INWARD component out of a magnet's glide as it closes on
+    /// one it is already touching, so a snapped pair stops instead of
+    /// buzzing. Only the closing component, in proportion to the gap
+    /// left; a magnet can still slide along or be pulled away.
     private func softenedAtContact(velocity: SIMD3<Double>,
                                    of magnet: BarMagnet,
                                    among all: [BarMagnet]) -> SIMD3<Double> {
@@ -449,8 +307,7 @@ final class MagnetismModel {
         return result
     }
 
-    /// Pushes overlapping magnets apart to the touching distance so they
-    /// snap together and stick instead of collapsing into one point. The
+    /// Pushes overlapping magnets apart to the touching distance. The
     /// held magnet stays put; free ones yield.
     private func separated(_ input: [BarMagnet]) -> [BarMagnet] {
         var result = input
@@ -538,8 +395,7 @@ final class MagnetismModel {
     @discardableResult
     func addMagnet(at position: SIMD3<Double>) -> UUID? {
         guard magnets.count < Self.magnetBudget else { return nil }
-        // Born at the fingertips: the well stands wherever it stands,
-        // and a hand meets no walls.
+        // Born at the fingertips; a hand meets no walls.
         let magnet = BarMagnet(position: floored(position),
                                moment: SIMD3(Self.defaultStrength, 0, 0))
         magnets.append(magnet)
@@ -549,8 +405,7 @@ final class MagnetismModel {
 
     func removeMagnet(id: UUID) {
         // Deleting down to an empty room is allowed: the well can always
-        // hand back a magnet, and a Delete petal that silently refuses
-        // on the last one reads as broken (2026-08-03).
+        // hand back a magnet.
         magnets.removeAll { $0.id == id }
         heldIDs.remove(id)
         if selectedID == id { selectedID = magnets.last?.id }
@@ -572,30 +427,7 @@ final class MagnetismModel {
                                            Self.strengthRange.upperBound)
     }
 
-    // `removeSelected()` was deleted here on 2026-08-03. A GRAVE, not a
-    // missing door: it was the window panel's delete button, and the
-    // panel was deleted on 2026-08-01. Removing a magnet is the trash
-    // petal on its own ring now (`MagnetismSpaceView.syncBloom` →
-    // `removeMagnet(id:)`), which is better in the way the interaction
-    // law says — you delete the thing you are holding, not "the
-    // selection" named somewhere else. It had no caller anywhere,
-    // including tests.
-
-    // `flipSelected()` and `selectedStrength` followed it on 2026-08-09,
-    // and the grave above is why they are worth a second note: that
-    // sweep deleted the sibling standing eight lines away and left
-    // these two, which are the same thing — panel controls addressing
-    // "the selection" by name, orphaned when the panel went. Flip and
-    // strength are both petals on the magnet's own ring now. An audit
-    // that removes one member of a group and writes a paragraph about
-    // it is how the other members come to look deliberate.
-
     // MARK: Field readout for the notebook
-    //
-    // This said "for the numbers card", which was the window panel's,
-    // and `centerFieldMilliTesla`'s only reader has been the lab
-    // notebook since that panel was deleted. The compass's own µT
-    // Callout is what the room shows.
 
     /// |B| in millitesla at the region centre — a live sense of the field.
     var centerFieldMilliTesla: Double {
@@ -604,10 +436,8 @@ final class MagnetismModel {
 
     // MARK: Reset
 
-    /// What `-magInertia` asked for at launch. `reset()` returns to THIS
-    /// rather than to `false`: the argument is how the alternative bench
-    /// is staged for a screenshot, and a Reset that silently dropped
-    /// back to the glide would photograph the wrong one.
+    /// What `-magInertia` asked for at launch — `reset()` returns to THIS
+    /// rather than `false`, so Reset keeps the staged bench.
     #if DEBUG
     private let inertiaAtLaunch = UserDefaults.standard.bool(forKey: "magInertia")
     #else
@@ -615,18 +445,11 @@ final class MagnetismModel {
     #endif
 
     func reset() {
-        // Covered by `ResetCoverageTests`, which enumerates every Bool on
-        // this model — so adding `inertiaOn` above obliged this line
-        // rather than relying on anybody remembering it. That is the
-        // whole point of that test.
+        // ResetCoverageTests enumerates every Bool, so a new flag obliges
+        // a line here.
         inertiaOn = inertiaAtLaunch
         bodies.removeAll()
-        // ONE magnet, centred: its looping dipole field IS the opening
-        // scene — clean, symmetric, readable, like the electric
-        // dipole next door. (Three misaligned magnets used to glide
-        // into a chain here; three interleaved loop systems on arrival
-        // was a tangle before anyone had seen one field. Add a second
-        // magnet yourself and the approach becomes something you DID.)
+        // ONE magnet, centred: its looping dipole field IS the opening scene.
         magnets = [
             BarMagnet(position: Self.regionCenter,
                       moment: SIMD3(Self.defaultStrength, 0, 0)),
@@ -636,15 +459,9 @@ final class MagnetismModel {
         isPaused = false
         showFieldLines = true
         compassOn = true
-        // The fourth state the switch bank shows, and reset restored the
-        // other three while silently skipping this one — so freezing the
-        // magnets and pressing Reset left them frozen under a dark plate
-        // claiming they were free. The identical omission was found in
-        // Pendulums' `frictionOn` the same day: a flag with no visible
-        // control can drift out of reset unnoticed for months, and the
-        // moment it gets a lamp the lamp starts telling the truth about
-        // it. (`-magFrozen` still opens frozen — `init()` applies it
-        // after this runs.)
+        // A flag with no visible control can drift out of reset unnoticed;
+        // restore it here. (`-magFrozen` reopens frozen — `init()` applies
+        // it after this runs.)
         dynamicsOn = true
         earthFieldOn = true
         compassPosition = Self.regionCenter + SIMD3(0.0, -0.42, 0.55)
@@ -665,15 +482,10 @@ final class MagnetismModel {
 // MARK: - Time Capsule
 
 extension MagnetismModel: TimeCapsuleRecording {
-    /// The magnets, their motion, and where the compass was standing.
-    ///
-    /// `bodies` is in the snapshot and that is the whole point of it on
-    /// this bench: it carries the linear and angular velocities of the
-    /// INERTIAL regime, and a needle restored without them comes back at
-    /// rest — the overshoot-and-ring that the inertial mode exists to
-    /// show would vanish the moment you scrubbed to look at it. Out:
-    /// `inertiaOn`, `dynamicsOn`, `earthFieldOn`, `showFieldLines`,
-    /// `compassOn` and the selection — the bank's states, not the bench's.
+    /// The magnets, their motion, and the compass position. `bodies` is
+    /// in the snapshot to carry the inertial regime's velocities — a
+    /// needle restored without them loses the overshoot-and-ring. Out:
+    /// the bank's flags and the selection.
     struct CapsuleSnapshot: Equatable {
         var magnets: [BarMagnet]
         var bodies: [UUID: DipoleBody]
@@ -686,9 +498,8 @@ extension MagnetismModel: TimeCapsuleRecording {
     }
 
     func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
-        // Whatever a hand is holding right now stays exactly where the
-        // hand has it — nothing may move a held magnet, including the
-        // past.
+        // A held magnet stays where the hand has it — nothing moves it,
+        // including the past.
         var restored = snapshot.magnets
         for index in restored.indices where heldIDs.contains(restored[index].id) {
             if let live = magnets.first(where: { $0.id == restored[index].id }) {
@@ -702,8 +513,7 @@ extension MagnetismModel: TimeCapsuleRecording {
         }
         magnets = restored
         bodies = snapshot.bodies
-        // A held magnet's stored motion is the hand's business, not the
-        // recording's — the same clearing `stepWithInertia` does.
+        // A held magnet's stored motion is the hand's, not the recording's.
         for held in heldIDs { bodies[held] = DipoleBody() }
         compassPosition = snapshot.compassPosition
         if let selectedID, !magnets.contains(where: { $0.id == selectedID }) {

@@ -1,23 +1,6 @@
-//
-//  CurrentLoop.swift
-//  PhysicsCore — Magnetism
-//
-//  The bridge between the circuit bench and the field bench.
-//
-//  A coil carrying a current IS a magnet: N turns of area A carrying
-//  current I have magnetic moment m = N·I·A, pointing along the coil
-//  axis by the right-hand rule. That single identity is what connects
-//  the two halves of electromagnetism, and it is the reason the two
-//  modules should be able to talk to each other: build a circuit, read
-//  the current it actually delivers, and put THAT number into the field
-//  as a magnet you can carry around.
-//
-//  Everything here is exact. The far field of a real loop is the ideal
-//  dipole field the rest of the Magnetism code already computes, and
-//  the on-axis expression below is the exact Biot–Savart result for a
-//  circular loop — so the two can be checked against each other, which
-//  is what the tests do.
-//
+//  CurrentLoop.swift — circuit↔field bridge: a coil IS a magnet, m = N·I·A along the axis
+//  (right-hand rule). Exact throughout; the on-axis Biot–Savart result cross-checks the
+//  dipole far field in tests.
 
 import Foundation
 import simd
@@ -36,11 +19,8 @@ public enum CurrentLoop {
         .pi * radius * radius
     }
 
-    /// A coil, as the ideal dipole the field code understands.
-    ///
-    /// The moment points along `axis` by the right-hand rule; a negative
-    /// current reverses it, which is exactly what reversing the battery
-    /// does to a real electromagnet.
+    /// A coil as the ideal dipole the field code understands; a negative current reverses
+    /// the moment, exactly as reversing the battery does to a real electromagnet.
     public static func magnet(
         at position: SIMD3<Double>,
         axis: SIMD3<Double>,
@@ -53,9 +33,7 @@ public enum CurrentLoop {
         return BarMagnet(position: position, moment: unit * m)
     }
 
-    /// EXACT on-axis field of a circular loop, T:
-    ///     B(z) = μ₀ N I a² / (2 (a² + z²)^{3/2})
-    /// measured from the loop's centre along its axis.
+    /// EXACT on-axis field of a circular loop, T: B(z) = μ₀NIa²/(2(a²+z²)^{3/2}), z from centre.
     public static func axialField(turns: Int, current: Double,
                                   radius: Double, distance z: Double) -> Double {
         let a2 = radius * radius
@@ -64,8 +42,7 @@ public enum CurrentLoop {
         return mu0 * Double(turns) * current * a2 / denominator
     }
 
-    /// Field at the very centre of the loop: μ₀NI/2a — the special case
-    /// everyone memorises, and a useful sanity anchor.
+    /// Centre-of-loop field: μ₀NI/2a — the memorised special case, a sanity anchor.
     public static func centreField(turns: Int, current: Double, radius: Double) -> Double {
         guard radius > 0 else { return 0 }
         return mu0 * Double(turns) * current / (2 * radius)

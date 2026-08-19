@@ -1,26 +1,6 @@
-//
-//  GalleryPlacement.swift
-//  Physics Playground — Hub
-//
-//  Put the gallery where you actually have room — the hub's sibling of
-//  `LabPlacement`, and the replacement for the Settings window's
-//  "Gallery" section (distance/height sliders and a Recenter button;
-//  owner's call, 2026-08-03).
-//
-//  Two things decided the shape. First, the sliders repositioned by
-//  REBUILDING: they bumped `layoutVersion`, which tore the RealityView
-//  down and re-ran `HubScene.build` — on a `@State` scene that
-//  survived the teardown, so every reposition stacked a second gallery
-//  on top of the first. A transform never rebuilds anything. Second,
-//  the fix the owner asked for is the native one: a grab bar under the
-//  gallery, like the bar under every visionOS window, remembered
-//  across launches so the room opens exactly where it was left.
-//
-//  It is a pure display transform on `HubScene.root`, applied every
-//  frame — the same argument that makes `LabPlacement` safe: every
-//  grab in the hub converts through `root`, so a constant translation
-//  and yaw change nothing about how carrying an exhibit works.
-//
+//  GalleryPlacement.swift — grab-bar placement of the gallery, persisted across launches.
+//  A pure display transform on `HubScene.root`, applied every frame — never repositions by
+//  rebuilding (rebuild once stacked a second gallery); grabs convert through `root` so it's safe.
 
 import Foundation
 import Observation
@@ -31,8 +11,7 @@ import simd
 final class GalleryPlacement {
     /// Where the whole gallery stands, relative to where it builds.
     private(set) var offset: SIMD3<Float> = .zero
-    /// Yaw about Y, radians — set by a tap on the bar, which swings the
-    /// crescent round to face wherever the wearer is looking.
+    /// Yaw about Y, radians — a bar tap swings the crescent to face the wearer.
     private(set) var yaw: Float = 0
 
     private static let offsetKey = "hub.galleryOffset"
@@ -49,8 +28,7 @@ final class GalleryPlacement {
     }
 
     func move(to newOffset: SIMD3<Float>) {
-        // Generous but bounded: far enough to put the gallery across
-        // the room, not so far it ends up in next door.
+        // Bounded: across the room, not into next door.
         offset = simd_clamp(newOffset,
                             SIMD3(-3, -0.9, -3), SIMD3(3, 0.9, 3))
         persist()
@@ -61,8 +39,7 @@ final class GalleryPlacement {
         persist()
     }
 
-    /// A tap on the bar: home position, facing the wearer if the room
-    /// knows which way that is.
+    /// Bar tap: home position, facing the wearer if the room knows which way that is.
     func recentre(facing yaw: Float?) {
         offset = .zero
         if let yaw { self.yaw = yaw }

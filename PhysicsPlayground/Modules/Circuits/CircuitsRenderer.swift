@@ -2,17 +2,8 @@
 //  CircuitsRenderer.swift
 //  Physics Playground — Circuits module
 //
-//  Renders the circuit lab: recognizable little components (a cylinder
-//  battery with a + cap, banded resistors wearing their real color
-//  code, glass bulbs that glow with their true power, electrolytic
-//  capacitors, flip switches), copper wires that follow their terminals
-//  as you carry components around the room, and — the show — electron
-//  dots drifting along every live wire, minus to plus.
-//
-//  Components and wires are created/destroyed on edit (rare); the
-//  per-frame path is transform writes: component roots, wire cylinders
-//  (position/orientation/stretch — no mesh regeneration), and pooled
-//  electron dots.
+//  Renders the circuit lab. Entities are created/destroyed on edit (rare);
+//  the per-frame path is transform writes only — no mesh regeneration.
 //
 
 import Foundation
@@ -27,68 +18,34 @@ final class CircuitsRenderer {
     let root = Entity()
     var subscriptions: [EventSubscription] = []
 
-    /// The SpaceView's tap router, so a control this renderer builds can
-    /// be operated without hands.
-    ///
-    /// A CALLBACK RATHER THAN A MODEL REFERENCE, because the renderer
-    /// deliberately holds no model — every method here takes one as an
-    /// argument. `CircuitsSpaceView.handleTap(on:)` already routes
-    /// purely by entity name, so pointing VoiceOver at the same function
-    /// the pinch calls costs one property and cannot drift from it.
+    /// The SpaceView's tap router. A callback, not a model reference — the
+    /// renderer deliberately holds no model.
     var onTap: ((Entity) -> Void)?
-    /// THE ACCESSIBILITY DOOR, and the only one.
-    ///
-    /// Pulling a lead needs a sustained pinch and a hand that travels.
-    /// A terminal's VoiceOver action arms a wire from it, and the next
-    /// terminal's lands it — tap-tap wiring, kept for exactly the
-    /// users who cannot pull, and reachable from nowhere else.
-    /// `SpatialActionComponent` carries one `activate`, so this cannot
-    /// be a second action on the same entity; it IS the terminal's
-    /// activate, and the pinch path never calls it.
+    /// The accessibility door, and the only one: tap-tap wiring for users who
+    /// cannot pull. It IS the terminal's activate; the pinch path never calls it.
     var onTerminalAction: ((CircuitsModel.Terminal) -> Void)?
 
-    /// Called from the SpaceView's `onDisappear`, and the reason it has
-    /// to be called explicitly is that neither of the things it releases
-    /// is tied to this object's lifetime.
-    ///
-    /// An `EventSubscription` outlives the view that made it — cancelled
-    /// nowhere, it keeps calling into a renderer for a scene that is no
-    /// longer on screen and holds the whole entity graph alive behind
-    /// it. And a `GeometryPipeline` job in flight ran to completion and
-    /// then uploaded a mesh and enabled an entity in a scene being torn
-    /// down (see `GeometryPipeline.cancel`).
+    /// Called from the SpaceView's `onDisappear` — an `EventSubscription`
+    /// outlives the view that made it and would hold the entity graph alive.
     func teardown() {
         subscriptions.forEach { $0.cancel() }
         subscriptions = []
     }
 
-    // `manipulatingComponentID` STOOD HERE WITH NO WRITER. Six
-    // references, all reads, zero assignments app-wide — so the pickup
-    // pulse never flashed, `terminalWorld`'s follow-the-live-entity
-    // branch never ran, and the guard in `syncComponents` that claimed
-    // "while the hand carries the holder the system owns its
-    // transform — including any twist, which the model adopts on
-    // release" described a mechanism that never existed and could not:
-    // `DragGesture` carries `location3D` and no rotation at all. The
-    // pulse is an explicit call now (`flashPickup`), which is a thing
-    // that either happens or does not.
     /// Where the release tick plays from when the grab ends.
     private weak var pulsedGrabEntity: Entity?
 
     /// Parent for the selected component's readout attachment.
     let selectedAnchor = Entity()
 
-    /// The lead's touch target. Named because two things are sized
-    /// against it: the bead itself, and the carry target that has to
-    /// stay clear of it.
+    /// The lead's touch target — the bead and the carry target are both sized against it.
     static let terminalTargetRadius: Float = 0.026
 
     private struct ComponentVisual {
         let holder: Entity
         let body: ModelEntity
         var terminals: [ModelEntity]
-        /// What each lead's accessibility value currently says, so an
-        /// unchanged state costs no component write.
+        /// Each lead's current accessibility value — unchanged state costs no write.
         var terminalValues: [String] = ["", ""]
         let label: BackedLabel
         let halo: ModelEntity
@@ -107,8 +64,7 @@ final class CircuitsRenderer {
     private var wirePhases: [UUID: Double] = [:]
 
     // MARK: Voltage skyline (potential as terrain)
-    /// The datum the towers rise from — a common floor so heights are
-    /// comparable, floated above the bench.
+    /// The datum the towers rise from — a common floor so heights are comparable.
     private static let skylineDatumY: Float = 1.62
     private static let voltsToMeters: Float = 0.028
     private let skylineRoot = Entity()
@@ -120,61 +76,42 @@ final class CircuitsRenderer {
     /// NaN until first write. See the gate in `syncVoltageSkyline`.
     private var towerReadings: [Double] = []
     private var towerLabelPivots: [Entity] = []
-    /// The colour step each tower is currently wearing, so an unchanged
-    /// potential costs no material write.
+    /// The colour step each tower wears — unchanged potential costs no material write.
     private var towerBuckets: [Int] = []
 
-    /// The bench's own magnetic field, as arrows on a coarse grid.
-    ///
-    /// Budget and spacing are deliberately modest. This is a field that
-    /// exists EVERYWHERE around every wire, so a fine grid would fill the
-    /// room with arrows and read as fog; what teaches is seeing the
-    /// arrows CIRCLE a wire and reverse when the current does.
+    /// The bench's own magnetic field. Deliberately modest budget: what teaches
+    /// is arrows CIRCLING a wire, not a room-filling fog.
     private let fieldArrows = VectorFieldArrows(count: 260)
     /// How many runs get rings, longest first.
     private static let fieldRunBudget = 10
     /// Rings per run, and arrows per ring.
     private static let fieldStations = 3
     private static let fieldSpokes = 8
-    /// How far out the ring sits. Far enough from the copper that the
-    /// 1/d field is not a spike, close enough that the circulation reads
-    /// as belonging to THIS wire rather than to the bench in general.
+    /// Ring offset: far enough that the 1/d field is not a spike, close enough
+    /// that the circulation reads as belonging to THIS wire.
     private static let fieldRingRadius: Double = 0.055
 
     private static let electronBudget = 200
     private let electronPool: EntityPool<Void>
     private var electronsVisible = false
     private var fieldArrowsVisible = false
-    /// The segments the field arrows were last drawn from — nil when the
-    /// layer is off, so re-enabling always redraws. See
-    /// `syncMagneticField` for the gate this feeds.
+    /// The segments the field arrows were last drawn from — nil when the layer
+    /// is off, so re-enabling always redraws.
     private var lastFieldSegments: [WireField.Segment]?
 
     private let audioEmitter = Entity()
     private var lastSoundID = 0
     private var appliedResistorTextureVersion = -1
 
-    /// The wire core, and the most scrutinised surface in the app:
-    /// Electron View shrinks you into it until it is a barrel filling
-    /// your view, so this is the one metal that gets looked at closely.
-    /// STATIC, so `makeBody` can be too: the palette's previews are
-    /// built before any renderer exists to own a copper. It is an
-    /// immutable material built from two constants, so one shared copy
-    /// is not a shortcut — there was never anything per-instance about it.
+    /// The wire core. STATIC so `makeBody` can be too: the palette's previews
+    /// are built before any renderer exists to own a copper.
     private static let copperMaterial = Materials.machined(
         DesignTokens.Palette.copperUI, roughness: 0.35)
     private var glowMaterials: [UnlitMaterial] = []
 
 
-    /// The bench's VIEW transform.
-    ///
-    /// `root` belongs to the lab placement — where in your room the
-    /// workshop sits. `viewRoot` belongs to the ZOOM, and the two used
-    /// to fight: Electron View wrote root.position and root.scale every
-    /// frame while the lab offset wrote root.position too, so whichever
-    /// ran last won and moving the lab did nothing here. Splitting them
-    /// gives each one transform of its own, which is also what lets the
-    /// two-handed gesture in.
+    /// The bench's VIEW transform: `root` belongs to the lab placement,
+    /// `viewRoot` to the ZOOM — one transform each, so they cannot fight.
     let viewRoot = Entity()
 
     init() {
@@ -217,41 +154,25 @@ final class CircuitsRenderer {
 
     // MARK: The bench's magnetic field
 
-    /// Places arrows on RINGS around each current-carrying run.
-    ///
-    /// Not a volume grid, and the first version's failure is the reason.
-    /// A grid over the build volume at a useful pitch is about 2 200
-    /// samples against a 260-arrow pool, and `VectorFieldArrows` takes
-    /// the first ones it is given — so the whole budget went to the
-    /// lowest-x slab and the field appeared as a wall of arrows stacked
-    /// against the left edge of the room, nowhere near a wire.
-    ///
-    /// Rings are better than a coarser grid would have been anyway. The
-    /// thing worth seeing is that B CIRCLES a conductor and reverses when
-    /// the current does; a sparse grid samples mostly empty room, while a
-    /// ring puts every arrow exactly where the circulation is legible.
-    /// The vector at each point is still the TOTAL field from every
-    /// segment, so two nearby wires visibly reinforce or cancel.
+    /// Places arrows on RINGS around each current-carrying run — never a volume
+    /// grid (`VectorFieldArrows` takes the first points given, so a grid dumps
+    /// the whole budget into one slab). Each vector is still the TOTAL field
+    /// from every segment, so nearby wires visibly reinforce or cancel.
     private func syncMagneticField(_ model: CircuitsModel) {
         guard model.showMagneticField else {
             if fieldArrowsVisible {
                 fieldArrows.hideAll()
                 fieldArrowsVisible = false
             }
-            // Invalidated, not remembered: toggling the layer back on
-            // must redraw even if nothing on the bench moved meanwhile.
+            // Invalidated, not remembered: re-enabling must redraw.
             lastFieldSegments = nil
             return
         }
         fieldArrowsVisible = true
 
-        // CHANGE-GATED (2026-08-13), the same way `FieldRenderer` gates
-        // its charges: everything below — the ranking, the ring layout,
-        // and ~240 Biot–Savart sums — is a pure function of the
-        // segments, and it was re-running every frame whether anything
-        // had moved or not. A static bench now costs one array compare;
-        // a carried part still updates every frame, because carrying it
-        // changes the segments.
+        // CHANGE-GATED: everything below is a pure function of the segments,
+        // so a static bench costs one array compare; a carried part still
+        // updates every frame because it changes the segments.
         let segments = model.currentSegments
         guard segments != lastFieldSegments else { return }
         lastFieldSegments = segments
@@ -261,9 +182,7 @@ final class CircuitsRenderer {
             return
         }
 
-        // The longest runs first: a 2 cm component stub carries the same
-        // current as the wire it feeds, but there is no room around it to
-        // read a circulation from.
+        // Longest runs first: a 2 cm stub has no room to read a circulation from.
         let ranked = segments
             .sorted { simd_length($0.b - $0.a) > simd_length($1.b - $1.a) }
             .prefix(Self.fieldRunBudget)
@@ -276,9 +195,8 @@ final class CircuitsRenderer {
             let length = simd_length(along)
             guard length > 1e-4 else { continue }
             let axis = along / length
-            // Any vector not parallel to the run gives a perpendicular
-            // basis; picking the world axis the run is LEAST aligned with
-            // keeps the cross product well conditioned.
+            // The world axis the run is LEAST aligned with keeps the cross
+            // product well conditioned.
             let reference: SIMD3<Double> = abs(axis.y) < 0.9
                 ? SIMD3(0, 1, 0) : SIMD3(1, 0, 0)
             let u = simd_normalize(simd_cross(axis, reference))
@@ -301,9 +219,8 @@ final class CircuitsRenderer {
                            hidden: Array(repeating: false, count: points.count))
     }
 
-    /// Perpendicular distance from a point to a SEGMENT — clamped to the
-    /// ends, so a point past a wire's end is measured to that end rather
-    /// than to the infinite line it lies on.
+    /// Distance from a point to a SEGMENT — clamped to the ends, not the
+    /// infinite line.
     private static func distance(from point: SIMD3<Double>,
                                  to segment: WireField.Segment) -> Double {
         let along = segment.b - segment.a
@@ -315,57 +232,31 @@ final class CircuitsRenderer {
 
     // MARK: The parts palette
 
-    /// One part, built the way the bench builds it, for a `Well` to
-    /// stand on the flank — the palette's whole supply.
-    ///
-    /// It is `makeBody` itself, not a likeness of it: `Well`'s rule is
-    /// that a preview and the object it makes must be recognisably one
-    /// thing, and the surest way to honour that is to call the same
-    /// function the renderer calls. At the part's own final size, too —
-    /// the tray shrank its templates to 0.8, so every part in this
-    /// module was a fifth smaller in the place you learned what it
-    /// looked like than in the place you used it.
-    ///
-    /// See `CircuitsPartsLayout` for where these stand and why the tray
-    /// they replace is not coming back.
+    /// One part for a `Well` preview — `makeBody` itself, at final size, so the
+    /// preview and the object it makes are one thing.
     static func partPreview(for kind: CircuitsModel.ComponentKind) -> ModelEntity {
         makeBody(for: CircuitsModel.Component(
             id: UUID(), kind: kind, position: .zero, value: kind.defaultValue))
     }
 
     // MARK: Render clock
+    // Ticked directly from SceneEvents.Update, not the observation render loop —
+    // a steady DC circuit gives withObservationTracking nothing to re-fire on.
 
-    /// Per-frame entry, driven straight from SceneEvents.Update: advance
-    /// the electron drift by real elapsed time, then write every
-    /// transform. Direct ticking (the hub/Gravity-field pattern) rather
-    /// than the observation render loop — a steady DC circuit gave
-    /// withObservationTracking nothing it reliably re-fired on, which
-    /// froze the flow animation whenever nothing else was changing.
     /// Drives the armed-terminal pulse.
     private var pendingPulsePhase = 0.0
 
     // MARK: Connection previews & drag-to-wire
 
-    /// While this part is carried (or its end pulled), ghost wires show
-    /// exactly what a release would connect.
+    /// While this part is carried, ghost wires show what a release would connect.
     var previewComponentID: UUID?
     /// Terminals currently highlighted as connection targets.
     private(set) var previewTargets: Set<CircuitsModel.Terminal> = []
     private var previewWireEntities: [ModelEntity] = []
 
-    /// THE LEAD IN FLIGHT: copper drawn out of a terminal toward the
-    /// hand, in one of three states.
-    ///
-    /// It reads as the wire it is about to become — not as a green
-    /// gesture line — because that is what it will be if you let go.
-    /// FATTER THAN A WIRE, AND THAT IS LOAD-BEARING. The first build
-    /// used the ghost wires' 0.0045, which is thinner than a wire's
-    /// 0.0062 jacket — so a lead lying along an existing wire was
-    /// swallowed by it completely. That is not a rare case: it is the
-    /// REFUSAL case, which happens exactly when a wire already joins
-    /// the two ends, and a screenshot of the refusal showed no lead at
-    /// all. A lead in your hand should also simply be the most
-    /// present thing in the room.
+    /// The lead in flight, in one of three states. FATTER THAN A WIRE'S 0.0062
+    /// jacket, load-bearing: a thinner lead lying along an existing wire is
+    /// swallowed by it — which is exactly the refusal case.
     private static let flyingLeadRadius: Float = 0.008
 
     private lazy var flyingLead: ModelEntity = {
@@ -380,28 +271,22 @@ final class CircuitsRenderer {
     /// Neutral: reaching, nothing under it yet.
     private static let leadMaterial = Materials.machined(
         DesignTokens.Palette.copperUI, roughness: 0.35)
-    /// Armed: a release right now lands a wire. Same green the ghost
-    /// wires use, so "this will connect" is one colour on this bench.
+    /// Armed: a release right now lands a wire. Same green as the ghost wires —
+    /// "this will connect" is one colour on this bench.
     private static let previewMaterial: UnlitMaterial = {
         var material = UnlitMaterial(color: UIColor(
             red: 0.35, green: 1.0, blue: 0.55, alpha: 1))
         material.blending = .transparent(opacity: 0.65)
         return material
     }()
-    /// Refusing: a release right now would be declined.
-    ///
-    /// NO TEXT — the refusal is the RECOIL. The lead shortens back
-    /// toward its source and goes red, which says "not there" without
-    /// a paragraph. Three cards of words have been rejected in this
-    /// room in three days; a fourth explaining why a wire did not
-    /// appear would be the same mistake in a smaller font.
+    /// Refusing: a release right now would be declined. NO TEXT — the refusal
+    /// is the recoil, red and shortened.
     private static let refusalMaterial: UnlitMaterial = {
         var material = UnlitMaterial(color: DesignTokens.Palette.destructiveUI)
         material.blending = .transparent(opacity: 0.8)
         return material
     }()
-    /// How far back a refused lead pulls — most of the way home, so
-    /// the recoil is unmistakable without the lead vanishing.
+    /// How far back a refused lead pulls — unmistakable without vanishing.
     private static let refusalRecoil: Float = 0.65
 
     private func stretch(_ entity: ModelEntity, from a: SIMD3<Float>, to b: SIMD3<Float>) {
@@ -414,8 +299,7 @@ final class CircuitsRenderer {
         entity.scale = SIMD3(1, length, 1)
     }
 
-    /// Draw the lead a hand is pulling, in whichever of its three
-    /// states the model says it is in.
+    /// Draw the lead a hand is pulling, in whichever state the model says.
     private func syncFlyingLead(_ model: CircuitsModel) {
         guard let pull = model.leadPull,
               let source = terminalWorld(pull.source, model) else {
@@ -423,15 +307,13 @@ final class CircuitsRenderer {
             return
         }
         let hand = SIMD3<Float>(pull.hand)
-        // Armed leads snap to the target they would land on, so the
-        // picture and the outcome cannot disagree.
+        // Armed leads snap to their target, so picture and outcome cannot disagree.
         let landing: SIMD3<Float>
         let material: RealityKit.Material
-        // A refused lead also thickens, so the blunt red stub cannot
-        // hide inside the wire it lies along.
+        // A refused lead also thickens, so the red stub cannot hide inside the
+        // wire it lies along.
         var girth: Float = 1
         if pull.refusal != nil {
-            // Recoil: pull most of the way back to the source.
             landing = source + (hand - source) * (1 - Self.refusalRecoil)
             material = Self.refusalMaterial
             girth = 1.5
@@ -459,9 +341,8 @@ final class CircuitsRenderer {
             }
         }
         previewTargets = Set(pairs.map(\.2))
-        // A lead in flight swells whatever it would land on — but not
-        // one it would be REFUSED by: a terminal that swells and then
-        // declines is worse than one that never invited the drop.
+        // A lead in flight swells its landing target — never one that would
+        // REFUSE it.
         if let pull = model.leadPull, pull.refusal == nil, let target = pull.target {
             previewTargets.insert(target)
         }
@@ -483,13 +364,8 @@ final class CircuitsRenderer {
         }
     }
 
-    /// The zoom, as ONE number.
-    ///
-    /// Electron View used to be a discrete 1× / 4× flip. It is now just
-    /// a floor under the same continuous zoom the two hands drive, so
-    /// "get closer to the electrons" and "pull the bench open with your
-    /// hands" are the same gesture rather than two competing systems —
-    /// and the user can stop anywhere between.
+    /// The zoom, as ONE number: Electron View is a floor under the same
+    /// continuous two-hand zoom, not a competing 1×/4× flip.
     private var benchScale: Float = 1
     static let benchPivot = SIMD3<Float>(0, 1.25, -0.85)
     /// Set by the space view from the two-handed scale rig.
@@ -497,22 +373,15 @@ final class CircuitsRenderer {
     static let electronViewZoom: Float = 4.0
 
     /// Where the zoom is heading: the larger of the hands' zoom and the
-    /// Electron View floor, so switching Electron View on while already
-    /// zoomed in never yanks the bench smaller.
+    /// Electron View floor, so enabling it while zoomed never shrinks the bench.
     private func targetZoom(_ model: CircuitsModel) -> Float {
         max(handZoom, model.electronView ? Self.electronViewZoom : 1)
     }
 
     // MARK: The bench's hum
 
-    /// A mains hum whose loudness rides the total current the bench is
-    /// carrying, and whose pitch rises with the power it dissipates.
-    ///
-    /// A live circuit is not silent, and a circuit that has just gone
-    /// dead should not sound the same as one delivering two amps. This
-    /// is the module's one continuous voice: close the switch and the
-    /// bench comes audibly alive, short it and the hum climbs, open it
-    /// and the room goes quiet — all without looking at a readout.
+    /// A mains hum whose loudness rides total current and whose pitch
+    /// rises with dissipated power.
     private var hum: ToneVoice?
 
     private func tickHum(_ model: CircuitsModel) {
@@ -526,8 +395,7 @@ final class CircuitsRenderer {
         let power = model.components
             .compactMap { model.readouts[$0.id]?.watts }
             .map(abs).reduce(0, +)
-        // 50 Hz-ish fundamental, climbing a little as the bench works
-        // harder, so a short circuit is audibly frantic.
+        // 50 Hz-ish fundamental, climbing as the bench works harder.
         hum?.update(pitchHz: 52 + min(power, 12) * 7,
                     loudness: Sonification.loudness(current, full: 1.5, knee: 0.55))
     }
@@ -537,9 +405,7 @@ final class CircuitsRenderer {
         pendingPulsePhase += dt * 6
         let target = targetZoom(model)
         if abs(benchScale - target) > 1e-3 {
-            // Eased toward the target so a flick of Electron View glides
-            // rather than snaps; a live hand gesture is already smooth,
-            // and the same easing keeps it from lagging perceptibly.
+            // Eased toward the target so an Electron View flick glides.
             benchScale += (target - benchScale) * Float(min(dt * 8, 1))
             viewRoot.scale = SIMD3(repeating: benchScale)
             viewRoot.position = Self.benchPivot * (1 - benchScale)
@@ -547,9 +413,7 @@ final class CircuitsRenderer {
         render(model, dt: dt)
     }
 
-    /// Acknowledge a grab: a light pulse and a tick, on the part the
-    /// hand just took. Called once, from the gesture that promoted —
-    /// not diffed per frame off a field nobody wrote.
+    /// Acknowledge a grab: a light pulse and a tick on the part just taken.
     func flashPickup(id: UUID) {
         guard let holder = visuals[id]?.holder else { return }
         pulsedGrabEntity = holder
@@ -587,16 +451,8 @@ final class CircuitsRenderer {
         if let selected = model.selectedComponent {
             selectedAnchor.isEnabled = true
             selectedAnchor.position = SIMD3<Float>(selected.position) + SIMD3(0, 0.14, 0)
-            // COUNTER-SCALED, because this anchor hangs under `viewRoot`
-            // and `viewRoot` is the zoom rig — Electron View pins it to
-            // 4× and two hands drive it to 8×. Its position must stay in
-            // the rig (the card has to ride the part it describes as the
-            // bench swells), but its SIZE must not: a readout that grew
-            // with the bench would be a wall-sized slab of text at the
-            // exact moment you got in among the electrons to read
-            // something else. Gravity Lab solves the same problem with
-            // `compensateForRig`; this module has one anchor to fix, so
-            // it fixes it here.
+            // Counter-scaled: the anchor hangs under `viewRoot` (the zoom
+            // rig), so its position rides the zoom but its size must not.
             selectedAnchor.scale = SIMD3(repeating: 1 / max(benchScale, 0.001))
         } else {
             selectedAnchor.isEnabled = false
@@ -615,17 +471,8 @@ final class CircuitsRenderer {
         return UIColor(red: 0.35 + 0.35 * t, green: 0.65 + 0.2 * t, blue: 1.0, alpha: 1)
     }
 
-    // The skyline's materials, resolved once.
-    //
-    // Every tower and every cap used to build a fresh
-    // `PhysicallyBasedMaterial` from its live voltage on EVERY frame the
-    // skyline was shown — two allocations per node per frame, for a
-    // picture whose colour only moves when the ramp crosses a step the
-    // eye can actually see. Quantising the axis into 33 steps turns the
-    // whole thing into a table lookup, and a bucket that has not moved
-    // since last frame writes nothing at all. The file already banked
-    // its other ramps this way (`glowMaterials`, `voltageMaterials`);
-    // this one was simply missed.
+    // The skyline's materials, resolved once: the axis is quantised into
+    // 33 steps so a tower whose bucket has not moved writes no material.
     private static let skylineSteps = 33
 
     private static func skylineBucket(_ volts: Double, span: Double) -> Int {
@@ -655,11 +502,8 @@ final class CircuitsRenderer {
     private static let capMaterials: [PhysicallyBasedMaterial] =
         (0..<skylineSteps).map { skylineMaterial($0, intensity: 0.9) }
 
-    /// Raises a translucent glowing tower over every circuit node to a
-    /// height equal to its voltage, linked to the node by a faint
-    /// thread. Potential becomes terrain you can compare at a glance —
-    /// the battery towers up, ground sits at the datum, each component
-    /// steps the height down (Kirchhoff's loop law, made spatial).
+    /// Raises a glowing tower over every node to a height equal to its
+    /// voltage — potential as terrain (Kirchhoff's loop law made spatial).
     private func syncVoltageSkyline(_ model: CircuitsModel) {
         skylineRoot.isEnabled = model.showVoltageHeights
         guard model.showVoltageHeights else { return }
@@ -718,9 +562,7 @@ final class CircuitsRenderer {
             let pivot = towerLabelPivots[index]
             pivot.isEnabled = true
             pivot.position = base + SIMD3(0, height + (height >= 0 ? 0.05 : -0.06), 0)
-            // Formatted only when the displayed decimal (or the tint
-            // bucket) moves — `BackedLabel` dedupes the mesh, but the
-            // string was being built per tower per frame regardless.
+            // Formatted only when the displayed decimal or tint bucket moves.
             let reading = (node.voltage * 10).rounded()
             if towerReadings[index] != reading || colorMoved {
                 towerReadings[index] = reading
@@ -791,10 +633,7 @@ final class CircuitsRenderer {
         for component in model.components {
             var visual = visuals[component.id] ?? makeVisual(for: component)
 
-            // The model owns motion; the renderer follows it. (This
-            // was wrapped in a `manipulatingComponentID` guard that
-            // never fired, so the unconditional write is what has
-            // always actually happened.)
+            // The model owns motion; the renderer follows it.
             visual.holder.position = SIMD3<Float>(component.position)
             // Aim the whole part along its model axis — but only when
             // the axis actually moved.
@@ -818,8 +657,7 @@ final class CircuitsRenderer {
                 // The armed terminal breathes, and preview targets swell,
                 // so there's never doubt what the next action will wire.
                 let isProbed = model.probeA == key || model.probeB == key
-                // The armed state is AUDIBLE as well as visible: a
-                // VoiceOver user cannot see a bead breathing.
+                // The armed state is audible too — VoiceOver cannot see a bead breathe.
                 let spokenValue = isSource ? "armed" : ""
                 if visual.terminalValues[end] != spokenValue {
                     visual.terminalValues[end] = spokenValue
@@ -892,22 +730,10 @@ final class CircuitsRenderer {
         return PhysicsFormat.measurement(rpm, "rpm", decimals: 0)
     }
 
-    /// THE PART'S LABEL AND THE PART'S READOUT MUST AGREE, so there is
-    /// one function that knows how a component value is written and this
-    /// is not it — `CircuitsModel.formatValue` is.
-    ///
-    /// This carried its OWN copy of the resistance rule (the same
-    /// threshold, the same two branches, spelled with a literal Ω where
-    /// the model spells `\u{03A9}`) and its own copy of the capacitance
-    /// rule. The model's copy has a comment recording the day its
-    /// capacitor branch printed "0 mF" beside a bench label reading
-    /// "100 µF" — the fix went in there, and this half of the same pair
-    /// was left behind. Two copies of a formatting rule is a readout and
-    /// a label waiting to disagree.
-    ///
-    /// What stays here is only what the BENCH says differently from the
-    /// readout: a motor reads in rpm, a switch reads open or closed, and
-    /// an AC source wears the tilde that tells you it is AC.
+    /// The bench label. Value formatting goes through the ONE authority,
+    /// `CircuitsModel.formatValue`, so label and readout cannot disagree;
+    /// only bench-specific wording stays here (motor rpm, switch
+    /// open/closed, the AC tilde).
     private func labelText(for component: CircuitsModel.Component) -> String {
         switch component.kind {
         case .battery, .resistor, .bulb, .capacitor, .inductor:
@@ -925,8 +751,7 @@ final class CircuitsRenderer {
 
     private func makeVisual(for component: CircuitsModel.Component) -> ComponentVisual {
         // The HOLDER is the manipulation target, so a carried part brings
-        // its terminals, grips, label, and halo along — and wires stay
-        // pinned to real terminal entities the whole way.
+        // its terminals, label and halo along.
         let holder = Entity()
         holder.name = component.id.uuidString
         holder.position = SIMD3<Float>(component.position)
@@ -941,20 +766,10 @@ final class CircuitsRenderer {
         let body = Self.makeBody(for: component)
         holder.addChild(body)
 
-        // THE CARRY TARGET IS THE BODY, MEASURED — and it is measured
-        // from `body` rather than `holder` deliberately: the holder
-        // will collect a bulb's 0.055 glow and a 0.085 selection halo,
-        // and a target swollen to cover those would be LARGER than the
-        // 0.075 sphere this replaced.
-        //
-        // The sphere it replaced spanned the inner third of both
-        // terminal colliders, so a pinch aimed at a lead could take
-        // the whole part instead. The x half-extent is therefore
-        // clamped just inside the terminal target's inner edge
-        // (0.085 − 0.026 = 0.059): the battery's 0.11 m body plus the
-        // usual 0.015 of reach would be 0.070, which is back inside
-        // the lead. y and z have nothing to collide with and keep the
-        // full allowance.
+        // The carry target is the BODY, measured from `body` not `holder`
+        // (which collects a bulb's glow and a selection halo). Its x
+        // half-extent is clamped just inside the terminal target's inner
+        // edge (0.085 − 0.026 = 0.059) so a body pinch cannot swallow a lead.
         let bodyExtents = body.visualBounds(relativeTo: holder).extents
         let clearOfLead = Float(CircuitsModel.terminalOffset) - Self.terminalTargetRadius - 0.002
         let half = SIMD3<Float>(
@@ -976,13 +791,7 @@ final class CircuitsRenderer {
             terminal.name = "t\(end)-\(component.id.uuidString)"
             terminal.position = SIMD3(
                 Float(end == 0 ? -CircuitsModel.terminalOffset : CircuitsModel.terminalOffset), 0, 0)
-            // 0.042 until 2026-08-07, on a 0.013 m bead. It reached
-            // past the end grip at 0.115, and on a short wire the two
-            // terminals' targets interpenetrated — so which end you
-            // wired was decided by hit order. The grip it was shrunk
-            // to clear is gone now (2026-08-11); this is the only
-            // thing to hit at this end, and the nearest other target
-            // is the far lead 0.17 m away.
+            // The only target at this end; the far lead is 0.17 m away.
             terminal.components.set(InputTargetComponent())
             terminal.components.set(CollisionComponent(
                 shapes: [.generateSphere(radius: Self.terminalTargetRadius)]))
@@ -1008,21 +817,7 @@ final class CircuitsRenderer {
             holder.addChild(lead)
         }
 
-        // THE ORANGE END GRIPS STOOD HERE, at ±(0.085 + 0.03), with
-        // 0.026 collision radii — three centimetres from the copper
-        // terminals, which carry 0.026 radii of their own. The hit
-        // volumes OVERLAPPED, so which of the two you grabbed was
-        // decided by hit order, and the comment on the terminal
-        // collider below already recorded a bug from exactly this
-        // crowding. They are the "2 different nodes at each end" the
-        // owner reported (2026-08-11), and they are gone: one lead per
-        // end, the copper one, and it is the only thing to hit there.
-        //
-        // Their job was aiming, which is now a consequence of
-        // connection (`CircuitsModel.swing`) rather than a control.
-
-        // The white center knob: the part's carry handle, marking where
-        // to grab when you want to move it rather than aim it.
+        // The white center knob: the part's carry handle.
         var knobMaterial = UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))
         knobMaterial.blending = .transparent(opacity: 0.85)
         let knob = ModelEntity(
@@ -1033,8 +828,7 @@ final class CircuitsRenderer {
         let halo = SelectionHalo.make(mesh: .generateSphere(radius: 0.085))
         holder.addChild(halo)
 
-        // Value label beneath, billboarded, over the house dark backing
-        // so the number survives whatever wall stands behind the bench.
+        // Value label beneath, billboarded over the dark backing.
         let label = BackedLabel(size: 0.02)
         let labelPivot = Entity()
         labelPivot.position = [0, -0.065, 0]

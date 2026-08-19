@@ -2,17 +2,8 @@
 //  IsosurfaceTests.swift
 //  PhysicsCoreTests
 //
-//  `Isosurface` was the only type in PhysicsCore with no test at all —
-//  148 lines of marching tetrahedra, while its two-dimensional sibling
-//  `MarchingSquares` carries nine. Found by an inventory on 2026-08-03,
-//  not by a failure.
-//
-//  The tests are geometry recovery, in the shape the rest of this
-//  package uses: hand it a field whose level set is a surface we know
-//  the exact area and position of, and measure what comes back. Nothing
-//  here stores a reference triangle list — that would pin this
-//  implementation rather than the mathematics, and a re-triangulation
-//  that is just as correct would fail it.
+//  Geometry recovery for marching tetrahedra. No stored triangle lists —
+//  that would pin the implementation, not the mathematics.
 //
 
 import XCTest
@@ -21,8 +12,7 @@ import simd
 
 final class IsosurfaceTests: XCTestCase {
 
-    /// Sum of triangle areas — what a triangulation is FOR, and
-    /// independent of how the surface happens to be cut up.
+    /// Sum of triangle areas — independent of how the surface is cut up.
     private func area(_ triangles: [SIMD3<Double>]) -> Double {
         var total = 0.0
         for base in stride(from: 0, to: triangles.count - 2, by: 3) {
@@ -44,12 +34,8 @@ final class IsosurfaceTests: XCTestCase {
             resolution: resolution)
     }
 
-    /// **4πr².** The headline: a level set of |r| is a sphere, and its
-    /// triangulated area has to converge on the closed form.
-    ///
-    /// A tolerance of 4 % at resolution 32, because a flat-faceted mesh
-    /// INSCRIBED in a sphere always under-reports — this is discretisation
-    /// error, not inaccuracy, and it has a sign.
+    /// 4πr² recovered. Tolerance 4% at resolution 32: an inscribed faceted
+    /// mesh always under-reports — discretisation error, with a sign.
     func testASphereRecoversFourPiRSquared() {
         let radius = 1.0
         let measured = area(sphere(radius: radius, resolution: 32))
@@ -61,9 +47,8 @@ final class IsosurfaceTests: XCTestCase {
                                  + "have MORE area than the sphere.")
     }
 
-    /// Refining the grid must move the answer toward the closed form,
-    /// not merely near it. A constant offset would pass the test above
-    /// at one resolution and is what this catches.
+    /// Refinement must move the answer toward the closed form — catches a
+    /// constant offset the area test alone would tolerate.
     func testRefiningTheGridConvergesOnTheTrueArea() {
         let exact = 4 * Double.pi
         let coarse = abs(area(sphere(radius: 1, resolution: 12)) - exact)
@@ -73,23 +58,8 @@ final class IsosurfaceTests: XCTestCase {
                           + "was refined — that is not convergence.")
     }
 
-    /// Every vertex must sit ON the level set to within the grid's own
-    /// resolution. Area alone would tolerate a mesh of the right size in
-    /// the wrong place.
-    ///
-    /// NOT to machine precision, and the reason is the interesting part.
-    /// Crossing points are found by linear interpolation along a cell
-    /// edge, which is exact only where the field is linear. |r| is not:
-    /// along a chord the interpolated root sits slightly INSIDE the true
-    /// arc, by O(h²). At resolution 16 over a 3.2 m box the cell is
-    /// 0.2 m and the observed error is ~0.005 — second order, as it
-    /// should be. The first draft of this test demanded 1e-9 and failed
-    /// against a perfectly correct implementation.
-    ///
-    /// So: bounded by the discretisation, and — the part that actually
-    /// pins the arithmetic — systematically inside rather than
-    /// scattered, which is the signature of chord-versus-arc and not of
-    /// a wrong root.
+    /// Every vertex on the level set to within O(h²), NOT machine precision:
+    /// chord interpolation lands systematically INSIDE a convex level set.
     func testEveryVertexLiesOnTheLevelSetToWithinTheGridResolution() {
         let radius = 0.8
         let resolution = 16
@@ -111,16 +81,13 @@ final class IsosurfaceTests: XCTestCase {
                                      + "level set lands inside it, never "
                                      + "outside.")
         }
-        // And it really is second order: the error is well under the
-        // cell size, not merely under the bound above.
+        // Second order in practice: error well under the cell size.
         XCTAssertLessThan(worst, cell * 0.1,
                           "Worst vertex error \(worst) against cell \(cell).")
     }
 
-    /// A PLANE, where linear interpolation is exact and there is no
-    /// discretisation error to hide behind: f(r) = r.x at level 0.25
-    /// must come back as a flat sheet at exactly x = 0.25, with area
-    /// equal to the box's cross-section.
+    /// A plane: the field is linear, so interpolation is exact — a flat sheet
+    /// at exactly x = 0.25 with the box's cross-section area.
     func testAPlaneIsRecoveredExactly() {
         let level = 0.25
         let triangles = Isosurface.triangles(
@@ -141,10 +108,8 @@ final class IsosurfaceTests: XCTestCase {
         XCTAssertEqual(area(triangles), 4.0, accuracy: 1e-9)
     }
 
-    /// **Winding.** The header promises triangles wound so the
-    /// right-hand-rule normal points along `outwardDirection`, and the
-    /// modules that draw these rely on it for lighting. A surface with
-    /// half its triangles inside out renders as a mesh full of holes.
+    /// Winding: right-hand-rule normals must point along `outwardDirection` —
+    /// renderers rely on it for lighting.
     func testTrianglesAreWoundToFaceOutward() {
         let triangles = sphere(radius: 1, resolution: 16)
         XCTAssertFalse(triangles.isEmpty)
@@ -163,8 +128,7 @@ final class IsosurfaceTests: XCTestCase {
         XCTAssertGreaterThan(checked, 100, "Too few triangles to be meaningful.")
     }
 
-    /// A level the field never reaches produces nothing, rather than a
-    /// degenerate sheet at the box wall.
+    /// An unreached level produces nothing, not a degenerate sheet at the box wall.
     func testALevelOutsideTheFieldsRangeProducesNoSurface() {
         let triangles = Isosurface.triangles(
             level: 99,

@@ -1,12 +1,6 @@
 //
 //  NBodyTests.swift
-//  PhysicsCoreTests
-//
-//  The gravity engine is pinned to the classical results: circular orbits
-//  stay circular, energy is conserved over long spans (the symplectic
-//  property that justifies Verlet), Kepler's third law emerges from the
-//  integration rather than being assumed, the escape-speed boundary is
-//  exactly where √(2GM/r) says, and merges conserve momentum.
+//  The gravity engine pinned to classical results: stable orbits, energy conservation, Kepler III.
 //
 
 import XCTest
@@ -25,8 +19,7 @@ final class NBodyTests: XCTestCase {
         ]
     }
 
-    /// Earth's real circular-orbit speed is ≈ 29.8 km/s — the preset math
-    /// must reproduce it from G, M☉, and 1 AU alone.
+    /// Earth's circular-orbit speed ≈ 29.8 km/s from G, M☉, and 1 AU alone.
     func testCircularOrbitSpeedMatchesEarth() {
         let speed = NBody.circularOrbitSpeed(
             centralMass: CelestialBody.sun.mass,
@@ -34,8 +27,7 @@ final class NBodyTests: XCTestCase {
         XCTAssertEqual(speed, 29_780, accuracy: 100)
     }
 
-    /// A circular orbit must stay circular: over 2 years of 6-hour steps
-    /// the Sun–Earth distance never drifts more than 0.1%.
+    /// Sun–Earth distance drifts under 0.1% over 2 years of 6-hour steps.
     func testCircularOrbitRadiusIsStable() {
         var bodies = sunEarth()
         let dt = 6 * 3600.0
@@ -47,7 +39,7 @@ final class NBodyTests: XCTestCase {
         }
     }
 
-    /// Symplectic integration: total energy drift stays tiny over 5 years.
+    /// The symplectic property that justifies Verlet: tiny energy drift over 5 years.
     func testEnergyIsConservedOverManyOrbits() {
         var bodies = sunEarth()
         let initial = NBody.totalEnergy(bodies: bodies)
@@ -59,17 +51,14 @@ final class NBodyTests: XCTestCase {
         XCTAssertLessThan(drift, 1e-6, "energy drift over 5 years: \(drift)")
     }
 
-    /// Kepler III from the simulation itself: time one full simulated
-    /// orbit and compare with T = 2π√(a³/GM) ≈ 365.25 d.
+    /// Kepler III emerges: one timed simulated orbit matches T = 2π√(a³/GM) ≈ 365.25 d.
     func testSimulatedPeriodMatchesKeplersThirdLaw() {
         var bodies = sunEarth()
         let dt = 3600.0
         var time = 0.0
         var crossings = 0
         var previousZ = bodies[1].position.z - bodies[0].position.z
-        // Starting on the +x axis, z = 0 flips sign immediately (crossing 1
-        // is an artifact of the start), then at T/2 and at T — so the third
-        // sign change marks one full orbit.
+        // Crossing 1 is a start artifact; the third z sign change marks one full orbit.
         while crossings < 3, time < 500 * day {
             NBody.step(bodies: &bodies, dt: dt)
             time += dt
@@ -84,8 +73,7 @@ final class NBodyTests: XCTestCase {
         XCTAssertEqual(predicted / day, 365.25, accuracy: 1.0)
     }
 
-    /// The escape boundary is exactly √2 × circular speed: just below it
-    /// the total two-body energy is negative (bound), just above positive.
+    /// Escape = √2 × circular speed; energy is negative just below, positive just above.
     func testEscapeSpeedBoundary() {
         let au = CelestialBody.astronomicalUnit
         let escape = NBody.escapeSpeed(centralMass: CelestialBody.sun.mass, distance: au)
@@ -103,8 +91,7 @@ final class NBodyTests: XCTestCase {
         XCTAssertGreaterThan(totalEnergy(speed: escape * 1.01), 0, "above escape → unbound")
     }
 
-    /// Vis-viva round trip: from any point of an elliptical orbit, the
-    /// recovered semi-major axis must match the one it was built from.
+    /// Vis-viva round trip: recovered semi-major axis matches the one built from.
     func testVisVivaRecoversSemiMajorAxis() {
         let au = CelestialBody.astronomicalUnit
         let mu = NBody.gravitationalConstant * CelestialBody.sun.mass
@@ -140,8 +127,7 @@ final class NBodyTests: XCTestCase {
                           "volume-additive, not radius-additive")
     }
 
-    /// The prediction is a faithful preview: propagating the real system
-    /// the same number of steps lands where the predicted path ends.
+    /// The predicted path ends where actually propagating the system lands.
     func testPredictedPathMatchesActualEvolution() {
         let bodies = sunEarth()
         let dt = 6 * 3600.0

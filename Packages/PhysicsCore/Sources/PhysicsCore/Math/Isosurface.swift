@@ -1,29 +1,15 @@
 //
 //  Isosurface.swift
-//  PhysicsCore — Math
-//
-//  Domain-agnostic isosurface extraction: triangulates the set of points
-//  where any scalar field f(r) equals a chosen level, via marching
-//  tetrahedra. Interference surfaces and density contours are both
-//  isosurfaces — modules supply the scalar closure and an
-//  outward-direction closure used to orient triangle winding.
-//
-//  Method: the region is divided into a uniform grid of cubes, each cube
-//  into six tetrahedra sharing a main diagonal. Within a tetrahedron the
-//  field is treated as linear, so the f = level surface cuts it in one of
-//  only a few simple ways (a triangle or a quad), with crossing points
-//  found by linear interpolation along the edges. It's the small-table
-//  cousin of marching cubes: slightly more triangles, far simpler case
-//  analysis, and no topological ambiguities.
+//  PhysicsCore — Math: isosurface extraction f(r) = level via marching
+//  tetrahedra (6 tets/cube, linear edge interpolation, no ambiguities).
 //
 
 import Foundation
 import simd
 
 public enum Isosurface {
-    /// Flat triangle list (every 3 consecutive points form one triangle) for
-    /// the isosurface f = `level` inside the box. Triangles are wound so the
-    /// right-hand-rule normal points along `outwardDirection`.
+    /// Flat triangle list (3 consecutive points per triangle) for f = `level`
+    /// inside the box, wound so the RH-rule normal points along `outwardDirection`.
     public static func triangles(
         level: Double,
         scalar: (SIMD3<Double>) -> Double,
@@ -38,7 +24,6 @@ public enum Isosurface {
         let lower = center - extents / 2
         let spacing = extents / Double(n)
 
-        // Sample f on the (n+1)³ lattice once; cells then just look values up.
         var values = [Double]()
         values.reserveCapacity((n + 1) * (n + 1) * (n + 1))
         for i in 0...n {
@@ -52,8 +37,7 @@ public enum Isosurface {
             values[(i * (n + 1) + j) * (n + 1) + k]
         }
 
-        // Cube corners (unit offsets) and the 6-tetrahedron decomposition,
-        // every tetrahedron sharing the 0→6 main diagonal.
+        // 6-tetrahedron decomposition; every tet MUST share the 0→6 main diagonal.
         let cornerOffsets: [SIMD3<Int>] = [
             [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
             [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1],
@@ -78,7 +62,6 @@ public enum Isosurface {
                         cornerPoints[c] = lower + spacing * SIMD3(Double(gi), Double(gj), Double(gk))
                         if cornerValues[c] > level { anyAbove = true } else { anyBelow = true }
                     }
-                    // Surface can't pass through a cube that's all one side.
                     guard anyAbove && anyBelow else { continue }
 
                     for tet in tetrahedra {

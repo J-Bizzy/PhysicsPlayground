@@ -2,16 +2,8 @@
 //  MagnetismModule.swift
 //  Physics Playground — Magnetism bench
 //
-//  What the magnetic bench contributes to the catalog: its legend and
-//  its notebook readings. Bar magnets whose looping field fills the
-//  room in 3D.
-//
-//  This IS a catalog entry — one of the three behind the Electricity &
-//  Magnetism door. It briefly was not: the merged E&M world made this
-//  the right-hand station of a shared room, and that world was undone
-//  on 2026-07-30 when the geometry refused to close (see DECISIONS.md).
-//  The bench stands alone now: bar magnets and the field they make,
-//  and nothing that belongs to another module.
+//  Catalog entry, legend, and notebook readings. Bar magnets whose
+//  looping field fills the room in 3D.
 //
 
 import SwiftUI
@@ -48,15 +40,9 @@ enum MagnetismModule {
         let model = appModel.magnetismModel
         var rows: [NotebookEntry.Reading] = [
             .init("Magnets", "\(model.magnets.count)"),
-            // One spelling of a magnetic field, chosen by magnitude, instead
-            // of this module hand-writing mT while Electric Fields hand-wrote
-            // µT and kT in three other places.
             .init("|B| at centre",
                   PhysicsFormat.metric(model.centerFieldMilliTesla / 1000, "T",
                                        decimals: 2)),
-            // "free"/"frozen" was this module's own spelling of a switched
-            // state; three rooms had three. `PhysicsFormat.state` is the
-            // one the notebook now reads everywhere.
             .init("Magnets move", PhysicsFormat.state(model.dynamicsOn)),
         ]
         if let selected = model.selectedMagnet {
@@ -64,10 +50,7 @@ enum MagnetismModule {
                               PhysicsFormat.fixed(selected.strength, decimals: 3), "A·m²"))
             let others = model.magnets.filter { $0.id != selected.id }
             if !others.isEmpty {
-                // Point dipole, matching the dynamics — a readout that
-                // disagrees with the motion it describes is worse than
-                // an inaccurate one. Both move together when the bench
-                // is retuned; see `MagnetismModel.step`.
+                // Point dipole, matching the dynamics; see `MagnetismModel.step`.
                 let force = MagneticField.netForce(on: selected, from: others)
                 rows.append(.init("Force on it",
                                   PhysicsFormat.scientific(simd_length(force)), "N"))
@@ -93,14 +76,9 @@ enum MagnetismModule {
                    text: "The hand compass points along the local field — and it is a SPHERE, with its needle free to swing in any direction. A flat dial can only show the part of B lying in the dial; between two poles the field usually points out of it."),
         LegendItem(swatch: .stroke(DesignTokens.Palette.selectionHalo),
                    text: "Halo marks the selected magnet"),
-        // A DISCLOSED FUDGE, added 2026-08-03, and the module's largest.
-        // The FIELDS here are exact — `MagneticField` gives the true
-        // dipole B, force and torque, and `barVector` even swaps in a
-        // finite two-pole bar where a point dipole would be wrong. The
-        // MOTION is not: a magnet's speed is proportional to the force on
-        // it and its turn rate to the torque, both capped, which is a
-        // quasi-static mobility law rather than Newton's. The bars have
-        // no mass and no moment of inertia here.
+        // A DISCLOSED FUDGE: the fields, force and torque are exact, but
+        // the MOTION is a capped quasi-static mobility law, not Newton's —
+        // the bars have no mass or moment of inertia here.
         LegendItem(
             swatch: .symbol("arrow.triangle.2.circlepath",
                             Color(uiColor: MagnetismRenderer.lineColor)),

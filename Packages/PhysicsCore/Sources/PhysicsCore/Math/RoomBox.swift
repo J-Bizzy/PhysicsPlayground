@@ -1,17 +1,7 @@
 //
 //  RoomBox.swift
-//  PhysicsCore — Math
-//
-//  An axis-aligned box standing in for the user's room, and the
-//  clipping the renderers need so a field line, a ray, or a predicted
-//  trajectory STOPS at the walls instead of driving out through them
-//  and off to infinity.
-//
-//  This is pure geometry — no RealityKit, no ARKit. The app fills the
-//  box in from detected planes (or a sane default when nothing has been
-//  scanned), and every module clips its polylines through here, so
-//  "virtual light stops at the real wall" is one tested function rather
-//  than eleven ad-hoc guesses.
+//  PhysicsCore — Math: axis-aligned box standing in for the user's room;
+//  clips rays/segments/polylines so traced curves stop at the walls. Pure geometry.
 //
 
 import Foundation
@@ -27,8 +17,7 @@ public struct RoomBox: Equatable, Sendable {
         self.halfExtents = SIMD3(abs(halfExtents.x), abs(halfExtents.y), abs(halfExtents.z))
     }
 
-    /// The fallback when nothing has been scanned: a generous room the
-    /// user is standing in the middle of, floor at y = 0.
+    /// Fallback when nothing has been scanned; floor at y = 0.
     public static let unscanned = RoomBox(
         center: SIMD3(0, 1.35, -0.4),
         halfExtents: SIMD3(1.9, 1.35, 1.9))
@@ -44,15 +33,12 @@ public struct RoomBox: Equatable, Sendable {
             && point.z >= low.z && point.z <= high.z
     }
 
-    /// The same box expressed in a frame shifted by `delta` — for a
-    /// caller whose simulation runs in a translated copy of world space
-    /// (a lab the user has relocated with the anchor).
+    /// The same box expressed in a frame shifted by `delta`.
     public func translated(by delta: SIMD3<Double>) -> RoomBox {
         RoomBox(center: center + delta, halfExtents: halfExtents)
     }
 
-    /// Shrinks (or grows, with a negative inset) the box on every side.
-    /// Never collapses past a millimetre so clipping stays well-defined.
+    /// Insets every side; never collapses below 1 mm so clipping stays defined.
     public func inset(by amount: Double) -> RoomBox {
         RoomBox(center: center,
                 halfExtents: simd_max(halfExtents - SIMD3(repeating: amount),
@@ -61,9 +47,7 @@ public struct RoomBox: Equatable, Sendable {
 
     // MARK: Ray / segment clipping
 
-    /// The slab method: the parametric interval of `origin + t·direction`
-    /// (t ≥ 0 unbounded) that lies inside the box, or nil if the ray
-    /// misses it entirely.
+    /// Slab method: t-interval of `origin + t·direction` inside the box, or nil on a miss.
     public func rayInterval(origin: SIMD3<Double>,
                             direction: SIMD3<Double>) -> (enter: Double, exit: Double)? {
         var enter = -Double.infinity
@@ -86,8 +70,7 @@ public struct RoomBox: Equatable, Sendable {
         return (enter, exit)
     }
 
-    /// Where a segment leaves the box, if it does. `a` is assumed inside
-    /// (or on) the box; returns the exit point on the boundary.
+    /// Exit point of a→b on the boundary (`a` assumed inside/on); nil if none.
     public func exitPoint(from a: SIMD3<Double>, towards b: SIMD3<Double>) -> SIMD3<Double>? {
         let direction = b - a
         let length = simd_length(direction)
@@ -98,15 +81,7 @@ public struct RoomBox: Equatable, Sendable {
         return a + (direction / length) * t
     }
 
-    /// A point at `reach` along a ray, pulled back to stay inside the
-    /// box — the "look at it to measure it" placement.
-    ///
-    /// Where a user is looking is a ray, but a measurement needs a
-    /// POINT, and the honest choice of point is "as far along the ray as
-    /// they asked for, or the far wall of the experiment, whichever
-    /// comes first". If the ray misses the region entirely there is
-    /// nothing sensible to measure, so this returns nil rather than a
-    /// number about empty air.
+    /// A point at `reach` along a ray, clamped to the box's [enter, exit]; nil on a miss.
     public func point(onRay origin: SIMD3<Double>,
                       direction: SIMD3<Double>,
                       reach: Double) -> SIMD3<Double>? {
@@ -114,7 +89,6 @@ public struct RoomBox: Equatable, Sendable {
         guard length > 1e-12 else { return nil }
         let unit = direction / length
         guard let interval = rayInterval(origin: origin, direction: unit) else { return nil }
-        // Only what is in front of the viewer counts.
         let enter = max(interval.enter, 0)
         guard interval.exit > enter else { return nil }
         let t = min(max(reach, enter), interval.exit)
@@ -123,10 +97,8 @@ public struct RoomBox: Equatable, Sendable {
 
     // MARK: Polyline clipping
 
-    /// Clips a polyline to the box, returning the pieces that lie inside.
-    /// A line that wanders out and back in comes back as two runs, so a
-    /// field line threading past a doorway doesn't get silently joined
-    /// across the gap. Boundary crossings land exactly on the wall.
+    /// Clips a polyline to the box. A line that leaves and re-enters returns
+    /// as SEPARATE runs, never joined; crossings land exactly on the wall.
     public func clip(polyline: [SIMD3<Double>]) -> [[SIMD3<Double>]] {
         guard polyline.count >= 2 else {
             return polyline.count == 1 && contains(polyline[0]) ? [polyline] : []
@@ -149,15 +121,13 @@ public struct RoomBox: Equatable, Sendable {
                 if current.count >= 2 { runs.append(current) }
                 current = []
             } else if !aIn && bIn {
-                // Enter: the crossing found looking back from b.
                 if let crossing = exitPoint(from: b, towards: a) {
                     current = [crossing, b]
                 } else {
                     current = [b]
                 }
             } else {
-                // Both outside: the segment may still cut a corner of the
-                // box. Keep that piece rather than dropping the whole span.
+                // Both ends outside: the segment may still cut a corner — keep that piece.
                 let direction = b - a
                 let length = simd_length(direction)
                 if length > 1e-12,
@@ -177,18 +147,15 @@ public struct RoomBox: Equatable, Sendable {
         return runs
     }
 
-    /// Clips every polyline in a set, flattening the runs. The common
-    /// call for a renderer holding a bundle of field lines or rays.
+    /// Clips every polyline in a set, flattening the runs.
     public func clip(polylines: [[SIMD3<Double>]]) -> [[SIMD3<Double>]] {
         polylines.flatMap { clip(polyline: $0) }
     }
 
     // MARK: Building one from scanned planes
 
-    /// Estimates the room from detected plane centres: the tightest box
-    /// containing them all, floored at the lowest horizontal plane and
-    /// never smaller than `minimumHalfExtents` (a scan that only caught
-    /// one wall must not squash the room to a sliver).
+    /// Tightest box containing the detected plane centres, never smaller
+    /// than `minimumHalfExtents` (a one-wall scan must not squash the room).
     public static func enclosing(points: [SIMD3<Double>],
                                  minimumHalfExtents: SIMD3<Double> = SIMD3(1.2, 1.0, 1.2),
                                  fallback: RoomBox = .unscanned) -> RoomBox {

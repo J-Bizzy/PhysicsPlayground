@@ -1,27 +1,8 @@
 //
 //  OrbitalElementsTests.swift
-//  PhysicsCoreTests
-//
-//  The orbit-as-object math, pinned. Three groups, and the third is the
-//  one the interaction lives or dies on:
-//
-//  1. ROUND TRIPS. State → elements → state and back, over a table that
-//     includes every degenerate configuration, because a convention that
-//     is merely deterministic is enough to make the round trip exact even
-//     where the physics is indifferent — and if it isn't exact, some
-//     branch is picking a different answer on the way back.
-//  2. TIES TO SHIPPED CODE. `onCircularOrbit` and `onEllipticalOrbit`
-//     have built every body in Gravity Lab for months. The new math has
-//     to agree with them, which is what catches a sign error in the +y-up
-//     frame — the failure that would otherwise look perfectly correct in
-//     a still frame and build the entire solar system retrograde.
-//  3. THE DRAG. In-plane drags must leave the orbital plane BIT-EXACT
-//     (`==`, not `≈` — a drag runs at ninety frames a second for as long
-//     as a hand is moving, so a per-frame ulp of error is a random walk
-//     that visibly tilts the orbit with nothing in the gesture to explain
-//     it), the near/far swap must pass through the circular crossing
-//     without a jump, and the transport rule must have the holonomy that
-//     justifies there being only two beads and not three.
+//  Three groups: round trips over every degenerate configuration; agreement with the
+//  builders that made every Gravity Lab body (catches a retrograde +y-up sign error);
+//  and the drag, whose in-plane cases must be BIT-EXACT (90 fps ulp drift visibly tilts).
 //
 
 import XCTest
@@ -33,10 +14,7 @@ final class OrbitalElementsTests: XCTestCase {
     private let au = CelestialBody.astronomicalUnit
     private let sunMu = NBody.gravitationalConstant * 1.989e30
 
-    /// The orbits every test sweeps. Each one is here because it breaks
-    /// something naive: the circular ones have no periapsis, the
-    /// equatorial ones have no node, the retrograde one inverts the
-    /// measuring axis, and the last two are not ellipses at all.
+    /// Each entry breaks something naive: no periapsis, no node, inverted axis, non-ellipses.
     private var table: [(name: String, elements: OrbitalElements)] {
         func make(_ a: Double, _ e: Double, _ i: Double,
                   _ raan: Double, _ argP: Double, _ nu: Double) -> OrbitalElements {
@@ -91,10 +69,7 @@ final class OrbitalElementsTests: XCTestCase {
                            accuracy: 1e-9, "\(entry.name): i")
             assertAngle(back.trueAnomaly, original.trueAnomaly,
                         "\(entry.name): ν")
-            // Ω and ω are only individually meaningful when the orbit has
-            // a node and a periapsis to measure them from; where it does
-            // not, their SUM is what survives, and the round trip has to
-            // preserve that much.
+            // Ω and ω are only individually meaningful when a node and periapsis exist.
             if back.degeneracy == .none {
                 assertAngle(back.longitudeOfAscendingNode,
                             original.longitudeOfAscendingNode, "\(entry.name): Ω")
@@ -126,9 +101,7 @@ final class OrbitalElementsTests: XCTestCase {
 
     // MARK: 2 — Ties to the code that already builds this app's bodies
 
-    /// The sign test. `onCircularOrbit` is what every planet in Gravity
-    /// Lab is built with; if the new math reads its output as retrograde,
-    /// everything downstream is quietly mirrored.
+    /// The sign test: if `onCircularOrbit` output reads as retrograde, everything downstream mirrors.
     func testPrograderCircularOrbitReadsAsInclinationZero() {
         let sun = CelestialBody.sun
         let earth = CelestialBody.earth.onCircularOrbit(of: sun, distance: au)
@@ -163,7 +136,6 @@ final class OrbitalElementsTests: XCTestCase {
         XCTAssertEqual(elements.eccentricity, e, accuracy: 1e-9)
         XCTAssertEqual(elements.semiMajorAxis! / a, 1, accuracy: 1e-9)
         XCTAssertEqual(elements.inclination, i, accuracy: 1e-9)
-        // The builder places the body AT perihelion.
         assertAngle(elements.trueAnomaly, 0, "the comet is not at perihelion")
     }
 
@@ -186,9 +158,7 @@ final class OrbitalElementsTests: XCTestCase {
             1, accuracy: 1e-12, "the elements disagree with Kepler III")
     }
 
-    /// The claim the whole orbit ring makes: this IS the path, when
-    /// nothing else pulls. Integrate a real two-body system for a full
-    /// period and the shape must not have moved.
+    /// The orbit ring's claim: this IS the path — one integrated period must not move the shape.
     func testTheOsculatingOrbitIsThePathInATwoBodySystem() {
         let a = 1.6 * au, e = 0.35
         let mu = NBody.standardGravitationalParameter(
@@ -204,7 +174,7 @@ final class OrbitalElementsTests: XCTestCase {
             CelestialBody(name: "P", mass: CelestialBody.earth.mass,
                           radius: 6.4e6, position: position, velocity: velocity),
         ]
-        // Keep the barycentre still, so "relative to the Sun" stays honest.
+        // Keep the barycentre still so "relative to the Sun" stays honest.
         let total = bodies[0].mass + bodies[1].mass
         bodies[0].velocity = -bodies[1].mass * velocity / total
         bodies[1].velocity = bodies[0].velocity + velocity
@@ -273,7 +243,6 @@ final class OrbitalElementsTests: XCTestCase {
     }
 
     func testHyperbolicOrbitHasNegativeApoapsisAndNoFarBead() {
-        // Escape speed × 1.3 at 1 AU, thrown sideways.
         let speed = NBody.escapeSpeed(centralMass: 1.989e30, distance: au) * 1.3
         let frame = ApsisFrame(position: SIMD3(au, 0, 0),
                                velocity: SIMD3(0, 0, -speed), mu: sunMu)!
@@ -285,15 +254,13 @@ final class OrbitalElementsTests: XCTestCase {
         XCTAssertEqual(elements.kind, .hyperbola)
         XCTAssertLessThan(elements.semiMajorAxis!, 0)
         XCTAssertNil(elements.period, "an unbound orbit has no period")
-        // It is ALSO equatorial, and the two facts are reported
-        // separately on purpose: this one happens to lie in the
-        // reference plane, which says nothing about whether it comes
-        // back. An enum that conflated them could only report one.
+        // Hyperbolic AND equatorial are reported separately on purpose —
+        // an enum that conflated them could only report one.
         XCTAssertEqual(elements.degeneracy, .equatorial)
     }
 
     func testRadialFallHasNoOrbitAtAll() {
-        // Straight down: r × v = 0, so there is no plane to describe.
+        // r × v = 0: no plane to describe.
         XCTAssertNil(OrbitalElements.from(position: SIMD3(au, 0, 0),
                                           velocity: SIMD3(-3e4, 0, 0), mu: sunMu))
         XCTAssertNil(ApsisFrame(position: SIMD3(au, 0, 0),
@@ -310,23 +277,17 @@ final class OrbitalElementsTests: XCTestCase {
             argumentOfPeriapsis: 1.2, trueAnomaly: 0.5, mu: sunMu).frame
     }
 
-    /// A straight pull along the apse line changes one distance and
-    /// NOTHING else. Bit-exact, because the transport projection is the
-    /// identity when the apse line does not move — an approximate answer
-    /// here would let the plane wander during ordinary use.
+    /// A radial pull changes one distance and NOTHING else — bit-exact (`==`),
+    /// or an in-plane drag held at 90 fps would creep the plane.
     func testRadialDragLeavesThePlaneBitExact() {
         let frame = earthFrame()
         let pulled = frame.dragged(
             handOffset: frame.periapsisDirection * (frame.periapsisRadius * 0.6),
             otherRadius: frame.apoapsisRadius,
             bodyDirection: simd_normalize(frame.state().position))
-        // Bit-exact, and that is the point: the transport short-circuits
-        // when the plane is already perpendicular, so an in-plane drag
-        // held for a minute at ninety frames a second cannot creep.
         XCTAssertEqual(pulled.orbitNormal, frame.orbitNormal,
                        "a radial pull moved the orbital plane")
-        // The apse line is re-derived from the hand through a divide and
-        // a normalise, so it lands within an ulp rather than identical.
+        // The apse line is re-derived through a divide and normalise, so within an ulp.
         XCTAssertEqual(
             simd_length(pulled.periapsisDirection - frame.periapsisDirection), 0,
             accuracy: 1e-15, "a radial pull moved the apse line")
@@ -335,11 +296,9 @@ final class OrbitalElementsTests: XCTestCase {
         XCTAssertEqual(pulled.apoapsisRadius, frame.apoapsisRadius)
     }
 
-    /// Swinging a bead sideways WITHIN the plane rotates the whole
-    /// ellipse and still must not tilt it.
+    /// An in-plane swing rotates the whole ellipse and still must not tilt it.
     func testInPlaneSwingLeavesThePlaneBitExact() {
         let frame = earthFrame()
-        // A direction in the orbital plane, 90° from periapsis.
         let target = frame.alongTrack * frame.periapsisRadius
         let pulled = frame.dragged(
             handOffset: target, otherRadius: frame.apoapsisRadius,
@@ -350,8 +309,7 @@ final class OrbitalElementsTests: XCTestCase {
                        accuracy: 1e-12)
     }
 
-    /// Lifting a bead out of the plane tilts the orbit by exactly that
-    /// much, and the result is still a plane (ĥ ⊥ p̂ to machine epsilon).
+    /// An out-of-plane lift tilts by exactly that much, and ĥ ⊥ p̂ holds to machine epsilon.
     func testOutOfPlaneDragTiltsTheOrbit() {
         let frame = earthFrame()
         let tilt = 0.35
@@ -370,10 +328,7 @@ final class OrbitalElementsTests: XCTestCase {
                        "the plane did not follow the apse line")
     }
 
-    /// The swap. Drag the near bead continuously out past the far one:
-    /// the labels exchange, and the STATE must not jump — because the
-    /// exchange happens exactly where e = 0 and the two ends of the orbit
-    /// are physically the same thing.
+    /// The near/far swap happens exactly at e = 0, so the STATE must not jump through it.
     func testDraggingNearBeadPastFarBeadDoesNotJump() {
         var frame = earthFrame(eccentricity: 0.4)
         let far = frame.apoapsisRadius
@@ -381,10 +336,8 @@ final class OrbitalElementsTests: XCTestCase {
         var previous = frame.state()
         var crossed = false
 
-        // Start the sweep exactly where the near bead already is, so the
-        // first step is a no-op. Starting anywhere else would make step
-        // zero a real change to the orbit and the test would be
-        // measuring that instead of the crossing.
+        // Start where the near bead already is, so step zero is a no-op
+        // and the test measures the crossing, not the setup.
         let start = frame.periapsisRadius / far
         for step in 0...400 {
             let reach = far * (start + (1.5 - start) * Double(step) / 400)
@@ -402,29 +355,22 @@ final class OrbitalElementsTests: XCTestCase {
             previous = now
         }
         XCTAssertTrue(crossed)
-        // Past the crossing the held bead IS the far one, so the apse
-        // line has flipped to point the other way.
+        // Past the crossing the held bead IS the far one: apse line flipped.
         XCTAssertLessThan(simd_dot(frame.periapsisDirection, direction), 0,
                           "the apse line never flipped")
     }
 
-    /// The holonomy that licenses there being only two beads.
-    ///
-    /// Transport is parallel transport, so walking the apse line around a
-    /// closed loop on the sphere brings the plane back rotated by the
-    /// enclosed solid angle. An octant of the sphere encloses exactly
-    /// π/2 steradians, so the plane must come back turned by π/2 — which
-    /// means the roll no bead can set directly IS reachable, by circling.
+    /// The holonomy that licenses only two beads: parallel transport around an octant
+    /// (π/2 steradians) must return the plane rotated by π/2 — the roll is reachable by circling.
     func testTransportHasHolonomyEqualToTheEnclosedSolidAngle() {
         let radius = au
-        // Start with the apse line on +x and the plane's normal on +y.
         var frame = ApsisFrame(
             periapsisDirection: SIMD3(1, 0, 0), orbitNormal: SIMD3(0, 1, 0),
             periapsisRadius: radius, apoapsisRadius: radius * 2,
             trueAnomaly: 0, mu: sunMu)
         let startNormal = frame.orbitNormal
 
-        // Walk p̂ around the spherical triangle (+x → +z → +y → +x).
+        // Walk p̂ around the spherical triangle +x → +z → +y → +x.
         let corners: [SIMD3<Double>] = [
             SIMD3(1, 0, 0), SIMD3(0, 0, 1), SIMD3(0, 1, 0), SIMD3(1, 0, 0),
         ]
@@ -446,8 +392,7 @@ final class OrbitalElementsTests: XCTestCase {
                        "transport has no holonomy — the roll would be unreachable")
     }
 
-    /// Degenerate hands are no-ops. A hand at the focus has no direction,
-    /// and a hand on the orbit's pole describes every plane equally.
+    /// Degenerate hands (at the focus, on the pole) are no-ops.
     func testDegenerateDragsLeaveTheOrbitAlone() {
         let frame = earthFrame()
         let body = simd_normalize(frame.state().position)
@@ -462,8 +407,7 @@ final class OrbitalElementsTests: XCTestCase {
                        "a hand on the pole snapped the plane instead of holding it")
     }
 
-    /// Dragging an unbound orbit's one bead keeps its shape — there is no
-    /// second bead to pin anything, so eccentricity is what holds.
+    /// An unbound orbit has one bead, so eccentricity is what holds under drag.
     func testDraggingAnUnboundOrbitPreservesItsShape() {
         let speed = NBody.escapeSpeed(centralMass: 1.989e30, distance: au) * 1.3
         let frame = ApsisFrame(position: SIMD3(au, 0, 0),
@@ -505,15 +449,11 @@ final class OrbitalElementsTests: XCTestCase {
                        accuracy: 1e-9, "the ring does not start at periapsis")
         XCTAssertEqual(simd_distance(points.first!, points.last!) / au, 0,
                        accuracy: 1e-9, "the ring does not close")
-        // The far side really is the far side.
         let mid = points[points.count / 2]
         XCTAssertEqual(simd_length(mid) / frame.apoapsisRadius, 1, accuracy: 1e-6)
     }
 
-    /// Eccentric-anomaly sampling exists to space points evenly along the
-    /// arc. On a very eccentric orbit, true-anomaly sampling would crowd
-    /// the slow far end and facet the fast nose; this pins that it does
-    /// not.
+    /// Eccentric-anomaly sampling spaces points evenly — true-anomaly would facet the nose.
     func testSamplingIsEvenlySpacedOnAnEccentricOrbit() {
         let frame = earthFrame(eccentricity: 0.9)
         let points = frame.sampled(count: 256)

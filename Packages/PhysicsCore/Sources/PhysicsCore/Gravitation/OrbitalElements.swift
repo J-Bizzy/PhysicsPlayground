@@ -1,46 +1,14 @@
+//  OrbitalElements.swift — the conic a body is on now, as readout and as handle.
 //
-//  OrbitalElements.swift
-//  PhysicsCore — Gravitation
+//  Two types on purpose: `OrbitalElements` is the READOUT (textbook a, e, i, Ω, ω, ν —
+//  singular for circular/equatorial orbits, hence `degeneracy`); `ApsisFrame` is the
+//  HANDLE (p̂, ĥ, r_p, r_a, ν — vectors and distances only, nothing singular). Closed
+//  form both ways; pure geometry, NO Kepler's equation anywhere.
 //
-//  The conic an orbiting body is on right now, both as the classical six
-//  elements and as a shape you can take hold of.
-//
-//  WHY TWO TYPES AND NOT ONE. They answer different questions and they
-//  fail in different places, so conflating them would make one of them
-//  bad at its job:
-//
-//  · `OrbitalElements` is the READOUT — a, e, i, Ω, ω, ν in the textbook
-//    conventions, so a number here can be checked against an almanac.
-//    Those conventions are also singular: ω is undefined for a circular
-//    orbit and Ω is undefined for an equatorial one, and a UI that reads
-//    them has to be told so rather than shown a NaN. Hence `degeneracy`.
-//
-//  · `ApsisFrame` is the HANDLE — (p̂, ĥ, r_p, r_a, ν). Every member is a
-//    vector or a distance, nothing is an angle measured from a reference
-//    direction that might not exist, and so nothing in it is singular.
-//    This is the type a hand manipulates.
-//
-//  Both convert to and from state vectors in closed form, and to and from
-//  each other. NO KEPLER'S EQUATION ANYWHERE IN THIS FILE, and that is
-//  worth stating: solving Kepler's equation answers "where is the body at
-//  time t", which is iterative and which nothing here needs. Every
-//  question asked of this file is geometry — what shape is this orbit,
-//  and what state vector produces that shape — and geometry is exact.
-//
-//  THE FRAME CONVENTION, AND IT IS THE FIRST THING THAT GOES WRONG.
-//  Every textbook writes these formulas with +z as the reference normal.
-//  This project is +Y UP WITH ORBITS IN THE XZ PLANE (see CelestialBody),
-//  so ŷ substitutes for ẑ throughout. The consequence to check against:
-//  `CelestialBody.onCircularOrbit` puts a body at +x moving along −z, and
-//  x̂ × (−ẑ) = +ŷ, so PROGRADE MEANS h ALONG +ŷ AND i = 0. Get that
-//  backwards and every orbit in the app is built retrograde while looking
-//  perfectly correct in a still frame.
-//
-//  In-plane angles are measured with a signed, quadrant-safe form —
-//  `∠(a, b; n̂) = atan2((a × b)·n̂, a·b)` — rather than `acos` plus a sign
-//  test. It is one expression, it never needs clamping, and it cannot
-//  lose a quadrant.
-//
+//  FRAME: +Y up, orbits in xz (see CelestialBody); ŷ substitutes for the textbook ẑ.
+//  PROGRADE MEANS h ALONG +ŷ AND i = 0 — get that backwards and every orbit builds
+//  retrograde while looking correct in a still frame. In-plane angles use the signed
+//  quadrant-safe form ∠(a, b; n̂) = atan2((a × b)·n̂, a·b) — no clamping, no lost quadrant.
 
 import Foundation
 import simd
@@ -55,23 +23,12 @@ public enum Apsis: String, Sendable, CaseIterable {
 
 // MARK: - Where the classical elements stop being defined
 
-/// Which of the classical ANGLES this orbit leaves undetermined.
-///
-/// These are not error cases. A circular orbit is a perfectly good orbit;
-/// it simply has no periapsis, so ω is a choice rather than a measurement.
-/// The conventions below are deterministic, which is what lets the round
-/// trip be exact even where the physics is indifferent.
-///
-/// Deliberately says nothing about the orbit's SHAPE — see `ConicKind`.
-/// The first draft of this enum carried `.parabolic` and `.hyperbolic`
-/// alongside `.circular` and `.equatorial`, and an equatorial hyperbola
-/// then had to report one fact and hide the other. They are independent
-/// questions: "which angles can I trust" and "does this orbit come back".
+/// Which classical ANGLES this orbit leaves undetermined — conventions, not errors;
+/// deterministic, so the round trip stays exact. Shape is `ConicKind`, independently.
 public enum OrbitDegeneracy: String, Sendable, Equatable, CaseIterable {
     /// Everything is determined.
     case none
-    /// e ≈ 0: no periapsis, so ω is undefined. ν becomes the argument of
-    /// latitude (angle from the ascending node).
+    /// e ≈ 0: no periapsis; ω undefined, ν becomes the argument of latitude (from the node).
     case circular
     /// i ≈ 0 or π: no node line, so Ω is undefined. ω is measured from x̂.
     case equatorial
@@ -79,8 +36,7 @@ public enum OrbitDegeneracy: String, Sendable, Equatable, CaseIterable {
     case circularEquatorial
 }
 
-/// What shape the conic is — the question `degeneracy` deliberately does
-/// not answer.
+/// What shape the conic is — the question `degeneracy` deliberately does not answer.
 public enum ConicKind: String, Sendable, Equatable, CaseIterable {
     /// e < 1. Closed: it has a far end, and a period.
     case ellipse
@@ -95,21 +51,16 @@ public enum ConicKind: String, Sendable, Equatable, CaseIterable {
 public struct OrbitalElements: Sendable, Equatable {
     /// a, metres. `nil` at exactly parabolic, where it is infinite.
     public var semiMajorAxis: Double?
-    /// p = h²/μ, metres. ALWAYS finite and always defined — prefer it to
-    /// `a` anywhere a formula allows the choice, because it is the one
-    /// size parameter no conic degenerates.
+    /// p = h²/μ, metres. ALWAYS finite — prefer it to `a` where a formula allows: the one size parameter no conic degenerates.
     public var semiLatusRectum: Double
     public var eccentricity: Double
-    /// i, radians, 0…π. Measured from +ŷ, so i = 0 is prograde in the xz
-    /// plane and i = π is retrograde in it.
+    /// i, radians, 0…π from +ŷ: i = 0 prograde in xz, i = π retrograde.
     public var inclination: Double
     /// Ω, radians. Zero when equatorial.
     public var longitudeOfAscendingNode: Double
-    /// ω, radians. Measured from the ascending node, or from x̂ when
-    /// equatorial.
+    /// ω, radians. From the ascending node, or from x̂ when equatorial.
     public var argumentOfPeriapsis: Double
-    /// ν, radians. Measured from periapsis, or from the node / x̂ when the
-    /// orbit is circular.
+    /// ν, radians. From periapsis, or from the node / x̂ when circular.
     public var trueAnomaly: Double
     /// Standard gravitational parameter, m³/s².
     public var mu: Double
@@ -143,17 +94,9 @@ public struct OrbitalElements: Sendable, Equatable {
     /// r_p = p/(1+e). Always positive, always finite.
     public var periapsisRadius: Double { semiLatusRectum / (1 + eccentricity) }
 
-    /// r_a = p/(1−e): positive on an ellipse, +∞ on a parabola, and
-    /// NEGATIVE on a hyperbola.
-    ///
-    /// The negative branch is not a bug and it is load-bearing. With
-    /// `a < 0` for a hyperbola, `r_a = a(1+e) < 0`, and then
-    ///
-    ///     e = (r_a − r_p)/(r_a + r_p)   and   p = 2·r_p·r_a/(r_p + r_a)
-    ///
-    /// hold uniformly across ellipse, parabola and hyperbola with no
-    /// branching at all. One parameterisation, three conics. Anything
-    /// that wants to DRAW a far end should ask `hasApoapsis`.
+    /// r_a = p/(1−e): +∞ on a parabola, NEGATIVE on a hyperbola — load-bearing, so that
+    /// e = (r_a−r_p)/(r_a+r_p) and p = 2·r_p·r_a/(r_p+r_a) hold branch-free for all three
+    /// conics. Anything that wants to DRAW a far end should ask `hasApoapsis`.
     public var apoapsisRadius: Double {
         let denominator = 1 - eccentricity
         guard abs(denominator) > 1e-12 else { return .infinity }
@@ -171,11 +114,8 @@ public struct OrbitalElements: Sendable, Equatable {
 
     // MARK: State → elements
 
-    /// The osculating elements of a body at `position` moving at
-    /// `velocity`, both RELATIVE TO THE FOCUS.
-    ///
-    /// Returns nil only for a radial trajectory (r × v = 0), where no
-    /// orbital plane exists and there is genuinely nothing to report.
+    /// Osculating elements from state RELATIVE TO THE FOCUS. Nil only for a radial
+    /// trajectory (r × v = 0), where no orbital plane exists.
     public static func from(position r: SIMD3<Double>,
                             velocity v: SIMD3<Double>,
                             mu: Double) -> OrbitalElements? {
@@ -199,16 +139,14 @@ public struct OrbitalElements: Sendable, Equatable {
 
         let inclination = acos(min(max(hHat.y, -1), 1))
 
-        // The node line, n = ŷ × ĥ, points at the ascending node. It
-        // vanishes exactly when the orbit lies in the reference plane.
+        // Node line n = ŷ × ĥ; vanishes exactly when the orbit is equatorial.
         let node = simd_cross(Self.referenceNormal, hHat)
         let nodeMagnitude = simd_length(node)
         let isEquatorial = nodeMagnitude < Self.degeneracyTolerance
         let isCircular = e < Self.degeneracyTolerance
 
         let nodeHat = isEquatorial ? Self.referenceDirection : node / nodeMagnitude
-        // With no periapsis to point at, the node (or x̂) stands in — a
-        // choice, made the same way every time so the round trip closes.
+        // No periapsis: the node (or x̂) stands in — same choice every time, so the round trip closes.
         let periapsisHat = isCircular ? nodeHat : eccentricityVector / e
 
         let ascendingNode = isEquatorial
@@ -243,8 +181,7 @@ public struct OrbitalElements: Sendable, Equatable {
         frame.state()
     }
 
-    /// The same orbit as a handle. This is the conversion the drag path
-    /// uses, and it is exact both ways.
+    /// The same orbit as a handle — the drag path's conversion, exact both ways.
     public var frame: ApsisFrame {
         let sinI = sin(inclination), cosI = cos(inclination)
         // ĥ from (i, Ω), inverting `node = ŷ × ĥ` and `ĥ·ŷ = cos i`.
@@ -256,8 +193,7 @@ public struct OrbitalElements: Sendable, Equatable {
             ? Self.referenceDirection
             : SIMD3(cos(longitudeOfAscendingNode), 0,
                     -sin(longitudeOfAscendingNode))
-        // p̂ is the node turned through ω about ĥ (Rodrigues, with the
-        // n̂·ĥ = 0 term dropped because it is zero by construction).
+        // p̂ = node turned through ω about ĥ (Rodrigues; n̂·ĥ = 0 term is zero by construction).
         let periapsisHat = nodeHat * cos(argumentOfPeriapsis)
             + simd_cross(hHat, nodeHat) * sin(argumentOfPeriapsis)
         return ApsisFrame(
@@ -275,19 +211,13 @@ public struct OrbitalElements: Sendable, Equatable {
     public static let referenceNormal = SIMD3<Double>(0, 1, 0)
     public static let referenceDirection = SIMD3<Double>(1, 0, 0)
 
-    /// How close to zero counts as "this element is not determined". At
-    /// 1e-10 an orbit has to be circular or equatorial to about a
-    /// nanoradian before its conventions kick in, which no orbit reaches
-    /// by accident and every deliberately-built one reaches exactly.
+    /// "Not determined" threshold: ~a nanoradian — no orbit reaches it by accident, every deliberately-built one exactly.
     static let degeneracyTolerance = 1e-10
     /// e within this of 1 is treated as parabolic, where a is infinite.
     static let parabolicTolerance = 1e-8
 
-    /// Signed angle from `a` to `b` about `axis`, in (−π, π].
-    ///
-    /// One `atan2` rather than an `acos` plus a quadrant test: it needs
-    /// no clamping against floating-point overshoot, and it cannot pick
-    /// the wrong half of the circle.
+    /// Signed angle from `a` to `b` about `axis`, in (−π, π]. One atan2, not acos + sign
+    /// test: no clamping, cannot pick the wrong half of the circle.
     static func signedAngle(from a: SIMD3<Double>, to b: SIMD3<Double>,
                             about axis: SIMD3<Double>) -> Double {
         atan2(simd_dot(simd_cross(a, b), axis), simd_dot(a, b))
@@ -296,25 +226,16 @@ public struct OrbitalElements: Sendable, Equatable {
 
 // MARK: - The handle
 
-/// An orbit as two directions and two distances — the form a hand takes
-/// hold of.
-///
-/// Nothing here is singular. `p̂` always points somewhere (at the body
-/// itself, if the orbit is circular and has no periapsis of its own), `ĥ`
-/// always names the plane, and the two radii are just lengths. That is
-/// the whole reason this type exists next to `OrbitalElements`: a control
-/// cannot be allowed to stop working at e = 0, which is precisely the
-/// value a user tuning an orbit will spend the most time near.
+/// An orbit as two directions and two distances — the graspable form. Nothing here is
+/// singular: a control cannot stop working at e = 0, exactly where a tuning user lingers.
 public struct ApsisFrame: Sendable, Equatable {
     /// Unit vector from the focus toward periapsis — the apse line.
     public var periapsisDirection: SIMD3<Double>
-    /// Unit angular-momentum direction. Perpendicular to the apse line,
-    /// and the invariant this type works hardest to preserve.
+    /// Unit angular-momentum direction. Perpendicular to the apse line — the invariant this type preserves hardest.
     public var orbitNormal: SIMD3<Double>
     /// r_p, metres. Always positive.
     public var periapsisRadius: Double
-    /// r_a, metres — negative on a hyperbola, +∞ on a parabola. See
-    /// `OrbitalElements.apoapsisRadius` for why that is deliberate.
+    /// r_a, metres — negative on a hyperbola, +∞ on a parabola; deliberate, see `OrbitalElements.apoapsisRadius`.
     public var apoapsisRadius: Double
     /// Where the body is on the conic, radians from periapsis.
     public var trueAnomaly: Double
@@ -343,15 +264,8 @@ public struct ApsisFrame: Sendable, Equatable {
         let eccentricityVector = simd_cross(v, h) / mu - r / distance
         let e = simd_length(eccentricityVector)
 
-        // CIRCULAR FALLBACK, AND IT DIFFERS FROM `OrbitalElements` ON
-        // PURPOSE. There the convention is the node line, because that is
-        // what the textbook says and what an almanac can be checked
-        // against. Here it is the BODY'S OWN DIRECTION, because these two
-        // vectors are where the beads go: putting the near bead on the
-        // planet and the far bead at the antipode gives the user two
-        // handles that are both exactly where they expect to find them.
-        // (When r_p = r_a the two beads do the same thing anyway, so the
-        // one hidden behind its planet costs nothing.)
+        // Circular fallback differs from `OrbitalElements` ON PURPOSE: the body's own
+        // direction, not the node — these vectors place the drag beads on the planet.
         let periapsisHat = e < OrbitalElements.degeneracyTolerance
             ? r / distance
             : eccentricityVector / e
@@ -368,14 +282,12 @@ public struct ApsisFrame: Sendable, Equatable {
 
     // MARK: Shape
 
-    /// The in-plane direction 90° ahead of periapsis: p̂, ĥ, q̂ is a
-    /// right-handed perifocal basis.
+    /// In-plane direction 90° ahead of periapsis: p̂, ĥ, q̂ is a right-handed perifocal basis.
     public var alongTrack: SIMD3<Double> {
         simd_cross(orbitNormal, periapsisDirection)
     }
 
-    /// e = (r_a − r_p)/(r_a + r_p). Handles the infinite far end without
-    /// a branch, because the ratio tends to 1.
+    /// e = (r_a − r_p)/(r_a + r_p); the ratio tends to 1 at an infinite far end.
     public var eccentricity: Double {
         guard apoapsisRadius.isFinite else { return 1 }
         let sum = apoapsisRadius + periapsisRadius
@@ -383,9 +295,7 @@ public struct ApsisFrame: Sendable, Equatable {
         return (apoapsisRadius - periapsisRadius) / sum
     }
 
-    /// p = 2·r_p·r_a/(r_p + r_a) — the harmonic mean of the two apsis
-    /// radii, which tends to 2·r_p as the far end runs off to infinity
-    /// and so gives the parabola exactly.
+    /// p = 2·r_p·r_a/(r_p + r_a) — harmonic mean; tends to 2·r_p at infinity, giving the parabola exactly.
     public var semiLatusRectum: Double {
         guard apoapsisRadius.isFinite else { return 2 * periapsisRadius }
         let sum = apoapsisRadius + periapsisRadius
@@ -411,12 +321,8 @@ public struct ApsisFrame: Sendable, Equatable {
 
     // MARK: Frame → state
 
-    /// The state vector this frame describes, relative to the focus.
-    ///
-    /// Check it against `CelestialBody.onEllipticalOrbit`, which has
-    /// shipped for months: at ν = 0 this reduces to r = a(1−e) and
-    /// |v| = √(μ(1+e)/(a(1−e))), which is that function's formula
-    /// character for character.
+    /// State vector relative to the focus. At ν = 0 it reduces to r = a(1−e),
+    /// |v| = √(μ(1+e)/(a(1−e))) — `CelestialBody.onEllipticalOrbit`'s formula exactly.
     public func state() -> (position: SIMD3<Double>, velocity: SIMD3<Double>) {
         let p = semiLatusRectum
         let e = eccentricity
@@ -432,10 +338,8 @@ public struct ApsisFrame: Sendable, Equatable {
     public var elements: OrbitalElements {
         OrbitalElements.from(position: state().position,
                              velocity: state().velocity, mu: mu)
-            // Unreachable in practice: this frame was built from a state
-            // that had an angular momentum, so reading it back always
-            // finds one. The fallback exists so the property is not
-            // optional for every caller.
+            // Unreachable in practice (the frame was built from a state with h ≠ 0);
+            // exists so the property is not optional for every caller.
             ?? OrbitalElements(
                 semiMajorAxis: nil, semiLatusRectum: semiLatusRectum,
                 eccentricity: eccentricity, inclination: 0,
@@ -444,57 +348,15 @@ public struct ApsisFrame: Sendable, Equatable {
     }
 
     // MARK: The drag
-    //
-    // The entire manipulation, as one pure function of a hand position.
-    // It lives here rather than in the module for two reasons: it is the
-    // part most likely to be wrong, and `swift test` runs it in three
-    // seconds without a simulator.
+    // Pure function of a hand position — lives here so `swift test` runs it without a simulator.
 
-    /// This orbit, reshaped by a hand at `handOffset` (relative to the
-    /// focus, in metres) holding one bead while the other stays at
-    /// `otherRadius`.
-    ///
-    /// THREE THINGS MAKE THIS WELL-POSED, and none of them is obvious.
-    ///
-    /// 1. THE BEADS ARE NOT INDEPENDENT, AND THE HELD ONE IS NOT LABELLED.
-    ///    Periapsis and apoapsis are collinear through the focus, so both
-    ///    report the same apse line. The bead you hold is therefore just
-    ///    "the end at distance ρ", and which apsis that IS follows from
-    ///    the arithmetic: whichever of ρ and `otherRadius` is smaller is
-    ///    the near end. This makes "what if I drag periapsis out past
-    ///    apoapsis" evaporate rather than needing a rule — the labels
-    ///    swap exactly at ρ = otherRadius, which is where the orbit is
-    ///    circular and the two ends are physically interchangeable. The
-    ///    state passes through smoothly because the two velocities differ
-    ///    by 2e·q̂ and e is zero at precisely that crossing.
-    ///
-    /// 2. THE PLANE IS TRANSPORTED, NOT SET. Two collinear points and a
-    ///    focus define a PENCIL of planes, not one — the roll about the
-    ///    apse line is a degree of freedom neither bead can reach. So it
-    ///    is carried: ĥ is projected perpendicular to the new apse line
-    ///    and renormalised. In-plane drags leave it bit-exact (the
-    ///    projection is the identity); out-of-plane drags tilt it by
-    ///    exactly the minimum rotation, so the plane follows the apse
-    ///    line the way a hoop follows its diameter, with no mode and
-    ///    nothing to discover.
-    ///
-    ///    That rule is parallel transport, which means it has HOLONOMY:
-    ///    walk a bead around a closed loop and the plane comes back
-    ///    rotated by the solid angle you enclosed. Two beads are
-    ///    instantaneously one degree of freedom short and globally
-    ///    complete, which is the licence for not adding a third.
-    ///
-    /// 3. THE BODY KEEPS ITS BEARING, NOT ITS TRUE ANOMALY. Preserving ν
-    ///    would fling a planet across the room when the apse line swings.
-    ///    Instead its direction from the focus is held and its distance
-    ///    follows the new conic, so an apse rotation slides it along its
-    ///    own sightline. For a straight radial pull — the common case —
-    ///    the two rules are identical.
-    ///
-    /// Degenerate hands are NO-OPS, never snaps: a hand at the focus has
-    /// no direction, and a hand on the orbit's pole describes every plane
-    /// equally well. Both leave the orbit exactly as it was, which is the
-    /// same answer the Gauss-surface tilt gives for the same reason.
+    /// This orbit reshaped by a hand at `handOffset` (from focus, m) holding one bead while
+    /// the other stays at `otherRadius`. Well-posed because: (1) beads are UNLABELLED — the
+    /// nearer of ρ/otherRadius is periapsis, labels swap smoothly at the circular crossing;
+    /// (2) the plane is PARALLEL-TRANSPORTED, not set — ĥ projected ⊥ the new apse line
+    /// (in-plane drags bit-exact, out-of-plane the minimum rotation; holonomy is accepted);
+    /// (3) the body keeps its BEARING, not its ν. Degenerate hands (at the focus, on the
+    /// pole) are NO-OPS, never snaps.
     public func dragged(handOffset: SIMD3<Double>,
                         otherRadius: Double,
                         bodyDirection: SIMD3<Double>) -> ApsisFrame {
@@ -505,18 +367,14 @@ public struct ApsisFrame: Sendable, Equatable {
         var result = self
 
         if otherRadius.isFinite && otherRadius > 0 {
-            // Bound: the other bead pins one end, and the arithmetic
-            // decides which end each of them is.
+            // Bound: the other bead pins one end; the arithmetic decides which is which.
             let heldIsNear = reach <= otherRadius
             result.periapsisRadius = min(reach, otherRadius)
             result.apoapsisRadius = max(reach, otherRadius)
             result.periapsisDirection = heldIsNear ? handHat : -handHat
         } else {
-            // Unbound: there is no far bead to pin anything, so the hand
-            // is on periapsis by definition and the SHAPE is what holds.
-            // Pull it in or out and the hyperbola keeps its eccentricity,
-            // which is the only reading of the gesture that leaves the
-            // orbit recognisably the same orbit.
+            // Unbound: no far bead — the hand is periapsis by definition and eccentricity
+            // holds, the only reading that keeps the orbit recognisably the same orbit.
             let e = eccentricity
             result.periapsisRadius = reach
             result.periapsisDirection = handHat
@@ -529,24 +387,15 @@ public struct ApsisFrame: Sendable, Equatable {
         let axis = result.periapsisDirection
         let tilt = simd_dot(orbitNormal, axis)
         if abs(tilt) < 1e-14 {
-            // ALREADY PERPENDICULAR, SO LEAVE IT ALONE — do not project
-            // and renormalise a vector that is already the answer.
-            //
-            // This is not a micro-optimisation, it is the difference
-            // between a plane that holds and a plane that creeps. An
-            // in-plane drag is the commonest gesture there is, it runs at
-            // ninety frames a second for as long as the hand is moving,
-            // and projecting-then-normalising costs about an ulp each
-            // time. Left in, those ulps are a random walk: drag a bead
-            // back and forth for a minute and the orbit is measurably
-            // tilted, with nothing in the gesture to explain it.
+            // Already perpendicular: keep it BIT-EXACT. Projecting + renormalising costs
+            // ~an ulp per frame — a random walk that measurably tilts the plane over a
+            // minute of in-plane dragging.
             result.orbitNormal = orbitNormal
         } else {
             let transported = orbitNormal - tilt * axis
             let transportedLength = simd_length(transported)
             guard transportedLength > 1e-6 else {
-                // The hand is on the orbit's pole. Every plane through
-                // this apse line is equally described, so describe none.
+                // Hand on the orbit's pole: every plane fits equally, so change nothing.
                 return self
             }
             result.orbitNormal = transported / transportedLength
@@ -566,14 +415,9 @@ public struct ApsisFrame: Sendable, Equatable {
 
     // MARK: Drawing
 
-    /// The conic as a polyline of points relative to the focus.
-    ///
-    /// Sampled uniformly in ECCENTRIC anomaly, not true anomaly. A conic
-    /// crowds its curvature near periapsis, so equal steps in ν draw a
-    /// coarse, faceted nose on an eccentric orbit and waste most of the
-    /// budget out at the slow end; equal steps in E space the points
-    /// evenly along the arc for any eccentricity, which is why 256 points
-    /// is enough for a circle and for e = 0.97 alike.
+    /// The conic as a polyline relative to the focus. Sampled uniformly in ECCENTRIC
+    /// anomaly, not ν: equal-ν steps facet the periapsis nose; equal-E spaces points
+    /// evenly along the arc at any eccentricity, so 256 points serve e = 0 and e = 0.97 alike.
     public func sampled(count: Int = 256) -> [SIMD3<Double>] {
         let n = max(count, 8)
         let e = eccentricity
@@ -588,9 +432,7 @@ public struct ApsisFrame: Sendable, Equatable {
         }
 
         guard e < 1 - 1e-9 else {
-            // Open conic: walk ν out toward the asymptotes and stop short
-            // of them, since the curve runs to infinity there and a tube
-            // to infinity is not a drawing.
+            // Open conic: walk ν toward the asymptotes, stopping short of infinity.
             let limit = e > 1 ? acos(min(max(-1 / e, -1), 1)) : .pi
             let sweep = (limit - 0.06) * 2
             return (0..<n).map { index in
@@ -604,7 +446,7 @@ public struct ApsisFrame: Sendable, Equatable {
         points.reserveCapacity(n + 1)
         for index in 0...n {
             let anomaly = 2 * Double.pi * Double(index) / Double(n)
-            // ν from E, in the half-angle form that stays exact near π.
+            // ν from E in the half-angle form that stays exact near π.
             let nu = 2 * atan2(rootRatio * sin(anomaly / 2), cos(anomaly / 2))
             let r = a * (1 - e * cos(anomaly))
             points.append(r * (cos(nu) * periapsisDirection + sin(nu) * q))

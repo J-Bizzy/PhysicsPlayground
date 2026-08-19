@@ -1,12 +1,4 @@
-//
-//  BarMagnet.swift
-//  PhysicsCore — Magnetism
-//
-//  A bar magnet, modelled as an ideal magnetic dipole: a point with a
-//  magnetic moment vector m (A·m²). The moment points from the south
-//  pole toward the north pole, and its magnitude is the magnet's
-//  strength. Pure Swift + simd, SI units, no rendering.
-//
+//  BarMagnet.swift — ideal magnetic dipole: a point with moment m (A·m², S→N, |m| = strength).
 
 import Foundation
 import simd

@@ -2,25 +2,17 @@
 //  ElasticSheet.swift
 //  PhysicsCore — Oscillations
 //
-//  A physical elastic membrane: a square grid of masses coupled to
-//  their neighbours by springs, which in the small-displacement limit
-//  IS the 2-D wave equation
+//  An elastic membrane: masses spring-coupled on a square lattice, which
+//  in the small-displacement limit IS the 2-D wave equation
 //
 //      ∂²u/∂t² = c² ∇²u − γ ∂u/∂t
 //
-//  discretised on the lattice (u is transverse height). Pluck a point
-//  and a wave spreads at speed c, reflects off the boundary, and — on
-//  a fixed frame — settles into the drumhead's standing modes. The
-//  lattice is honest: sin(mπi/N)·sin(nπj/N) is an exact eigenvector of
-//  the discrete Laplacian, so a struck mode stays a pure standing wave
-//  and oscillates at the lattice frequency (the tests pin this, plus
-//  energy conservation and the wavefront's speed).
-//
-//  Boundaries are either FIXED (the rim is clamped to zero — a real
-//  drumhead) or FREE (zero-gradient, the wave reflects off an open
-//  edge). Any node can be PINNED to a height: that is how a hand grabs
-//  and holds the sheet while the rest of the medium responds.
-//
+//  (u is transverse height). sin(mπi/N)·sin(nπj/N) is an exact eigenvector
+//  of the discrete Laplacian, so a struck mode stays a pure standing wave
+//  at the lattice frequency (tests pin this, plus energy conservation and
+//  wavefront speed). Boundaries are FIXED (rim clamped to zero) or FREE
+//  (zero-gradient). Any node can be PINNED to a height — how a hand holds
+//  the sheet while the medium responds.
 
 import Foundation
 
@@ -36,13 +28,10 @@ public struct ElasticSheet: Sendable {
     /// Velocity damping γ (1/s); 0 = lossless.
     public var damping: Double
     public var boundary: Boundary
-    /// A ceiling on the free field's amplitude (m). The linear wave
-    /// equation can't blow up on its own, but a hand DRIVING a point —
-    /// holding and shaking it — pumps in energy without bound. When the
-    /// peak of the un-held field passes this, the whole field is gently
-    /// scaled back to it (energy bled off), so the sheet can never run
-    /// away and glitch. Default .infinity = no limit (the tests run
-    /// unclamped).
+    /// A ceiling on the free field's amplitude (m): a hand driving a point
+    /// pumps in energy without bound, so when the un-held peak passes this
+    /// the whole field is scaled back to it. Default .infinity = no limit
+    /// (tests run unclamped).
     public var amplitudeLimit: Double = .infinity
 
     /// Transverse height and velocity, row-major (index = j*n + i).
@@ -54,12 +43,10 @@ public struct ElasticSheet: Sendable {
 
     // MARK: Sinusoidal drive (the shaker)
     //
-    // A mechanical shaker attached to one or more nodes, pushing them
-    // with a force F(t) = A·sin(2πf·t). The driven nodes still obey the
-    // wave equation — the force is added to their acceleration — so the
-    // disturbance radiates out into the medium. Sweep f: when it nears a
-    // natural frequency the matching standing mode builds to a large
-    // amplitude (resonance), capped only by damping and the governor.
+    // Pushes driven nodes with F(t) = A·sin(2πf·t), added to their
+    // acceleration so the disturbance radiates. Sweep f toward a natural
+    // frequency and the matching mode resonates, capped by damping and the
+    // governor.
 
     /// Nodes the shaker pushes (index = j*n + i). Empty = no drive.
     public var driveNodes: Set<Int> = []
@@ -151,11 +138,9 @@ public struct ElasticSheet: Sendable {
     /// outruns the lattice (CFL): c·dt_sub ≤ spacing/√2.
     public mutating func step(dt: Double) {
         guard dt > 0 else { return }
-        // CFL for the 2-D lattice (max Laplacian eigenvalue 8/a²):
-        // c·dt/a ≤ 1/√2 ≈ 0.707 for stability — 0.35 is a HALF of that,
-        // not a third as this comment claimed until 2026-08-03. Still
-        // stable with room to spare; only the arithmetic in the sentence
-        // was wrong. The damping term needs γ·dt ≤ 1 as well.
+        // CFL for the 2-D lattice (max Laplacian eigenvalue 8/a²): stable
+        // for c·dt/a ≤ 1/√2 ≈ 0.707; 0.35 is half that. Damping also needs
+        // γ·dt ≤ 1.
         let cfl = 0.35 * spacing / max(waveSpeed, 1e-6)
         let dampLimit = damping > 1e-9 ? 0.5 / damping : .infinity
         let safe = min(cfl, dampLimit)
@@ -250,10 +235,8 @@ public struct ElasticSheet: Sendable {
         (height.min() ?? 0, height.max() ?? 0)
     }
 
-    /// Root-mean-square height across the whole sheet — a stable measure
-    /// of how strongly it's vibrating right now. It swells at resonance
-    /// and all but vanishes off it, so it drives both the sound's volume
-    /// and the resonance meter.
+    /// Root-mean-square height across the sheet — how strongly it vibrates.
+    /// Swells at resonance, so it drives the sound volume and the meter.
     public var rms: Double {
         guard !height.isEmpty else { return 0 }
         var sum = 0.0

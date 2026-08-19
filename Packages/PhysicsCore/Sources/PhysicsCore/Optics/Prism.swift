@@ -1,15 +1,6 @@
 //
 //  Prism.swift
-//  PhysicsCore — Optics
-//
-//  A real triangular prism traced with real refraction, in the 2D
-//  plane of the studio's dispersion station (x along the beam, y up).
-//  A ray refracts at the entry face, crosses the glass, and refracts
-//  out — or, past the critical angle, reflects internally and tries
-//  the next face. The textbook results emerge instead of being drawn:
-//  symmetric passage produces exactly the minimum deviation
-//  δ = 2·asin(n·sin(A/2)) − A, and Cauchy dispersion fans white light
-//  into a spectrum because each wavelength solves Snell differently.
+//  PhysicsCore — Optics: 2D trace through a triangular prism, real Snell + TIR; minimum deviation and dispersion emerge rather than being drawn.
 //
 
 import Foundation
@@ -20,8 +11,7 @@ public enum Prism {
     public struct Geometry: Sendable, Equatable {
         public var apex: SIMD2<Double>
         public var apexAngle: Double
-        /// Rotation about the apex, radians; positive tips the prism
-        /// counterclockwise.
+        /// Rotation about the apex, rad; positive = counterclockwise.
         public var rotation: Double
         /// Slant side length, apex to base corner.
         public var sideLength: Double
@@ -57,10 +47,7 @@ public enum Prism {
 
     static func faces(of geometry: Geometry) -> [Face] {
         let v = geometry.vertices
-        // Outward normal of edge a→b for a counterclockwise triangle
-        // (apex, base-left, base-right is clockwise in screen coords;
-        // compute normals by pushing away from the centroid instead —
-        // immune to winding mistakes).
+        // Outward normals pushed away from the centroid — immune to winding mistakes.
         let centroid = (v[0] + v[1] + v[2]) / 3
         func face(_ a: SIMD2<Double>, _ b: SIMD2<Double>) -> Face {
             let edge = simd_normalize(b - a)
@@ -73,10 +60,7 @@ public enum Prism {
                 face(v[1], v[2])]   // base
     }
 
-    /// Traces one ray through the prism. Returns the polyline: origin,
-    /// entry point, any internal reflections, exit point, and a final
-    /// point marched `escape` beyond the last surface. Rays that miss
-    /// the prism go straight through to the march distance.
+    /// Polyline: origin, entry, internal reflections, exit, then `escape` past the last surface. Misses go straight.
     public static func trace(
         from origin: SIMD2<Double>, direction: SIMD2<Double>,
         geometry: Geometry, index n: Double,
@@ -93,13 +77,11 @@ public enum Prism {
         }
         p = entry.point
         points.append(p)
-        // Into the glass. The refract normal points against the ray:
-        // the outward face normal already does.
+        // Entering: refract wants the normal against the ray — the outward one already is.
         guard let inside = Refraction.refract(
             direction: SIMD3(d.x, d.y, 0), normal: SIMD3(entry.face.normal.x, entry.face.normal.y, 0),
             n1: 1.0, n2: n
         ) else {
-            // Grazing reflection off the outside: mirror and leave.
             let r = Refraction.reflect(
                 direction: SIMD3(d.x, d.y, 0),
                 normal: SIMD3(entry.face.normal.x, entry.face.normal.y, 0))
@@ -115,8 +97,7 @@ public enum Prism {
             p = hit.point
             points.append(p)
             currentFace = hit.index
-            // Try to leave: the refract normal must point against the
-            // ray, i.e. INTO the glass here.
+            // Leaving: the refract normal must oppose the ray, i.e. point INTO the glass.
             if let out = Refraction.refract(
                 direction: SIMD3(d.x, d.y, 0),
                 normal: SIMD3(-hit.face.normal.x, -hit.face.normal.y, 0),
@@ -126,7 +107,6 @@ public enum Prism {
                 points.append(p + d * escape)
                 return points
             }
-            // Total internal reflection: the face is a perfect mirror.
             let r = Refraction.reflect(
                 direction: SIMD3(d.x, d.y, 0),
                 normal: SIMD3(hit.face.normal.x, hit.face.normal.y, 0))
@@ -147,7 +127,6 @@ public enum Prism {
             let t = simd_dot(face.a - origin, face.normal) / denominator
             guard t > 1e-9 else { continue }
             let point = origin + t * direction
-            // Within the segment?
             let edge = face.b - face.a
             let along = simd_dot(point - face.a, edge) / simd_length_squared(edge)
             guard along >= -1e-9, along <= 1 + 1e-9 else { continue }
@@ -159,8 +138,7 @@ public enum Prism {
         return (best.1, best.2, best.3)
     }
 
-    /// The textbook minimum deviation for symmetric passage:
-    /// δmin = 2·asin(n·sin(A/2)) − A.
+    /// Minimum deviation for symmetric passage: δmin = 2·asin(n·sin(A/2)) − A.
     public static func minimumDeviation(apexAngle: Double, index n: Double) -> Double {
         2 * asin(n * sin(apexAngle / 2)) - apexAngle
     }

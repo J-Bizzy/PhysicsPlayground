@@ -2,12 +2,7 @@
 //  ElectromagnetismModule.swift
 //  Physics Playground — Electromagnetism module
 //
-//  Catalog registration for Electric Fields: descriptor, readings and
-//  legend. Briefly the centre station of a merged E&M world; the world
-//  was undone for geometry (DECISIONS.md, 2026-07-30) and this is a
-//  standalone experience again — but it keeps the lateral clamps that
-//  merger forced into existence, because a charge that could be
-//  dragged across the room was a bug with or without a neighbour.
+//  Catalog registration for Electric Fields: descriptor, readings and legend.
 //
 
 import SwiftUI
@@ -16,8 +11,7 @@ import simd
 
 @MainActor
 enum ElectromagnetismModule {
-    // Kept even though nothing registers under it any more: it still
-    // keys this bench's dismissed-hint flag and its notebook history.
+    // Keys this bench's dismissed-hint flag and its notebook history.
     static let id = "electrostatics"
 
     static func descriptor(appModel: AppModel) -> ModuleDescriptor {
@@ -45,7 +39,6 @@ enum ElectromagnetismModule {
     }
 
     /// The readings this bench writes into the lab notebook.
-    /// Shared with the combined module that now hosts it.
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
         let model = appModel.electromagnetismModel
         var rows: [NotebookEntry.Reading] = [
@@ -109,13 +102,9 @@ enum ElectromagnetismModule {
             swatch: .symbol("arrow.up.right", DesignTokens.Palette.fieldLine),
             text: "Arrowheads ride the field lines, pointing along E"
         ),
-        // A DISCLOSED FUDGE, added 2026-08-03. `chargesRespond` moves the
-        // source charges by an overdamped mobility law — velocity ∝
-        // force, capped — rather than by F = ma. Everything the module
-        // COMPUTES is exact Coulomb; what is approximated is how the
-        // charges travel, and nothing said so. Every other fiction in
-        // this app is disclosed where it is read (the 50 kT field says so
-        // in its own readout); this one was not.
+        // A disclosed fudge: `chargesRespond` moves source charges by an
+        // overdamped mobility law (velocity ∝ force, capped), not F = ma. The
+        // field, force and potential are exact Coulomb; only the travel is.
         LegendItem(
             swatch: .symbol("arrow.left.and.right", DesignTokens.Palette.fieldLine),
             text: "Free charges DRIFT rather than accelerate: with the switch on, a charge's speed is set by the force on it instead of its acceleration, so the flock slides into place and settles rather than overshooting and oscillating. The field, the force and the potential are exact Coulomb; only the travel is a simplification, chosen so a pair you release finds equilibrium in front of you instead of ringing about it forever."

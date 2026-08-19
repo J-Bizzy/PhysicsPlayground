@@ -1,46 +1,12 @@
 //
 //  MagneticFieldLineTracer.swift
-//  PhysicsCore — Magnetism
+//  PhysicsCore — Magnetism: closed-loop streamlines of B for a bar magnet.
 //
-//  Magnetic field lines are streamlines of B. Unlike electric lines they
-//  form CLOSED LOOPS (no monopoles): a line leaving the north pole curves
-//  back to the south. So each seed is traced BOTH ways along B and the two
-//  halves joined into one continuous loop. The RK4 integration is Math's
-//  shared StreamlineTracer; this file owns only the magnetism policy.
-//
-//  That policy was rewritten on 2026-07-31, after an on-device pass
-//  reported the loops as "a little off". They were, in four separate
-//  ways, and none of them was the integrator:
-//
-//  1. THE LINES WERE BORN INSIDE THE MAGNET. Seeds sat 6 cm from centre
-//     and lines died at 5 cm, on a bar 16 cm long — so every loop
-//     emerged from the middle of the bar's FLANK and vanished into it
-//     again, leaving a dead sphere where the poles should be. The one
-//     thing a bar magnet's field picture has to show is flux leaving one
-//     end and entering the other.
-//  2. THEY WERE TRACED THROUGH THE WRONG FIELD. See `MagneticField`'s
-//     note on `barVector`: a point dipole is not a bar magnet at one
-//     bar-length's range, and one bar-length is exactly where these
-//     curves live.
-//  3. THE SEEDS WERE SPREAD BY AREA, NOT BY FLUX. A Fibonacci sphere is
-//     uniform in solid angle; a dipole's outward flux is not. Equal-area
-//     seeding draws as many lines out of the equator — where the field
-//     is weak and tangential — as out of the poles, so line density said
-//     nothing. Density IS the classical encoding, and the electric
-//     tracer next door has argued this in its own header for months.
-//  4. HALF OF THEM WERE THE SAME LOOP TWICE. A loop through (R, θ)
-//     passes through (R, π−θ) as well, so seeding both hemispheres and
-//     then tracing each seed BOTH WAYS drew every curve about twice —
-//     at random offsets, which is what made some loops read as thick
-//     and others as thin for no reason.
-//
-//  And one consequence worth stating plainly, because the module's own
-//  comments promised it and it was false: the strength bead now changes
-//  the picture. It could not before. `StreamlineTracer` integrates the
-//  NORMALIZED field, so a single magnet's traced geometry is completely
-//  invariant to |m| — the loops were pixel-identical at strength 1 and
-//  strength 12, and the bead you pulled rebuilt an unchanged mesh.
-//
+//  No monopoles: each seed is traced BOTH ways along B and the halves
+//  joined into one continuous loop. RK4 integration is Math's shared
+//  StreamlineTracer; this file owns only the magnetism policy: seeds must
+//  clear the bar's half-length, use the bar (not point-dipole) field, and
+//  seed by equal flux so line density encodes strength.
 
 import Foundation
 import simd
@@ -49,29 +15,25 @@ public enum MagneticFieldLineTracer {
     public struct Config: Sendable {
         public var stepSize = 0.01
         public var maxSteps = 260
-        /// The bar's physical length (m) — what makes this a bar magnet
-        /// rather than a point. Seeds, terminations and the field model
-        /// itself are all derived from it.
+        /// The bar's physical length (m). Seeds, terminations and the
+        /// field model are all derived from it.
         public var magnetLength = 0.16
-        /// Seeds start this far out from the magnet's CENTRE. Must clear
-        /// the bar's own half-length or the lines start underground.
+        /// Seeds start this far from centre. Must clear the bar's
+        /// half-length or the lines start underground.
         public var seedRadius: Double { magnetLength * seedStandoff }
-        /// …and a line ends when it comes this close to a magnet centre.
-        /// Just inside the seed sphere: any closer and short loops never
-        /// close, any further and every line stops on the step it was
-        /// born.
+        /// A line ends this close to a magnet centre. Just inside the seed
+        /// sphere: closer and short loops never close, further and every
+        /// line stops on the step it was born.
         public var terminationRadius: Double { seedRadius * 0.90 }
-        /// Seed sphere radius as a multiple of the bar's length. 0.72
-        /// puts it 15 % clear of the pole tips at 0.5.
         public var seedStandoff = 0.72
         public var boundsCenter: SIMD3<Double> = .zero
         public var boundsRadius = 1.1
-        /// Lines drawn for a magnet of `referenceStrength`. A magnet
-        /// twice as strong gets twice as many — see the header.
+        /// Lines for a magnet of `referenceStrength`; twice as strong gets
+        /// twice as many.
         public var seedsPerMagnet = 12
         public var referenceStrength = 6.0
-        /// Proportional, but bounded: one loop does not read as a field,
-        /// and a maxed-out magnet must not blow the frame budget.
+        /// Bounded: one loop does not read as a field, and a maxed magnet
+        /// must not blow the frame budget.
         public var seedRange: ClosedRange<Int> = 5...30
 
         public init() {}
@@ -114,24 +76,13 @@ public enum MagneticFieldLineTracer {
             field: { MagneticField.barVector(at: $0, dueTo: magnets, length: length) })
     }
 
-    /// Seed directions on the NORTH half of a sphere around a dipole,
-    /// one per equal slice of outward flux.
-    ///
-    /// The rule falls straight out of the dipole field. Its radial part
-    /// is B_r ∝ cos θ, so the flux through a cap of half-angle θ is
-    ///
-    ///     Φ(θ) ∝ ∫₀^θ cos θ′ sin θ′ dθ′ ∝ sin²θ
-    ///
-    /// — the classical r = C sin²θ result, read as a seeding rule
-    /// instead of a curve. Equal flux per line therefore means equal
-    /// steps in sin²θ, which is what the square root below does. The
-    /// azimuth is spread by the golden angle so the loops do not stack
-    /// into a fan on one plane.
-    ///
-    /// North half only, and that is not an optimisation: each of these
-    /// seeds is traced in BOTH directions and comes back a closed loop,
-    /// and that loop already crosses the southern hemisphere. Seeding
-    /// there too would redraw curves that are already on screen.
+    /// Seed directions on the NORTH half of a sphere around a dipole, one
+    /// per equal slice of outward flux. Flux through a cap of half-angle θ
+    /// is Φ ∝ sin²θ (from B_r ∝ cos θ), so equal flux per line means equal
+    /// steps in sin²θ — the square root below. Azimuth spread by the
+    /// golden angle. North half only: each seed traces both ways into a
+    /// closed loop that already crosses the south, so seeding it too
+    /// redraws existing curves.
     public static func fluxSeedDirections(axis: SIMD3<Double>,
                                           count: Int) -> [SIMD3<Double>] {
         let n = max(count, 1)
@@ -155,34 +106,16 @@ public enum MagneticFieldLineTracer {
 
     // MARK: Even through the room
 
-    /// Traces loops seeded EVENLY THROUGH A VOLUME rather than off a
-    /// small sphere around each magnet.
-    ///
-    /// **This is a deliberate trade, and the thing it trades away is
-    /// real.** `trace(magnets:config:)` above seeds by equal slices of
-    /// outward flux, which is the classical encoding: line density means
-    /// field strength, and that is why the flanks are sparse and the
-    /// poles are dense. Seeding by VOLUME instead makes the picture even
-    /// across the room and breaks that encoding — density here tells you
-    /// where there was room to draw a line, not how strong the field is.
-    ///
-    /// It is still an honest picture, because every curve is a true
-    /// streamline of B and the arrowheads still carry direction. It is
-    /// just a picture of the field's SHAPE rather than of its strength,
-    /// and the module's legend has to say so. Requested by the owner on
-    /// 2026-08-01, who wanted the field to fill the room it is in.
-    ///
-    /// **Dedup is not optional here.** Seeds scattered through a volume
-    /// land on the same closed loop over and over — the naive version
-    /// draws a handful of curves many times each, at random offsets,
-    /// which is precisely the "some loops read thick and others thin for
-    /// no reason" defect the 2026-07-31 pass removed. A candidate whose
-    /// path mostly retraces one already accepted is rejected.
+    /// Traces loops seeded EVENLY THROUGH A VOLUME rather than off a small
+    /// sphere per magnet. Deliberate trade: density here means where there
+    /// was room to draw a line, not field strength (the module legend must
+    /// say so). Every curve is still a true streamline of B. Dedup is
+    /// mandatory — volume seeds land on the same closed loop repeatedly, so
+    /// a candidate that mostly retraces an accepted line is rejected.
     ///
     /// - Parameters:
     ///   - center/halfExtents: the room box to fill.
-    ///   - spacing: how close two loops may come before they count as
-    ///     the same loop.
+    ///   - spacing: how close two loops may come before they count as one.
     ///   - budget: hard cap on returned lines.
     public static func traceThroughVolume(
         magnets: [BarMagnet],
@@ -201,23 +134,11 @@ public enum MagneticFieldLineTracer {
         streamConfig.stopCenters = magnets.map(\.position)
 
         var accepted: [[SIMD3<Double>]] = []
-        /// Each accepted line's samples, kept PER LINE rather than in one
-        /// pooled set. Two reasons, and the first was a bug the tests
-        /// caught rather than a precaution:
-        ///
-        /// · Overlap is NOT symmetric. A short loop lying entirely along
-        ///   a longer one is ~100 % retraced by it, while the long one is
-        ///   only partly retraced by the short. Testing one direction let
-        ///   a curve through that was three-quarters a duplicate.
-        /// · Against a pooled set, a candidate could be "mostly covered"
-        ///   by fragments of several different loops without duplicating
-        ///   any of them, and be rejected for it.
-        ///
-        /// So each candidate is compared with each accepted line on its
-        /// own, BOTH ways, and rejected if either direction says the same
-        /// curve. Subsampled because this is an O(n·m) sweep and full
-        /// resolution buys nothing: two loops 11 cm apart are 11 cm apart
-        /// at every eighth point too.
+        /// Samples kept PER LINE, not pooled: overlap is not symmetric (a
+        /// short loop lying along a long one is ~100% retraced by it but
+        /// not vice versa), so each candidate is compared with each
+        /// accepted line BOTH ways. Subsampled — an O(n·m) sweep, and two
+        /// loops 11 cm apart are 11 cm apart at every eighth point too.
         var acceptedSamples: [[SIMD3<Double>]] = []
 
         /// The fraction of `a` that runs within `spacing` of `b`.
@@ -255,10 +176,8 @@ public enum MagneticFieldLineTracer {
             guard line.count > 8 else { continue }
 
             let samples = stride(from: 0, to: line.count, by: 8).map { line[$0] }
-            // Mostly-overlapping means the same loop. Not ALL of it,
-            // because every loop in a dipole field crowds through the
-            // poles — two genuinely different curves share that
-            // neighbourhood and diverge everywhere else.
+            // Mostly-overlapping means the same loop — not all, since every
+            // dipole loop crowds through the poles yet diverges elsewhere.
             let isDuplicate = acceptedSamples.contains { existing in
                 retracedFraction(samples, existing) > 0.55
                     || retracedFraction(existing, samples) > 0.55
@@ -270,14 +189,10 @@ public enum MagneticFieldLineTracer {
         return accepted
     }
 
-    /// Points spread through a box with no clumping and no randomness.
-    ///
-    /// A jittered grid would need a random source, and this runs on a
-    /// worker whose output has to be reproducible for tests. The
-    /// additive-recurrence (R₃ / plastic-constant) sequence is the
-    /// standard low-discrepancy answer: deterministic, and it fills a
-    /// volume far more evenly than a lattice, which would put every seed
-    /// on a plane and draw the field in slabs.
+    /// Points spread through a box, deterministic (no random source, for
+    /// reproducible tests). Additive-recurrence (R₃ / plastic-constant)
+    /// low-discrepancy sequence fills a volume far more evenly than a
+    /// lattice, which would put every seed on a plane.
     public static func volumeSeeds(center: SIMD3<Double>,
                                    halfExtents: SIMD3<Double>,
                                    count: Int) -> [SIMD3<Double>] {

@@ -1,15 +1,7 @@
 //
 //  Integrators.swift
-//  PhysicsCore — Math
-//
-//  Shared numerical integrators over (position, velocity) state.
-//
-//  RK4 here complements ParticleDynamics' velocity Verlet: Verlet is the
-//  right tool for conservative a(r) forces (it conserves energy over long
-//  orbits), but it is *wrong* for velocity-dependent forces like air drag.
-//  Classical 4th-order Runge–Kutta handles a(r, v) correctly and is exact
-//  for constant acceleration, so projectile arcs match the textbook
-//  parabola to machine precision when drag is off.
+//  PhysicsCore — Math: RK4 over (position, velocity). Handles a(r, v) forces
+//  (drag) that Verlet cannot; exact for constant acceleration.
 //
 
 import Foundation
@@ -26,8 +18,6 @@ public enum Integrators {
         let v0 = state.velocity
         let half = dt / 2
 
-        // Four staged samples of the derivative (kNr = position slope,
-        // aN = velocity slope), then the standard 1-2-2-1 blend.
         let a1 = acceleration(r0, v0)
         let k1r = v0
 

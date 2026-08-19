@@ -1,12 +1,4 @@
-//
-//  CelestialBody.swift
-//  PhysicsCore — Gravitation
-//
-//  A gravitating body in real SI units: kilograms, meters, m/s. The
-//  presets are the actual solar system — real masses, radii, orbital
-//  distances, and mean orbital speeds — so every number a panel shows
-//  can be checked against an almanac.
-//
+//  CelestialBody.swift — a gravitating body in SI units, with real solar-system presets (checkable against an almanac).
 
 import Foundation
 import simd
@@ -76,17 +68,8 @@ public struct CelestialBody: Equatable, Sendable {
         }
     }
 
-    /// This body placed on a circular prograde orbit of `central` at
-    /// `distance`, in the xz plane (offset along +x, moving along −z).
-    ///
-    /// The speed is √(G(M+m)/r), not √(GM/r). The relative orbit of a
-    /// two-body system obeys r̈ = −G(M+m)r̂/r², so the test-particle form
-    /// leaves the orbit slightly slow and therefore slightly ELLIPTICAL —
-    /// by a part in a million for Earth, which no one would ever notice,
-    /// and by 1.2 % for the Moon about the Earth, which they would. It
-    /// surfaced when the orbit ring started reading these orbits back:
-    /// a planet built circular has to READ as circular, or the app is
-    /// disagreeing with itself about what it just built.
+    /// Circular prograde orbit of `central` at `distance`, xz plane (+x offset, −z motion).
+    /// Speed is √(G(M+m)/r), NOT √(GM/r): this is the relative two-body orbit; GM alone leaves it slightly elliptical (1.2% for the Moon).
     public func onCircularOrbit(
         of central: CelestialBody,
         distance: Double,
@@ -101,29 +84,9 @@ public struct CelestialBody: Equatable, Sendable {
         return body
     }
 
-    /// This body placed at PERIHELION of an inclined elliptical orbit.
-    ///
-    /// The solar system's planets all orbit within a few degrees of one
-    /// plane, which is true and — rendered in a room — completely flat:
-    /// a disc at chest height that gives the viewer no reason to move
-    /// their head. Comets do not. A steeply inclined, highly eccentric
-    /// orbit is real physics that genuinely uses all three dimensions,
-    /// and it is the orbit where the vis-viva speed-up at perihelion is
-    /// dramatic enough to watch.
-    ///
-    /// Exact: at perihelion the velocity is perpendicular to the radius,
-    /// with magnitude v_p = √(G(M+m)(1+e)/(a(1−e))) — the vis-viva
-    /// equation evaluated at r = a(1−e). M+m rather than M for the same
-    /// reason `onCircularOrbit` uses it: this is the RELATIVE orbit, and
-    /// the two builders have to agree at e = 0 or they describe different
-    /// circles. The orbit plane is the ecliptic tilted
-    /// by `inclination` about the +x axis, so perihelion still lies on
-    /// +x and the whole ellipse rides up out of the planets' plane.
-    ///
-    /// - Parameters:
-    ///   - semiMajorAxis: a, metres.
-    ///   - eccentricity: e, 0 ..< 1.
-    ///   - inclination: tilt of the orbit plane, radians.
+    /// This body at PERIHELION of an inclined elliptical orbit. Exact vis-viva: v_p = √(G(M+m)(1+e)/(a(1−e))),
+    /// M+m so it agrees with `onCircularOrbit` at e = 0. Plane = ecliptic tilted by `inclination` about +x.
+    /// - Parameters: semiMajorAxis a (m); eccentricity e, 0..<1; inclination (rad).
     public func onEllipticalOrbit(
         of central: CelestialBody,
         semiMajorAxis: Double,
@@ -135,8 +98,7 @@ public struct CelestialBody: Equatable, Sendable {
         let e = min(max(eccentricity, 0), 0.999)
         let perihelion = semiMajorAxis * (1 - e)
         let speed = (G * (central.mass + mass) * (1 + e) / perihelion).squareRoot()
-        // In-plane basis: radius along +x, velocity along −z, both then
-        // tilted about +x so the plane rises out of the ecliptic.
+        // In-plane basis: radius +x, velocity −z, tilted about +x.
         let cosI = cos(inclination), sinI = sin(inclination)
         let radial = SIMD3<Double>(1, 0, 0)
         let along = SIMD3<Double>(0, sinI, -cosI)
@@ -145,9 +107,7 @@ public struct CelestialBody: Equatable, Sendable {
         return body
     }
 
-    /// Halley's comet, to scale: a = 17.834 AU, e = 0.967, and the
-    /// famously retrograde 162° inclination that takes it right out of
-    /// the planets' plane.
+    /// Halley's comet to scale: a = 17.834 AU, e = 0.967, retrograde 162° inclination.
     public static let comet = CelestialBody(
         name: "Comet", mass: 2.2e14, radius: 5.5e3)
 }

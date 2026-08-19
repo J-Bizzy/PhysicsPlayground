@@ -3,26 +3,10 @@
 //  Physics Playground — Design System
 //
 //  The app's only N-way picker: pinch a petal, a fan of labelled discs
-//  unfolds in the room, pick one, it folds.
-//
-//  This is the Wind Tunnel's shape fan, made general. That fan was the
-//  one place in the app where choosing among many things was a physical
-//  act rather than a menu — and the interaction law (DECISIONS.md,
-//  2026-07-29) makes it the only allowed form: a quantity without extent
-//  is a discrete choice, and a discrete choice gets a labelled object in
-//  the room. Every `Picker` that was ever in a window panel is one of
-//  these now — the last of them on 2026-08-01, when the panels
-//  themselves were deleted and `makeControls` went with them.
-//
-//  It sits in DesignSystem rather than RenderKit because it needs the
-//  app's own vocabulary — `Bloom.symbolTexture`, `HubScene.namePlate`,
-//  `SoundPalette` — the same reason `Bloom` and `Well` live here. Only the
-//  geometry is shared, in `RenderKit.FanLayout`, where it is tested.
+//  unfolds in the room, pick one, it folds. Geometry is shared in
+//  `RenderKit.FanLayout`, where it is tested.
 //
 //  Taps resolve by entity IDENTITY, not by parsing the entity's name.
-//  The fan it replaces round-tripped a name through `DragBody(rawValue:)`,
-//  which silently selects nothing if an id ever contains the separator or
-//  stops being a raw value.
 //
 
 import RealityKit
@@ -48,17 +32,9 @@ struct PickerChoice: Identifiable, Equatable {
 
 @MainActor
 final class SpatialPicker {
-    /// The lateral span of one disc's TOUCH TARGET, and therefore the
-    /// number a fan has to space its discs by.
-    ///
-    /// The disc's face is 0.052 m across; the target is deliberately
-    /// wider, because a fan is something you reach for. Two discs
-    /// closer together than this cannot be aimed at separately, no
-    /// matter how clearly they read — which is exactly what happened
-    /// when Gravity Lab's clock grew from four scales to six and
-    /// `FanLayoutTests` checked the clearance against the 0.052 m FACE
-    /// instead. Named here so the layout and its test can never again
-    /// disagree with the collider about how big a disc is.
+    /// The lateral span of one disc's TOUCH TARGET (wider than the 0.052 m
+    /// face), and the number a fan must space its discs by — named here so
+    /// `FanLayout` and its tests cannot disagree with the collider.
     static let colliderSpan: Float = 0.068
 
     let root = Entity()
@@ -66,36 +42,17 @@ final class SpatialPicker {
     /// Called with the chosen `PickerChoice.id`.
     var onSelect: ((String) -> Void)?
 
-    /// Which choice is current, read every frame.
-    ///
-    /// Without this a standing picker renders N identical discs and shows
-    /// **nothing** about the value it is picking — which flatly contradicts
-    /// the doc comment below claiming a standing bank exists so you can
-    /// "SEE the current value of" a setting, and fails the replacement
-    /// standard's "visible without being looked for". A control that cannot
-    /// be read is not a readout; it is a row of buttons.
-    ///
-    /// A closure rather than a stored id, for the same reason
-    /// `SpatialLayerBank.Layer.isOn` is one: the model is the truth, and a
-    /// reset or a launch argument must move the lit disc without anybody
-    /// remembering to tell the picker.
+    /// Which choice is current, read every frame — a closure, not a stored
+    /// id, so the model stays the truth and a reset moves the lit disc.
     var selectedID: (() -> String?)?
 
     /// Spoken before each choice's label, so a fan of shapes and a fan of
     /// materials don't both just announce "Cube".
     private let accessibilityNoun: String
     private let layout: FanLayout
-    /// A permanent switch bank rather than a menu: it starts open, and
-    /// choosing does not fold it away.
-    ///
-    /// Both shapes are legitimate and the law tells them apart. A momentary
-    /// fan suits a choice you make occasionally from many options — nine
-    /// drag bodies, four balls — where showing them all permanently would
-    /// be clutter. A standing bank suits a small set you change often and
-    /// need to SEE the current value of, which the anti-regression standard
-    /// requires be "visible without being looked for": Gravity Lab's clock
-    /// speed is the difference between an orbit you can watch and one you
-    /// cannot, so hiding it behind a pinch would be hiding the module.
+    /// A permanent switch bank rather than a menu: it starts open and
+    /// choosing does not fold it away. For a small set changed often whose
+    /// current value must stay visible (Gravity Lab's clock speed).
     private let staysOpen: Bool
     private var openness: Double = 0
 
@@ -177,37 +134,28 @@ final class SpatialPicker {
             disc.entity.scale = SIMD3(repeating: Float(placement.scale))
             disc.entity.isEnabled = placement.isVisible
 
-            // Repaint only on change. `update` runs every frame, and a
-            // material write per disc per frame is exactly the defect this
-            // codebase has been sweeping out of its renderers.
+            // Repaint only on change — a material write per disc per frame
+            // is the defect this codebase sweeps out of its renderers.
             guard selectedID != nil else { continue }
             let selected = disc.id == current
             if disc.wasSelected != selected {
                 discs[index].wasSelected = selected
                 disc.rim.model?.materials = [selected ? litRim : dimRim]
-                // REPUBLISH RATHER THAN REBUILD: a fresh component here
-                // would carry empty `systemActions` and silently strip
-                // Activate from whichever disc was just chosen — the
-                // selected one, i.e. the one most likely to be visited
-                // next.
+                // REPUBLISH RATHER THAN REBUILD: a fresh component carries
+                // empty systemActions and strips Activate from the disc.
                 SpatialActions.republish(
                     value: selected ? "selected" : "not selected", on: disc.entity)
             }
         }
 
-        // ANCHOR IN WORLD SPACE, NOT THE ARGUMENT. `anchor` is expressed
-        // in the parent's frame — labs place their apparatus under a root
-        // carrying a placement offset, and Gravity Lab's carries a scale
-        // too — while a fingertip from `RoomModel` is world space.
-        // Comparing the two directly measures a distance that does not
-        // exist. `root.position(relativeTo: nil)` is the same point in
-        // the frame the hand is already in.
+        // ANCHOR IN WORLD SPACE, NOT THE ARGUMENT: `anchor` is in the
+        // parent's (possibly scaled) frame while the hand is world space —
+        // `position(relativeTo: nil)` puts both in the same frame.
         Recession.apply(to: root, anchor: root.position(relativeTo: nil),
                         nearestHand: nearestHand)
     }
 
-    /// True when the tap chose something — the fan folds itself, so the
-    /// caller does not have to remember to.
+    /// True when the tap chose something — the fan folds itself.
     func handleTap(_ entity: Entity) -> Bool {
         guard root.isEnabled else { return false }
         var current: Entity? = entity
@@ -232,10 +180,9 @@ final class SpatialPicker {
         disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
         disc.components.set(GroundingShadowComponent(castsShadow: true))
 
-        // The glass edge, proud of the face all the way round. It sits
-        // UNDER the selection ring below, which is brighter and coloured
-        // — the hairline says "this is a pane", the ring says "this one
-        // is chosen", and they must not be the same cue.
+        // The glass edge, proud of the face all round. It sits UNDER the
+        // brighter coloured selection ring — the hairline and the ring must
+        // not be the same cue.
         let border = ModelEntity(
             mesh: .generateCylinder(height: 0.0042,
                                     radius: 0.026 + Materials.glassEdgeInset),
@@ -270,26 +217,10 @@ final class SpatialPicker {
         disc.addChild(label)
 
         disc.components.set(InputTargetComponent())
-        // A DISC IS FLAT, and this was a ball. The lateral 0.068 m is
-        // deliberate reach over a 0.052 m face — it is also the number
-        // `FanLayout` must space these by, and the one `FanLayoutTests`
-        // failed to use. But the same radius applied VERTICALLY made a
-        // 68 mm-thick slab out of a disc 10.5 mm thick, hanging 3 cm
-        // above and below the fan over whatever the fan was drawn in
-        // front of.
-        // THE LABEL IS PART OF THE TARGET. The pill sits 42 mm forward
-        // of the disc's centre, 8 mm past the 68 mm box, so the word
-        // naming the choice was scenery you could pinch through — the
-        // same defect `SpatialLayerBank` and `SpatialActionBank` each
-        // found and fixed alone, which is why there is now a criterion
-        // instead of a third comment.
-        //
-        // CLAMPED TO `colliderSpan` LATERALLY. A label wider than the
-        // disc's own reach is not a reason to widen the disc: `FanLayout`
-        // spaces the fan by exactly this number, so a long choice name
-        // would push neighbouring targets into each other and make which
-        // disc you hit a matter of hit order. Covering most of a long
-        // word beats overlapping the disc beside it.
+        // A DISC IS FLAT: the collider box is thin in Y so it does not
+        // become a slab hanging above and below the fan. THE LABEL IS PART
+        // OF THE TARGET (a second box), CLAMPED TO `colliderSpan` laterally
+        // so a long name does not push neighbouring targets into each other.
         let labelSpan = min(HubScene.namePlateWidth(choice.label, size: PlateStyle.labelSize),
                             Self.colliderSpan)
         disc.components.set(CollisionComponent(shapes: [

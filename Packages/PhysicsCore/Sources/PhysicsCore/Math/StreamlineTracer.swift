@@ -1,17 +1,8 @@
 //
 //  StreamlineTracer.swift
-//  PhysicsCore — Math
-//
-//  Domain-agnostic streamline integration: traces curves that follow the
-//  direction of any vector field F(r), by 4th-order Runge–Kutta on the
-//  *normalized* field, dr/ds = F(r)/|F(r)|. Normalizing gives unit-speed
-//  (arc-length) parametrization: every step advances ~stepSize meters along
-//  the curve regardless of the field's magnitude, so integration neither
-//  blows up near singularities nor crawls in weak regions.
-//
-//  Electric field lines, magnetic field lines, and flow visualizations are
-//  all streamlines — each module supplies its own field closure, seeding
-//  policy, and termination sites.
+//  PhysicsCore — Math: streamlines of any vector field, RK4 on the
+//  NORMALIZED field dr/ds = F/|F| — unit-speed arc-length steps, so it
+//  neither blows up near singularities nor crawls in weak regions.
 //
 
 import Foundation
@@ -22,21 +13,14 @@ public enum StreamlineTracer {
         /// Arc length advanced per RK4 step, in meters.
         public var stepSize = 0.008
         public var maxSteps = 320
-        /// A line ends when it comes this close to any of `stopCenters`
-        /// (e.g. the charges field lines terminate on).
+        /// A line ends within `stopRadius` of any of these (e.g. charges).
         public var stopCenters: [SIMD3<Double>] = []
         public var stopRadius = 0.04
-        /// Lines also end when they wander this far from `boundsCenter`
-        /// ("off to infinity" as far as the room is concerned).
+        /// Lines also end past `boundsRadius` from here ("off to infinity").
         public var boundsCenter: SIMD3<Double> = .zero
         public var boundsRadius = 0.85
-        /// Lines also end where this says they have landed — for
-        /// termination sites that are SURFACES rather than points
-        /// (a capacitor plate is a rectangle, and a sphere around its
-        /// centre either misses the corners or swallows the gap).
-        /// Without it a line that reaches a conductor integrates on
-        /// through the far side at full step cost until `maxSteps` or
-        /// the bounds catch it, for a caller to trim afterwards.
+        /// Termination test for SURFACE sites (a plate is a rectangle; a stop
+        /// sphere misses its corners or swallows the gap).
         public var stopWhere: (@Sendable (SIMD3<Double>) -> Bool)?
 
         public init() {}
@@ -50,8 +34,7 @@ public enum StreamlineTracer {
         field: (SIMD3<Double>) -> SIMD3<Double>,
         config: Config
     ) -> [SIMD3<Double>] {
-        // Unit tangent of the streamline at a point; nil where the field
-        // vanishes (equilibrium points, or a guarded singularity).
+        // Unit tangent; nil where the field vanishes (equilibria, guarded singularity).
         func tangent(at point: SIMD3<Double>) -> SIMD3<Double>? {
             let value = field(point)
             let magnitude = simd_length(value)
@@ -65,7 +48,6 @@ public enum StreamlineTracer {
         let halfStep = h / 2
 
         for _ in 0..<config.maxSteps {
-            // RK4: sample the direction at four staged points and blend.
             guard let k1 = tangent(at: p) else { break }
             guard let k2 = tangent(at: p + halfStep * k1) else { break }
             guard let k3 = tangent(at: p + halfStep * k2) else { break }
@@ -76,7 +58,6 @@ public enum StreamlineTracer {
             p += (h / 6) * blended
             points.append(p)
 
-            // Landed on a termination site or left the room.
             if config.stopCenters.contains(where: { simd_distance($0, p) < config.stopRadius }) {
                 break
             }
@@ -90,24 +71,15 @@ public enum StreamlineTracer {
         return points
     }
 
-    /// One source's contribution to a field-line picture: where it is,
-    /// and how many lines it earns.
+    /// One source: where it is, and how many lines it earns.
     public struct Seeded: Sendable {
         public var position: SIMD3<Double>
         public var seeds: Int
-        /// Which way lines run from this source: +1 out, −1 in. Ignored
-        /// by `loopedLines`, which traces both ways regardless.
+        /// +1 out, −1 in. Ignored by `loopedLines`, which traces both ways.
         public var sign: Double
-        /// Where on the seed sphere this source's lines start.
-        ///
-        /// `nil` spreads them evenly over the whole sphere, which is
-        /// right for a source with no preferred axis — a point charge
-        /// radiates the same in every direction. A source that DOES have
-        /// an axis supplies its own, because for those "evenly over the
-        /// sphere" is the wrong distribution twice over: it draws as
-        /// many lines out of the weak equator as out of the strong
-        /// poles, and it does not know that the far hemisphere's seeds
-        /// lie on loops the near hemisphere's have already drawn.
+        /// Seed directions; nil = uniform over the sphere (right for a point
+        /// charge). Axial sources supply their own — uniform over-seeds the
+        /// weak equator and re-draws loops the near hemisphere already drew.
         public var directions: [SIMD3<Double>]?
 
         public init(position: SIMD3<Double>, seeds: Int, sign: Double = 1,
@@ -119,13 +91,8 @@ public enum StreamlineTracer {
         }
     }
 
-    /// One line per seed, each traced a single direction.
-    ///
-    /// The electric case: lines begin on positive charges and end on
-    /// negative ones, so a charge's own sign says which way its bundle
-    /// runs. Tracing negatives backwards draws the same curves the
-    /// incoming lines follow, which is why every charge radiates lines
-    /// all the way around instead of showing them on one side only.
+    /// One line per seed, traced one direction — the electric case: each
+    /// charge's sign sets its bundle's direction (negatives trace backwards).
     public static func directedLines(
         from sources: [Seeded],
         seedRadius: Double,
@@ -146,13 +113,8 @@ public enum StreamlineTracer {
         return lines
     }
 
-    /// Both halves from each seed, spliced through it into one curve.
-    ///
-    /// The magnetic case, and the reason it needs its own function: with
-    /// no monopoles there is nowhere for a line to start or stop, so a
-    /// line leaving a north pole has to be followed *backwards* as well
-    /// to close it. Tracing one direction only would draw half a loop
-    /// and imply magnetic charge.
+    /// Both halves from each seed, spliced into one curve — the magnetic
+    /// case: no monopoles, so one-way tracing would imply magnetic charge.
     public static func loopedLines(
         from sources: [Seeded],
         seedRadius: Double,
@@ -168,9 +130,7 @@ public enum StreamlineTracer {
                 let seed = source.position + seedRadius * direction
                 let forward = streamline(from: seed, sign: 1, field: field, config: config)
                 let backward = streamline(from: seed, sign: -1, field: field, config: config)
-                // Backward reversed, minus the seed it shares with
-                // forward, then forward — one continuous curve through
-                // the seed rather than two lines meeting at a kink.
+                // Backward reversed, dropping the shared seed — one continuous curve, no kink.
                 var line = Array(backward.reversed().dropLast())
                 line.append(contentsOf: forward)
                 if line.count > 2 { lines.append(line) }
@@ -179,9 +139,7 @@ public enum StreamlineTracer {
         return lines
     }
 
-    /// `count` directions spread nearly uniformly over a unit sphere
-    /// (Fibonacci lattice — the standard trick for even spherical coverage).
-    /// The usual seeding pattern for streamlines radiating from a point.
+    /// `count` near-uniform unit directions (Fibonacci sphere lattice).
     public static func fibonacciSphere(count: Int) -> [SIMD3<Double>] {
         let goldenAngle = Double.pi * (3 - 5.0.squareRoot())
         return (0..<count).map { i in

@@ -2,23 +2,10 @@
 //  GeometryPipeline.swift
 //  RenderKit
 //
-//  A coalescing background worker for expensive geometry (streamline
-//  tracing, isosurface marching, trail meshes). The frame-rate contract for
-//  every simulation: heavy math NEVER runs on the main thread.
-//
-//  Submit jobs as fast as state changes; if they arrive faster than
-//  rebuilds finish, intermediate jobs are dropped and only the newest runs
-//  ("newest state wins"). Results are applied back on the main actor.
-//
-//  IT IS ALSO CANCELLABLE, since 2026-08-07, and was not before. The
-//  driving `Task` was never stored and neither loop checked
-//  `Task.isCancelled`, so a trace in flight when a lab closed ran to
-//  completion and then uploaded a `MeshResource` and enabled an entity
-//  on a renderer whose scene was being torn down. Five renderers use
-//  this, and Magnetism's field-line job is the heavy one — 2400 steps
-//  per line plus an O(n²) dedup sweep — so "leave Magnetism during a
-//  drag" is a real path to seconds of compute nobody can see and a
-//  write into a dead scene.
+//  Coalescing background worker for expensive geometry: newest state wins,
+//  heavy math never on the main thread, results applied on the main actor.
+//  Cancellable — call cancel() from teardown, or a trace that outlives its
+//  lab writes into a dead scene.
 //
 
 import Foundation
@@ -51,8 +38,8 @@ public final class GeometryPipeline<Job: Sendable, Output: Sendable> {
                 let output = await Task.detached(priority: .userInitiated) {
                     compute(next)
                 }.value
-                // Checked AFTER the await: the whole point is the work
-                // that finishes once the scene it was for is gone.
+                // Checked AFTER the await — the danger is work finishing
+                // once the scene it was for is gone.
                 guard !Task.isCancelled else { break }
                 self?.apply(output)
             }

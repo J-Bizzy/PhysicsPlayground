@@ -1,33 +1,7 @@
 //
 //  NetPartition.swift
-//  PhysicsCore — Circuits
-//
-//  Which terminals are electrically the same point. A disjoint-set
-//  forest over SLOTS — small integers the caller assigns — with union
-//  by size and path compression, so a bench of a few dozen terminals
-//  partitions in effectively linear time.
-//
-//  This is the half of the circuit that `CircuitSolver` assumes has
-//  already happened: the solver takes `nodeA`/`nodeB` as given and
-//  never asks how two components came to share a node. Until now that
-//  question was answered by a union–find built from scratch inside the
-//  app's solve, every frame, and thrown away — so nothing above it
-//  could ever ask "are these two terminals already the same point?"
-//  without walking the wire list again. It is here, in PhysicsCore,
-//  because it is pure index arithmetic with real invariants, and it
-//  belongs in the fast `swift test` loop rather than behind a
-//  simulator.
-//
-//  SLOT NUMBERING IS THE CALLER'S CONTRACT, and it is load-bearing.
-//  Circuit Workshop uses `slot = 2 * componentIndex + end`, which is
-//  what lets its stamping loop stay index-parallel with its component
-//  array — element i is component i — without a lookup table between
-//  them.
-//
-//  Ground is not a property of the graph. `numbering(ground:)` takes
-//  the slot the caller wants at node 0, because which point of a
-//  circuit is "zero volts" is a modelling choice, not a fact about the
-//  wires.
+//  Disjoint-set forest over caller-assigned terminal slots (union by size + path compression) — which terminals are electrically one point.
+//  Slot numbering is the caller's contract (Circuit Workshop: slot = 2·componentIndex + end, keeping stamping index-parallel); ground is a numbering choice, not a graph property.
 //
 
 import Foundation
@@ -38,8 +12,7 @@ public struct NetPartition: Sendable, Equatable {
     private var parent: [Int]
     /// Tree sizes, for union by size. Meaningful at roots only.
     private var size: [Int]
-    /// How many disjoint sets remain — every slot starts alone, and
-    /// each union that joins two distinct roots removes one.
+    /// Disjoint sets remaining — each root-joining union removes one.
     public private(set) var netCount: Int
 
     public var slotCount: Int { parent.count }
@@ -51,12 +24,8 @@ public struct NetPartition: Sendable, Equatable {
         netCount = slotCount
     }
 
-    /// The root of `slot`'s set, compressing the path it walked.
-    ///
-    /// Mutating is not an implementation detail leaking out: path
-    /// compression is what keeps this near-constant, and a
-    /// non-mutating variant that skipped it would quietly be the slow
-    /// one. `areConnected` exists for callers holding a `let`.
+    /// Root of `slot`'s set, compressing the path — mutating on purpose (compression is the speed);
+    /// `areConnected` serves callers holding a `let`.
     public mutating func find(_ slot: Int) -> Int {
         precondition(parent.indices.contains(slot), "Slot \(slot) is outside the partition.")
         var root = slot
@@ -70,24 +39,18 @@ public struct NetPartition: Sendable, Equatable {
         return root
     }
 
-    /// Declare two slots to be the same electrical point. Idempotent,
-    /// and order-independent: the partition after a set of unions does
-    /// not depend on the order they arrived in.
+    /// Declare two slots the same electrical point. Idempotent and order-independent.
     public mutating func union(_ a: Int, _ b: Int) {
         let rootA = find(a), rootB = find(b)
         guard rootA != rootB else { return }
-        // Union by size: the smaller tree hangs off the larger, which
-        // is what bounds the depth path compression then flattens.
+        // Union by size bounds the depth that compression then flattens.
         let (big, small) = size[rootA] >= size[rootB] ? (rootA, rootB) : (rootB, rootA)
         parent[small] = big
         size[big] += size[small]
         netCount -= 1
     }
 
-    /// Whether two slots are the same electrical point — without
-    /// mutating, so a caller holding an immutable partition can ask.
-    /// Answers identically to `find(a) == find(b)`; it just walks the
-    /// full path instead of compressing it.
+    /// Non-mutating `find(a) == find(b)` — walks the full path instead of compressing.
     public func areConnected(_ a: Int, _ b: Int) -> Bool {
         precondition(parent.indices.contains(a) && parent.indices.contains(b),
                      "Slot outside the partition.")
@@ -100,19 +63,8 @@ public struct NetPartition: Sendable, Equatable {
         return root
     }
 
-    /// Compact node numbers for the solver: 0..<nodeCount with no gaps,
-    /// `ground`'s net forced to 0 because `CircuitSolver` grounds node
-    /// 0 and eliminates its row.
-    ///
-    /// Returns an ARRAY indexed by slot, not a dictionary — this is
-    /// read twice per component on every frame of every circuit, and a
-    /// dictionary here is a hash per terminal per frame for a lookup
-    /// the caller already has an integer for.
-    ///
-    /// Numbering is deterministic: after ground, nets are numbered in
-    /// order of their lowest-numbered slot, so the same bench always
-    /// produces the same node ids and a snapshot restored twice is the
-    /// same circuit twice.
+    /// Compact gapless node numbers with `ground`'s net forced to 0 (CircuitSolver grounds node 0).
+    /// Returns a slot-indexed ARRAY (read twice per component per frame), and numbering is deterministic — nets ordered by lowest slot, so a restored bench gets identical node ids.
     public mutating func numbering(ground: Int) -> (nodeOfSlot: [Int], nodeCount: Int) {
         guard !parent.isEmpty else { return ([], 0) }
         precondition(parent.indices.contains(ground), "Ground slot \(ground) is outside the partition.")

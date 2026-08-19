@@ -1,31 +1,7 @@
 //
 //  CircuitSolver.swift
-//  PhysicsCore — Circuits
-//
-//  A nodal-analysis circuit solver. Every element is reduced to its
-//  Norton companion — a conductance g between its nodes plus a current
-//  injection J — which keeps the whole solver one symmetric linear
-//  system G·v = I (no extended MNA rows needed):
-//
-//    · resistor R:            g = 1/R
-//    · battery (V, r_int):    g = 1/r_int,  J = V/r_int   (Thévenin→Norton;
-//      the internal resistance is physically honest AND keeps shorted
-//      batteries finite)
-//    · capacitor C (backward Euler over dt):
-//                             g = C/dt,     J = (C/dt)·v_previous
-//      — this is what makes RC charging follow the real 1−e^(−t/RC)
-//      curve, verified by the tests
-//    · closed switch:         g = 1/1 mΩ
-//    · open switch:           nothing stamped
-//
-//  Ground is node 0. A tiny diagonal leak keeps floating (unwired)
-//  nodes solvable. Gaussian elimination with partial pivoting — circuits
-//  here are ≤ a few dozen nodes, so this is microseconds.
-//
-//  Sign conventions: element current is positive flowing from nodeA
-//  through the element to nodeB; a battery's + terminal is nodeA.
-//  Kirchhoff's laws are consequences of the formulation — the tests
-//  check them anyway.
+//  Nodal analysis via Norton companions — one symmetric G·v = I system, Gaussian elimination with partial pivoting; backward-Euler C and L give the real 1−e^(−t/RC) / 1−e^(−tR/L) curves; ground is node 0, a tiny diagonal leak keeps floating nodes solvable.
+//  Signs: element current positive nodeA→nodeB; a battery's + terminal is nodeA.
 //
 
 import Foundation
@@ -43,9 +19,8 @@ public struct CircuitElement: Sendable, Equatable {
         /// Backward-Euler inductor: i = i_prev + (dt/L)·v — RL rise
         /// follows the real 1 − e^(−tR/L) curve.
         case inductor(henries: Double, previousCurrent: Double)
-        /// An ideal-ish diode: forward drop + small on-resistance when
-        /// conducting (anode = nodeA), otherwise open. Conduction state
-        /// is found by solveWithDiodes' fixed-point iteration.
+        /// Ideal-ish diode: drop + on-resistance when conducting (anode = nodeA), else open;
+        /// state found by solveWithDiodes' fixed-point iteration.
         case diode(forwardDrop: Double, onResistance: Double, isConducting: Bool)
     }
 
@@ -62,45 +37,12 @@ public struct CircuitElement: Sendable, Equatable {
 
 public enum CircuitSolver {
     public static let switchResistance = 1e-3
-    /// A tiny conductance to ground on every node, so an unconnected
-    /// island still has a solvable row rather than a singular matrix.
-    ///
-    /// PUBLIC because it is a FLOOR that callers have to reason about,
-    /// not an implementation detail. Every open element leaks
-    /// `voltage × leakConductance`, so a reading of "is any current
-    /// flowing here" compared against a fixed small number is really
-    /// comparing against this — and Circuits' ammeter used `1e-9`, the
-    /// same magnitude, so an open switch's 9 nA leak read as a live
-    /// circuit and the meter refused a loop the user had just broken.
-    /// A caller that needs such a threshold should derive it from here.
+    /// Tiny per-node conductance to ground so unwired islands stay solvable. PUBLIC because it is a
+    /// noise FLOOR: every open element leaks voltage × this, so any "is current flowing" threshold must derive from it.
     public static let leakConductance = 1e-9
 
-    /// How far above the leak floor a current has to be before it counts
-    /// as real, given the voltage driving it.
-    ///
-    /// A hundredfold margin: leak through an open element at `volts` is
-    /// exactly `volts × leakConductance`, so this is never a false
-    /// positive, and at any sane voltage it still lands far below a
-    /// microamp — orders of magnitude under anything a circuit on this
-    /// The smallest current that means "this element is carrying
-    /// something", given the voltage across it.
-    ///
-    /// Derived from this solver's own leak floor rather than a
-    /// hand-typed `1e-9`, so a caller asking "is this live" compares
-    /// against the number that actually sets the noise, and says so.
-    ///
-    /// I RETIRED THIS FOR AN HOUR ON 2026-08-08 AND WAS WRONG. The
-    /// argument was that stamping Circuit Workshop's ammeter into the
-    /// network changed the question from "is this above the noise" to
-    /// "is this a current a meter would object to". That is true of the
-    /// READING and false of the GUARD: whether the probes are bracketing
-    /// something live is answerable from the component's own current,
-    /// immediately, without the meter being in the circuit at all — and
-    /// it has to be, because the guard runs the moment a probe lands
-    /// while the stamped current only exists after a solve.
-    /// `testAmpsModeRefusesToBePutAcrossALiveComponent` failed the
-    /// instant the guard was made to depend on the stamp, which is
-    /// exactly the failure it was written for.
+    /// Smallest current that counts as "live" given the driving voltage — 10× the leak floor.
+    /// Must stay independent of any stamped meter: the guard runs the moment a probe lands, before any solve.
     public static func liveCurrentThreshold(volts: Double) -> Double {
         max(abs(volts) * leakConductance * 10, 1e-9)
     }
@@ -116,8 +58,7 @@ public enum CircuitSolver {
         public var powers: [Double]
     }
 
-    /// Norton companion for one element: (conductance, injected current
-    /// into nodeA).
+    /// Norton companion for one element: (conductance, injected current into nodeA).
     private static func companion(_ kind: CircuitElement.Kind, timeStep: Double) -> (Double, Double) {
         switch kind {
         case .battery(let volts, let internalResistance):
@@ -209,7 +150,6 @@ public enum CircuitSolver {
             }
         }
 
-        // Element outputs from the node solution.
         var currents = [Double](repeating: 0, count: elements.count)
         var elementVoltages = [Double](repeating: 0, count: elements.count)
         var powers = [Double](repeating: 0, count: elements.count)
@@ -219,12 +159,10 @@ public enum CircuitSolver {
             switch element.kind {
             case .battery(let volts, let internalResistance):
                 let r = max(internalResistance, 1e-3)
-                // Internal current A→B; negative means the battery is
-                // driving current out of its + terminal, as it should.
+                // Internal current A→B; negative = driving out of the + terminal.
                 let current = (vAB - volts) / r
                 currents[index] = current
-                // Net power: internal dissipation minus delivered EMF power
-                // (negative overall when supplying the circuit).
+                // Net power: internal dissipation + EMF term (negative when supplying).
                 powers[index] = current * current * r + current * volts
             case .resistor(let ohms):
                 let current = vAB / max(ohms, 1e-6)
@@ -259,12 +197,8 @@ public enum CircuitSolver {
                         voltages: elementVoltages, powers: powers)
     }
 
-    /// Solves a network containing diodes by fixed-point iteration on
-    /// their conduction states: assume, solve, check each diode against
-    /// its own solution (conducting must carry forward current; blocking
-    /// must see less than the forward drop), repeat until stable. Two
-    /// states per diode and monotone updates make this converge in a
-    /// few passes for the networks this app builds.
+    /// Diode networks by fixed-point iteration on conduction states (conducting must carry forward
+    /// current; blocking must see less than the drop) — converges in a few passes for these networks.
     public static func solveWithDiodes(
         elements: [CircuitElement],
         nodeCount: Int,
@@ -298,37 +232,13 @@ public enum CircuitSolver {
 
     // MARK: Resistor color code (the EE garnish)
 
-    /// The real 4-band code for a resistance, e.g. 4700 → [yellow,
-    /// violet, red] + gold tolerance. Returns band indices 0–9 for the
-    /// two digits and the multiplier exponent. nil for out-of-range.
-    ///
-    /// TWO ARITHMETIC BUGS LIVED HERE UNTIL 2026-08-03, and the second
-    /// was reachable by dragging a bead.
-    ///
-    /// 1. **The decade boundary.** Rounding to two digits can carry:
-    ///    996 Ω normalises to 99.6, which rounds to **100**, and the old
-    ///    code then took `min(100 / 10, 9) = 9` and `100 % 10 = 0` —
-    ///    painting **900 Ω on a 996 Ω resistor**. The clamp hid the carry
-    ///    instead of handling it. The fix is to notice the carry and
-    ///    promote the exponent, which is what a carry means.
-    /// 2. **No gold band.** The multiplier was `max(exponent - 1, 0)`, so
-    ///    it could never go negative — but a real 4-band code uses gold
-    ///    (×0.1) for 1–9.9 Ω. Every resistance below 10 Ω was painted an
-    ///    order of magnitude high: 4.7 Ω read as 47 Ω.
-    ///
-    /// The app's own resistor rail runs 10…4700 Ω continuously
-    /// (`CircuitsModel.valueRange`), so (2) was unreachable in the
-    /// shipping app and (1) was one bead-drag away. The tests covered
-    /// 4700 and 56 — both safely mid-decade, which is why neither was
-    /// caught.
-    ///
-    /// `multiplier` is a signed power of ten: −1 is the gold band.
+    /// Real 4-band resistor code: two digit indices 0–9 plus a SIGNED multiplier exponent
+    /// (−1 = gold, ×0.1, needed for 1–9.9 Ω). nil out of range.
     public static func colorBands(ohms: Double) -> (digit1: Int, digit2: Int, multiplier: Int)? {
         guard ohms >= 1, ohms < 1e11 else { return nil }
         var exponent = Int(floor(log10(ohms)))
         var twoDigits = Int((ohms / pow(10, Double(exponent - 1))).rounded())
-        // The carry. 99.6 → 100 is not a three-digit mantissa, it is the
-        // next decade: 100 × 10^(e-1) == 10 × 10^e.
+        // Rounding carry: 99.6 → 100 is the next decade — promote the exponent or 996 Ω paints as 900 Ω.
         if twoDigits >= 100 {
             twoDigits /= 10
             exponent += 1

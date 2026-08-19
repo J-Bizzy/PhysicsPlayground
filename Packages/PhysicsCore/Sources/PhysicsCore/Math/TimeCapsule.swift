@@ -1,22 +1,8 @@
 //
 //  TimeCapsule.swift
-//  PhysicsCore — Math
-//
-//  A time-windowed ring buffer of simulation snapshots: the memory behind
-//  the Time Capsule scrubber. A model records one snapshot per physics
-//  step; scrubbing looks a recorded frame up by time and restores it.
-//
-//  Two properties are load-bearing and tested, not assumed:
-//
-//  - A lookup always lands ON a recorded frame, never between two. Most
-//    of the simulations here advance by numerical integration through
-//    discrete events (bounces, merges, component failures), so a state
-//    interpolated between frames is a state that never happened. Scrub
-//    resolution is therefore the recording cadence, by design.
-//
-//  - Memory is bounded twice over: frames older than `window` seconds are
-//    evicted by time, and a fixed frame capacity is the hard guarantee if
-//    the caller records faster than `expectedRate`.
+//  PhysicsCore — Math: time-windowed ring buffer of simulation snapshots.
+//  Lookups land ON a recorded frame, never between two (an interpolated
+//  state never happened); memory bounded by `window` AND a hard `capacity`.
 //
 
 public struct TimeCapsule<Snapshot> {
@@ -37,10 +23,8 @@ public struct TimeCapsule<Snapshot> {
     /// The hard frame cap: window × expectedRate, rounded up.
     public let capacity: Int
 
-    // Circular storage. `head` is the index of the oldest frame; frames
-    // are ordered by strictly increasing time from there. Slots are
-    // optionals only so the buffer can preallocate without demanding a
-    // default Snapshot; every slot inside `count` is non-nil.
+    // Circular: `head` = oldest, strictly increasing time from there; slots
+    // are optional only to preallocate — every slot inside `count` is non-nil.
     private var storage: [Frame?]
     private var head = 0
     public private(set) var count = 0
@@ -66,9 +50,8 @@ public struct TimeCapsule<Snapshot> {
 
     // MARK: Recording
 
-    /// Appends a frame. Time must grow; if it does not (a rewound or
-    /// stalled clock), frames at or after `time` are dropped first so the
-    /// buffer's ordering invariant survives a caller misbehaving.
+    /// Appends. Time must grow; a rewound/stalled clock drops frames at or
+    /// after `time` first, so the ordering invariant survives a bad caller.
     public mutating func record(_ snapshot: Snapshot, at time: Double) {
         while let last = newest(), last.time >= time {
             dropNewest()
@@ -87,8 +70,7 @@ public struct TimeCapsule<Snapshot> {
         count = 0
     }
 
-    /// Discards every frame strictly after `time` — the resume path:
-    /// un-pausing from a scrubbed instant truncates the rejected future.
+    /// Discards frames strictly after `time` — un-pausing from a scrub truncates the rejected future.
     public mutating func truncate(after time: Double) {
         while let last = newest(), last.time > time {
             dropNewest()
@@ -97,17 +79,14 @@ public struct TimeCapsule<Snapshot> {
 
     // MARK: Lookup
 
-    /// The recorded frame nearest to and not after `time`. Queries before
-    /// the span clamp to the oldest frame, after it to the newest —
-    /// scrubbing never fabricates a state.
+    /// Nearest recorded frame not after `time`, clamped to the span's ends — never fabricates a state.
     public func frame(at time: Double) -> Frame? {
         guard count > 0 else { return nil }
         guard let i = index(atOrBefore: time) else { return frame(atIndex: 0) }
         return frame(atIndex: i)
     }
 
-    /// The frame `frames` recorded ticks away from the frame at `time`
-    /// (negative = earlier), clamped to the buffer's ends.
+    /// The frame `frames` recorded ticks away (negative = earlier), clamped to the ends.
     public func frame(steppedFrom time: Double, by frames: Int) -> Frame? {
         guard count > 0 else { return nil }
         let base = index(atOrBefore: time) ?? 0
@@ -115,9 +94,7 @@ public struct TimeCapsule<Snapshot> {
         return frame(atIndex: stepped)
     }
 
-    /// Every recorded frame with time in `range`, taking each `stride`-th
-    /// but always keeping both ends — a path drawn from these vertices
-    /// starts and finishes where the recording does.
+    /// Every `stride`-th recorded frame in `range`, but ALWAYS keeping both ends.
     public func frames(in range: ClosedRange<Double>, stride: Int = 1) -> [Frame] {
         guard count > 0, stride > 0 else { return [] }
         var first: Int?
@@ -147,13 +124,11 @@ public struct TimeCapsule<Snapshot> {
 
     // MARK: Internals
 
-    /// Logical index → stored frame. Only valid for 0..<count.
     private func frame(atIndex logical: Int) -> Frame {
         storage[(head + logical) % capacity]!
     }
 
-    /// Binary search: the greatest logical index whose time ≤ `time`,
-    /// or nil if every frame is later.
+    /// Binary search: greatest logical index with time ≤ `time`; nil if all later.
     private func index(atOrBefore time: Double) -> Int? {
         guard count > 0, frame(atIndex: 0).time <= time else { return nil }
         var lo = 0

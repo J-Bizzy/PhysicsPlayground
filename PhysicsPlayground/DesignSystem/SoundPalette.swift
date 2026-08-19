@@ -2,20 +2,9 @@
 //  SoundPalette.swift
 //  Physics Playground — Design system
 //
-//  The app's sound design, with no audio assets: every sound is
-//  synthesized (sine partials, filtered noise, exponential envelopes),
-//  written once as WAV files into Caches, and loaded as spatial
-//  AudioFileResources. Playback is positional — a bounce sounds like it
-//  happened where the ball hit.
-//
-//  The palette is deliberately quiet and physical: a soft pop for
-//  launches, a filtered whoosh for throws, a low thud for impacts (gain
-//  scaled by impact speed), a two-note chime for scores, a deep boom
-//  for planetary mergers. Nothing gamified, nothing looping.
-//
-//  Models publish SpatialSoundEvents (pure data, unit-testable);
-//  renderers position an emitter entity and play. Everything no-ops
-//  gracefully if synthesis or loading fails.
+//  All sounds are synthesized, written once as WAVs into Caches, and loaded
+//  as spatial AudioFileResources. Models publish SpatialSoundEvents;
+//  renderers position an emitter and play. No-ops if loading fails.
 //
 
 import Foundation
@@ -34,23 +23,15 @@ struct SpatialSoundEvent: Equatable {
 enum SoundPalette {
     enum Sound: String, CaseIterable {
         case pop, whoosh, thud, chime, boom
-        /// The grab acknowledgement (2026-08-06): a short bright pluck,
-        /// quieter and quicker than `pop` — the audio half of the
-        /// pickup pulse. Its gentler sibling `releaseTick` answers a
-        /// set-down, and closes a control ring (open keeps its pop, so
-        /// the pair reads as unfold/fold rather than two unfolds).
+        /// Grab acknowledgement; `releaseTick` answers a set-down and closes
+        /// a ring (open keeps its pop, so the pair reads unfold/fold).
         case grabTick, releaseTick
-        /// The home's arrival (2026-08-14): a warm swell under the
-        /// centred wordmark that resolves into a soft bell exactly as
-        /// the mark lands on the wall, then dies away with the cascade.
-        /// Its bell time and `HubIntro.landingTime` are pinned to each
-        /// other in `HubIntroTests` — the sound is the choreography's
-        /// clock made audible, and the two must not drift.
+        /// The home's arrival swell. Its bell time and `HubIntro.landingTime`
+        /// are pinned to each other in `HubIntroTests` — they must not drift.
         case calibration
     }
 
-    /// When `calibration`'s bell strikes, seconds into the file — the
-    /// moment the wordmark lands. See `HubIntro.landingTime`.
+    /// When `calibration`'s bell strikes, seconds into the file — must match `HubIntro.landingTime`.
     nonisolated static let calibrationLanding = 2.65
 
     private static var resources: [Sound: AudioFileResource] = [:]
@@ -64,22 +45,9 @@ enum SoundPalette {
     }
 
     /// Synthesize (if needed) and load every sound. Call once, early.
-    ///
-    /// THE SYNTHESIS RUNS OFF THE MAIN THREAD and must keep doing so.
-    /// This enum is `@MainActor`, so an unstructured `Task {}` inside it
-    /// INHERITS the main actor, and `writeIfNeeded` and friends are
-    /// synchronous — which meant that until 2026-08-07 first launch
-    /// rendered ~40 s of audio (36 s of it the ambient pad, every sample
-    /// summing nine detuned voice pairs, then a 3.2 MB `Data` built two
-    /// bytes at a time) on the main thread while the home screen was
-    /// trying to draw. Invisible on a warm simulator, because the files
-    /// are already on disk; a multi-second stall on a cold install and
-    /// after any purge of Caches.
-    ///
-    /// The sample math is pure `[Float]` arithmetic over `Sendable`
-    /// values and reads no actor state, so it is `nonisolated` and runs
-    /// detached. Only the `AudioFileResource` loads and the property
-    /// writes come back here.
+    /// Synthesis MUST stay off the main actor: an unstructured `Task {}`
+    /// here inherits @MainActor, so the sample math runs detached
+    /// (`nonisolated`); only the resource loads come back here.
     static func warmUp() {
         guard !warmed else { return }
         warmed = true
@@ -112,16 +80,9 @@ enum SoundPalette {
         }
     }
 
-    /// The cache directory every `write…IfNeeded` writes into.
-    ///
-    /// CACHE FILENAMES CARRY A VERSION SUFFIX, all four of them as of
-    /// 2026-08-07. Synthesis is cached to disk and only ever written
-    /// when the file is absent, so editing a recipe without renaming its
-    /// file changes nothing for anyone who has already launched the app.
-    /// `ambient-lab-4.wav` had followed that rule since it was written;
-    /// the pops, the fan hum and the resonance tone had not, so three of
-    /// the four recipes were uneditable in practice and the comment
-    /// stating the rule was a rule we followed once.
+    /// The cache directory. CACHE FILENAMES CARRY A VERSION SUFFIX: a file
+    /// is only written when absent, so editing a recipe without renaming
+    /// its file changes nothing for anyone who has already launched.
     private nonisolated static func soundsDirectory() throws -> URL {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("PhysicsPlaygroundSounds", isDirectory: true)
@@ -136,10 +97,8 @@ enum SoundPalette {
     /// it with the controller's `speed` to sing the swept drive.
     nonisolated static let resonanceToneBaseHz = 220.0
 
-    /// Starts the looping resonance tone on `entity`, silent to begin
-    /// with. The caller sets the controller's `gain` from how hard the
-    /// membrane is ringing and its `speed` from the drive frequency, so
-    /// the drum sings louder at resonance and higher as you sweep up.
+    /// Starts the looping resonance tone on `entity`, silent. The caller
+    /// sets `gain` from ring amplitude and `speed` from drive frequency.
     static func startResonanceTone(on entity: Entity) -> AudioPlaybackController? {
         guard let resonanceToneResource else { return nil }
         entity.components.set(SpatialAudioComponent(gain: Audio.Decibel(-80)))
@@ -156,9 +115,8 @@ enum SoundPalette {
         return url
     }
 
-    /// A 1-second seamless loop of a warm drum-like tone: a 220 Hz
-    /// fundamental with a couple of soft harmonics (all integer cycles in
-    /// one second, so the loop seam vanishes).
+    /// A 1 s seamless loop: 220 Hz fundamental plus soft harmonics — all
+    /// integer cycles per second, so the loop seam vanishes.
     private nonisolated static func synthesizeResonanceTone() -> [Float] {
         render(duration: 1.0) { t, _ in
             let f = resonanceToneBaseHz
@@ -172,8 +130,7 @@ enum SoundPalette {
 
     private static var ambientResource: AudioFileResource?
 
-    /// Starts the looping lab ambience on `entity` (very quiet: a deep
-    /// air-handler rumble, a faint equipment hum, a whisper of hiss).
+    /// Starts the looping lab ambience on `entity` (very quiet).
     /// Returns nil until warmUp's synthesis has finished.
     static func startAmbient(on entity: Entity, gainDecibels: Double = -22) -> AudioPlaybackController? {
         guard let ambientResource else { return nil }
@@ -189,31 +146,14 @@ enum SoundPalette {
         return url
     }
 
-    /// The house soundscape, fourth recipe: a 36-second seamless drift
-    /// that reads as a planetarium after closing.
-    ///
-    /// What changed from the third, and why. ETHEREAL is voicing:
-    /// the previous pad was a full A-major chord, and a major third is
-    /// SWEET — resolved, earthbound. This one is suspended: open fifths
-    /// and a ninth (A·E·B) with no third anywhere, octaves whispering
-    /// above, so the chord floats without ever landing. SOOTHING is
-    /// tempo: the loop is half again as long, every swell is slower,
-    /// the top voices are quieter and surface rarely, and the one
-    /// communal breath takes the whole 36 seconds. Three far-away bell
-    /// glints cross the loop — sparse enough to be noticed maybe once
-    /// a minute, never awaited.
-    ///
-    /// Still PURELY TONAL (the filtered-noise "air" of recipe two read
-    /// as static over spatial audio), and still mathematically seamless:
-    /// every sustained frequency, detune and swell is quantised to a
-    /// whole number of cycles per loop. The glints are enveloped to
-    /// silence well inside the loop, so they need no quantising.
+    /// The house soundscape: a 36 s seamless suspended pad, purely tonal.
+    /// Every sustained frequency, detune and swell is quantised to whole
+    /// cycles per loop; the bell glints decay to silence inside it.
     private nonisolated static func synthesizeAmbient() -> [Float] {
         let loop = 36.0
         let grid = { (frequency: Double) in (frequency * loop).rounded() / loop }
 
-        // A1 sub, then A2 E3 A3 B3 E4 B4 E5 A5 — fifths, ninths,
-        // octaves. No third: suspended, open, glassy.
+        // Fifths, ninths, octaves — no third: suspended, open, glassy.
         let voices: [(frequency: Double, amplitude: Double)] = [
             (grid(55.0), 0.10),
             (grid(110.0), 0.16),
@@ -226,10 +166,8 @@ enum SoundPalette {
             (grid(880.0), 0.015),
         ]
 
-        // The glints: three soft bells far off in the dark, each an
-        // octave-ish pair with a slightly inharmonic partial (what makes
-        // a bell a bell and not an organ). Attack eased so there is no
-        // click; tails die out before the loop ends.
+        // Three soft far-off bells; attack eased so there is no click,
+        // tails die out before the loop ends.
         let glints: [(at: Double, frequency: Double, amplitude: Double)] = [
             (6.0, 1318.51, 0.020),   // E6
             (17.5, 880.0, 0.016),    // A5
@@ -239,16 +177,13 @@ enum SoundPalette {
         return render(duration: loop) { t, _ in
             var pad = 0.0
             for (index, voice) in voices.enumerated() {
-                // Detuned pairs whose beats complete 1, 2, 3… whole
-                // cycles per loop — the shimmer never repeats the same
-                // way twice inside one pass yet loops exactly.
+                // Detuned pairs whose beats complete whole cycles per loop
+                // — shimmer that never repeats within a pass yet loops exactly.
                 let detune = Double(index + 1) / loop
                 let pair = 0.5 * (sin(2 * .pi * voice.frequency * t)
                     + sin(2 * .pi * (voice.frequency + detune) * t + 0.7))
-                // Slow independent swells — 36, 18 and 12 second
-                // periods, so voices surface and sink in turn. The high
-                // voices ride the slowest swells: glass should drift,
-                // not flicker.
+                // Independent swells at 36/18/12 s periods; high voices
+                // ride the slowest.
                 let cycles = Double((index % 3) + 1)
                 let swell = 0.68 + 0.32 * sin(2 * .pi * cycles * t / loop
                                               + Double(index) * 2.1)
@@ -269,20 +204,8 @@ enum SoundPalette {
         }
     }
 
-    // THE FAN HUM WENT WITH THE WIND TUNNEL, three days late.
-    //
-    // A 3-second axial-fan loop — broadband air noise pulsed at the
-    // blade-pass rate over a motor hum — synthesized, written to
-    // Caches, and loaded as an `AudioFileResource` on every launch.
-    // `startFanHum` had no callers anywhere, including tests: the
-    // module it blew through was archived 2026-07-30 and the sound
-    // kept being made for it for ten days. Deleted 2026-08-09.
-    //
-    // It is the only piece of residue found in this pass that cost
-    // anything at RUNTIME rather than just space on the page, which is
-    // the argument for checking `warmUp`'s list against its callers
-    // whenever a module leaves: synthesis is keyed off `CachedSounds`,
-    // and a field nobody reads still gets rendered.
+    // When a module leaves, check `CachedSounds` against its callers —
+    // a field nobody reads still gets rendered on every cold launch.
 
     /// Settings' master volume, 0…1. Applied to every one-shot; the
     /// settings window writes it here so callers never have to know.
@@ -348,11 +271,8 @@ enum SoundPalette {
                 return (sin(2 * .pi * 55 * t) + 1.6 * lowPassed) * exp(-t * 7)
             }
         case .calibration:
-            // The arrival. A warm low fifth (A2 + E3, with an octave
-            // shade) swelling in over the beat, a soft A4/E5 bell at
-            // the landing, a shared tail out under the cascade. The
-            // pad's slow square-law swell is what makes it read as an
-            // instrument warming rather than a note starting.
+            // A warm low fifth swelling in, a soft bell at the landing,
+            // a shared tail out under the cascade.
             let landing = calibrationLanding
             return render(duration: 3.4) { t, _ in
                 let swell = min(t / 2.0, 1)
@@ -371,15 +291,13 @@ enum SoundPalette {
                 return pad + bell
             }
         case .grabTick:
-            // A short bright pluck: 1200 → 900 Hz over 40 ms, gone
-            // before the hand has finished closing.
+            // A short bright pluck: 1200 → 900 Hz over 40 ms.
             return render(duration: 0.04) { t, _ in
                 let frequency = 1200 - 7500 * t
                 return sin(2 * .pi * max(frequency, 900) * t) * exp(-t * 70)
             }
         case .releaseTick:
-            // The set-down: lower, softer, slightly longer — an answer,
-            // not an echo.
+            // The set-down: lower, softer, slightly longer.
             return render(duration: 0.055) { t, _ in
                 let frequency = 900 - 3600 * t
                 return sin(2 * .pi * max(frequency, 700) * t) * exp(-t * 55)
@@ -402,8 +320,8 @@ enum SoundPalette {
     /// Minimal mono 16-bit PCM WAV container.
     private nonisolated static func wavData(samples: [Float]) -> Data {
         let dataSize = samples.count * 2
-        // The ambient pad is 36 s at 44.1 kHz — a 3.2 MB `Data` grown
-        // two bytes at a time is a few dozen reallocations and copies.
+        // Reserve up front — the 36 s pad is 3.2 MB; growing two bytes at
+        // a time reallocates dozens of times.
         var data = Data()
         data.reserveCapacity(44 + dataSize)
 

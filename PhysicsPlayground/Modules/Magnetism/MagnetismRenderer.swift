@@ -2,19 +2,13 @@
 //  MagnetismRenderer.swift
 //  Physics Playground — Magnetism module
 //
-//  Renders the magnetic sandbox, fully volumetric:
+//  Renders the magnetic sandbox: bar magnets, the looping field lines
+//  (traced off-main on a GeometryPipeline, drawn as a glowing tube), and
+//  the hand compass.
 //
-//  · bar magnets — a red north half and a blue south half, grabbable,
-//    oriented along their live moment;
-//  · the looping field lines, traced off-main on a GeometryPipeline and
-//    drawn as a glowing tube (a bright core inside a soft halo);
-//  · a room-filling 3-D grid of compass needles that swing to point
-//    along the local field every frame.
-//
-//  Frame-rate contract: field lines rebuild only when the magnets move
-//  (change-gated, vertex math on a worker); the per-frame path is the
-//  magnets' transforms and the compass needle orientations — a few dozen
-//  dipole evaluations. Ticked from SceneEvents.Update.
+//  Frame-rate contract: field lines rebuild only when the magnets move;
+//  the per-frame path is transforms and needle orientation. Ticked from
+//  SceneEvents.Update.
 //
 
 import Foundation
@@ -27,30 +21,21 @@ import simd
 @MainActor
 final class MagnetismRenderer {
     /// The SpaceView's tap router, so a carried object can be operated
-    /// without hands. `Grabbable` takes the closure and this supplies
-    /// it — the helper cannot invent a meaning for pressing a magnet,
-    /// and only the module knows that a tap opens its control ring.
+    /// without hands. A tap opens the magnet's control ring.
     var onObjectTap: ((Entity) -> Void)?
 
     let root = Entity()
     /// Everything the two-hand scale gesture grows lives under here;
-    /// pods and lighting stay on `root`, unscaled. The rig's transform
-    /// is a pure view change — the model keeps its own coordinates, and
-    /// every hand position converts through this root on its way in.
+    /// lighting stays on `root`. A pure view change — the model keeps its
+    /// own coordinates, and every hand position converts through this root.
     let viewRoot = Entity()
 
     var subscriptions: [EventSubscription] = []
 
-    /// Called from the SpaceView's `onDisappear`, and the reason it has
-    /// to be called explicitly is that neither of the things it releases
-    /// is tied to this object's lifetime.
-    ///
-    /// An `EventSubscription` outlives the view that made it — cancelled
-    /// nowhere, it keeps calling into a renderer for a scene that is no
-    /// longer on screen and holds the whole entity graph alive behind
-    /// it. And a `GeometryPipeline` job in flight ran to completion and
-    /// then uploaded a mesh and enabled an entity in a scene being torn
-    /// down (see `GeometryPipeline.cancel`).
+    /// Called from the SpaceView's `onDisappear`: an `EventSubscription`
+    /// outlives the view and holds the entity graph alive, and a
+    /// `GeometryPipeline` job in flight uploads into a dead scene (see
+    /// `GeometryPipeline.cancel`).
     func teardown() {
         subscriptions.forEach { $0.cancel() }
         subscriptions = []
@@ -60,9 +45,7 @@ final class MagnetismRenderer {
     static let northColor = DesignTokens.Palette.positiveUI
     static let southColor = DesignTokens.Palette.negativeUI
     static let lineColor = UIColor(red: 0.72, green: 0.6, blue: 1.0, alpha: 1)
-    /// The hand compass's readout gold — module-local vocabulary, like
-    /// Pendulums' tension yellow (see `VectorPalette`'s header): a
-    /// per-module decomposition keeps its own colours.
+    /// The hand compass's readout gold — module-local vocabulary.
     static let compassGold = UIColor(red: 0.95, green: 0.78, blue: 0.42, alpha: 1)
 
     private var magnetEntities: [UUID: Entity] = [:]
@@ -76,12 +59,8 @@ final class MagnetismRenderer {
     /// Direction cones riding the field loops, N→S outside the magnet.
     private let arrowHeads: EntityPool<ModelEntity>
     private let lineMaterial = UnlitMaterial(color: MagnetismRenderer.lineColor)
-    /// The near-black outline the bright core sits against. Passthrough
-    /// is a BRIGHT medium — cream walls, daylight — so a pale 1.6 mm
-    /// loop drawn over it has almost no luminance contrast and simply
-    /// disappears. Electric Fields has had this since it was written;
-    /// the dipole loops are this module's entire subject and went
-    /// without it.
+    /// The near-black outline the bright core sits against — passthrough
+    /// is a bright medium, so a pale loop needs the contrast casing.
     private let lineCasingMaterial =
         Materials.contrastLine(MagnetismRenderer.lineColor).casing
     private let lineGlowMaterial: UnlitMaterial = {
@@ -140,39 +119,17 @@ final class MagnetismRenderer {
     private let handCompass = Entity()
     private var handCompassNeedle: Entity?
     private var handCompassCallout: Callout?
-    /// The reading last pushed to the callout, at the one decimal it
-    /// displays. `Callout.setText` already dedupes the MESH, but the
-    /// format call was building the string ninety times a second for a
-    /// value that mostly reads the same — NaN so the first frame writes.
+    /// The reading last pushed, at display precision — skips rebuilding
+    /// the string ninety times a second. NaN so the first frame writes.
     private var lastCompassReading: Double = .nan
 
     private func buildHandCompass() {
         handCompass.name = Self.handCompassName
 
-        // A SPHERE, not a pocket compass (2026-08-01, owner's call).
-        //
-        // It was a brass cylinder with a flat pale dial and a flat
-        // needle, and that shape was making a promise the physics does
-        // not keep. A magnetic field points wherever it likes — steeply
-        // up between two attracting poles, straight down beside them —
-        // and a dial can only ever show you the part of it lying in the
-        // dial's plane. On Earth we get away with that because we only
-        // ever ask a compass for a heading. In a room with bar magnets
-        // in it the interesting answer is usually the one pointing out
-        // of the dial.
-        //
-        // A CURIOUS DETAIL FOUND WHILE CHANGING IT: the needle was
-        // already aiming in full 3-D — `rotation(from: [0,1,0], to:
-        // direction)` takes the whole vector — while the comment beside
-        // it said "the needle lies in the dial's plane, so project B onto
-        // it: a real compass only shows the component it can turn to."
-        // The code did not project. So the instrument was telling the
-        // truth and its case and its comment were both lying about it,
-        // and the needle spent its life poking through a brass lid.
-        //
-        // The orb is the honest housing: a glass ball with the needle
-        // swinging freely inside, gimbal rings for a sense of which way
-        // is which, and nothing anywhere that suggests a plane.
+        // A SPHERE, not a flat dial: a magnetic field points wherever it
+        // likes (steeply up between two poles), and a flat dial can only
+        // show the component lying in its plane. The needle aims in full
+        // 3-D — `rotation(from:to:)` takes the whole vector.
         var shell = Materials.frostedGlass(
             UIColor(white: 0.62, alpha: 1), opacity: 0.20, frost: 0.35)
         shell.emissiveIntensity = 0.08

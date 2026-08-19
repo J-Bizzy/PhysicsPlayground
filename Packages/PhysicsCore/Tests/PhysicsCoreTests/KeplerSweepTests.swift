@@ -1,13 +1,6 @@
 //
 //  KeplerSweepTests.swift
-//  PhysicsCoreTests
-//
-//  Theorem recovery: the sweep must rediscover Kepler's second law
-//  from raw integrated orbits, not have it whispered in. The areas it
-//  reports for equal time windows must match wherever on the orbit
-//  they are taken — including an eccentric orbit whose sector SHAPES
-//  are wildly different — and the area rate must equal L/2m, because
-//  the second law IS conservation of angular momentum.
+//  The sweep must rediscover Kepler's second law from raw integrated orbits; dA/dt = L/2m.
 //
 
 import XCTest
@@ -16,7 +9,6 @@ import simd
 
 final class KeplerSweepTests: XCTestCase {
 
-    /// Integrates a two-body system and records the secondary's sweep.
     private func sweptOrbit(eccentricity: Double,
                             days: Double,
                             stepHours: Double = 6)
@@ -47,12 +39,9 @@ final class KeplerSweepTests: XCTestCase {
     }
 
     func testEqualAreasInEqualTimesOnAnEccentricOrbit() {
-        // e = 0.6: perihelion is 4x closer than aphelion, so the two
-        // sectors look nothing alike. Their areas must still agree.
+        // e = 0.6: the two sectors look nothing alike; areas must still agree.
         let (sweep, period) = sweptOrbit(eccentricity: 0.6, days: 400)
         let window = period / 12
-        // Window 1 starts at perihelion (t = 0); window 2 straddles
-        // aphelion (half a period later).
         let fast = sweep.area(from: 0, to: window)
         let slow = sweep.area(from: period / 2, to: period / 2 + window)
         XCTAssertGreaterThan(fast, 0)
@@ -61,12 +50,10 @@ final class KeplerSweepTests: XCTestCase {
     }
 
     func testAreaRateIsAngularMomentumOverTwoM() {
-        // dA/dt = L / 2m — the second law is angular momentum
-        // conservation. Checked against the initial state directly.
+        // dA/dt = L/2m, checked against the initial state directly.
         let (sweep, period) = sweptOrbit(eccentricity: 0.3, days: 200)
         guard let first = sweep.samples.first else { return XCTFail("no samples") }
 
-        // Reconstruct v at t=0 from the first two samples.
         guard sweep.samples.count > 1 else { return XCTFail("too few samples") }
         let second = sweep.samples[1]
         let velocity = (second.position - first.position) / (second.time - first.time)

@@ -1,34 +1,15 @@
 //
 //  StationBox.swift
-//  PhysicsCore — Math
-//
-//  The volume one apparatus is allowed to occupy, and the questions a
-//  multi-station module has to ask about it.
-//
-//  A world that stands several apparatus in one room has exactly one
-//  class of silent failure: two things authored to own the space in
-//  front of the user quietly sharing it. A magnet clamped to a box that
-//  reaches into the circuit bench does not crash — it drifts through a
-//  battery. So each station declares a box, and the layouts assert
-//  against these functions rather than eyeballing coordinates.
-//
-//  Two different invariants are needed, because two different kinds of
-//  station exist. Benches standing side by side must be DISJOINT. An
-//  apparatus larger than the room — an orrery fifteen metres across —
-//  cannot be disjoint from anything, so the benches inside it are
-//  checked for CONTAINMENT in the empty shell between its orbits
-//  instead. `separation` answers the first; `distanceRange` answers the
-//  second.
-//
-//  Pure geometry, deliberately: it lives here so the layout tests run
-//  in `swift test` in three seconds rather than booting a simulator.
+//  PhysicsCore — Math: the volume one apparatus may occupy; pure geometry
+//  for layout assertions. Two invariants for two station kinds: benches
+//  side by side must be DISJOINT (`separation`); benches inside a
+//  room-sized apparatus are checked for CONTAINMENT (`distanceRange`).
 //
 
 import Foundation
 import simd
 
-/// An axis-aligned volume belonging to one apparatus, in world
-/// coordinates.
+/// An axis-aligned volume belonging to one apparatus, world coordinates.
 public struct StationBox: Equatable, Sendable {
     public var center: SIMD3<Double>
     public var halfExtents: SIMD3<Double>
@@ -43,8 +24,7 @@ public struct StationBox: Equatable, Sendable {
     public var minimum: SIMD3<Double> { center - halfExtents }
     public var maximum: SIMD3<Double> { center + halfExtents }
 
-    /// The eight corners — what you iterate when the question is about
-    /// the box's extremes rather than its faces.
+    /// The eight corners.
     public var corners: [SIMD3<Double>] {
         let lo = minimum, hi = maximum
         return [
@@ -57,13 +37,8 @@ public struct StationBox: Equatable, Sendable {
 
     // MARK: Disjointness — the invariant for benches side by side
 
-    /// The widest gap between the two boxes on any single axis, negative
-    /// when they overlap on every axis.
-    ///
-    /// These are axis-aligned, so clearance on ONE axis is enough to
-    /// prove no overlap — which is why this is a max over axes and not a
-    /// distance. Returning the number rather than a Bool lets a failing
-    /// test say how far short it fell.
+    /// Widest per-axis gap between the boxes, negative when overlapping on
+    /// every axis. Max over axes (one clear axis proves AABB disjointness).
     public func separation(from other: StationBox) -> Double {
         var widest = -Double.greatestFiniteMagnitude
         for axis in 0..<3 {
@@ -91,8 +66,7 @@ public struct StationBox: Equatable, Sendable {
         return true
     }
 
-    /// Whether `other` sits wholly inside this box — the shape of every
-    /// "does the clamp escape its station?" assertion.
+    /// Whether `other` sits wholly inside this box.
     public func contains(_ other: StationBox, tolerance: Double = 1e-9) -> Bool {
         let lo = minimum, hi = maximum
         let oLo = other.minimum, oHi = other.maximum
@@ -110,12 +84,8 @@ public struct StationBox: Equatable, Sendable {
 
     // MARK: Radial reach — the invariant for an apparatus you stand inside
 
-    /// How near and how far this box reaches from `point`.
-    ///
-    /// The near end is the standard point-to-AABB distance (zero when
-    /// the point is inside); the far end is the most distant corner.
-    /// Both ends are needed to place a bench inside an annulus: near
-    /// must clear the inner orbit, far must stay within the outer one.
+    /// Near = point-to-AABB distance (0 inside), far = most distant corner.
+    /// Both are needed to place a bench inside an annulus between orbits.
     public func distanceRange(from point: SIMD3<Double>)
     -> (nearest: Double, farthest: Double) {
         let lo = minimum, hi = maximum

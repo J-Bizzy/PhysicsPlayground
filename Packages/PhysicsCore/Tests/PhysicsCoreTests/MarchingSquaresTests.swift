@@ -1,11 +1,6 @@
 //
 //  MarchingSquaresTests.swift
-//  PhysicsCoreTests
-//
-//  Contours have to land ON the level, not near it — an interpolated
-//  crossing is the whole difference between a smooth curve and a
-//  staircase. Circles are the honest test case: an exact answer to
-//  compare every extracted vertex against.
+//  Contour extraction checked against exact circles: every vertex must land ON the level.
 //
 
 import XCTest
@@ -14,9 +9,7 @@ import simd
 
 final class MarchingSquaresTests: XCTestCase {
 
-    /// f(x,y) = |p| — the contour at level r must be the circle of
-    /// radius r, and EVERY vertex must sit on it to interpolation
-    /// accuracy.
+    /// f(x,y) = |p|: the level-r contour is the circle of radius r, every vertex on it.
     func testContourOfARadialFieldIsACircleOfTheRightRadius() {
         let radius = 0.6
         let segments = MarchingSquares.contour(
@@ -33,7 +26,6 @@ final class MarchingSquaresTests: XCTestCase {
         }
     }
 
-    /// And the total arc length of that contour is 2πr.
     func testContourLengthMatchesTheCircumference() {
         let radius = 0.6
         let segments = MarchingSquares.contour(
@@ -44,7 +36,6 @@ final class MarchingSquaresTests: XCTestCase {
         XCTAssertEqual(total, 2 * .pi * radius, accuracy: 0.02)
     }
 
-    /// A level nothing reaches produces nothing — no spurious geometry.
     func testLevelOutsideTheFieldRangeProducesNoSegments() {
         let segments = MarchingSquares.contour(
             level: 99,
@@ -53,8 +44,6 @@ final class MarchingSquaresTests: XCTestCase {
         XCTAssertTrue(segments.isEmpty)
     }
 
-    /// A constant field has no contour anywhere — every cell is entirely
-    /// inside or entirely outside.
     func testConstantFieldHasNoContour() {
         let segments = MarchingSquares.contour(
             level: 0.5, scalar: { _ in 1.0 },
@@ -62,9 +51,7 @@ final class MarchingSquaresTests: XCTestCase {
         XCTAssertTrue(segments.isEmpty)
     }
 
-    /// Linear ramp: the contour is the straight line x = level, and it
-    /// must be exact — linear interpolation reproduces a linear field
-    /// with no error at all.
+    /// Linear interpolation reproduces a linear field exactly: contour is x = level to 1e-12.
     func testLinearRampGivesAnExactStraightContour() {
         let level = 0.31
         let segments = MarchingSquares.contour(
@@ -77,7 +64,6 @@ final class MarchingSquaresTests: XCTestCase {
         }
     }
 
-    /// Resolution refines the answer rather than changing it.
     func testFinerResolutionConvergesOnTheCircle() {
         func error(resolution: Int) -> Double {
             MarchingSquares.contour(
@@ -91,7 +77,7 @@ final class MarchingSquaresTests: XCTestCase {
 
     // MARK: Chaining
 
-    /// A closed circular contour welds into a single loop, not 200 sticks.
+    /// A closed contour welds into ONE polyline, not 200 sticks.
     func testChainingJoinsACircleIntoOnePolyline() {
         let segments = MarchingSquares.contour(
             level: 0.5, scalar: { simd_length($0) },
@@ -103,8 +89,7 @@ final class MarchingSquaresTests: XCTestCase {
                        accuracy: 1e-9, "and it closes on itself")
     }
 
-    /// Two separate circles stay two separate polylines — chaining must
-    /// never bridge across a gap.
+    /// Chaining must never bridge across a gap between separate contours.
     func testChainingKeepsSeparateContoursSeparate() {
         let left = SIMD2<Double>(-0.6, 0), right = SIMD2<Double>(0.6, 0)
         let segments = MarchingSquares.contour(

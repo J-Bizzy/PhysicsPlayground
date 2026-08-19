@@ -2,20 +2,9 @@
 //  Sonification.swift
 //  Physics Playground — Design System
 //
-//  Physics you can HEAR, continuously — not just event chirps.
-//
-//  The app had a good event palette (pop, thud, chime) and exactly one
-//  continuous voice, in the Elastic Field. But a headset puts sound
-//  everywhere in space, and a continuously-sounding quantity is
-//  something a page cannot do: an orbit's period as a pitch, a circuit's
-//  current as a mains hum, wind noise that rises with the tunnel speed,
-//  the wave field's amplitude at YOUR HEAD as you walk through a node.
-//  You hear the physics while you're looking somewhere else.
-//
-//  A `ToneVoice` wraps one looping synthesized tone on one emitter and
-//  exposes the two knobs that matter: pitch (played back as a rate
-//  shift off the synthesized base frequency) and loudness in decibels,
-//  both smoothed so a jittery frame can't click. Silent until asked.
+//  Continuous sonification: `ToneVoice` wraps one looping synthesized tone,
+//  exposing pitch (a rate shift off the synthesized base frequency) and
+//  loudness in dB, both smoothed so a jittery frame can't click.
 //
 
 import Foundation
@@ -50,9 +39,8 @@ final class ToneVoice {
         self.smoothedPitch = baseHz
     }
 
-    /// Begins playback, silent. Safe to call repeatedly — the resources
-    /// are synthesized asynchronously at launch, so the first few
-    /// attempts can fail and the caller simply tries again next frame.
+    /// Begins playback, silent. Safe to call repeatedly — resources
+    /// synthesize asynchronously at launch, so retry next frame on failure.
     @discardableResult
     func start() -> Bool {
         guard controller == nil else { return true }
@@ -93,14 +81,8 @@ final class ToneVoice {
 }
 
 enum Sonification {
-    /// Maps a physical period to a musical pitch: shorter period, higher
-    /// note. Used for the orbital chord in Gravity Lab, where Kepler's
-    /// third law becomes something you can hear go out of tune when you
-    /// perturb an orbit.
-    ///
-    /// Anchored so a one-year orbit sings at A3 (220 Hz), then log-scaled
-    /// so each halving of the period is an octave up — exactly what
-    /// frequency ratio means.
+    /// Maps a physical period to pitch: the reference period sings at
+    /// `referenceHz`, and each halving of the period is an octave up.
     static func pitch(forPeriodSeconds period: Double,
                       referencePeriod: Double,
                       referenceHz: Double = 220) -> Double {

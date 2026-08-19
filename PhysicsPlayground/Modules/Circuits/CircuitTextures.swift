@@ -87,14 +87,9 @@ enum CircuitTextures {
         }
         band(at: 0.22, color: bandColors[min(max(code.digit1, 0), 9)])
         band(at: 0.38, color: bandColors[min(max(code.digit2, 0), 9)])
-        // THE MULTIPLIER BAND CAN BE GOLD, and this line indexed an array
-        // with it. `colorBands` gained a signed multiplier on 2026-08-03
-        // so that a resistance below 10 Ω gets the ×0.1 band a real
-        // 4-band code uses — and a bare `bandColors[min(-1, 9)]` is a
-        // crash, not a wrong colour. Gold is the ×0.1 multiplier and
-        // silver the ×0.01; the app's rail stops at 10 Ω so neither is
-        // reachable today, which is exactly why this had to be handled
-        // here rather than left to the caller.
+        // The multiplier band can be signed (gold ×0.1, silver ×0.01);
+        // route through `multiplierColor` so a negative exponent is not
+        // an out-of-bounds `bandColors` index.
         band(at: 0.54, color: multiplierColor(code.multiplier))
         band(at: 0.78, color: gold)  // tolerance
 

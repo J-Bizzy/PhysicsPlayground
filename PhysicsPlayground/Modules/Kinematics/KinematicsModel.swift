@@ -1,24 +1,9 @@
 //
 //  KinematicsModel.swift
-//  Physics Playground — Kinematics module
+//  Physics Playground — Kinematics: app state for room-scale projectile motion.
 //
-//  App state for room-scale projectile motion: physics space IS the room
-//  (1:1, immersive-space coordinates, the real floor at y = 0), so every
-//  number the room shows is literally true of what you're looking at.
-//
-//  Two ways to launch:
-//    · grab any ball and THROW it — release velocity is estimated from
-//      the hand's last ~0.1 s of motion, optionally amplified by the
-//      throw boost for small rooms;
-//    · the free-floating launcher — grab its body to move it anywhere,
-//      pinch-drag the bead to aim, Fire for repeatable, precise launches.
-//
-//  Flights bounce on the floor, the room's walls, and the ceiling with
-//  each ball's real restitution — always; a ball that leaves the room
-//  is a bug, not a setting — then roll briefly to rest. Time steps in
-//  simulated time (strobe dots stay equal-Δt in *simulated* time, so
-//  slow motion never lies about speed). The hoop/scoring machinery is
-//  dormant: retired from the surface 2026-07-29, kept in the model.
+//  Physics space IS the room: 1:1 immersive-space coordinates, real floor at y = 0; a ball that leaves the room is a bug, not a setting.
+//  Strobe dots are equal-Δt in SIMULATED time. The hoop/scoring machinery is dormant: off the surface, kept in the model.
 //
 
 import Foundation
@@ -35,15 +20,10 @@ final class KinematicsModel {
     nonisolated static let speedRange = 0.5...15.0            // m/s
     nonisolated static let elevationRangeDegrees = -85.0...85.0
     nonisolated static let gravityRange = 0.0...30.0          // m/s²
-    /// `PhysicsCore.SurfaceGravity` — shared with Pendulums, which had
-    /// its own copy of these numbers. Zero-g included here: a projectile
-    /// with no gravity is a straight line, which is worth seeing.
+    /// Shared `PhysicsCore.SurfaceGravity` presets (zero-g included).
     nonisolated static let gravityPresets = SurfaceGravity.all
     nonisolated static let windSpeedRange = 0.0...15.0        // m/s
     nonisolated static let timeScaleRange = 0.1...2.0
-    nonisolated static let throwBoostRange = 1.0...3.0
-    nonisolated static let customMassRange = 0.005...5.0      // kg
-    nonisolated static let customDiameterRange = 0.02...0.35  // m
 
     // MARK: Budgets (degrade by not drawing, never by dropping frames)
 
@@ -82,7 +62,7 @@ final class KinematicsModel {
     }
 
     var kind: ProjectileKind = .golfBall
-    /// The custom ball, editable live (smooth-sphere Cd, mid restitution).
+    /// The custom ball, editable live.
     var customMass = 0.25
     var customDiameter = 0.10
 
@@ -103,30 +83,16 @@ final class KinematicsModel {
     var gravity = 9.81
     var airResistance = false
 
-    /// Whether flights bounce off the walls and ceiling, or sail
-    /// through. Defaults ON — and when on, it always works: before the
-    /// real room is scanned (and always in the simulator) the walls
-    /// default to the generous unscanned box; on device the shared
-    /// room model replaces them with the detected walls plus the
-    /// scanned boundary.
+    /// Whether flights bounce off walls and ceiling. Defaults ON; the unscanned box stands in until the shared room model supplies detected walls.
     var respectRoomWalls = true
     var roomWalls: [RoomWalls.Wall] = RoomWalls.box(of: .unscanned)
-    /// The room's box, for the containment clamp — the guarantee that
-    /// no ball ever ends a frame outside the room.
+    /// The room's box for the containment clamp — no ball ever ends a frame outside the room.
     var roomBounds: RoomBox = .unscanned
 
     init() {
-        // The welcome scene lives in reset() — and reset() only ran
-        // from the reset button, so the module opened BARE: no hoops,
-        // no staged balls, no opening shot. Open the way reset leaves
-        // things.
         reset()
 
-        // Debug hook: `simctl launch … -kinWalls 1` seeds a synthetic
-        // wall across the room and fires a ball at it, so the bounce is
-        // verifiable in the simulator (real walls are device-only).
-        // Close enough (1.4 m) that the welcome shot actually reaches
-        // it before landing.
+        // `-kinWalls 1`: seed a synthetic wall and fire at it (real walls are device-only); at 1.4 m the welcome shot reaches it.
         #if DEBUG
         let kinWalls = UserDefaults.standard.integer(forKey: "kinWalls")
         if kinWalls > 0 {
@@ -136,11 +102,7 @@ final class KinematicsModel {
                 halfU: 2.5, halfV: 1.5)]
             fire()
             if kinWalls >= 2 {
-                // `-kinWalls 2`: also a hand-throw-speed ball straight
-                // at the wall — the fast regime the 2026-08-06
-                // reliability fixes exist for, photographed rather than
-                // trusted. A screenshot of only the gentle welcome shot
-                // proves nothing about tunnelling.
+                // `-kinWalls 2`: also a 12 m/s ball at the wall — the fast regime the bounce fixes exist for; the gentle shot proves nothing about tunnelling.
                 let savedSpeed = launchSpeed
                 launchSpeed = 12
                 setAim(elevationDegrees: 12, azimuthDegrees: 0)
@@ -179,8 +141,7 @@ final class KinematicsModel {
 
     var launcherPosition = KinematicsModel.launcherHome
     var launchSpeed = 6.0
-    /// Unit aim vector. Negative elevation is allowed — the launcher can
-    /// sit high and fire downward.
+    /// Unit aim vector. Negative elevation is allowed — the launcher can sit high and fire downward.
     private(set) var aimDirection = KinematicsModel.direction(elevationDegrees: 45, azimuthDegrees: 0)
 
     nonisolated static func direction(elevationDegrees: Double, azimuthDegrees: Double) -> SIMD3<Double> {
@@ -208,8 +169,7 @@ final class KinematicsModel {
         aimDirection = Self.direction(elevationDegrees: elevation, azimuthDegrees: azimuthDegrees)
     }
 
-    /// Aim from the bead drag: `point` is the hand in room space; aim from
-    /// the launcher toward it (azimuth free — fire anywhere in the room).
+    /// Aim from the bead drag: `point` is the hand in room space; aim the launcher toward it (azimuth free).
     func aim(toward point: SIMD3<Double>) {
         let offset = point - launcherPosition
         guard simd_length(offset) > 0.05 else { return }
@@ -230,8 +190,7 @@ final class KinematicsModel {
         launcherPosition + Self.barrelLength * aimDirection
     }
 
-    /// The live predicted trajectory from the launcher, bounces included —
-    /// a few hundred RK4 steps, microseconds, fine to recompute on read.
+    /// Live predicted trajectory, bounces included — a few hundred RK4 steps, fine to recompute on read.
     var prediction: ProjectileMotion.Trajectory {
         ProjectileMotion.simulate(
             from: muzzlePoint,
@@ -241,10 +200,7 @@ final class KinematicsModel {
             restitution: projectile.restitution,
             maxBounces: 4,
             walls: respectRoomWalls ? roomWalls : [],
-            // THE BALL'S OWN RADIUS. Omitted, the arc is drawn for a
-            // point: with a basketball it corners 12 cm short of every
-            // wall and 12 cm below every floor bounce, and "predicted
-            // arc, bounces included" is this module's central claim.
+            // The ball's OWN radius — omitted, the arc is drawn for a point and corners short of every wall and floor bounce.
             radius: projectile.diameter / 2,
             maxDuration: 12
         )
@@ -270,14 +226,12 @@ final class KinematicsModel {
         /// Where this arc began, for the range readout.
         var launchPoint = SIMD3<Double>.zero
         var wasThrown = false
-        /// Each flight can score each hoop once (a real rim has a net —
-        /// a ball bouncing back up and through again shouldn't re-score).
+        /// Each flight can score each hoop once — a bounce back up through the rim must not re-score.
         var scoredRings: Set<UUID> = []
 
         enum Status: Equatable {
-            /// Hovering, waiting to be grabbed (fresh "ball to throw").
+            /// Hovering, waiting to be grabbed.
             case staged
-            /// In the user's hand.
             case held
             case flying
             /// On the floor, shedding the last of its speed.
@@ -301,8 +255,7 @@ final class KinematicsModel {
 
     // MARK: Catching
 
-    /// How near a fingertip has to be to a flying ball to catch it.
-    /// Generous — a real catch is a hand, not a point.
+    /// Fingertip-to-ball catch distance — generous, because a catch is a hand, not a point.
     nonisolated static let catchRadius = 0.14
 
     /// The last catch, for the callout that appears at the caught ball.
@@ -317,16 +270,7 @@ final class KinematicsModel {
     private(set) var lastCatch: Catch?
     var catchingEnabled = true
 
-    /// Catches any flying ball that reaches an open hand: freezes it,
-    /// records what it was doing at that instant, and stages it to be
-    /// thrown again.
-    ///
-    /// This is the piece the module was missing. Everything else here is
-    /// launch-and-watch; a catch is the moment the simulation reaches
-    /// BACK to you, and it is only possible because there are real hands
-    /// in the scene. The numbers it freezes — impact speed, height,
-    /// flight time, kinetic energy — are the ones a stopwatch and a
-    /// tape measure could never give you mid-flight.
+    /// Catches any flying ball that reaches an open hand: freezes it, records that instant, stages it to rethrow.
     @discardableResult
     func catchBalls(atFingertips fingertips: [SIMD3<Double>]) -> Bool {
         guard catchingEnabled, !fingertips.isEmpty else { return false }
@@ -354,9 +298,7 @@ final class KinematicsModel {
         return caught
     }
 
-    /// Hand-motion samples for the ball currently being held.
-    /// `PhysicsCore.ThrowSampler` — shared with Gravity Lab and
-    /// Pendulums, which each had their own copy of this buffer.
+    /// Hand-motion samples for the held ball (shared `PhysicsCore.ThrowSampler`).
     private var throwSampler = ThrowSampler()
     private var heldFlightID: UUID?
     /// Release-velocity multiplier — ×1 is a physically honest throw.
@@ -374,7 +316,6 @@ final class KinematicsModel {
         flights.append(flight)
     }
 
-    /// Fires the launcher.
     func fire() {
         var flight = Flight(
             id: UUID(),
@@ -391,9 +332,7 @@ final class KinematicsModel {
         emitSound(.pop, at: muzzlePoint, volume: 0.8)
     }
 
-    /// Spawns a fresh ball hovering at `ballSpawnPoint`, ready to grab
-    /// and throw. (It said "by the panel" until 2026-08-03; the spawn
-    /// point is its own constant and has never been near a window.)
+    /// Spawns a fresh ball hovering at `ballSpawnPoint`, ready to grab and throw.
     func spawnBall() {
         let stagedCount = flights.filter { $0.status == .staged }.count
         let angle = Double(stagedCount) * 2.4
@@ -405,11 +344,7 @@ final class KinematicsModel {
         ))
     }
 
-    /// Spawns a ball AT THE HAND — the well's spawn (owner, 2026-08-04:
-    /// the launcher used to be the only way a ball came into the room).
-    /// Staged, so it hangs inert exactly where it is born until a throw
-    /// gives it a velocity; it wears whatever kind the ball fan has
-    /// picked, so the well and the launcher agree about what a ball is.
+    /// Spawns a staged ball AT THE HAND (the well's spawn), inert until a throw, wearing the ball fan's current kind.
     @discardableResult
     func spawnBall(at position: SIMD3<Double>) -> UUID {
         let flight = Flight(
@@ -450,8 +385,7 @@ final class KinematicsModel {
         throwSampler.record(position, at: timestamp)
     }
 
-    /// Releases the held ball with the hand's velocity over the final
-    /// ~0.1 s of motion (endpoint estimate over the sample window).
+    /// Releases the held ball with the hand's velocity over the final ~0.1 s of motion.
     func releaseBall(id: UUID, timestamp: Double = CACurrentMediaTime()) {
         guard let index = flights.firstIndex(where: { $0.id == id }) else { return }
         defer {
@@ -460,7 +394,6 @@ final class KinematicsModel {
         }
 
         guard let handVelocity = throwSampler.velocity(at: timestamp) else {
-            // No meaningful motion: the ball just hovers where released.
             flights[index].status = .staged
             return
         }
@@ -584,17 +517,11 @@ final class KinematicsModel {
                                        position: position, volume: volume)
     }
 
-    /// Advances every active flight by one rendered frame, in simulated
-    /// time (dt × timeScale). Two RK4 substeps per frame; stalled frames
-    /// are clamped so debugger pauses don't become physics leaps.
+    /// Advances flights one rendered frame in simulated time (dt × timeScale); two RK4 substeps, stalled frames clamped.
     func step(dt: Double) {
         guard !isPaused else { return }
         let frameDt = min(dt, 1.0 / 30.0) * timeScale
-        // Record AFTER the step: the capsule's newest frame is always the
-        // state the room is showing, so pause-then-scrub starts from
-        // exactly what the eye just saw. In WALL-CLOCK seconds, not
-        // simulated ones — the rail's unit is seconds of the wearer's
-        // life, and it must mean the same thing on every bench.
+        // Record AFTER the step, in WALL-CLOCK seconds — the rail's unit must mean the same on every bench.
         defer { recordCapsuleFrame(dt: min(dt, 1.0 / 30.0)) }
         stepRings(dt: frameDt)
         guard flights.contains(where: { $0.status == .flying || $0.status == .rolling }) else { return }
@@ -633,8 +560,7 @@ final class KinematicsModel {
             alreadyScored: flight.scoredRings
         ))
 
-        // Strobe dots at exact simulated-time intervals, interpolated
-        // inside the frame so their spacing genuinely encodes speed.
+        // Strobe dots at exact simulated-time intervals, interpolated inside the frame so spacing genuinely encodes speed.
         while flight.elapsed >= flight.nextDotTime, flight.dots.count < Self.dotsPerFlight {
             let fraction = (flight.nextDotTime - previousElapsed) / dt
             flight.dots.append(
@@ -643,12 +569,7 @@ final class KinematicsModel {
             flight.nextDotTime += Self.dotInterval
         }
 
-        // Wall contact: the real room pushes back (when enabled). The
-        // frame does not end at the wall — the fraction of the step
-        // left after contact is spent along the reflection, and struck
-        // again if it reaches another wall (a corner can genuinely take
-        // two bounces in one frame). Bounded, because a pathological
-        // wedge must cost frames, never hang one.
+        // Wall contact: step time left after contact runs along the reflection and can strike again (a corner takes two bounces in one frame); bounded so a wedge never hangs a frame.
         if respectRoomWalls, !roomWalls.isEmpty {
             var segmentStart = previous.position
             var timeLeft = dt
@@ -688,8 +609,6 @@ final class KinematicsModel {
                     flightTime: contactTime,
                     wasThrown: flight.wasThrown
                 )
-                // Streak bookkeeping: with hoops up, every flight either
-                // scored (streak grows) or missed (streak dies).
                 if !rings.isEmpty {
                     if flight.scoredRings.isEmpty {
                         streak = 0
@@ -726,8 +645,7 @@ final class KinematicsModel {
         flights[index] = flight
     }
 
-    /// Rolling: horizontal exponential decay (simplified rolling friction)
-    /// until the ball stops.
+    /// Rolling: horizontal exponential decay until the ball stops.
     private func stepRolling(index: Int, dt: Double) {
         var flight = flights[index]
         let decay = exp(-1.5 * dt)
@@ -737,10 +655,7 @@ final class KinematicsModel {
         var position = previous + dt * velocity
         position.y = flight.projectile.diameter / 2
 
-        // Rolling balls respect walls too. They didn't — a ball that
-        // had settled into a roll passed straight through the same
-        // wall it had just bounced off, which read as the feature
-        // simply giving up.
+        // Rolling balls respect walls too.
         if respectRoomWalls, !roomWalls.isEmpty,
            let hit = RoomWalls.strike(
                previous: previous, current: position,
@@ -762,12 +677,7 @@ final class KinematicsModel {
         flights[index] = flight
     }
 
-    /// The invariant the segment test cannot promise on its own: a ball
-    /// NEVER ends a frame outside the room. Whatever slips past the
-    /// strike test — anchor churn replacing walls mid-flight, a spawn
-    /// beyond a plane, numeric residue — is clamped back inside the
-    /// scanned bounds with its velocity reflected. Belt and braces:
-    /// the strike gives the honest bounce, this guarantees containment.
+    /// Invariant: a ball NEVER ends a frame outside the room — whatever slips past the strike test is clamped back inside `roomBounds` with velocity reflected.
     private func contain(_ flight: inout Flight) {
         guard respectRoomWalls else { return }
         let box = roomBounds
@@ -797,15 +707,7 @@ final class KinematicsModel {
 
     // MARK: Reset
 
-    /// Returns the module to its freshly-entered state — and that state
-    /// is a PLAYGROUND, not an empty range.
-    ///
-    /// It used to open with a launcher, a ghost arc, and nothing else:
-    /// no ball to throw, no hoop to aim at, and a default launch speed
-    /// of 6 m/s, which at 45° carries 4.7 m — further than most rooms
-    /// are long, so the very first arc left through the wall. Now it
-    /// opens with hoops hung in the air, balls staged ready to grab,
-    /// and a speed picked so the whole flight lands inside the room.
+    /// Returns the module to its freshly-entered state — a playground, not an empty range.
     func reset() {
         clearFlights()
         rings.removeAll()
@@ -815,14 +717,7 @@ final class KinematicsModel {
         launchSpeed = Self.roomFittingSpeed
         gravity = 9.81
         airResistance = false
-        // The third state a switch bank shows that reset had never
-        // restored — Pendulums' `frictionOn` and Magnetism's `dynamicsOn`
-        // were the other two, all found the same day. A flag with no
-        // visible control drifts out of reset and stays wrong
-        // indefinitely, because nothing in the room contradicts it; the
-        // moment it gets a lamp, the lamp makes the claim every frame.
-        // Walls off + Reset used to hand back a room balls flew straight
-        // out of.
+        // Plate-backed flag — reset must restore it (ResetCoverageTests reflects over every Bool).
         respectRoomWalls = true
         windSpeed = 0
         windDirectionDegrees = 0
@@ -837,31 +732,19 @@ final class KinematicsModel {
         aimDirection = Self.direction(elevationDegrees: 45, azimuthDegrees: 0)
         clearCapsule()
 
-        // The welcome scene: one shot already in the air, from the
-        // launcher's own muzzle — every ball in this module is born at
-        // the barrel tip, never conjured mid-air. (Floating staged
-        // basketballs and pre-hung hoops used to open here; they read
-        // as things spawning out of nowhere.)
+        // Welcome scene: one shot already in the air, born at the muzzle — every ball comes from the barrel tip, never mid-air.
         fire()
     }
 
-    /// A launch speed whose 45° range fits inside a typical room.
-    ///
-    /// Range at 45° is v²/g, so v = √(g · R). Aiming for a 2.5 m range
-    /// puts the landing point comfortably short of the far wall and
-    /// keeps the whole parabola — apex included — inside the space the
-    /// user can actually see.
+    /// Launch speed whose 45° range (v²/g) is 2.5 m, so the whole parabola fits a typical room.
     nonisolated static let roomFittingSpeed = (9.81 * 2.5).squareRoot()
 }
 
 // MARK: - Time Capsule
 
 extension KinematicsModel: TimeCapsuleRecording {
-    /// The experiment, not the observer: flights, hoops, the launcher's
-    /// aim and the environment the recorded motion happened under.
-    /// Excluded: `respectRoomWalls`/`roomWalls` (the live room feeds
-    /// them), `hoopsOrbit`/`throwBoost`/`catchingEnabled`/`timeScale`
-    /// (settings), streaks (personal bests survive rewinds), sounds.
+    /// The experiment, not the observer: flights, hoops, aim, environment.
+    /// Excluded: room walls/bounds (the live room feeds them), settings, streaks, sounds.
     struct CapsuleSnapshot: Equatable {
         var flights: [Flight]
         var rings: [Ring]
@@ -898,12 +781,7 @@ extension KinematicsModel: TimeCapsuleRecording {
         )
     }
 
-    /// The recorded flight paths across the whole capsule window, for
-    /// the walkable tube the renderer draws while scrubbed. One polyline
-    /// per flight that was airborne or rolling at any recorded instant,
-    /// strided down from the 90 Hz recording (the tube does not need a
-    /// vertex per physics tick), with near-coincident points dropped so
-    /// a ball that rolls to rest does not stack degenerate segments.
+    /// Recorded flight polylines for the scrub tube — strided down from 90 Hz, near-coincident points dropped so a settling ball doesn't stack degenerate segments.
     func capsuleRecordedPaths(stride: Int = 6) -> [[SIMD3<Float>]] {
         guard scrubTime != nil, let span = capsule.span else { return [] }
         var paths: [UUID: [SIMD3<Float>]] = [:]
@@ -921,13 +799,11 @@ extension KinematicsModel: TimeCapsuleRecording {
 
     func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
         var restored = snapshot.flights
-        // The past hand is gone: a ball that was held THEN comes back
-        // staged, hovering where the hand had it.
+        // The past hand is gone: a then-held ball comes back staged.
         for index in restored.indices where restored[index].status == .held {
             restored[index].status = .staged
         }
-        // The present hand wins: a ball held RIGHT NOW is never moved by
-        // a restore — its live state replaces (or joins) the snapshot's.
+        // The present hand wins: a live-held ball is never moved by a restore.
         if let heldID = heldFlightID,
            let live = flights.first(where: { $0.id == heldID }) {
             if let index = restored.firstIndex(where: { $0.id == heldID }) {
