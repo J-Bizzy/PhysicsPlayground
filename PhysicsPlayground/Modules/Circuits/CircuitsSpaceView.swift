@@ -3,16 +3,8 @@
 //  Physics Playground — Circuits module
 //
 //  The circuit lab immersive scene. Component bodies are carried by a
-//  `RelativeDrag` — the part moves by the hand's displacement, and the
-//  model owns where it ends up. Terminals, wires and switch levers are
-//  tap targets: pinch a terminal, then another, and they're wired;
-//  pinch a wire to remove it; pinch a lever to flip it. The solver
-//  clock is SceneEvents.Update.
-//
-//  (This said "route through RenderKit's ManipulationRouter" until
-//  2026-08-03. They never did — nothing in the app ever used the
-//  router, and it is deleted. See `Grabbable.swift` for why the system
-//  component is the wrong shape here.)
+//  `RelativeDrag`; the model owns where they end up. Terminals, wires
+//  and switch levers are tap targets. Solver clock is SceneEvents.Update.
 //
 
 import PhysicsCore
@@ -27,19 +19,9 @@ struct CircuitsSpaceView: View {
     /// Which component's ring is open — shared by the tap gesture and
     /// the render loop (see RingState's header).
     @State private var ring = RingState()
-    /// PRESS-BEFORE-DRAG, and it is the fix for a real race.
-    ///
-    /// This view carries ONE `DragGesture(minimumDistance: 0)` — it has
-    /// to, because the rack pull must claim the very first frame — so
-    /// every TAP also runs the drag's `onChanged` and `onEnded`. A tap
-    /// on a terminal used to arm `pendingTerminal` through the tap
-    /// gesture AND, if any other terminal happened to be within reach,
-    /// complete a wire through the drag, in an order nothing defined.
-    ///
-    /// A latch presses on contact and only PROMOTES once the hand has
-    /// travelled `PressLatch.tapTravel`. `onEnded` acts only on a
-    /// promoted latch, so a zero-travel press can no longer wire
-    /// anything at all.
+    /// Press-before-drag: the view's single `DragGesture(minimumDistance: 0)`
+    /// means every tap also runs the drag, so a latch only promotes to a
+    /// pull past `PressLatch.tapTravel` — a zero-travel press wires nothing.
     @State private var leadPress = PressLatch<CircuitsModel.Terminal>()
     @State private var partPress = PressLatch<UUID>()
     /// A wire end being lifted off its terminal. The payload is the
@@ -50,12 +32,8 @@ struct CircuitsSpaceView: View {
     /// it can go on moving it. It outlives the `RelativeDrag`'s name,
     /// which for a new part is the well's, not a UUID.
     @State private var spawnedPartID: UUID?
-    /// The parts palette: two blocks of sources on the flanks, one per
-    /// component kind. See `CircuitsPartsLayout` for the geometry and
-    /// for what it replaced.
-    /// THE PARTS, VISIBLE AND ON THE RIGHT — see
-    /// `CircuitsPartsLayout.rightSlot(index:)` for the geometry and for
-    /// why the cabinet that briefly held them is gone.
+    /// The parts palette: blocks of sources on the flanks, one per
+    /// component kind. Geometry in `CircuitsPartsLayout`.
     @State private var palette: Well?
 
     /// Which probe a hand is carrying, if either.
@@ -64,43 +42,20 @@ struct CircuitsSpaceView: View {
     /// on it, and where the hand was, both in the renderer's frame.
     @State private var meterDrag: (start: SIMD3<Float>, hand: SIMD3<Float>)?
     @Environment(AppModel.self) private var appModel
-    /// Two-handed zoom on the bench. Electron View is now a FLOOR under
-    /// this same number rather than a competing 1x/4x flip, so "get in
-    /// among the electrons" and "pull the bench open with both hands"
-    /// are one continuous control.
+    /// Two-handed zoom on the bench. Electron View raises this same
+    /// number's floor rather than being a competing 1x/4x flip.
     @State private var scaleRig = SpatialScaleRig(
         pivot: CircuitsRenderer.benchPivot, range: 0.6...8.0, allowsTurn: false)
-    /// The layers bank: which views of the current are switched on.
-    ///
-    /// It also finally gives ELECTRON VIEW a door. `model.electronView`
-    /// has existed since the bench was written — it raises the zoom floor
-    /// to 4x so the wires swell around you and the drifting electrons
-    /// become things you stand among — and NOTHING in the app ever set it.
-    /// It was reachable only by happening to pinch the bench open with two
-    /// hands past 4x. The one view that kills the misconception this module
-    /// exists to kill was hidden behind an accident.
+    /// The layers bank: which views of the current are switched on;
+    /// also the door to Electron View (`model.electronView`).
     @State private var layers: SpatialLayerBank?
     /// The bench's meter — a tool, not a layer. See `Multimeter`.
     @State private var meter: Multimeter?
     /// The bench's one standing verb: clear it. See `clearAnchor`.
     @State private var verbs: SpatialActionBank?
 
-    /// FIVE AUTHORED CIRCUITS THAT NOBODY COULD LOAD.
-    ///
-    /// `CircuitsModel.Preset` has five cases and `loadPreset` had ZERO
-    /// callers — series bulbs, parallel bulbs, a voltage divider, an RC
-    /// charger and a dead short, all compiled and unreachable. They were
-    /// built for the window panel that was deleted on 2026-08-01 and
-    /// never given a surface in the room. (Each also carried an authored
-    /// paragraph explaining itself; those went with the insight card on
-    /// 2026-08-09. The CIRCUITS are the teaching now — five real
-    /// arrangements you can take apart.)
-    ///
-    /// Behind a `SummonHandle` because that type's own header names this
-    /// exact case — "the things a room accumulates … a ten-preset fan" —
-    /// and because five more standing plates in a lab the owner already
-    /// called cluttered is not the trade. Folded it is one tab that
-    /// reads out the last circuit loaded.
+    /// The five authored circuits (`CircuitsModel.Preset`), behind a
+    /// `SummonHandle` that folds to one tab reading out the last loaded.
     @State private var presetsHandle = SummonHandle(
         title: "Presets", symbol: "square.grid.2x2",
         accent: UIColor(DesignTokens.Palette.circuitsAccent))
@@ -111,65 +66,23 @@ struct CircuitsSpaceView: View {
     /// Identifies the floating readout above the selected part.
     private static let readoutCardID = "circuit-readout"
 
-    /// Right of the bench, mirroring the layers bank on the left —
-    /// where the meter STARTS. Where it ends up is the meter's own
-    /// business once a hand has moved it (`Multimeter.anchor`). The
-    /// two swapped flanks on 2026-08-04: the owner wants the side
-    /// BUTTONS on the left in every module, and this bench was one of
-    /// two that kept its bank off the right shoulder. The mirror
-    /// layout survives, just handed.
+    /// Where the meter starts (right flank); it moves with the hand after.
     private static let meterAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(0.62, -0.03, 0.16)
-    /// The Clear plate, on the bench's far left flank.
-    ///
-    /// It went beside the TRAY first, on the reasoning that the tray is
-    /// where every part came from — the pairing Electric Fields makes
-    /// between its wells and its Clear plate. A screenshot killed that
-    /// twice over. The tray slab is not 0.63 m wide but 0.93: eleven
-    /// component kinds make six columns, so `slabWidth` is `5 * 0.15 +
-    /// 0.18`, and x = 0.42 was INSIDE it, with the slab's own glass
-    /// between the plate and the reader. And tray height is the bottom
-    /// of the frame — the plate sat half out of shot, which is
-    /// `FieldInstrumentLayout`'s "reachable by the arithmetic, invisible
-    /// in practice" in a second module.
-    ///
-    /// So it takes the far end of the buttons flank instead, at the
-    /// furniture's own height. The bench's furniture reads as a row at
-    /// one height — layers, bench, meter since the 2026-08-04 handing —
-    /// with this beyond the bank, rather than one stray plate down
-    /// among the parts.
-    ///
-    /// This is the most dangerous of the seven verbs that left the
-    /// window. Circuit Workshop's bench PERSISTS ACROSS LAUNCHES
-    /// (`CircuitsModel(restoreSaved:)`), so this plate can destroy work
-    /// from a previous session — which is why the panel guarded it with
-    /// a `confirmationDialog` and why the plate `confirms`.
+    /// The Clear plate, on the bench's far left flank. The most dangerous
+    /// verb: the bench persists across launches, so it `confirms`.
     private static let clearAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-1.02, -0.02, 0.10)
 
-    /// The layers bank, on the bench's left flank. Named since
-    /// 2026-08-09 so the reach criterion can measure it; the value is
-    /// unchanged.
+    /// The layers bank, on the bench's left flank. A named static so
+    /// `InstrumentReachCriterionTests` can measure it.
     static let bankAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-0.62, -0.06, 0.16)
 
-    /// BESIDE THE CLEAR PLATE, and unfolding UPWARD — moved down from
-    /// y 1.73 on 2026-08-08 after a screenshot showed what the owner had
-    /// already said in words: at that height it read "on its own",
-    /// floating over the wall a long way from anything it belongs to.
-    ///
-    /// The constraint that shapes this is that the presets column and
-    /// the layers bank are BOTH five plates, and two five-plate columns
-    /// do not fit stacked inside the 0.70…1.80 working band. So they
-    /// cannot share the bank's x, and the far-left flank is where the
-    /// Clear plate already lives.
-    ///
-    /// Grouping them is the fix: the tab sits 0.06 above the Clear
-    /// plate's top edge, which reads as one small stack of verbs rather
-    /// than two strays, and the column unfolds UP into the empty band
-    /// instead of down through the plate. Unfolded it spans y
-    /// 1.483…1.797, inside the ceiling by 3 mm — tight, and checked by
-    /// `CircuitsInstrumentClearanceTests` rather than by eye.
+    /// Beside the Clear plate, unfolding UPWARD: presets and layers are
+    /// both five-plate columns and can't stack inside the 0.70…1.80 band,
+    /// so they share the far-left flank. Clearance checked by
+    /// `CircuitsInstrumentClearanceTests`.
     private static let presetsAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-1.02, 0.15, 0.10)
     /// The column hangs below the tab, centred on this point — a bank
@@ -255,15 +168,9 @@ struct CircuitsSpaceView: View {
             renderer.root.addChild(benchVerbs.root)
             self.verbs = benchVerbs
 
-            // EVERY PRESET CONFIRMS, and that is not caution for its own
-            // sake: `loadPreset` opens with `clearBench()`, and this
-            // bench PERSISTS ACROSS LAUNCHES (`CircuitsModel(restoreSaved:)`).
-            // A single tap here would destroy work from a previous
-            // session — the same reason the Clear plate beside it
-            // confirms, and the reason its comment calls it the most
-            // dangerous of the seven verbs that left the window. Adding
-            // five more one-tap ways to do the same thing would have
-            // undone that decision by accident.
+            // Every preset confirms: `loadPreset` opens with `clearBench()`
+            // and the bench persists across launches, so one tap would
+            // destroy a previous session's work.
             let presetBank = SpatialActionBank(
                 accent: UIColor(DesignTokens.Palette.circuitsAccent),
                 actions: CircuitsModel.Preset.allCases.map { preset in
@@ -280,36 +187,14 @@ struct CircuitsSpaceView: View {
             renderer.root.addChild(presetBank.root)
             self.presets = presetBank
 
-            // The handle is a READOUT as well as a door — the half that
-            // makes folding legitimate. It says which circuit is on the
-            // bench, or that the bench is the user's own.
+            // The handle reads out which circuit is on the bench.
             presetsHandle.summary = { lastPreset?.displayName ?? "your bench" }
             renderer.root.addChild(presetsHandle.root)
 
-            // THE PARTS, IN ONE BLOCK ON THE RIGHT.
-            //
-            // Two flanks until 2026-08-08, then a cabinet for a few
-            // hours, now this — and the cabinet is the interesting one to
-            // record. It was a correct answer to "eleven components stand
-            // in the room whether or not anybody is building", and the
-            // wrong answer to what a workshop bench is FOR. Parts behind
-            // a door are parts you reach for less. The owner's verdict
-            // was to bring them back visible, on the right of the
-            // starting circuit, in the opening view.
-            //
-            // `CircuitsPartsLayout` still says WHICH parts and in what
-            // order — sources, then passives, then the things that do
-            // something — and now says where again, via `rightSlot`.
-            // The two `kinds(on:)` lists are concatenated rather than
-            // merged: that grouping is the one part of the old layout
-            // that was about the COMPONENTS rather than the room, and it
-            // is the order the block should read in.
-            //
-            // GRAVE: `slot`, `rowPitch`, `reach` and `offAxisAngle`
-            // described the two-flank arrangement and have no callers.
-            // They keep their tests — the reasoning in them about what a
-            // reach and an off-axis angle cost is the material for
-            // whatever this bench does next.
+            // The parts, in one block on the right. `CircuitsPartsLayout`
+            // says which parts and in what order (sources, passives, then
+            // active parts) via `rightSlot`; the two `kinds(on:)` lists
+            // are concatenated, not merged, to keep that grouping.
             let partSpecs: [Well.Spec] = CircuitsPartsLayout.Flank.allCases
                 .flatMap { CircuitsPartsLayout.kinds(on: $0) }
                 .enumerated()
@@ -322,13 +207,9 @@ struct CircuitsSpaceView: View {
                         position: CircuitsPartsLayout.rightSlot(index: index),
                         spawn: { model.add(kind, at: $0) })
                 }
-            // THE METER IS THE TWELFTH SLOT. It stood beside the bench
-            // at all times and the owner's word was "intruding"; the
-            // cabinet that briefly swallowed it is gone, so it parks in
-            // the rack with everything else instead. `handOver` rather
-            // than `spawn` because there is exactly ONE multimeter —
-            // minting a second on every pull would be the opposite of an
-            // instrument.
+            // The meter is the twelfth slot, parked in the rack. `handOver`
+            // not `spawn`: there is exactly one multimeter, not a fresh one
+            // per pull.
             let meterSlot = Well.Spec(
                 name: "multimeter",
                 tint: UIColor(DesignTokens.Palette.circuitsAccent),
@@ -336,33 +217,21 @@ struct CircuitsSpaceView: View {
                 preview: { Multimeter.miniature() },
                 position: CircuitsPartsLayout.rightSlot(index: partSpecs.count),
                 spawn: { _ in nil },
-                // CAPTURING THE INSTRUMENT, NOT THE VIEW: a SwiftUI
-                // `View` is a struct, so there is no `self` to hold
-                // weakly — and the meter is the only thing this closure
-                // actually needs.
+                // Captures the instrument, not the view (a SwiftUI View is
+                // a struct, no `self` to hold weakly).
                 handOver: { [weak multimeter] hand in
-                    // Out of the rack and into the hand — and VISIBLE,
-                    // which is the half that was missing. The instrument
-                    // starts hidden so the rack's slot is the only
-                    // multimeter in the room until somebody asks for it.
+                    // Out of the rack, into the hand, and made visible.
                     multimeter?.place(at: SIMD3<Float>(hand))
                     multimeter?.root.isEnabled = true
                 })
 
-            // HIDDEN UNTIL PULLED. The slot above shows a miniature; the
-            // real instrument is one object with its own transform, its
-            // dial and two probes, and leaving it standing beside the
-            // bench as well put TWO multimeters in the room — the
-            // miniature in the rack and the original still intruding
-            // exactly where the owner objected to it. Caught in the
-            // first CLI screenshot of the rack, which is the whole
-            // reason the launch arguments above exist.
+            // Hidden until pulled: the slot shows a miniature, so leaving
+            // the real instrument out too would put two meters in the room.
             multimeter.root.isEnabled = false
 
             let parts = Well(partSpecs + [meterSlot])
-            // A WINDOW, NOT A WALL: six of the twelve, the rest a drag
-            // away. Opt-in, so the five modules with three or four
-            // sources are untouched.
+            // A window, not a wall: six of the twelve visible, the rest a
+            // drag away.
             parts.visibleCount = CircuitsPartsLayout.rightVisibleRows
             renderer.root.addChild(parts.root)
             self.palette = parts
@@ -370,60 +239,24 @@ struct CircuitsSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // The lab's placement in the user's room — a pure
-                    // display offset, safe because every grab in this app
-                    // moves a body by hand DISPLACEMENT, which a constant
-                    // translation leaves untouched.
+                    // Constant display offset — safe because grabs move a
+                    // body by hand displacement. The bank, meter and verb
+                    // plate are children of `renderer.root`, so they ride it.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // …AND THE INSTRUMENTS GO WITH IT. The bank, the
-                    // meter and the verb plate are all children of
-                    // `renderer.root` (see the three `addChild` calls in
-                    // the setup above), so they ride the offset.
-                    //
-                    // This said they "hang off the scene content rather
-                    // than the renderer root, so they never inherited the
-                    // offset" until 2026-08-03. They always did. The
-                    // three sibling modules carried the same false claim
-                    // in different words.
                     model.step(dt: event.deltaTime)
-                    // The bank stands beside the bench, at the bench's own
-                    // depth so it sits in the same ~15 deg band as the
-                    // apparatus rather than dropping out of view — on the
-                    // LEFT, like every module's bank (2026-08-04).
                     let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
                     layers?.update(
-                        // x −0.62 IS INSIDE THE BUILD VOLUME, which spans
-                        // ±0.70. Measured 2026-08-09, and left alone
-                        // deliberately — the number is not the problem.
-                        //
-                        // The bank is 0.15 half-wide, so clearing the
-                        // volume by `InstrumentClearance.stationMargin`
-                        // needs its centre at |x| ≥ 0.97. Searched x
-                        // 0.82…1.30 against z 0.60…1.20: NO position
-                        // satisfies margin, reach and off-axis angle at
-                        // once. The closest is x 0.97, z −0.73 — reach
-                        // 1.253 m against a 1.25 limit and 53.0° against
-                        // 48°. The bench is simply too wide for its own
-                        // flanking furniture.
-                        //
-                        // It becomes feasible the moment the bench
-                        // narrows: at `buildHalfExtents.x` = 0.60 the
-                        // bank fits at x 0.87, z −0.79 (reach 1.215,
-                        // 47.8°). That is a one-number change with a
-                        // real cost — every saved circuit with a part
-                        // between 0.60 and 0.70 is then outside its own
-                        // bench — so it is the owner's, not a tidy-up.
-                        // The multimeter's rest position (+0.62) is
-                        // inside the volume for the same reason.
+                        // bankAnchor x −0.62 is inside the ±0.70 build
+                        // volume: no position clears the margin, reach and
+                        // off-axis limits at once until the bench narrows —
+                        // an owner call with a real cost (saved circuits
+                        // wider than 0.60 would fall outside the bench).
                         anchor: Self.bankAnchor,
                         viewer: viewer,
                         dt: event.deltaTime)
                     meter?.update(viewer: viewer, model: model)
-                    // The palette's idle breath, its recoil when it gives
-                    // a part up, and its refusal fade when the bench is
-                    // at its sixteen-component budget. That last one is
-                    // new capability, not decoration: at the budget the
-                    // tray's pinch did nothing at all and said nothing
-                    // about it.
+                    // Idle breath, recoil on giving up a part, and a
+                    // refusal fade at the component budget.
                     palette?.update(
                         dt: event.deltaTime,
                         nearestHand: appModel.room.nearestFingertip(
@@ -446,10 +279,9 @@ struct CircuitsSpaceView: View {
                                         nearestHand: appModel.room.nearestFingertip(
                                             to: Self.presetsBankAnchor))
                     }
-                    // Rendered here every frame (not via the observation
-                    // loop): a steady DC circuit mutates nothing that
-                    // observation reliably re-fires on, but its electrons
-                    // must keep drifting.
+                    // Ticked every frame, NOT via the observation loop: a
+                    // steady DC circuit mutates nothing observation re-fires
+                    // on, but its electrons must keep drifting.
                     renderer?.handZoom = scaleRig.liveScale
                     renderer?.tick(dt: event.deltaTime, model: model)
                     if let renderer {
@@ -461,22 +293,12 @@ struct CircuitsSpaceView: View {
             if UserDefaults.standard.double(forKey: "trueSpeed") > 0 {
                 model.trueSpeedMode = true
             }
-            // `-electronView 1` shrinks the bench into the copper at
-            // launch. Its switch is a plate on the layers bank standing
-            // beside the bench, and the simulator has no hand to press
-            // it — so without this the app's named centrepiece (the
-            // demo reel's, per DECISIONS.md) is the one thing that
-            // cannot be screenshot from the CLI at all.
+            // `-electronView 1` shrinks the bench into the copper (the
+            // switch is a bank plate the simulator can't press).
             if UserDefaults.standard.bool(forKey: "electronView") {
                 model.electronView = true
             }
-            // `-skyline 1` raises the voltage towers at launch. Same
-            // reason as the two above: the toggle lives on the layers
-            // bank, which needs a hand. This one earned its arg by
-            // being the module's heaviest per-frame path — every tower
-            // and cap rebuilt its material each frame until the ramp
-            // was banked — and a rewrite of a picture nobody can see
-            // from the CLI is a rewrite nobody can check.
+            // `-skyline 1` raises the voltage towers (bank toggle, needs a hand).
             if UserDefaults.standard.bool(forKey: "skyline") {
                 model.showVoltageHeights = true
             }
@@ -494,10 +316,8 @@ struct CircuitsSpaceView: View {
                let first = model.components.first {
                 ring.openID = first.id
             }
-            // `-circSameNet 1` holds the REFUSAL on screen: a lead
-            // pulled from one end of a wired pair onto the other,
-            // which is already the same electrical point. The lead
-            // recoils and goes red, and no wire appears.
+            // `-circSameNet 1` holds the refusal on screen: a lead pulled
+            // onto a terminal already on its own net (recoils red, no wire).
             if UserDefaults.standard.bool(forKey: "circSameNet") {
                 model.clearBench()
                 let anchor = CircuitsModel.buildCenter
@@ -522,14 +342,9 @@ struct CircuitsSpaceView: View {
                 let anchor = CircuitsModel.buildCenter
                 model.add(.battery, at: anchor)
                 if let battery = model.components.first {
-                    // The offset is the near LEAD's, not the centre's,
-                    // and it has to stay inside `leadReach` — 3 cm
-                    // along and 2 cm up is 3.6 cm, comfortably inside
-                    // 6, and crooked enough that the rotation has
-                    // something to do. (The first version of this
-                    // used 4 cm and 6 cm, which is 7.2 cm apart: no
-                    // candidate, no snap, and a screenshot of two
-                    // parts sitting near each other doing nothing.)
+                    // Offset is the near lead's and must stay inside
+                    // `leadReach` (0.06): 3 cm along + 2 cm up = 3.6 cm,
+                    // crooked enough to exercise the rotation.
                     let landing = battery.terminalPosition(1)
                         + SIMD3(0.03 + CircuitsModel.terminalOffset, 0.02, 0)
                     if let bulb = model.add(.bulb, at: landing) {
@@ -537,37 +352,19 @@ struct CircuitsSpaceView: View {
                     }
                 }
             }
-            // THE THREE SURFACES ADDED ON 2026-08-08, none of which the
-            // simulator can reach with a finger, and all of which I have
-            // been asking the owner to check on device for want of a
-            // way to photograph them.
-            //
             // `-circPreset series|parallel|divider|rcCharger|shortCircuit`
-            // loads one. It used to also put that preset's authored
-            // paragraph on the insight card; the card was deleted on
-            // 2026-08-09 and the paragraphs with it, so this now just
-            // builds the circuit.
+            // loads one of the authored circuits.
             if let name = UserDefaults.standard.string(forKey: "circPreset"),
                let preset = CircuitsModel.Preset(rawValue: name) {
                 model.loadPreset(preset)
                 lastPreset = preset
             }
 
-            // THESE THREE COME AFTER THE BENCH-SHAPING ARGUMENTS, and
-            // that ordering is load-bearing rather than tidy. They act
-            // ON a bench — they name a component index, a wire index,
-            // a terminal — and `-circPreset` starts with `clearBench`,
-            // so run earlier they would name parts that a preset then
-            // deleted. A screenshot combining `-circPreset series` with
-            // `-circHighlight` showed no highlight at all for exactly
-            // that reason, with the whole suite green.
-            // A LEAD IN FLIGHT IS A GESTURE STATE, so the simulator
-            // can only reach it by being handed one. Both of these
-            // build a pull and leave it standing, unreleased.
-            //
-            // `-circLead <componentIndex>,<end>` pulls a lead from
-            // that terminal out toward open air — the neutral copper
-            // state, reaching for nothing.
+            // The index-naming args below MUST run after the bench-shaping
+            // args: `-circPreset` starts with `clearBench`, so run earlier
+            // they would name parts a preset then deleted.
+            // `-circLead <componentIndex>,<end>` pulls a lead out toward
+            // open air (a gesture state the simulator can only be handed).
             if let spec = UserDefaults.standard.string(forKey: "circLead") {
                 let parts = spec.split(separator: ",")
                 if let index = parts.first.flatMap({ Int($0) }),
@@ -590,10 +387,8 @@ struct CircuitsSpaceView: View {
                         componentID: model.components[index].id, end: end))
                 }
             }
-            // `-circUnplug <wireIndex>,<end>` lifts that end of that
-            // wire into the air and leaves it there. The circuit goes
-            // DARK in the frame, which is the whole point of taking
-            // the wire out immediately rather than on release.
+            // `-circUnplug <wireIndex>,<end>` lifts that wire end into the
+            // air and holds it there, the circuit dark.
             if let spec = UserDefaults.standard.string(forKey: "circUnplug") {
                 let parts = spec.split(separator: ",")
                 if let index = parts.first.flatMap({ Int($0) }),
@@ -610,33 +405,20 @@ struct CircuitsSpaceView: View {
                     }
                 }
             }
-            // `-circPresetsOpen 1` unfolds the presets tab. Its five
-            // plates are behind a `SummonHandle` and a handle is a
-            // pinch, so folded is the only state a screenshot could ever
-            // catch without this.
+            // `-circPresetsOpen 1` unfolds the presets tab.
             if UserDefaults.standard.bool(forKey: "circPresetsOpen") {
                 presetsHandle.setOpen(true)
             }
-            // `-circScroll <n>` scrolls the parts rack n slots. A rack
-            // that only ever shows its first six is a rack whose scroll
-            // cannot be reviewed — and the carets change with it, so
-            // this is also the only way to photograph the up caret lit.
+            // `-circScroll <n>` scrolls the parts rack n slots.
             let scroll = UserDefaults.standard.integer(forKey: "circScroll")
             if scroll != 0 { parts.scroll(by: scroll) }
 
-            // `-circField 1` switches on the bench's own magnetic
-            // field. The plate is on the layers bank and the simulator
-            // has no finger to flick it with, and this is the one layer
-            // whose whole content is invisible until it is on.
+            // `-circField 1` switches on the bench's own magnetic field.
             if UserDefaults.standard.bool(forKey: "circField") {
                 model.showMagneticField = true
             }
-            // `-circClear 1` ARMS the Clear plate — it does not fire it.
-            // Firing would photograph an empty bench, which looks the
-            // same as a bench nobody built on. The armed state is the
-            // half that cannot otherwise be seen, and on this bench it
-            // is the half that matters: the plate can destroy a circuit
-            // saved from a previous launch.
+            // `-circClear 1` ARMS the Clear plate without firing — firing
+            // photographs an empty bench, indistinguishable from an unused one.
             if UserDefaults.standard.bool(forKey: "circClear") {
                 benchVerbs.arm("clear", holds: true)
             }
@@ -652,24 +434,14 @@ struct CircuitsSpaceView: View {
                     .environment(model)
             }
         }
-        // Leaving the lab must not leave anything running or held.
-        //
-        // `teardown` cancels the renderer's event subscriptions and any
-        // geometry job in flight (see `GeometryPipeline.cancel`), and the
-        // drag state is cleared because NOTHING ELSE CAN CLEAR IT: an
-        // in-flight grab that never receives its `onEnded` — the space
-        // closing under it is the ordinary way that happens — otherwise
-        // strands the object wherever the hand left it and re-targets
-        // every later drag at the same one, with no exit but leaving.
+        // Leaving the lab must not leave anything running or held: an
+        // in-flight grab never gets its `onEnded` when the space closes,
+        // so it must be cleared here or it strands and re-targets every
+        // later drag.
         .onDisappear {
             renderer?.teardown()
-            // A GRIP SURVIVES THE SPACE CLOSING, and that is worse than
-            // it sounds. `Bloom` is a class, so `gripDrag` outlives this
-            // view; left set, `updateGrip` claims EVERY subsequent drag
-            // in the module and nothing at all can be grabbed. That
-            // exact failure is documented in PendulumsSpaceView's
-            // `onEnded` — it cost this module every one of its verbs
-            // once already.
+            // MUST clear: `Bloom` is a class, so a live grip outlives the
+            // view and would claim every subsequent drag in the module.
             bloom.endGrip()
         }
         .gesture(
@@ -680,25 +452,15 @@ struct CircuitsSpaceView: View {
                     // grammar (terminals wire, wires delete, levers
                     // flip, bodies toggle their control ring).
                     if layers?.handleTap(value.entity) == true { return }
-                    // Ahead of `handleTap(on:)`, which is what reads a
-                    // TERMINAL — the meter stands among the bench's
-                    // terminals by design, and turning its dial must not
-                    // also count as probing whatever is behind it.
+                    // Meter before `handleTap(on:)` (which reads a terminal):
+                    // it stands among the terminals, so its dial must not
+                    // count as probing what's behind it.
                     if meter?.handleTap(value.entity, model: model) == true { return }
                     if bloom.handleTap(value.entity) { return }
-                    // Ahead of `handleTap(on:)` for the same reason the
-                    // meter is. The tray this plate used to stand at the
-                    // end of is gone (2026-08-03) and the palette that
-                    // replaced it is on the far flanks, so the crowding
-                    // that made the ordering urgent has eased — but the
-                    // ordering is what makes it a RULE rather than a
-                    // distance: a verb plate is never also a reach for
-                    // the bench behind it, wherever it happens to stand.
+                    // Verb plates before the bench, by the same rule: a plate
+                    // is never also a reach for the bench behind it.
                     if verbs?.handleTap(value.entity) == true { return }
-                    // The rack's carets, before anything else on that
-                    // flank: they sit at the ends of the parts column and
-                    // a miss would otherwise fall through to whatever is
-                    // behind them.
+                    // The rack's carets, before the flank behind them.
                     if palette?.handleTap(value.entity) == true { return }
                     if presetsHandle.handleTap(value.entity) { return }
                     if presetsHandle.isOpen,
@@ -706,35 +468,25 @@ struct CircuitsSpaceView: View {
                     handleTap(on: value.entity)
                 }
         )
-        // One drag gesture, four grabs — all relative, nothing lurches
-        // toward the hand: a terminal pulls a live wire; an end grip
-        // aims/stretches its part; a palette source hands you a NEW part
-        // at your fingertips; a part body carries the part. Tap-tap
-        // wiring still works too.
+        // One drag gesture, four grabs, all relative: a terminal pulls a
+        // wire; a lead aims its part; a palette source hands you a new
+        // part; a body carries the part.
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
                 .onChanged { value in
                     guard let renderer else { return }
-                    // Into the BENCH's own frame, not the room's. The
-                    // bench can be zoomed (Electron View, two hands) and
-                    // moved (lab placement); converting through viewRoot
-                    // inverts both exactly, so a part follows the hand
-                    // 1:1 on screen at any zoom instead of flying four
-                    // times as far.
+                    // Into the bench's frame, not the room's: converting
+                    // through viewRoot inverts zoom and lab placement, so a
+                    // part tracks the hand 1:1 on screen at any zoom.
                     let handF = renderer.viewRoot.convert(
                         position: SIMD3<Float>(value.convert(
                             value.location3D, from: .local, to: .scene)),
                         from: nil)
                     let hand = SIMD3<Double>(handF)
 
-                    // THE PROBES, before anything else on the bench.
-                    //
-                    // They are the one thing here that is not part of the
-                    // circuit: a probe carried across a terminal must not
-                    // also start dragging that terminal's wire, and a
-                    // probe is deliberately easy to pick up, so it has to
-                    // claim its drag first.
+                    // Probes first: a probe carried across a terminal must
+                    // not also start dragging that terminal's wire.
                     if probeDrag == nil, let meter,
                        let slot = meter.probeSlot(for: value.entity) {
                         probeDrag = slot
@@ -749,14 +501,9 @@ struct CircuitsSpaceView: View {
                         return
                     }
 
-                    // THE METER ITSELF, next.
-                    //
-                    // In the RENDERER's frame, not the bench's: the meter
-                    // hangs off `root` rather than `viewRoot` precisely so
-                    // an 8× Electron View cannot carry the instrument out
-                    // of reach, and converting its drag through the zoom
-                    // would undo that — the case would fly eight times as
-                    // far as the hand at full magnification.
+                    // Meter next, in the RENDERER's frame not the bench's:
+                    // it hangs off `root` (not `viewRoot`) so Electron View
+                    // zoom cannot carry it out of reach.
                     if let meter {
                         let world = SIMD3<Float>(value.convert(
                             value.location3D, from: .local, to: .scene))
@@ -824,20 +571,16 @@ struct CircuitsSpaceView: View {
                         model.endCarry()
                     }
                     guard let renderer else { return }
-                    // Into the BENCH's own frame, not the room's. The
-                    // bench can be zoomed (Electron View, two hands) and
-                    // moved (lab placement); converting through viewRoot
-                    // inverts both exactly, so a part follows the hand
-                    // 1:1 on screen at any zoom instead of flying four
-                    // times as far.
+                    // Into the bench's frame, not the room's: converting
+                    // through viewRoot inverts zoom and lab placement, so a
+                    // part tracks the hand 1:1 on screen at any zoom.
                     let handF = renderer.viewRoot.convert(
                         position: SIMD3<Float>(value.convert(
                             value.location3D, from: .local, to: .scene)),
                         from: nil)
                     let hand = SIMD3<Double>(handF)
-                    // A lead in flight lands here — or refuses, or
-                    // springs back. A lead that never promoted was a
-                    // TAP, and taps do not wire.
+                    // A lead in flight lands, refuses, or springs back. A
+                    // lead that never promoted was a tap, and taps don't wire.
                     if model.leadPull != nil {
                         model.updateLeadPull(hand: hand)
                         model.endLeadPull()
@@ -845,8 +588,6 @@ struct CircuitsSpaceView: View {
                     }
                     guard let partDrag else { return }
                     applyCircuitDrag(partDrag, hand: hand)
-                    // ONE release path. It used to be two, picked by
-                    // whether a grip or a body had been grabbed.
                     if let id = spawnedPartID ?? UUID(uuidString: partDrag.name) {
                         model.release(id: id)
                     }
@@ -856,14 +597,8 @@ struct CircuitsSpaceView: View {
         .spatialScale(scaleRig)
     }
 
-    /// Resolves what the pinch landed on and opens the right session:
-    /// wire (terminal), aim/stretch (grip), pull (palette), carry (body).
-
-    /// A part's own controls. Its value has no size of its own, so the
-    /// grip's honesty is the CONSEQUENCE — pull a bulb's resistance up
-    /// and it visibly dims, pull the battery's volts and the electron
-    /// drift quickens while your hand is still moving. Switches get a
-    /// petal instead, because open and closed is not a continuum.
+    /// A part's own controls: a value grip (a bulb dims, a battery's
+    /// drift quickens as you pull) and petals for the discrete actions.
     private func syncBloom(renderer: CircuitsRenderer, dt: Double) {
         if let openID = ring.openID,
            !model.components.contains(where: { $0.id == openID }) {
@@ -920,24 +655,10 @@ struct CircuitsSpaceView: View {
                      viewer: viewer, revealTarget: 1, dt: dt)
     }
 
-    /// What a pinch landed on.
-    ///
-    /// A PURE STATIC over entity NAMES, following
-    /// `FieldSpaceView.resolveCharge`, so the priority order is
-    /// testable without a headset — which matters because nothing
-    /// automated can touch a RealityKit entity, and "which of six
-    /// things claimed this drag" is exactly the question that used to
-    /// be answerable only by reading a closure.
-    ///
-    /// `names` is the entity's own name followed by its ancestors',
-    /// nearest first: a pinch lands on a child and the meaning lives
-    /// on a parent.
-    ///
-    /// THERE IS NO DISTANCE FALLBACK, deliberately. Electric Fields
-    /// has one — a pinch within 12 cm of a charge grabs that charge —
-    /// and it is right there, where the things being grabbed are far
-    /// apart. On this bench one part's two leads are 17 cm apart and a
-    /// fallback is how you wire the wrong end.
+    /// What a pinch landed on. A pure static over entity NAMES (the
+    /// entity's own then its ancestors', nearest first) so the six-way
+    /// priority is testable without a headset. NO distance fallback: a
+    /// part's two leads are 17 cm apart, so a fallback wires the wrong end.
     enum Grab: Equatable {
         case lead(CircuitsModel.Terminal)
         case body(UUID)
@@ -1004,14 +725,8 @@ struct CircuitsSpaceView: View {
         case .lever, .none:
             break
         }
-        // THE RACK CLAIMS THE DRAG BEFORE IT KNOWS WHAT IT IS.
-        //
-        // A pinch on a slot means two things — slide the rack to see
-        // the others, or take this one — and which cannot be known
-        // until the hand has travelled (`ScrollGesture`). So the drag
-        // opens here and resolves in `onChanged`; the part is still
-        // born AT THE FINGERTIPS when it comes, which is the whole
-        // reason a well beat the old tray.
+        // The rack claims the drag before knowing if it's a scroll or a
+        // take — that resolves in `onChanged` once the hand has travelled.
         var current: Entity? = entity
         while let candidate = current {
             if palette?.beginDrag(candidate, hand: SIMD3<Float>(hand)) == true { return }
@@ -1033,23 +748,14 @@ struct CircuitsSpaceView: View {
         let position = drag.position(forHand: hand)
         guard let id = spawnedPartID ?? UUID(uuidString: drag.name) else { return }
         model.move(id: id, to: position)
-        // A part hanging by one lead swings about it while it is
-        // carried — where "aim the part" went when the grip was
-        // deleted.
+        // A part hanging by one lead swings about it while carried.
         model.swing(id: id, hand: position)
         model.breakOverstretchedWires(id: id)
     }
 
-    /// A TAP NEVER WIRES ANYTHING AND NEVER DELETES ANYTHING.
-    ///
-    /// It used to do both. A tap on a terminal armed tap-tap wiring
-    /// (and, through the overlapping drag, could complete a different
-    /// wire in the same event); a tap on a wire deleted it outright,
-    /// with no confirmation, on a bench that persists across launches.
-    /// Wiring is a pull now, and a wire comes off by being pulled off.
-    ///
-    /// What a tap does is SELECT: it says "this one", and the room
-    /// answers with the readout and the ring.
+    /// A tap only SELECTS — it never wires and never deletes (wiring is a
+    /// pull, a wire comes off by being pulled off). It says "this one" and
+    /// the room answers with the readout and the ring.
     private func handleTap(on entity: Entity) {
         switch Self.resolveGrab(names: Self.nameChain(from: entity), on: model) {
         case .lead(let terminal):
@@ -1060,8 +766,7 @@ struct CircuitsSpaceView: View {
                 model.probeTap(terminal)
             } else {
                 model.select(id: terminal.componentID)
-                // WHAT IS THIS CONNECTED TO? Answered by the bench
-                // rather than by a sentence about the bench.
+                // "What is this connected to?" — answered by lighting the net.
                 model.highlightNet(containing: terminal)
             }
             return
@@ -1084,9 +789,7 @@ struct CircuitsSpaceView: View {
         case .none:
             break
         }
-        // Tapping nothing puts the room back: the ring folds and the
-        // lit net goes out, which is the same gesture meaning the same
-        // thing about two different things.
+        // Tapping nothing folds the ring and clears the lit net.
         if ring.openID != nil || model.highlightedNet != nil {
             SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
         }
@@ -1095,24 +798,9 @@ struct CircuitsSpaceView: View {
     }
 
 
-    /// Component bodies (named by UUID, marked by the white center knob)
-    /// are carried directly. A palette source makes a part AT THE HAND
-    /// and hands it to the same drag, so making one and moving one are
-    /// one gesture. A part hanging by one lead swings about it as it
-    /// is carried (`CircuitsModel.swing`) — which is where aiming
-    /// went when the orange end grips were deleted.
-    ///
-    /// The palette resolves by ENTITY, through `Well.pull`, rather than
-    /// by parsing a `"tray-<kind>"` prefix off a name. Name-parsing is
-    /// how the tray did it and it is the loosest coupling in this file:
-    /// a renamed entity failed silently, as a part that simply could not
-    /// be made. `SpatialPicker` made the same move for the same reason.
+    /// Component bodies (named by UUID) are carried directly; a palette
+    /// source makes a part at the hand and hands it to the same drag. The
+    /// palette resolves by ENTITY through `Well.pull`, not by name-parsing
+    /// (a renamed entity would fail silently).
 }
-
-// CircuitsSelectedReadout lives in CircuitsSelectedReadout.swift.
-//
-// It pointed at `CircuitsControlsPanel.swift` until 2026-08-09, and
-// that file was deleted on 2026-08-01 with every other module panel —
-// a signpost to a room that had been demolished eight days earlier.
-// The readout moved to its own file in the same sweep.
 
