@@ -2,45 +2,16 @@
 //  HubVignettes.swift
 //  Physics Playground — Hub
 //
-//  The miniatures in the hub gallery and the labs ring, and what each of
-//  them DOES.
-//
-//  They used to come from nine Blender assets authored months apart, in
-//  nine different styles and at nine different levels of finish — a
-//  spiky ball for the electric field, a stack of coloured tiles for the
-//  drumhead — and they were static. Worse, the "live exhibit" animation
-//  added later matched children by NAME, and those names only existed in
-//  the procedural fallbacks; every module that loaded an asset silently
-//  never animated at all.
-//
-//  So: one file, one visual language, each miniature returning its own
-//  animation closure alongside the geometry it drives. A model and its
-//  motion can no longer drift apart, because they are written in the
-//  same place and the closure captures the very entities it moves — no
-//  name lookups, no per-frame tree searches.
-//
-//  Assets came back after that, on those terms. A few of these
-//  miniatures load the SAME usdz the room loads — the launcher barrel,
-//  the battery, the bulb, the switch — because the miniature is the map
-//  you arrive holding, and a map drawn from different geometry than the
-//  place is worse than none. The rest of the solid apparatus comes from
-//  `Tools/moduleprops.py`, and anything that rotates on its own — the
-//  compass needle, the quadrant pointer — ships as a separate file so
-//  the closure can capture the moving part directly. They are static
-//  props parented under entities the closure moves, so the failure
-//  above cannot recur: nothing is looked up, and nothing loaded is
-//  asked to flex. The things that must flex — field lines, the
-//  trajectory, the orbits, the wire loop, the cables, the comet's tail
-//  — stay procedural for exactly that reason.
-//
-//  Three rules hold the file together:
-//
-//  1. A vignette NEVER writes its own root transform. That belongs to
-//     whoever placed it. All content hangs off an inner `frame`.
-//  2. `fit` owns `frame.position` and `frame.scale`. An animation that
-//     needs a scale of its own gets a third level beneath the frame.
-//  3. Every drawn line goes through `lines(_:)`, which puts the design
-//     system's two passes — dark casing, bright core — on all of them.
+//  The hub miniatures, each returning its animation closure alongside the
+//  geometry it drives, so a model and its motion cannot drift apart. Solid
+//  apparatus loads from usdz (some the same asset the room loads); things
+//  that must flex — field lines, trajectories, orbits, cables — stay
+//  procedural. Three rules:
+//    1. A vignette NEVER writes its own root transform; content hangs off
+//       an inner `frame`.
+//    2. `fit` owns `frame.position`/`frame.scale`; an animation needing
+//       its own scale gets a third level beneath the frame.
+//    3. Every drawn line goes through `lines(_:)` (dark casing, bright core).
 //
 
 import Foundation
@@ -102,34 +73,11 @@ enum HubVignettes {
 
     // MARK: The common frame
 
-    /// Centres `frame` on the root's origin and normalises it to the
-    /// common square, measuring across a whole cycle of the motion
-    /// rather than at rest.
-    ///
-    /// Both hosts measure ONCE, at build time, before a single frame has
-    /// run. So a miniature whose motion carries it outside its resting
-    /// bounds is fitted from a box smaller than the one it actually
-    /// uses, and overflows its bubble — which is precisely what the
-    /// projectile did: its strobe dots and its ball are created at the
-    /// origin and only reach the arc on the first `animate`, so the fit
-    /// never saw the trajectory at all.
-    ///
-    /// Neither host consults the bounds CENTRE either, only the extents,
-    /// so whatever origin a builder happened to author to became the
-    /// middle of the bubble. The pendulum rig hung entirely in the upper
-    /// half of its own slot for that reason.
-    ///
-    /// Sampling is also what retires the hand-picked "widest pose"
-    /// offsets the magnets and the spring used to carry. Both of those
-    /// comments were describing this function's job.
-    ///
-    /// `centredOn` overrides which point lands in the middle. Almost
-    /// every miniature wants the middle of its own bounding box, which is
-    /// the default — but a solar system does not: its star sits at a
-    /// FOCUS of the ellipses, not at their centre, so box-centring pushed
-    /// the one thing the eye goes to a fifth of the way off-frame while
-    /// the empty far end of the orbit took the middle. Where an exhibit
-    /// has an obvious anchor, that anchor is the centre.
+    /// Centres `frame` on the root's origin and normalises it to the common
+    /// square, sampling a WHOLE cycle of the motion (not the resting pose,
+    /// which is smaller and would overflow the bubble mid-swing).
+    /// `centredOn` overrides which point lands in the middle — a solar
+    /// system centres on its star's focus, not the ellipses' box centre.
     private static func fit(root: Entity, frame: Entity,
                             cycle: Double,
                             centredOn pivot: SIMD3<Float>? = nil,
@@ -148,33 +96,21 @@ enum HubVignettes {
             upper = simd_max(upper, box.max)
         }
 
-        // Half-extents measured OUTWARD FROM THE CENTRE, taking the
-        // larger side. With a box centre those two sides are equal and
-        // this is the plain span; with an anchor off to one side it is
-        // what keeps the long side inside the square instead of letting
-        // it hang out.
+        // Half-extents measured outward from the centre, larger side —
+        // keeps an off-centre anchor's long side inside the square.
         let centre = pivot ?? (lower + upper) / 2
         let reach = simd_max(upper - centre, centre - lower)
         let span = max(reach.x, max(reach.y, 1e-4)) * 2
         let scale = frameHalf * 2 / span
-        // The frame's own scale applies to the centre we just measured,
-        // so the offset that lands it on the origin is the SCALED centre
-        // negated — not the raw one.
+        // The offset is the SCALED centre negated (the frame scale applies
+        // to the centre just measured).
         frame.scale = SIMD3(repeating: scale)
         frame.position = -centre * scale
 
-        // And the square itself, as an invisible box on the ROOT where no
-        // animation can reach it.
-        //
-        // Normalising the swept union is not enough on its own, because
-        // the hosts measure at REST and a miniature at rest is smaller
-        // than the same miniature mid-swing — the pendulum rig came out
-        // 0.139 against the gravity system's 0.165, so each was still
-        // handed a different number to divide by and the streak this
-        // whole contract exists to prevent survived. The proxy makes the
-        // measurement independent of the pose: every miniature reports
-        // exactly one square, whatever it happens to be doing at the
-        // instant somebody looks at it.
+        // An invisible square proxy on the ROOT so both hosts measure ONE
+        // pose-independent box (they measure at rest, which is smaller than
+        // mid-swing, and would otherwise hand each miniature a different
+        // number to divide by).
         let proxy = ModelEntity(
             mesh: .generateBox(size: [frameHalf * 2, frameHalf * 2, 0.0005]),
             materials: [{
@@ -206,20 +142,10 @@ enum HubVignettes {
                     materials: [Materials.energized(color, glow: glow)])
     }
 
-    /// A bundle of drawn lines, in the two passes the design system asks
-    /// for: a near-black casing swept fatter than the bright core.
-    ///
-    /// `Materials.contrastLine` shipped in four module renderers and in
-    /// NONE of these miniatures, which is why every one of them dissolved
-    /// against a bright wall. Passthrough is a bright medium; a 2 mm cyan
-    /// tube at 0.9 opacity has nothing to be bright against, and the
-    /// exhibit fit then magnifies it about twofold. Putting both passes
-    /// inside the one helper every arc, ring, cable and orbit already
-    /// goes through is what makes the whole file inherit them.
-    ///
-    /// All the paths share ONE mesh per pass — `TubeMesh` takes a list of
-    /// polylines — so a sixteen-line field bundle is two draw calls, not
-    /// thirty-two.
+    /// A bundle of drawn lines in the two design-system passes (near-black
+    /// casing under a bright core, so they don't dissolve against a bright
+    /// wall). All paths share ONE mesh per pass — `TubeMesh` takes a list
+    /// of polylines — so a sixteen-line bundle is two draw calls.
     private static func lines(_ paths: [[SIMD3<Float>]], radius: Float,
                               _ color: UIColor, opacity: Float = 1) -> Entity? {
         let usable = paths.filter { $0.count > 1 }
@@ -792,22 +718,10 @@ enum HubVignettes {
         var worlds: [(entity: ModelEntity, name: String)] = [(sun, "Sun")]
         var appliedTextureVersion = CelestialTextures.version
 
-        // Two worlds, and their periods obey Kepler's third law: the
-        // outer one is not just slower, it is slower by exactly
-        // (a₂/a₁)^³ᐟ².
-        //
-        // `argument` is the argument of periapsis — where in the plane
-        // the orbit's long axis points, and a real orbital element that
-        // the lab itself computes. Here it also does compositional work:
-        // an eccentric orbit reaches further on one side than the other,
-        // and with both long axes pointing the same way all of that
-        // overhang piled onto one edge of the square. Turning the outer
-        // one across the frame spreads its reach over both axes, so a
-        // star-centred exhibit still fills its bubble.
-        // Sizes are up a fifth on the pre-comet exhibit: the comet's
-        // apoapsis grew the swept bounds by half again, so the whole
-        // system shrinks in the fit and the worlds pay for it unless
-        // they grow to compensate.
+        // Two worlds; periods obey Kepler's third law (outer slower by
+        // (a₂/a₁)^³ᐟ²). `argument` (argument of periapsis, a real element
+        // the lab computes) also turns the outer orbit across the frame so
+        // its eccentric overhang spreads over both axes.
         let plan: [(semiMajor: Double, eccentricity: Double, argument: Float,
                     name: String, size: Float)] = [
             (0.042, 0.10, 0, "Earth", 0.0096),
@@ -821,9 +735,7 @@ enum HubVignettes {
             pivot.orientation = simd_quatf(angle: spec.argument, axis: [0, 1, 0])
             system.addChild(pivot)
 
-            // The path, from the polar equation with the star at a FOCUS
-            // — which is where the star of an elliptical orbit is, and
-            // the reason the outer world swings close on one side.
+            // The path, from the polar equation with the star at a FOCUS.
             let a = Float(spec.semiMajor), e = Float(spec.eccentricity)
             let semiLatus = a * (1 - e * e)
             let path = (0...96).map { step -> SIMD3<Float> in
@@ -850,21 +762,12 @@ enum HubVignettes {
                     * pow(spec.semiMajor / baseSemiMajor, 1.5)))
         }
 
-        // The comet: the one body that shows Kepler's second law at a
-        // glance, racing through periapsis and crawling out to apoapsis
-        // on the same third-law clock as the planets. Its nucleus is the
-        // one modeled prop here (`Tools/moduleprops.py`, bilobed and
-        // 67P-dark); its tail is the fact the addition exists to get
-        // right, and it flexes, so it stays procedural: a comet's tail
-        // points AWAY FROM THE SUN — pushed out by light and wind — not
-        // behind the motion, and it grows as the ice gets close enough
-        // to boil.
-        // The argument of periapsis does the same compositional work as
-        // Mars's: an e = 0.62 ellipse is nearly all apoapsis, and with
-        // that long axis along X the exhibit came out 0.17 x 0.066 — a
-        // streak. At 2.27 the apoapsis crosses the frame at ~50°, so its
-        // reach lands on depth as well as width, and the 28° lean turns
-        // that depth into height.
+        // The comet shows Kepler's second law at a glance — racing through
+        // periapsis, crawling to apoapsis. Its nucleus is a modeled prop;
+        // its tail stays procedural and points AWAY FROM THE SUN (not
+        // behind the motion), growing as the ice nears boiling. Its
+        // argument of periapsis spreads the e = 0.62 ellipse's reach onto
+        // depth and height rather than a flat streak.
         let cometA: Float = 0.088, cometE: Float = 0.62
         let cometSemiLatus = cometA * (1 - cometE * cometE)
         let cometPivot = Entity()
@@ -1267,18 +1170,9 @@ enum HubVignettes {
                     paths.append(path.reversed())
                 }
             }
-            // THE MAGNET'S OWN LAVENDER, not the electric field's.
-            //
-            // This borrowed `Palette.fieldLineUI` and so drew magnetic
-            // lines in Electric Fields' colour — a mismatch that was
-            // invisible while that token happened to be a neutral cyan
-            // and became loud the moment it became yellow (2026-08-09).
-            //
-            // It was already wrong before that. `MagnetismRenderer`
-            // draws this lab's lines in lavender, so the miniature on
-            // the home screen and the apparatus it advertises have never
-            // agreed. Reading the renderer's own constant is what stops
-            // them drifting again.
+            // The magnet's own lavender (`MagnetismRenderer.lineColor`),
+            // NOT the electric field's token — reading the renderer's own
+            // constant keeps miniature and apparatus from drifting apart.
             return lines(paths, radius: 0.0017,
                          MagnetismRenderer.lineColor)
         }
@@ -1442,22 +1336,11 @@ enum HubVignettes {
 
     // MARK: Labs — the gyroscope that opens the ring
 
-    /// The app's only permanent piece of interface, and until now a white
-    /// glass sphere with an SF Symbol grid floating in it — iOS chrome on
-    /// the one object that is never not on screen.
-    ///
-    /// A gyroscope instead. It belongs to no single lab, which an
-    /// armillary would not (that reads as Gravity Lab's property); it is
-    /// an instrument rather than an icon, which is the language every
-    /// other object in this app speaks; and its meaning is exactly the
-    /// bead's job — the thing that holds still while everything around it
-    /// turns. When the ring opens, the gimbals unlock and lay flat into
-    /// the arc the labs fan along.
-    ///
-    /// Assembled from three separate assets rather than one, so the
-    /// closure can capture each moving part directly. Pulling named
-    /// children out of a single loaded model is the exact mistake this
-    /// file was rewritten to end.
+    /// The bead's gyroscope: an instrument belonging to no single lab,
+    /// meaning what the bead means — the thing that holds still while
+    /// everything turns. Assembled from three separate assets so the
+    /// closure can capture each moving part directly (not named children
+    /// of one model). When the ring opens, the gimbals lay flat into the arc.
     private static func gyroscope() -> Built {
         let root = Entity()
         let frame = Entity()
