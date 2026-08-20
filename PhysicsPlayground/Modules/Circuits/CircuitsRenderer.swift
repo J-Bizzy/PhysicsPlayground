@@ -1255,23 +1255,14 @@ final class CircuitsRenderer {
             if let existing = wireEntities[wire.id] {
                 entity = existing
             } else {
-                // A wire must LOOK like a wire. The conductor alone,
-                // drawn thin and mid-blue, lost the competition with the
-                // bright electron beads riding on it: the bench read as
-                // strings of floating beads with nothing joining them.
-                // A real cable is a dark insulating jacket with the
-                // conductor inside, so that is what gets built — the
-                // jacket carries the silhouette, the core carries the
-                // live voltage colour, and the electrons ride inside.
-                // A CABLE THAT HANGS IS BUILT FROM SEGMENTS, not
-                // from a regenerated mesh. The house rule is that the
-                // per-frame path touches only entity transforms and
-                // that mesh generation goes through
-                // `GeometryPipeline`'s worker — and a sagging wire
-                // moves every frame while its part is carried, so a
-                // `TubeMesh` rebuilt inline would break exactly that
-                // rule. Segments share one unit-cylinder mesh and
-                // move by transform alone.
+                // A cable is a dark jacket carrying the silhouette with the
+                // conductor inside — the core carries the live voltage
+                // colour and the electrons ride in it.
+                //
+                // A HANGING CABLE IS BUILT FROM SEGMENTS sharing one
+                // unit-cylinder mesh, never a regenerated `TubeMesh`: the
+                // per-frame path touches transforms only, and a wire on a
+                // carried part moves every frame.
                 entity = ModelEntity()
                 entity.name = "w-\(wire.id.uuidString)"
                 var accessibility = AccessibilityComponent()
@@ -1549,25 +1540,12 @@ final class CircuitsRenderer {
         let total = arc[arc.count - 1]
         guard total > 1e-6 else { return }
         let length = Double(total)
-        // Bead count grows with the zoom, but SUBLINEARLY, and the
-        // exponent is the whole subtlety here.
-        //
-        // The pool hangs under `viewRoot`, so the beads are scaled by
-        // the zoom exactly like the wire they ride: at 4x a bead is 4x
-        // fatter and a gap 4x wider, and the picture is unchanged. A
-        // flat model-space spacing is therefore already correct — it is
-        // the CAP of 9 that starves the moment, because Electron View
-        // puts you inside one long wire and nine beads on a barrel that
-        // fills your view reads as a dotted line, not a current.
-        //
-        // Dividing the spacing by the full zoom (the obvious fix) packs
-        // them until they overlap into a striped tube, because the
-        // beads grew too. The square root splits the difference: denser
-        // when you are inside the wire, still visibly separate beads.
-        //
-        // The pool remains the ceiling — EntityPool's contract is to
-        // show what the budget affords rather than drop frames — so the
-        // loop below stops at the budget regardless.
+        // Bead count grows with zoom SUBLINEARLY. The beads scale with the
+        // wire they ride, so flat model-space spacing is already right; it
+        // is the CAP that starves Electron View. Dividing spacing by the
+        // full zoom packs them into a striped tube (they grew too), so the
+        // square root splits the difference. The pool budget still caps the
+        // loop below.
         let zoom = Double(max(benchScale, 1))
         let spacing = 0.045 / zoom.squareRoot()
         let cap = Int((9 * zoom).rounded())

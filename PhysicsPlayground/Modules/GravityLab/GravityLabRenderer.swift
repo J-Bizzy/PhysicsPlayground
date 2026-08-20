@@ -1122,22 +1122,13 @@ final class GravityLabRenderer {
                 + SIMD3(0, Float(orbiting.displayRadius) + 0.028, 0)
             let bodyScale = Float(orbiting.displayRadius) / Self.baseBodyRadius
             slot.entity.scale = SIMD3<Float>(repeating: bodyScale)
-            // The target is re-sized WITH the body, so its reach in the
-            // room stays constant instead of scaling with the planet —
-            // see `Grabbable.sphereTargetRadius`. Change-gated: this
-            // allocates a `ShapeResource`, and a body's display radius
-            // only moves on a merge or a preset change.
+            // The target is re-sized WITH the body so its reach in the room
+            // stays constant. Change-gated: this allocates a `ShapeResource`.
             //
-            // ON `slot.payload`, NOT `slot.entity`. The pool is two
-            // levels: `slot.entity` is the bare container this scale is
-            // written to, and `slot.payload` is the sphere under it that
-            // carries the mesh, the `InputTargetComponent` and the
-            // body's UUID name — so the sphere is what a pinch hits and
-            // what the gesture handlers resolve. Setting this on the
-            // container put an inert collider on an entity with no input
-            // target, left the real one at its authored 1.15×, and
-            // achieved exactly nothing; the criterion could not see it
-            // because a fixed 1.15× rides its 1.15 margin at every scale.
+            // MUST go on `slot.payload`, not `slot.entity`: the payload is
+            // the sphere carrying the mesh, input target and UUID name, so
+            // it is what a pinch hits. On the container it is an inert
+            // collider on an entity with no input target.
             if abs((bodyColliderScales[index] ?? -1) - bodyScale) > 1e-4 {
                 bodyColliderScales[index] = bodyScale
                 slot.payload.components.set(CollisionComponent(shapes: [
@@ -1244,21 +1235,11 @@ final class GravityLabRenderer {
 
     // MARK: Trails (vertex math on the pipeline worker)
 
-    // A JOB CARRIES ONLY THE TRAILS THAT MOVED.
-    //
-    // It used to carry every body, because the resubmit test was "did
-    // ANY trail grow" and the payload was then built for all of them.
-    // At sixteen bodies that queued sixteen uploads every fourth frame
-    // against a drain of three per frame — six frames of work arriving
-    // every four — so the queue never emptied and the main actor did
-    // three `MeshResource.generate` calls every frame, permanently. The
-    // budget that was meant to spread one burst over five frames had
-    // become a floor instead of a ceiling.
-    //
+    // A JOB CARRIES ONLY THE TRAILS THAT MOVED — carrying every body
+    // queues more uploads than the budget drains, so the queue never
+    // empties and the main actor generates meshes every frame forever.
     // `slots` says which body each entry belongs to, so a partial job
-    // still lands on the right entities. In steady flight one or two
-    // trails cross the 8 mm spacing threshold in any given window, so
-    // the queue now drains and the renderer goes quiet between them.
+    // still lands on the right entities.
     private nonisolated struct TrailJob: Sendable {
         var slots: [Int]
         var names: [String]

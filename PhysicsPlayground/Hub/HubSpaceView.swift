@@ -1081,62 +1081,18 @@ final class HubScene {
             basePosition: basePosition, animate: built.animate))
     }
 
-    /// An exhibit's name, built to survive the room behind it.
-    ///
-    /// Saturated accent glyphs alone were legible while each exhibit sat
-    /// on a dark card. With the cards gone the wall shows through, and a
-    /// bright room under a mid-tone accent is the worst case for reading
-    /// type: cyan on white, red on white, green on white.
-    ///
-    /// The title's trick — a slightly larger dark copy of the same text
-    /// behind the glyphs — does not survive being shrunk to name size.
-    /// Scaling a whole string moves every glyph outward from the centre,
-    /// so at 36 mm the casing letters land between their own neighbours
-    /// and the name reads as if it were printed twice, badly. What works
-    /// at this size is an actual backing: one small dark plate, sized to
-    /// the words it carries. Crisp accent type, guaranteed contrast, and
-    /// nothing around the MODEL — which is the part that has to stay
-    /// unframed.
-    /// Internal, not private: the palette ring borrows this exact
-    /// treatment for its slot labels, so the app has ONE nameplate.
-    /// How wide the pill `namePlate` will build for this text.
-    ///
-    /// Exposed because a caller that mounts a label BESIDE something has
-    /// to know how far it reaches: `namePlate` returns a plate centred on
-    /// its own origin, so positioning it by a fixed offset works only
-    /// while the text is short enough. The layers bank did exactly that
-    /// and every label longer than 14 mm straddled the switch it named.
-    /// One formula, two callers — a second copy of the padding arithmetic
-    /// would drift the moment either changed.
+    /// How wide the pill `namePlate` will build for this text. Exposed
+    /// because a caller mounting a label BESIDE something must know how far
+    /// it reaches — the plate is centred on its own origin, so a fixed
+    /// offset only works while the text stays short. One formula, two
+    /// callers; a second copy of the padding arithmetic would drift.
     static func namePlateWidth(_ text: String, size: CGFloat = 0.036) -> Float {
         textExtents(text, size: size).x + Float(size) * 0.72 * 2
     }
 
-    // `namePlateHeight` was deleted 2026-08-09 with the ENTER plaque it
-    // spaced. Keeping the lesson, which outlived its caller: it asked
-    // the SAME arithmetic the builder uses rather than the built
-    // entity's `visualBounds`, because a freshly built, unparented
-    // entity does not report its plate — the first attempt measured the
-    // caption, moved the plaque down by less than the caption was tall,
-    // and still crossed its second line. A number you can compute
-    // before you build is a number you can also TEST, which is the
-    // difference between that fix and another screenshot.
-
-    /// A nameplate, optionally WRAPPED.
-    ///
-    /// Single-line was right while every caller passed a lab's name.
-    /// `HubDomain.promise` is a sentence, and the first photograph of the
-    /// focused exhibit's caption stack (2026-08-08) showed it as one long
-    /// unwrapped plate running straight through the neighbouring
-    /// exhibits' names and behind its own ENTER plaque. Pucks are
-    /// `GalleryLayout.basePuckPitch` apart, so anything wider than that
-    /// belongs to more than one exhibit.
-    ///
-    /// The comment at the promise's call site asked exactly this
-    /// question — "whether they read as one tidy caption or as three
-    /// things piled up" — and answered itself the moment there was a
-    /// picture. Placement is what this project has got wrong three times
-    /// with the numbers looking fine.
+    /// A nameplate, optionally WRAPPED — a sentence left unwrapped runs
+    /// straight through the neighbouring exhibits, since pucks are only
+    /// `GalleryLayout.basePuckPitch` apart.
     static func namePlate(_ text: String, accent: UIColor,
                           size: CGFloat = 0.036,
                           wrapWidth: CGFloat = 0,
@@ -1195,41 +1151,17 @@ final class HubScene {
         return plate
     }
 
-    /// The focus glow: a soft pool of the module's own colour behind the
-    /// miniature, lit only for the exhibit you are facing.
-    ///
-    /// The exhibits wore CARDS for a while — a gradient face, a frame, a
-    /// rule, a shadow. It made a tidy gallery and it buried the physics:
-    /// nine little machines, each behind a pane. The models are the
-    /// point, and they read better with nothing around them. So the
-    /// furniture is gone and focus is expressed the only way that does
-    /// not add any: the thing you are facing gets bigger, comes toward
-    /// you, and sits in a pool of its own light.
-    /// The focus pool's entity name — the pool of the module's colour
-    /// that appears on the platform under whichever exhibit you face.
+    /// The focus pool's entity name — the pool of the module's colour on
+    /// the platform under whichever exhibit you face. Focus is expressed
+    /// without furniture: the exhibit grows, comes toward you, and lights
+    /// its own puck.
     static let focusPoolName = "focus-pool"
 
     private static func focusGlow(accent: UIColor) -> Entity {
-        // A pool of the module's colour ON the puck beneath the
-        // miniature — the slab relights under the exhibit you face.
-        // (It used to be a billboarded halo floating behind the model;
-        // with real furniture underneath, light falling on a surface
-        // reads as light.)
-        // THE THREE DISCS SHARED ONE PLANE, and this is the fix.
-        //
-        // All three were built at the glow's own origin — three
-        // transparent cylinders 1 mm thick at identical y — so their
-        // faces were coplanar to the micron and the depth buffer had to
-        // choose between them per pixel, per frame, as the head moved.
-        // That is the flicker under a focused exhibit, and it is most
-        // obvious on the pad, where the docked lab holds still and gives
-        // the eye time to watch it happen.
-        //
-        // A LADDER, WIDEST AT THE BOTTOM. Half a millimetre apart is
-        // plenty for the depth buffer, and stacking the faint wide disc
-        // lowest means the tighter, brighter ones read as lying on top
-        // of it — which is the order the falloff is trying to describe
-        // anyway.
+        // The discs MUST be a ladder, half a millimetre apart, widest at
+        // the bottom: coplanar faces make the depth buffer choose per
+        // pixel per frame, which is a visible flicker under a focused
+        // exhibit. Stacking also matches the falloff being described.
         let glow = Entity()
         // Named so the stacking rule can be TESTED. Reaching for these
         // discs by shape instead — flat, wide, translucent — also finds

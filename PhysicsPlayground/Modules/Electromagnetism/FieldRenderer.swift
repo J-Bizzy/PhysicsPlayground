@@ -773,14 +773,10 @@ final class FieldRenderer {
     /// No touch target and no selection halo: a preview is not
     /// selectable, and the well owns the collider.
     /// The + or − glyph a charge wears: two white strokes on a
-    /// billboarded pivot, with the vertical one hidden to make a minus.
-    ///
-    /// Factored out so the WELL MOUTHS wear it too. They did not, and a
-    /// red ball and a blue ball are not a sign — colour is the app's
-    /// convention (`VectorPalette`: red positive, blue negative) but a
-    /// convention has to be learned, and the well is the first place
-    /// anyone meets one of these. The charge you pull out has a + on it;
-    /// the mouth you pull it from now says so before you commit.
+    /// billboarded pivot, the vertical one hidden to make a minus. Shared
+    /// with the WELL MOUTHS, so the sign is legible before you pull one
+    /// out — colour alone (red positive, blue negative) is a convention
+    /// that has to be learned.
     static func signGlyph(isPositive: Bool, radius: Float,
                           barLength: Float? = nil) -> Entity {
         let (pivot, vertical) = signGlyphParts(radius: radius, barLength: barLength)
@@ -815,19 +811,11 @@ final class FieldRenderer {
         return (pivot, vertical)
     }
 
-    /// How big a mouth's preview is, which is NOT `chargeRadius`.
-    ///
-    /// The column went from three mouths to four and its pitch tightened
-    /// to 0.095 m, and a `Well` hangs its nameplate 0.034 below the
-    /// preview's underside. At the charge's own 0.03 radius that puts the
-    /// label 0.074 below centre while the next mouth's top edge is only
-    /// 0.065 below — so every label sat on the sphere beneath it, which a
-    /// screenshot showed immediately.
-    ///
-    /// The fit is `2r + 0.044 < pitch`, i.e. r < 0.0255. At 0.024 each
-    /// mouth clears its neighbour's label with a couple of millimetres to
-    /// spare. A mouth is a sign saying what comes out, not a promise
-    /// about the size of it — the charge you actually pull is full size.
+    /// A mouth's preview radius, deliberately NOT `chargeRadius`: a `Well`
+    /// hangs its nameplate 0.034 below the preview, so at the 0.095 m
+    /// column pitch the fit is `2r + 0.044 < pitch` (r < 0.0255) or every
+    /// label lands on the sphere beneath it. The charge you pull is full
+    /// size — a mouth is a sign, not a promise about scale.
     static let wellPreviewRadius: Float = 0.024
 
     static func chargePreview(isPositive: Bool) -> Entity {
@@ -955,20 +943,11 @@ final class FieldRenderer {
 
     // MARK: The probe's trail
 
-    /// The path the test charge has taken, as a run of pooled beads
-    /// fading toward the tail.
-    ///
-    /// Beads rather than a swept tube, and the reason is where the work
-    /// would land. A tube means regenerating a `MeshResource` every time
-    /// a point is laid down — up to forty times a second during a fast
-    /// flight, on the main thread, in a module that is already running a
-    /// field-line re-trace whenever a charge moves. Pooled beads are
-    /// transform writes on entities that were built once, which is the
-    /// same trade Pendulums made for the same reason. At 11 mm spacing
-    /// they read as a drawn curve, not as dots.
-    ///
-    /// Under `viewRoot`, so the path scales with the two-hand rig and
-    /// stays registered with the field it was drawn through.
+    /// The probe's path, as pooled beads fading toward the tail. BEADS,
+    /// not a swept tube: a tube regenerates a `MeshResource` on the main
+    /// thread every time a point is laid down, while pooled beads are
+    /// transform writes on entities built once. At 11 mm they read as a
+    /// curve. Under `viewRoot`, so the path scales with the field.
     private lazy var probeTrailPool: EntityPool<ModelEntity> = {
         let mesh = MeshResource.generateSphere(radius: 0.0042)
         let pool = EntityPool<ModelEntity>(budget: FieldModel.probeTrailLength) { container in
