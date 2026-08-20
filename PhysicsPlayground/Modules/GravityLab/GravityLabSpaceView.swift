@@ -23,27 +23,15 @@ struct GravityLabSpaceView: View {
     /// render loop (see RingState's header for why it's a reference).
     @State private var ring = RingState()
     @State private var wells: Well?
-    /// The display layers, as switch plates standing beside the system.
-    ///
-    /// Six of them, and the sixth is the point: the acceleration vector
-    /// has been read by the renderer, defaulted to false and given no
-    /// control ANYWHERE since it was written. The arrow, its log scaling
-    /// and its legend entry all existed for something no user could turn
-    /// on. A bank is a readout as well as a control, which is why this
-    /// one does not fold.
+    /// The display layers, as switch plates beside the system. Doesn't
+    /// fold: a bank is a readout as well as a control.
     @State private var layers: SpatialLayerBank?
-    /// The module's two standing verbs — "Twin suns", and the plate that
-    /// opens the preset worlds. Both were window buttons; "Twin suns" is
-    /// also the target of an authored experiment (`gravity.binary`), so
-    /// deleting it with the panel would have broken content.
+    /// The module's two standing verbs — "Twin suns" and the plate that
+    /// opens the preset worlds.
     @State private var verbs: SpatialActionBank?
-    /// The ten preset worlds, as a fan the "Worlds" plate opens.
-    ///
-    /// A momentary fan, NOT a standing bank: the clock bank and the
-    /// layers bank stay open because they are readouts — which speed am
-    /// I running, what is drawn — and a list of things you could add
-    /// reports nothing. It folds away when it is done, the same grammar
-    /// as Projectiles' Balls petal.
+    /// The ten preset worlds, as a MOMENTARY fan (unlike the clock and
+    /// layer banks, a list of things you could add reports nothing, so it
+    /// folds away when done).
     @State private var worldPicker = SpatialPicker(
         accessibilityNoun: "Preset world",
         choices: GravityLabModel.Preset.allCases.map {
@@ -51,60 +39,30 @@ struct GravityLabSpaceView: View {
         },
         staysOpen: false,
         accent: UIColor(DesignTokens.Palette.gravityAccent),
-        // TEN discs, the most any fan in this app carries, and the
-        // geometry is measured rather than inherited.
-        //
-        // A `SpatialPicker` disc is 0.026 m in radius and its touch
-        // target `SpatialPicker.colliderSpan` is 0.068 m across, so the
-        // pitch that keeps ten of them from overlapping — colliders, not
-        // just paint, since hit-testing uses the former — is about
-        // 0.08 m. Ten discs therefore need ~0.8 m of arc, and
-        // `arc = reach × span`: 0.58 m at 120° gives 1.21 m of arc and
-        // ~0.12 m of pitch, which clears the labels too.
-        //
-        // The first attempt was 150° over 0.62 m ANCHORED ON THE CLOCK
-        // BANK'S FLANK, and a screenshot showed both halves of why that
-        // was wrong: the arc threw its far discs off the bottom-right of
-        // the frame, and its near discs climbed into the clock bank's
-        // own row. A fan this wide cannot hang off a flank — it has to
-        // open into the empty space under the system, centred, where its
-        // width is symmetric about the thing it adds to.
+        // TEN discs, measured: colliders (`SpatialPicker.colliderSpan`
+        // 0.068 m) need ~0.08 m pitch, so ten need ~0.8 m of arc.
+        // arc = reach × span: 0.58 m at 120° gives 1.21 m and ~0.12 m
+        // pitch, clearing the labels. Opens centred UNDER the system —
+        // a fan this wide cannot hang off a flank.
         layout: FanLayout(span: 120 * .pi / 180, reach: 0.58,
                           verticalScale: 0.22, lift: 0, stagger: 0))
-    /// Newton's G, as a rail under the switch bank.
-    ///
-    /// The one quantity in this module with NO physical extent — it is a
-    /// constant of nature, not a size — which is precisely why it gets
-    /// the app's decided form for a continuous quantity rather than an
-    /// invented one. Under `root`, unscaled: `SpatialTrackControl`'s own
-    /// header says a track must never be scaled, because its collider is
-    /// a box sized to the rail and scaling it makes that box a region.
+    /// Newton's G, as a rail under the switch bank. Lives under `root`,
+    /// UNSCALED: a track's collider is a box sized to the rail, and
+    /// scaling it would make that box a region.
     @State private var gravityTrack: SpatialTrackControl?
     /// The rail's live drag, if any.
     @State private var activeTrack: SpatialTrackControl?
     /// The last `model.viewResetNonce` this view acted on, so Reset also
     /// snaps the two-hand scale and turn back to 1x.
     @State private var seenResetNonce = 0
-    /// Two-handed scale and turn for the whole system: pull your hands
-    /// apart to grow the solar system around you, twist to look at the
-    /// comet's inclined orbit from the side.
-    /// Up to 9x: Earth's orbit displays at half a metre, so 4x let you
-    /// stand inside Earth's orbit but never between Mercury and Venus.
-    /// At 9x Mercury's orbit is 1.75 m across — the inner solar system
-    /// becomes a room you walk through, planets streaming past your
-    /// knees and the Kepler sectors sweeping underfoot like floor tiles.
+    /// Two-handed scale and turn for the whole system. Up to 9×, where
+    /// Mercury's orbit is 1.75 m across and the inner system becomes a
+    /// room you walk through.
     @State private var scaleRig = SpatialScaleRig(
         pivot: GravityLabRenderer.systemPosition, range: 0.4...9.0)
-    /// The clock: −20× / −1× / 1× / 5× / 20× / 100×, standing beside the
-    /// system as a permanent bank rather than hiding behind a pinch.
-    /// (Six since 2026-08-07 — the two reverse scales were added and
-    /// this comment still said four until the fan was re-derived.)
-    ///
-    /// This one looks like display chrome and is not. At 1× an Earth year
-    /// takes about two minutes, so the speed is what decides whether an
-    /// orbit is a thing you watch or a thing you wait for — Neptune at 1×
-    /// is a planet that appears not to move. It stays open because it is
-    /// also a READOUT: the bank shows which speed you are running.
+    /// The clock: −20× / −1× / 1× / 5× / 20× / 100×, a permanent bank.
+    /// At 1× an Earth year takes ~2 minutes, so speed decides whether an
+    /// orbit is watched or waited for. Stays open — it is also a readout.
     @State private var clockPicker = SpatialPicker(
         accessibilityNoun: "Clock speed",
         choices: GravityLabModel.timeScales.map {
@@ -112,70 +70,34 @@ struct GravityLabSpaceView: View {
                          symbol: "clock")
         },
         staysOpen: true,
-        // A bank is a ROW, not a fan. The default 150° arc is built for a
-        // menu that unfolds and folds away, and a screenshot showed why it
-        // is wrong here: discs at ±75° and ±25° spray across the orrery
-        // at four different heights, reading as scattered debris rather
-        // than as one instrument. Flattening the vertical squash to 0.25
-        // lays them out as a shallow, tidy row.
-        //
-        // THE SPAN IS DERIVED, NOT TYPED, and that is the fix for
-        // 2026-08-07. It was 50°, hand-tuned against FOUR discs and
-        // reasoned about as four in the comment that used to sit here.
-        // `timeScales` then grew to six and nothing widened: end-pair
-        // centres sat 0.0494 m apart against a 0.068 m touch target, so
-        // aiming at 1× could select −1× and run the solar system
-        // backwards. Asking `FanLayout` for a span that fits the count
-        // means the next scale added to the array widens the bank
-        // instead of jamming it.
+        // A bank is a ROW, not a fan: a flat vertical squash keeps the
+        // discs a tidy row instead of spraying them across the orrery.
+        // The span is DERIVED from the count, never typed — a hand-tuned
+        // span stops fitting the moment `timeScales` grows, and overlapping
+        // touch targets let a tap on 1× select −1×.
         layout: FanLayout.spread(
             count: GravityLabModel.timeScales.count,
             itemSpan: Double(SpatialPicker.colliderSpan),
             reach: 0.34, verticalScale: 0.25, lift: 0, stagger: 0))
-    /// THE CLOCK, FOLDED — and the reason folding it is legitimate.
-    ///
-    /// The picker below stays open because it is a READOUT: which speed
-    /// you are running is the difference between an orbit you can watch
-    /// and one you cannot. That argument is right, and it is exactly
-    /// what `SummonHandle.summary` answers — the tab reads "Clock · 5×",
-    /// which is the same fact the six discs were carrying, in one object
-    /// instead of six. Six became fourteen centimetres wider on
-    /// 2026-08-07 when the fan was re-derived to fit its own touch
-    /// targets, which is what made this urgent.
+    /// The clock, folded. Legitimate because `SummonHandle.summary` keeps
+    /// the readout — the tab reads "Clock · 5×", the same fact the six
+    /// discs carried, in one object.
     @State private var clockHandle = SummonHandle(
         title: "Clock", symbol: "clock",
         accent: UIColor(DesignTokens.Palette.gravityAccent))
 
-    /// The second row: Kepler sweep and the Lagrange points.
-    ///
-    /// Both are ANALYSIS — overlays you switch on to study something
-    /// specific and then switch off again — as against the grid and the
-    /// field flow, which are how the system is drawn. Two plates behind
-    /// a door, and the door says which of them are on.
+    /// Kepler sweep and Lagrange points: ANALYSIS overlays (switched on to
+    /// study, then off), as against the grid and flow, which are how the
+    /// system is drawn. Behind a door that says which are on.
     @State private var analysisHandle = SummonHandle(
         title: "Analysis", symbol: "chart.xyaxis.line",
         accent: UIColor(DesignTokens.Palette.gravityAccent))
     /// The plates the Analysis handle unfolds.
     @State private var analysis: SpatialLayerBank?
 
-    /// Velocity, acceleration and force — the arrows drawn ON the
-    /// selected body.
-    ///
-    /// THE GOAL SAID PUT THESE ON THE BODY'S BLOOM RING, and the code
-    /// says otherwise, so they are here instead. Two reasons, and the
-    /// first is the one that matters: `showVelocityVector` and its two
-    /// siblings are GLOBAL flags. The renderer draws the arrows on
-    /// whichever body is selected, but the switch is not a property of
-    /// that body — put it on a per-body ring and toggling it for Earth
-    /// silently changes what Jupiter shows, which is a control that lies
-    /// about its own scope. (Second, and minor: the ring already carries
-    /// Predict and Delete, and `Bloom.Petal`'s own ceiling is "two or
-    /// three per object, never more".)
-    ///
-    /// So the audit's diagnosis is right — three per-body annotations
-    /// had no business on a bank beside system-wide overlays — and its
-    /// prescription is not. They are their own group, behind their own
-    /// door, which says which of them are on.
+    /// Velocity, acceleration and force — arrows drawn on the selected
+    /// body. NOT on the body's ring: these are GLOBAL flags, so a per-body
+    /// control would lie about its own scope.
     @State private var vectorsHandle = SummonHandle(
         title: "Vectors", symbol: "arrow.up.right",
         accent: UIColor(DesignTokens.Palette.gravityAccent))
@@ -189,47 +111,16 @@ struct GravityLabSpaceView: View {
     static let bankAnchor = GravityLabRenderer.systemPosition
         + SIMD3<Float>(-0.62, 0.06, 0)
 
-    /// RIGHT — what you make and unmake. Binary and Worlds.
-    ///
-    /// PULLED IN AND LIFTED, 2026-08-09. It was
-    /// `systemPosition + (0.82, -0.20, 0)` — 1.37 m from a standing
-    /// viewer's nearest reach against a 1.25 m limit, so the one pair of
-    /// verbs in this lab could be seen and not touched. Nothing had ever
-    /// measured it: every module's bank anchor was a literal inside a
-    /// render closure, and `InstrumentClearance` was only ever pointed
-    /// at Electric Fields.
-    ///
-    /// Lifting it 15 cm does most of the work — the old y of 1.05 was
-    /// 45 cm below the eye line, and vertical distance costs reach just
-    /// as horizontal does. Pulling 12 cm in x does the rest.
-    ///
-    /// THE 0.20 OF Z IS FORCED, and it is worth saying why rather than
-    /// leaving it looking like a taste. At the system's own depth this
-    /// flank cannot be both reachable and uncrowded: the reach limit
-    /// wants x ≤ 0.60 and the two instruments here are 0.26 and 0.09
-    /// wide, so they cannot both fit inside that at one depth. Coming
-    /// forward is the only axis left. It is not free — furniture
-    /// forward of the apparatus can occlude it.
+    /// RIGHT — what you make and unmake. Binary and Worlds. The 0.20 of z
+    /// is FORCED: at the system's own depth the reach limit wants x ≤ 0.60
+    /// and these two instruments (0.26 and 0.09 wide) cannot both fit
+    /// there, so coming forward is the only axis left.
     static let verbAnchor = GravityLabRenderer.systemPosition
         + SIMD3<Float>(0.70, -0.05, 0.20)
 
-    /// The clock's folding tab, ABOVE the verbs and sharing their x.
-    ///
-    /// It was `(0.55, -0.09, 0)` — 1.33 m away, so the control that sets
-    /// how fast the whole system runs could not be reached either. That
-    /// was a THIRD failure on this one flank, found by the reach test
-    /// the same day as the verb bank's and left visible for a commit
-    /// rather than quietly folded in.
-    ///
-    /// STACKED RATHER THAN SIDE BY SIDE, which also repairs something
-    /// the first fix broke. The verbs' own note says they belong "under
-    /// the clock bank, on the same flank: the clock decides how fast the
-    /// system runs, these decide what is IN it" — and pulling the verbs
-    /// in to x 0.70 while the clock sat at 0.55 had put them BESIDE it,
-    /// slightly higher, which is neither the documented relationship nor
-    /// any other one. One column, clock at the head, verbs beneath:
-    /// reachable, clear of each other by 8.5 cm, and reading as the pair
-    /// the comment always said they were.
+    /// The clock's folding tab, stacked ABOVE the verbs on their x —
+    /// one column, clock at the head, clear of each other by 8.5 cm.
+    /// Measured by `InstrumentReachCriterionTests`.
     static let clockAnchor = GravityLabRenderer.systemPosition
         + SIMD3<Float>(0.70, 0.17, 0.20)
 
@@ -278,32 +169,11 @@ struct GravityLabSpaceView: View {
                 renderer.compensateForRig(card)
             }
 
-            // Under `root`, NOT `viewRoot`: the scale rig reaches 9×, and
-            // a control that grew to nine times its size along with the
-            // solar system would be a 0.45 m clock face.
-            // Under `root`, NOT `viewRoot`, for the reason the clock
-            // bank gives below: a switch that grew nine times along with
-            // the solar system would put its own plates out of reach the
-            // moment you used them.
-            // TWO PLATES, not seven. (Owner, 2026-08-07: this module
-            // is "way too cluttered".)
-            //
-            // What is left here is what the SYSTEM is drawn with — the
-            // grid it curves and the flow through it. The other five
-            // left for two different reasons, and the reasons are
-            // different kinds of wrong:
-            //
-            // · velocity / acceleration / force are PER-BODY
-            //   annotations. They were sitting on a system-wide bank
-            //   beside system-wide overlays, which is a category error:
-            //   "show the force" is a question about the planet you have
-            //   selected, and the selected body's control ring already
-            //   exists to answer questions about it. They are petals on
-            //   that ring now.
-            // · Kepler sweep and Lagrange points are ANALYSIS — things
-            //   you switch on to study something and off again. They are
-            //   behind the Analysis handle, which says which of them are
-            //   on, so folding them costs no readout.
+            // Under `root`, NOT `viewRoot`: the rig reaches 9×, and a
+            // control that grew with the system would put its own plates
+            // out of reach. Two plates only — what the SYSTEM is drawn
+            // with; per-body vectors and the analysis overlays live behind
+            // their own handles.
             let bank = SpatialLayerBank(
                 accent: UIColor(DesignTokens.Palette.gravityAccent),
                 layers: [
@@ -555,42 +425,18 @@ struct GravityLabSpaceView: View {
                     if let renderer {
                         syncBloom(renderer: renderer, dt: event.deltaTime)
                     }
-                    // The lab's placement in the user's room — a pure
-                    // display offset, safe because every grab in this app
-                    // moves a body by hand DISPLACEMENT, which a constant
-                    // translation leaves untouched.
+                    // Constant display offset — safe because grabs move a
+                    // body by hand displacement. Every bank, handle, rail
+                    // and picker is a child of `renderer.root`, so moving
+                    // the lab moves the whole lab.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // …AND THE INSTRUMENTS GO WITH IT, which is what
-                    // this comment used to deny.
-                    //
-                    // It read "the control pods do NOT go with it: the
-                    // user parked them where they wanted them" — a
-                    // sentence about the four-bead pods, which have not
-                    // existed since 2026-08-01. The other four modules
-                    // had the same paragraph corrected on 2026-08-03
-                    // with a note explaining it was false in all four;
-                    // the sweep missed this one, so the module the fix
-                    // was written for kept the wrong version for six
-                    // days. Every bank, handle, rail and picker here is
-                    // a child of `renderer.root` (see the `addChild`
-                    // calls in the make closure), so moving the lab
-                    // moves the whole lab — which is the behaviour a
-                    // user dragging a room-scale orrery expects.
                 }
             )
 
             #if DEBUG
-            // `-gravLagrange 1` switches the Lagrange layer on AND parks
-            // a body at L4, which is the only way to photograph the
-            // capture callout.
-            //
-            // It reaches a CAPABILITY rather than a control, in the
-            // manner of `-apsisDrag`: the paragraph appears when a
-            // release lands a body near a point, and neither the release
-            // nor the point is something the simulator can pinch. The
-            // five paragraphs it exists to show spent the project's
-            // whole life with no reader, so a way to look at one matters
-            // more here than in most places.
+            // `-gravLagrange 1` lights the Lagrange layer AND parks a body
+            // at L4 — a CAPABILITY, not a control (the callout appears on a
+            // release near a point, which the simulator cannot pinch).
             if UserDefaults.standard.bool(forKey: "gravLagrange") {
                 model.showLagrangePoints = true
                 if let host = model.bodies.dropFirst().first {
@@ -691,44 +537,22 @@ struct GravityLabSpaceView: View {
                     .environment(model)
             }
         }
-        // Leaving the lab must not leave anything running or held.
-        //
-        // `teardown` cancels the renderer's event subscriptions and any
-        // geometry job in flight (see `GeometryPipeline.cancel`), and the
-        // drag state is cleared because NOTHING ELSE CAN CLEAR IT: an
-        // in-flight grab that never receives its `onEnded` — the space
-        // closing under it is the ordinary way that happens — otherwise
-        // strands the object wherever the hand left it and re-targets
-        // every later drag at the same one, with no exit but leaving.
+        // Leaving the lab must not leave anything running or held: an
+        // in-flight grab never gets its `onEnded` when the space closes,
+        // so it must be cleared here or it strands and re-targets every
+        // later drag.
         .onDisappear {
             renderer?.teardown()
-            // A GRIP SURVIVES THE SPACE CLOSING, and that is worse than
-            // it sounds. `Bloom` is a class, so `gripDrag` outlives this
-            // view; left set, `updateGrip` claims EVERY subsequent drag
-            // in the module and nothing at all can be grabbed. That
-            // exact failure is documented in PendulumsSpaceView's
-            // `onEnded` — it cost this module every one of its verbs
-            // once already.
+            // MUST clear: `Bloom` is a class, so a live grip outlives the
+            // view and would claim every subsequent drag in the module.
             bloom.endGrip()
             drag = nil
         }
         .simultaneousGesture(
-            // A TAP MUST NOT BECOME A THROW.
-            //
-            // At minimumDistance 0 this gesture fires on a bare tap, and
-            // the consequence in this module is catastrophic rather than
-            // cosmetic: the tap runs grab → hold → release, `hold` zeroes
-            // the body's velocity, and a tap carries no hand motion for
-            // `ThrowSampler` to read — so the planet is released AT REST
-            // and falls straight down its own radius into the Sun. Tap
-            // Earth, watch Earth die.
-            //
-            // It was always a landmine; it became the main path the day
-            // tapping started selecting a planet and raising its orbit
-            // ring. 12 mm is under a finger's width of travel — nobody
-            // drags a planet that little on purpose — and it is the same
-            // shape of threshold the hub already uses to stop a pinch on
-            // an exhibit from being read as a carry.
+            // A TAP MUST NOT BECOME A THROW: at minimumDistance 0 a tap
+            // runs grab → hold → release, `hold` zeroes the body's
+            // velocity, and with no hand motion to sample the planet is
+            // released at rest and falls into the Sun.
             DragGesture(minimumDistance: 0.012)
                 .targetedToAnyEntity()
                 .onChanged { value in
@@ -858,30 +682,17 @@ struct GravityLabSpaceView: View {
             bloom.clearTarget()
             return
         }
-        // THE STAR GETS A BEAD, AND THE SLIDER GOES. Its mass was a
-        // slider in a window while every planet's was a bead on the
-        // planet — the same quantity, in the same scene, with two
-        // different grammars. Mass has physical extent (the star
-        // visibly inflates as the cube root), so by the interaction law
-        // it is changed by changing that extent.
-        //
-        // No delete petal, for the obvious reason: deleting the Sun
-        // deletes the system. And its bead is calibrated in SOLAR
-        // masses, because a star measured in Earths reads "333000".
+        // The star's mass is a bead like every planet's (mass has physical
+        // extent — the star inflates as the cube root). No delete petal:
+        // deleting the Sun deletes the system. Its bead reads in SOLAR
+        // masses, since a star measured in Earths reads "333000".
         let isPrimary = body.id == model.primaryBody?.id
         bloom.retarget(
             uuid,
             petals: isPrimary ? [] : [
-                // "Predict an orbit", off the window panel and onto the
-                // ring of the body it predicts.
-                //
-                // The panel button carried `.disabled(selection is nil
-                // or primary)`. Here that predicate is GEOMETRY: this
-                // ring only exists while a body is selected, and the
-                // `isPrimary` branch above means the Sun never gets one.
-                // A control that cannot be reached in the state where it
-                // would be meaningless is better than one that greys out
-                // — there is no disabled thing to wonder about.
+                // Predict lives on the ring of the body it predicts; the
+                // `isPrimary` branch means the Sun never offers it, so
+                // there is no disabled control to wonder about.
                 .init(name: "Predict", symbol: "scope",
                       tint: UIColor(DesignTokens.Palette.gravityAccent)) {
                     model.armPrediction()
@@ -942,33 +753,10 @@ struct GravityLabSpaceView: View {
         if worldPicker.handleTap(entity) { return }
         if verbs?.handleTap(entity) == true { return }
         if bloom.handleTap(entity) { return }
-        // A tap on a body toggles its control ring; the
-        // primary keeps no ring (deleting the sun deletes
-        // the system). A tap on anything else folds it.
-        //
-        // Matched on the body's UUID, because that is what
-        // the renderer names its spheres. It used to match
-        // `$0.body.name == candidate.name` — the DISPLAY
-        // name, "Earth", "Mars" — and no entity in this
-        // scene has ever carried one. So the condition was
-        // never true, and the mass bead and delete petal
-        // could not be opened by tapping a planet at all.
-        // The drag handler two functions up got this right;
-        // the tap handler did not, and `-gravRing 1` sets
-        // `ring.openID` directly, so every screenshot of the
-        // ring was taken down a path no user can walk.
-        // A TAP ALSO SELECTS, and until now it did not.
-        //
-        // `select(id:)` was reachable only from a DEBUG
-        // launch argument, so the one user path to a
-        // selection was to grab a body and drag it — which
-        // freezes it and zeroes its velocity, destroying the
-        // orbit you were about to study. Selection drives the
-        // vectors, the Kepler sweep, the Predict button's
-        // enabled state, the notebook rows and now the orbit
-        // ring, and the Prophet experiment's own step text
-        // says "Tap a planet to select it" — describing an
-        // interaction that did not exist.
+        // A tap toggles the body's control ring and SELECTS it (selection
+        // drives the vectors, Kepler sweep, Predict and the notebook rows).
+        // Matched on the body's UUID — that is what the renderer names its
+        // spheres; no entity here carries a display name.
         var current: Entity? = entity
         while let candidate = current {
             if let id = UUID(uuidString: candidate.name),
