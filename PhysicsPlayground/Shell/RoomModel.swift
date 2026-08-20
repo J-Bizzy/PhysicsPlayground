@@ -2,26 +2,16 @@
 //  RoomModel.swift
 //  Physics Playground — Shell
 //
-//  ONE shared understanding of the user's room, for every module.
-//
-//  The app previously ignored the real world entirely: every apparatus
-//  was pinned to hard-coded immersive-space coordinates, field lines
-//  drove out through the walls, prediction arcs left through the
-//  ceiling, and nothing was ever occluded by real geometry. Two modules
-//  had their own private ARKit sessions (Kinematics for walls, Wind
-//  Tunnel for hands + furniture) and nothing else knew the room existed.
-//
-//  This consolidates that: one ARKitSession, reference-counted so any
-//  number of modules can share it, publishing
+//  ONE shared understanding of the user's room: a single ARKitSession,
+//  reference-counted so any number of modules can share it, publishing
 //
 //    • `bounds`     — a RoomBox every renderer clips its lines against,
-//    • `walls`      — finite rectangles the projectiles genuinely bounce off,
-//    • `obstacles`  — hands, forearms and furniture as spheres for the CFD.
+//    • `walls`      — finite rectangles the projectiles bounce off,
+//    • `obstacles`  — hands, forearms and furniture as spheres.
 //
-//  All providers are device-only and permission-gated. In the simulator
-//  every one of them is simply unsupported, so `bounds` stays at
-//  RoomBox.unscanned and the app behaves exactly as it does today —
-//  the fallback is a generous room, never an empty one.
+//  All providers are device-only and permission-gated; in the simulator
+//  they are unsupported, so `bounds` stays at `RoomBox.unscanned` — the
+//  fallback is a generous room, never an empty one.
 //
 
 import ARKit

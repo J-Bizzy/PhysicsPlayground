@@ -20,26 +20,11 @@ struct PlaygroundSpaceView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
 
-    /// THE FLAT CATALOG DOES NOT STAND BEHIND THE GALLERY (2026-08-10).
-    ///
-    /// The main window has three jobs and only two of them survive the
-    /// gallery opening. Before it opens, it is the front door — the
-    /// wordmark, "Enter the Gallery", and the way back if that fails.
-    /// Inside a lab it is that lab's title bar. But on the HOME SCREEN
-    /// with the gallery up, it was a list of six labs parked a couple
-    /// of metres behind a crescent of six exhibits that say the same
-    /// thing better, and the wordmark had already been lowered twice to
-    /// dodge it (`HubSpaceView`, which also records that "some overlap
-    /// is inherent"). Owner's call: the room is the home screen.
-    ///
-    /// THE COST IS REAL AND IS THE OWNER'S. "Put the Gallery away" is
-    /// the app's only `dismissImmersiveSpace`, and the palette bead that
-    /// carries Home and Dim exists only while a module does — so on the
-    /// home screen there is now no in-app exit, only the Digital Crown.
-    /// That is a documented trade, not an oversight: the button was
-    /// added on 2026-08-07 for discoverability, and a window standing in
-    /// front of the thing it describes costs more than a signpost for a
-    /// gesture the system already provides everywhere.
+    /// THE FLAT CATALOG DOES NOT STAND BEHIND THE GALLERY: the window is
+    /// the front door before the gallery opens and a lab's title bar
+    /// inside one, but on the home screen it duplicated the exhibits it
+    /// stood behind. Known cost: with it dismissed there is no in-app exit
+    /// from the home screen, only the Digital Crown.
     private func syncMainWindow() {
         // Never in UI tests: XCUITest cannot see into an immersive
         // space, so the flat catalog is the only surface it has. The
@@ -98,25 +83,10 @@ struct PlaygroundSpaceView: View {
                         // module is paused with a recording worth scrubbing.
                         TimeRailView(module: module)
                             .id("time-rail-\(module.id)")
-                        // NO CARD OF WORDS STANDS IN A LAB, and the room
-                        // has now rejected two of them.
-                        //
-                        // `FirstRunHint` hung at head height on the left
-                        // of every module, naming the lab and saying
-                        // "pinch to explore" until it was dismissed. It
-                        // came out on 2026-08-08 — unnecessary, and in
-                        // the way. Its replacement, `RoomTeach`, moved
-                        // the same paragraph in FRONT of the apparatus
-                        // so the window could not stand through it, and
-                        // the owner cut that on 2026-08-09 for the same
-                        // reason one step worse: a 262-line card whose
-                        // whole job was to cover the bench it described.
-                        //
-                        // The teach survives in the module WINDOW
-                        // (`ModuleHostView`, `ModuleDescriptor.firstRunHint`),
-                        // which is where it started and the one place it
-                        // obscures no physics. `AppSettings.seenHints`
-                        // stays: that window copy is gated on it.
+                        // NO CARD OF WORDS STANDS IN A LAB — the teach lives
+                        // only in the module WINDOW (`ModuleHostView`,
+                        // `ModuleDescriptor.firstRunHint`, gated on
+                        // `AppSettings.seenHints`).
                         //
                         // Quiet lab room tone under every module (not the hub);
                         // no per-module id, so it runs seamlessly across switches.
@@ -129,33 +99,13 @@ struct PlaygroundSpaceView: View {
                 }
             }
 
-            // THE FLAG HANGS OFF A STABLE LEAF THAT IS A SIBLING OF THE
-            // `Group`, NOT A MODIFIER ON IT.
-            //
-            // A `Group` does not wrap its children in a container view
-            // — it applies each modifier to EVERY child individually. So
-            // this pair was one `onAppear`/`onDisappear` per child, and
-            // the child count changes with state: entering a dimmed
-            // module (Gravity Lab dims 0.85, Electric Fields and
-            // Magnetism 0.35) removes `HubSpaceView` and adds
-            // `RoomDimmerView` plus the module `ZStack`. SwiftUI does
-            // not order those callbacks, so when the removal lands last
-            // the flag reads FALSE with the space open — and
-            // `ModuleHostView` then offers "Show in room" for a lab that
-            // is already in the room, which fails with "Couldn't open
-            // the room."
-            //
-            // MOVING IT TO `.background` ON THE SAME `Group` DOES NOT
-            // FIX THAT, and the first attempt at this did exactly that.
-            // A background is a modifier like any other, so it
-            // distributes over the children too: one leaf per PRESENT
-            // child rather than one leaf, and the dimmer branch coming
-            // and going still fires a spurious `onDisappear`. The fix
-            // has to be a SIBLING, not a modifier.
-            //
-            // Inside this `ZStack` the leaf is a sibling of the whole
-            // `Group`, so it exists exactly once for as long as this
-            // view does, whatever the branches inside do.
+            // THE FLAG MUST HANG OFF A SIBLING LEAF, NOT A MODIFIER ON THE
+            // `Group`: a Group applies each modifier to EVERY child, so the
+            // pair would fire once per child and the child count changes
+            // with state (a dimmed module swaps branches). SwiftUI does not
+            // order those callbacks, so the flag could read false with the
+            // space open. `.background` fails the same way — it distributes
+            // too. As a ZStack sibling the leaf exists exactly once.
             Color.clear
                 .frame(width: 0, height: 0)
                 .onAppear {

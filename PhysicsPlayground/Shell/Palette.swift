@@ -2,33 +2,14 @@
 //  Palette.swift
 //  Physics Playground — Shell
 //
-//  Navigation, as one object.
+//  Navigation, as one object: the app's only permanent piece of
+//  interface. Pinch the bead and it unfolds into a ring of the labs
+//  themselves — live miniatures, not icons — plus six petals: home,
+//  pause, capture, dim, settings, reset.
 //
-//  This replaces the four-bead rail that used to float at every user's
-//  feet: back, grid, pause, dim, note, pods — six affordances, always
-//  on, in every lab, whether or not you wanted any of them. One of
-//  them (pods) controlled something that no longer exists.
-//
-//  In its place: a single bead. Pinch it and it unfolds into a ring of
-//  the labs themselves — live miniatures, the same running physics the
-//  home constellation shows, not icons of them — with six petals:
-//  home, pause, capture, dim, settings, reset. Pinch a lab and the room
-//  changes. Pinch the bead again and everything folds away.
-//
-//  SIX PETALS IS NOT SIX MORE OBJECTS. The original decision (2026-07-29)
-//  allowed exactly two and every addition since has amended it, which is
-//  the right amount of friction — but the bar it sets is about what
-//  stands in the room, and a folded ring stands for nothing. The real
-//  cost of a petal is the width of the row when it is open, and that is
-//  now derived from the count (`petalRowSpan`) rather than hand-tuned,
-//  so the next one cannot quietly overlap its neighbours.
-//
-//  The two newest close capabilities that had NO door at all: `home`
-//  (the only route back to the gallery was a chevron in a 2-D window
-//  you may have left behind you) and `dim` (`cycleDimming` had zero
-//  callers while Gravity Lab darkens your real room by 85%).
-//
-//  The bead is the app's only permanent piece of interface.
+//  The cost of a petal is the width of the open row, which is DERIVED
+//  from the count (`petalRowSpan`), never hand-tuned, so a new one cannot
+//  quietly overlap its neighbours.
 //
 
 import RealityKit
@@ -40,20 +21,10 @@ import simd
 final class Palette {
     let root = Entity()
 
-    /// The per-frame subscription, held here so it can be cancelled.
-    ///
-    /// THIS LEAKED UNTIL 2026-08-03, in the one object that is on screen
-    /// in every lab. `PaletteView` is remounted per module — it carries
-    /// `.id("palette-\(module.id)")` — and the subscription was created
-    /// with `_ =`, capturing the palette strongly and never cancelled.
-    /// So every module switch built another palette, another
-    /// subscription, and another closure animating an orphaned bead
-    /// forever, in the background, for the life of the process.
-    ///
-    /// `HubSpaceView` documents this exact cycle in fourteen lines of
-    /// comment and defends against it with `[weak scene]` plus an
-    /// explicit cancel — and says "every module already knew it". The
-    /// shell chrome next door did not.
+    /// The per-frame subscription, held so it can be CANCELLED: this view
+    /// is remounted per module, and a subscription left running captures
+    /// the palette strongly, animating an orphaned bead for the life of
+    /// the process.
     var subscription: EventSubscription?
 
     private let bead = ModelEntity()
@@ -196,27 +167,9 @@ final class Palette {
             slots.append((spec.id, holder, built.animate))
         }
 
-        // Pause and reset keep the outer spots hands have already
-        // learned; capture and settings sit between them. (Each petal
-        // past the original two amends the "exactly two petals"
-        // decision — see DECISIONS.md 2026-07-29.)
-        // HOME and DIM arrive 2026-08-07, and both close a capability
-        // with NO other door.
-        //
-        // · Home — `dismissImmersiveSpace` appeared zero times in the
-        //   app target, and the only route from a lab back to the
-        //   gallery was a chevron in a 2-D window the user may well have
-        //   left behind them. A one-path capability, and the one path
-        //   was not in the room.
-        // · Dim — `AppModel.cycleDimming()` had zero callers. Entering
-        //   Gravity Lab darkens the user's real room by 85% with no
-        //   control in the window, none in the room and none in
-        //   Settings. That is the rule's strongest form broken: not one
-        //   path, none.
-        //
-        // They go on the RING rather than into the room because the ring
-        // is the one container this app already has that costs nothing
-        // at rest — six petals folded away are still zero standing
+        // Pause and reset keep the outer spots hands have learned; capture
+        // and settings sit between them. Home and dim are here because the
+        // ring costs nothing at rest — folded petals are zero standing
         // objects, which a plate on a bank would not be.
         petals = [
             Self.makePetal(name: "home", symbol: "square.grid.2x2.fill"),
@@ -448,20 +401,9 @@ final class Palette {
                 _ = self.handleTap(self.bead)
             })
 
-        // The bead is a gyroscope, built by the same system that builds
-        // every lab's miniature — `HubVignettes.make(for: "labs")`.
-        //
-        // It was a white glass sphere with an SF Symbol grid floating
-        // inside it: iOS chrome on the one object in this app that is
-        // never not on screen. The glyph was there because an anonymous
-        // sphere asked to be pinched on faith and wasn't — but the answer
-        // to "say what you are" is to BE something, and every other
-        // object in the room is an instrument. A gyroscope belongs to no
-        // single lab, and holding still while everything turns is exactly
-        // the bead's job.
-        //
-        // Fitted the same way the ring slots are: the miniature arrives
-        // normalised to the common square and is scaled to the bead.
+        // The bead is a gyroscope from the same system that builds every
+        // lab's miniature — an instrument, not iOS chrome. Fitted like the
+        // ring slots: normalised to the common square, scaled to the bead.
         let built = HubVignettes.make(for: "labs")
         built.entity.scale = SIMD3(
             repeating: Self.beadRadius * 2 / (HubVignettes.frameHalf * 2))
