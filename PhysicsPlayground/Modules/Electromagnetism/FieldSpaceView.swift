@@ -2,38 +2,17 @@
 //  FieldSpaceView.swift
 //  Physics Playground — Electromagnetism module
 //
-//  The electrostatics immersive scene, hosted by PlaygroundSpaceView, and
-//  since 2026-08-01 the module's ONLY surface of any kind. There is no
-//  window panel: it reported numbers and set nothing, and its numbers
-//  stand in the room now on `FieldReadoutCard`. The module's window is a
-//  title bar.
+//  The electrostatics immersive scene — the module's ONLY surface (its
+//  window is a title bar). Left to right: a layers bank (field lines, free
+//  charges, capacitor, uniform B), a B-strength rail under it, four wells
+//  that hand you a charge already in your grip, and a ΔV rail bolted under
+//  the capacitor. On the objects: tap for a ring, grab a plate to set d.
 //
-//  The room, left to right:
-//
-//    · A LAYERS BANK off the left flank — four plates saying what exists:
-//      field lines, free charges, the capacitor, the uniform B. Flick one
-//      and its apparatus arrives WITH its instrument attached, which is
-//      the whole delight of the arrangement. (The flux meter and its
-//      "Open disc" plate came out 2026-08-03, with the particle bank —
-//      see DECISIONS.md.)
-//    · A B-STRENGTH RAIL under the bank, present only while B is.
-//    · FOUR WELLS on the right — pull a +, a −, or a test charge of
-//      either sign out and it is already in your hand; creating and
-//      aiming are one motion.
-//    · A ΔV RAIL bolted under the capacitor, carried with it.
-//
-//  And on the objects themselves: tap a charge or the probe for its ring
-//  (delete, and a strength bead), grab a plate to set d, grab the flux
-//  meter's rim to set its radius and — if it is a disc — its facing.
-//
-//  THE ORDER OF THE GESTURE CHAINS BELOW IS LOAD-BEARING. This module has
-//  been broken once by a collider that shielded the field from every pinch
-//  (`SpatialScaleHandle`, DECISIONS 2026-07-29), and the rules that came
-//  out of it govern everything here: an input-targetable collider is never
-//  larger than the thing it represents, and nothing sits between the pinch
-//  ray and the object it decorates. `FieldInstrumentLayout` keeps the
-//  furniture 12 cm clear of the physics so contention is impossible by
-//  geometry rather than by care.
+//  THE ORDER OF THE GESTURE CHAINS BELOW IS LOAD-BEARING. An
+//  input-targetable collider is never larger than the thing it represents,
+//  and nothing sits between the pinch ray and the object it decorates;
+//  `FieldInstrumentLayout` keeps the furniture 12 cm clear of the physics
+//  so contention is impossible by geometry rather than by care.
 //
 
 import PhysicsCore
@@ -95,18 +74,10 @@ struct FieldSpaceView: View {
 
     /// Identifies the standing readout card. See `FieldReadoutCard`.
     private static let readoutCardID = "field-readout"
-    /// Above the layers bank on the left flank — the one band in this
-    /// room with nothing drawn in it and nothing grabbable. It is NOT in
-    /// `FieldInstrumentLayout`, and the card's own header says why: those
-    /// invariants govern colliders, and this carries none.
-    ///
-    /// The field lines DO get drawn across it, and that is not fixable by
-    /// moving: the uniform-B lines fill the region, so any position with
-    /// a clear sightline to the apparatus also has filaments in front of
-    /// it. Pulling the card out to (-1.34, 1.60, -0.52) to escape them
-    /// put it off the edge of the view entirely — a readout nobody can
-    /// see is worse than one with a line across it. The answer was the
-    /// MATERIAL, not the position; see `FieldReadoutCard`.
+    /// Above the layers bank on the left flank. NOT in
+    /// `FieldInstrumentLayout` — those invariants govern colliders and
+    /// this carries none. Field lines cross it unavoidably (uniform B
+    /// fills the region), so the fix is the MATERIAL, not the position.
     private static let readoutCardAnchor = SIMD3<Double>(-1.08, 1.68, -0.86)
 
     var body: some View {
@@ -115,12 +86,9 @@ struct FieldSpaceView: View {
             renderer.onObjectTap = { handleObjectTap(on: $0) }
             content.add(renderer.root)
 
-            // Everything this module measures, on one card standing with
-            // the instruments. Billboarded so it faces the reader from
-            // anywhere, and parented to `root` rather than `viewRoot`
-            // for the same reason every bank here is: the scale rig
-            // reaches 4×, and a readout that grew with the field would
-            // put its own text out of the frame.
+            // Everything this module measures, on one billboarded card.
+            // Parented to `root`, NOT `viewRoot`: the rig reaches 4×, and a
+            // readout that grew with the field would leave the frame.
             if let card = attachments.entity(for: Self.readoutCardID) {
                 card.components.set(BillboardComponent())
                 card.position = SIMD3<Float>(Self.readoutCardAnchor)
@@ -262,32 +230,16 @@ struct FieldSpaceView: View {
         renderer.root.addChild(bank.root)
         self.bank = bank
 
-        // "Clear the field", off the window panel and onto the head of
-        // the well column — the wells made every charge in the room, so
-        // the one control that removes them all belongs with them.
-        //
-        // It CONFIRMS. The panel guarded this with `.disabled` plus a
-        // destructive button role and nothing else, which was survivable
-        // while it lived behind a window you had to look at on purpose.
-        // A plate standing in the room beside the thing it empties is one
-        // stray pinch from wiping a field somebody spent minutes
-        // arranging, and there is no window left to put a dialog in.
+        // "Clear the field", at the head of the well column that made every
+        // charge. It CONFIRMS: a plate standing beside the thing it empties
+        // is otherwise one stray pinch from wiping the whole arrangement.
         let verbs = SpatialActionBank(
             accent: DesignTokens.Palette.negativeUI,
             actions: [
                 .init(id: "clear", label: "Clear all", symbol: "trash.slash",
-                      // Unlike the launcher's Clear petal, this one CAN
-                      // track its condition: `SpatialActionBank` reads
-                      // `isAvailable` every frame rather than at build
-                      // time, which is the whole reason it takes a
-                      // closure instead of a Bool.
-                      //
-                      // Available while ANYTHING placed is in the room —
-                      // the probe counts. It read `!charges.isEmpty` and
-                      // fired `removeAllCharges` for months, so a probe
-                      // both survived every clear and, alone in the
-                      // room, couldn't even arm the plate that should
-                      // have removed it.
+                      // `isAvailable` is read every frame, so it tracks its
+                      // condition. Available while ANYTHING placed is in
+                      // the room — the probe counts.
                       isAvailable: { !model.charges.isEmpty || model.probe != nil },
                       confirms: true,
                       fire: { model.clearEverything() }),

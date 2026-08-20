@@ -2,35 +2,14 @@
 //  HubTitleStyle.swift
 //  Physics Playground — Hub
 //
-//  The typographic voice of the home's three display texts — the
-//  wordmark and the two door signs. One voice, no alternatives, no
-//  switch: widetracked uppercase bold, deeply extruded, milled from the
-//  same alloy as the labs' instruments. Museum plaque, flight hardware.
+//  The typographic voice of the home's three display texts — the wordmark
+//  and the two door signs. One voice, no alternatives: widetracked
+//  uppercase bold, deeply extruded, milled from the labs' own alloy.
 //
-//  THE PLAQUE SHIPS (owner's call, 2026-07-30), chosen off a specimen
-//  wall that hung four candidates side by side in the room. On
-//  2026-07-31 the wall and the Settings picker behind it both came out:
-//  the decision had been made, and a made decision offered back as a
-//  menu is not a feature, it is an unfinished argument.
-//
-//  The three losing voices stayed in this file for a while after that,
-//  unreferenced, on the reasoning that deleting them would leave the
-//  survivor looking arbitrary. That reasoning does not survive contact
-//  with the file: an enum with four cases, a `shipping` constant, a
-//  `current` global and a `switch` in every method is a CHOICE
-//  mechanism, and a choice mechanism with one live option is just an
-//  elaborate way of writing one option. The argument the specimen wall
-//  settled lives in the git history and in DECISIONS.md, which is where
-//  a settled argument belongs — not in three unreachable branches that
-//  every future reader has to rule out.
-//
-//  So this is a namespace, not a taxonomy. It reads `HubTitleStyle.line`
-//  rather than `HubTitleStyle.current.line`, because there is no current.
-//
-//  DELIBERATELY NOT the style of every text in the hub. The exhibit
-//  nameplates and the Well glyphs keep `HubScene.bubbleText`: they are
-//  labels on objects, this is display type, and restyling forty labels
-//  because the marquee changed would be the tail wagging the dog.
+//  A NAMESPACE, not a taxonomy — `HubTitleStyle.line`, not
+//  `.current.line`, because there is no current. Deliberately NOT the
+//  style of every text in the hub: exhibit nameplates and Well glyphs keep
+//  `HubScene.bubbleText`, since those are labels on objects.
 //
 
 import RealityKit
@@ -85,69 +64,32 @@ enum HubTitleStyle {
         mesh(text, size: size).bounds.extents
     }
 
-    /// One line of display type, centred on its own origin.
-    /// `accent` nil is the wordmark's neutral role; a colour is a door
-    /// sign speaking in its domain's voice.
+    /// One line of display type, centred on its own origin. `accent` nil is
+    /// the wordmark's neutral role; a colour is a door sign in its domain's
+    /// voice.
     ///
-    /// ONE solid, one material. It was three passes and they fought: a
-    /// dark copy behind the metal has to sit further back than the
-    /// extrusion is deep or the two meshes interpenetrate, and this type
-    /// is deep — so any offset small enough to read as a shadow was small
-    /// enough to punch through the faces. The symptom was letters that
-    /// looked doubled and lines that looked like they collided; the cause
-    /// was two solids sharing a volume.
-    ///
-    /// A real plaque does not need a drop shadow. It is a thick object,
-    /// and its own extruded sides catch the light at a different angle
-    /// from its face. That IS the depth cue, and it holds from every
-    /// viewing angle, which a fixed offset never does.
+    /// ONE solid, one material — never a shadow copy behind it. This type is
+    /// deeply extruded, so any offset small enough to read as a shadow is
+    /// small enough to interpenetrate the faces; the extruded sides catching
+    /// the light at their own angle ARE the depth cue.
     @MainActor
     static func line(_ text: String, size: CGFloat, accent: UIColor?) -> Entity {
         let group = Entity()
         let mesh = mesh(text, size: size)
         let bounds = mesh.bounds
 
-        // These values were derived here, on the specimen wall, and then
-        // promoted: `Materials.machined` IS this recipe, and the
-        // reasoning behind every number lives on it now. The labs' metal
-        // is the same alloy as the signage.
-        //
-        // ANODISED DARK since 2026-08-13, matching `milled` — the same
-        // legibility finding, applied to the fallback so a missing asset
-        // degrades in tone rather than in voice. The generated prism has
-        // no rim mesh to cut bright, so this path leans entirely on the
-        // dark face.
+        // Anodised dark, matching `milled`: the generated prism has no rim
+        // mesh to cut bright, so this fallback leans on the dark face.
         let stock = accent.map {
             blend($0, toward: .black, by: 0.32)
         } ?? graphite
         var metal = Materials.machined(stock)
-        // An emissive floor so the letters never fall to pure black in
-        // the shaded parts of the extrusion — the anodised colour stays
-        // legible all the way round the bevel.
-        //
-        // 0.16 UNTIL 2026-08-08, and the owner's word for what it needed
-        // was "pop". The problem this solves is specific to a headset:
-        // the plaque is machined metal, so most of what you see is
-        // REFLECTED light, and the gallery is drawn over whatever room
-        // the wearer is standing in. Against a bright wall the highlights
-        // and the passthrough behind them land at nearly the same
-        // luminance and the mark goes soft — the same failure the colour
-        // it replaced had, one step further along.
-        //
-        // Lifting the floor to 0.34 makes the letterform carry its own
-        // light rather than borrowing the room's, so the shape holds at
-        // any wall brightness. It stays a floor, not a glow: the
-        // specular highlight is still what shapes the bevel, which is
-        // what keeps it reading as metal rather than as a lit sign.
+        // An emissive FLOOR (not a glow) so the letters never fall to pure
+        // black in the shaded parts of the extrusion. Kept low: raising it
+        // does not fix legibility on a bright wall — light-on-light has no
+        // contrast — and the specular highlight must stay what shapes the
+        // bevel, or the plaque reads as a lit sign rather than as metal.
         metal.emissiveColor = .init(color: stock)
-        // BACK TO 0.16 ON 2026-08-08. I pushed this to 0.34 to make the
-        // wordmark "pop" and a screenshot showed it had not: the mark
-        // was still a ghost on a cream wall, because light-on-light has
-        // no contrast and a brighter light does not create any. What
-        // fixed it was giving the letters something dark to be ivory
-        // against — first a backing plate, and since 2026-08-09 the
-        // keyline below — and with that in place the original floor is
-        // the right one again.
         metal.emissiveIntensity = 0.16
 
         let model = ModelEntity(mesh: mesh, materials: [metal])
@@ -198,77 +140,36 @@ enum HubTitleStyle {
     // (2026-08-15): one prototype cache for the whole app, warmed
     // off-main before the space opens.
 
-    /// ONE LINE OF DISPLAY TYPE, MILLED RATHER THAN GENERATED — same
-    /// contract as `keylined`, and nil when there is no asset for these
-    /// words.
+    /// One line of display type, MILLED rather than generated; nil when
+    /// there is no asset for these words.
     ///
-    /// WHAT THE ASSET BUYS, IN ONE WORD: THE CHAMFER.
-    /// `MeshResource.generateText` extrudes a flat prism — a face,
-    /// straight sides, and a sharp ninety-degree edge between them. The
-    /// note on `line` says the plaque's depth cue is its extruded sides
-    /// catching the light at a different angle from its face, and that
-    /// is true, but a square edge catches it in a hard line, which is
-    /// what a stamped part looks like. `blenderprops.bevel` states the
-    /// house position: a machined part has no sharp corners, and the
-    /// highlight running along a bevel is most of what makes a shape
-    /// read as a solid object rather than as a box. This is the plaque
-    /// finally being milled instead of claiming to be.
-    ///
-    /// THE TYPEFACE DID NOT CHANGE. Blender cannot read SF Pro's Bold —
-    /// `SFNS.ttf` is a variable font and its default instance is
-    /// Regular — so `Tools/hubtitles.py` snapshots it at wght 700 with
-    /// fontTools before building. It also pins the optical size to SF
-    /// Pro's DISPLAY cut, which is the right face for type set this
-    /// large and which `.systemFont(ofSize:weight:)` cannot ask for.
-    ///
-    /// THE COLOUR IS STILL SWIFT'S. The asset carries two meshes named
-    /// for their role and nothing else; the alloy, the accent blend and
-    /// the casing are assigned here, so `Materials.machined` and
-    /// `DesignTokens.Palette` remain the one authority on what the home
-    /// is coloured. Bake geometry, never bake the design system.
+    /// What the asset buys is THE CHAMFER: `generateText` extrudes a flat
+    /// prism with a sharp ninety-degree edge, and the highlight running
+    /// along a bevel is most of what makes a shape read as a solid object.
+    /// The typeface is unchanged — `Tools/hubtitles.py` snapshots SF Pro at
+    /// wght 700 (Blender cannot read the variable font's Bold) and pins the
+    /// DISPLAY optical cut. BAKE GEOMETRY, NEVER THE DESIGN SYSTEM: the
+    /// asset's meshes are named for their role and coloured here.
     @MainActor
     static func milled(_ text: String, size: CGFloat,
                        accent: UIColor?) -> (entity: Entity,
                                              extents: SIMD3<Float>)? {
         guard let asset = milledAssets[text] else { return nil }
         guard let prototype = PropCache.prototype(named: asset) else { return nil }
-        // THE RETURNED ENTITY'S OWN SCALE MUST STAY 1, and this wrapper
-        // is the whole reason for it. Both lockups above finish with
-        //
-        //     item.entity.scale = SIMD3(repeating: scale)
-        //
-        // — an ASSIGNMENT, not a multiply, because `keylined` hands back
-        // a line whose size is already in its geometry. Putting `size`
-        // on the entity here instead means that assignment silently
-        // throws it away, the asset reverts to its nominal point size of
-        // ONE METRE, and the wordmark comes up about six times too big
-        // and swallows the room.
-        //
-        // Which is exactly what it did. Every test still passed —
-        // they inspect what this function returns, and what it returns
-        // was correct; the defect only exists once the caller composes
-        // with it. A screenshot found it in one frame.
-        //
-        // So `size` goes on a CHILD and the wrapper stays free for the
-        // caller to scale.
+        // THE RETURNED ENTITY'S SCALE MUST STAY 1: callers finish with
+        // `entity.scale = ...`, an ASSIGNMENT, so a scale set here would be
+        // thrown away and the asset would revert to its nominal ONE METRE.
+        // `size` therefore goes on a CHILD, leaving the wrapper free.
         let group = Entity()
         let model = prototype.clone(recursive: true)
         group.addChild(model)
 
-        // ANODISED DARK, CUT BRIGHT (2026-08-13). Three generations of
-        // this sign chased legibility with LIGHT — ivory letters, a
-        // raised emissive floor, a keyline, a backing plate — and every
-        // one ran into the same wall: the gallery is drawn over the
-        // wearer's own room, and light-on-light has no edge. This build
-        // goes the other way round. The faces and extrusion walls are
-        // anodised dark — the wordmark in graphite, a door sign in its
-        // accent pulled a third toward black, which keeps the hue that
-        // does the wayfinding while giving the letters real weight —
-        // and the chamfer band is a SEPARATE mesh left bright champagne
-        // alloy, the way a diamond-cut badge shows bare metal exactly
-        // where the tool touched the stock. A dark face holds the mark
-        // against a bright wall; the bright rim holds it against a dark
-        // one; and the rake finally has a real edge to walk light along.
+        // ANODISED DARK, CUT BRIGHT. Chasing legibility with light fails —
+        // the gallery draws over the wearer's room and light-on-light has
+        // no edge — so faces and extrusion walls are dark (graphite, or an
+        // accent pulled a third toward black to keep the wayfinding hue)
+        // while the chamfer band stays a SEPARATE bright alloy mesh. Dark
+        // face holds against a bright wall, bright rim against a dark one.
         let stock = accent.map {
             blend($0, toward: .black, by: 0.32)
         } ?? graphite
@@ -339,31 +240,14 @@ enum HubTitleStyle {
 
     // MARK: The rake
 
-    /// A slow turn, so the light walks across the letterforms.
-    ///
-    /// THIS IS AN ANIMATION THAT ONLY WORKS BECAUSE THE TYPE IS MILLED,
-    /// which is why it is the one that got built. The letters carry a
-    /// real chamfer around every stroke; turning the line a degree and a
-    /// half moves where that chamfer catches the key light, so the
-    /// highlight travels along the edge of each glyph and the mark reads
-    /// as a metal object sitting in a lit room. Flat extruded type doing
-    /// the same thing just looks like a sign wobbling — there is no edge
-    /// for the light to run along.
-    ///
-    /// So nothing here is animating an EFFECT. It moves the geometry a
-    /// little and lets the material do what a material does, which is
-    /// also why it costs one transform per line and no per-frame
-    /// material work.
-    ///
-    /// DELIBERATELY NOT A KINETIC BODY. An electron lapped the E&M sign
-    /// and a ball crossed the Mechanics rule through two full redesigns,
-    /// and the owner cut both on 2026-08-04 — "still is pretty bad".
-    /// Those put a PROP next to the type. This animates the type.
+    /// A slow turn, so the light walks across the letterforms — an
+    /// animation that only works because the type is MILLED: the chamfer
+    /// gives the highlight an edge to travel along. Nothing here animates
+    /// an effect; it moves the geometry and lets the material do the rest,
+    /// so it costs one transform per line and no per-frame material work.
     ///
     /// Yaw and pitch run at rates that do not divide into each other, so
-    /// the pair never repeats on a short cycle and the motion has no
-    /// findable beat — the fastest way to make slow movement look
-    /// mechanical is to let the reader catch its period.
+    /// the motion never repeats on a findable beat.
     static func rake(time: Double, phase: Double) -> simd_quatf {
         let yaw = rakeAmplitude * Float(sin(time * rakeRate + phase))
         let pitch = rakeAmplitude * 0.34
