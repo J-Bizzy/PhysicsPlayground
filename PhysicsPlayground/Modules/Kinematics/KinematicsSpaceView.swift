@@ -75,59 +75,18 @@ struct KinematicsSpaceView: View {
     /// the launcher stops being the only way a ball enters the room.
     @State private var wells: Well?
 
-    // Placement: an instrument wall to the LEFT of the launcher's home,
-    // at its depth. This module is 1:1 with the room and balls go
-    // everywhere, so the one thing these must not do is stand in the
-    // firing line — the launcher opens at x = −0.6 aiming down −z, so
-    // everything here sits further out in −x, beside the shot rather
-    // than in front of it.
+    // An instrument wall LEFT of the launcher's home, at its depth —
+    // never in the firing line (the launcher opens at x = −0.6 down −z).
+    // It does NOT ride the launcher: `SpatialTrackControl.adjust(hand:)`
+    // measures against `root.position`, so a carried rail would shift its
+    // own mapping mid-drag.
     //
-    // They do NOT ride the launcher, though it is grabbable and the
-    // controls would then live on the apparatus. Two reasons, and the
-    // second is a correctness one: `SpatialTrackControl.adjust(hand:)`
-    // measures the hand against `root.position`, so a rail whose root is
-    // being carried would shift its own mapping mid-drag; and a rig of
-    // four instruments swinging around the room with the launcher is a
-    // lot of furniture to drag through a wall.
-    // THE WHOLE WALL WAS OUT OF REACH, and had been since it was built.
-    //
-    // Measured 2026-08-09, when every module's anchors were finally put
-    // somewhere a test could see them: bank 1.67 m, worlds 1.31, the g
-    // rail 1.37, the wind rail 1.41, the ball well 1.52 — against
-    // `InstrumentClearance.maximumReach` of 1.25. Five instruments, none
-    // of them touchable without stepping, in the one module whose
-    // apparatus is 1:1 with the room. Nothing had caught it because
-    // these were `SIMD3` literals inside a view, and the clearance rules
-    // had only ever been pointed at Electric Fields.
-    //
-    // ONE COLUMN, NOT TWO, and the second column is what could not be
-    // saved. Three constraints meet here and only two of them can hold
-    // at once for anything standing outboard of the rails:
-    //
-    //   reach       wants it near      (nearest face ≤ 1.25 m)
-    //   off-axis    wants it shallow   (≤ 48°, CircuitsPartsLayout)
-    //   firing line wants it left      (clear of x = −0.6, down −z)
-    //
-    // The rails are 0.26 long, so a second column beside them starts at
-    // x ≈ −1.22 before it has any size of its own — and from there,
-    // every depth that brings it inside reach pushes it past 58° off
-    // axis, and every depth that keeps it on axis puts it past 1.3 m.
-    // That is not a placement to be found; the old layout had simply
-    // chosen the angle and paid 1.67 m for it. Stacking all five in the
-    // single column dissolves the trade.
-    //
-    // DEPTH IS SET BY THE ANGLE, NOT BY REACH. The first attempt at
-    // this pulled the column forward to z = −0.78, which fixed reach and
-    // quietly moved it from 43.7° to 49.1° — past the documented limit,
-    // and visible in a screenshot as the rails running off the left of
-    // the frame. −0.94 holds the original 43.8° and still brings every
-    // instrument inside 1.25 m, because most of the old distance was
-    // being spent on x, not z.
-    //
-    // Order, top down: the ball you throw, the world you throw it in,
-    // that world's g, its wind, and last what the ROOM is made of. The
-    // well is at the head because it is the only one whose reach fails
-    // at the bottom of a column — a small box's near face is far.
+    // ONE COLUMN, because three constraints meet and only two can hold
+    // for anything outboard of the rails: reach (≤ 1.25 m), off-axis
+    // (≤ 48°) and the firing line. Depth is set by the ANGLE, not reach:
+    // z −0.94 holds 43.8° and still brings every instrument inside 1.25 m.
+    // Order top down: ball, world, its g, its wind, then the room's
+    // material — the well leads because a small box's near face is far.
     private static let wallX: Float = -0.90
     private static let wallZ: Float = -0.94
 
@@ -270,20 +229,12 @@ struct KinematicsSpaceView: View {
             // the model applies the slow-motion scale and pause).
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
-                    // On device, detected walls flow into the physics.
-                    // The walls come from the SHARED room session — this
-                    // module used to run a second plane-detection session
-                    // of its own, for the same planes the shell was
-                    // already tracking.
-                    // Everything the room hands the model is TRANSLATED
-                    // INTO MODULE SPACE first. The model's coordinates
-                    // render under `renderer.root`, which carries the
-                    // lab-placement offset — so a wall fed in raw world
-                    // coordinates is correct only while the lab has
-                    // never been moved, and wrong by exactly the offset
-                    // after the anchor relocates it. "Bounces at the
-                    // wall sometimes, a step past it other times" was
-                    // this line, not the physics.
+                    // Detected walls (from the SHARED room session) flow
+                    // into the physics. Everything the room hands the model
+                    // is TRANSLATED INTO MODULE SPACE first: model
+                    // coordinates render under `renderer.root`, which
+                    // carries the lab-placement offset, so raw world walls
+                    // are wrong by exactly that offset once the lab moves.
                     let placement = SIMD3<Double>(appModel.labPlacement.offset)
                     if appModel.room.hasScannedRoom {
                         // Detected walls backed by the room's boundary
@@ -297,12 +248,9 @@ struct KinematicsSpaceView: View {
                             .translated(by: -placement)
                     }
                     model.step(dt: event.deltaTime)
-                    // A ball that reaches an open hand is caught: the
-                    // one moment in the module where the simulation
-                    // reaches back to you. Device-only — the simulator
-                    // reports no fingertips, so this is simply inert
-                    // there. Fingertips arrive in world space and cross
-                    // into module space like the walls do.
+                    // A ball reaching an open hand is caught. Device-only
+                    // (the simulator reports no fingertips); fingertips
+                    // cross into module space like the walls do.
                     model.catchBalls(atFingertips:
                         appModel.room.fingertips.map { $0 - placement })
                     renderer?.tick(model)
@@ -310,50 +258,25 @@ struct KinematicsSpaceView: View {
                                   nearestHand: appModel.room.nearestFingertip(
                                     to: Self.bankAnchor))
                     syncBloom(dt: event.deltaTime)
-                    // The lab's placement in the user's room — a pure
-                    // display offset, safe because every grab in this app
-                    // moves a body by hand DISPLACEMENT, which a constant
-                    // translation leaves untouched.
+                    // Constant display offset — safe because grabs move a
+                    // body by hand displacement. Every bank, rail, well and
+                    // ring is a child of `renderer.root`, so the whole lab
+                    // travels together: a rail belongs to the thing it sets.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // …AND THE INSTRUMENTS GO WITH IT. Every bank, rail,
-                    // well and ring in this module is a child of
-                    // `renderer.root`, so they ride the same offset the
-                    // apparatus does.
-                    //
-                    // This comment said the opposite until 2026-08-03 —
-                    // "the control pods do NOT go with it: the user
-                    // parked them where they wanted them" — in all four
-                    // modules that carry it, and it was false in all
-                    // four. There are no pods; the instruments were
-                    // reparented onto the apparatus when the panels died,
-                    // and travelling with it is the RIGHT behaviour: a
-                    // rail belongs to the thing it sets. Left standing,
-                    // the sentence would eventually persuade somebody to
-                    // "fix" a counter-translation back in.
                 }
             )
 
             renderer.tick(model)
             self.renderer = renderer
         }
-        // Leaving the lab must not leave anything running or held.
-        //
-        // `teardown` cancels the renderer's event subscriptions and any
-        // geometry job in flight (see `GeometryPipeline.cancel`), and the
-        // drag state is cleared because NOTHING ELSE CAN CLEAR IT: an
-        // in-flight grab that never receives its `onEnded` — the space
-        // closing under it is the ordinary way that happens — otherwise
-        // strands the object wherever the hand left it and re-targets
-        // every later drag at the same one, with no exit but leaving.
+        // Leaving the lab must not leave anything running or held: an
+        // in-flight grab never gets its `onEnded` when the space closes,
+        // so it must be cleared here or it strands and re-targets every
+        // later drag.
         .onDisappear {
             renderer?.teardown()
-            // A GRIP SURVIVES THE SPACE CLOSING, and that is worse than
-            // it sounds. `Bloom` is a class, so `gripDrag` outlives this
-            // view; left set, `updateGrip` claims EVERY subsequent drag
-            // in the module and nothing at all can be grabbed. That
-            // exact failure is documented in PendulumsSpaceView's
-            // `onEnded` — it cost this module every one of its verbs
-            // once already.
+            // MUST clear: `Bloom` is a class, so a live grip outlives the
+            // view and would claim every subsequent drag in the module.
             bloom.endGrip()
             // A rail mid-adjust swallows every `onChanged` until an
             // `onEnded` clears it, against an orphaned control.
@@ -406,22 +329,12 @@ struct KinematicsSpaceView: View {
                                                 target: hand, hand: hand)
                             return
                         }
-                        // A TAP ON A FLYING BALL MUST NOT CATCH IT.
-                        //
-                        // This recogniser is `minimumDistance: 0`, so it
-                        // fires on a bare press, and for a ball in
-                        // flight the whole path runs: `grabBall` freezes
-                        // it, `apply` holds it exactly where it was, and
-                        // `onEnded` releases it with no hand motion to
-                        // throw it. The ball stopped dead in mid-air and
-                        // hung there — losing its strobe trail and its
-                        // flight record — because you looked at it and
-                        // pinched. Gravity Lab already carried the same
-                        // diagnosis about tapping a planet.
-                        //
-                        // Only the ball needs this. The launcher, the aim
-                        // bead and a hoop are positional: a press that
-                        // does not move moves them by zero.
+                        // A TAP ON A FLYING BALL MUST NOT CATCH IT: at
+                        // `minimumDistance: 0` a bare press would freeze the
+                        // ball, hold it, and release it with no hand motion,
+                        // leaving it dead in mid-air. Only the ball needs
+                        // this — the launcher, bead and hoops are positional,
+                        // so a press that doesn't move moves them by zero.
                         if let press = flightPress(on: value.entity) {
                             pressedBall.press(press, at: hand)
                         } else {
@@ -491,36 +404,12 @@ struct KinematicsSpaceView: View {
                       tint: DesignTokens.Palette.neutralActionUI) { [ballPicker] in
                     ballPicker.toggle()
                 },
-                // Clearing the volley, off the window panel. The
-                // launcher made every ball in the room, so the thing
-                // that unmakes them belongs on the launcher — and this
-                // is the third petal, which is the ceiling `Petal`'s own
-                // doc sets ("two or three per object, never more").
-                //
-                // UNCONDITIONAL, and that is not laziness. The panel
-                // button was `.disabled(flights.isEmpty)` and the
-                // obvious translation is to leave the petal out when
-                // there is nothing to clear — but `retarget` rebuilds
-                // ONLY when the target id changes, and this bloom's id
-                // is the constant "launcher". A conditional list would
-                // be evaluated once, on the first frame, and then never
-                // again: the petal would be permanently present or
-                // permanently absent depending on what the room happened
-                // to look like at launch. Clearing nothing is a no-op;
-                // a control that silently stops tracking its condition
-                // is a lie.
-                // BOTH of those are expressible now (2026-08-03). The
-                // note above is why they were not: a plain `Bool` read
-                // once at configure time would freeze, so the petal had
-                // no condition at all — and, separately, no confirmation,
-                // which made this the one destructive verb in the app
-                // with no guard. Circuits' and Electric Fields' identical
-                // "Clear" are both confirming plates that track their own
-                // availability; this was one pinch.
-                //
-                // `isAvailable` is a closure, so it is read every frame
-                // and cannot freeze. `confirms` gives it the same two-tap
-                // arm the standing plates use.
+                // Clear the volley — the third petal, `Petal`'s own ceiling.
+                // `isAvailable` MUST be a closure, not a Bool: `retarget`
+                // rebuilds only when the target id changes, and this bloom's
+                // id is the constant "launcher", so a value read at configure
+                // time would freeze on the first frame's state. `confirms`
+                // gives it the same two-tap arm the standing plates use.
                 .init(name: "Clear", symbol: "trash.slash",
                       tint: DesignTokens.Palette.neutralActionUI,
                       isAvailable: { !model.flights.isEmpty },

@@ -55,62 +55,22 @@ struct PendulumsSpaceView: View {
     /// How far a press may wander and still count as a tap, metres.
     private static let tapTravel: Double = 0.012
     @State private var wells: Well?
-    /// `PhysicsCore.ThrowSampler` — shared with Projectiles and Gravity
-    /// Lab, which each kept their own copy of this buffer.
-    ///
-    /// The 0.14 s window is inherited from the hand-rolled version this
-    /// replaced; the other two used 0.12. Nothing in the old code said
-    /// why, and it looks like drift rather than intent — but a bob is
-    /// released out of a swing rather than flicked, so it is plausible
-    /// enough to keep until someone compares the two on device. Stated
-    /// here rather than diverging silently in a third file.
+    /// `PhysicsCore.ThrowSampler`. The 0.14 s window is wider than the
+    /// 0.12 the other two modules use: a bob is released out of a swing
+    /// rather than flicked.
     @State private var handSampler = ThrowSampler(window: 0.14)
 
     // MARK: The instruments
-    //
-    // This module held SEVEN panel controls — two sliders and five
-    // toggles, the largest surviving panel in the app — while the
-    // interaction law (DECISIONS.md, 2026-07-29) said a display layer is
-    // a labelled object in the room and a continuous quantity is a rail.
-    //
-    // The claim that used to stand here was worse than absent: it said
-    // gravity "is a dial you turn while watching the swing stretch out in
-    // front of you." There was no dial — `SpatialDial` was deleted on
-    // 2026-07-29 for being relative, and gravity was a `Slider` in a
-    // collapsed card three taps from the physics. It briefly became a
-    // rail, which made the sentence true for about a day, and then the
-    // rail came out too (see below). There is no gravity control in this
-    // module now, and no sentence anywhere should say there is.
 
-    /// What is drawn, and whether the air is real. Five plates, and the
-    /// fifth is not a display layer — air resistance decides whether the
-    /// swing ever stops. It earns the bank anyway: it is a labelled
-    /// discrete choice, and one lone plate standing beside a bank of four
-    /// is worse than one bank of five.
+    /// What is drawn, and whether the air is real. Five plates — the
+    /// fifth (air resistance) is not a display layer but a labelled
+    /// discrete choice, and one lone plate beside a bank of four is worse.
     @State private var layers: SpatialLayerBank?
-    // NO ACTION BANK, NO WORLD PICKER, NO g OR TIME RAIL (2026-08-02,
-    // at the owner's direction). "Resonance ×5" is gone, and so is the
-    // whole right-hand column: the three world discs and the two rails
-    // under them.
-    //
-    // `gravity` and `timeScale` are still real properties of the model
-    // and still reachable from the debug arguments (`-penGravity`,
-    // `-penTime`) — what has gone is their furniture, not the physics.
-    //
-    // SO THEY ARE RETIRED CAPABILITIES, NOT HIDDEN ONES, and that
-    // distinction is the whole of what this comment is for. The standing
-    // rule is that nothing may be reachable ONLY from the CLI, and taken
-    // at face value these two now break it. They do not, because a
-    // wearer is no longer offered them at all: this bench stands on
-    // Earth, at 1×, and the two arguments exist so a screenshot can put
-    // it somewhere else. The rule forbids a capability the user is meant
-    // to have and cannot reach; it does not forbid retiring one.
-    // Anybody restoring either must restore its rail in the same commit.
-    //
-    // What is left in this room: the swing, the two wells that make one,
-    // and the layers bank. (Foucault's globe, spin rail and marker ring
-    // stood here until 2026-08-03, when the whole feature came out at
-    // the owner's direction — see DECISIONS.md.)
+    // `gravity` and `timeScale` are RETIRED CAPABILITIES, not hidden ones:
+    // the wearer is not offered them at all (this bench is Earth at 1×),
+    // and `-penGravity`/`-penTime` exist only so a screenshot can put it
+    // elsewhere. Anybody restoring either must restore its rail in the
+    // same commit.
 
     // Placement. Every one of these sits at the apparatus's own DEPTH
     // (z ≈ −1.08, the pivot plane) rather than at a height picked on its
@@ -237,21 +197,8 @@ struct PendulumsSpaceView: View {
                     // moves a body by hand DISPLACEMENT, which a constant
                     // translation leaves untouched.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // …AND THE INSTRUMENTS GO WITH IT. Every bank, rail,
-                    // well and ring in this module is a child of
-                    // `renderer.root`, so they ride the same offset the
-                    // apparatus does.
-                    //
-                    // This comment said the opposite until 2026-08-03 —
-                    // "the control pods do NOT go with it: the user
-                    // parked them where they wanted them" — in all four
-                    // modules that carry it, and it was false in all
-                    // four. There are no pods; the instruments were
-                    // reparented onto the apparatus when the panels died,
-                    // and travelling with it is the RIGHT behaviour: a
-                    // rail belongs to the thing it sets. Left standing,
-                    // the sentence would eventually persuade somebody to
-                    // "fix" a counter-translation back in.
+                    // Every bank, rail, well and ring is a child of
+                    // `renderer.root`, so the whole lab travels together.
                 }
             )
             #if DEBUG
@@ -261,26 +208,17 @@ struct PendulumsSpaceView: View {
                let first = model.pendulums.first {
                 ring.openID = first.id
             }
-            // `-penPivotRing 1` opens the COLLAR's ring — the cable bead
-            // and the trash petal. It needs its own argument because the
-            // collar's ring is opened by a press that does not MOVE the
-            // collar, and the simulator has neither a hand to press with
-            // nor a way to hold one still.
+            // `-penPivotRing 1` opens the COLLAR's ring (cable bead and
+            // trash), which a press-without-moving opens — not something
+            // the simulator can do.
             if UserDefaults.standard.bool(forKey: "penPivotRing"),
                let first = model.pendulums.first {
                 pivotRing.openID = first.id
                 ring.openID = nil
             }
-            // The instruments are all pinch-operated, and the simulator
-            // has no hands — so each one gets an argument that sets a
-            // VALUE rather than a flag. A bead parked at its default in
-            // every screenshot proves the rail rendered and nothing at
-            // all about the mapping behind it, which is the mistake
-            // CLAUDE.md already records against the field module.
-            //
-            // `-penGravity 1.62` puts the bench on the Moon, which should
-            // light the Moon disc on the standing bank as well as moving
-            // the rail's bead — the two are one readout.
+            // Each instrument arg sets a VALUE, not a flag: a bead parked
+            // at its default proves the rail rendered and nothing about
+            // the mapping behind it. `-penGravity 1.62` is the Moon.
             let forcedGravity = UserDefaults.standard.double(forKey: "penGravity")
             if forcedGravity > 0 {
                 model.gravity = min(max(forcedGravity,
@@ -393,24 +331,12 @@ struct PendulumsSpaceView: View {
                             return
                         }
 
-                        // THE BOB GETS THE COLLAR'S DISCRIMINATOR TOO.
-                        //
-                        // The collar three branches up is careful that a
-                        // press which never moves is not a drag. The bob
-                        // was not, and it is on the same
-                        // `minimumDistance: 0` recogniser — so a TAP on a
-                        // bob ran the whole grab path: `clearTrail()`
-                        // wiped every trail in the room, `beginGrab`
-                        // zeroed the swing, and `onEnded` released it
-                        // with a hand velocity of essentially nothing.
-                        // Tap a swinging pendulum to open its ring — the
-                        // documented way to open it — and it stopped
-                        // dead and took the room's traces with it.
-                        //
-                        // The press is only RECORDED here. It is promoted
-                        // to a grab below, once the hand has actually
-                        // moved, and the grab is anchored back at the
-                        // press so nothing jumps.
+                        // A press that never moves is NOT a drag: on this
+                        // `minimumDistance: 0` recogniser a bare tap on a
+                        // bob would wipe every trail, zero the swing and
+                        // release it at rest. The press is only RECORDED
+                        // here and promoted to a grab below once the hand
+                        // moves, anchored back at the press so nothing jumps.
                         var current: Entity? = value.entity
                         while let candidate = current {
                             if let id = UUID(uuidString: candidate.name),
@@ -532,22 +458,10 @@ struct PendulumsSpaceView: View {
                                   handVelocity: handSampler.velocity(at: now) ?? .zero)
                 }
         )
-        // `.simultaneousGesture`, NOT `.gesture` — this is why none of
-        // this module's side controls could be pressed.
-        //
-        // The drag above is `DragGesture(minimumDistance: 0)`, which
-        // claims a touch the instant it lands. A plain `.gesture` tap
-        // composed against an already-claimed drag never resolves, so
-        // every plate, disc and rail in the room silently stopped
-        // responding while the bobs — which are DRAGGED — went on
-        // working, which is exactly the shape of the report.
-        //
-        // Magnetism and Kinematics use `.simultaneousGesture` for both
-        // their tap and their drag and have never had this problem;
-        // Pendulums was the one module that differed. Diagnosed by
-        // comparing the modules that worked against the one that did
-        // not, after two wrong guesses at causes that were merely
-        // plausible.
+        // `.simultaneousGesture`, NOT `.gesture`: the drag above is
+        // `minimumDistance: 0` and claims a touch the instant it lands, so
+        // a plain `.gesture` tap never resolves and every plate, disc and
+        // rail in the room stops responding.
         .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
@@ -561,21 +475,9 @@ struct PendulumsSpaceView: View {
     /// it, and the period tag over the pivot climbs as the square root
     /// of length while your hand is still moving.
     private func syncBloom(dt: Double) {
-        // THE PIVOT'S RING: a bead for the cable, and Delete.
-        //
-        // Cable length is the quantity a pivot owns — it is where the
-        // cable is paid out from, and the length is visibly the distance
-        // between this collar and the bob. Delete is here because the
-        // collar IS the rig: every other module in the app puts a trash
-        // petal on the ring of whatever you tapped (a charge, a planet, a
-        // magnet, a circuit part), and a pendulum whose top could be
-        // pressed but not thrown away would be the one object in the app
-        // that broke that grammar.
-        //
-        // The BOB's ring keeps its own Delete rather than handing the
-        // verb over. Both rings act on the same pendulum, which is
-        // correct: you can throw a rig away from either end of it, the
-        // way you can pick up a real one by either end.
+        // The pivot's ring: a bead for the cable (the quantity a pivot
+        // owns) and Delete. The bob's ring keeps its own Delete — you can
+        // throw a rig away from either end, as you can pick one up.
         if let openPivot = pivotRing.openID,
            !model.pendulums.contains(where: { $0.id == openPivot }) {
             // Deleted out from under the ring — by its own trash petal,
@@ -702,22 +604,13 @@ struct PendulumsSpaceView: View {
 
 }
 
-/// The card floating above the selected bob: the numbers behind the swing.
+/// The card floating above the selected bob, on the billboarded
+/// `PendulumsRenderer.infoAnchor`.
 ///
-/// It hangs on `PendulumsRenderer.infoAnchor`, which is billboarded and
-/// re-pointed at the selected bob every frame. It was written for the
-/// window panel's "Numbers" dropdown and rendered nowhere else; the
-/// anchor was built for it and carried nothing. They are connected now.
-///
-/// TWO of its four numbers change every frame — θ and v — which is the
-/// cost `Callout.minimumInterval` exists to bound for text meshes. The
-/// same argument applies to an attachment, whose content is rasterised
-/// into a texture: what matters is how often the RENDERED OUTPUT
-/// changes, not how often `body` runs. So every value is quantised to
-/// the precision it is displayed at, and the strings are built from the
-/// quantised numbers rather than by handing raw doubles to a format
-/// specifier. A bob swinging at 1.2345 m/s then redraws when the reading
-/// changes, roughly ten times a second, instead of ninety.
+/// Every value is QUANTISED to its displayed precision and the strings
+/// built from the quantised numbers: an attachment is rasterised into a
+/// texture, so what costs is how often the rendered output changes. A bob
+/// at 1.2345 m/s then redraws ~10 times a second instead of 90.
 struct PendulumInfoCard: View {
     @Environment(PendulumsModel.self) private var model
 
