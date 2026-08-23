@@ -246,8 +246,8 @@ Then, per shot — **terminate first**, or the arguments are ignored:
 ```bash
 shot () {   # shot <name> <args...>
   local name=$1; shift
-  xcrun simctl terminate $D j-bizzell.PhysicsPlayground 2>/dev/null
-  xcrun simctl launch $D j-bizzell.PhysicsPlayground "$@"
+  xcrun simctl terminate $D com.jbizzell.physicsplayground 2>/dev/null
+  xcrun simctl launch $D com.jbizzell.physicsplayground "$@"
   sleep 22                                   # scenes settle; fields trace
   xcrun simctl io $D screenshot "$name.png"
 }

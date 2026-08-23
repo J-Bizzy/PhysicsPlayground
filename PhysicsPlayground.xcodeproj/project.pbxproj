@@ -322,7 +322,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "j-bizzell.PhysicsPlayground";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.jbizzell.physicsplayground";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -354,7 +354,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "j-bizzell.PhysicsPlayground";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.jbizzell.physicsplayground";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -500,7 +500,7 @@
 				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Physics Playground tracks your hands so you can pick up a magnet, stretch a pendulum's cable, and pinch with both hands to zoom an experiment.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "Physics Playground uses the shape of your room so experiments happen in it: projectiles bounce off your real walls, floor and ceiling, and apparatus is hidden correctly behind your furniture.";
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "j-bizzell.PhysicsPlaygroundTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.jbizzell.physicsplayground.tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -525,7 +525,7 @@
 				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Physics Playground tracks your hands so you can pick up a magnet, stretch a pendulum's cable, and pinch with both hands to zoom an experiment.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "Physics Playground uses the shape of your room so experiments happen in it: projectiles bounce off your real walls, floor and ceiling, and apparatus is hidden correctly behind your furniture.";
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "j-bizzell.PhysicsPlaygroundTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.jbizzell.physicsplayground.tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -547,7 +547,7 @@
 				DEVELOPMENT_TEAM = TL459W44PC;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "j-bizzell.PhysicsPlaygroundUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.jbizzell.physicsplayground.uitests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -569,7 +569,7 @@
 				DEVELOPMENT_TEAM = TL459W44PC;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "j-bizzell.PhysicsPlaygroundUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.jbizzell.physicsplayground.uitests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
