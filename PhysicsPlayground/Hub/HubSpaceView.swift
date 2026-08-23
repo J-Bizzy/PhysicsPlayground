@@ -1208,6 +1208,17 @@ final class HubScene {
         let dt = min(dt, 1.0 / 30.0)
         time += dt
         if let placement {
+            // ONCE PER LAUNCH, and only if the restored facing points away from
+            // the wearer. A saved yaw is relative to last launch's standing
+            // position, so relaunching from another chair can open the gallery
+            // behind them — see `GalleryPlacement.reFacedYaw`. The offset is
+            // left alone; a placement the user chose is not a bug.
+            if !hasRefaced, let lookRay {
+                hasRefaced = true
+                placement.refaceIfBehind(
+                    lookYaw: atan2(-Float(lookRay.direction.x),
+                                   -Float(lookRay.direction.z)))
+            }
             root.position = placement.offset
             root.orientation = simd_quatf(angle: placement.yaw, axis: [0, 1, 0])
         }
@@ -1374,6 +1385,11 @@ final class HubScene {
     }
 
     private var hasLookRay = false
+
+    /// Latches the once-per-launch facing rescue in `animate`. Nil `lookRay`
+    /// (the simulator, and device frames before ARKit settles) leaves it false,
+    /// so the rescue waits for a real look rather than firing on a guess.
+    private var hasRefaced = false
 
     /// Where to aim at an exhibit for the gaze cone: its puck, the podium while docked,
     /// the hand while carried. Deliberately NOT the live anchor otherwise — it carries

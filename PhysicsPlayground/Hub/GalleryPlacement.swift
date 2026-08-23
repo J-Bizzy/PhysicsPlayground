@@ -46,6 +46,42 @@ final class GalleryPlacement {
         persist()
     }
 
+    /// How far the restored facing may sit from the wearer's own before the
+    /// gallery counts as behind them. Generous on purpose — a deliberate
+    /// quarter-turn is a placement, not a mistake.
+    static let refaceTolerance: Float = 70 * .pi / 180
+
+    /// The rescue, as arithmetic so it can be tested without a headset.
+    ///
+    /// The saved offset and yaw are relative to where the scene BUILDS, which
+    /// is wherever the wearer happened to be standing last launch. Relaunch
+    /// from another chair — or another room — and the same numbers put the
+    /// gallery behind them, before the app has shown them anything. So the
+    /// placement is still restored (the grab bar's promise, `testThePlacementSurvivesRelaunch`),
+    /// and only a facing that has gone badly wrong is overridden.
+    ///
+    /// Signed shortest angle, not `abs(a - b)`: the two facings straddle ±π
+    /// as often as not, and the naive difference reads 350° apart for two
+    /// directions 10° apart.
+    static func reFacedYaw(saved: Float, lookYaw: Float,
+                           tolerance: Float = GalleryPlacement.refaceTolerance) -> Float {
+        var delta = (lookYaw - saved).truncatingRemainder(dividingBy: 2 * .pi)
+        if delta > .pi { delta -= 2 * .pi }
+        if delta < -.pi { delta += 2 * .pi }
+        return abs(delta) <= tolerance ? saved : lookYaw
+    }
+
+    /// Called once per launch, on the first frame the room knows which way the
+    /// wearer is looking. Turns the gallery to face them ONLY if the restored
+    /// facing would have put it behind them; the offset is never touched, so a
+    /// placement the user chose survives.
+    func refaceIfBehind(lookYaw: Float) {
+        let next = Self.reFacedYaw(saved: yaw, lookYaw: lookYaw)
+        guard next != yaw else { return }
+        yaw = next
+        persist()
+    }
+
     private func persist() {
         UserDefaults.standard.set(
             [Double(offset.x), Double(offset.y), Double(offset.z)],

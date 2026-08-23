@@ -51,6 +51,47 @@ final class GalleryPlacementTests: XCTestCase {
         XCTAssertEqual(placement.offset, SIMD3(3, -0.9, 3))
     }
 
+    // MARK: The facing rescue
+    //
+    // The relaunch promise above is kept, and one pathological case is
+    // rescued: a saved yaw is relative to where the wearer stood LAST
+    // launch, so relaunching from another chair can open the gallery
+    // behind them. Pure arithmetic, because the headset cannot be asked
+    // to relaunch four times in a unit test.
+
+    func testAFacingCloseToTheWearerIsLeftAlone() {
+        // A deliberate quarter-turn is a placement, not a mistake.
+        XCTAssertEqual(GalleryPlacement.reFacedYaw(saved: 0.5, lookYaw: 0.9),
+                       0.5, accuracy: 1e-6)
+    }
+
+    func testAFacingBehindTheWearerAdoptsTheLook() {
+        XCTAssertEqual(GalleryPlacement.reFacedYaw(saved: 0, lookYaw: .pi),
+                       .pi, accuracy: 1e-6)
+    }
+
+    /// THE CASE A NAIVE `abs(a - b)` GETS WRONG. These two facings are 20°
+    /// apart, but straddle ±π — subtracting them reads 340° and would spin
+    /// a correctly-placed gallery to face a wearer it already faced.
+    func testTheComparisonWrapsAcrossPi() {
+        let saved: Float = .pi - 0.17
+        let look: Float = -.pi + 0.17
+        XCTAssertEqual(GalleryPlacement.reFacedYaw(saved: saved, lookYaw: look),
+                       saved, accuracy: 1e-6)
+    }
+
+    /// The rescue turns the gallery and never moves it — an offset the
+    /// user dragged is theirs, and is not what put it behind them.
+    func testTheRescueKeepsTheOffset() {
+        let placement = GalleryPlacement()
+        placement.move(to: SIMD3(1.2, 0, -0.4))
+        placement.turn(to: 0)
+
+        placement.refaceIfBehind(lookYaw: .pi)
+        XCTAssertEqual(placement.offset, SIMD3(1.2, 0, -0.4))
+        XCTAssertEqual(placement.yaw, .pi, accuracy: 1e-6)
+    }
+
     /// A tap on the bar: home, and facing the wearer when the room
     /// knows which way that is.
     func testRecentreGoesHomeAndFacesTheWearer() {
