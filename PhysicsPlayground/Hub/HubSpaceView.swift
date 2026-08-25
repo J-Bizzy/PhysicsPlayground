@@ -87,7 +87,8 @@ struct HubSpaceView: View {
                 HubUtilityBar(
                     openSettings: { openWindow(id: SettingsView.windowID) },
                     openAbout: { openWindow(id: AboutView.windowID) },
-                    openNotebook: { openWindow(id: NotebookView.windowID) })
+                    openNotebook: { openWindow(id: NotebookView.windowID) },
+                    openCatalog: { openWindow(id: MainWindowView.windowID) })
             }
             Attachment(id: "load") {
                 if let module = ModuleCatalog.all(appModel: appModel)
@@ -187,11 +188,28 @@ struct HubSpaceView: View {
     /// not the same instance. One constant declares and recognises, so the two cannot drift.
     static let enterAction = LocalizedStringResource("Enter")
 
+    /// How long the exhibit swells before the module takes the stage.
+    ///
+    /// A NAMED CONSTANT because two things have to agree with it — the
+    /// swell's own duration and the gallery's fade — and a magic number
+    /// inside a `Task.sleep` is precisely the shape this project keeps
+    /// having to catch after the fact.
+    static let enterDelay: Double = 0.42
+
     /// One enter path for every caller: the exhibit swells and the module takes over at the peak.
     private func enter(_ id: String) {
+        // REDUCE MOTION SKIPPED THE INTRO AND NOT THIS. `beginIntro` has
+        // guarded on stillness since it was written, so the setting was
+        // half-honoured: no arrival ceremony, but the exhibit still swelled
+        // for 420 ms and the wearer still waited for it. A wearer who has
+        // asked for no motion should get the lab, now.
+        guard !Motion.isReduced else {
+            appModel.activeModuleID = id
+            return
+        }
         scene.beginEnterTransition(id: id)
         Task {
-            try? await Task.sleep(for: .milliseconds(420))
+            try? await Task.sleep(for: .seconds(Self.enterDelay))
             appModel.activeModuleID = id
         }
     }
@@ -1222,7 +1240,7 @@ final class HubScene {
             root.position = placement.offset
             root.orientation = simd_quatf(angle: placement.yaw, axis: [0, 1, 0])
         }
-        fadeIn(dt: dt)
+        fadePresence(dt: dt)
         updateIntro()
         updateFocus(lookRay: lookRay, dt: dt)
 
@@ -1367,22 +1385,34 @@ final class HubScene {
     /// How far the gallery has faded up, 0…1.
     private var presence: Float = 0
 
-    /// The gallery arrives rather than appears — a rebuild is a hard cut. Deliberately on
-    /// the ROOT, not per-entity, so everything fades on one curve.
-    private func fadeIn(dt: Double) {
-        guard presence < 1 else { return }
+    /// Where the gallery is heading: 1 on arrival, 0 once a lab has been chosen.
+    private var presenceTarget: Float = 1
+
+    /// The gallery arrives rather than appears, and LEAVES rather than vanishing —
+    /// a rebuild is a hard cut in either direction. Deliberately on the ROOT, not
+    /// per-entity, so everything moves on one curve.
+    private func fadePresence(dt: Double) {
+        guard presence != presenceTarget else { return }
         // Exponential approach, frame-rate independent, τ ≈ 0.18 s.
-        presence = min(1, presence + (1 - presence)
-            * Float(1 - exp(-dt / 0.18)))
-        if presence > 0.999 {
-            presence = 1
+        presence += (presenceTarget - presence) * Float(1 - exp(-dt / 0.18))
+        if abs(presence - presenceTarget) < 0.001 {
+            presence = presenceTarget
+        }
+        if presence == 1 {
             // Land exactly, then remove the component — a permanent OpacityComponent
             // forces the whole gallery down a transparency path it does not need.
             root.components.remove(OpacityComponent.self)
         } else {
+            // NOTE THE ASYMMETRY: at 0 the component STAYS. Removing it would
+            // restore the gallery to full opacity for the frames between the
+            // fade finishing and the module scene taking over — which is the
+            // hard cut, arriving by the back door.
             root.components.set(OpacityComponent(opacity: presence))
         }
     }
+
+    /// The gallery begins to leave. Called when a lab has been chosen.
+    func beginDeparture() { presenceTarget = 0 }
 
     private var hasLookRay = false
 
@@ -1476,6 +1506,11 @@ final class HubScene {
     func beginEnterTransition(id: String) {
         guard let exhibit = exhibits.first(where: { $0.moduleID == id }) else { return }
         SoundPalette.play(.pop, on: exhibit.anchor, volume: 0.7)
+        // The gallery starts leaving now. The chosen exhibit is a CHILD of
+        // `root`, so it fades with everything else even as it swells — it
+        // grows as the room it stood in goes, which is the right reading of
+        // being taken somewhere.
+        beginDeparture()
         // The exhibit swells and rises; its terrace's hairline flares with it.
         exhibit.pulser.move(
             to: Transform(scale: SIMD3(repeating: 1.6),
@@ -1554,15 +1589,39 @@ private struct HubUtilityBar: View {
     let openSettings: () -> Void
     let openAbout: () -> Void
     let openNotebook: () -> Void
+    let openCatalog: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
+            // THE FLAT CATALOG'S ONLY DOOR.
+            //
+            // `HubView` calls the catalog "the accessibility path" and the
+            // standing rule is that nothing may be reachable only in space —
+            // but `syncMainWindow` dismisses the main window whenever no
+            // module is active, and this bar opened only Settings, Notebook
+            // and About. So on the home screen there was no way to summon it
+            // back, and the one UI test guarding it passed only because it
+            // launches with `-uiTesting 1`, which retreats out of the space
+            // entirely. The guarantee was measured in a configuration no
+            // wearer runs.
+            //
+            // A fourth button in a bar that already exists, not a new
+            // surface.
+            Button(action: openCatalog) {
+                Image(systemName: "list.bullet.rectangle")
+                    .font(.title3)
+            }
+            .accessibilityLabel("Lab list")
+            .accessibilityHint("Opens a flat list of every lab in a window")
+
             Button(action: openSettings) {
                 Image(systemName: "gearshape.fill")
                     .font(.title3)
             }
             .accessibilityLabel("Settings")
-            .accessibilityHint("Sound, hints and progress")
+            // "progress" until 2026-08-23: the progress/experiments system
+            // it named was cut on 2026-08-09.
+            .accessibilityHint("Sound, room tone and onboarding")
 
             Button(action: openNotebook) {
                 Image(systemName: "book.closed.fill")

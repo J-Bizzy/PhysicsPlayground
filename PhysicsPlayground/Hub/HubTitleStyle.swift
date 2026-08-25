@@ -173,19 +173,60 @@ enum HubTitleStyle {
         let stock = accent.map {
             blend($0, toward: .black, by: 0.32)
         } ?? graphite
+        // ANODISE, NOT LACQUER — and NOT `Materials.machined` (2026-08-24).
+        //
+        // The canon recipe carries `clearcoat = 0.55` at
+        // `clearcoatRoughness = 0.30`, which is a second specular lobe with
+        // its own Fresnel term. Fresnel goes to ~1 at grazing incidence
+        // WHATEVER the base colour is, and a letter's extrusion walls are
+        // seen at grazing incidence by definition — so every wall blew out
+        // to a pale slab while the face stayed dark. Measured off a studio
+        // capture of the shipped wordmark: face luminance 3.6, walls 119,
+        // against a champagne keyline at 161. The walls covered TWICE the
+        // area of the keyline and came within a third of its brightness, so
+        // the letter read as a light-grey block with a dark front rather
+        // than as dark type with a milled edge.
+        //
+        // Clearcoat is right for the lacquered nameplates it was written
+        // for and wrong here: anodising is a matte oxide, it has no lacquer
+        // layer, and modelling one is what produced the slab. Dropped to
+        // zero, metal well down and roughness well up, so a wall answers
+        // its own dark base colour at every angle.
+        var metal = PhysicallyBasedMaterial()
+        metal.baseColor = .init(tint: stock)
+        metal.metallic = .init(floatLiteral: 0.20)
+        metal.roughness = .init(floatLiteral: 0.62)
+        metal.clearcoat = .init(floatLiteral: 0.0)
         // A small emissive floor so the anodise never crushes to pure
         // black in the shaded parts of the extrusion.
-        var metal = Materials.machined(stock)
         metal.emissiveColor = .init(color: stock)
         metal.emissiveIntensity = 0.16
 
-        // The cut edge. A higher floor than the face on purpose: the rim
-        // is a thin line doing the silhouette's work, and it must not
-        // die in shade — while staying a floor, not a glow, so the
-        // specular walk of the rake still shapes it.
-        var rimMetal = Materials.machined(champagne)
+        // THE KEYLINE READS AT EVERY RAKE, WHICH IS THE WHOLE ASK.
+        //
+        // This was a specular effect on a sub-pixel band, and both halves
+        // of that were fighting it. The chamfer is a fortieth of cap
+        // height, split by `BEVEL_RESOLUTION` into two facets, and only the
+        // facet whose normal happened to bisect eye and light lit up — so
+        // the line was about one pixel of champagne, aliased into DASHES on
+        // the diagonals of A and Y, and its coverage swung 3.1x across
+        // PHYSICS and 5.8x across PLAYGROUND depending on where a letter
+        // sat in the line. That is the non-uniformity, measured.
+        //
+        // A specular highlight cannot be uniform across letters at
+        // different rakes — that is what a specular highlight IS. So the
+        // keyline stops being one. The emissive floor carries the band at a
+        // value that does not depend on the rake, the roughness is raised
+        // so what specular remains spreads ACROSS both facets instead of
+        // picking one, and the clearcoat goes for the same reason as above.
+        // The rake still shapes it; it no longer decides whether it exists.
+        var rimMetal = PhysicallyBasedMaterial()
+        rimMetal.baseColor = .init(tint: champagne)
+        rimMetal.metallic = .init(floatLiteral: 0.30)
+        rimMetal.roughness = .init(floatLiteral: 0.55)
+        rimMetal.clearcoat = .init(floatLiteral: 0.0)
         rimMetal.emissiveColor = .init(color: champagne)
-        rimMetal.emissiveIntensity = 0.30
+        rimMetal.emissiveIntensity = 0.55
 
         // Found by the MESH's name, which is what the USD exporter
         // writes the prim from — naming only the Blender object ships a

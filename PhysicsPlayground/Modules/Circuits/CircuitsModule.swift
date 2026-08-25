@@ -20,7 +20,12 @@ enum CircuitsModule {
             blurb: "A live electronics workbench: build anything from a flashlight to an RLC network, and watch voltage, current, and charge become visible.",
             icon: "powerplug.fill",
             accent: DesignTokens.Palette.circuitsAccent,
-            firstRunHint: "The loop in front of you is live — pinch the switch lever to break it. Pull parts out of the racks on either side of you and drop them so copper ends nearly touch: they connect themselves. Pull an orange end grip to aim or stretch a part; pinch two copper terminals to wire across a distance; the trash button removes a selected part. visionOS will ask to use your room so the bench can stand in it.",
+            // WHAT THIS SENTENCE SAYS HAS TO BE WHAT THE HANDS DO. It
+            // described two gestures that were retired on 2026-08-11: an
+            // "orange end grip" (the grips were deleted — a lead is the only
+            // thing at an end now) and "pinch two copper terminals to wire"
+            // (tap-tap wiring is gone; a tap selects and never wires).
+            firstRunHint: "The loop in front of you is live — pinch the switch lever to break it. Pull parts out of the racks on either side of you and drop them so copper ends nearly touch: they connect themselves. To wire across a distance, pull a lead out of one copper end and let go on another. Tap a lead to light everything it is connected to; pull a wire's end off to move it somewhere else. The trash button removes a selected part. visionOS will ask to use your room so the bench can stand in it.",
             // The house dimming — see `PendulumsModule`. Gravity Lab is the exception.
             preferredDimming: 0.35,
             legend: legend,
