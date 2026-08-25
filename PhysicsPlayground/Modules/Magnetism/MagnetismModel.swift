@@ -449,10 +449,31 @@ final class MagnetismModel {
         // a line here.
         inertiaOn = inertiaAtLaunch
         bodies.removeAll()
-        // ONE magnet, centred: its looping dipole field IS the opening scene.
+        // TWO magnets, and the second one is the module.
+        //
+        // It was one, centred, on the reasoning that "its looping dipole
+        // field IS the opening scene". The field was drawn and it was
+        // correct and NOTHING MOVED — one magnet has nothing to attract, so
+        // the lab opened as a diagram of itself and stayed that way until
+        // the wearer thought to do something.
+        //
+        // The second sits off-axis with its moment turned well away from
+        // the first, so with `dynamicsOn` (below) the pair visibly swings
+        // into alignment over a few seconds as the wearer arrives. That is
+        // the module's own `firstRunHint` — "Bring two close and watch —
+        // they pull together head-to-tail" — happening without being asked
+        // for, which is what the home screen's "every exhibit is a
+        // perpetual live demo" means applied to a lab.
+        //
+        // Far enough apart to read as two objects and to take a moment
+        // settling; the overdamped glide is what keeps that legible rather
+        // than a snap.
         magnets = [
-            BarMagnet(position: Self.regionCenter,
+            BarMagnet(position: Self.regionCenter - SIMD3(0.34, 0, 0),
                       moment: SIMD3(Self.defaultStrength, 0, 0)),
+            BarMagnet(position: Self.regionCenter + SIMD3(0.34, 0, 0.12),
+                      moment: SIMD3(Self.defaultStrength * cos(1.05),
+                                    Self.defaultStrength * sin(1.05), 0)),
         ]
         selectedID = magnets.last?.id
         heldIDs.removeAll()

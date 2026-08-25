@@ -30,7 +30,12 @@ final class MagnetismBankTests: XCTestCase {
     /// Freezing is physics, not display: a frozen magnet stays put even under a strong pull.
     func testFreezingTheMagnetsStopsThemMoving() {
         let model = MagnetismModel()
-        // A second magnet close by, so there is a real force to resist.
+        // An explicit pair, close enough that there is a real force to
+        // resist. Built rather than inherited: the seeded bench already
+        // occupies the spot this used to add into, so `addMagnet` refused
+        // and the fixture came up one magnet short.
+        while !model.magnets.isEmpty { model.removeMagnet(id: model.magnets[0].id) }
+        XCTAssertNotNil(model.addMagnet(at: MagnetismModel.regionCenter))
         let partner = MagnetismModel.regionCenter + SIMD3(0.34, 0, 0)
         XCTAssertNotNil(model.addMagnet(at: partner))
 
@@ -111,6 +116,14 @@ final class MagnetismSettlingTests: XCTestCase {
         steps: Int = 1_200
     ) -> (drift: Double, turn: Double) {
         let model = MagnetismModel()
+        // A PAIR, built here rather than inherited. The bench opens with two
+        // magnets since 2026-08-23 so the room is alive on arrival; this
+        // fixture wants an exact pair in an exact arrangement, so it clears
+        // the seed and states its own. Depending on the model's default
+        // population is what made this test change meaning when the default
+        // did.
+        while !model.magnets.isEmpty { model.removeMagnet(id: model.magnets[0].id) }
+        _ = model.addMagnet(at: MagnetismModel.regionCenter)
         // SIDE BY SIDE, not end to end: a second magnet along +x is already at
         // equilibrium and never rotates — a fixture with nothing to settle.
         _ = model.addMagnet(at: MagnetismModel.regionCenter + SIMD3(0.04, 0.02, 0.30))
@@ -144,6 +157,8 @@ final class MagnetismSettlingTests: XCTestCase {
     /// The clamp must not stop them ALIGNING — freezing rotation early would pass the jitter test.
     func testTheyStillSwingIntoAlignmentFirst() {
         let model = MagnetismModel()
+        while !model.magnets.isEmpty { model.removeMagnet(id: model.magnets[0].id) }
+        _ = model.addMagnet(at: MagnetismModel.regionCenter)
         // Side by side, so there is a real rotation to perform.
         _ = model.addMagnet(at: MagnetismModel.regionCenter + SIMD3(0.04, 0, 0.34))
         let startTurn = model.magnets.map { simd_normalize($0.moment) }
@@ -200,9 +215,14 @@ final class MagnetismEarthFieldTests: XCTestCase {
     /// one frees only that one. `heldIDs` is a set for exactly this.
     func testTwoMagnetsCanBeHeldAtOnceAndReleasedIndependently() {
         let model = MagnetismModel()
-        guard let second = model.addMagnet(
-            at: MagnetismModel.regionCenter + SIMD3(0.30, 0, 0)),
-            let first = model.magnets.first?.id else {
+        // EXACTLY two, built here. The assertion below is that NOTHING moved
+        // while both were held, so a third magnet left over from the seeded
+        // bench is free to glide and fails it — correctly, and for a reason
+        // that has nothing to do with what this test is about.
+        while !model.magnets.isEmpty { model.removeMagnet(id: model.magnets[0].id) }
+        guard let first = model.addMagnet(at: MagnetismModel.regionCenter),
+              let second = model.addMagnet(
+                at: MagnetismModel.regionCenter + SIMD3(0.30, 0, 0)) else {
             return XCTFail("could not stage two magnets")
         }
 
@@ -251,6 +271,10 @@ final class MagnetismEarthFieldTests: XCTestCase {
     /// The Delete petal works all the way down to an empty room, which must still step and refill.
     func testTheLastMagnetCanBeDeletedAndTheRoomRefilled() {
         let model = MagnetismModel()
+        // The bench opens with a PAIR since 2026-08-23, so the room is alive
+        // on arrival. This test is about deleting the last one, so it thins
+        // the bench down to one first rather than weakening its assertions.
+        while model.magnets.count > 1 { model.removeMagnet(id: model.magnets[0].id) }
         XCTAssertEqual(model.magnets.count, 1)
         let last = model.magnets[0].id
 
@@ -268,6 +292,10 @@ final class MagnetismEarthFieldTests: XCTestCase {
     func testEarthDoesNotTurnTheBarMagnets() {
         let model = MagnetismModel()
         XCTAssertTrue(model.earthFieldOn)
+        // ONE magnet, deliberately: the seeded pair turns each OTHER, which
+        // is the point of the pair and would hide the thing being tested
+        // here — that EARTH does not turn a bar magnet.
+        while model.magnets.count > 1 { model.removeMagnet(id: model.magnets[0].id) }
         XCTAssertEqual(model.magnets.count, 1)
         let before = model.magnets[0].moment
 

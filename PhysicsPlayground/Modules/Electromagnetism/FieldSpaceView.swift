@@ -85,6 +85,28 @@ struct FieldSpaceView: View {
             let renderer = FieldRenderer()
             renderer.onObjectTap = { handleObjectTap(on: $0) }
             content.add(renderer.root)
+            // ARRIVES, NEVER APPEARS. Disabled here and raised by
+            // `Fade.tick` below, so the apparatus resolves into the room
+            // instead of being there between one frame and the next.
+            renderer.root.isEnabled = false
+
+            // A LAB WITH NOTHING MOVING IN IT IS A DIAGRAM. `reset()` seeds
+            // a dipole with `chargesRespond` off and no probe, so the field
+            // portrait was correct, beautiful and completely still until the
+            // wearer thought to do something. The probe rides the dipole on
+            // arrival instead.
+            //
+            // HERE AND NOT IN `reset()`, for two reasons. The shell gives
+            // each module fresh view identity, so `make` runs on EVERY entry
+            // while the model persists on `AppModel` — which is the only hook
+            // that reaches a second visit. And `FieldModelTests` asserts
+            // `probe == nil` after a reset; that contract is right and stays.
+            //
+            // Not `chargesRespond = true` instead: the two dipole charges
+            // would accelerate into each other and destroy the recognisable
+            // picture inside a second, and its plate would be lit over a
+            // claim that is false at rest.
+            if model.probeStatus != .running { model.dropProbe() }
 
             // Everything this module measures, on one billboarded card.
             // Parented to `root`, NOT `viewRoot`: the rig reaches 4×, and a
@@ -101,6 +123,15 @@ struct FieldSpaceView: View {
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
+                    // The lab's own arrival and departure, on the shell's
+                    // one flag. `Fade.tick` settles to a no-op — it drops its
+                    // clock and its OpacityComponent once landed — so this
+                    // costs one comparison for all the frames that are not a
+                    // transition.
+                    if let renderer {
+                        Fade.tick(renderer.root, visible: !appModel.isDeparting,
+                                  duration: AppModel.departure)
+                    }
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
                     model.step(dt: event.deltaTime)
                     if let renderer {
