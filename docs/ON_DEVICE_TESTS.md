@@ -642,15 +642,27 @@ decide whether the phase was worth doing.
       out again as you move on — never two at once, never flickering as
       you sweep past.
 
-- [ ] **The window is not blank.** Look at the hub window with the
-      Gallery up. It should show the compact catalog — each lab's name
-      and its promise line. Tapping a row there must still open its lab —
-      that is the accessibility path, and it has been unreachable in
-      normal use since the gallery started auto-opening.
+- [ ] **THE LAUNCH (2026-08-22).** Cold-start the app. It must go
+      STRAIGHT into the Gallery with the arrival choreography — no flat
+      window at any point, not even a flash. Expect a beat of plain
+      passthrough first while the prop cache warms; that is
+      `PlaygroundSpaceView.ready` doing its job, and it is the wait that
+      used to happen behind the front door. What must NOT happen is the
+      gallery building cold: if the terraces pop in piecemeal or the
+      first seconds judder, the gate is not holding.
 
-- [ ] **The way out.** In the same window, "Put the Gallery away" should
-      close the immersive space and leave you with your room and the
-      window. Then "Enter the Gallery" brings it back.
+- [ ] **The window is not blank.** Get the hub window back (Digital
+      Crown, or "Put the Gallery away" then reopen). It should show the
+      catalog — each lab's name and its promise line. Tapping a row
+      there must still open its lab — that is the accessibility path,
+      and nothing reaches it in normal use now that the app launches
+      into the room.
+
+- [ ] **The way out, and back.** In that window, "Put the Gallery away"
+      should close the immersive space and leave you with your room and
+      the window. Then "Enter the Gallery" brings it back — that button
+      is no longer a front door, it is the ONLY way to undo the button
+      above, so it has to work.
 
 - [ ] **The bead has six petals now** — home, pause, capture, dim,
       settings, reset — and the row is wider to fit them. `-paletteOpen 1`

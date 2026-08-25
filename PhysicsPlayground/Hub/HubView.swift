@@ -74,6 +74,16 @@ struct HubView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
+                // THIS IS THE WAY BACK, NOT THE WAY IN (2026-08-22).
+                //
+                // The app launches into the gallery now, so nobody
+                // arrives here: this branch is reached by deliberately
+                // pressing "Put the Gallery away" below, or by the
+                // Digital Crown. Deleting the button along with the
+                // front door was the tempting half of that change and
+                // would have stranded exactly the user who had just
+                // asked for their room back, with the catalog in front
+                // of them and no way to reopen what it lists.
                 Button {
                     Task { await openGallery() }
                 } label: {
@@ -141,27 +151,11 @@ struct HubView: View {
         // Bare type over passthrough needs its own separation from the room.
         .shadow(color: .black.opacity(0.45), radius: 8, y: 2)
         .task {
+            // Cheap and idempotent, and this view can appear without the
+            // space ever having opened (the `-uiTesting` retreat), so it
+            // cannot rely on the space having warmed the sound set.
             SoundPalette.warmUp()
             SoundPalette.masterVolume = appModel.settings.masterVolume
-            // The Gallery is the menu — bring it up on arrival.
-            //
-            // `-uiTesting 1` holds it back, so the FULL front door
-            // stays up: XCUITest can only see the window, and the
-            // wordmark and the "Enter the Gallery" button exist only in
-            // that state. (Before 2026-08-07 the argument was
-            // load-bearing for a harder reason — the window went
-            // completely blank once the Gallery opened, so without it
-            // there was nothing at all to test. The compact catalog
-            // means that is no longer true, and the argument now buys
-            // coverage of the front door rather than coverage of
-            // anything.) The catalog it leaves up is not a test fixture:
-            // it is the app's real accessibility path, the one the
-            // standing rule demands — nothing may be reachable only in
-            // space — so testing against it tests something that has to
-            // work anyway.
-            if !appModel.isImmersiveSpaceOpen, !Self.isUITesting {
-                await openGallery()
-            }
         }
     }
 
@@ -184,6 +178,15 @@ struct HubView: View {
     /// `UserDefaults` by any code path in the app. Removing the hook
     /// would cost the only automated coverage that proves the catalog is
     /// reachable at all.
+    ///
+    /// WHAT IT DOES CHANGED ON 2026-08-22, though not what it is for.
+    /// It used to suppress this view's automatic opening of the gallery.
+    /// There is no such call any more — the ImmersiveSpace is the launch
+    /// scene, chosen by a static Info.plist key no argument can reach —
+    /// so the flag is now read by `PlaygroundSpaceView.retreatForUITesting`,
+    /// which turns round on the way in and hands the window back. Same
+    /// contract for the tests: with `-uiTesting 1`, the app is a window
+    /// app showing the flat catalog.
     static var isUITesting: Bool {
         UserDefaults.standard.bool(forKey: "uiTesting")
     }
