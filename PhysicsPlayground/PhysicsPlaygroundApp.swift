@@ -2,13 +2,20 @@
 //  PhysicsPlaygroundApp.swift
 //  Physics Playground
 //
-//  The scenes: a main window that shows either the flat catalog (the
-//  hub) or the active module's title bar, three utility windows
-//  (Settings, the Lab Notebook, About), and ONE shared ImmersiveSpace
-//  whose content switches with the active module. Immersion style
-//  follows the module: .mixed keeps passthrough for room-scale modules;
-//  Gravity Lab asks for .progressive, so turning the crown opens its
-//  starfield.
+//  The scenes: ONE shared ImmersiveSpace whose content switches with the
+//  active module, a main window that shows either the flat catalog (the
+//  hub) or the active module's title bar, and three utility windows
+//  (Settings, the Lab Notebook, About). Immersion style follows the
+//  module: .mixed keeps passthrough for room-scale modules; Gravity Lab
+//  asks for .progressive, so turning the crown opens its starfield.
+//
+//  THE IMMERSIVE SPACE IS DECLARED FIRST BECAUSE IT IS WHAT LAUNCHES
+//  (2026-08-22). `Info.plist`'s `UIApplicationPreferredDefaultSceneSessionRole`
+//  is `UISceneSessionRoleImmersiveSpaceApplication`, and the space it
+//  picks is the first one declared here — so this ordering is
+//  load-bearing, not cosmetic. Until this change the main window was
+//  the launch scene and the gallery was opened from inside it, which
+//  put a flat "Enter the Gallery" slab in front of the room.
 //
 
 import SwiftUI
@@ -18,11 +25,20 @@ struct PhysicsPlaygroundApp: App {
     @State private var appModel = AppModel()
 
     var body: some Scene {
+        // THE LAUNCH SCENE. Declared first on purpose — see the header.
+        ImmersiveSpace(id: PlaygroundSpaceView.spaceID) {
+            PlaygroundSpaceView()
+                .environment(appModel)
+        }
+        .immersionStyle(
+            selection: Bindable(appModel).immersionStyle,
+            in: .mixed, .progressive, .full
+        )
+
         // IDENTIFIED SINCE 2026-08-10, so the shell can put it away and
-        // bring it back. It is still the app's primary window and still
-        // what launches; the id only gives `dismissWindow`/`openWindow`
-        // something to name when the gallery takes over the home screen
-        // (see `PlaygroundSpaceView.syncMainWindow`).
+        // bring it back. No longer the launch scene: the id is now the
+        // only way in, since nothing opens this window implicitly any
+        // more (see `PlaygroundSpaceView.syncMainWindow`).
         WindowGroup(id: MainWindowView.windowID) {
             MainWindowView()
                 .environment(appModel)
@@ -78,14 +94,5 @@ struct PhysicsPlaygroundApp: App {
         .defaultSize(width: 420, height: 380)
         .windowResizability(.contentSize)
         .defaultWindowPlacement { _, _ in WindowPlacement(.utilityPanel) }
-
-        ImmersiveSpace(id: PlaygroundSpaceView.spaceID) {
-            PlaygroundSpaceView()
-                .environment(appModel)
-        }
-        .immersionStyle(
-            selection: Bindable(appModel).immersionStyle,
-            in: .mixed, .progressive, .full
-        )
     }
 }

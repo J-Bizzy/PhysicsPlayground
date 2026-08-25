@@ -10,8 +10,22 @@
 	<false/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
+		<!-- THE APP LAUNCHES INTO THE GALLERY, NOT INTO A WINDOW
+		     (2026-08-22, owner's call). The home is a room-scale place;
+		     a flat slab asking permission to enter it was a door in
+		     front of a door. With this role the ImmersiveSpace declared
+		     first in `PhysicsPlaygroundApp` is the launch scene, the
+		     arrival choreography plays unasked, and the main window
+		     becomes what it always really was — a lab's title bar and
+		     the way back out — opened on demand rather than sat behind.
+
+		     This key is STATIC; it cannot be conditioned on a launch
+		     argument. `-uiTesting 1` therefore no longer holds the
+		     gallery back by suppressing an auto-open (there isn't one
+		     any more) — `PlaygroundSpaceView` bails out of the space on
+		     appear instead. See the note there. -->
 		<key>UIApplicationPreferredDefaultSceneSessionRole</key>
-		<string>UIWindowSceneSessionRoleApplication</string>
+		<string>UISceneSessionRoleImmersiveSpaceApplication</string>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<true/>
 		<key>UISceneConfigurations</key>

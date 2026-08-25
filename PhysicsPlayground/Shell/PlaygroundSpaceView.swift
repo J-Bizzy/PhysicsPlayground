@@ -19,20 +19,28 @@ struct PlaygroundSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+
+    /// THE ASSETS ARE READY. Nothing builds until the prop cache is warm.
+    ///
+    /// `PropCache.prototype` falls back to a SYNCHRONOUS `Entity.load`
+    /// when it misses, so a gallery built cold parses twenty usdz on
+    /// Thread 1 and hangs the first frames. That used to be covered by
+    /// warming during the window phase — the front door was on screen
+    /// while the cache filled. Launching straight into the space
+    /// (2026-08-22) deletes that phase, so the wait moves here: the
+    /// space opens on plain passthrough, the cache fills, and only then
+    /// does the arrival choreography start, with everything it needs.
+    /// The user waits exactly as long as before and sees their own room
+    /// instead of a slab.
+    @State private var ready = false
 
     /// THE FLAT CATALOG DOES NOT STAND BEHIND THE GALLERY: the window is
-    /// the front door before the gallery opens and a lab's title bar
-    /// inside one, but on the home screen it duplicated the exhibits it
-    /// stood behind. Known cost: with it dismissed there is no in-app exit
-    /// from the home screen, only the Digital Crown.
+    /// a lab's title bar and the way back out, but on the home screen it
+    /// duplicated the exhibits it stood behind. Known cost: with it
+    /// dismissed there is no in-app exit from the home screen, only the
+    /// Digital Crown.
     private func syncMainWindow() {
-        // Never in UI tests: XCUITest cannot see into an immersive
-        // space, so the flat catalog is the only surface it has. The
-        // gallery is normally held back under `-uiTesting`, but a test
-        // that opens it must not lose the window it is driving.
-        #if DEBUG
-        if UserDefaults.standard.bool(forKey: "uiTesting") { return }
-        #endif
         if appModel.activeModuleID == nil {
             dismissWindow(id: MainWindowView.windowID)
         } else {
@@ -40,28 +48,132 @@ struct PlaygroundSpaceView: View {
         }
     }
 
+    /// XCUITest cannot see into an immersive space, so under `-uiTesting`
+    /// the app has to be a window app.
+    ///
+    /// This USED to be a suppressed auto-open: the window was the launch
+    /// scene, and the argument simply stopped it opening the gallery.
+    /// There is no auto-open left to suppress — the space IS the launch
+    /// scene now, chosen by a static Info.plist key that no launch
+    /// argument can reach — so the only place left to turn round is
+    /// here, on the way in. Not `#if DEBUG`-gated, for the same reason
+    /// `HubView.isUITesting` is not: the UI test target runs the
+    /// shipping configuration, and a hook that vanishes in Release
+    /// cannot test what ships.
+    /// It only DISMISSES; it does not open the window. The `onDisappear`
+    /// below already reopens the main window unconditionally, and
+    /// opening it here as well produced two — the module's title bar in
+    /// one and the catalog still sitting in the other, which is exactly
+    /// what `testTappingALabEntersIt`'s last assertion is written to
+    /// catch ("the module opened but the catalog is still up behind it").
+    private func retreatForUITesting() -> Bool {
+        guard HubView.isUITesting else { return false }
+        Task { await dismissImmersiveSpace() }
+        return true
+    }
+
+    #if DEBUG
+    /// The screenshot hooks that need a scene to have appeared.
+    ///
+    /// MOVED HERE FROM `MainWindowView.task` (2026-08-22) BECAUSE THAT
+    /// WINDOW NO LONGER LAUNCHES. Seven arguments were read there and
+    /// nowhere else, so leaving them behind would have silently broken
+    /// `-settingsOpen`, `-notebookOpen`, `-notebookSeed`, `-seedCircuits`,
+    /// `-seedMotor` and `-circuitVoltageHeights` — the CLI screenshot
+    /// workflow the project leans on precisely because the simulator
+    /// cannot be gaze-pinched. `-openModule`'s companion went the other
+    /// way and was DELETED rather than moved: it existed only to open
+    /// the space for a module launched from the command line, and the
+    /// space is now always open.
+    private func applyDebugLaunchArguments() {
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: "settingsOpen") {
+            openWindow(id: SettingsView.windowID)
+        }
+        // `-notebookSeed 1` fills the notebook with sample observations
+        // first, so the entry cards can be screenshot-checked.
+        if defaults.bool(forKey: "notebookSeed"),
+           appModel.notebook.entries.isEmpty {
+            appModel.notebook.record(
+                moduleID: "electrostatics", moduleTitle: "Electric Fields",
+                title: "Seeded observation 1",
+                readings: [.init("Charges", "2"),
+                           .init("Net charge", "0.0", "C"),
+                           .init("|E| 10 cm away", "8.99e5", "N/C")])
+            appModel.notebook.record(
+                moduleID: "pendulums", moduleTitle: "Pendulums",
+                title: "Seeded observation 1",
+                readings: [.init("Length", "0.80", "m"),
+                           .init("Period", "1.79", "s")])
+        }
+        if defaults.bool(forKey: "notebookOpen") {
+            openWindow(id: NotebookView.windowID)
+        }
+        // `-seedCircuits 1` drops a few parts (one aimed off-axis) so
+        // component visuals can be screenshot-checked from the CLI.
+        guard defaults.bool(forKey: "seedCircuits") else { return }
+        let circuits = appModel.circuitsModel
+        if circuits.components.isEmpty {
+            circuits.add(.battery, at: SIMD3(-0.35, 1.3, -0.9))
+            circuits.add(.bulb, at: SIMD3(0.35, 1.3, -0.9))
+            circuits.add(.resistor, at: SIMD3(0, 1.5, -0.9))
+            if let part = circuits.components.last {
+                circuits.setAxis(id: part.id, axis: SIMD3(0.35, 0.4, 0.05))
+            }
+        }
+        // `-circuitVoltageHeights 1` raises the voltage skyline.
+        if defaults.bool(forKey: "circuitVoltageHeights") {
+            circuits.showVoltageHeights = true
+        }
+        // `-seedMotor 1` builds a battery→motor loop so the rotor spins.
+        if defaults.bool(forKey: "seedMotor") {
+            circuits.clearBench()
+            if let battery = circuits.add(.battery, at: SIMD3(-0.3, 1.3, -0.85)),
+               let motor = circuits.add(.motor, at: SIMD3(0.3, 1.3, -0.85)) {
+                circuits.connectTerminals(.init(componentID: battery, end: 0),
+                                          .init(componentID: motor, end: 0))
+                circuits.connectTerminals(.init(componentID: battery, end: 1),
+                                          .init(componentID: motor, end: 1))
+            }
+        }
+    }
+    #endif
+
     var body: some View {
         // A ZSTACK AROUND THE GROUP, so the flag at the bottom has a
         // stable sibling to hang off. See the comment down there.
         ZStack {
+            // NOTHING BUILDS UNTIL THE CACHE IS WARM — see `ready`. The
+            // gate is here rather than inside the Group so it covers the
+            // hub and the modules too, not just the backdrop chain.
+            if ready {
             Group {
                 // Studio Mode's dark gallery sits behind whatever is active —
                 // hub ring or module — and survives switches between them.
                 if appModel.studioMode {
                     StudioEnvironmentView()
                         .id("studio")
-                } else if appModel.roomDimming > 0.01 {
+                } else {
                     // The middle setting: the room stays, but a dark shell
                     // gives the physics its contrast back.
-                    RoomDimmerView(
-                        level: appModel.roomDimming,
-                        radius: appModel.activeModule?.preferredDimmingRadius
-                            ?? RoomDimmerView.defaultRadius)
-                        // Keyed on the radius as well as on being the dimmer:
-                        // the shell's mesh is built once in `make`, so a
-                        // module that wants a different one needs a new view
-                        // identity to get it.
-                        .id("dimmer-\(appModel.activeModule?.preferredDimmingRadius ?? 0)")
+                    //
+                    // MOUNTED UNCONDITIONALLY, and both halves of that matter.
+                    // It used to hang off `roomDimming > 0.01`, which meant a
+                    // shell whose target had just become 0 was torn out of the
+                    // hierarchy at full opacity — there was no view left to
+                    // ramp DOWN, so leaving a lab could only ever snap. And a
+                    // conditional child changes the `Group`'s child count,
+                    // which is the thing the ZStack note further down already
+                    // frets about. Off, it is one entity with `isEnabled` false.
+                    //
+                    // No `.id()` on the radius any more either: the dome is
+                    // built at unit radius and sized by its transform, and the
+                    // radius itself is read per-frame off `AppModel`. A module
+                    // wanting a 16 m shell no longer needs a new view identity
+                    // to get one — which is what let the Gravity Lab ramp
+                    // survive its own radius change.
+                    RoomDimmerView()
+                        .id("dimmer")
                 }
                 if let module = appModel.activeModule {
                     ZStack {
@@ -98,6 +210,7 @@ struct PlaygroundSpaceView: View {
                         .id("hub")
                 }
             }
+            }
 
             // THE FLAG MUST HANG OFF A SIBLING LEAF, NOT A MODIFIER ON THE
             // `Group`: a Group applies each modifier to EVERY child, so the
@@ -111,6 +224,25 @@ struct PlaygroundSpaceView: View {
                 .onAppear {
                     appModel.isImmersiveSpaceOpen = true
                     syncMainWindow()
+                }
+                // THE LAUNCH PATH RUNS HERE NOW. It used to live in
+                // `MainWindowView.task`, which was the launch scene; the
+                // space is, so this is the only place guaranteed to run
+                // once on every start.
+                .task {
+                    SoundPalette.warmUp()
+                    SoundPalette.masterVolume = appModel.settings.masterVolume
+                    // BEFORE THE RETREAT, NOT AFTER. `-uiTesting 1` and a
+                    // screenshot argument arrive together — the settings
+                    // UI test passes both — so putting this behind the
+                    // guard silently dropped `-settingsOpen` for exactly
+                    // the run that needed it.
+                    #if DEBUG
+                    applyDebugLaunchArguments()
+                    #endif
+                    guard !retreatForUITesting() else { return }
+                    await PropCache.warmUp()
+                    ready = true
                 }
                 .onDisappear {
                     appModel.isImmersiveSpaceOpen = false

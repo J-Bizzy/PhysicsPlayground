@@ -21,6 +21,7 @@
 //  taking an autoclosure, which is a change to all six descriptors.
 //
 
+import RenderKit
 import SwiftUI
 import Observation
 
@@ -32,6 +33,52 @@ final class AppModel {
             refreshImmersionStyle()
             adoptModuleAtmosphere()
             recordVisit()
+        }
+    }
+
+    /// True while a lab is fading out and before its replacement mounts.
+    /// Every module's scene root watches this and rides it down.
+    private(set) var isDeparting = false
+
+    /// How long a lab takes to leave. Matches the arrival ramp, so a
+    /// switch is symmetric rather than lopsided.
+    static let departure: Double = 0.22
+
+    /// THE ONE DOOR between labs — and between a lab and the gallery.
+    ///
+    /// There were three ways to change the active module and all three
+    /// were a bare assignment, so the scene swapped in one frame: the
+    /// gallery's Load button, the palette's slot ring (lab→lab, the move
+    /// a demo makes constantly), and the window's back chevron. Routing
+    /// them through here is what lets all three run the same curve.
+    ///
+    /// The transition is a DISSOLVE THROUGH PASSTHROUGH, not a
+    /// cross-dissolve: the old lab fades, the wearer's real room is
+    /// briefly just the room, the new one fades up. A true cross-fade
+    /// would need both scenes alive at once, and the room never leaving
+    /// the frame is what makes this read as continuous anyway.
+    func go(to id: String?) {
+        guard id != activeModuleID else { return }
+        // Nothing to fade FROM (arriving from the gallery, or from
+        // `-openModule` during init), or nothing that would render a
+        // fade, or the wearer has asked for no motion. Go straight
+        // through — a delay nobody can see is just latency.
+        guard activeModuleID != nil, isImmersiveSpaceOpen, !Motion.isReduced else {
+            activeModuleID = id
+            return
+        }
+        guard !isDeparting else { return }
+        isDeparting = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.departure))
+            guard let self else { return }
+            // BEFORE the swap, and this ordering is the whole thing.
+            // The incoming scene mounts on the next line; if the flag
+            // were still true it would be born invisible with nothing
+            // left to turn it back on, and an invisible lab looks
+            // exactly like a crash. `AppModelDoorTests` asserts it.
+            self.isDeparting = false
+            self.activeModuleID = id
         }
     }
 
@@ -132,7 +179,35 @@ final class AppModel {
     /// control in the window, none in the room and none in Settings.
     /// Not one path to a capability — none — which reads as a bug rather
     /// than as a feature.
+    /// THE TARGET, not what is on screen. `dimmingShown` below is what the
+    /// shell actually wears; this is where it is heading.
     var roomDimming: Double = 0
+
+    /// What the shell is wearing this frame, eased toward `roomDimming`.
+    ///
+    /// WHY THE SPLIT. Until 2026-08-23 there was one number, assigned in
+    /// `adoptModuleAtmosphere` and written straight into an
+    /// `OpacityComponent` — so the wearer's real room changed brightness in
+    /// ONE FRAME, twice per lab visit, six times in a demo that cuts between
+    /// labs. `AtmosphereCriterionTests` already named that as the loudest
+    /// difference between two rooms meant to feel like one place; it fixed
+    /// the values and could not reach the transition between them.
+    ///
+    /// `@ObservationIgnored` is load-bearing: this changes every frame while
+    /// a ramp runs, and an observed property would invalidate the whole
+    /// shell view hierarchy at 90 Hz. It lives on the model rather than in
+    /// the view because it has to survive the view being rebuilt — which it
+    /// is, whenever the dimming radius changes.
+    @ObservationIgnored var dimmingShown: Double = 0
+
+    /// How far out the shell should stand, metres — the active module's
+    /// `preferredDimmingRadius`, or the house 3.4.
+    ///
+    /// ON THE MODEL, not read from `activeModule` in the ramp, because
+    /// `activeModule` builds a whole `ModuleDescriptor` (six closures) on
+    /// every access and the ramp runs at 90 Hz. Set once when the module
+    /// changes, which is the only time it can move.
+    @ObservationIgnored var dimmingRadius: Float = RoomDimmerView.defaultRadius
 
     func setDimming(_ level: Double) {
         roomDimming = min(max(level, 0), 1)
@@ -150,7 +225,10 @@ final class AppModel {
     }
 
     private func adoptModuleAtmosphere() {
-        roomDimming = activeModule?.preferredDimming ?? 0
+        // One descriptor build, not two — see `dimmingRadius`.
+        let module = activeModule
+        roomDimming = module?.preferredDimming ?? 0
+        dimmingRadius = module?.preferredDimmingRadius ?? RoomDimmerView.defaultRadius
         if let id = activeModuleID { labPlacement.adopt(moduleID: id) }
     }
 
