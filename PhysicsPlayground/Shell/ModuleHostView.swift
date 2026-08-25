@@ -48,7 +48,7 @@ struct ModuleHostView: View {
             HStack(spacing: 10) {
                 // Left: navigation.
                 Button {
-                    appModel.activeModuleID = nil
+                    appModel.go(to: nil)
                 } label: {
                     Image(systemName: "chevron.left")
                 }

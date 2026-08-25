@@ -515,7 +515,10 @@ struct PaletteView: View {
             // the chin — the first choice — is comfortable to reach and
             // never noticed, the same mistake the wells made.
             made.place(at: [0.72, 1.32, -0.95])
-            made.onSelect = { id in appModel.activeModuleID = id }
+            // THE LAB→LAB SWITCH, and the one the transition work nearly
+            // missed: it is not reached from the gallery at all, so it
+            // used to be the one cut with no ceremony in front of it.
+            made.onSelect = { id in appModel.go(to: id) }
             made.onPause = { module.togglePause() }
             made.onReset = { appModel.resetActiveModule(module) }
             made.onSettings = { openWindow(id: SettingsView.windowID) }
@@ -524,7 +527,7 @@ struct PaletteView: View {
             // scene for `HubSpaceView` inside the SAME immersive space —
             // the gallery is not a separate space, so this is a
             // one-line answer to "let me out of this lab".
-            made.onHome = { appModel.activeModuleID = nil }
+            made.onHome = { appModel.go(to: nil) }
             made.onDim = { appModel.cycleDimming() }
             content.add(made.root)
             palette = made

@@ -67,6 +67,10 @@ struct MagnetismSpaceView: View {
             let renderer = MagnetismRenderer()
             renderer.onObjectTap = { handleTap(on: $0) }
             content.add(renderer.root)
+            // ARRIVES, NEVER APPEARS. Disabled here and raised by
+            // `Fade.tick` below, so the apparatus resolves into the room
+            // instead of being there between one frame and the next.
+            renderer.root.isEnabled = false
             sceneContent = content
 
             let sources = Well([
@@ -110,6 +114,15 @@ struct MagnetismSpaceView: View {
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
+                    // The lab's own arrival and departure, on the shell's
+                    // one flag. `Fade.tick` settles to a no-op — it drops its
+                    // clock and its OpacityComponent once landed — so this
+                    // costs one comparison for all the frames that are not a
+                    // transition.
+                    if let renderer {
+                        Fade.tick(renderer.root, visible: !appModel.isDeparting,
+                                  duration: AppModel.departure)
+                    }
                     // PER FRAME, not per event, and that distinction is
                     // the whole point: a hand that leaves the tracking
                     // volume mid-carry stops SENDING events, so an

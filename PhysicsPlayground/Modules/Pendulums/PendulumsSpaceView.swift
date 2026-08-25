@@ -112,6 +112,10 @@ struct PendulumsSpaceView: View {
             let renderer = PendulumsRenderer()
             renderer.onObjectTap = { handleObjectTap(on: $0) }
             content.add(renderer.root)
+            // ARRIVES, NEVER APPEARS. Disabled here and raised by
+            // `Fade.tick` below, so the apparatus resolves into the room
+            // instead of being there between one frame and the next.
+            renderer.root.isEnabled = false
             renderer.root.addChild(bloom.root)
 
             // The selected bob's numbers, finally attached.
@@ -184,6 +188,15 @@ struct PendulumsSpaceView: View {
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
+                    // The lab's own arrival and departure, on the shell's
+                    // one flag. `Fade.tick` settles to a no-op — it drops its
+                    // clock and its OpacityComponent once landed — so this
+                    // costs one comparison for all the frames that are not a
+                    // transition.
+                    if let renderer {
+                        Fade.tick(renderer.root, visible: !appModel.isDeparting,
+                                  duration: AppModel.departure)
+                    }
                     renderer?.tick(dt: event.deltaTime, model: model)
                     let hand = appModel.room.nearestFingertip(to: Self.bankAnchor)
                     wells?.update(dt: event.deltaTime, nearestHand: hand)
