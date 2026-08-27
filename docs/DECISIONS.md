@@ -16,6 +16,51 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-26 — Three documents stop describing an app that no longer exists
+
+**Decision:** `GOAL_2026-08-07.md` and `AUDIT_2026-08-07.md` get status
+headers marking them CLOSED and historical, naming the reversals and the
+retraction. `CIRCUITS_DESIGN_REVIEW.md` gets a per-number verdict table:
+C7 done, C3 and C4 moot, C10 half, the other seven declined for v1. None
+of the three is deleted.
+
+**Context:** The repo is about to be published, and a document that
+contradicts the code is worse than no document — it is a set of
+instructions for undoing work.
+
+`GOAL` was the worst of the three. About 70% of it landed, and roughly
+15% landed and was then **reversed by the owner**: the experiments system
+it devotes §3.1 to was deleted on 2026-08-09, the in-room teach of §1.4
+was built and deleted the same day, and the flat front door of §1.1–1.2
+was removed outright on 2026-08-22. Someone executing it in good faith
+would rebuild three surfaces that were deliberately taken out.
+
+`AUDIT` is mostly fixed, but carries three claims that are simply wrong
+and were never marked as such: P1-24 was **retracted** (the author had
+been reading the seeded welcome shot); P0's quaternion symptom was
+misdiagnosed as NaN when the real defect was one visible roll; and its ΔE
+figures were hand-typed approximations of UIKit system colours — the
+measured numbers are different enough that one "collision" it reports was
+never a collision.
+
+`CIRCUITS_DESIGN_REVIEW` had sat untriaged for twenty days. It was
+written to be reacted to per-number in the headset and never was, so it
+stood as a permanent implication that eleven pieces of work were owed.
+Two of its proposals had gone stale underneath it — C3 and C4 both
+describe affordances the 2026-08-11 wiring rewrite deleted. One, C7, was
+filed as polish and turned out to be a correctness bug.
+
+**Consequences:** Nine of the eleven Circuits proposals are declined as
+new features, under the standing rule that "improve" means refine what
+exists. That is a real decision with a cost: the module keeps the
+sprawling first-build problem C1 and C2 were aimed at, and the answer to
+it is the snap-align and lead-pull work that landed instead.
+
+The three documents stay in the repo because they are the record of a
+real engineering arc and most of it did land — deleting them would hide
+the reasoning, which is the opposite of the problem being fixed. They are
+now labelled history, and `DECISIONS.md` is stated to supersede them.
+
 ## 2026-08-26 — The bench stops being a wall, and then narrows to 0.60
 
 **Decision:** `CircuitsModel.buildHalfExtents` stops clamping hands and

@@ -1,5 +1,29 @@
 # Circuit Workshop — Design Review (2026-08-06)
 
+> ## TRIAGED 2026-08-26 — mostly declined for v1. Verdict per number.
+>
+> This document sat untriaged for twenty days: it was written to be
+> reacted to per-number in the headset, nothing in `DECISIONS.md` adopted
+> any of it, and an un-triaged review doc is a standing implication that
+> work is owed. Here is the answer, so it stops being one.
+>
+> | # | Verdict |
+> |---|---|
+> | **C1** ghost landing disc | **Declined for v1.** A new affordance, and `alignment(for:)` + the ghosted `pendingJoins` wires already answer "where will this land" at the moment it matters. |
+> | **C2** terminal gravity / dashed preview | **Declined for v1.** Superseded in spirit by the lead-pull rewrite (2026-08-11), which previews the wire *and* its refusal a frame before release. |
+> | **C3** armed terminal glows | **MOOT.** Tap-tap wiring was deleted on 2026-08-11; there is no armed terminal to glow. |
+> | **C4** wire-length label on the grip hand | **MOOT.** The end grips were deleted on 2026-08-11 — the copper lead is the only thing at an end. |
+> | **C5** name the rack flanks SOURCES / LOADS | **Declined for v1.** Two more standing labels in a room whose rule is that the apparatus explains itself. |
+> | **C6** glass shelf per rack column | **Declined for v1.** It was to be judged last, and the rack moved on 2026-08-26; judge the geometry on device before adding furniture to it. |
+> | **C7** reset re-holsters the probes | **DONE 2026-08-26** — and it was a correctness bug, not polish. Reset reached only the model, so the meter stayed out with its probes wherever you dropped them. See `DECISIONS.md`. |
+> | **C8** meter face adopts `BackedLabel` | **Declined for v1.** `setScreen` works and has its own rate limiter; this is a refactor with no user-visible change. |
+> | **C9** skyline datum rides the build | **Declined for v1.** Real, but a fixed datum is legible and the fix wants device judgement about a moving baseline. |
+> | **C10** ease the Electron View dive + raise dimming | **Half done, half declined.** The easing landed (`CircuitsRenderer`); the dimming raise is declined — the room's brightness is one number now (2026-08-09) and `AtmosphereCriterionTests` allows exactly one departure, already spent on Gravity Lab. |
+> | **C11** fault sound on `component.failed` | **Declined for v1.** The audit's own P2-10 says `.pop` already carries seven meanings and there is no refusal sound at all; adding a fifth voice to an overloaded palette is the wrong order of operations. |
+>
+> The standing rule behind most of these declines: *"improve" means
+> refine what exists, not add.* Nine of the eleven are new features.
+
 The deferred revisit, delivered as a document. The owner's brief
 (ON_DEVICE_TESTS.md, Deferred): *"Okay I want to revisit this with you
 … and we will plan out how to improve this system."* The bug-class

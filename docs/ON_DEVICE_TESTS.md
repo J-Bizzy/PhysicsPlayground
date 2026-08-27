@@ -33,13 +33,18 @@ Three revisits from the 2026-08-03 pass, deliberately NOT addressed in
 the fix pass that followed it. Bring these up when planning the next
 working session:
 
-- [ ] **Circuit Workshop, whole-module improvement.** "Okay I want to
+- [x] **Circuit Workshop, whole-module improvement.** "Okay I want to
       revisit this with you … and we will plan out how to improve this
-      system." The bug-class fixes landed, and **the design pass now
-      has its review**: `docs/CIRCUITS_DESIGN_REVIEW.md` (2026-08-06)
-      — eleven numbered proposals, C1–C11, sized S/M/L, written to be
-      reacted to per-number in the headset. No code changed with it;
-      the owner picks, then the work is planned.
+      system." The bug-class fixes landed, the design pass got its
+      review (`docs/CIRCUITS_DESIGN_REVIEW.md`, eleven proposals
+      C1–C11), and **it was triaged on 2026-08-26**: C3 and C4 are moot
+      (the wiring gesture changed under them on 08-11), C7 was a
+      correctness bug and is fixed, C10 is half done and half declined,
+      and the remaining seven are declined for v1 as new features. The
+      verdicts and their reasons are at the top of that file. Nothing
+      is owed here any more — but the module has changed a great deal
+      since the review was written, so **walk it once on device** and
+      say whether the answer still feels right.
 - [ ] **Projectiles, whole-module improvement.** "It has the same UI
       flip issue, the wall bouncing is unreliable, and it just seems
       uninspired. we will revisit." The flip is fixed app-wide and a
@@ -669,6 +674,21 @@ decide whether the phase was worth doing.
       there must still open its lab — that is the accessibility path,
       and nothing reaches it in normal use now that the app launches
       into the room.
+  - [ ] **AND THE LAB IT OPENS MUST FADE IN, not cut.** ⟳ 2026-08-26:
+        the catalog row assigned `activeModuleID` directly instead of
+        going through `AppModel.go(to:)`, so entering a lab this way
+        skipped the departure dissolve every other route runs. It is
+        `private(set)` now and the compiler enforces the door, but
+        **no automated test can watch a fade from inside an immersive
+        space** — XCUITest cannot see it and `simctl` cannot pinch. Go
+        lab → window → different lab, and watch the handover: the old
+        apparatus should fade, your real room should be briefly just
+        your room, then the new lab fades up. A hard cut is the bug.
+  - [ ] **The door button itself.** Same reason — `DECISIONS.md`
+        2026-08-23 records that this control cannot be covered by any
+        automated test. Press it, twice, from both the gallery and a
+        lab. Exactly one window, exactly one lab, no catalog left
+        standing behind the module.
 
 - [ ] **The way out, and back.** In that window, "Put the Gallery away"
       should close the immersive space and leave you with your room and
