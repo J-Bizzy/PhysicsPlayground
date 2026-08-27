@@ -16,6 +16,76 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-26 — Five owed cleanups, and the seventh reset defect
+
+**Decision:** Five items that had been recorded as owed, plus one new
+defect found while checking them, all landed together. Nothing here is a
+feature; it is the list of things the code and the docs disagreed about.
+
+- **Reset now restores the multimeter.** `Multimeter.stow()` watches
+  `AppModel.resetNonce`, the `SpatialActionBank` pattern.
+- **Magnetism's field lines derive from `magnetismAccent`**, via a new
+  `Palette.magnetismLineUI`, the way Electric Fields' already did.
+- **`LabPlacement` writes are debounced**, and `adopt` flushes first.
+- **Four dead authored fields deleted**: `PendulumsModel.insightText`,
+  `CircuitsModel.scopeSamples`, `MagnetismModel.compassIsReadingEarth`,
+  `LabNotebook.captureNonce`.
+- **`AppModel.activeModuleID` is `private(set)`**, with `go(to:)` and one
+  named exception the only writers.
+- **`kinematicsAccent` stays #FF9F0A**, deliberately.
+
+**Context:**
+
+*The multimeter* is the SEVENTH instance of the reset defect CLAUDE.md
+devotes a paragraph to, and the first that `ResetCoverageTests` could not
+have caught: that test reflects over `Bool`s **on models**, and this was
+`root.isEnabled` plus a `Set` of carried probes on a **view** object. A
+module's `reset` closure is `{ model.reset() }` in all six labs, so any
+apparatus a SpaceView owns is outside the net by construction. After a
+Reset the meter stayed out in mid-air with both probes where you had
+dropped them, on a bench that had just claimed to be restored — against
+the rule 73253af set two days ago: *reset restores the apparatus, the
+SpaceView arms the experiment.* A multimeter is apparatus. The test file
+now states what its reflection cannot reach, so the eighth is not found
+the same way.
+
+*Magnetism's lines* were a hardcoded lavender, ΔE 46 from the pink accent
+worn by every plate and label around them — a lab in two colours, with
+the one filling the room not the one on the furniture. Deriving is not
+tidiness: lavender was also the closest thing in the room to the S pole's
+blue (ΔE 31), so the exception cost pole legibility too. The accent is
+ΔE 58 from N and 73 from S. Both facts are now assertions.
+
+*`activeModuleID`* was settable, and `go(to:)` — which documents itself as
+THE ONE DOOR and exists so every lab change runs the same dissolve — was
+one of five. The hub's two enter paths and the flat catalog's row assigned
+it directly and so skipped the departure fade entirely. The compile-time
+enforcement was owed from the day the door was written.
+
+*`kinematicsAccent`* is the one item here that was decided by NOT changing
+anything. It sits ΔE 13.5 from the acceleration arrow, under the house bar
+of 20, and both are on screen in Projectile Motion. (Two earlier figures in
+this log — 5.1 for this pair and 19.5 for `gravityAccent`/velocity — were
+hand-typed approximations of UIKit system colours and are wrong; the
+measured values are 13.5 and 23.8, so the second pair was never a
+collision.) A brute-force search over the RGB cube, kept to bright
+saturated candidates, found no warm answer that clears 20: the best is a
+dark olive, and clearing the bar means moving to yellow (already Electric
+Fields') or green (already the E&M door). The alternative is to move
+`acceleration`, a vector colour used in all six labs, to fix one lab's
+furniture. The search and its losers are recorded in
+`AccentAuthorityTests` so nobody runs it twice.
+
+**Consequences:** Any instrument a SpaceView owns and a hand can move or
+reveal now needs the `resetNonce` pattern and a test of its own —
+`ResetCoverageTests` will not tell you. `activeModuleID` can only be set
+through `go(to:)` or `closeForDismissal()`, which exists because closing
+the immersive space must not wait out a fade that has no scene to land in.
+The `#FF9F0A`/orange pair stays pinned at 13.5 by
+`testTheKnownAccentCollisionHasNotWorsened`, and Magnetism's pink lines
+want a device judgement — a simulator frame says they read; it cannot say
+how a room full of hot pink feels through passthrough.
+
 ## 2026-08-24 — The app icon is milled from the same stock as everything else
 
 **Decision:** The Bohr-atom icon is replaced by Gravity Lab's orbit ring

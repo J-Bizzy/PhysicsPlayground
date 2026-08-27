@@ -34,6 +34,21 @@
 //  `@Observable` stores each tracked property in an underscored backing
 //  field, so that is what `Mirror` reports and what this reads.
 //
+//  WHAT THIS STILL CANNOT SEE, stated so the next one is not found the
+//  same way. The sweep is `Bool`s ON MODELS, and both halves are limits:
+//
+//  · A model's non-`Bool` state. Deliberate, argued above.
+//  · Anything owned by a VIEW. The seventh instance (2026-08-26) was the
+//    multimeter — `root.isEnabled` and a `Set` of carried probes, held by
+//    `Multimeter`, which no reflection over models can reach. A module's
+//    `reset` closure calls `model.reset()` and nothing else, so any
+//    apparatus a SpaceView owns is outside this net by construction.
+//    `MultimeterTests.testAResetPutsTheMeterBackInTheRack` covers that
+//    one by hand, and `SpatialActionBank.seenResetNonce` is the general
+//    pattern: a view object watches `AppModel.resetNonce` and restores
+//    itself. If you add an instrument a hand can move or reveal, it needs
+//    that pattern and a test of its own — this file will not tell you.
+//
 
 import XCTest
 @testable import PhysicsPlayground

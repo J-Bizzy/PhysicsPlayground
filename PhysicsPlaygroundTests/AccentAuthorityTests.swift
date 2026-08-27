@@ -190,6 +190,27 @@ final class AccentAuthorityTests: XCTestCase {
     /// pair is not a collision at all and was about to be written into
     /// this file as one. UIKit's system colours are not the RGB triples
     /// they look like.
+    ///
+    /// THE SEARCH WAS RUN, AND THERE IS NO WINNER (2026-08-26). Brute
+    /// force over the RGB cube in this file's own ΔE, scored by the worst
+    /// separation from all four `VectorPalette` entries and all five other
+    /// module accents, keeping only bright saturated candidates (L 62–92,
+    /// chroma > 60 — without a chroma floor the search "wins" by going
+    /// grey, which is far from everything and reads as nothing):
+    ///
+    /// · Warm band (r ≥ g ≥ b, still amber/gold): the best is #A3991E at
+    ///   worst-ΔE 42.6 — but it is a dark olive. Every bright warm colour
+    ///   near orange IS orange; that is what 13.5 is measuring.
+    /// · Unconstrained: the winners are all bright greens (#A3FF00,
+    ///   worst-ΔE 44.5). Numerically fine, conceptually wrong — green is
+    ///   the E&M door, and Mechanics cannot wear it.
+    /// · Yellow is `electrostaticsAccent` #FFEA05 already.
+    ///
+    /// So the choice is: a muddy door, a door that duplicates another
+    /// domain, or moving `acceleration` — a vector colour used in all six
+    /// labs — to fix one lab's furniture. The owner's call was to keep
+    /// #FF9F0A and keep the number visible. Recorded here so the next
+    /// person does not run the search again.
     func testTheKnownAccentCollisionHasNotWorsened() {
         let distance = deltaE(UIColor(DesignTokens.Palette.kinematicsAccent),
                               VectorPalette.acceleration)
@@ -225,6 +246,60 @@ final class AccentAuthorityTests: XCTestCase {
                     the \(vectors[i].0) and \(vectors[j].0) arrows are ΔE \
                     \(String(format: "%.1f", distance)) apart — drawn from the \
                     same object, they would read as one quantity.
+                    """)
+            }
+        }
+    }
+
+    /// A LAB'S FIELD LINES ARE ITS ACCENT.
+    ///
+    /// The two modules that draw a field filling the room both derive the
+    /// line colour from the module accent, so the furniture and the
+    /// centrepiece move together and a lab is one colour.
+    ///
+    /// Electric Fields did this from the start; Magnetism carried a
+    /// hardcoded lavender until 2026-08-26 — ΔE 46 from the pink accent
+    /// on every plate around it. Deriving is not a tidiness preference
+    /// here: the lavender was also the closest thing in the room to the
+    /// S pole's blue, so the exception cost pole legibility too.
+    func testAFieldLineIsItsModulesAccent() {
+        let pairs: [(String, UIColor, UIColor)] = [
+            ("Electric Fields",
+             DesignTokens.Palette.fieldLineUI,
+             UIColor(DesignTokens.Palette.electrostaticsAccent)),
+            ("Magnetism",
+             DesignTokens.Palette.magnetismLineUI,
+             UIColor(DesignTokens.Palette.magnetismAccent)),
+        ]
+        for (lab, line, accent) in pairs {
+            XCTAssertEqual(deltaE(line, accent), 0, accuracy: 0.5, """
+                \(lab)'s field lines are ΔE \
+                \(String(format: "%.1f", deltaE(line, accent))) from its own \
+                accent — the lab is two colours, and the one filling the room \
+                is not the one on the plates.
+                """)
+        }
+    }
+
+    /// …and the lines still have to clear the pole colours they are drawn
+    /// between, which is the constraint deriving them could have broken.
+    func testFieldLinesClearThePoleColours() {
+        let lines: [(String, UIColor)] = [
+            ("Electric Fields", DesignTokens.Palette.fieldLineUI),
+            ("Magnetism", DesignTokens.Palette.magnetismLineUI),
+        ]
+        let poles: [(String, UIColor)] = [
+            ("positive/N", DesignTokens.Palette.positiveUI),
+            ("negative/S", DesignTokens.Palette.negativeUI),
+        ]
+        for (lab, line) in lines {
+            for (poleName, pole) in poles {
+                let distance = deltaE(line, pole)
+                XCTAssertGreaterThanOrEqual(distance, minimumSeparation, """
+                    \(lab)'s field lines are ΔE \
+                    \(String(format: "%.1f", distance)) from the \(poleName) \
+                    pole — the lines and the thing they come out of read as \
+                    one object.
                     """)
             }
         }

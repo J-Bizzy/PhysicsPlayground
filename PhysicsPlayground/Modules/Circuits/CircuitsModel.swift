@@ -276,7 +276,6 @@ final class CircuitsModel {
     }
 
     func select(id: UUID) {
-        if id != selectedID { scopeSamples = [] }
         guard components.contains(where: { $0.id == id }) else { return }
         selectedID = id
     }
@@ -1137,15 +1136,6 @@ final class CircuitsModel {
         }
         readouts = newReadouts
         totalSourcePower = sourcePower
-        if !isPaused, let selectedID, let readout = newReadouts[selectedID],
-           simTime - lastScopeSample >= 1.0 / 60.0 {
-            lastScopeSample = simTime
-            scopeSamples.append((simTime, readout.volts, readout.amps))
-            if scopeSamples.count > Self.scopeCapacity {
-                scopeSamples.removeFirst(scopeSamples.count - Self.scopeCapacity)
-            }
-        }
-
         // 5. Wire currents for the electron flow: each terminal's element current
         // fans out evenly over its wires (a visualization choice). Lookup tables
         // built once — per-wire scans were O(W²) inside a per-frame solve.
@@ -1177,11 +1167,10 @@ final class CircuitsModel {
 
     // MARK: Instruments
 
-    /// Oscilloscope: a scrolling window of the selected part's voltage and
-    /// current, sampled at 60 Hz of simulated time.
-    private(set) var scopeSamples: [(time: Double, volts: Double, amps: Double)] = []
-    private var lastScopeSample = -1.0
-    nonisolated static let scopeCapacity = 300   // 5 s at 60 Hz
+    // NO OSCILLOSCOPE. `scopeSamples` accumulated a 300-frame window of
+    // the selected part's volts and amps every frame and NOTHING READ IT
+    // — no scope face was ever built, and the readout that ships is the
+    // multimeter. Deleted 2026-08-26.
 
     /// Multimeter: arm it, then tap any two terminals. Red probe first.
     var multimeterArmed = false {
@@ -1942,7 +1931,6 @@ extension CircuitsModel: TimeCapsuleRecording {
         wires = snapshot.wires
         simTime = snapshot.simTime
         // The scope strip chart is monotone in simTime — scrubbing back cuts off the future.
-        scopeSamples.removeAll { $0.time > snapshot.simTime }
         // A restore replaces the WHOLE bench, so all in-flight observer state
         // clears unconditionally — never gated on something being selected.
         cancelLeadPull()

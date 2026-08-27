@@ -29,6 +29,16 @@ enum DesignTokens {
         /// hand-mixed near it) so the accent and the field move together.
         /// Yellow also clears both `positiveUI` red and `negativeUI` blue.
         static let fieldLineUI = UIColor(electrostaticsAccent)
+        /// Magnetism's lines, derived the same way and for the same reason.
+        ///
+        /// It was a hardcoded lavender in `MagnetismRenderer` — ΔE 46 from
+        /// the pink accent every plate and label in that lab wears, so the
+        /// module's furniture and its centrepiece were two different
+        /// colours. It was also the CLOSEST thing in the room to the S
+        /// pole's blue (ΔE 31, against 58 for the accent), so following
+        /// the house rule here separates the poles from the lines better
+        /// than the exception did.
+        static let magnetismLineUI = UIColor(magnetismAccent)
         static let selectionHaloUI: UIColor = .white
 
         // MARK: The two petal tints

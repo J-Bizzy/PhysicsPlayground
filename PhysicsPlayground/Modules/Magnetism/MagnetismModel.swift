@@ -86,13 +86,10 @@ final class MagnetismModel {
     /// The field where the hand compass is — what its needle points along.
     var compassField: SIMD3<Double> { compassField(at: compassPosition) }
 
-    /// True when Earth is the bigger part of what the hand compass feels
-    /// — carried clear of the magnets, reading the planet.
-    var compassIsReadingEarth: Bool {
-        guard earthFieldOn else { return false }
-        let fromMagnets = MagneticField.vector(at: compassPosition, dueTo: magnets)
-        return simd_length(fromMagnets) < simd_length(earthField)
-    }
+    // NO `compassIsReadingEarth`. It answered "is the planet the bigger
+    // part of what this needle feels?" and no renderer ever asked — the
+    // compass shows |B| and a direction, and the wearer reads the answer
+    // off the dial by walking away from the magnets. Deleted 2026-08-26.
 
     /// |B| at the compass in microtesla, for its dial label.
     var compassMicroTesla: Double { simd_length(compassField) * 1e6 }

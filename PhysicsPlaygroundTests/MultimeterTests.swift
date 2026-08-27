@@ -128,6 +128,87 @@ final class MultimeterTests: XCTestCase {
                        + "view thought it should be")
     }
 
+    // MARK: Reset
+
+    /// RESET PUTS THE METER BACK IN THE RACK.
+    ///
+    /// The module's `reset` closure only ever called `model.reset()`, and
+    /// the meter is a VIEW object: it kept `root.isEnabled`, it kept the
+    /// anchor a hand had carried it to, and `carried` — the set that stops
+    /// `update` re-parking a probe — was only ever inserted into. So a
+    /// Reset left the instrument standing in mid-air with both probes
+    /// where you dropped them, on a bench that had just claimed to be
+    /// restored. Commit 73253af's rule is that reset restores the
+    /// apparatus, and a multimeter is apparatus.
+    ///
+    /// `ResetCoverageTests` cannot see this: it reflects over `Bool`s on
+    /// MODELS, and this is a `Set` on a view object.
+    func testAResetPutsTheMeterBackInTheRack() throws {
+        let meter = meter()
+        let model = CircuitsModel()
+        let carriedTo = Self.home + SIMD3(0.4, 0.2, 0.3)
+
+        // Out of the rack, into a hand, with a probe placed on the bench.
+        meter.root.isEnabled = true
+        meter.place(at: carriedTo)
+        meter.update(viewer: SIMD3(0, 1.5, 0), model: model, resetNonce: 0)
+        meter.moveProbe(.red, local: Self.home + SIMD3(0.10, 0, -0.04),
+                        bench: SIMD3(0, 1.2, -0.9), model: model)
+        meter.update(viewer: SIMD3(0, 1.5, 0), model: model, resetNonce: 0)
+        XCTAssertEqual(meter.anchor, carriedTo, "the meter never left the rack")
+
+        // The shell bumps the nonce; the next frame is what notices.
+        meter.update(viewer: SIMD3(0, 1.5, 0), model: model, resetNonce: 1)
+
+        XCTAssertFalse(meter.root.isEnabled,
+                       "the meter is still drawn after a reset — the rack "
+                       + "slot's miniature and the real instrument are both "
+                       + "in the room")
+        XCTAssertEqual(meter.anchor, Self.home,
+                       "the case stayed where a hand carried it")
+        let jack = try XCTUnwrap(meter.probeTip[.red])
+        XCTAssertLessThan(jack.y, Self.home.y,
+                          "the red probe is still out on the bench rather "
+                          + "than hanging in its holster")
+    }
+
+    /// The first frame must not stow a meter somebody just pulled out.
+    /// `seenResetNonce` starts nil for exactly this reason — the app's
+    /// count is not zero after the user has reset any lab this session.
+    func testTheFirstFrameAdoptsTheNonceRatherThanStowing() {
+        let meter = meter()
+        let model = CircuitsModel()
+
+        meter.root.isEnabled = true
+        meter.place(at: Self.home + SIMD3(0.4, 0, 0))
+        meter.update(viewer: SIMD3(0, 1.5, 0), model: model, resetNonce: 7)
+
+        XCTAssertTrue(meter.root.isEnabled,
+                      "the meter stowed itself on its first frame because "
+                      + "the app's reset count happened not to be zero")
+    }
+
+    /// A reset the meter has already seen does not stow it again — so
+    /// pulling the meter out AFTER a reset leaves it out.
+    func testTheSameNonceStowsOnlyOnce() {
+        let meter = meter()
+        let model = CircuitsModel()
+
+        meter.update(viewer: SIMD3(0, 1.5, 0), model: model, resetNonce: 0)
+        meter.update(viewer: SIMD3(0, 1.5, 0), model: model, resetNonce: 1)
+
+        // Pulled out again, after the reset.
+        meter.root.isEnabled = true
+        meter.place(at: Self.home + SIMD3(0.4, 0, 0))
+        for _ in 0..<6 {
+            meter.update(viewer: SIMD3(0, 1.5, 0), model: model, resetNonce: 1)
+        }
+
+        XCTAssertTrue(meter.root.isEnabled,
+                      "the meter re-stows every frame after a reset, so it "
+                      + "cannot be picked up again")
+    }
+
     /// MOVING THE METER DOES NOT MOVE A PLACED PROBE.
     ///
     /// The second half of "these are separate objects". Turning the case

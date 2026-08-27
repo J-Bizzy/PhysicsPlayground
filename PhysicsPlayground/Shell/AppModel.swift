@@ -28,12 +28,27 @@ import Observation
 @MainActor
 @Observable
 final class AppModel {
-    var activeModuleID: String? {
+    /// `private(set)` since 2026-08-26: `go(to:)` below calls itself THE
+    /// ONE DOOR, and it was one of five — four callers still assigned this
+    /// directly and so skipped the departure fade the door exists to run.
+    /// Compile-time enforcement was owed from the day the door was written
+    /// (DECISIONS.md 2026-08-23); this is it. The only writer that is not
+    /// the door is `closeForDismissal()`, which says why.
+    private(set) var activeModuleID: String? {
         didSet {
             refreshImmersionStyle()
             adoptModuleAtmosphere()
             recordVisit()
         }
+    }
+
+    /// Clears the active module WITHOUT the departure fade, for the one
+    /// caller that is closing the immersive space in the same breath:
+    /// there is nothing to fade into, and `go(to:)`'s 0.22 s delay would
+    /// land after `dismissImmersiveSpace()` had already torn the scene
+    /// down — leaving a module marked active with no space to hold it.
+    func closeForDismissal() {
+        activeModuleID = nil
     }
 
     /// True while a lab is fading out and before its replacement mounts.

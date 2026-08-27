@@ -10,12 +10,12 @@ afternoon rediscovering it:
   windows, buttons, pickers, lists — and everything in an immersive
   space is invisible to it. No exhibit, no pad, no magnet, no pinch.
 
-So the automated suites cover three of four layers, and this file is the
-fourth:
+So the automated suites cover four of five layers, and this file is the
+fifth:
 
 | Layer | Covered by | Runs where |
 |---|---|---|
-| Physics & geometry | `PhysicsCoreTests` (379) | `swift test`, no simulator |
+| Physics & geometry | `PhysicsCoreTests` (450) | `swift test`, no simulator |
 | Models, clamps, layout | `PhysicsPlaygroundTests` | simulator |
 | Tap *handlers* | `SpatialTapTests`, `SpatialActionBankTests`, `BloomPetalTests`, `MultimeterTests` — call `handleTap` directly | simulator |
 | Window chrome | `PhysicsPlaygroundUITests` — real taps | simulator |
@@ -247,6 +247,18 @@ file). What follows is the standing script.
 
 ## Magnetism
 
+- [ ] **THE FIELD LINES ARE PINK NOW, AND THIS IS THE JUDGEMENT CALL.**
+      ⟳ 2026-08-26: they were a hardcoded lavender, ΔE 46 from the accent
+      on every plate in the lab; they now derive from `magnetismAccent`
+      the way Electric Fields' lines derive from its own. The measurements
+      all improved (ΔE 58 from the N pole, 73 from S, against lavender's
+      31 from S). **What a simulator frame cannot tell you is how a room
+      filled with hot pink feels through passthrough** — that is what this
+      step is for. Judge: do the loops still read as *field* rather than
+      as decoration, and can you still tell a line from the red N pole it
+      leaves? If it is too much, the fix is NOT to hand-mix a paler pink
+      (`DesignTokens` forbids deriving-by-eye) — it is to move the accent
+      itself, and the whole lab with it.
 - [ ] **Nothing but the magnets is in the room.** Bar magnets and the
       hand compass — no coil, no cable, and ⟳ **no compass grid**: the
       245-needle lattice came out with its bank plate. The bank is four

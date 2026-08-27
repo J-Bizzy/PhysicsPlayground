@@ -148,4 +148,86 @@ final class PlacementDragTests: XCTestCase {
         XCTAssertEqual(drag.travel(forHand: SIMD3(10.4, 10, 10)), 0.4, accuracy: 1e-12)
         XCTAssertEqual(drag.travel(forHand: SIMD3(10, 10.3, 10.4)), 0.5, accuracy: 1e-12)
     }
+
+    // MARK: Persistence
+
+    private func saved(_ moduleID: String) -> [Double]? {
+        UserDefaults.standard.array(forKey: "labOffset.\(moduleID)") as? [Double]
+    }
+
+    /// A DRAG IS ONE WRITE, NOT NINETY A SECOND.
+    ///
+    /// `move(to:)` is called once per frame for the whole length of a
+    /// placement drag, and it wrote `UserDefaults` unconditionally every
+    /// time (audit P3). Only the last value matters, so the write is
+    /// debounced and the drag's end flushes it.
+    func testAWholeDragCollapsesIntoOneWriteAtTheEnd() {
+        let id = "test-debounce"
+        UserDefaults.standard.removeObject(forKey: "labOffset.\(id)")
+        defer { UserDefaults.standard.removeObject(forKey: "labOffset.\(id)") }
+
+        let placement = LabPlacement()
+        placement.adopt(moduleID: id)
+
+        _ = replay(speed: 0.3, frames: 180, into: placement)
+        XCTAssertNil(saved(id),
+                     "180 drag frames wrote the defaults database before the "
+                     + "drag had even finished")
+
+        placement.endMove()
+        let written = try? XCTUnwrap(saved(id))
+        XCTAssertEqual(written?.count, 3)
+        XCTAssertEqual(written?[0] ?? 0, 0.6, accuracy: 0.01,
+                       "the flush wrote something other than where the lab "
+                       + "was actually carried to")
+    }
+
+    /// Recentring is a discrete act, so it writes immediately — a tap
+    /// has no "end of drag" to flush it later.
+    func testRecentreWritesStraightAway() {
+        let id = "test-recentre"
+        UserDefaults.standard.removeObject(forKey: "labOffset.\(id)")
+        defer { UserDefaults.standard.removeObject(forKey: "labOffset.\(id)") }
+
+        let placement = LabPlacement()
+        placement.adopt(moduleID: id)
+        _ = replay(speed: 0.3, frames: 60, into: placement)
+        placement.recentre()
+
+        XCTAssertEqual(saved(id) ?? [], [0, 0, 0])
+    }
+
+    /// SWITCHING LABS FLUSHES THE OLD ONE FIRST.
+    ///
+    /// The hazard the debounce introduces: `persistNow` reads `moduleID`
+    /// when it RUNS, so a pending write carried across a module switch
+    /// would file the old lab's offset under the new lab's key — losing
+    /// one placement and inventing another. `adopt` flushes before it
+    /// changes the id.
+    func testSwitchingModulesFlushesThePreviousLabsPlacement() {
+        let first = "test-switch-a", second = "test-switch-b"
+        for id in [first, second] {
+            UserDefaults.standard.removeObject(forKey: "labOffset.\(id)")
+        }
+        defer {
+            for id in [first, second] {
+                UserDefaults.standard.removeObject(forKey: "labOffset.\(id)")
+            }
+        }
+
+        let placement = LabPlacement()
+        placement.adopt(moduleID: first)
+        _ = replay(speed: 0.3, frames: 180, into: placement)
+
+        // Switch away mid-debounce, exactly as leaving a lab does.
+        placement.adopt(moduleID: second)
+
+        XCTAssertEqual((saved(first) ?? [0])[0], 0.6, accuracy: 0.01,
+                       "the first lab's placement was lost on the way out")
+        XCTAssertNil(saved(second),
+                     "the first lab's offset was filed under the second "
+                     + "lab's key")
+        XCTAssertEqual(placement.offset, .zero,
+                       "the second lab opened with the first one's offset")
+    }
 }

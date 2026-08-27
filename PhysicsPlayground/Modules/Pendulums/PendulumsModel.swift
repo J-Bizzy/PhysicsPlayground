@@ -104,7 +104,7 @@ final class PendulumsModel {
 
     // MARK: Global knobs
 
-    var gravity = 9.81 { didSet { insight(.gravity) } }
+    var gravity = 9.81
 
     /// Bob-on-bob restitution, 0…1 (1 = elastic, what a steel cradle very nearly is).
     var bobRestitution = 1.0
@@ -125,25 +125,13 @@ final class PendulumsModel {
     var showAcceleration = false
     var showForces = false
 
-    /// The contextual one-liner shown after a parameter change.
-    private(set) var insightText = ""
-
-    enum InsightTopic {
-        case length, mass, gravity, damping
-    }
-
-    private func insight(_ topic: InsightTopic) {
-        switch topic {
-        case .length:
-            insightText = "Longer cable, longer period: T = 2π√(L/g) — the restoring pull acts over a bigger arc, so each swing takes longer. Mass doesn't appear at all."
-        case .mass:
-            insightText = "Mass changes the forces and the energy, but not the period — gravity accelerates every mass equally, so the swing timing is untouched."
-        case .gravity:
-            insightText = "Stronger gravity stiffens the restoring force: period shrinks as 1/√g. On the Moon this pendulum would swing in slow motion."
-        case .damping:
-            insightText = "Damping drains energy every swing — the arc decays exponentially, and the trail cools from orange toward blue as it goes."
-        }
-    }
+    // NO INSIGHT LINE. `insightText` and its four written explanations
+    // lived here with twelve writers and zero readers — no card was ever
+    // built for it (DECISIONS.md 2026-08-09), and none will be: three
+    // cards of prose were rejected in three days, and the module window is
+    // the only place a lab explains itself in words. Deleted 2026-08-26
+    // rather than left dormant, which is what happened to the teach card,
+    // the insight card and the experiments system before it.
 
     // MARK: Editing
 
@@ -246,19 +234,16 @@ final class PendulumsModel {
         pendulum.state.position = direction * clamped
         pendulum.length = clamped
         pendulums[index] = pendulum
-        insight(.length)
     }
 
     func setMass(id: UUID, _ mass: Double) {
         guard let index = pendulums.firstIndex(where: { $0.id == id }) else { return }
         pendulums[index].mass = min(max(mass, Self.massRange.lowerBound), Self.massRange.upperBound)
-        insight(.mass)
     }
 
     func setDamping(id: UUID, _ damping: Double) {
         guard let index = pendulums.firstIndex(where: { $0.id == id }) else { return }
         pendulums[index].damping = min(max(damping, 0), Self.dampingRange.upperBound)
-        insight(.damping)
     }
 
     // MARK: Grab & release
@@ -307,13 +292,7 @@ final class PendulumsModel {
 
     /// The friction kill-switch: off = an ideal pendulum that swings
     /// forever (per-pendulum damping is bypassed, not forgotten).
-    var frictionOn = true {
-        didSet {
-            insightText = frictionOn
-                ? "Air resistance is back — each swing hands a little energy to the air, and the amplitude decays."
-                : "Frictionless: an ideal pendulum. The energy just trades between height and speed — it will swing forever."
-        }
-    }
+    var frictionOn = true
 
     func step(dt: Double) {
         guard !isPaused, timeScale > 0 else { return }
@@ -464,7 +443,6 @@ final class PendulumsModel {
         // Reset must restore every plate-backed flag — ResetCoverageTests
         // reflects over Bools.
         frictionOn = true
-        insightText = ""
         accumulator = 0
         clearCapsule()
         loadNewtonsCradle()

@@ -44,7 +44,7 @@ final class MagnetismRenderer {
 
     static let northColor = DesignTokens.Palette.positiveUI
     static let southColor = DesignTokens.Palette.negativeUI
-    static let lineColor = UIColor(red: 0.72, green: 0.6, blue: 1.0, alpha: 1)
+    static let lineColor = DesignTokens.Palette.magnetismLineUI
     /// The hand compass's readout gold — module-local vocabulary.
     static let compassGold = UIColor(red: 0.95, green: 0.78, blue: 0.42, alpha: 1)
 

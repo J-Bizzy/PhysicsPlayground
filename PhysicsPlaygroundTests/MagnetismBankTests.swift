@@ -176,15 +176,27 @@ final class MagnetismSettlingTests: XCTestCase {
 @MainActor
 final class MagnetismEarthFieldTests: XCTestCase {
 
+    /// Which field the needle is actually obeying, measured off the two
+    /// contributions rather than off a flag. `compassIsReadingEarth` said
+    /// this in one Bool until 2026-08-26, when it was deleted for having
+    /// no readers — the CLAIM is the physics and outlives the property.
+    private func benchBeatsEarth(_ model: MagnetismModel) -> Bool {
+        let fromMagnets = MagneticField.vector(at: model.compassPosition,
+                                               dueTo: model.magnets)
+        return simd_length(fromMagnets) >= simd_length(model.earthField)
+    }
+
     func testTheCompassReadsEarthWhenCarriedClearOfTheBench() {
         let model = MagnetismModel()
         // Right on top of the magnet: the bench wins outright.
         model.moveCompass(to: MagnetismModel.regionCenter + SIMD3(0.16, 0, 0))
-        XCTAssertFalse(model.compassIsReadingEarth)
+        XCTAssertTrue(benchBeatsEarth(model),
+                      "on top of a magnet the needle is following the planet")
 
         // An arm's length away: the planet takes over.
         model.moveCompass(to: MagnetismModel.regionCenter + SIMD3(0.85, 0, 0))
-        XCTAssertTrue(model.compassIsReadingEarth)
+        XCTAssertFalse(benchBeatsEarth(model),
+                       "an arm's length off the bench and the magnets still win")
         XCTAssertEqual(simd_length(model.compassField),
                        GeomagneticField.referenceMagnitude,
                        accuracy: GeomagneticField.referenceMagnitude * 0.35)
@@ -208,7 +220,8 @@ final class MagnetismEarthFieldTests: XCTestCase {
         XCTAssertEqual(model.earthField, .zero)
         XCTAssertLessThan(simd_length(model.compassField), withEarth / 5,
                           "the planet is still in the reading")
-        XCTAssertFalse(model.compassIsReadingEarth)
+        // With Earth off there is nothing for the bench to lose to.
+        XCTAssertTrue(benchBeatsEarth(model))
     }
 
     /// Two hands, two magnets: both pinned against the physics, and releasing

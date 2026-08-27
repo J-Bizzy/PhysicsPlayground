@@ -56,9 +56,10 @@ final class LabNotebook {
 
     private(set) var entries: [NotebookEntry] = []
 
-    /// Bumped on every capture so a renderer can flash a confirmation
-    /// without diffing the array.
-    private(set) var captureNonce = 0
+    // NO CAPTURE NONCE. It was bumped on every capture "so a renderer can
+    // flash a confirmation without diffing the array" — no renderer ever
+    // did, and `entries` is `@Observable` anyway, so a confirmation would
+    // read the array it already tracks. Deleted 2026-08-26.
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.key),
@@ -76,7 +77,6 @@ final class LabNotebook {
         if entries.count > Self.capacity {
             entries.removeLast(entries.count - Self.capacity)
         }
-        captureNonce += 1
         persist()
         return entry
     }

@@ -132,7 +132,7 @@ struct HubView: View {
                 // standing in front of the thing it closes.
                 Button {
                     Task {
-                        appModel.activeModuleID = nil
+                        appModel.closeForDismissal()
                         await dismissImmersiveSpace()
                     }
                 } label: {
@@ -314,7 +314,7 @@ private struct HubCatalogRow: View {
 
     var body: some View {
         Button {
-            appModel.activeModuleID = module.id
+            appModel.go(to: module.id)
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: module.icon)

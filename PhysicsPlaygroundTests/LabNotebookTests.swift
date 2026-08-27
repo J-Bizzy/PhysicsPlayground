@@ -92,7 +92,7 @@ final class LabNotebookTests: XCTestCase {
         XCTAssertFalse(appModel.captureNotebookEntry(),
                        "no active module — nothing to capture")
 
-        appModel.activeModuleID = "electrostatics"
+        appModel.go(to: "electrostatics")
         XCTAssertTrue(appModel.captureNotebookEntry())
         XCTAssertEqual(appModel.notebook.entries.count, 1)
         XCTAssertEqual(appModel.notebook.entries[0].moduleID, "electrostatics")

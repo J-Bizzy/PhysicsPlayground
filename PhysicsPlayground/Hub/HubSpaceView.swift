@@ -204,13 +204,13 @@ struct HubSpaceView: View {
         // for 420 ms and the wearer still waited for it. A wearer who has
         // asked for no motion should get the lab, now.
         guard !Motion.isReduced else {
-            appModel.activeModuleID = id
+            appModel.go(to: id)
             return
         }
         scene.beginEnterTransition(id: id)
         Task {
             try? await Task.sleep(for: .seconds(Self.enterDelay))
-            appModel.activeModuleID = id
+            appModel.go(to: id)
         }
     }
 }

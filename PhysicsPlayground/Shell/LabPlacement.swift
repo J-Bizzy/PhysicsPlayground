@@ -44,6 +44,11 @@ final class LabPlacement {
     /// Loads the saved offset when a module opens.
     func adopt(moduleID: String) {
         guard moduleID != self.moduleID else { return }
+        // FLUSH BEFORE SWITCHING. `persistNow` reads `self.moduleID` at
+        // the moment it runs, so a pending debounced write that survived
+        // into the next module would file the OLD lab's final offset under
+        // the NEW lab's key — losing one and corrupting the other.
+        persistNow()
         self.moduleID = moduleID
         isPlacing = false
         if let saved = UserDefaults.standard.array(forKey: Self.key(moduleID)) as? [Double],
@@ -58,15 +63,39 @@ final class LabPlacement {
         // A generous but bounded reach: far enough to clear the
         // furniture, not so far the apparatus ends up in next door.
         offset = simd_clamp(newOffset, SIMD3(-2, -0.9, -2.5), SIMD3(2, 0.9, 1.2))
-        persist()
+        // DEBOUNCED, because this is called once per FRAME for the whole
+        // length of a placement drag — ~90 `UserDefaults` writes a second
+        // for an offset only the last value of which matters (audit P3).
+        // Same shape as `CircuitsModel.persistSoon`.
+        persistSoon()
+    }
+
+    /// The drag let go: write the final offset without waiting out the
+    /// debounce, so quitting straight after a placement keeps it.
+    func endMove() {
+        persistNow()
     }
 
     func recentre() {
         offset = .zero
-        persist()
+        persistNow()
     }
 
-    private func persist() {
+    @ObservationIgnored private var persistTask: Task<Void, Never>?
+
+    /// Writes within a second of each other collapse into one.
+    private func persistSoon() {
+        persistTask?.cancel()
+        persistTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            self?.persistNow()
+        }
+    }
+
+    private func persistNow() {
+        persistTask?.cancel()
+        persistTask = nil
         guard let moduleID else { return }
         UserDefaults.standard.set(
             [Double(offset.x), Double(offset.y), Double(offset.z)],
@@ -158,6 +187,10 @@ struct LabAnchorView: View {
                 .onEnded { _ in
                     if drag != nil, travelled < Self.tapTravel {
                         appModel.labPlacement.recentre()
+                    } else if drag != nil {
+                        // The placement is final: write it now rather than
+                        // leaving it in the debounce window.
+                        appModel.labPlacement.endMove()
                     }
                     drag = nil
                     travelled = 0

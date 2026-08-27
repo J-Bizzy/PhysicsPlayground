@@ -57,26 +57,10 @@ final class CircuitsModelTests: XCTestCase {
                       "wired-together terminals show continuity")
     }
 
-    /// The scope buffers the selected part's live samples and clears
-    /// when the selection changes.
-    func testScopeBuffersSelectedComponent() {
-        let model = CircuitsModel()
-        model.clearBench()
-        guard let battery = model.add(.battery, at: SIMD3(-0.3, 1.2, -0.9)),
-              let resistor = model.add(.resistor, at: SIMD3(0.3, 1.2, -0.9)) else {
-            return XCTFail("bench refused parts")
-        }
-        model.connectTerminals(.init(componentID: battery, end: 0), .init(componentID: resistor, end: 0))
-        model.connectTerminals(.init(componentID: battery, end: 1), .init(componentID: resistor, end: 1))
-        model.select(id: resistor)
-        for _ in 0..<90 { model.step(dt: 1.0 / 90.0) }
-        XCTAssertGreaterThan(model.scopeSamples.count, 30, "a second of samples")
-        XCTAssertEqual(model.scopeSamples.last!.volts,
-                       model.readouts[resistor]!.volts, accuracy: 1e-9)
-        model.select(id: battery)
-        XCTAssertTrue(model.scopeSamples.isEmpty, "new selection, fresh trace")
-    }
-
+    // `testScopeBuffersSelectedComponent` went with `scopeSamples` on
+    // 2026-08-26 — a 300-frame buffer with no scope face to draw it. What
+    // it incidentally proved (a selected part's readout tracks the solve)
+    // is covered by the multimeter and readout tests above.
 
     /// A bare LED across a 9 V battery burns out in one live step; a
     /// Replace puts it back in service.

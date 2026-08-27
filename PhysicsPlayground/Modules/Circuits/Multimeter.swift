@@ -82,6 +82,7 @@ final class Multimeter {
     init(accent: UIColor, anchor: SIMD3<Float>) {
         self.accent = accent
         self.anchor = anchor
+        self.homeAnchor = anchor
 
         if let mesh = PropCache.instance(named: "Multimeter") {
             // Stand the case up: the export arrives face-up along +Y, and
@@ -279,11 +280,38 @@ final class Multimeter {
     /// Where the case stands, in the renderer's own (unscaled) frame.
     private(set) var anchor: SIMD3<Float>
 
+    /// Where it stood when it was built — the rack slot it goes back to.
+    /// `anchor` is where a hand has since carried it; the two differ from
+    /// the first handover onward, and `stow` is the only way back.
+    private let homeAnchor: SIMD3<Float>
+
     func place(at position: SIMD3<Float>) {
         anchor = position
     }
 
-    func update(viewer: SIMD3<Float>?, model: CircuitsModel) {
+    /// Back in the rack: not drawn, both probes re-holstered, the case
+    /// returned to `homeAnchor`. Called on a reset, and ONLY there — a
+    /// pull out of the rack is the only thing that undoes it.
+    func stow() {
+        carried.removeAll()
+        anchor = homeAnchor
+        root.isEnabled = false
+    }
+
+    /// The last `resetNonce` this meter saw — the `SpatialActionBank`
+    /// pattern, and for the same reason: THE METER IS A VIEW OBJECT, so a
+    /// model reset alone cannot reach it. `CircuitsModel.reset()` drops
+    /// the probes' electrical latch (`multimeterArmed`'s `didSet`), but
+    /// the instrument standing in the room and the two probe tips a hand
+    /// placed live here, and were left behind by every reset until
+    /// 2026-08-26.
+    private var seenResetNonce: Int?
+
+    func update(viewer: SIMD3<Float>?, model: CircuitsModel, resetNonce: Int = 0) {
+        // Starts nil so the first frame adopts the app's count rather than
+        // stowing a meter the user just pulled out.
+        if let seen = seenResetNonce, seen != resetNonce { stow() }
+        seenResetNonce = resetNonce
         let anchor = self.anchor
         // On the chassis, not `root` (see `chassis`): the case moves, the
         // probes hanging off `root` do not.

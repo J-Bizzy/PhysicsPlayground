@@ -267,7 +267,8 @@ struct CircuitsSpaceView: View {
                         anchor: Self.bankAnchor,
                         viewer: viewer,
                         dt: event.deltaTime)
-                    meter?.update(viewer: viewer, model: model)
+                    meter?.update(viewer: viewer, model: model,
+                                  resetNonce: appModel.resetNonce)
                     // Idle breath, recoil on giving up a part, and a
                     // refusal fade at the component budget.
                     palette?.update(
