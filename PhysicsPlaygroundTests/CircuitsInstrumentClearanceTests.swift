@@ -74,12 +74,13 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
 
     /// Every well mouth as one box, measured from the layout itself.
     private var partsBlock: StationBox {
-        // THE WINDOW, NOT THE WHOLE RACK. Only six slots are on screen
-        // at once and the rack slides so the window stays put, so the
-        // occupied volume is six rows however many parts exist. Measuring
-        // all twelve would reserve half a metre of room nothing stands
-        // in — and would fail the working-band check for furniture that
-        // is never visible there.
+        // THE WINDOW, NOT THE WHOLE RACK. Only `rightVisibleRows` slots
+        // are on screen at once and the rack slides so the window stays
+        // put, so the occupied volume is that many rows however many
+        // parts exist. Measuring all eleven (ten kinds plus the meter)
+        // would reserve half a metre of room nothing stands in — and
+        // would fail the working-band check for furniture that is never
+        // visible there.
         let slots = (0..<CircuitsPartsLayout.rightVisibleRows)
             .map { CircuitsPartsLayout.rightSlot(index: $0) }
         var lo = SIMD3<Double>(Double(slots[0].x), Double(slots[0].y),
@@ -186,15 +187,25 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
     ///
     /// The very first run of the shared checker against this module said
     /// the layers bank stands inside the bench's build volume, and it is
-    /// right: `buildHalfExtents.x` is 0.70, so a part can be dragged to
-    /// x = −0.70, while the bank spans −0.77…−0.47. A component parked at
-    /// the bench's left edge is behind the bank's plates, and the plates
-    /// carry colliders — which is the shielding failure this whole family
-    /// of rules exists to prevent, sitting in the module all along.
+    /// right: the bank spans −0.77…−0.47 and the volume reaches −0.60,
+    /// so they overlap by 0.13 m. A part laid out at the bench's left
+    /// edge is behind the bank's plates, and the plates carry colliders —
+    /// the shielding failure this whole family of rules exists to
+    /// prevent, sitting in the module all along.
     ///
-    /// Not fixed here. Moving the layers bank is a visual change to a
-    /// module the owner has not seen since, and it wants a screenshot,
-    /// not a commit that also adds a feature.
+    /// TWO THINGS CHANGED UNDER THIS ON 2026-08-26 and neither resolves
+    /// it. The overlap shrank from 0.23 to 0.13 when `buildHalfExtents.x`
+    /// went 0.70 → 0.60; and the box stopped being a WALL, so the
+    /// sentence "a part can be dragged to x = −0.70" is no longer how it
+    /// happens — a hand can now carry a part anywhere, past the bank or
+    /// behind it. The volume is where a reset LAYS PARTS OUT, and laying
+    /// one out behind a collider is the same problem arrived at a
+    /// different way.
+    ///
+    /// Still not fixed here. `DECISIONS.md` records the declined move:
+    /// the bank's proposed home at x 0.87 / z −0.79 is 47.8° off axis
+    /// against a 48° limit, and this project's own tests refuse that
+    /// margin for the rack. It is a visual change wanting a screenshot.
     func testTheOlderBenchFurnitureStandsInsideTheBuildVolume() throws {
         let bank = try XCTUnwrap(
             standingFurniture.first { $0.name == "layers bank" }).box

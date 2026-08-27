@@ -16,6 +16,74 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-26 — The bench stops being a wall, and then narrows to 0.60
+
+**Decision:** `CircuitsModel.buildHalfExtents` stops clamping hands and
+becomes the layout reference `ARCHITECTURE.md` has called it since
+2026-08-03; a new `safetyHalfExtents` (2.6, 1.6, 2.6) is the only clamp a
+hand meets. Then, and only then, the box narrows from 0.70 to 0.60, the
+parts rack comes in from x 0.82 to 0.74, and `rightVisibleRows` goes 5 → 6.
+This closes the OPEN decision of 2026-08-09.
+
+**Context:** Two problems were filed as one, and separating them is the
+whole content of this entry.
+
+*The parts teleport was never a layout bug.* A part pulled from the rack
+was born at the hand — at x 0.82 — and `add` clamped it to 0.70, so it
+jumped 12 cm out of your grip on the first frame (audit P1-28). The
+obvious fix is to move the rack, and **it cannot work**: the clearance
+rule requires `|rackX| − buildHalfExtents.x ≥ stationMargin`, so the jump
+is *at least* `stationMargin` for any legal rack position at any bench
+width, by construction. Narrowing the bench to 0.60 and leaving the clamp
+alone would have made it 14 cm.
+
+The actual cause is that Circuits was the last module still clamping a
+hand to a nominal box. Electric Fields and Magnetism were split into
+`regionHalfExtents` (layout) and `safetyHalfExtents` (the free
+simulation) on 2026-08-03; `ARCHITECTURE.md` names `buildHalfExtents` in
+the same sentence as a layout reference, and it simply was not one. The
+doc and the code disagreed for three weeks and the doc was right.
+
+*No data migration was needed, and that surprised me.* Narrowing a box
+that saved benches live inside sounds like the `.wire` retirement all
+over again. It is not: `decodeBench` → `migrated` → `apply` transforms
+KINDS and assigns positions verbatim, so a bench saved at the old wall
+restores exactly where it was saved. The tempting move — clamping
+positions inside `migrated` — was considered and rejected. It would
+reintroduce at load time the wall this entry removes, and it would
+permanently and irreversibly move people's circuits (two parts at 0.70
+and 0.64 collapse onto one plane) with no version stamp and no undo.
+After the split, a part outside the layout box is simply legal, the way a
+charge outside `FieldModel.regionHalfExtents` is legal. A test now pins
+the verbatim restore so nobody adds that clamp by accident.
+
+*The numbers.* From the viewer at (0, 1.5, 0), rack at x 0.74, z −0.77:
+off-axis 43.9° (was 46.8°, against a 48° limit — two-tenths of a degree
+of margin); reach to the sixth row 1.190 m (against 1.25, and a 1.23
+margin line). A seventh row reaches 1.240 m and fails, so six is a
+ceiling rather than a preference and the test says so. Not x 0.72, which
+is `0.60 + stationMargin` exactly — `InstrumentReachCriterionTests` puts
+it well: *exactly at the limit is not clearance, it is a coincidence.*
+
+**Consequences:** The clamp vetoes in `alignment(for:)` and `swing` now
+measure against the safety box, because that is the only clamp left;
+against the bench they would refuse alignments nothing would then move.
+`CircuitsAlignmentTests`' 4000-placement sweep was rebiased one box out
+for the same reason — it exists to prove the veto is neither dead nor
+insufficient, and at bench scale it had become dead.
+
+The layers bank at −0.62 still overlaps the volume, by 0.13 m rather than
+0.23. The move this file floated on 2026-08-09 (x 0.87, z −0.79) is 47.8°
+against a 48° limit, which is the margin we just refused for the rack, so
+it stays declined. And a finding while checking it: the multimeter's rest
+position at +0.62 was justified here as "inside the volume for the same
+reason", but the meter is built `isEnabled = false` and only ever moved to
+a hand — nothing has ever stood there.
+
+`CircuitsPartsLayoutTests.testTheClearanceRuleWouldCatchTheOldColumn` had
+baked a bench width into a point about a margin (`0.80 - 0.70 < 0.12`) and
+hard-failed at 0.60. Its witness is relative now.
+
 ## 2026-08-26 — Five owed cleanups, and the seventh reset defect
 
 **Decision:** Five items that had been recorded as owed, plus one new
@@ -643,10 +711,14 @@ disagreed. Measuring the wrong relationship is the failure mode here, not
 getting the arithmetic wrong, and it does not announce itself — it comes
 out green.
 
-## 2026-08-09 — Circuit Workshop's bench is too wide for its own instruments (OPEN)
+## 2026-08-09 — Circuit Workshop's bench is too wide for its own instruments (CLOSED 2026-08-26)
 
 **Decision:** None yet — this is a measurement placed in front of the
-owner, and the code is unchanged.
+owner, and the code is unchanged. *(Answered on 2026-08-26: the bench
+narrowed to 0.60 and the rack came in to 0.74. See that entry — and note
+that the diagnosis below is half wrong, in a way worth reading: the parts
+jumping inward is not caused by the rack's position and could never have
+been fixed by moving it.)*
 
 **Context:** The parts rack was found standing 0.10 m from a build volume
 that ends at 0.70, inside a 0.12 m `InstrumentClearance.stationMargin`.

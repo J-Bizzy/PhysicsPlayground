@@ -188,13 +188,52 @@ final class CircuitsPartsLayoutTests: XCTestCase {
 
     /// The pair can fail. Without this they are two budgets that happen
     /// to be satisfied by whatever numbers are in the file.
-    func testTheClearanceRuleWouldCatchTheOldColumn() {
+    ///
+    /// THE WITNESS IS RELATIVE, NOT ABSOLUTE. This asserted `0.80 - clamp
+    /// < margin` — the column's position until 2026-08-09 against a bench
+    /// half-width of 0.70, i.e. `0.10 < 0.12`. When the bench narrowed to
+    /// 0.60 on 2026-08-26 it read `0.20 < 0.12` and failed: the test had
+    /// baked in a bench width to make a point about a margin. A column
+    /// just inside the margin is the claim, whatever the bench is doing.
+    func testTheClearanceRuleWouldCatchATooCloseColumn() {
         let clamp = Float(CircuitsModel.buildHalfExtents.x)
         let margin = Float(InstrumentClearance.stationMargin)
-        // 0.80, where the column stood until 2026-08-09.
-        XCTAssertLessThan(0.80 - clamp, margin, """
-            0.80 satisfies the margin, so the assertion above is not \
-            measuring the thing that was wrong.
+        let tooClose = clamp + margin - 0.02
+        XCTAssertLessThan(tooClose - clamp, margin, """
+            a column at \(tooClose) — 2 cm inside the \(margin) m margin \
+            around a volume ending at \(clamp) — satisfies the rule, so the \
+            assertion above is not measuring the thing that was wrong.
+            """)
+        // …and the shipped column is on the right side of the same line.
+        XCTAssertGreaterThanOrEqual(
+            abs(CircuitsPartsLayout.rightColumnX) - clamp, margin,
+            "the shipped rack is inside the margin it is meant to clear")
+    }
+
+    /// SIX ROWS FIT, AND SIX IS THE CEILING.
+    ///
+    /// The window was five because at x 0.82 a sixth row reached 1.246 m
+    /// against a 1.25 limit. Narrowing the bench let the rack come in to
+    /// 0.74 and bought the row back. This asserts BOTH halves, so "six"
+    /// is a derivation rather than a number somebody liked.
+    func testTheSixthRowFitsAndASeventhWouldNot() {
+        let viewer = SIMD3<Float>(InstrumentClearance.viewer)
+        let margin = 1.23  // the "with margin" line the window tests use
+
+        let last = CircuitsPartsLayout.rightSlot(
+            index: CircuitsPartsLayout.rightVisibleRows - 1)
+        XCTAssertLessThanOrEqual(Double(simd_length(last - viewer)), margin, """
+            the last visible row is \(simd_length(last - viewer)) m away — \
+            past the margin line, so the bottom of the rack is a step rather \
+            than a reach.
+            """)
+
+        let oneMore = CircuitsPartsLayout.rightSlot(
+            index: CircuitsPartsLayout.rightVisibleRows)
+        XCTAssertGreaterThan(Double(simd_length(oneMore - viewer)), margin, """
+            a further row would ALSO fit at \(simd_length(oneMore - viewer)) m, \
+            so `rightVisibleRows` is not the ceiling this comment claims — \
+            either show it or correct the arithmetic in `CircuitsPartsLayout`.
             """)
     }
 }

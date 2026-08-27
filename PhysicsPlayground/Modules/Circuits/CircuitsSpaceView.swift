@@ -259,11 +259,12 @@ struct CircuitsSpaceView: View {
                     model.step(dt: event.deltaTime)
                     let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
                     layers?.update(
-                        // bankAnchor x −0.62 is inside the ±0.70 build
-                        // volume: no position clears the margin, reach and
-                        // off-axis limits at once until the bench narrows —
-                        // an owner call with a real cost (saved circuits
-                        // wider than 0.60 would fall outside the bench).
+                        // bankAnchor x −0.62 still overlaps the build
+                        // volume, by 0.13 m since it narrowed to ±0.60 on
+                        // 2026-08-26. The move DECISIONS.md floated (x 0.87,
+                        // z −0.79) is 47.8° off axis against a 48° limit —
+                        // the margin this project's own tests refuse for the
+                        // rack. Declined, and recorded there.
                         anchor: Self.bankAnchor,
                         viewer: viewer,
                         dt: event.deltaTime)

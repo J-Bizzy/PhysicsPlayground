@@ -25,11 +25,11 @@ enum CircuitsPartsLayout {
     /// shipped layers bank's own angle.
     static let maximumOffAxisAngle: Float = 48
 
-    /// The two column centres sit INSIDE `buildHalfExtents.x` (0.70) —
-    /// existing practice (layers bank at −0.62, meter at 0.62); the box
-    /// clamps where a part MAY drop, not where furniture stands, and the
-    /// palette clears their row vertically. A column far enough out to
-    /// clear the box in x is 50°+ off axis and out of reach.
+    /// Furniture may stand outside `buildHalfExtents` (0.60) and some of
+    /// it stands inside — the box is where a reset LAYS PARTS OUT and
+    /// where instruments take their bearings, not a wall. The layers bank
+    /// (−0.62) still overlaps it; the rack (0.74) clears it by the
+    /// station margin. Both are correct.
 
     static let rows = 3
     static let columns = 2
@@ -57,16 +57,36 @@ enum CircuitsPartsLayout {
 
     /// One scrolling column on the right, cleared of the build volume by
     /// `InstrumentClearance.stationMargin`. Every number is a constraint,
-    /// not taste: x 0.82 clears the volume (`buildHalfExtents.x` 0.70);
-    /// z −0.77 shrinks the off-axis angle (reach 1.201 m, 46.8°). No
-    /// depth satisfies reach and angle with SIX rows on screen, so the
-    /// window is five. `CircuitsPartsLayoutTests` checks the window.
-    static let rightColumnX: Float = 0.82
+    /// not taste.
+    ///
+    /// **x 0.74** clears `buildHalfExtents.x` (0.60) by 0.14, against a
+    /// `stationMargin` of 0.12. NOT 0.72, which is the margin exactly:
+    /// `InstrumentReachCriterionTests` states the rule — *"Exactly at the
+    /// limit is not clearance, it is a coincidence."*
+    ///
+    /// **z −0.77** shrinks the off-axis angle: `atan2(0.74, 0.77)` = 43.9°
+    /// against the 48° limit. It was 46.8° at x 0.82, two-tenths of a
+    /// degree off the margin line — narrowing the bench on 2026-08-26 is
+    /// what bought that budget back.
+    ///
+    /// **Six rows, and six is the ceiling.** Reach to the worst visible
+    /// slot from the viewer at (0, 1.5, 0), by row count:
+    ///
+    ///     5 rows (Δy 0.42):  1.145 m
+    ///     6 rows (Δy 0.525): 1.190 m   ← ships
+    ///     7 rows (Δy 0.63):  1.240 m   ← fails the 1.23 margin line
+    ///
+    /// The comment here used to read *"No depth satisfies reach and angle
+    /// with SIX rows on screen, so the window is five"* — true at x 0.82,
+    /// where six rows reached 1.246 m and all but touched the hard 1.25.
+    /// Do not try seven. `CircuitsPartsLayoutTests` checks the window and
+    /// asserts the seventh row would fail.
+    static let rightColumnX: Float = 0.74
     static let rightTopY: Float = 1.50
     static let rightRowPitch: Float = 0.105
     static let rightZ: Float = -0.77
     /// How many are on screen at once; the rest are a drag away.
-    static let rightVisibleRows = 5
+    static let rightVisibleRows = 6
 
     /// Where slot `index` stands, in world coordinates. Every slot has a
     /// position, including ones scrolled out — `Well` hides what falls

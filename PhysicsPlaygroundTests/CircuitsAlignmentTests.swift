@@ -258,7 +258,12 @@ final class CircuitsAlignmentTests: XCTestCase {
             SIMD3(random() * 2 - 1, random() * 2 - 1, random() * 2 - 1)
         }
         let model = CircuitsModel()
-        let half = CircuitsModel.buildHalfExtents
+        // THE SAFETY BOX, NOT THE BENCH (2026-08-26). The bench stopped
+        // being a wall, so `add` no longer parks anything against it and
+        // the veto can no longer fire there. The room-scale safety box is
+        // the one clamp left, so that is where the scenario now lives —
+        // same test, one box out.
+        let half = CircuitsModel.safetyHalfExtents
         for _ in 0..<4000 {
             model.clearBench()
             // Deliberately biased OUTSIDE the volume, so `add`'s clamp
@@ -283,10 +288,10 @@ final class CircuitsAlignmentTests: XCTestCase {
             if let alignment = model.alignment(for: part) {
                 alignments += 1
                 XCTAssertEqual(
-                    simd_distance(CircuitsModel.clampToBench(alignment.position),
+                    simd_distance(CircuitsModel.clampToRoomSafety(alignment.position),
                                   alignment.position),
                     0, accuracy: 1e-9,
-                    "An alignment escaped the bench at \(alignment.position).")
+                    "An alignment escaped the room at \(alignment.position).")
                 // And it does what it claims: the lead lands on target.
                 let target = model.components
                     .first { $0.id == alignment.target.componentID }!
@@ -318,8 +323,8 @@ final class CircuitsAlignmentTests: XCTestCase {
             let part = drop(model, .bulb, near: lead(model, anchor, 1), gap: 0.03)
             model.release(id: part)
             let landed = model.components.first { $0.id == part }!.position
-            XCTAssertEqual(simd_distance(CircuitsModel.clampToBench(landed), landed), 0,
-                           accuracy: 1e-9, "A part landed outside the bench at offset \(offset).")
+            XCTAssertEqual(simd_distance(CircuitsModel.clampToRoomSafety(landed), landed), 0,
+                           accuracy: 1e-9, "A part landed outside the room at offset \(offset).")
         }
     }
 

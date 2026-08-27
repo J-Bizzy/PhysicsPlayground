@@ -17,9 +17,33 @@ final class CircuitsModel {
     // MARK: Build volume & budgets
 
     nonisolated static let buildCenter = SIMD3<Double>(0, 1.25, -0.9)
-    /// The bench's walls, as a half-size about `buildCenter` — a box, because
-    /// `CircuitsModelTests.assertOnTheBench` checks a box.
-    nonisolated static let buildHalfExtents = SIMD3<Double>(0.70, 0.48, 0.33)
+
+    /// The bench's NOMINAL volume — where a reset lays the starter loop out
+    /// and where the flanking instruments take their clearance bearings.
+    /// **NOT a wall: a hand meets only the floor.**
+    ///
+    /// It was a hand clamp until 2026-08-26, and that was the last survivor
+    /// of the merged-worlds-era drag clamps. `ARCHITECTURE.md` has said
+    /// since 2026-08-03 that model bounds are split by WHO they bind —
+    /// Electric Fields and Magnetism both got `regionHalfExtents` (layout)
+    /// and `safetyHalfExtents` (the free simulation, never a hand), and it
+    /// names THIS constant as a layout reference in the same sentence.
+    /// Circuits was simply skipped. The visible cost was a part pulled from
+    /// a rack at x 0.82 being born at 0.70 — a 12 cm jump out of your hand,
+    /// audit P1-28 — and a jump the rack could not be moved to fix, since
+    /// the clearance rule keeps the rack `stationMargin` OUTSIDE this box
+    /// by construction.
+    ///
+    /// Narrowed 0.70 → 0.60 the same day, once it had stopped being a wall
+    /// and could be sized for the job it actually does. See
+    /// `CircuitsPartsLayout`.
+    nonisolated static let buildHalfExtents = SIMD3<Double>(0.60, 0.48, 0.33)
+
+    /// The free simulation's safety bounds — room-scale, never applied to a
+    /// hand. A released part stays in the room; it does not stay on the
+    /// bench. Same shape and same reason as `FieldModel.safetyHalfExtents`.
+    nonisolated static let safetyHalfExtents = SIMD3<Double>(2.6, 1.6, 2.6)
+
     nonisolated static let floorMargin = 0.2
     nonisolated static let componentBudget = 16
     nonisolated static let wireBudget = 36
@@ -350,9 +374,12 @@ final class CircuitsModel {
         let axis = best.end == 0 ? direction : -direction
         let position = best.position + direction * Self.terminalOffset
 
-        // CLAMP VETO: if the bench wall would move the aligned part, the leads end up
+        // CLAMP VETO: if the clamp would move the aligned part, the leads end up
         // visibly apart — abandon the geometry and let the wire span the gap.
-        guard simd_distance(Self.clampToBench(position), position) < 1e-9 else { return nil }
+        // Against the SAFETY box since 2026-08-26, because that is the only
+        // clamp left; the bench stopped being a wall the same day, so vetoing
+        // against it would refuse alignments nothing would then move.
+        guard simd_distance(Self.clampToRoomSafety(position), position) < 1e-9 else { return nil }
         return Alignment(componentID: id, end: best.end, target: best.target,
                          position: position, axis: axis)
     }
@@ -397,10 +424,10 @@ final class CircuitsModel {
         let reach = simd_length(direction)
         guard reach > 1e-4 else { return }
         direction /= reach
-        // Same clamp veto as `alignment(for:)`: against a bench wall the clamp
-        // would shift the body and the pinned lead would leave its joint.
+        // Same clamp veto as `alignment(for:)`: where the clamp would shift the
+        // body, the pinned lead would leave its joint.
         let position = pivot + direction * Self.terminalOffset
-        guard simd_distance(Self.clampToBench(position), position) < 1e-9 else { return }
+        guard simd_distance(Self.clampToRoomSafety(position), position) < 1e-9 else { return }
         components[index].axis = pinned == 0 ? direction : -direction
         components[index].position = position
     }
@@ -524,6 +551,10 @@ final class CircuitsModel {
         components[index].position = clamp(point)
     }
 
+    /// Folds a point into the NOMINAL bench box. No longer applied to a
+    /// hand — this is the layout question ("would this sit on the bench?")
+    /// that `reset`'s seeding and the layout tests ask. `clampToRoomSafety`
+    /// is what actually binds a released part.
     nonisolated static func clampToBench(
         _ point: SIMD3<Double>
     ) -> SIMD3<Double> {
@@ -534,8 +565,21 @@ final class CircuitsModel {
         return clamped
     }
 
+    /// Clamps a part into the room-scale safety box — the only clamp a
+    /// hand meets, and it is there so a part cannot be carried into next
+    /// door, not to keep it on the bench.
+    nonisolated static func clampToRoomSafety(
+        _ point: SIMD3<Double>
+    ) -> SIMD3<Double> {
+        var clamped = simd_clamp(point,
+                                 buildCenter - safetyHalfExtents,
+                                 buildCenter + safetyHalfExtents)
+        clamped.y = max(clamped.y, floorMargin)
+        return clamped
+    }
+
     private func clamp(_ point: SIMD3<Double>) -> SIMD3<Double> {
-        Self.clampToBench(point)
+        Self.clampToRoomSafety(point)
     }
 
     // MARK: Wiring — pull a lead

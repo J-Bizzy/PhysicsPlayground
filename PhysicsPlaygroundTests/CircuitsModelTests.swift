@@ -418,34 +418,149 @@ final class CircuitsModelTests: XCTestCase {
         let id = model.components.last!.id
         model.move(id: id, to: SIMD3(50, -50, 50))
         let position = model.components.last!.position
-        assertOnTheBench(position)
+        assertInTheRoom(position)
         XCTAssertGreaterThanOrEqual(position.y, CircuitsModel.floorMargin - 1e-9)
 
-        // Off-bench tray drops clamp too.
+        // A drop from the far side of the building lands in the room too.
         model.clearBench()
         model.add(.bulb, at: CircuitsModel.buildCenter + SIMD3(100, 0, 0))
-        assertOnTheBench(model.components[0].position)
+        assertInTheRoom(model.components[0].position)
     }
 
-    /// The bench is a BOX, not the 3 m sphere it was before the E&M
-    /// world stood a magnetic field 1.33 m to its right. A part that
-    /// can be dragged three metres is a part that can be parked inside
-    /// the neighbouring apparatus.
-    private func assertOnTheBench(
+    // MARK: The hand meets no wall
+
+    /// A PART IS BORN WHERE YOUR HAND IS.
+    ///
+    /// `Well` spawns from the hand, which is at the rack — `rightColumnX`,
+    /// outside the bench box by the station margin, BY CONSTRUCTION (the
+    /// clearance rule puts it there). `add` clamped to the bench, so every
+    /// part pulled from the rack jumped inward by at least that margin the
+    /// instant it existed: audit P1-28, and the reason it could never be
+    /// fixed by moving the rack.
+    ///
+    /// `ARCHITECTURE.md` has said since 2026-08-03 that a hand meets no
+    /// invisible wall and that `buildHalfExtents` is a layout reference.
+    /// Circuits was the last module still clamping a hand to it.
+    func testAPartIsBornAtTheHandAndNotDraggedOntoTheBench() {
+        let model = CircuitsModel()
+        model.clearBench()
+        let rack = CircuitsPartsLayout.rightSlot(index: 0)
+        let hand = SIMD3<Double>(rack)
+
+        guard let id = model.add(.resistor, at: hand) else {
+            return XCTFail("bench refused the part")
+        }
+        let born = model.components.first { $0.id == id }!.position
+
+        XCTAssertEqual(simd_distance(born, hand), 0, accuracy: 1e-9, """
+            the part was born \(simd_distance(born, hand)) m from the hand \
+            that pulled it — it jumped out of your grip on the first frame.
+            """)
+        XCTAssertGreaterThan(
+            abs(born.x), CircuitsModel.buildHalfExtents.x,
+            "the rack is meant to stand outside the bench box; if this fails "
+            + "the test is no longer exercising the case that was broken")
+    }
+
+    /// …and the hand goes on being obeyed for the whole drag, which is the
+    /// same rule `FieldClampTests` holds for Electric Fields.
+    func testADragPastTheBenchIsObeyed() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let id = model.add(.resistor, at: CircuitsModel.buildCenter) else {
+            return XCTFail("bench refused the part")
+        }
+        let reached = CircuitsModel.buildCenter + SIMD3(1.4, 0.3, 0.2)
+        model.move(id: id, to: reached)
+
+        XCTAssertEqual(
+            simd_distance(model.components[0].position, reached), 0,
+            accuracy: 1e-9,
+            "a hand carrying a part off the bench met an invisible wall")
+    }
+
+    /// The safety box is still there, and it is what a runaway meets.
+    func testTheRoomScaleSafetyBoxStillCatchesARunaway() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let id = model.add(.resistor, at: CircuitsModel.buildCenter) else {
+            return XCTFail("bench refused the part")
+        }
+        model.move(id: id, to: CircuitsModel.buildCenter + SIMD3(40, 0, 0))
+        assertInTheRoom(model.components[0].position)
+    }
+
+    /// A SAVED BENCH FROM BEFORE THE NARROWING COMES BACK UNTOUCHED.
+    ///
+    /// This is the fact that made a data migration unnecessary when
+    /// `buildHalfExtents.x` went 0.70 → 0.60 on 2026-08-26: the restore
+    /// path (`decodeBench` → `migrated` → `apply`) transforms KINDS, never
+    /// positions. A part saved at the old wall is simply a part outside
+    /// the layout box, which is legal now — the same way a charge outside
+    /// `FieldModel.regionHalfExtents` is legal in Electric Fields.
+    ///
+    /// If someone ever adds a position clamp to `migrated`, this fails and
+    /// tells them they are about to move everybody's saved circuits.
+    func testABenchSavedAtTheOldWidthRestoresWhereItWasSaved() {
+        // This one writes the REAL save key, because the restore path is
+        // what is under test. Put back whatever was there.
+        let previous = UserDefaults.standard.data(forKey: CircuitsModel.saveKey)
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: CircuitsModel.saveKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey)
+            }
+        }
+
+        let model = CircuitsModel()
+        model.clearBench()
+        // 0.70 — hard against the wall as it stood before the narrowing.
+        let atTheOldWall = SIMD3<Double>(0.70, 1.25, -0.9)
+        guard let id = model.add(.battery, at: atTheOldWall) else {
+            return XCTFail("bench refused the part")
+        }
+        XCTAssertEqual(simd_distance(model.components[0].position, atTheOldWall),
+                       0, accuracy: 1e-9)
+        model.persistNow()
+
+        let reopened = CircuitsModel(restoreSaved: true)
+        let restored = reopened.components.first { $0.id == id }
+        XCTAssertNotNil(restored, "the saved bench did not come back at all")
+        XCTAssertEqual(
+            simd_distance(restored?.position ?? .zero, atTheOldWall), 0,
+            accuracy: 1e-9, """
+            a part saved at the old bench wall came back at \
+            \(restored?.position ?? .zero) — something is clamping on restore, \
+            and it has just moved a saved circuit nobody asked it to move.
+            """)
+    }
+
+    /// Room-scale, not bench-scale: what the safety box promises.
+    private func assertInTheRoom(
         _ position: SIMD3<Double>,
         file: StaticString = #filePath, line: UInt = #line
     ) {
-        let low = CircuitsModel.buildCenter - CircuitsModel.buildHalfExtents
-        let high = CircuitsModel.buildCenter + CircuitsModel.buildHalfExtents
+        let low = CircuitsModel.buildCenter - CircuitsModel.safetyHalfExtents
+        let high = CircuitsModel.buildCenter + CircuitsModel.safetyHalfExtents
         for axis in 0..<3 {
             XCTAssertGreaterThanOrEqual(
                 position[axis], low[axis] - 1e-9,
-                "a part escaped the bench on axis \(axis)", file: file, line: line)
+                "a part left the room on axis \(axis)", file: file, line: line)
             XCTAssertLessThanOrEqual(
                 position[axis], high[axis] + 1e-9,
-                "a part escaped the bench on axis \(axis)", file: file, line: line)
+                "a part left the room on axis \(axis)", file: file, line: line)
         }
     }
+
+    // `assertOnTheBench` STOOD HERE. It asserted that a dragged part was
+    // inside `buildHalfExtents`, which stopped being true on 2026-08-26
+    // when the bench stopped being a wall. `assertInTheRoom` above is its
+    // replacement and checks the bound that still binds. The reasoning it
+    // carried is worth keeping: the bench was made a BOX, rather than the
+    // 3 m sphere it had been, because a part that can be dragged three
+    // metres is a part that can be parked inside the neighbouring
+    // apparatus — and the safety box is that argument at room scale.
 
     /// Reset restores the welcome scene: the lit starter loop, defaults
     /// back, edits gone.
