@@ -83,9 +83,10 @@ final class InstrumentReachCriterionTests: XCTestCase {
         ]
     }
 
-    /// Gravity Lab's right flank, which had TWO instruments out of
-    /// reach and is measured as a flank for the reason Projectiles is
-    /// measured as a wall.
+    /// Gravity Lab's fore column (on the left since 2026-08-29; it was
+    /// the right flank, which had TWO instruments out of reach) —
+    /// measured as a flank for the reason Projectiles is measured as a
+    /// wall.
     private var verbBanks: [Instrument] {
         [
             .init(name: "Gravity Lab verbs",
@@ -248,7 +249,7 @@ final class InstrumentReachCriterionTests: XCTestCase {
     /// reach limit and the clock want the same air. So the fix is only
     /// a fix if the gap survives it, and "I checked the arithmetic" is
     /// how the 2 cm of slack in Electric Fields got spent twice.
-    func testGravityLabsRightFlankInstrumentsDoNotCrowd() {
+    func testGravityLabsForeColumnInstrumentsDoNotCrowd() {
         let verbs = Instrument(name: "Gravity Lab verbs",
                                anchor: GravityLabSpaceView.verbAnchor,
                                halfExtents: Self.verbHalfExtents)

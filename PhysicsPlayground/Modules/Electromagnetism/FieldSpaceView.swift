@@ -3,10 +3,12 @@
 //  Physics Playground — Electromagnetism module
 //
 //  The electrostatics immersive scene — the module's ONLY surface (its
-//  window is a title bar). Left to right: a layers bank (field lines, free
-//  charges, capacitor, uniform B), a B-strength rail under it, four wells
-//  that hand you a charge already in your grip, and a ΔV rail bolted under
-//  the capacitor. On the objects: tap for a ring, grab a plate to set d.
+//  window is a title bar). Everything stands off the left shoulder, split
+//  by depth: deep at the station's own plane, a layers bank (field lines,
+//  free charges, capacitor, uniform B) with a B-strength rail under it;
+//  fore of it, four wells that hand you a charge already in your grip
+//  with the Clear plate at their base; and a ΔV rail bolted over the
+//  capacitor. On the objects: tap for a ring, grab a plate to set d.
 //
 //  THE ORDER OF THE GESTURE CHAINS BELOW IS LOAD-BEARING. An
 //  input-targetable collider is never larger than the thing it represents,

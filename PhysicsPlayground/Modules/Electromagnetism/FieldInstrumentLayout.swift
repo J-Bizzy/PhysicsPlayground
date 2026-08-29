@@ -14,11 +14,14 @@
 //  legally-placed charge. Keeping every instrument a fallback-radius clear
 //  makes contention geometrically impossible.
 //
-//  Layout: what EXISTS is on the left (layers bank + the field strength it
-//  summons), what you MAKE is on the right (the wells). Anchors are DERIVED
-//  from two `InstrumentRail`s; the generic invariants live in
-//  `InstrumentClearance`. Which flank/depth/facing each rail takes is a
-//  judgement about this room and stays here.
+//  Layout: EVERY CONTROL STANDS ON THE LEFT (owner, 2026-08-29 — the old
+//  exists-left/make-right split is retired app-wide). Two rails share the
+//  flank split by DEPTH instead: what exists stands deep at the station's
+//  own z, what you make stands fore of it — fore rather than beside,
+//  because a second column at the same depth either overlaps the first or
+//  runs past `maximumReach`. Anchors are DERIVED from the rails; the
+//  generic invariants live in `InstrumentClearance`. Which depth/facing
+//  each rail takes is a judgement about this room and stays here.
 //
 
 import Foundation
@@ -40,7 +43,7 @@ enum FieldInstrumentLayout {
 
     // MARK: The two rails
 
-    /// LEFT — what exists: the layers bank, and under it the field strength
+    /// DEEP — what exists: the layers bank, and under it the field strength
     /// its bottom plate summons. At the station's own depth (z = −0.9), so
     /// the instruments sit in the same band as the apparatus. The 0.07 gap
     /// (vs the default 0.03) is because these two are a pair a hand works
@@ -58,24 +61,40 @@ enum FieldInstrumentLayout {
                   inset: SIMD2(-0.01, 0.08)),
         ])
 
-    /// RIGHT — what you make: the Clear plate caps a column of well mouths.
-    /// The wells made every charge in the room, so the control that removes
-    /// them all heads the same column. Above rather than below or level:
-    /// below drops off the bottom of frame, level-and-out runs past
-    /// `maximumReach`. The fit is tight — the 2 cm of slack the header warns of.
-    static let rightRail = InstrumentRail(
-        head: SIMD3(1.02, 1.71, -0.90),
+    /// FORE — what you make: the well mouths, with the Clear plate at the
+    /// base. The wells made every charge in the room, so the control that
+    /// removes them all shares the column. Moved from the right flank on
+    /// 2026-08-29 (all controls left, owner's call), and three numbers are
+    /// load-bearing:
+    ///
+    /// **x −1.02** matches Circuits' Clear plate exactly — the same verb at
+    /// the same x and y in both modules, so the hand that learns one has
+    /// learned the other. It leaves the plate's box 0.13 from the station
+    /// against the 0.12 margin: 1 cm of slack, the tightest number in the
+    /// module, and it is spent HERE deliberately rather than at −1.03 where
+    /// the two modules' clears would differ by exactly the sliver nobody
+    /// can see but every reach memorises.
+    ///
+    /// **z −0.60** is fore of the deep rail for two reasons: a second column
+    /// at z −0.90 overlaps the bank outright, and anything much deeper than
+    /// −0.7 SHADOWS the bank's label flank from the standing viewpoint —
+    /// the projection of this column onto the bank's plane must land left
+    /// of x −1.22, and at −0.60 it does with margin.
+    ///
+    /// **The clear plate at y 1.23** (the head hangs the wells so the plate
+    /// lands there) — Circuits' `clearAnchor` height, see the x note.
+    static let foreRail = InstrumentRail(
+        head: SIMD3(-1.02, 1.5325, -0.60),
         gap: 0.04,
         items: [
+            // The four mouths as ONE object. Four at 0.095 pitch span 0.285,
+            // so 0.1425 + a 0.06 mouth radius = 0.2025 half-height. NOT 0.21:
+            // rounding up left 2.75 cm against a 3 cm margin.
+            .init(name: "wells", halfExtents: SIMD3(0.06, 0.2025, 0.06)),
             // Sized on the ARMED label too: a confirming plate swaps its
             // nameplate to "Tap again", and a box sized only to "Clear all"
             // would grow on arming into what it just cleared.
             .init(name: "clear plate", halfExtents: SIMD3(0.13, 0.06, 0.08)),
-            // The four mouths as ONE object. Four at 0.095 pitch span 0.285,
-            // so 0.1425 + a 0.06 mouth radius = 0.2025 half-height. NOT 0.21:
-            // rounding up left 2.75 cm against a 3 cm margin.
-            .init(name: "wells", halfExtents: SIMD3(0.06, 0.2025, 0.06),
-                  inset: SIMD2(-0.06, 0)),
         ])
 
     // MARK: Derived anchors
@@ -93,7 +112,7 @@ enum FieldInstrumentLayout {
     /// horizontally across their view rather than edge-on.
     static let fieldTrackNormal = SIMD3<Double>(0.93, 0, 0.50)
 
-    static var clearPlateAnchor: SIMD3<Double> { rightRail.anchor("clear plate")! }
+    static var clearPlateAnchor: SIMD3<Double> { foreRail.anchor("clear plate")! }
     static let clearPlateHalfExtents = SIMD3<Double>(0.13, 0.06, 0.08)
 
     /// The well mouths, spaced within the column the right rail places.
@@ -103,7 +122,7 @@ enum FieldInstrumentLayout {
     static let wellHalfExtents = SIMD3<Double>(0.06, 0.2025, 0.06)
 
     static func wellAnchor(index: Int) -> SIMD3<Double> {
-        let column = rightRail.anchor("wells")!
+        let column = foreRail.anchor("wells")!
         // Hung from the top of the column's box, so a fifth mouth grows it
         // downward from a fixed head rather than sliding all four.
         let top = column.y + wellHalfExtents.y - 0.06
@@ -142,7 +161,7 @@ enum FieldInstrumentLayout {
     /// free. The ΔV rail is deliberately absent: it moves with the capacitor
     /// and is checked separately over the capacitor's whole travel.
     static var standingInstruments: [(name: String, box: StationBox)] {
-        leftRail.boxes + rightRail.boxes
+        leftRail.boxes + foreRail.boxes
     }
 
     static func voltageTrackBox(capacitorCenter: SIMD3<Double>) -> StationBox {

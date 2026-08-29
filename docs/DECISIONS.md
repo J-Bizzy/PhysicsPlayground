@@ -16,6 +16,40 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-29 — Every control stands on the left
+
+**Decision:** All in-room controls — banks, verb plates, tabs, pickers,
+rails, wells — stand off the user's LEFT shoulder in every module. The
+"what exists is on the left, what you MAKE is on the right" split that
+Electric Fields and Gravity Lab shared is retired; that distinction now
+runs in DEPTH on the one flank (what exists deep at the apparatus'
+plane, what you make fore of it). The one exception, decided in the
+same breath: Circuit Workshop's parts rack stays on the right — it is
+a shelf you reach into, not a button, and its six-row reach analysis
+stands.
+
+**Context:** Owner's call, extending their own 2026-08-04 rule ("the
+side buttons live on the left everywhere") from switch banks to
+everything. Electric Fields had two surfaces on the right (the Clear
+column and the four charge wells) and Gravity Lab two more (the
+Worlds/Twin-suns verbs and the clock tab) — four controls arguing with
+the rule the other rooms teach. Two placement consequences carry the
+weight: Electric Fields' Clear plate lands at (−1.02, 1.23), exactly
+Circuit Workshop's `clearAnchor` x and y, so the same verb sits in the
+same spot in both modules that have it; and both moved columns come
+FORE of their flanks rather than beside them, because a left flank —
+unlike the empty right ones they left — already holds a column, and a
+second column at the same depth either overlaps it or shadows its
+labels from the standing viewpoint (the sightline projections are
+worked in each anchor's comment).
+
+**Consequences:** One hand rule app-wide. The
+`FieldInstrumentLayoutTests` coordinate pins moved in the same commit;
+Gravity Lab's reach tests read the anchors and follow. This rules out
+placing any future control on the right without reopening this entry —
+and it commits the fore-column depth split to being the house answer
+when a flank fills up.
+
 ## 2026-08-29 — A one-wired part hangs from its joint while carried
 
 **Decision:** A carried part with exactly one wired lead pivots on the

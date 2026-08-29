@@ -87,8 +87,12 @@ final class FieldInstrumentLayoutTests: XCTestCase {
     /// numbers, so a refactor that shifted them while the nets still
     /// passed would have proved nothing about either.
     ///
-    /// These literals are the values as of 2026-08-07, copied from the
-    /// file's own history. If a future change means to move an
+    /// The deep-rail literals are the values as of 2026-08-07, copied
+    /// from the file's own history. The fore rail's are the 2026-08-29
+    /// move of the make-column from the right flank to the left (all
+    /// controls left, owner's call) — the clear plate lands at
+    /// (−1.02, 1.23), which is exactly Circuits' `clearAnchor`, and
+    /// that match is the point. If a future change means to move an
     /// instrument, this test is the one that should fail first, and the
     /// literal should be updated in the same commit that moves it.
     func testTheRailsReproduceTheHandPlacedLayout() {
@@ -103,12 +107,12 @@ final class FieldInstrumentLayoutTests: XCTestCase {
         same(FieldInstrumentLayout.fieldTrackAnchor,
              SIMD3(-1.06, 1.10, -0.82), "B rail")
         same(FieldInstrumentLayout.clearPlateAnchor,
-             SIMD3(1.02, 1.71, -0.90), "clear plate")
+             SIMD3(-1.02, 1.23, -0.60), "clear plate")
         // The column head, and the pitch down it.
         same(FieldInstrumentLayout.wellAnchor(index: 0),
-             SIMD3(0.96, 1.55, -0.90), "well 0")
+             SIMD3(-1.02, 1.675, -0.60), "well 0")
         same(FieldInstrumentLayout.wellAnchor(index: 3),
-             SIMD3(0.96, 1.55 - 3 * 0.095, -0.90), "well 3")
+             SIMD3(-1.02, 1.675 - 3 * 0.095, -0.60), "well 3")
     }
 
     /// The spacing must now come from the neighbours' own sizes — that is

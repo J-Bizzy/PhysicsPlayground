@@ -111,18 +111,24 @@ struct GravityLabSpaceView: View {
     static let bankAnchor = GravityLabRenderer.systemPosition
         + SIMD3<Float>(-0.62, 0.06, 0)
 
-    /// RIGHT — what you make and unmake. Binary and Worlds. The 0.20 of z
-    /// is FORCED: at the system's own depth the reach limit wants x ≤ 0.60
-    /// and these two instruments (0.26 and 0.09 wide) cannot both fit
-    /// there, so coming forward is the only axis left.
+    /// LEFT AND FORE — what you make and unmake. Binary and Worlds, moved
+    /// from the right flank on 2026-08-29 (all controls left, owner's
+    /// call). Both offsets are FORCED: at the system's own depth the
+    /// reach limit wants x ≤ 0.60 and these two instruments (0.26 and
+    /// 0.09 wide) cannot both fit there, so the column comes forward —
+    /// and 0.40 of z rather than the old 0.20 because the left flank,
+    /// unlike the old right one, is not empty: at 0.20 this column's
+    /// sightline shadow from the standing viewpoint lands on the tab
+    /// column and the G rail at x −0.62. At (−0.85, z +0.40) the shadow
+    /// projects to x ≤ −1.08 on the deep plane, clear of everything.
     static let verbAnchor = GravityLabRenderer.systemPosition
-        + SIMD3<Float>(0.70, -0.05, 0.20)
+        + SIMD3<Float>(-0.85, 0.07, 0.40)
 
     /// The clock's folding tab, stacked ABOVE the verbs on their x —
     /// one column, clock at the head, clear of each other by 8.5 cm.
     /// Measured by `InstrumentReachCriterionTests`.
     static let clockAnchor = GravityLabRenderer.systemPosition
-        + SIMD3<Float>(0.70, 0.17, 0.20)
+        + SIMD3<Float>(-0.85, 0.29, 0.40)
 
     @Environment(AppModel.self) private var appModel
 
@@ -385,10 +391,11 @@ struct GravityLabSpaceView: View {
                             viewer: head,
                             dt: event.deltaTime)
                     }
-                    // What EXISTS is on the left, what you MAKE is on the
-                    // right — the same hand rule Electric Fields lays out
-                    // its instruments by, so the two modules teach one
-                    // layout rather than two.
+                    // Every control stands on the LEFT (owner, 2026-08-29,
+                    // app-wide) — what EXISTS deep at the system's flank,
+                    // what you MAKE fore of it, the same depth split
+                    // Electric Fields lays out its instruments by, so the
+                    // two modules teach one layout rather than two.
                     let bankAnchor = Self.bankAnchor
                     layers?.update(anchor: bankAnchor, viewer: head,
                                    dt: event.deltaTime)

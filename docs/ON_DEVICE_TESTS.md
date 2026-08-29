@@ -602,8 +602,10 @@ file). The new well and the standing script:
       checkmark), not fire. Tap again to clear. Arm it and walk away
       five seconds: it disarms itself. With NO balls it is dim, and a
       tap falls THROUGH.
-- [ ] **Electric Fields — Clear all**, above the well column. Dim when
-      there are no charges, and a tap on it while dim must fall through.
+- [ ] **Electric Fields — Clear all**, at the base of the well column on
+      the left, at the same height and x as Circuit Workshop's Clear
+      (2026-08-29). Dim when there are no charges, and a tap on it
+      while dim must fall through.
 - [ ] **Circuit Workshop — Clear bench**, on the bench's far left flank.
 - [ ] **Gravity Lab — Twin suns** and **Worlds**, below the clock bank.
 
@@ -788,12 +790,16 @@ otherwise.
       without opening the tab, this design has failed and the plates
       should come back out.
 
-- [ ] **The clock tab.** On the right flank where the fan used to be,
-      reading "Clock · 5×". Pinch it: the six-disc fan should unfold
-      ABOVE the tab, and the number on the tab should track whichever
-      disc you pick. Pinch again to fold. **Then check the tab still
-      tells you the speed with the fan closed** — that is the readout the
-      six discs used to be.
+- [ ] **The clock tab.** At the head of the fore column off your LEFT
+      shoulder (moved from the right flank 2026-08-29), reading
+      "Clock · 5×". Pinch it: the six-disc fan should unfold ABOVE the
+      tab, and the number on the tab should track whichever disc you
+      pick. Pinch again to fold. **Then check the tab still tells you
+      the speed with the fan closed** — that is the readout the six
+      discs used to be. And check the fore column does not stand in
+      front of the deep column: from where you naturally stand, the
+      tabs, sub-banks and G rail at the system's flank must all be
+      visible past it.
 
 - [ ] **Recession.** Stand back with your hands at your sides: every
       instrument should sit at about 45% — clearly still readable, just
@@ -1173,10 +1179,12 @@ reading "seconds ago".
       the modules: a quick swell, facing held, never a tumble.
 - [ ] ⟳ **No invisible walls anywhere.** Carry objects to the far side
       of your real room in every module that has them.
-- [ ] ⟳ **Every module's switch bank is on your LEFT** (2026-08-04).
-      Walk all six rooms: the layer plates are always off the left
-      shoulder, so the hand that learns one module has learned them
-      all. Magnetism and Circuit Workshop are the two that moved.
+- [ ] ⟳ **Every CONTROL is on your LEFT** (banks 2026-08-04; everything
+      else 2026-08-29). Walk all six rooms: every plate, tab, rail,
+      picker and verb stands off the left shoulder, so the hand that
+      learns one module has learned them all. The one deliberate
+      exception is Circuit Workshop's parts rack — a shelf you reach
+      into, not a button, and its right-side reach analysis stands.
 - [ ] **Every rail in the app hangs under the thing it adjusts.**
 - [ ] **Every ring folds in place.**
 - [ ] **System Reduce Motion** (Settings ▸ Accessibility): the hub's
@@ -1280,8 +1288,9 @@ proves nothing about the room.
 ### Reach — measured now, but a metre is a body, not a number
 
 - [ ] **Gravity Lab: reach for Binary and Worlds without stepping.**
-      They came in from 1.36 m to 1.13 m.
-- [ ] **And the clock tab, which was a third case at 1.33 m.** It now
+      They came in from 1.36 m on 2026-08-09 and moved to the left
+      fore column on 2026-08-29 — closer still.
+- [ ] **And the clock tab, which was a third case at 1.33 m.** It
       sits ABOVE the verbs on the same x, which is also what the verbs'
       own comment always claimed ("under the clock bank, on the same
       flank") and what the first version of this fix accidentally
