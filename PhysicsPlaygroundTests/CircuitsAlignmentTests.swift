@@ -379,6 +379,96 @@ final class CircuitsAlignmentTests: XCTestCase {
                                          .init(componentID: chain[1], end: 0)))
     }
 
+    // MARK: The release speaks its outcome
+
+    /// A legal snap says yes.
+    func testAJoiningReleaseReportsJoined() {
+        let model = CircuitsModel()
+        model.clearBench()
+        let battery = model.add(.battery, at: CircuitsModel.buildCenter)!
+        let bulb = drop(model, .bulb, near: lead(model, battery, 1), gap: 0.03)
+        XCTAssertEqual(model.release(id: bulb), .joined)
+    }
+
+    /// Open air is honestly silent — no join was on offer.
+    func testAReleaseInOpenAirReportsNothingNear() {
+        let model = CircuitsModel()
+        model.clearBench()
+        let loose = model.add(.resistor, at: CircuitsModel.buildCenter)!
+        XCTAssertEqual(model.release(id: loose), .nothingNear)
+    }
+
+    /// Parked against a terminal it is already netted with THROUGH
+    /// ANOTHER PATH, the release refuses out loud — the same "no" the
+    /// lead pull dramatises, instead of the old silent nothing.
+    func testAReleaseOntoItsOwnNetIsRefused() {
+        let model = CircuitsModel()
+        model.clearBench()
+        let battery = model.add(.battery, at: CircuitsModel.buildCenter)!
+        let resistor = model.add(.resistor,
+                                 at: CircuitsModel.buildCenter + SIMD3(0.6, 0, 0))!
+        let bulb = model.add(.bulb, at: CircuitsModel.buildCenter + SIMD3(0.3, 0.3, 0))!
+        // One net, three terminals, two wires: battery1 — resistor0 — bulb0.
+        model.connectTerminals(.init(componentID: battery, end: 1),
+                               .init(componentID: resistor, end: 0))
+        model.connectTerminals(.init(componentID: resistor, end: 0),
+                               .init(componentID: bulb, end: 0))
+        // Park the bulb so ITS netted lead sits within reach of the
+        // battery's — same point through the resistor, no direct wire.
+        let target = lead(model, battery, 1)
+        model.move(id: bulb, to: target + SIMD3(0.085, 0.03, 0))
+
+        let before = model.wires.count
+        XCTAssertEqual(model.release(id: bulb), .refused)
+        XCTAssertEqual(model.wires.count, before,
+                       "a refused release must not wire anything")
+    }
+
+    /// And the refusal is PREVIEWED: `refusedJoins` names exactly the
+    /// same-net pair in reach, so the renderer can tint it red while
+    /// the part is still in the hand.
+    func testRefusedJoinsNamesTheSameNetPairInReach() {
+        let model = CircuitsModel()
+        model.clearBench()
+        let battery = model.add(.battery, at: CircuitsModel.buildCenter)!
+        let resistor = model.add(.resistor,
+                                 at: CircuitsModel.buildCenter + SIMD3(0.6, 0, 0))!
+        let bulb = model.add(.bulb, at: CircuitsModel.buildCenter + SIMD3(0.3, 0.3, 0))!
+        model.connectTerminals(.init(componentID: battery, end: 1),
+                               .init(componentID: resistor, end: 0))
+        model.connectTerminals(.init(componentID: resistor, end: 0),
+                               .init(componentID: bulb, end: 0))
+        let target = lead(model, battery, 1)
+
+        model.move(id: bulb, to: target + SIMD3(0.085, 0.03, 0))
+        let refused = model.refusedJoins(for: bulb)
+        XCTAssertEqual(refused.count, 1)
+        XCTAssertEqual(refused.first?.from,
+                       .init(componentID: bulb, end: 0))
+        XCTAssertEqual(refused.first?.to,
+                       .init(componentID: battery, end: 1))
+
+        // Out of reach, nothing is refused — there is nothing to refuse.
+        model.move(id: bulb, to: target + SIMD3(0.085, 0.3, 0))
+        XCTAssertTrue(model.refusedJoins(for: bulb).isEmpty)
+    }
+
+    /// A part snapped into its own chain has nothing refused about it:
+    /// the pair it sits coincident with already carries a DIRECT wire,
+    /// and a standing red ghost on every chained part — or a thud on
+    /// putting one back down — would be the refusal crying wolf.
+    func testAChainedPartHasNoRefusedJoins() {
+        let model = CircuitsModel()
+        model.clearBench()
+        let battery = model.add(.battery, at: CircuitsModel.buildCenter)!
+        let bulb = drop(model, .bulb, near: lead(model, battery, 1), gap: 0.03)
+        XCTAssertEqual(model.release(id: bulb), .joined)
+        XCTAssertTrue(model.refusedJoins(for: bulb).isEmpty,
+                      "a snapped joint is a connection, not a refusal")
+        XCTAssertEqual(model.release(id: bulb), .nothingNear,
+                       "setting a chained part back down must stay silent")
+    }
+
     // MARK: swing — where "aim the part" went
 
     /// A part hanging by ONE lead swings about its JOINT: within the

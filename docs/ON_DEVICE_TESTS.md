@@ -138,6 +138,11 @@ file). What follows is the standing script.
 
 - [ ] **The loop is live on arrival.** Pinch the switch lever: the bulb
       goes out, the electron beads stop.
+- [ ] **Flip the switch with a drifting hand (2026-08-29).** A pinch on
+      the lever that wanders a few millimetres — under ~12 mm — must
+      still flip it, the same grace every other target gets. And a
+      clean tap must flip it exactly ONCE: a switch that visibly does
+      nothing on a tap is the double-fire, not a dead switch.
 - [ ] **Pull a part out of a rack.** Ten parts and the meter stand
       free, above the furniture row. The part must be born AT YOUR
       FINGERTIPS — not at the rack, then flown to your hand — and
@@ -177,6 +182,13 @@ file). What follows is the standing script.
 - [ ] **Pull a lead onto one it is ALREADY joined to.** It must go RED
       and visibly recoil toward where it came from. No wire, no text.
       A silent no-op is the thing this replaced.
+- [ ] **Carry a part up to its own net (2026-08-29).** Take a part
+      that is already wired into a chain and park one of its leads
+      near a DIFFERENT terminal of the same net — not one it shares a
+      wire with. The ghost between them must be RED, not green, and
+      letting go must thud with no wire made. Set a chained part back
+      down in its own place: silence — that connection exists, and
+      there is nothing to refuse.
 - [ ] **Tap a terminal. NO WIRE MAY APPEAR.** A tap selects. Until
       this pass a tap could arm the wiring and — through the
       overlapping drag — complete a different wire in the same event.

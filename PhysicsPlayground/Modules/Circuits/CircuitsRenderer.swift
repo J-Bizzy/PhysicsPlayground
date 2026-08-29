@@ -24,6 +24,10 @@ final class CircuitsRenderer {
     /// The accessibility door, and the only one: tap-tap wiring for users who
     /// cannot pull. It IS the terminal's activate; the pinch path never calls it.
     var onTerminalAction: ((CircuitsModel.Terminal) -> Void)?
+    /// VoiceOver's switch toggle. Its own callback because the
+    /// physical tap path only SELECTS a lever (the toggle settles out
+    /// of the drag gesture) — see the lever's `SpatialActions.attach`.
+    var onLeverAction: ((UUID) -> Void)?
 
     /// Called from the SpaceView's `onDisappear` — an `EventSubscription`
     /// outlives the view that made it and would hold the entity graph alive.
@@ -331,18 +335,29 @@ final class CircuitsRenderer {
     }
 
     private func syncConnectionPreviews(_ model: CircuitsModel) {
-        var pairs: [(SIMD3<Float>, SIMD3<Float>, CircuitsModel.Terminal)] = []
+        var pairs: [(a: SIMD3<Float>, b: SIMD3<Float>,
+                     target: CircuitsModel.Terminal, refused: Bool)] = []
         if let id = previewComponentID {
             for pair in model.pendingJoins(for: id) {
                 if let a = terminalWorld(pair.from, model),
                    let b = terminalWorld(pair.to, model) {
-                    pairs.append((a, b, pair.to))
+                    pairs.append((a, b, pair.to, false))
+                }
+            }
+            // The joins a release would REFUSE, in the same red the lead
+            // pull recoils in — carried up to a terminal it is already
+            // netted with, the part previews the "no" instead of the old
+            // silent nothing.
+            for pair in model.refusedJoins(for: id) {
+                if let a = terminalWorld(pair.from, model),
+                   let b = terminalWorld(pair.to, model) {
+                    pairs.append((a, b, pair.to, true))
                 }
             }
         }
-        previewTargets = Set(pairs.map(\.2))
-        // A lead in flight swells its landing target — never one that would
-        // REFUSE it.
+        // Only the joinable targets swell — never one that would REFUSE.
+        previewTargets = Set(pairs.filter { !$0.refused }.map(\.target))
+        // A lead in flight swells its landing target on the same terms.
         if let pull = model.leadPull, pull.refusal == nil, let target = pull.target {
             previewTargets.insert(target)
         }
@@ -357,7 +372,9 @@ final class CircuitsRenderer {
         }
         for (index, ghost) in previewWireEntities.enumerated() {
             if index < pairs.count {
-                stretch(ghost, from: pairs[index].0, to: pairs[index].1)
+                stretch(ghost, from: pairs[index].a, to: pairs[index].b)
+                ghost.model?.materials = [pairs[index].refused
+                    ? Self.refusalMaterial : Self.previewMaterial]
             } else {
                 ghost.isEnabled = false
             }
@@ -913,11 +930,16 @@ final class CircuitsRenderer {
                     .offsetBy(translation: leverBounds.center),
             ]))
             pivot.components.set(HoverEffectComponent())
+            // A dedicated callback, NOT `onTap`: the physical tap path
+            // only selects a lever now (the toggle settles out of the
+            // drag gesture, with tap-travel grace), so routing VO's
+            // activate through `onTap` would leave VoiceOver unable to
+            // flip the switch at all. Activations fire once; physical
+            // taps never fire this.
             SpatialActions.attach(
                 to: pivot, label: "Switch",
-                activate: { [weak self, weak pivot] in
-                    guard let pivot else { return }
-                    self?.onTap?(pivot)
+                activate: { [weak self] in
+                    self?.onLeverAction?(component.id)
                 })
             body.addChild(pivot)
             visual.lever = pivot

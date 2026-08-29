@@ -52,6 +52,17 @@ public struct PressLatch<Payload>: Sendable where Payload: Sendable {
         return pending.payload
     }
 
+    /// Resolves a press that never became a drag — by construction,
+    /// anything still pending at gesture end stayed within `tapTravel`
+    /// (a travelled press was consumed by `promote` in `onChanged`).
+    /// Returns and clears the payload, so the caller can treat the
+    /// settled press as the tap it was; nil if nothing was pending or
+    /// the press already promoted.
+    public mutating func settle() -> Payload? {
+        defer { pending = nil }
+        return pending?.payload
+    }
+
     /// Abandons a press without acting on it — it was a tap, or the
     /// gesture went away.
     public mutating func cancel() { pending = nil }

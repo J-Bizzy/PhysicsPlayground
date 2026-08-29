@@ -365,28 +365,98 @@ final class CircuitsModel {
                          position: position, axis: axis)
     }
 
+    /// What a release did. The lead pull dramatises its refusal (red,
+    /// recoil, thud); the release path used to say nothing at all —
+    /// parking a part against a terminal it is already netted with was
+    /// the silent no-op the lead-pull rewrite was written to abolish.
+    enum ReleaseOutcome: Equatable {
+        case joined
+        /// Something WAS in reach, and joining it was refused — the
+        /// same net through another path, or the wire budget is full.
+        case refused
+        /// Open air. Honestly silent: no join was on offer.
+        case nothingNear
+    }
+
     /// The ONE place a carried part lands. Order matters: align first, then wire
     /// from the pairs the ALIGNED part sees — a release cannot wire one pair and
     /// snap to another. `breakOverstretchedWires` deliberately does NOT run here:
     /// after the alignment's translation it could yank a NEIGHBOUR's contact off.
-    func release(id: UUID) {
-        guard scrubTime == nil else { return }
-        guard components.contains(where: { $0.id == id }) else { return }
+    @discardableResult
+    func release(id: UUID) -> ReleaseOutcome {
+        guard scrubTime == nil else { return .nothingNear }
+        guard components.contains(where: { $0.id == id }) else { return .nothingNear }
         if let alignment = alignment(for: id),
            let index = components.firstIndex(where: { $0.id == id }) {
             components[index].position = alignment.position
             components[index].axis = alignment.axis
         }
         let pairs = pendingJoins(for: id)
-        guard !pairs.isEmpty,
-              let component = components.first(where: { $0.id == id }) else { return }
+        guard let component = components.first(where: { $0.id == id }) else {
+            return .nothingNear
+        }
+        guard !pairs.isEmpty else {
+            // Nothing joinable — but a terminal in reach that was
+            // excluded only for being the same net gets the same "no"
+            // the lead pull gives: the thud, so the non-join reads as
+            // a refusal instead of a miss.
+            guard refusedJoins(for: id).isEmpty else {
+                emitSound(.thud, at: component.position, volume: 0.5)
+                return .refused
+            }
+            return .nothingNear
+        }
         var joined = false
         for pair in pairs {
             if case .connected = connectTerminals(pair.from, pair.to) { joined = true }
         }
-        guard joined else { return }
+        guard joined else {
+            // Pairs were on offer and every join was refused — the
+            // budget, since `pendingJoins` already filtered same-net.
+            emitSound(.thud, at: component.position, volume: 0.5)
+            return .refused
+        }
         emitSound(.chime, at: component.position, volume: 0.5)
         persistSoon()
+        return .joined
+    }
+
+    /// The joins a release would REFUSE: for each end, the nearest
+    /// foreign terminal within `leadReach` that is already the same
+    /// electrical point THROUGH ANOTHER PATH. A pair these two ends
+    /// already share a wire over is excluded — that connection exists,
+    /// and a part set back down in its own chain has nothing refused
+    /// about it. The renderer tints these the refusal red while the
+    /// part is carried, so the "no" is previewed exactly like the lead
+    /// pull's.
+    func refusedJoins(for id: UUID) -> [(from: Terminal, to: Terminal)] {
+        guard let component = components.first(where: { $0.id == id }) else { return [] }
+        let net = topology()
+        var pairs: [(from: Terminal, to: Terminal)] = []
+        for end in 0...1 {
+            let mine = Terminal(componentID: id, end: end)
+            let minePosition = component.terminalPosition(end)
+            var best: (terminal: Terminal, distance: Double)?
+            for other in components where other.id != id {
+                for otherEnd in 0...1 {
+                    let theirs = Terminal(componentID: other.id, end: otherEnd)
+                    let distance = simd_distance(minePosition, other.terminalPosition(otherEnd))
+                    guard distance < Self.leadReach else { continue }
+                    guard net.sameNet(mine, theirs) else { continue }
+                    guard !wires.contains(where: {
+                        ($0.from == mine && $0.to == theirs)
+                            || ($0.from == theirs && $0.to == mine)
+                    }) else { continue }
+                    if best == nil || distance < best!.distance {
+                        best = (theirs, distance)
+                    }
+                }
+            }
+            if let best {
+                pairs.append((mine, best.terminal))
+            }
+        }
+        return pairs
     }
 
     /// The ONE verb a carried part is driven by, each frame: a part hanging

@@ -194,4 +194,31 @@ final class PressLatchTests: XCTestCase {
         XCTAssertFalse(latch.isPending)
         XCTAssertNil(latch.promote(hand: start))
     }
+
+    // MARK: Settling — the tap that acts at gesture end
+
+    /// `settle` resolves a press that never became a drag. By
+    /// construction anything still pending at gesture end stayed
+    /// within `tapTravel` — a travelled press was consumed by
+    /// `promote` in `onChanged` — so what settles is a tap, and the
+    /// switch lever's toggle rides it.
+    func testSettlingAnUnpromotedPressReturnsThePayload() {
+        var latch = PressLatch<String>()
+        latch.press("lever", at: start)
+        XCTAssertEqual(latch.settle(), "lever")
+        XCTAssertFalse(latch.isPending, "settling must clear the press")
+        XCTAssertNil(latch.settle(), "a settled press must not settle twice")
+    }
+
+    /// A press that promoted was a drag, and a drag must not ALSO act
+    /// as a tap at gesture end — that is the double-fire this method
+    /// exists to prevent.
+    func testSettlingAfterAPromotionReturnsNothing() {
+        var latch = PressLatch<String>()
+        latch.press("lever", at: start)
+        XCTAssertEqual(latch.promote(hand: start + SIMD3(0.05, 0, 0)), "lever")
+        XCTAssertNil(latch.settle(),
+                     "a promoted press settled as a tap — the drag would "
+                     + "also toggle")
+    }
 }

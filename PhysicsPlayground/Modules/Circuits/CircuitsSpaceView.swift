@@ -27,6 +27,13 @@ struct CircuitsSpaceView: View {
     /// A wire end being lifted off its terminal. The payload is the
     /// wire and which of its two ends the hand was nearer to.
     @State private var wirePress = PressLatch<CircuitsModel.WireEnd>()
+    /// A switch lever under a finger. This latch never promotes to a
+    /// drag — it exists so a lever press SURVIVES the 12 mm of drift a
+    /// real hand has, like every other target on the bench, and
+    /// toggles on `settle()` at gesture end. The physical TapGesture
+    /// no longer toggles (it would double-fire: both gestures complete
+    /// on a clean tap); it only selects.
+    @State private var leverPress = PressLatch<UUID>()
     @State private var partDrag: RelativeDrag?
     /// The part a pull off the palette just made, so the drag that made
     /// it can go on moving it. It outlives the `RelativeDrag`'s name,
@@ -97,6 +104,7 @@ struct CircuitsSpaceView: View {
             let renderer = CircuitsRenderer()
             renderer.onTap = { handleTap(on: $0) }
             renderer.onTerminalAction = { model.voiceOverWire($0) }
+            renderer.onLeverAction = { model.toggleSwitch(id: $0) }
             content.add(renderer.root)
             // ARRIVES, NEVER APPEARS. Disabled here and raised by
             // `Fade.tick` below, so the apparatus resolves into the room
@@ -534,7 +542,8 @@ struct CircuitsSpaceView: View {
 
                     if bloom.updateGrip(hand: handF) { return }
                     if model.leadPull == nil, partDrag == nil,
-                       !leadPress.isPending, !partPress.isPending, !wirePress.isPending {
+                       !leadPress.isPending, !partPress.isPending,
+                       !wirePress.isPending, !leverPress.isPending {
                         if bloom.beginGrip(value.entity, hand: handF) { return }
                         beginCircuitDrag(entity: value.entity, hand: hand, renderer: renderer)
                     }
@@ -550,6 +559,10 @@ struct CircuitsSpaceView: View {
                         model.beginRewire(wire: grabbed.wire,
                                           grabbing: grabbed.end, hand: hand)
                     }
+                    // A lever press that TRAVELS is a drag to nowhere:
+                    // consume and discard it, so only a press that stays
+                    // put settles into a toggle at gesture end.
+                    _ = leverPress.promote(hand: hand)
                     switch Self.carryDispatch(
                         leadPullActive: model.leadPull != nil,
                         partDragActive: partDrag != nil,
@@ -589,11 +602,19 @@ struct CircuitsSpaceView: View {
                     meterDrag = nil
                     palette?.endDrag()
                     bloom.endGrip()
+                    // A lever press that never travelled was a flick with
+                    // up to 12 mm of drift — the same grace every other
+                    // target gets. The TapGesture only selects, so this
+                    // is the one physical path that toggles.
+                    if let id = leverPress.settle() {
+                        model.toggleSwitch(id: id)
+                    }
                     defer {
                         renderer?.previewComponentID = nil
                         leadPress.cancel()
                         partPress.cancel()
                         wirePress.cancel()
+                        leverPress.cancel()
                         partDrag = nil
                         spawnedPartID = nil
                         model.endCarry()
@@ -771,7 +792,13 @@ struct CircuitsSpaceView: View {
                 wirePress.press(.init(wire: id, end: end), at: hand)
             }
             return
-        case .lever, .none:
+        case .lever(let id):
+            // PRESSED, and never promoted: a lever is a toggle, not a
+            // handle. The press settles into the flip at gesture end
+            // if the hand stayed within `tapTravel`.
+            leverPress.press(id, at: hand)
+            return
+        case .none:
             break
         }
         // The rack claims the drag before knowing if it's a scroll or a
@@ -824,7 +851,12 @@ struct CircuitsSpaceView: View {
             model.selectWire(id: id)
             return
         case .lever(let id):
-            model.toggleSwitch(id: id)
+            // SELECT ONLY. The toggle lives on the drag path's settled
+            // press — both gestures complete on a clean tap, so if this
+            // also toggled, every clean tap would flip the switch twice
+            // and read as a no-op. VoiceOver toggles through its own
+            // `onLeverAction` callback, which physical taps never fire.
+            model.select(id: id)
             return
         case .body(let id):
             model.clearNetHighlight()
