@@ -157,9 +157,18 @@ file). What follows is the standing script.
       the build volume — there it must stay exactly where your hand
       left it, wired across the gap but NOT snapped, because a snap
       the wall would undo is a snap that lies.
-- [ ] **A part hanging by one lead swings about it** as you carry it,
-      the way a component on a wire does. A part wired at both ends,
-      or at neither, must not swing.
+- [ ] **A part hanging by one lead hangs from its JOINT (2026-08-29).**
+      Carry it with your hand near the joint: the wired lead sits ON
+      the joint and the body swings about it as you circle your hand.
+      Pull further away: the body follows your hand while its wired
+      lead keeps aiming back at the joint, the wire stretching between
+      them. Pull past ~30 cm and the snapped contact pops off into
+      your hand. A part wired at both ends, or at neither, must not
+      swing — it moves rigidly.
+- [ ] **A part pulled from the rack FOLLOWS your hand from the first
+      frame (2026-08-29).** It is born at your fingertips and rides
+      the hand all the way to the bench — it must never sit frozen at
+      the rack until you let go.
 - [ ] **PULL A LEAD (2026-08-11).** Pinch a copper lead and draw it
       across the bench: copper follows your hand. Bring it near
       another lead — it snaps to it and goes green. Let go: wired.

@@ -550,14 +550,27 @@ struct CircuitsSpaceView: View {
                         model.beginRewire(wire: grabbed.wire,
                                           grabbing: grabbed.end, hand: hand)
                     }
-                    if model.leadPull != nil {
+                    switch Self.carryDispatch(
+                        leadPullActive: model.leadPull != nil,
+                        partDragActive: partDrag != nil,
+                        rackDragging: palette?.isDragging == true
+                    ) {
+                    case .leadPull:
                         model.updateLeadPull(hand: hand)
-                    } else if let palette, palette.isDragging {
+                    case .carry:
+                        // A live carry OUTRANKS the rack: the rack's
+                        // gesture stays "dragging" after its one-shot
+                        // pull is spent, and a part it spawned must
+                        // follow the hand from its first frame, not
+                        // sit at the rack until release.
+                        if let partDrag { applyCircuitDrag(partDrag, hand: hand) }
+                    case .rack:
                         // Browsing, or the frame a pull commits on. The
                         // slot comes back exactly once — returning it
                         // every frame would put one part on the bench
                         // per frame.
-                        if let slot = palette.updateDrag(hand: handF),
+                        if let palette,
+                           let slot = palette.updateDrag(hand: handF),
                            let source = palette.source(at: slot) {
                             if let id = palette.pull(source, at: hand) {
                                 spawnedPartID = id
@@ -567,8 +580,8 @@ struct CircuitsSpaceView: View {
                                 model.beginCarry(id: id)
                             }
                         }
-                    } else if let partDrag {
-                        applyCircuitDrag(partDrag, hand: hand)
+                    case .idle:
+                        break
                     }
                 }
                 .onEnded { value in
@@ -705,6 +718,27 @@ struct CircuitsSpaceView: View {
         return .none
     }
 
+    /// Which branch owns this frame of the one drag gesture. A pure
+    /// static, like `resolveGrab`, so the order is testable without a
+    /// headset. THE ORDER IS THE FIX for a real defect: the rack's
+    /// `isDragging` stays true for the whole gesture even after its
+    /// one-shot pull is spent, so a rack that outranks a live carry
+    /// leaves the part it just spawned frozen at the rack until
+    /// release. A live carry outranks the rack; the rack still gets
+    /// the spawn frame, because on that frame no carry exists yet.
+    enum CarryPhase: Equatable {
+        case leadPull, carry, rack, idle
+    }
+
+    static func carryDispatch(
+        leadPullActive: Bool, partDragActive: Bool, rackDragging: Bool
+    ) -> CarryPhase {
+        if leadPullActive { return .leadPull }
+        if partDragActive { return .carry }
+        if rackDragging { return .rack }
+        return .idle
+    }
+
     /// The entity's name and its ancestors', nearest first.
     private static func nameChain(from entity: Entity) -> [String] {
         var names: [String] = []
@@ -760,12 +794,13 @@ struct CircuitsSpaceView: View {
     }
 
     private func applyCircuitDrag(_ drag: RelativeDrag, hand: SIMD3<Double>) {
+        // The grab offset survives (`position(forHand:)`), and the model
+        // composes the rest: swing when one lead is wired, rigid move
+        // otherwise, pop what overstretches. The composition lives in
+        // `CircuitsModel.drag` so a test can drive the real sequence.
         let position = drag.position(forHand: hand)
         guard let id = spawnedPartID ?? UUID(uuidString: drag.name) else { return }
-        model.move(id: id, to: position)
-        // A part hanging by one lead swings about it while carried.
-        model.swing(id: id, hand: position)
-        model.breakOverstretchedWires(id: id)
+        model.drag(id: id, toward: position)
     }
 
     /// A tap only SELECTS — it never wires and never deletes (wiring is a

@@ -381,33 +381,94 @@ final class CircuitsAlignmentTests: XCTestCase {
 
     // MARK: swing — where "aim the part" went
 
-    /// A part hanging by ONE lead swings about that lead: the wired
-    /// end stays pinned, the free end follows the hand.
+    /// A part hanging by ONE lead swings about its JOINT: within the
+    /// body's own reach the wired end sits exactly on the anchor and
+    /// the free end follows the hand. The pivot is the ANCHOR — the
+    /// far terminal of the wire — because the part's own terminal
+    /// moves with the part, and pivoting on it after a move is the
+    /// identity (the shipped defect this section now pins).
     func testSwingPinsTheWiredEnd() {
         let model = CircuitsModel()
         model.clearBench()
         let battery = model.add(.battery, at: CircuitsModel.buildCenter)!
         let bulb = drop(model, .bulb, near: lead(model, battery, 1), gap: 0.02)
         model.release(id: bulb)
-        let joint = lead(model, bulb, 0)
+        let joint = lead(model, battery, 1)
 
-        model.swing(id: bulb, hand: joint + SIMD3(0.0, 0.3, 0.0))
+        // Hand INSIDE the body's own reach: a pure swing about the joint.
+        model.swing(id: bulb, hand: joint + SIMD3(0.0, 0.05, 0.0))
         XCTAssertEqual(simd_distance(lead(model, bulb, 0), joint), 0, accuracy: 1e-12,
-                       "The wired lead must stay where it is.")
+                       "The wired lead must sit exactly on the joint.")
         XCTAssertEqual(model.components.first { $0.id == bulb }!.axis.y, 1, accuracy: 1e-9,
                        "The part should point at the hand.")
     }
 
+    /// THE COMPOSED SEQUENCE, driven through the one verb the view
+    /// calls. A one-wired part dragged past its own reach tracks the
+    /// hand while aiming its lead back at the joint — the wire
+    /// stretches honestly, and does not break short of `breakDistance`.
+    /// This is the regression pin for the defect where the view fed
+    /// `swing` the part's own just-moved centre and the affordance
+    /// never happened at all.
+    func testACarriedOneWiredPartAimsAtItsJoint() {
+        let model = CircuitsModel()
+        model.clearBench()
+        let battery = model.add(.battery, at: CircuitsModel.buildCenter)!
+        let bulb = drop(model, .bulb, near: lead(model, battery, 1), gap: 0.02)
+        model.release(id: bulb)
+        let joint = lead(model, battery, 1)
+
+        model.beginCarry(id: bulb)
+        let target = joint + SIMD3(0.0, 0.2, 0.0)
+        model.drag(id: bulb, toward: target)
+
+        let part = model.components.first { $0.id == bulb }!
+        XCTAssertEqual(simd_distance(part.position, target), 0, accuracy: 1e-9,
+                       "Past its own reach the body tracks the hand.")
+        XCTAssertEqual(part.axis.y, 1, accuracy: 1e-9,
+                       "…while aiming its wired lead back at the joint.")
+        XCTAssertEqual(model.wires.count, 1,
+                       "A stretch short of breakDistance must not pop the wire.")
+        let stretched = simd_distance(lead(model, bulb, 0), joint)
+        XCTAssertEqual(stretched, 0.2 - CircuitsModel.terminalOffset, accuracy: 1e-9,
+                       "The wire spans exactly the gap the leash leaves.")
+        model.endCarry()
+    }
+
+    /// And past `breakDistance` the snapped contact pops — through the
+    /// same composed verb, with no second threshold anywhere.
+    func testDraggingPastBreakDistancePopsTheSnappedContact() {
+        let model = CircuitsModel()
+        model.clearBench()
+        let battery = model.add(.battery, at: CircuitsModel.buildCenter)!
+        let bulb = drop(model, .bulb, near: lead(model, battery, 1), gap: 0.02)
+        model.release(id: bulb)
+        let joint = lead(model, battery, 1)
+        XCTAssertEqual(model.wires.count, 1)
+
+        model.beginCarry(id: bulb)
+        model.drag(id: bulb, toward: joint + SIMD3(0.0, 0.5, 0.0))
+        XCTAssertEqual(model.wires.count, 0,
+                       "A contact stretched past breakDistance must pop.")
+        model.endCarry()
+    }
+
     /// A part wired at BOTH ends does not swing — the chain decides
     /// the aim. A part wired at neither has nothing to hang from.
+    /// Either way `drag` moves it rigidly: the hand is obeyed, the
+    /// axis untouched.
     func testSwingIgnoresPartsWiredAtBothEndsOrNeither() {
         let model = CircuitsModel()
         model.clearBench()
         let loose = model.add(.resistor, at: CircuitsModel.buildCenter)!
         let before = model.components.first { $0.id == loose }!.axis
-        model.swing(id: loose, hand: CircuitsModel.buildCenter + SIMD3(0, 0.3, 0))
-        XCTAssertEqual(simd_distance(model.components.first { $0.id == loose }!.axis, before),
+        let target = CircuitsModel.buildCenter + SIMD3(0, 0.3, 0)
+        model.drag(id: loose, toward: target)
+        let unwired = model.components.first { $0.id == loose }!
+        XCTAssertEqual(simd_distance(unwired.axis, before),
                        0, accuracy: 1e-12, "An unwired part must not swing.")
+        XCTAssertEqual(simd_distance(unwired.position, target), 0, accuracy: 1e-9,
+                       "An unwired part moves rigidly with the hand.")
 
         // Now wire both ends and try again.
         let a = model.add(.battery, at: CircuitsModel.buildCenter - SIMD3(0.3, 0, 0))!
@@ -415,7 +476,7 @@ final class CircuitsAlignmentTests: XCTestCase {
         model.connectTerminals(.init(componentID: loose, end: 0), .init(componentID: a, end: 1))
         model.connectTerminals(.init(componentID: loose, end: 1), .init(componentID: b, end: 0))
         let both = model.components.first { $0.id == loose }!.axis
-        model.swing(id: loose, hand: CircuitsModel.buildCenter + SIMD3(0, 0.3, 0))
+        model.drag(id: loose, toward: target)
         XCTAssertEqual(simd_distance(model.components.first { $0.id == loose }!.axis, both),
                        0, accuracy: 1e-12, "A part wired at both ends must not swing.")
     }

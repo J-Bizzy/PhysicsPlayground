@@ -389,28 +389,61 @@ final class CircuitsModel {
         persistSoon()
     }
 
-    /// A carried part with exactly ONE wired lead swings about it; both ends
-    /// wired or neither, no swing. Aim is a consequence of connection.
-    func swing(id: UUID, hand: SIMD3<Double>) {
-        guard scrubTime == nil else { return }
-        guard let index = components.firstIndex(where: { $0.id == id }) else { return }
+    /// The ONE verb a carried part is driven by, each frame: a part hanging
+    /// by exactly one wired lead swings about its joint, anything else moves
+    /// rigidly — and either way a snapped contact stretched past
+    /// `breakDistance` pops. The composition lives HERE, not in the view,
+    /// because the view once composed it wrongly (`swing` fed the part's own
+    /// just-moved centre, which is exactly the identity) and nothing headless
+    /// could see it.
+    func drag(id: UUID, toward target: SIMD3<Double>) {
+        if !swing(id: id, hand: target) {
+            move(id: id, to: target)
+        }
+        breakOverstretchedWires(id: id)
+    }
+
+    /// A carried part with exactly ONE wired lead swings about its JOINT —
+    /// the far terminal of that wire, the genuinely fixed point. (The part's
+    /// OWN terminal moves with the part; pivoting on it after a move is the
+    /// identity.) Within the body's own reach the lead sits exactly on the
+    /// joint, a pure swing; past it the body tracks the hand while aiming its
+    /// lead back at the joint, so the wire stretches honestly and
+    /// `breakDistance` alone decides when the contact pops (via `drag`). One
+    /// continuous formula, no second threshold. Both ends wired or neither,
+    /// no swing — the chain decides the aim. Aim is a consequence of
+    /// connection. Returns whether it owned the carry.
+    @discardableResult
+    func swing(id: UUID, hand: SIMD3<Double>) -> Bool {
+        guard scrubTime == nil else { return false }
+        guard let index = components.firstIndex(where: { $0.id == id }) else { return false }
         let ends = (0...1).filter { end in
             wires.contains { $0.from == Terminal(componentID: id, end: end)
                           || $0.to == Terminal(componentID: id, end: end) }
         }
-        guard ends.count == 1, let pinned = ends.first,
-              let pivot = terminalWorldPosition(Terminal(componentID: id, end: pinned))
-        else { return }
+        guard ends.count == 1, let pinned = ends.first else { return false }
+        let mine = Terminal(componentID: id, end: pinned)
+        let anchors = wires.compactMap { wire -> SIMD3<Double>? in
+            if wire.from == mine { return terminalWorldPosition(wire.to) }
+            if wire.to == mine { return terminalWorldPosition(wire.from) }
+            return nil
+        }
+        // Several wires on the one lead: hang from the nearest joint.
+        guard let pivot = anchors.min(by: {
+            simd_distance($0, hand) < simd_distance($1, hand) })
+        else { return false }
         var direction = hand - pivot
         let reach = simd_length(direction)
-        guard reach > 1e-4 else { return }
+        guard reach > 1e-4 else { return false }
         direction /= reach
-        // Same clamp veto as `alignment(for:)`: where the clamp would shift the
-        // body, the pinned lead would leave its joint.
-        let position = pivot + direction * Self.terminalOffset
-        guard simd_distance(Self.clampToRoomSafety(position), position) < 1e-9 else { return }
+        let position = pivot + direction * max(reach, Self.terminalOffset)
+        // Same clamp veto as `alignment(for:)`: where the clamp would shift
+        // the body, the pinned lead would leave its aim — refuse and let
+        // `drag` fall back to the rigid move, which clamps honestly.
+        guard simd_distance(Self.clampToRoomSafety(position), position) < 1e-9 else { return false }
         components[index].axis = pinned == 0 ? direction : -direction
         components[index].position = position
+        return true
     }
 
     // MARK: Pull-apart detach (the magnet, in reverse)

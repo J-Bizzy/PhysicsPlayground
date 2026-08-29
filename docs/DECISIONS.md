@@ -16,6 +16,45 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-29 — A one-wired part hangs from its joint while carried
+
+**Decision:** A carried part with exactly one wired lead pivots on the
+ANCHOR — the far terminal of its wire — with a leash rather than a mode
+switch: within the body's own reach (`terminalOffset`) the lead sits
+exactly on the joint and the body swings; past it the body tracks the
+hand while aiming its lead back at the joint, the wire stretches, and
+the existing `breakDistance` alone decides when the contact pops. The
+composition (swing, else rigid move, then break) is one model verb,
+`drag(id:toward:)`, and the gesture's per-frame routing is a pure
+static, `carryDispatch`.
+
+**Context:** Two shipped defects, found in one review. First, `swing`
+pivoted on the part's OWN wired terminal — which moves with the part —
+and the view called it after `move` with the part's just-moved centre,
+so it computed the identity: the "hangs by one lead and swings"
+affordance in the first-run hint never actually happened. Its test
+passed by skipping the `move`. Second, the gesture dispatch consulted
+the rack before the live carry; the rack holds its gesture until it
+ends even after its one-shot pull is spent, so a part pulled from the
+rack froze at its spawn point until release. Both defects lived in the
+composed closure sequence, which nothing headless exercised — the same
+gap `resolveGrab` was extracted to close.
+
+A pure pin-the-lead swing could not simply be fixed in place: if the
+wired lead never leaves the joint, the wire never lengthens and
+pull-apart detach can never fire — and a hard mode-switch radius would
+be a new threshold constant, the exact sin the module paid to kill
+(`snapDistance` 0.13 vs the hardcoded 0.09). The leash is one
+continuous formula that is a pure swing near the joint and an honest
+stretch past it.
+
+**Consequences:** The view's `applyCircuitDrag` is three lines and owns
+no composition; `CircuitsAlignmentTests` drives the real sequence
+through `drag`, and `CircuitsCarryDispatchTests` pins the dispatch
+order plus the Well behaviour (spent pull, still dragging) that makes
+the order load-bearing. This rules out re-composing carry behaviour in
+the gesture closure.
+
 ## 2026-08-29 — Wires are straight; the catenary is removed
 
 **Decision:** A circuit connection is drawn as a taut straight line
