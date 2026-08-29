@@ -31,23 +31,16 @@ enum CircuitsPartsLayout {
     /// (−0.62) still overlaps it; the rack (0.74) clears it by the
     /// station margin. Both are correct.
 
-    static let rows = 3
-    static let columns = 2
-
-    /// Vertical room a part needs beyond its own height (nameplate 0.034
-    /// below, plate, inter-row gap). Tight: three rows of the tallest
-    /// part must fit the ~37 cm band, and the gap is the only slack.
-    static let plateAndGap: Float = 0.066
-
-    /// Which side of the room a block stands on.
+    /// ORDER within the one column, not geography: the racks merged into
+    /// a single right-hand column, and the flanks survive only as the
+    /// grouping that keeps sources-and-interrupters above loads.
     enum Flank: CaseIterable {
         case left, right
     }
 
-    /// Which parts stand on which side: what DRIVES or INTERRUPTS a
-    /// circuit on the left, what the current DOES on the right.
-    /// Exhaustive by construction — a test fails any unassigned kind, so
-    /// no `ComponentKind` can be authored but unbuildable.
+    /// What DRIVES or INTERRUPTS a circuit first, then what the current
+    /// DOES. Exhaustive by construction — a test fails any unassigned
+    /// kind, so no `ComponentKind` can be authored but unbuildable.
     static func kinds(on flank: Flank) -> [CircuitsModel.ComponentKind] {
         switch flank {
         case .left: [.battery, .acSource, .switcher, .fuse]

@@ -35,7 +35,6 @@ final class CircuitsScrubLockTests: XCTestCase {
 
         XCTAssertNil(model.add(.resistor), "no new parts in the past")
         model.select(id: anyPart.id)
-        model.removeSelected()
         model.removeComponent(id: anyPart.id)
         model.detachComponent(id: anyPart.id)
         model.deleteWire(id: anyWire.id)

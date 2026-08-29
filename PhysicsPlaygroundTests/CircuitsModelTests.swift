@@ -365,8 +365,7 @@ final class CircuitsModelTests: XCTestCase {
     func testRemovingComponentRemovesItsWires() {
         let model = CircuitsModel()
         let bulb = model.components.first { $0.kind == .bulb }!
-        model.select(id: bulb.id)
-        model.removeSelected()
+        model.removeComponent(id: bulb.id)
         XCTAssertEqual(model.components.count, 2)
         XCTAssertEqual(model.wires.count, 1,
                        "only the battery–switch wire survives")

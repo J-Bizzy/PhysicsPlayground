@@ -28,6 +28,10 @@ final class CircuitsRenderer {
     /// physical tap path only SELECTS a lever (the toggle settles out
     /// of the drag gesture) — see the lever's `SpatialActions.attach`.
     var onLeverAction: ((UUID) -> Void)?
+    /// VoiceOver's wire removal. The pinch path deletes a wire by
+    /// pulling an end into open air — a gesture VoiceOver cannot make —
+    /// so its activate deletes directly, and physical taps never fire it.
+    var onWireAction: ((UUID) -> Void)?
 
     /// Called from the SpaceView's `onDisappear` — an `EventSubscription`
     /// outlives the view that made it and would hold the entity graph alive.
@@ -775,7 +779,7 @@ final class CircuitsRenderer {
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = LocalizedStringResource(
-            stringLiteral: "\(component.kind.displayName). Drag to move; pinch its terminals to wire.")
+            stringLiteral: "\(component.kind.displayName). Drag to move; pull from its terminals to wire.")
         holder.components.set(accessibility)
         viewRoot.addChild(holder)
 
@@ -817,10 +821,14 @@ final class CircuitsRenderer {
             SpatialActions.attach(
                 to: terminal, label: "Terminal. Activate to wire from here.",
                 activate: { [weak self] in self?.onTerminalAction?(key) })
+            // "Activate this, then another" is TRUE for VoiceOver — the
+            // deliberate surviving tap-tap path (`voiceOverWire`) — and
+            // matches the SpatialActions label above, which used to
+            // contradict this one on the same entity.
             var terminalAccessibility = AccessibilityComponent()
             terminalAccessibility.isAccessibilityElement = true
             terminalAccessibility.label = LocalizedStringResource(stringLiteral:
-                "\(component.kind.displayName) terminal. Pinch this then another terminal to wire them.")
+                "\(component.kind.displayName) terminal. Activate this, then another terminal, to wire them.")
             terminal.components.set(terminalAccessibility)
             holder.addChild(terminal)
             terminals.append(terminal)
@@ -1234,11 +1242,17 @@ final class CircuitsRenderer {
                 accessibility.isAccessibilityElement = true
                 accessibility.label = "Wire. Pinch an end and pull to move it."
                 entity.components.set(accessibility)
+                // The label was "Activate to remove it" while the
+                // activation only SELECTED — and the pinch path removes a
+                // wire by pulling it into open air, a gesture VoiceOver
+                // cannot make. The dedicated callback makes the label
+                // true: activations remove, and physical taps never fire
+                // this, so "a tap never deletes" stands for hands.
+                let key = wire.id
                 SpatialActions.attach(
                     to: entity, label: "Wire. Activate to remove it.",
-                    activate: { [weak self, weak entity] in
-                        guard let entity else { return }
-                        self?.onTap?(entity)
+                    activate: { [weak self] in
+                        self?.onWireAction?(key)
                     })
                 viewRoot.addChild(entity)
                 wireEntities[wire.id] = entity

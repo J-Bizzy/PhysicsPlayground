@@ -317,8 +317,12 @@ final class CircuitsRewireTests: XCTestCase {
         XCTAssertNil(model.leadPull)
     }
 
-    /// `deleteWire` survives — it lost its tap caller but it is still
-    /// the free-air landing and `detachComponent`'s helper.
+    /// `deleteWire` is VoiceOver's wire removal (`onWireAction`) — the
+    /// pinch path deletes by pulling an end into open air, a gesture
+    /// VoiceOver cannot make. (This comment once claimed it was "the
+    /// free-air landing and `detachComponent`'s helper"; neither was
+    /// true — both do their own `removeAll` — which is how a dead
+    /// function nearly kept a live test.)
     func testDeleteWireStillWorksForTheCallersThatRemain() {
         let model = CircuitsModel()
         let (_, _, _, wire) = loop(model)

@@ -105,6 +105,7 @@ struct CircuitsSpaceView: View {
             renderer.onTap = { handleTap(on: $0) }
             renderer.onTerminalAction = { model.voiceOverWire($0) }
             renderer.onLeverAction = { model.toggleSwitch(id: $0) }
+            renderer.onWireAction = { model.deleteWire(id: $0) }
             content.add(renderer.root)
             // ARRIVES, NEVER APPEARS. Disabled here and raised by
             // `Fade.tick` below, so the apparatus resolves into the room
@@ -219,7 +220,7 @@ struct CircuitsSpaceView: View {
                         position: CircuitsPartsLayout.rightSlot(index: index),
                         spawn: { model.add(kind, at: $0) })
                 }
-            // The meter is the twelfth slot, parked in the rack. `handOver`
+            // The meter is the last slot, parked in the rack. `handOver`
             // not `spawn`: there is exactly one multimeter, not a fresh one
             // per pull.
             let meterSlot = Well.Spec(

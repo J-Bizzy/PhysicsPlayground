@@ -84,11 +84,13 @@ final class Well {
 
     /// How many slots are on screen at once, or nil for all of them.
     ///
-    /// A SHELF, NOT A WALL. Circuit Workshop stands twelve kinds of part
-    /// and the owner's note was that twelve at once is a lot to look
-    /// past; the other five modules have three or four and want none of
-    /// this. Nil keeps their behaviour exactly as it was — the window is
-    /// opt-in, so adding it could not change a module that did not ask.
+    /// A SHELF, NOT A WALL. Circuit Workshop stands every part kind plus
+    /// the meter (a hand-kept count here drifted to "twelve" — the CLAUDE.md
+    /// launch-args lesson, in a comment) and the owner's note was that a
+    /// full wall at once is a lot to look past; the other five modules
+    /// have three or four sources and want none of this. Nil keeps their
+    /// behaviour exactly as it was — the window is opt-in, so adding it
+    /// could not change a module that did not ask.
     ///
     /// Setting this BUILDS the carets, because a caller sets it after
     /// `init` and the first version built them there — where
@@ -243,8 +245,8 @@ final class Well {
     ///
     /// READ BY THE CARETS BELOW, not left for a caller to remember. The
     /// first version of this said "the caller draws whatever tells the
-    /// user so" and no caller did — six of twelve parts on screen and
-    /// nothing saying the other six existed, which is the same
+    /// user so" and no caller did — six slots of the rack on screen and
+    /// nothing saying the rest existed, which is the same
     /// authored-but-dark defect this project keeps convicting, committed
     /// by the comment that promised otherwise.
     var canScrollUp: Bool { scrollIndex > 0 }
@@ -264,9 +266,9 @@ final class Well {
     /// reachable without knowing the gesture, and reachable by VoiceOver,
     /// which cannot drag at all.
     ///
-    /// A PAGE, not a slot: at six visible of twelve, one press reaches
-    /// the end. Stepping one at a time would take six presses to learn
-    /// what is down there.
+    /// A PAGE, not a slot: at six visible, one press reaches the end of
+    /// the rack. Stepping one at a time would take a press per hidden
+    /// slot to learn what is down there.
     private let upCaret = ModelEntity()
     private let downCaret = ModelEntity()
 

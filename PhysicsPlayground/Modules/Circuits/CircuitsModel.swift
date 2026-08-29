@@ -56,8 +56,8 @@ final class CircuitsModel {
     // MARK: Components
 
     enum ComponentKind: String, CaseIterable, Identifiable, Codable {
-        // Declaration order is drawer order: power, passives,
-        // outputs, control.
+        // Grouped for the reader: power, passives, outputs, control.
+        // The RACK's order is `CircuitsPartsLayout.kinds(on:)`, not this.
         case battery, acSource, resistor, capacitor, inductor
         case bulb, led, motor, fuse, switcher
 
@@ -265,19 +265,6 @@ final class CircuitsModel {
         emitSound(.pop, at: position, volume: 0.6)
         persistSoon()
         return component.id
-    }
-
-    func removeSelected() {
-        guard scrubTime == nil else { return }
-        guard let selectedID,
-              let component = components.first(where: { $0.id == selectedID }) else { return }
-        wires.removeAll { $0.from.componentID == selectedID || $0.to.componentID == selectedID }
-        components.removeAll { $0.id == selectedID }
-        if leadPull?.source.componentID == selectedID { cancelLeadPull() }
-        if voiceWireSource?.componentID == selectedID { voiceWireSource = nil }
-        self.selectedID = components.last?.id
-        emitSound(.thud, at: component.position, volume: 0.4)
-        persistSoon()
     }
 
     func select(id: UUID) {
@@ -908,6 +895,10 @@ final class CircuitsModel {
         }
     }
 
+    /// VoiceOver's wire removal — the pinch path deletes a wire by
+    /// pulling an end into open air, a gesture VoiceOver cannot make,
+    /// so the wire's `activate` routes here (`onWireAction`). Physical
+    /// taps never call this: a tap selects, never deletes.
     func deleteWire(id: UUID) {
         guard scrubTime == nil else { return }
         guard let wire = wires.first(where: { $0.id == id }) else { return }

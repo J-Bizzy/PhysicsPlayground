@@ -66,7 +66,7 @@ enum CircuitsModule {
     static let legend: [LegendItem] = [
         LegendItem(
             swatch: .fill(Color(uiColor: DesignTokens.Palette.copperUI)),
-            text: "Copper terminals — pinch one, then another, to wire them; pinch a wire to remove it"
+            text: "Copper terminals — pull a lead from one to another to wire them; pull a wire's end into open air to remove it"
         ),
         LegendItem(
             swatch: .fill(Color(uiColor: DesignTokens.Palette.electronUI)),
