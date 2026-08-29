@@ -1105,49 +1105,12 @@ final class CircuitsRenderer {
     }
     private var wireVoltBuckets: [UUID: Int] = [:]
 
-    /// The polyline each wire is currently drawn along, so the
-    /// electrons can ride the same path rather than the chord.
-    private var wireCurves: [UUID: [SIMD3<Float>]] = [:]
-    /// The endpoints each wire's segments were last laid out for, and
-    /// the cumulative arc table the drift dots walk. Both are pure
-    /// functions of the endpoints, so both are rebuilt only when an end
-    /// actually moves — an idle bench used to re-solve every catenary
-    /// and rewrite every segment transform every frame for nothing.
+    /// The endpoints each wire's segment was last laid out for. A wire
+    /// is a pure function of its two endpoints, so the transform and
+    /// the collider are rebuilt only when an end actually moves — an
+    /// idle bench used to rewrite every segment transform every frame
+    /// for nothing.
     private var wireLaidEndpoints: [UUID: (a: SIMD3<Float>, b: SIMD3<Float>)] = [:]
-    private var wireArcs: [UUID: [Float]] = [:]
-
-    /// How many segments a hanging cable is drawn from.
-    ///
-    /// A STRAIGHT WIRE IS ONE SEGMENT, which matters more than it
-    /// sounds: after a snap-align most joints are coincident and most
-    /// remaining wires are short and taut, so a tidy bench costs
-    /// exactly what it cost before sag existed. Only a genuine span
-    /// pays for its own curve.
-    private static let sagSegments = 7
-
-    /// The path a wire hangs along, in bench coordinates.
-    private func wireCurve(from a: SIMD3<Float>, to b: SIMD3<Float>,
-                           span: Double) -> [SIMD3<Float>] {
-        var slack = CircuitsModel.slack(span: span)
-        #if DEBUG
-        // `-circSag <ratio>` overrides the policy so a still frame can
-        // show the curve at a chosen depth — and `-circSag 0` proves
-        // the straight fallback, which is otherwise only reachable by
-        // building a bench with every joint snapped.
-        // `as? NSNumber`, not `as? Double`: `-circSag 0` is stored as
-        // an integer, so a Double cast silently fails and the override
-        // does nothing — which is exactly how the first attempt at
-        // photographing the straight fallback produced two identical
-        // pictures of a sagging one.
-        if let forced = UserDefaults.standard.object(forKey: "circSag") as? NSNumber {
-            slack = forced.doubleValue * span
-        }
-        #endif
-        guard slack > 1e-5 else { return [a, b] }
-        return Catenary.points(from: SIMD3<Double>(a), to: SIMD3<Double>(b),
-                               slack: slack, samples: Self.sagSegments + 1)
-            .map { SIMD3<Float>($0) }
-    }
 
     /// Where each wire's collider was last shaped, so a wire that is
     /// not moving does not rebuild shapes it already has.
@@ -1158,53 +1121,39 @@ final class CircuitsRenderer {
     /// cost none — only the one or two on a carried part pay.
     private static let colliderRebuildEpsilon: Float = 0.002
 
-    /// Give the wire a grab volume that FOLLOWS THE CURVE, in three
-    /// capsules rather than one along the chord.
-    ///
-    /// On a long hanging span the chord passes through open air a
-    /// hand's width above the cable, so a single straight capsule
-    /// would put the grab volume where the wire visibly is not.
+    /// Give the wire a grab volume: one capsule along the wire, on
+    /// this unscaled parent — the visual segment carries its length as
+    /// a Y scale, and `ColliderCriterionTests` rightly refuses to
+    /// measure a collider under a world scale of 0.05.
     private func reshapeCollider(_ entity: ModelEntity, id: UUID,
-                                 along curve: [SIMD3<Float>]) {
-        guard let first = curve.first, let last = curve.last else { return }
+                                 from a: SIMD3<Float>, to b: SIMD3<Float>) {
         if let previous = wireColliderAnchors[id],
-           simd_distance(previous.0, first) < Self.colliderRebuildEpsilon,
-           simd_distance(previous.1, last) < Self.colliderRebuildEpsilon {
+           simd_distance(previous.0, a) < Self.colliderRebuildEpsilon,
+           simd_distance(previous.1, b) < Self.colliderRebuildEpsilon {
             return
         }
-        wireColliderAnchors[id] = (first, last)
+        wireColliderAnchors[id] = (a, b)
 
-        // Three, whatever the curve was sampled at: enough to follow a
-        // sag, few enough that a moving wire is cheap.
-        var shapes: [ShapeResource] = []
-        let pieces = 3
-        for piece in 0..<pieces {
-            let a = curve[piece * (curve.count - 1) / pieces]
-            let b = curve[(piece + 1) * (curve.count - 1) / pieces]
-            let direction = b - a
-            let length = simd_length(direction)
-            guard length > 1e-4 else { continue }
-            shapes.append(ShapeResource
-                .generateCapsule(height: length, radius: 0.016)
-                .offsetBy(rotation: VectorFieldArrows.rotationFromYAxis(to: direction / length),
-                          translation: (a + b) / 2))
-        }
-        guard !shapes.isEmpty else { return }
-        entity.components.set(CollisionComponent(shapes: shapes))
+        let direction = b - a
+        let length = simd_length(direction)
+        guard length > 1e-4 else { return }
+        let capsule = ShapeResource
+            .generateCapsule(height: length, radius: 0.016)
+            .offsetBy(rotation: VectorFieldArrows.rotationFromYAxis(to: direction / length),
+                      translation: (a + b) / 2)
+        entity.components.set(CollisionComponent(shapes: [capsule]))
         entity.components.set(InputTargetComponent())
         entity.components.set(HoverEffectComponent())
     }
 
-    /// Point a wire's segment children along a polyline, growing the
-    /// pool of segments if the curve needs more than it has.
+    /// Stretch a wire's one segment taut between its two endpoints.
     ///
-    /// Each segment is a copper core with a dark jacket child, the
-    /// same two-layer cable the straight version drew — the jacket
-    /// carries the silhouette, the core carries the live voltage
+    /// The segment is a copper core with a dark jacket child — the
+    /// jacket carries the silhouette, the core carries the live voltage
     /// colour, and the electrons ride inside.
-    private func layOut(segmentsOf entity: ModelEntity, along curve: [SIMD3<Float>]) {
-        let needed = max(curve.count - 1, 1)
-        while entity.children.count < needed {
+    private func layOut(segmentsOf entity: ModelEntity,
+                        from a: SIMD3<Float>, to b: SIMD3<Float>) {
+        if entity.children.isEmpty {
             let core = ModelEntity(
                 mesh: .generateCylinder(height: 1, radius: 0.0032),
                 materials: [Self.copperMaterial])
@@ -1213,29 +1162,25 @@ final class CircuitsRenderer {
                 materials: [Self.wireJacketMaterial])
             jacket.name = "jacket"
             core.addChild(jacket)
-            // SEGMENTS ARE PURE VISUALS — no collider, deliberately.
-            // A segment carries its own length as a Y scale, and a
-            // 45 mm piece of a curve therefore has a world scale of
-            // 0.045; `ColliderCriterionTests` reads any collider under
-            // a scale below 0.05 as a FOLDED instrument it cannot
-            // honestly measure, and says so rather than passing. It is
-            // right to. The grab volume lives on the parent instead,
-            // which is unscaled — see `reshapeCollider`.
+            // THE SEGMENT IS PURE VISUAL — no collider, deliberately.
+            // It carries its own length as a Y scale, and a short wire
+            // therefore has a world scale under 0.05, which
+            // `ColliderCriterionTests` reads as a FOLDED instrument it
+            // cannot honestly measure, and says so rather than passing.
+            // It is right to. The grab volume lives on the parent
+            // instead, which is unscaled — see `reshapeCollider`.
             entity.addChild(core)
         }
-        for (index, child) in entity.children.enumerated() {
-            guard index < needed else { child.isEnabled = false; continue }
-            let a = curve[index], b = curve[index + 1]
-            let direction = b - a
-            let length = simd_length(direction)
-            guard length > 1e-6 else { child.isEnabled = false; continue }
-            child.isEnabled = true
-            // The parent is at the origin of `viewRoot`, so segment
-            // transforms are bench coordinates directly.
-            child.position = (a + b) / 2
-            child.orientation = VectorFieldArrows.rotationFromYAxis(to: direction / length)
-            child.scale = SIMD3(1, length, 1)
-        }
+        guard let child = entity.children.first else { return }
+        let direction = b - a
+        let length = simd_length(direction)
+        guard length > 1e-6 else { child.isEnabled = false; return }
+        child.isEnabled = true
+        // The parent is at the origin of `viewRoot`, so segment
+        // transforms are bench coordinates directly.
+        child.position = (a + b) / 2
+        child.orientation = VectorFieldArrows.rotationFromYAxis(to: direction / length)
+        child.scale = SIMD3(1, length, 1)
     }
 
     private func syncWires(_ model: CircuitsModel) {
@@ -1244,9 +1189,7 @@ final class CircuitsRenderer {
             wireEntities[id]?.removeFromParent()
             wireEntities[id] = nil
             wirePhases[id] = nil
-            wireCurves[id] = nil
             wireLaidEndpoints[id] = nil
-            wireArcs[id] = nil
             wireColliderAnchors[id] = nil
         }
 
@@ -1259,10 +1202,10 @@ final class CircuitsRenderer {
                 // conductor inside — the core carries the live voltage
                 // colour and the electrons ride in it.
                 //
-                // A HANGING CABLE IS BUILT FROM SEGMENTS sharing one
-                // unit-cylinder mesh, never a regenerated `TubeMesh`: the
-                // per-frame path touches transforms only, and a wire on a
-                // carried part moves every frame.
+                // The cable is ONE unit-cylinder segment stretched by its
+                // transform, never a regenerated `TubeMesh`: the per-frame
+                // path touches transforms only, and a wire on a carried
+                // part moves every frame.
                 entity = ModelEntity()
                 entity.name = "w-\(wire.id.uuidString)"
                 var accessibility = AccessibilityComponent()
@@ -1288,39 +1231,23 @@ final class CircuitsRenderer {
             entity.isEnabled = true
             let length = simd_distance(a, b)
             // Two leads snapped into one point need no cable between
-            // them, which is what keeps a tidy chained bench from
-            // sprouting droops at every joint.
+            // them.
             guard length > 1e-4 else { entity.isEnabled = false; continue }
 
-            // Re-laid ONLY when an end moved. The curve, the segment
-            // transforms, the collider and the arc table are all pure
-            // functions of the two endpoints; on an idle bench the
-            // endpoints are bit-identical frame to frame, and a carried
-            // part changes them every frame — so this gate costs the
-            // moving case nothing and saves the still case everything.
+            // Re-laid ONLY when an end moved. The segment transform and
+            // the collider are pure functions of the two endpoints; on
+            // an idle bench the endpoints are bit-identical frame to
+            // frame, and a carried part changes them every frame — so
+            // this gate costs the moving case nothing and saves the
+            // still case everything.
             if wireLaidEndpoints[wire.id].map({ $0.a != a || $0.b != b }) ?? true {
                 wireLaidEndpoints[wire.id] = (a, b)
-                let curve = wireCurve(from: a, to: b, span: Double(length))
-                wireCurves[wire.id] = curve
-                layOut(segmentsOf: entity, along: curve)
-                reshapeCollider(entity, id: wire.id, along: curve)
-                // The arc table the drift dots walk, built beside the
-                // curve it measures rather than once per frame in
-                // `driftDots`.
-                var arc: [Float] = [0]
-                arc.reserveCapacity(curve.count)
-                for index in 1..<curve.count {
-                    arc.append(arc[index - 1]
-                        + simd_distance(curve[index - 1], curve[index]))
-                }
-                wireArcs[wire.id] = arc
-                // A re-lay can GROW the segment pool, and `layOut`
-                // mints new cores in bare copper. The repaint below
-                // only fires on a bucket change, and stretching a wire
-                // changes no voltage — so without this the six fresh
-                // segments of a newly hanging cable stay copper beside
-                // one painted one. Forgetting the bucket forces the
-                // repaint to cover them on this same pass.
+                layOut(segmentsOf: entity, from: a, to: b)
+                reshapeCollider(entity, id: wire.id, from: a, to: b)
+                // A re-lay can mint the segment in bare copper. The
+                // repaint below only fires on a bucket change, and
+                // stretching a wire changes no voltage — forgetting the
+                // bucket forces the repaint to cover it on this pass.
                 wireVoltBuckets[wire.id] = nil
             }
 
@@ -1487,7 +1414,7 @@ final class CircuitsRenderer {
             guard let entity = wireEntities[wire.id], entity.isEnabled,
                   let a = terminalWorld(wire.from, model),
                   let b = terminalWorld(wire.to, model) else { continue }
-            driftDots(key: wire.id, along: wireCurves[wire.id] ?? [a, b],
+            driftDots(key: wire.id, from: a, to: b,
                       current: model.wireFlows[wire.id] ?? 0,
                       model: model, dt: dt, dotIndex: &dotIndex)
         }
@@ -1496,48 +1423,16 @@ final class CircuitsRenderer {
         }
     }
 
-    /// Lays a run of drifting electron dots between two points, advancing
+    /// Lays a run of drifting electron dots along a wire, advancing
     /// their shared phase by the current's drift speed (− to +, opposite
-    /// the conventional arrow) over the real elapsed time.
-    /// Where a given distance along the polyline lands.
-    private func point(onCurve curve: [SIMD3<Float>], arc: [Float],
-                       at distance: Float) -> SIMD3<Float> {
-        var index = 1
-        while index < arc.count - 1 && arc[index] < distance { index += 1 }
-        let spanStart = arc[index - 1]
-        let spanLength = max(arc[index] - spanStart, 1e-6)
-        let t = min(max((distance - spanStart) / spanLength, 0), 1)
-        return curve[index - 1] + (curve[index] - curve[index - 1]) * t
-    }
-
-    /// Beads riding a wire, spaced along its ARC — so on a hanging
-    /// cable they follow the droop rather than cutting through the
-    /// air beneath it.
+    /// the conventional arrow) over the real elapsed time. The wire is
+    /// taut, so a bead's position is a straight lerp between the ends.
     private func driftDots(
-        key: UUID, along curve: [SIMD3<Float>],
+        key: UUID, from a: SIMD3<Float>, to b: SIMD3<Float>,
         current: Double, model: CircuitsModel, dt: Double, dotIndex: inout Int
     ) {
-        guard abs(current) > 5e-4, curve.count >= 2 else { return }
-
-        // Cumulative arc length, so `t` is a fraction of the distance
-        // TRAVELLED and the beads stay evenly spaced around the curve
-        // instead of bunching where it bends. Cached beside the curve in
-        // `syncWires` and rebuilt only when an end moves; built here
-        // only for a run with no cache entry (or a stale one — the
-        // count check catches the `?? [a, b]` fallback curve).
-        let arc: [Float]
-        if let cached = wireArcs[key], cached.count == curve.count {
-            arc = cached
-        } else {
-            var built: [Float] = [0]
-            built.reserveCapacity(curve.count)
-            for index in 1..<curve.count {
-                built.append(built[index - 1]
-                    + simd_distance(curve[index - 1], curve[index]))
-            }
-            arc = built
-        }
-        let total = arc[arc.count - 1]
+        guard abs(current) > 5e-4 else { return }
+        let total = simd_distance(a, b)
         guard total > 1e-6 else { return }
         let length = Double(total)
         // Bead count grows with zoom SUBLINEARLY. The beads scale with the
@@ -1562,7 +1457,7 @@ final class CircuitsRenderer {
             if t < 0 { t += 1 }
             let slot = electronPool.slots[dotIndex]
             slot.entity.isEnabled = true
-            slot.entity.position = point(onCurve: curve, arc: arc, at: Float(t) * total)
+            slot.entity.position = a + (b - a) * Float(t)
             dotIndex += 1
         }
     }

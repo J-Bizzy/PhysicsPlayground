@@ -186,14 +186,11 @@ file). What follows is the standing script.
       potential and every wire between them, in the module's green.
       Tap a lead three hops away from anything and confirm the far end
       lights too. Tap empty space: it goes out with the ring.
-- [ ] **A long wire HANGS (2026-08-11).** Drag two parts far apart:
-      the wire between them must droop like a cable, and the electron
-      beads must ride the droop rather than cutting through the air
-      under it. Now push the parts together until they snap: the sag
-      must go, completely. A joint that snapped has no cable.
-- [ ] **Grab a hanging wire at its LOWEST point,** not on the straight
-      line between its ends. It must be grabbable there — the collider
-      follows the curve in three pieces.
+- [ ] **A wire is STRAIGHT at any span (2026-08-29).** Drag two parts
+      far apart: the wire between them is a taut straight line — no
+      droop — and the electron beads ride exactly that line. Push the
+      parts together until they snap: the cable between the joined
+      leads disappears entirely. A joint that snapped has no cable.
 - [ ] **Grab the wire in the MIDDLE.** It must still take the nearer
       end, not do nothing. And a pinch at the joint must take the
       LEAD, not the wire — the bead is fatter than the cable and sits

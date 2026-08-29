@@ -112,14 +112,6 @@ final class CircuitsModel {
     /// cannot reach past the end it belongs to.
     nonisolated static let leadReach = 0.06
 
-    /// Extra cable length beyond the straight line — the hang. ZERO within
-    /// `leadReach` (a snapped joint has no cable to hang, so sag cannot undo
-    /// snap-align); bounded so a bench-height wire never reaches the floor.
-    nonisolated static func slack(span: Double) -> Double {
-        guard span > leadReach else { return 0 }
-        return min(0.02 + 0.06 * (span - leadReach), 0.18 * span)
-    }
-
     /// Carry a part until a snapped connection stretches past this and it pops off.
     /// Much larger than `leadReach`: joining needs precision, leaving needs intent.
     nonisolated static let breakDistance = 0.3
@@ -202,26 +194,15 @@ final class CircuitsModel {
     }
 
     /// The loop an electron walks, metres — summed length of every carrying wire.
-    /// ARC, NOT CHORD: the electron walks the hanging cable, and this feeds the
-    /// true-speed readout.
+    /// A wire is drawn taut between its terminals, so the electron's path is the
+    /// chord sum — the same distances the field front walks, so the true-speed
+    /// readout and the front agree by construction.
     var conductingPathLength: Double {
         var total = 0.0
         for wire in wires where abs(wireFlows[wire.id] ?? 0) > 5e-4 {
             guard let a = terminalWorldPosition(wire.from),
                   let b = terminalWorldPosition(wire.to) else { continue }
-            // Closed form, not a resample: `Catenary.points` is CONSTRUCTED to have
-            // arc length chord + slack, and this is read three times a frame.
-            let span = simd_distance(a, b)
-            // Only a hanging span is longer than its chord: `Catenary.path` draws a
-            // near-vertical span (horizontal < 0.2 × chord) as a straight drop, and the
-            // electron walks what is drawn. Same threshold, same policy.
-            let delta = b - a
-            let horizontal = simd_length(SIMD2(delta.x, delta.z))
-            if horizontal > 0.2 * span {
-                total += span + Self.slack(span: span)
-            } else {
-                total += span
-            }
+            total += simd_distance(a, b)
         }
         return total
     }

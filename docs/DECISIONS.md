@@ -16,6 +16,33 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-29 — Wires are straight; the catenary is removed
+
+**Decision:** A circuit connection is drawn as a taut straight line
+between its terminals. The catenary sag of 2026-08-11 — `Catenary.swift`
+in PhysicsCore, `CircuitsModel.slack(span:)`, the seven-segment curve,
+the arc-length conducting path, and the `-circSag` launch argument — is
+deleted, on the owner's call: the bend was unnecessary.
+
+**Context:** The sag was built as a "pictures are physics" flourish: a
+real catenary, Newton-solved, with the electron beads riding the arc.
+But it earned its keep nowhere. The bench's own tidiness rules already
+kept it invisible in the common case (a snapped joint had zero slack,
+and most joints on a chained bench are snapped), the multimeter's probe
+leads had always been straight for per-frame-cost reasons, and the sag
+had quietly introduced a real inconsistency: `conductingPathLength`
+summed the arc while the true-speed field front walked straight chords,
+so the readout and the front measured two different loops.
+
+**Consequences:** A wire is one unit-cylinder segment stretched by its
+transform, its grab volume one capsule on the unscaled parent, and the
+conducting path is the chord sum — identical by construction to the
+path the field front walks. `CatenaryTests` and `CircuitsSagTests` are
+gone; `CircuitsWirePathTests` pins the chord-sum claim. This rules out
+re-introducing per-wire geometry that differs from the model's straight
+line — anything that bends a wire again re-opens the readout/front
+disagreement this removal closed.
+
 ## 2026-08-26 — Three documents stop describing an app that no longer exists
 
 **Decision:** `GOAL_2026-08-07.md` and `AUDIT_2026-08-07.md` get status
