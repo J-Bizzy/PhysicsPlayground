@@ -315,6 +315,17 @@ struct ModuleHostView: View {
         .frame(minWidth: 620)
         .glassBackgroundEffect(
             in: RoundedRectangle(cornerRadius: DesignTokens.Panel.windowRadius, style: .continuous))
+        // THE BAR RIDES THE TOP OF ITS WINDOW (2026-08-29). visionOS owns
+        // where the window stands — there is no API to park it high — and
+        // the system's default drop is dead ahead at apparatus height,
+        // which put this bar inside the scene of every module (in Electric
+        // Fields it opened BEHIND a capacitor plate). What the app does
+        // own is where the bar sits within its invisible plain window:
+        // top-aligned in the tall frame the window already claims, it
+        // rides ~0.3 m higher and clears the apparatus band. The wearer
+        // can still grab the window and park it anywhere; this only moves
+        // the default.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     // The three cases get three sentences, and they are deliberately not

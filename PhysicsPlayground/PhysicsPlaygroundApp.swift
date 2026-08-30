@@ -48,10 +48,12 @@ struct PhysicsPlaygroundApp: App {
         // (MainWindowView adds it back for that branch).
         .windowStyle(.plain)
         .windowResizability(.contentMinSize)
-        // The height predates the panels' removal (their content asked
-        // for 620 pt); it is kept because the flat catalog uses it and
-        // the hub nameplate centers itself in whatever height it gets.
-        .defaultSize(width: 560, height: 720)
+        // The height is spent as HEADROOM: the module title bar top-aligns
+        // in this frame (see `ModuleHostView`), so a taller window lifts
+        // the bar further above the apparatus the system default would
+        // otherwise drop it into. The flat catalog scrolls in whatever
+        // height it gets, and the hub nameplate centers itself.
+        .defaultSize(width: 560, height: 960)
 
         // The three utility windows — Settings, the Lab Notebook, About.
         // Each keeps the system glass (unlike the plain main window,
