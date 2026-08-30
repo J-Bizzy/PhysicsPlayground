@@ -258,6 +258,11 @@ final class GravityLabModelTests: XCTestCase {
         XCTAssertFalse(model.showFieldParticles)
         XCTAssertTrue(model.showSpacetimeGrid,
                       "the curvature grid is the module's signature image — it opens with it")
+        XCTAssertNil(model.selectedBody, """
+            nothing is selected on arrival: selection drives the ring, the \
+            data card, the vectors and the sweep readout, and opening with \
+            Earth selected stacked all four on the inner system at once
+            """)
     }
 
     // MARK: The well's world

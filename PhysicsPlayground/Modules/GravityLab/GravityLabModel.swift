@@ -906,7 +906,13 @@ final class GravityLabModel {
             inclination: 162 * .pi / 180,
             gravitationalConstant: effectiveG),
             displayRadius: Self.displayRadius(for: .comet))
-        selectedID = bodies.first(where: { $0.body.name == "Earth" })?.id
+        // NOTHING is selected on arrival (2026-08-29). Selection drives the
+        // orbit ring, the data card, the v/a/F arrows AND the Kepler sweep
+        // readout — with Earth pre-selected the module opened wearing all
+        // four at once, stacked on the inner system. The quiet sky is the
+        // opening image; tap a planet and the room answers, the same "this
+        // one" grammar every other module teaches.
+        selectedID = nil
         clearCapsule()
     }
 }

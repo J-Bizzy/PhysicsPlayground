@@ -16,6 +16,27 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-08-29 — Gravity Lab arrives with nothing selected
+
+**Decision:** `reset()` no longer pre-selects Earth. The module opens as
+a quiet sky — planets, trails, labels, the curvature grid — and the
+orbit ring, data card, v/a/F arrows and Kepler sweep readout appear
+only when the user taps a body.
+
+**Context:** Owner's call: the module looked "very clustered" on
+arrival. All four of those overlays guard on `selectedBody`, and the
+pre-selected Earth stacked every one of them on the inner system — the
+busiest square metre of the scene — before the user had done anything.
+The layer flags themselves (`keplerSweepOn`, the vector toggles, the
+grid) keep their defaults: they are what the tap REVEALS, and the tab
+summaries go on advertising them.
+
+**Consequences:** The tap teaches — "this one", and the room answers
+with everything at once, the same selection grammar as Circuits. The
+opening scene is pinned by `testResetRestoresOpeningScene`
+(`selectedBody == nil`). Screenshot staging is unchanged: `-selectBody`
+still picks a planet and draws its ring.
+
 ## 2026-08-29 — Every control stands on the left
 
 **Decision:** All in-room controls — banks, verb plates, tabs, pickers,

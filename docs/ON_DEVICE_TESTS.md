@@ -499,12 +499,20 @@ file). The new well and the standing script:
 
 ## Gravity Lab
 
+### The quiet arrival (2026-08-29)
+
+- [ ] **Open the module and touch nothing.** The sky is QUIET: planets,
+      trails, labels, the curvature grid — and no orbit ring, no data
+      card, no vector arrows, no sweep readout. All four of those ride
+      the selection, and nothing is selected until you say "this one".
+
 ### The orbit ring
 
 - [ ] **Tap a planet.** Two things must happen at once: its **control
       ring** unfolds (mass bead, delete petal) AND its **orbit ring**
       appears — a conic drawn around the Sun, passing through the planet,
-      with a bead at each end.
+      with a bead at each end. (And the data card, arrows and sweep
+      readout arrive with it — the room answering the tap.)
 - [ ] **Pull the far bead straight out.** The orbit stretches into an
       ellipse; the near end stays put.
 - [ ] **Pull a bead sideways.** The whole ellipse swings about the Sun
