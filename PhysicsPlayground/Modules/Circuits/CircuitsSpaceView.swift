@@ -16,6 +16,15 @@ struct CircuitsSpaceView: View {
     @Environment(CircuitsModel.self) private var model
     @State private var renderer: CircuitsRenderer?
     @State private var bloom = Bloom()
+    /// The AC source's frequency, on a rail hung under the selected
+    /// source (2026-09-02) — present exactly while an AC source is the
+    /// selection, the capacitor ΔV rail's precedent. Parented to the
+    /// renderer's `root`, not the zoomed bench, so it never grows out of
+    /// reach; its position is the part's, through the zoom rig.
+    @State private var frequencyTrack: SpatialTrackControl?
+    /// A rail mid-adjust swallows every `onChanged` until its `onEnded`,
+    /// so a drag that starts on the rail cannot wander onto a part.
+    @State private var activeTrack: SpatialTrackControl?
     /// Which component's ring is open — shared by the tap gesture and
     /// the render loop (see RingState's header).
     @State private var ring = RingState()
@@ -310,6 +319,7 @@ struct CircuitsSpaceView: View {
                     renderer?.tick(dt: event.deltaTime, model: model)
                     if let renderer {
                         syncBloom(renderer: renderer, dt: event.deltaTime)
+                        syncFrequencyRail(renderer: renderer)
                     }
                 }
             )
@@ -467,6 +477,7 @@ struct CircuitsSpaceView: View {
             // MUST clear: `Bloom` is a class, so a live grip outlives the
             // view and would claim every subsequent drag in the module.
             bloom.endGrip()
+            activeTrack = nil
         }
         .gesture(
             TapGesture()
@@ -508,6 +519,26 @@ struct CircuitsSpaceView: View {
                             value.location3D, from: .local, to: .scene)),
                         from: nil)
                     let hand = SIMD3<Double>(handF)
+
+                    // The frequency rail, in ROOM coordinates: it hangs off
+                    // `root`, not the bench, and a gesture already in it may
+                    // not be re-claimed by anything under it.
+                    let world = SIMD3<Double>(SIMD3<Float>(value.convert(
+                        value.location3D, from: .local, to: .scene)))
+                    if let track = activeTrack {
+                        guard track.isEnabled else {
+                            activeTrack = nil
+                            return
+                        }
+                        track.adjust(hand: world)
+                        return
+                    }
+                    if partDrag == nil, model.leadPull == nil, probeDrag == nil,
+                       let track = frequencyTrack, track.isEnabled, track.owns(value.entity) {
+                        activeTrack = track
+                        track.adjust(hand: world)
+                        return
+                    }
 
                     // Probes first: a probe carried across a terminal must
                     // not also start dragging that terminal's wire.
@@ -599,6 +630,11 @@ struct CircuitsSpaceView: View {
                     }
                 }
                 .onEnded { value in
+                    if let track = activeTrack {
+                        track.endAdjust()
+                        activeTrack = nil
+                        return
+                    }
                     probeDrag = nil
                     meterDrag = nil
                     palette?.endDrag()
@@ -649,6 +685,38 @@ struct CircuitsSpaceView: View {
 
     /// A part's own controls: a value grip (a bulb dims, a battery's
     /// drift quickens as you pull) and petals for the discrete actions.
+    /// The frequency rail exists exactly while an AC source is selected,
+    /// hung 0.14 m under it wherever the part is — through the zoom rig,
+    /// without scaling with it. Built on first need so it can be a
+    /// child of the renderer's root.
+    private func syncFrequencyRail(renderer: CircuitsRenderer) {
+        let source = model.selectedComponent.flatMap { $0.kind == .acSource ? $0 : nil }
+        if frequencyTrack == nil, source != nil {
+            let track = SpatialTrackControl(
+                name: "Frequency",
+                center: .zero,
+                normal: SIMD3(0, 0, 1),
+                accent: UIColor(DesignTokens.Palette.circuitsAccent),
+                range: CircuitsModel.acFrequencyRange,
+                read: { model.selectedComponent?.acFrequency ?? CircuitsModel.acFrequency },
+                write: { hertz in
+                    if let id = model.selectedComponent?.id {
+                        model.setACFrequency(id: id, hertz)
+                    }
+                },
+                format: { PhysicsFormat.measurement(($0 * 10).rounded() / 10, "Hz", decimals: 1) })
+            renderer.root.addChild(track.root)
+            frequencyTrack = track
+        }
+        guard let track = frequencyTrack else { return }
+        track.isEnabled = source != nil
+        if let source {
+            track.root.position = renderer.worldPosition(
+                ofBenchPoint: source.position + SIMD3(0, -0.14, 0))
+            track.refresh()
+        }
+    }
+
     private func syncBloom(renderer: CircuitsRenderer, dt: Double) {
         if let openID = ring.openID,
            !model.components.contains(where: { $0.id == openID }) {

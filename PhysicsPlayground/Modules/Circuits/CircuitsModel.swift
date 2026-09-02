@@ -99,7 +99,37 @@ final class CircuitsModel {
     nonisolated static let ledOnResistance = 12.0
     nonisolated static let ledMaxAmps = 0.03
     /// The AC source's fixed frequency — slow enough to watch.
+    /// The AC source's frequency when a part does not say otherwise; each
+    /// source carries its own since 2026-09-02 (`Component.acFrequency`,
+    /// the rail under a selected source).
     nonisolated static let acFrequency = 0.5
+    nonisolated static let acFrequencyRange = 0.1...5.0        // Hz
+
+    /// THE INDUCTOR AS A COIL (2026-09-02). The drawn part is 0.07 m long
+    /// with 0.019 m windings, and for an air core its inductance implies
+    /// a turn count — L = μ₀N²A/ℓ, so the default 0.5 H is about 4,960
+    /// turns. Derived, not invented: the field the layer draws is the
+    /// field of the coil the inductance claims, and the card says so.
+    nonisolated static let inductorCoilLength = 0.07
+    nonisolated static let inductorCoilRadius = 0.019
+    nonisolated static func inductorTurns(henries: Double) -> Int {
+        let area = CurrentLoop.area(radius: inductorCoilRadius)
+        guard henries > 0, area > 0 else { return 0 }
+        return Int((henries * inductorCoilLength / (CurrentLoop.mu0 * area)).squareRoot().rounded())
+    }
+
+    /// HEAT (2026-09-02). A resistor is rated; past its rating it stores
+    /// the excess as heat, under it it cools, and a sustained overload
+    /// scorches it — a slow fuse, with a glow on the way. Only resistors
+    /// carry a rating: the bulb's whole job is to run hot, the fuse and
+    /// the LED already fail their own way, and a wire is an ideal net to
+    /// the solver.
+    nonisolated static func powerRating(for kind: ComponentKind) -> Double? {
+        kind == .resistor ? 2.0 : nil
+    }
+    /// Joules of excess a resistor absorbs before it scorches: a spike is
+    /// forgiven, six seconds at 50 % over is not.
+    nonisolated static let thermalBudget = 4.0
 
     // DC motor: back-EMF and torque share k (V·s/rad = N·m/A); coil resistance is the
     // component's value. No-load steady speed ω = kV/(bR + k²) — the property the tests pin.
@@ -141,9 +171,57 @@ final class CircuitsModel {
         /// Motors only: the spin speed (rad/s) — transient, integrated
         /// each step from torque against back-EMF and friction.
         var motorSpeed = 0.0
+        /// Rated parts only: joules of excess dissipation stored as heat
+        /// — transient; past `thermalBudget` the part scorches.
+        var thermalEnergy = 0.0
+        /// AC sources only: their own frequency, Hz — persisted, and a
+        /// stored bench without it runs at the old fixed 0.5 Hz.
+        var acFrequency = CircuitsModel.acFrequency
 
         private enum CodingKeys: String, CodingKey {
-            case id, kind, position, value, axis, isClosed, capacitorVoltage
+            case id, kind, position, value, axis, isClosed, capacitorVoltage, acFrequency
+        }
+
+        /// Tolerant of every field but the four that define a part, so a
+        /// bench written before a field existed still decodes — the same
+        /// guarantee `StoredComponent` gives the launch-time restore.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(UUID.self, forKey: .id)
+            kind = try container.decode(ComponentKind.self, forKey: .kind)
+            position = try container.decode(SIMD3<Double>.self, forKey: .position)
+            value = try container.decode(Double.self, forKey: .value)
+            if let stored = try container.decodeIfPresent(SIMD3<Double>.self, forKey: .axis),
+               simd_length(stored) > 1e-6 {
+                axis = simd_normalize(stored)
+            }
+            isClosed = try container.decodeIfPresent(Bool.self, forKey: .isClosed) ?? true
+            capacitorVoltage = try container.decodeIfPresent(Double.self, forKey: .capacitorVoltage) ?? 0
+            acFrequency = try container.decodeIfPresent(Double.self, forKey: .acFrequency)
+                ?? CircuitsModel.acFrequency
+        }
+
+        /// The memberwise initialiser, spelled out because the tolerant
+        /// `init(from:)` above suppresses the synthesised one: every
+        /// stored property in declaration order, the transients defaulted.
+        init(id: UUID, kind: ComponentKind, position: SIMD3<Double>, value: Double,
+             axis: SIMD3<Double> = SIMD3(1, 0, 0), isClosed: Bool = true,
+             capacitorVoltage: Double = 0, failed: Bool = false,
+             inductorCurrent: Double = 0, motorSpeed: Double = 0,
+             thermalEnergy: Double = 0,
+             acFrequency: Double = CircuitsModel.acFrequency) {
+            self.id = id
+            self.kind = kind
+            self.position = position
+            self.value = value
+            self.axis = axis
+            self.isClosed = isClosed
+            self.capacitorVoltage = capacitorVoltage
+            self.failed = failed
+            self.inductorCurrent = inductorCurrent
+            self.motorSpeed = motorSpeed
+            self.thermalEnergy = thermalEnergy
+            self.acFrequency = acFrequency
         }
 
         /// Where one of this part's two leads sits.
@@ -1148,9 +1226,13 @@ final class CircuitsModel {
                          internalResistance: Self.batteryInternalResistance)
             case .acSource:
                 .battery(volts: component.value
-                            * sin(2 * .pi * Self.acFrequency * simTime),
+                            * sin(2 * .pi * component.acFrequency * simTime),
                          internalResistance: Self.batteryInternalResistance)
-            case .resistor, .bulb:
+            case .resistor:
+                // A scorched resistor is an open circuit — the loop goes
+                // dark, which is how you learn what it was doing.
+                component.failed ? .open : .resistor(ohms: component.value)
+            case .bulb:
                 .resistor(ohms: component.value)
             case .capacitor:
                 .capacitor(farads: component.value,
@@ -1250,6 +1332,19 @@ final class CircuitsModel {
                 } else if component.kind == .fuse, amps > component.value {
                     components[index].failed = true
                     emitSound(.pop, at: component.position, volume: 0.8)
+                }
+            }
+            // Heat: the excess over a rated part's rating accumulates as
+            // energy, and cools at the same rate when under it.
+            if !isPaused, !component.failed,
+               let rating = Self.powerRating(for: component.kind) {
+                let excess = solution.powers[index] - rating
+                components[index].thermalEnergy = max(
+                    0, components[index].thermalEnergy + excess * timeStep)
+                if components[index].thermalEnergy > Self.thermalBudget {
+                    components[index].failed = true
+                    components[index].thermalEnergy = 0
+                    emitSound(.boom, at: component.position, volume: 0.35)
                 }
             }
         }
@@ -1498,7 +1593,7 @@ final class CircuitsModel {
     /// frequency-dependent reactance, not a resistance.
     nonisolated static func resistance(of component: Component) -> Double? {
         switch component.kind {
-        case .resistor: component.value
+        case .resistor: component.failed ? nil : component.value   // scorched: open
         case .bulb, .led, .motor: component.value
         case .switcher: component.isClosed ? 0.001 : nil
         case .fuse: component.failed ? nil : 0.001
@@ -1560,7 +1655,21 @@ final class CircuitsModel {
         guard scrubTime == nil else { return }
         guard let index = components.firstIndex(where: { $0.id == id }) else { return }
         components[index].failed = false
+        components[index].thermalEnergy = 0
         emitSound(.chime, at: components[index].position, volume: 0.5)
+    }
+
+    /// The frequency rail under a selected AC source (2026-09-02).
+    func setACFrequency(id: UUID, _ hertz: Double) {
+        guard let index = components.firstIndex(where: { $0.id == id }),
+              components[index].kind == .acSource else { return }
+        components[index].acFrequency = min(max(hertz, Self.acFrequencyRange.lowerBound),
+                                            Self.acFrequencyRange.upperBound)
+    }
+
+    /// Watts a part is dissipating right now, for the card's "of 2 W".
+    func dissipation(id: UUID) -> Double {
+        readouts[id]?.watts ?? 0
     }
 
     // MARK: Persistence (the bench survives relaunch)
@@ -1588,6 +1697,8 @@ final class CircuitsModel {
         var axis: SIMD3<Double>?
         var isClosed: Bool?
         var capacitorVoltage: Double?
+        /// Absent in every bench written before 2026-09-02 → 0.5 Hz.
+        var acFrequency: Double?
     }
 
     struct StoredBench: Codable {
@@ -1642,6 +1753,7 @@ final class CircuitsModel {
             }
             component.isClosed = row.isClosed ?? true
             component.capacitorVoltage = row.capacitorVoltage ?? 0
+            component.acFrequency = row.acFrequency ?? Self.acFrequency
             components.append(component)
             for end in 0...1 {
                 survivingTerminals.append((Terminal(componentID: row.id, end: end),
@@ -1901,8 +2013,28 @@ final class CircuitsModel {
     }
 
     /// B at a point, tesla — the bench's field only; Earth's field is Magnetism's business.
+    /// Every inductor carrying current, as the magnet its coil is:
+    /// m = N·I·A along its axis, N from the inductance (2026-09-02). A
+    /// negative current reverses the moment, exactly as reversing the
+    /// battery does to a real electromagnet.
+    var coilMagnets: [BarMagnet] {
+        components.compactMap { component in
+            guard component.kind == .inductor,
+                  abs(component.inductorCurrent) > 1e-9 else { return nil }
+            return CurrentLoop.magnet(
+                at: component.position, axis: component.axis,
+                turns: Self.inductorTurns(henries: component.value),
+                current: component.inductorCurrent,
+                radius: Self.inductorCoilRadius)
+        }
+    }
+
+    /// The bench's field at a point: every wire segment's, plus every
+    /// coil's. The renderer's layer samples this, so what it draws is
+    /// the total.
     func magneticField(at point: SIMD3<Double>) -> SIMD3<Double> {
         WireField.field(at: point, segments: currentSegments)
+            + MagneticField.vector(at: point, dueTo: coilMagnets)
     }
 
     // MARK: Inductor current

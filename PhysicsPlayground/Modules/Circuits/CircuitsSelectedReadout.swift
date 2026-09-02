@@ -40,6 +40,38 @@ struct CircuitsSelectedReadout: View {
                         .foregroundStyle(DesignTokens.Palette.circuitsAccent)
                 }
 
+                // The coil the inductance implies (2026-09-02): the field
+                // layer draws this coil's field, so the card names it.
+                if component.kind == .inductor {
+                    let turns = CircuitsModel.inductorTurns(henries: component.value)
+                    Text("≈\(turns.formatted()) turns · air core")
+                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+
+                // A rated part says how hard it is working, or that it is
+                // done (2026-09-02).
+                if let rating = CircuitsModel.powerRating(for: component.kind) {
+                    if component.failed {
+                        Label("scorched — replace it", systemImage: "flame.fill")
+                            .font(DesignTokens.TypeScale.footnote)
+                            .foregroundStyle(.red)
+                    } else {
+                        let load = (abs(model.dissipation(id: component.id)) * 100).rounded() / 100
+                        Text("\(PhysicsFormat.measurement(load, "W", decimals: 2)) of "
+                             + "\(PhysicsFormat.measurement(rating, "W", decimals: 0)) rating")
+                            .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                            .foregroundStyle(load > rating ? .red : .secondary)
+                    }
+                }
+
+                if component.kind == .acSource {
+                    let hertz = (component.acFrequency * 10).rounded() / 10
+                    Text(PhysicsFormat.measurement(hertz, "Hz", decimals: 1))
+                        .font(DesignTokens.TypeScale.footnote.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+
                 // A battery past `overloadAmps` is a short — say so.
                 if component.kind == .battery,
                    abs(model.readouts[component.id]?.amps ?? 0) > CircuitsModel.overloadAmps {

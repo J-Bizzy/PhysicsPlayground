@@ -323,4 +323,24 @@ final class CircuitsBenchMigrationTests: XCTestCase {
                        "Every kind the bench can hold needs a slot, and no slot may name one it cannot.")
         XCTAssertEqual(kinds.count, 10)
     }
+
+
+    /// A bench written before the AC source had a frequency of its own
+    /// (2026-09-02) runs at the fixed 0.5 Hz it always did; one written
+    /// after keeps what it stored.
+    func testAnACSourceWithoutAStoredFrequencyRunsAtHalfAHertz() throws {
+        let old = UUID(), new = UUID()
+        let json = """
+        {"components":[
+          {"id":"\(old.uuidString)","kind":"acSource","position":[0,1.25,-0.9],"value":6},
+          {"id":"\(new.uuidString)","kind":"acSource","position":[0.3,1.25,-0.9],"value":6,
+           "acFrequency":3.0}],"wires":[]}
+        """
+        UserDefaults.standard.set(Data(json.utf8), forKey: CircuitsModel.saveKey)
+        defer { UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey) }
+        let model = CircuitsModel(restoreSaved: true)
+
+        XCTAssertEqual(try XCTUnwrap(model.components.first { $0.id == old }).acFrequency, 0.5)
+        XCTAssertEqual(try XCTUnwrap(model.components.first { $0.id == new }).acFrequency, 3.0)
+    }
 }

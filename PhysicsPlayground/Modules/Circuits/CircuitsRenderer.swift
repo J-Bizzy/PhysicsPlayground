@@ -65,6 +65,9 @@ final class CircuitsRenderer {
         var labelText = ""
         var glowBucket = -1
         var resistorCodeKey = ""
+        /// Resistors: how hot, 0…4 by dissipation against the rating,
+        /// −2 once scorched — the material is rebuilt only when it moves.
+        var heatBucket = -1
     }
 
     private var visuals: [UUID: ComponentVisual] = [:]
@@ -106,6 +109,7 @@ final class CircuitsRenderer {
     /// The segments the field arrows were last drawn from — nil when the layer
     /// is off, so re-enabling always redraws.
     private var lastFieldSegments: [WireField.Segment]?
+    private var lastCoils: [BarMagnet]?
 
     private let audioEmitter = Entity()
     private var lastSoundID = 0
@@ -178,14 +182,16 @@ final class CircuitsRenderer {
         }
         fieldArrowsVisible = true
 
-        // CHANGE-GATED: everything below is a pure function of the segments,
-        // so a static bench costs one array compare; a carried part still
-        // updates every frame because it changes the segments.
+        // CHANGE-GATED: everything below is a pure function of the segments
+        // and the coils, so a static bench costs one array compare; a
+        // carried part still updates every frame because it changes them.
         let segments = model.currentSegments
-        guard segments != lastFieldSegments else { return }
+        let coils = model.coilMagnets
+        guard segments != lastFieldSegments || coils != lastCoils else { return }
         lastFieldSegments = segments
+        lastCoils = coils
 
-        guard !segments.isEmpty else {
+        guard !segments.isEmpty || !coils.isEmpty else {
             fieldArrows.hideAll()
             return
         }
@@ -219,13 +225,42 @@ final class CircuitsRenderer {
                     let offset = (u * cos(angle) + v * sin(angle)) * Self.fieldRingRadius
                     let point = centre + offset
                     points.append(point)
-                    vectors.append(WireField.field(at: point, segments: segments))
+                    // The TOTAL field — every segment and every coil.
+                    vectors.append(model.magneticField(at: point))
                 }
+            }
+        }
+
+        // THE COIL IS A MAGNET (2026-09-02): rings around each carrying
+        // inductor's axis, out past its ends where a bar field closes,
+        // plus the axis itself where it is strongest. Same total field
+        // at every point, so a wire beside a coil shows the coil's pull.
+        for coil in coils {
+            let axis = simd_normalize(coil.moment)
+            let reference: SIMD3<Double> = abs(axis.y) < 0.9 ? SIMD3(0, 1, 0) : SIMD3(1, 0, 0)
+            let u = simd_normalize(simd_cross(axis, reference))
+            let v = simd_cross(axis, u)
+            for station in stride(from: -0.12, through: 0.12, by: 0.06) {
+                let centre = coil.position + axis * station
+                for spokeIndex in 0..<Self.fieldSpokes {
+                    let angle = 2 * Double.pi * Double(spokeIndex) / Double(Self.fieldSpokes)
+                    let point = centre + (u * cos(angle) + v * sin(angle)) * Self.coilRingRadius
+                    points.append(point)
+                    vectors.append(model.magneticField(at: point))
+                }
+            }
+            for end in [-0.16, 0.16] {
+                let point = coil.position + axis * end
+                points.append(point)
+                vectors.append(model.magneticField(at: point))
             }
         }
         fieldArrows.update(points: points, vectors: vectors,
                            hidden: Array(repeating: false, count: points.count))
     }
+    /// Wider than a wire's ring: the windings are 0.019 m and the arrows
+    /// must stand clear of the part they describe.
+    private static let coilRingRadius: Double = 0.07
 
     /// Distance from a point to a SEGMENT — clamped to the ends, not the
     /// infinite line.
@@ -389,6 +424,13 @@ final class CircuitsRenderer {
     /// continuous two-hand zoom, not a competing 1×/4× flip.
     private var benchScale: Float = 1
     static let benchPivot = SIMD3<Float>(0, 1.25, -0.85)
+
+    /// A bench-space point in the room, through the zoom rig — for an
+    /// instrument that must hang under a part without scaling with the
+    /// bench (the AC source's frequency rail, 2026-09-02).
+    func worldPosition(ofBenchPoint point: SIMD3<Double>) -> SIMD3<Float> {
+        viewRoot.position + SIMD3<Float>(point) * benchScale
+    }
     /// Set by the space view from the two-handed scale rig.
     var handZoom: Float = 1
     static let electronViewZoom: Float = 4.0
@@ -722,13 +764,31 @@ final class CircuitsRenderer {
                 visual.lever?.orientation = simd_quatf(
                     angle: component.isClosed ? 0 : 0.6, axis: [0, 0, 1])
             case .resistor:
+                // HEAT (2026-09-02): the body glows by I²R against its
+                // rating, in four steps, and goes black when it scorches.
                 let key = resistorKey(component.value)
-                if visual.resistorCodeKey != key {
-                    if let texture = CircuitTextures.resistorTexture(ohms: component.value) {
+                let rating = CircuitsModel.powerRating(for: .resistor) ?? 1
+                let load = (model.readouts[component.id]?.watts ?? 0) / rating
+                let bucket = component.failed ? -2 : min(Int(max(0, load) * 4), 4)
+                if visual.resistorCodeKey != key || visual.heatBucket != bucket {
+                    if component.failed {
                         visual.resistorCodeKey = key
+                        visual.heatBucket = bucket
+                        var scorched = PhysicallyBasedMaterial()
+                        scorched.baseColor = .init(tint: UIColor(white: 0.08, alpha: 1))
+                        scorched.roughness = 0.9
+                        visual.body.model?.materials = [scorched]
+                    } else if let texture = CircuitTextures.resistorTexture(ohms: component.value) {
+                        visual.resistorCodeKey = key
+                        visual.heatBucket = bucket
                         var material = PhysicallyBasedMaterial()
                         material.baseColor = .init(tint: .white, texture: .init(texture))
                         material.roughness = 0.6
+                        if bucket > 0 {
+                            material.emissiveColor = .init(
+                                color: UIColor(red: 1, green: 0.42, blue: 0.08, alpha: 1))
+                            material.emissiveIntensity = Float(bucket) * 0.55
+                        }
                         visual.body.model?.materials = [material]
                     }
                 }
@@ -757,8 +817,11 @@ final class CircuitsRenderer {
     /// open/closed, the AC tilde).
     private func labelText(for component: CircuitsModel.Component) -> String {
         switch component.kind {
-        case .battery, .resistor, .bulb, .capacitor, .inductor:
+        case .battery, .bulb, .capacitor, .inductor:
             CircuitsModel.formatValue(component.value, for: component.kind)
+        case .resistor: component.failed
+            ? "scorched"
+            : CircuitsModel.formatValue(component.value, for: component.kind)
         case .switcher: component.isClosed ? "closed" : "open"
         case .acSource:
             CircuitsModel.formatValue(component.value, for: component.kind) + "~"
@@ -961,13 +1024,21 @@ final class CircuitsRenderer {
 
     // MARK: Modeled bodies (Blender-authored USDZ, procedural fallback)
 
-    /// Each part clones the shared `PropCache` prototype. The resistor
-    /// (live color-band texture) and wire (stretching rod) deliberately
-    /// stay procedural.
-    private static let bodyAssetNames: [CircuitsModel.ComponentKind: String] = [
-        .battery: "CircuitBattery", .bulb: "CircuitBulb",
-        .capacitor: "CircuitCapacitor", .switcher: "CircuitSwitch",
+    /// Each part clones the shared `PropCache` prototype — all ten milled
+    /// by `Tools/circuitparts.py` since 2026-09-02, in the stocks the
+    /// gallery's platforms wear. The resistor's ceramic BODY stays
+    /// procedural: its colour bands are a live texture painted from the
+    /// value, and the UV layout of a RealityKit cylinder is the one that
+    /// texture knows; only its steel end caps are milled. The procedural
+    /// bodies below survive as the fallback, so a missing asset never
+    /// blanks a part.
+    static let bodyAssetNames: [CircuitsModel.ComponentKind: String] = [
+        .battery: "CircuitBattery", .acSource: "CircuitACSource",
+        .capacitor: "CircuitCapacitor", .inductor: "CircuitInductor",
+        .bulb: "CircuitBulb", .led: "CircuitLED", .motor: "CircuitMotor",
+        .fuse: "CircuitFuse", .switcher: "CircuitSwitch",
     ]
+    static let resistorCapsAssetName = "CircuitResistorCaps"
 
     private static func modeledBody(for kind: CircuitsModel.ComponentKind) -> ModelEntity? {
         guard let name = bodyAssetNames[kind] else { return nil }
@@ -1000,6 +1071,14 @@ final class CircuitsRenderer {
                 materials: [Materials.machined(UIColor(red: 0.85, green: 0.72, blue: 0.55, alpha: 1),
                                                roughness: 0.6)])
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            // The milled steel caps ride the procedural ceramic. Added
+            // under the body, counter-rotated, so the body's own material
+            // swap (the live bands, the heat) never touches them.
+            if let caps = PropCache.prototype(named: Self.resistorCapsAssetName) {
+                let mounted = caps.clone(recursive: true)
+                mounted.orientation = simd_quatf(angle: -.pi / 2, axis: [0, 0, 1])
+                body.addChild(mounted)
+            }
             return body
         case .bulb:
             var glass = PhysicallyBasedMaterial()

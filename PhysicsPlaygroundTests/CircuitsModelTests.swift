@@ -1281,4 +1281,127 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertEqual(CircuitsModel.formatValue(100e-6, for: .capacitor),
                        "100 µF")
     }
+
+
+    // MARK: Batch G (2026-09-02) — the coil, heat, and a tunable AC source
+
+    /// A closed loop of the given kinds, each part wired end 1 → next
+    /// part's end 0, the last back to the first.
+    /// `reverseFirst` wires the first part the other way round — which
+    /// is what reversing a battery IS: its ends swap places in the loop.
+    /// (Turning the part with `setAxis` moves its terminals but leaves the
+    /// wiring's sense alone, and can stretch its wires past the break.)
+    private func loop(_ kinds: [CircuitsModel.ComponentKind],
+                      reverseFirst: Bool = false) -> (CircuitsModel, [UUID]) {
+        let model = CircuitsModel()
+        model.clearBench()
+        var ids: [UUID] = []
+        for (index, kind) in kinds.enumerated() {
+            ids.append(model.add(kind, at: SIMD3(Double(index) * 0.3 - 0.45, 1.3, -0.85))!)
+        }
+        for index in ids.indices {
+            let next = ids[(index + 1) % ids.count]
+            let fromEnd = (index == 0 && reverseFirst) ? 0 : 1
+            let toEnd = (next == ids[0] && reverseFirst) ? 1 : 0
+            _ = model.connectTerminals(.init(componentID: ids[index], end: fromEnd),
+                                       .init(componentID: next, end: toEnd))
+        }
+        return (model, ids)
+    }
+
+    private func run(_ model: CircuitsModel, seconds: Double, dt: Double = 1.0 / 90.0) {
+        for _ in 0..<Int((seconds / dt).rounded()) { model.step(dt: dt) }
+    }
+
+    /// The inductance implies the coil: 0.5 H of air-core windings of the
+    /// drawn size is about five thousand turns.
+    func testTheInductanceImpliesTheTurnCount() {
+        let turns = CircuitsModel.inductorTurns(henries: 0.5)
+        XCTAssertEqual(turns, 4960, accuracy: 60)
+        // And it recovers the inductance it was derived from.
+        let area = CurrentLoop.area(radius: CircuitsModel.inductorCoilRadius)
+        let henries = CurrentLoop.mu0 * Double(turns * turns) * area / CircuitsModel.inductorCoilLength
+        XCTAssertEqual(henries, 0.5, accuracy: 0.5 * 0.03)
+    }
+
+    /// With current in the coil the bench's field on the coil's axis is
+    /// the loop's far field — the point dipole and the exact axial
+    /// formula agree to a few percent thirteen radii out — and it flips
+    /// when the current does.
+    func testTheCoilIsAMagnetWhoseFieldIsTheLoopsFarField() throws {
+        let bare = CircuitsModel()
+        bare.clearBench()
+        XCTAssertTrue(bare.coilMagnets.isEmpty, "no coil, no magnet")
+
+        let (model, ids) = loop([.battery, .resistor, .inductor])
+        run(model, seconds: 1.0)
+        let coil = try XCTUnwrap(model.components.first { $0.id == ids[2] })
+        XCTAssertGreaterThan(abs(coil.inductorCurrent), 1e-3, "the loop carries current")
+        XCTAssertEqual(model.coilMagnets.count, 1)
+
+        let turns = CircuitsModel.inductorTurns(henries: coil.value)
+        let distance = 0.25
+        let probe = coil.position + coil.axis * distance
+        let expected = CurrentLoop.axialField(
+            turns: turns, current: coil.inductorCurrent,
+            radius: CircuitsModel.inductorCoilRadius, distance: distance)
+        let along = simd_dot(model.magneticField(at: probe), coil.axis)
+        XCTAssertGreaterThan(abs(expected), 1e-7, "a field worth drawing")
+        XCTAssertEqual(along, expected, accuracy: abs(expected) * 0.05)
+
+        // Reverse the battery — the same loop wired the other way round:
+        // the current, the moment and the field flip.
+        let (reversed, reversedIDs) = loop([.battery, .resistor, .inductor], reverseFirst: true)
+        run(reversed, seconds: 1.0)
+        let reversedCoil = try XCTUnwrap(reversed.components.first { $0.id == reversedIDs[2] })
+        XCTAssertLessThan(reversedCoil.inductorCurrent * coil.inductorCurrent, 0,
+                          "the current runs the other way")
+        let flipped = simd_dot(reversed.magneticField(at: probe), reversedCoil.axis)
+        XCTAssertLessThan(flipped * along, 0, "reversing the battery reverses the coil's field")
+    }
+
+    /// 9 V across 10 Ω is eight watts into a two-watt part: it scorches
+    /// within a second; 470 Ω never does; Replace makes it whole.
+    func testAResistorPastItsRatingScorchesAndOneWithinItNever() throws {
+        let (hot, hotIDs) = loop([.battery, .resistor])
+        hot.setComponentValue(id: hotIDs[1], 10)
+        run(hot, seconds: 0.2)
+        XCTAssertGreaterThan(hot.dissipation(id: hotIDs[1]), 2, "well past the rating")
+        XCTAssertFalse(try XCTUnwrap(hot.components.first { $0.id == hotIDs[1] }).failed,
+                       "a fifth of a second is a spike, and a spike is forgiven")
+        run(hot, seconds: 1.5)
+        let scorched = try XCTUnwrap(hot.components.first { $0.id == hotIDs[1] })
+        XCTAssertTrue(scorched.failed, "sustained overload scorches it")
+        XCTAssertEqual(hot.dissipation(id: hotIDs[1]), 0, accuracy: 1e-9,
+                       "a scorched resistor is an open circuit")
+        hot.replaceFailed(id: hotIDs[1])
+        let replaced = try XCTUnwrap(hot.components.first { $0.id == hotIDs[1] })
+        XCTAssertFalse(replaced.failed)
+        XCTAssertEqual(replaced.thermalEnergy, 0)
+
+        let (cool, coolIDs) = loop([.battery, .resistor])
+        run(cool, seconds: 5.0)
+        XCTAssertFalse(try XCTUnwrap(cool.components.first { $0.id == coolIDs[1] }).failed,
+                       "470 Ω dissipates a sixth of a watt and never warms")
+    }
+
+    /// The source runs at its own frequency: a quarter period after the
+    /// start it is at its peak, and half a period later at its trough.
+    func testTheACSourceRunsAtItsOwnFrequency() throws {
+        let (model, ids) = loop([.acSource, .bulb])
+        model.setACFrequency(id: ids[0], 2.5)
+        XCTAssertEqual(try XCTUnwrap(model.components.first { $0.id == ids[0] }).acFrequency, 2.5)
+        let dt = 0.01
+        run(model, seconds: 0.1, dt: dt)           // t = 0.1 s = quarter period
+        let peak = model.readouts[ids[0]]?.volts ?? 0
+        XCTAssertEqual(abs(peak), 6, accuracy: 6 * 0.05)
+        run(model, seconds: 0.2, dt: dt)           // t = 0.3 s = three quarters
+        let trough = model.readouts[ids[0]]?.volts ?? 0
+        XCTAssertEqual(abs(trough), 6, accuracy: 6 * 0.05)
+        XCTAssertLessThan(peak * trough, 0, "opposite halves of the cycle")
+        // The rail clamps to its range.
+        model.setACFrequency(id: ids[0], 40)
+        XCTAssertEqual(try XCTUnwrap(model.components.first { $0.id == ids[0] }).acFrequency,
+                       CircuitsModel.acFrequencyRange.upperBound)
+    }
 }
