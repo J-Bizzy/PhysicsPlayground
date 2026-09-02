@@ -328,6 +328,51 @@ carry themselves. Two consequences worth checking on device:
 - Shot 1 must contain something **unmistakably domestic** (a sofa, a
   bookshelf, a floor) or the whole spatial premise is lost.
 
+## Archive, validate, upload (2026-09-02)
+
+The order the gates run in: fast loop green → full suite green → the
+on-device pass (`ON_DEVICE_TESTS.md` › Release 1.0 gate) → the 180-second
+take (`DEMO_SCRIPT.md`) → archive validated. Nothing ships past a red one.
+
+```bash
+# From the project folder. Signing is automatic (team TL459W44PC).
+xcodebuild -project PhysicsPlayground.xcodeproj -scheme PhysicsPlayground \
+  -configuration Release -destination 'generic/platform=visionOS' \
+  -archivePath build/PhysicsPlayground.xcarchive archive -allowProvisioningUpdates
+```
+
+Then Xcode › Organizer › the archive › **Distribute App › App Store
+Connect › Validate**, and only after a clean validation **Upload**. (The
+command-line equivalent is `xcodebuild -exportArchive` with an
+`ExportOptions.plist` of `method: app-store-connect`, `teamID:
+TL459W44PC`, `uploadSymbols: true`; the Organizer is the same thing with
+the errors readable.) Build 1 is the first upload; bump
+`CURRENT_PROJECT_VERSION` for every upload after it — a version can be
+uploaded once per build number.
+
+In App Store Connect the record is: name from this file, bundle
+`com.jbizzell.physicsplayground`, category **Education**, age rating
+**4+**, App Privacy **Data Not Collected** (the manifest declares only
+`UserDefaults`, reason CA92.1), export compliance already answered by
+`ITSAppUsesNonExemptEncryption = false`, the two URLs above. Review
+notes, verbatim:
+
+> Physics Playground launches straight into an immersive gallery.
+> visionOS will ask for World Sensing and Hand Tracking — both are needed
+> for the labs to stand in the room and be grabbed; nothing is collected
+> or transmitted. To enter a lab: look at a miniature on either shelf and
+> pinch it — it flies to the cradle in front of you — then pinch the
+> "Load …" button above it. In a lab, every control is an object: plates
+> beside the apparatus toggle layers, a bead on a rail changes a
+> quantity, pull from a well to make a new object, tap an object for its
+> ring. The palette bead low on your right holds pause, notebook capture,
+> room dimming, settings, reset, home, and the six labs. Pause any lab
+> and pinch the reel that appears to rewind the last 30 seconds. No
+> account, no purchase, no network.
+
+After approval, the docs site (`PRIVACY.html`, `SUPPORT.html`) is
+republished with the subtree commands under **URLs** above.
+
 ## App preview video (optional)
 
 If one is made, it must show a **hand**. Every claim in the description
