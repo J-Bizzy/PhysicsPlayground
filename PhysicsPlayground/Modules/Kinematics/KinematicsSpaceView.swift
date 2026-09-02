@@ -32,6 +32,18 @@ struct KinematicsSpaceView: View {
         let name: String
     }
     @State private var bloom = Bloom()
+    /// Whether the launcher's ring is open. A SELECTION, not a model flag:
+    /// it stays out of `reset()`, out of the capsule snapshot and out of
+    /// the `ResetCoverageTests` sweep, the same reasoning as Circuits'
+    /// `highlightedNet`. The ring folded by tap from 2026-09-01; until
+    /// then `syncBloom` passed `revealTarget: 1` every frame and the
+    /// launcher was the one object in the app whose ring never closed —
+    /// against the design system's "unfolded by tap, never gaze". Only
+    /// the launch-speed grip lives behind the tap; the aim bead is the
+    /// renderer's own sibling entity and stays reachable folded.
+    @State private var ring = RingState()
+    /// The one id this module's ring can hold — there is one launcher.
+    static let launcherRingID = UUID()
     /// Which ball you are throwing, chosen in the room instead of from a
     /// menu on a card. A golf ball and a table-tennis ball are 17× apart
     /// in mass and behave nothing alike in air, so this is the module's
@@ -218,6 +230,11 @@ struct KinematicsSpaceView: View {
             if UserDefaults.standard.bool(forKey: "kinBalls") {
                 ballPicker.toggle()
             }
+            // `-kinRing 1` opens the launcher's ring — folded by default
+            // since 2026-09-01, and the simulator cannot tap the launcher.
+            if UserDefaults.standard.bool(forKey: "kinRing") {
+                ring.openID = Self.launcherRingID
+            }
             // `-kinGravity 1.62` moves the g rail's bead AND lights the
             // Moon disc — a value, not a flag, because a bead parked at
             // its default proves nothing about the mapping behind it.
@@ -312,6 +329,9 @@ struct KinematicsSpaceView: View {
             // let the next gesture promote it on frame one, against a
             // stale anchor, and grab the object you pressed last time.
             pressedBall.cancel()
+            // A selection, so it does not survive the lab: the next entry
+            // opens on a folded ring like every other module.
+            ring.openID = nil
         }
         .task {
             // Plane detection: device-only, quietly absent in the sim.
@@ -450,7 +470,11 @@ struct KinematicsSpaceView: View {
                 format: { PhysicsFormat.measurement($0, "m/s", decimals: 1) },
                 radius: { 0.10 }))
         let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
-        bloom.update(anchor: anchor, viewer: viewer, revealTarget: 1, dt: dt)
+        // Open only while selected — `Bloom` eases the fold itself, and a
+        // grip mid-drag pins it open whatever this says.
+        bloom.update(anchor: anchor, viewer: viewer,
+                     revealTarget: ring.openID == Self.launcherRingID ? 1 : 0,
+                     dt: dt)
         // Clear of the bloom's own petal arc, which reaches ~0.17 m up.
         let hand = appModel.room.nearestFingertip(to: anchor)
         ballPicker.update(anchor: anchor + SIMD3(0, 0.20, 0),
@@ -558,8 +582,39 @@ struct KinematicsSpaceView: View {
         if ballPicker.handleTap(entity) { return }
         if worldPicker.handleTap(entity) { return }
         if layers?.handleTap(entity) == true { return }
-        _ = bloom.handleTap(entity)
-    
+        // A petal or the grip took the tap: the ring stays as it is. A
+        // dim petal returns false and the tap falls through to the fold,
+        // exactly as Magnetism's does.
+        if bloom.handleTap(entity) { return }
+        let wasOpen = ring.openID == Self.launcherRingID
+        let open = Self.launcherRingOpen(afterTapOn: entity, wasOpen: wasOpen)
+        if open != wasOpen {
+            // The unfold pops; a silent fold read as broken.
+            SoundPalette.play(open ? .pop : .releaseTick, on: entity,
+                              volume: open ? 0.35 : 0.3)
+        }
+        ring.openID = open ? Self.launcherRingID : nil
+    }
+
+    /// What a tap does to the launcher's ring, as a pure function of what
+    /// was tapped — a static over entity names, like Circuits'
+    /// `resolveGrab`, so the routing is testable without a headset.
+    ///
+    /// The launcher toggles it. The aim bead leaves it alone: aiming is
+    /// the launcher's own verb and a zero-travel aim must not fold the
+    /// ring the wearer just opened. Anything else — a ball, a hoop, empty
+    /// space — folds it, which is the same grammar every other module's
+    /// ring answers to.
+    static func launcherRingOpen(afterTapOn entity: Entity, wasOpen: Bool) -> Bool {
+        var current: Entity? = entity
+        while let candidate = current {
+            switch candidate.name {
+            case KinematicsRenderer.launcherName: return !wasOpen
+            case KinematicsRenderer.aimBeadName: return wasOpen
+            default: current = candidate.parent
+            }
+        }
+        return false
     }
 
 }
