@@ -23,18 +23,20 @@ import simd
 @MainActor
 final class TimeCapsuleRoundTripTests: XCTestCase {
 
-    // The capsule ships OFF (`AppSettings.timeCapsule`), so every test
-    // about recording has to switch it on the way a user would. That is
-    // not boilerplate to route around — `testNothingIsRecordedWhenTheFeatureIsOff`
-    // below asserts the other half, and these two together are what stop
-    // the default drifting silently.
+    // The gate is set explicitly rather than trusted: the capsule ships ON
+    // (2026-09-01; it shipped OFF from 2026-08-07), and whichever way the
+    // default points, a test about recording must not depend on what the
+    // previous test left behind. `testNothingIsRecordedWhenTheFeatureIsOff`
+    // below asserts the other half, and `AppSettingsTests` pins the
+    // default itself, so a drift in either direction is caught by name.
     override func setUp() {
         super.setUp()
         TimeCapsuleSettings.isEnabled = true
     }
 
     override func tearDown() {
-        TimeCapsuleSettings.isEnabled = false
+        // The shipped default, for whatever runs next.
+        TimeCapsuleSettings.isEnabled = true
         super.tearDown()
     }
 
@@ -390,13 +392,15 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
         XCTAssertNil(circuits.capsuleSpan)
     }
 
-    // MARK: The feature ships off
+    // MARK: The feature switched off
 
     /// Switched off, a lab costs exactly what it cost before the capsule
     /// existed: no snapshot is taken, nothing accumulates, and there is
-    /// nothing to scrub. This is the half of the default that a setting
+    /// nothing to scrub. This is the half of the SETTING that a toggle
     /// which only hid the reel would have got wrong — the several
     /// megabytes and the per-frame copy would have gone on being spent.
+    /// (The heading said "ships off" until 2026-09-01; the default is on
+    /// now, and this is what declining it buys.)
     func testNothingIsRecordedWhenTheFeatureIsOff() {
         TimeCapsuleSettings.isEnabled = false
         let model = bareModel()

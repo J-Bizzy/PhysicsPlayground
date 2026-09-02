@@ -1583,8 +1583,10 @@ private struct HubLoadButton: View {
     }
 }
 
-/// Utility bar under the wordmark: three verbs, all real. No Exit button — visionOS
-/// offers no supported way for an app to quit itself.
+/// Utility bar under the wordmark: four verbs, all real — Lab list, Settings,
+/// Notebook, About (three until the catalog door of 2026-08-23; the header said
+/// three until 2026-09-01). No Exit button — visionOS offers no supported way
+/// for an app to quit itself.
 private struct HubUtilityBar: View {
     let openSettings: () -> Void
     let openAbout: () -> Void

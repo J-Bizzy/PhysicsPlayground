@@ -50,9 +50,15 @@ pointing at whatever is newest.
 ## Keywords (100 max, comma-separated)
 
 ```
-stem,science,education,teacher,classroom,circuit,magnet,orbit,pendulum,gravity,simulator,lab,ar
+stem,science,education,circuit,magnet,orbit,pendulum,gravity,simulator,lab,electricity,projectile,spatial
 ```
-*95 characters.*
+*99 characters.*
+
+*`teacher,classroom` were in this line until 2026-09-01 and are out on
+purpose: the app has no SharePlay, no lesson plans, no multi-device
+support and no progress tracking, so ranking for a buyer who wants a
+classroom tool is a refund waiting to happen. The four words that replaced
+them name things the app actually does.*
 
 Rules this follows, because they cost ranking if broken:
 - **No word from the name or subtitle.** "physics", "real" and "room"
@@ -79,8 +85,8 @@ No physics engine, no approximations for convenience. Every solver is
 written from scratch in SI units with real constants, and uses the exact
 closed-form solution wherever one exists: Kepler orbits from true orbital
 elements, nodal analysis for circuits, the exact dipole field between
-two bar magnets, r = mv/qB for a charge in a magnetic field. Nearly 350
-tests run against the physics alone.
+two bar magnets, r = mv/qB for a charge in a magnetic field. More than
+400 tests run against the physics alone.
 
 Where something has to be deliberately unphysical for you to see it, the
 app says so on screen, next to the number. The magnetic field that visibly
@@ -124,6 +130,15 @@ There are no floating control panels. Switches are plates you press,
 quantities are rails with a bead you slide, and new objects are pulled out
 of wells with your hands. If you want to know what something does, look at
 it.
+
+THE TIME CAPSULE
+
+Every lab remembers its last thirty seconds. Pause, and a small reel
+appears with the recording wound on it. Pinch the reel and a rail draws
+out like tape: drag the bead and the whole room runs backwards — the ball
+retraces its arc, the bounce un-happens — then walk around the frozen
+instant with its velocity and force arrows standing on it, step it one
+physics tick at a time, and resume from any moment you choose.
 
 A LAB NOTEBOOK
 
@@ -230,6 +245,7 @@ The first two do almost all the work; most people never swipe past three.
 | 4 | **Gravity Lab — binary star** | Conceptually the best story (two suns, every orbit reshaped) and the weakest *simulator* frame: the orrery sits low, so two-thirds of the image is black. **Shoot this one on device**, standing closer and looking down. |
 | 5 | **Gravity Lab — the orbit ring** | Depth, for the person who has already decided to look: Earth's orbit as a ring in the room, apoapsis pulled out to 2.2× under a hand. The module's documented centrepiece. (Reframed 2026-08-05: the previous subject left the app on 2026-08-03 — DECISIONS.md has the story. If two Gravity frames read as repetitive against shot 4, the alternate is Magnetism's room-filling field lines — `-openModule magnetism`, defaults.) |
 | 6 | **Home Screen** | Shows the scope — six labs behind two coloured doors, under the wordmark. A closer, not an opener: it is the least *spatial* frame, because nothing in it is an experiment. |
+| 7 | **Time Capsule** — the reel with its tape out, a ball rewound mid-arc | The feature nothing else in the category has, photographed as the object it is: the reel, the rail drawn out of it, the recorded path hanging as a tube and the ball frozen part-way back along it. Added 2026-09-01 when the capsule started shipping on. |
 
 ## Staging commands
 
@@ -258,7 +274,11 @@ shot 3-fields    -openModule electrostatics -emCap 1 -emMagnetic 1 -emVolts 90 -
 shot 4-gravity   -openModule gravitylab     -gravBinary 1
 shot 5-orbitring -openModule gravitylab     -selectBody Earth -gravRing 1 -apsisDrag far,2.2
 shot 6-home                                 # no arguments at all
+shot 7-capsule   -openModule kinematics     -kinBalls 1 -pauseAfter 4 -scrubBack 1.5
 ```
+
+(Shot 7 needs no `-timeCapsule` argument: recording is the default. Pass
+`-timeCapsule 0` to photograph a plain pause with no reel.)
 
 **In zsh, quote the arguments as `"$@"`, not `$2`.** zsh does not
 word-split an unquoted parameter expansion, so passing a whole argument
@@ -268,10 +288,11 @@ staging simply did not work. This cost two rounds of confused screenshots.
 
 ## Before you shoot
 
-- [ ] **Dismiss the first-run hint** in each lab (touch the card), or it sits across the
-      top of the frame. It is dismissed per module and persists — so shoot
-      each lab twice: once to dismiss, once for real. (`-resetHints 1`
-      brings them all back if you want the hint *in* a shot.)
+- [ ] **Dismiss the first-run hint** in each lab (its ✕ under the title
+      bar), or it sits in the frame. It is dismissed per module and
+      persists — so shoot each lab twice: once to dismiss, once for real.
+      (`-resetHints 1` brings them all back if you want the hint *in* a
+      shot.)
 - [ ] **Let each scene settle.** Field lines re-trace, orbits move,
       pendulums swing. 20 seconds is about right; a shot taken at 5
       catches half-built geometry.
@@ -299,3 +320,11 @@ is about reaching in, and no still frame can show a grab. The strongest
 30 seconds: pull a charge out of the well → the field redraws around it →
 pinch with both hands to zoom → tap a planet → drag the apsis bead and
 watch the orbit stretch.
+
+**The full demo is scripted in `docs/DEMO_SCRIPT.md`** (180 s, every
+beat with the file behind it and the launch arguments that stage it in
+the simulator). The preview is cut from a **Developer Capture** (Reality
+Composer Pro › File › Developer Capture, HEVC .mov, 30 fps), not from the
+headset's Control Center recording — App Store Connect wants 3840 × 2160,
+16:9, 30 fps, 15–30 s, H.264 at 10–12 Mbps or ProRes 422 HQ, stereo AAC,
+≤ 500 MB, up to three previews, poster frame at 5 s.

@@ -100,7 +100,10 @@ struct MagnetismSpaceView: View {
                           symbol: "location.north.circle",
                           isOn: { model.compassOn },
                           toggle: { model.compassOn.toggle() }),
-                    // The fifth: whether the room is standing on a
+                    // The fourth (it was the fifth until the compass
+                    // grid's plate came off on 2026-08-03; the comment
+                    // kept counting to five until 2026-09-01): whether
+                    // the room is standing on a
                     // planet. Switching it off is the comparison — the
                     // compasses stop knowing which way is north and go
                     // back to reading only the bench.

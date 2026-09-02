@@ -16,6 +16,79 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-09-01 — Release 1.0: the demo script sets the scope
+
+**Decision:** Version 1.0 is planned backwards from a 180-second demo
+(`docs/DEMO_SCRIPT.md`): a feature that cannot hold five seconds of it
+is broken, undiscoverable or buried, and the script says which. On the
+way, four owner decisions and one scope extension:
+
+1. **The Time Capsule ships ON**, toggle kept (amends 2026-08-07).
+2. **The first-run hint shows in the module window while the room is
+   open** (amends 2026-08-09), gated on a screenshot per lab.
+3. **The launcher's ring folds by tap** like every other ring
+   (`DESIGN_SYSTEM.md`: unfolded by tap, never gaze). Only the
+   launch-speed grip goes behind the tap; the aim bead is a sibling
+   entity and stays free.
+4. **The demo's "complete an experiment" beat is the Lab Notebook
+   capture.** The experiments system stays deleted.
+5. **Projectiles and Circuits each gain a batch of features**, and the
+   ten circuit parts are re-milled by one checked-in script. Projectiles:
+   hoops from a well (restoring the 2026-07-31 mothball — through a
+   well, so nothing stands at rest, which is the answer to the 07-29
+   clutter objection), the aim that solves for a hoop with both exact
+   roots, a custom-mass ball at a fixed diameter, the vacuum ghost arc,
+   monkey-and-hunter, and bouncing off classified tables and seats plus a
+   hand swat. Circuits: the inductor's own field on the Magnetic-field
+   layer (answering 2026-08-02: the bench you built, not a second
+   apparatus — `inductorCurrent` was integrated every frame and read by
+   nothing), I²R heat and scorch on resistors, and a frequency rail under
+   the AC source. Swap-in-place, a wind vane and the launcher's carriage
+   model were offered and declined for 1.0. Each lands with its own entry.
+
+**Context:** The brief was written from the 2026-08-07 audit, and that
+arc had closed on 2026-08-26. Verified against the code before planning:
+the git root is the parent directory (430 commits — the brief's "no
+repository, git init" would have nested a repo and orphaned them, so
+the release is a branch); the twenty experiment steps, `insightText`,
+`compassIsReadingEarth` and `scopeSamples` are graves, not sleepers; the
+front door already answers 07-29 (a tap moves a lab, a second pinch in a
+different place enters); recession and the folding handle shipped on
+08-07 (Gravity Lab 18 → 9, Circuits 22 → 13), so the container refactor
+the brief asked to cost is not owed; and of the eight "visibly wrong"
+physics items six are fixed, one is retracted and one is parked with a
+measurement. Two findings the brief could not have known: the first-run
+hint had ZERO readers since the space became the launch scene on
+2026-08-22 (it drew only while the space was closed), and the 2026-08-30
+title-bar lift removed the occlusion that had driven it out of the
+window; and the double pendulum still stamps `T = 2π√(L₁/g)` on a
+system that has no period.
+
+**Why the capsule flips to ON.** The 08-07 reasoning — a default is a
+claim about what the app is; meet the labs first; the cost is honest as
+a setting — was made against a build that put a 34 cm rail in every
+pause. The reel (same day, later) answered "not always visible": a pause
+shows one object and nothing else until it is pinched, so with ON the
+first thing a user meets is still six labs. The cost (2–11 MB and one
+struct copy per tick) is not a price a wearer needs to be asked about,
+and the toggle remains for anyone who wants it off. What was lost by OFF
+was measurable: every buyer, and App Review, met the app without its
+most distinctive feature.
+
+**Consequences:** `release/1.0` is the branch; every commit pathspec-
+scoped. Batches in order: ground truth and docs → the three small code
+changes → the ring fold → Projectiles → Circuits → models → the device
+gate (`ON_DEVICE_TESTS.md` › *Release 1.0 gate*, in demo order) → the
+take → archive and upload. Named backlog, so nothing drops silently:
+Circuits' eight save slots (a missing door), Recession on the five rails
+and the readout cards, Electric Fields' four wells → two, the second-
+object grab for the other hand in Circuits / Electric Fields / Gravity
+Lab, a refusal sound for a failed capture, the magnet force near
+contact, `cyclotronRadius` at launch speed, `-magInertia` as a mode,
+Dynamic Type in the room, the oscilloscope ribbon, the motor's voice.
+Cut order if time is lost: table + swat first, then monkey-and-hunter,
+then the models, then the ring fold; the gates never.
+
 ## 2026-08-29 — Gravity Lab arrives with nothing selected
 
 **Decision:** `reset()` no longer pre-selects Earth. The module opens as

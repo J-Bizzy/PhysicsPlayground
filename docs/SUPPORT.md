@@ -35,8 +35,9 @@ control panels — the window is a title bar. Look for:
 - **Wells** — pinch and pull to make a new charge, magnet or pendulum.
 - **Rings** — tap an object and its own controls unfold around it.
 
-Each lab's first-run hint names its own, once, on a card in the room you dismiss by touching. If you dismissed them and
-want them back: **Settings › Show hints again**.
+Each lab's first-run hint names its own, once, under the lab's title bar;
+close it with its ✕. If you dismissed them and want them back:
+**Settings › Show hints again**.
 
 ### How do I move the experiment?
 
@@ -54,8 +55,8 @@ or Markdown through the share sheet.
 
 Yes, and that is the point of the app. SI units, real constants, and
 exact closed-form solutions wherever they exist — Kepler orbits from
-orbital elements, the Foucault sine law, `r = mv/qB`, nodal analysis for
-circuits. Where something is deliberately unphysical so you can see it at
+orbital elements, the exact field of a finite charged plate, `r = mv/qB`,
+nodal analysis for circuits. Where something is deliberately unphysical so you can see it at
 all — the magnetic field that bends a visible ball is about a thousand
 times the strongest magnet ever built — the app says so, on screen, next
 to the number.

@@ -34,6 +34,13 @@ test — `PanelControlCriterionTests` fails the build if a panel comes
 back — because the project crossed it in the wrong direction once and it
 took 212 commits to get back.
 
+**Pause is a place you can walk into.** Every lab records its last
+thirty seconds. Pause, pinch the reel that appears, and drag the tape
+back: the whole room runs backwards onto recorded frames, the ball
+retraces its arc with its velocity and force arrows sculpted on it, and
+you resume from any instant you choose. Snapshots, never reverse
+integration — a restored moment is one that genuinely happened.
+
 **The fictions are disclosed where they are read.** Some numbers have to
 be unphysical for anything to be visible: the field that bends a 0.5 g
 ball is about a thousand times the strongest magnet ever built. The app

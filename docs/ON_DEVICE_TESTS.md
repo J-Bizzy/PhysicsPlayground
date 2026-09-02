@@ -27,6 +27,94 @@ Work top to bottom; each item says what CORRECT looks like, because
 **Items marked ⟳ changed on 2026-08-04** in response to the previous
 pass, and are the ones worth doing first.
 
+## Release 1.0 gate (2026-09-01) — the demo, in order, as the acceptance pass
+
+`docs/DEMO_SCRIPT.md` is the 180-second script; this is the same order
+as a checklist, and it is the fourth ship gate: nothing is recorded
+until every line here passes on the headset with the owner driving.
+Beats marked **[F]**, **[G]** and **[H]** exist only once those batches
+have landed; skip them on a pass before that and say so in the report.
+The older sections below stay as history and detail — where one of them
+contradicts this section, this section is current.
+
+- [ ] **0 · Arrival.** Cold launch goes STRAIGHT into the gallery: a beat
+      of plain passthrough, then the wordmark fades in and flies to the
+      wall with the bell, terraces and six live miniatures cascade in
+      over ~3.5 s, both door signs legible from where you stand. Turn
+      your head along the crescent: one promise line under the faced
+      exhibit, never two, never flickering.
+- [ ] **1 · Enter.** Pinch the Projectiles miniature: it flies to the
+      cradle in ~0.5 s and the three latch fingers close AS IT ARRIVES;
+      "Load Projectile Motion" hangs over it. Pinch Load: swell, pop,
+      hairline flare, dissolve through passthrough, the lab fades up with
+      the room ramping (not snapping) to 0.35, a welcome shot already in
+      the air. Tapping a second miniature sends the first home; tapping
+      the docked one does nothing.
+- [ ] **2 · Projectiles.** Pull a basketball from the well and throw it
+      overhand at a real wall: it bounces AT the wall. Tap Jupiter (arc
+      collapses), Zero-g (dead straight). Catch a ball on your fingertips.
+      Air on: the wind rail appears, a wind bends the flight.
+      **[F]** Pull a hoop from its well, stand it across the room, tap it
+      → "Aim low": two ghost arcs through the rim, the bead snaps to the
+      one you pinch, Fire → chime, the plate counts. "Drop when fired":
+      the hoop falls as you fire and the ball meets it — on the Moon too.
+      Air on: the vacuum ghost stands beside the real arc. Throw at your
+      coffee table: it bounces off the top and comes to rest on it; swat
+      a ball out of the air. **[C]** Tap the launcher: its ring unfolds
+      (Fire / Balls / Clear + the speed grip); tap empty space: it folds;
+      the aim bead works with the ring folded.
+- [ ] **3 · Time Capsule** (ships ON now — no Settings visit). Pinch the
+      pause petal: the room holds; ONE reel arrives, still coasting, under
+      "Time capsule". Pinch it: the tape draws out and the reel turns ~1.5
+      turns. Drag the bead back: the ball retraces its arc and the bounce
+      un-happens, landing on recorded frames. Walk around the frozen ball:
+      velocity and force arrows sculpted on it, the path a tube. "Back a
+      frame" ×3 through the wall contact. "Resume here": the room runs
+      forward FROM that instant. Settings › Time Capsule OFF, pause again:
+      nothing new appears.
+- [ ] **4 · Circuits** (via the palette bead's Circuits vignette — the
+      lab-to-lab door dissolves, no hard cut). The loop is live; pinch the
+      switch: bulb out, beads stop. Pull a resistor from the rack, born at
+      your fingertips; click it nose-to-tail onto the loop. Pull a lead
+      across: wired; tap a lead: the whole net lights green. Electron View:
+      into the copper, beads at mm/s, the field front laps the loop.
+      **[G]** Pull the resistor's bead to 10 Ω: it glows, then scorches
+      and the loop goes dark; Replace. Presets → RC charger; wire in the
+      coil; Magnetic-field plate: a looping field over the coil, flipping
+      when you reverse the battery, collapsing when you open the switch.
+      Tap the AC source: a frequency rail hangs under it; at 3 Hz the bulb
+      flickers and the capacitor lags. **[H]** Every part in the rack and
+      on the bench reads as one milled family; nothing looks like a
+      cylinder with a colour on it.
+- [ ] **5 · Gravity Lab.** The room goes to 0.85 and reads as entering
+      space. The sky is QUIET until you tap Earth; then ring, card, arrows
+      and sweep arrive together. Pull the far bead: the ellipse stretches;
+      let go: Earth stays on the orbit you drew. Clock tab → 20×: the
+      beads creep (precession). Two-hand pinch to ~4× and walk in: labels
+      hold their size, the well stays put, the chord plays. Twin suns:
+      every orbit answers. Analysis → Lagrange; drop a world on L4: it
+      holds, and the capture paragraph appears at the point.
+- [ ] **6 · Electric Fields.** Pull a + charge: the field redraws around
+      your hand. Uniform B on; pull a test probe and throw it sideways: it
+      circles and closes on its tail; the card reads a non-zero qv×B.
+- [ ] **7 · Magnetism.** Carry one bar toward the other: it swings and
+      snaps head-to-tail; the loops re-trace around you (judge the pink);
+      the hand compass follows.
+- [ ] **8 · Pendulums.** Release the cradle: click-click. Pull "Double"
+      from the well and flick it: the lower bob leaves a chaotic trail and
+      wears NO period tag. Throw a bob sideways: a true 3-D orbit.
+- [ ] **9 · Notebook.** Tap a bob (card: L, T, θ, v), pinch the capture
+      petal (chime), open the book from the title bar: the entry with its
+      readings; CSV and Markdown share buttons present.
+- [ ] **10 · Close.** Home petal: dissolve, the gallery fades back up
+      under its wordmark.
+- [ ] **Judgement calls, answered in writing:** the pink field lines
+      through passthrough; whether 45 % recession is legible in your
+      room; the reel's size and where it lands; whether the first-run
+      hint under the title bar clears the apparatus in all six labs.
+- [ ] **The cut test:** enter all six labs in sequence; the room's
+      brightness moves only at Gravity Lab, and ramps rather than steps.
+
 ## Deferred — the owner asked to be reminded
 
 Three revisits from the 2026-08-03 pass, deliberately NOT addressed in
@@ -84,8 +172,11 @@ working session:
 - [ ] ⟳ **Look at an exhibit.** It lifts off its puck, grows, and its
       halo lights. Look away: it settles back. **There is no panel any
       more** — the owner cut the floating card; the gaze answer is the
-      exhibit itself, and the ONLY way into a lab is carrying it to the
-      pad. Check nothing card-shaped appears anywhere while focusing.
+      exhibit itself. (This line said "the ONLY way into a lab is
+      carrying it to the pad" from 2026-08-04 until 2026-09-01; since
+      2026-08-09 a tap sends it to the pad, and the catalog and VoiceOver
+      go straight in — see the Release 1.0 gate above.) Check nothing
+      card-shaped appears anywhere while focusing.
 - [ ] ⟳ **Every exhibit's name is ALWAYS legible** — no fading in on
       gaze. Sweep the room: six names readable at a glance, focused or
       not.
@@ -1196,9 +1287,16 @@ reading "seconds ago".
 - [ ] **Every rail in the app hangs under the thing it adjusts.**
 - [ ] **Every ring folds in place.**
 - [ ] **System Reduce Motion** (Settings ▸ Accessibility): the hub's
-      idle life stills, and the door signs PARK at a composed rest pose
-      — the electron at its track's side, the ball resting on the rule.
-- [ ] **Every lab's first-run hint** appears once and stays dismissed — as a CARD IN THE ROOM, in front of the apparatus, dismissed by touching it anywhere (2026-08-08). Check it is not crossed by the physics; that is the defect it was moved to fix. With the room shut it still appears in the window instead, and dismissing it either way counts.
+      idle life stills, and the door signs' rule stops shimmering. (The
+      electron and the ball this line used to name were deleted on
+      2026-08-04; the signs are static lockups now.)
+- [ ] **Every lab's first-run hint** appears once and stays dismissed —
+      under the module's title bar, closed by its ✕ (the in-room card of
+      2026-08-08 was cut on 2026-08-09, and from 2026-09-01 the window
+      shows the hint whether or not the room is open, because the app
+      now launches into the room and a hint shown only while it is shut
+      had no readers). Check it stands ABOVE the apparatus band, never
+      through it.
 - [ ] **The notebook** captures a moment from each lab with sane
       numbers and units.
 - [ ] **Leave and re-enter a lab**: its state survives.

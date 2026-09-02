@@ -51,8 +51,9 @@ struct SettingsView: View {
                     caption("Every lab remembers what just happened. Pause and "
                             + "a reel appears — pinch it to draw out a rail, "
                             + "then scrub the whole room backwards and walk "
-                            + "around any moment. Off by default; it costs a "
-                            + "few megabytes per lab while it runs.")
+                            + "around any moment. It costs a few megabytes per "
+                            + "lab while it runs; switch it off and nothing is "
+                            + "recorded.")
                 }
 
                 PanelSection("Onboarding") {

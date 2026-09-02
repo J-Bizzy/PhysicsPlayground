@@ -32,8 +32,12 @@ import PhysicsCore
 /// the reader.
 @MainActor
 enum TimeCapsuleSettings {
-    /// Off by default — see `AppSettings.timeCapsule` for why.
-    static var isEnabled = false
+    /// On by default since 2026-09-01 — see `AppSettings.timeCapsule`
+    /// for why. This static only matters before `AppSettings` exists
+    /// (`AppModel.init` overwrites it from the stored preference); the
+    /// two defaults must agree, or a model built before the settings
+    /// would record differently from one built after.
+    static var isEnabled = true
 }
 
 @MainActor

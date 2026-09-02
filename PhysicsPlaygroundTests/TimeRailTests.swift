@@ -26,15 +26,17 @@ final class TimeRailTests: XCTestCase {
     /// The real kinematics descriptor, with its model paused on ~2 s of
     /// recording — the state the rail exists for.
     override func tearDown() {
-        TimeCapsuleSettings.isEnabled = false
+        // The shipped default (ON since 2026-09-01), for whatever runs next.
+        TimeCapsuleSettings.isEnabled = true
         super.tearDown()
     }
 
     private func makeRecordedModule() -> (ModuleDescriptor, KinematicsModel, AppModel) {
         let appModel = AppModel()
         // AFTER `AppModel()`, never before: constructing it builds
-        // `AppSettings`, which pushes the stored answer (off) into the
-        // recording gate. Enabling first would be silently undone.
+        // `AppSettings`, which pushes the STORED answer into the recording
+        // gate — whatever a previous simulator session left there.
+        // Enabling first would be silently undone.
         TimeCapsuleSettings.isEnabled = true
         let module = ModuleCatalog.all(appModel: appModel)
             .first { $0.id == KinematicsModule.id }!

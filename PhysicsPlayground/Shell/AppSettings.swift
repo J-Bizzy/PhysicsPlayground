@@ -42,19 +42,23 @@ final class AppSettings {
     // MARK: Time Capsule
 
     /// Whether every lab records its last thirty seconds, so a pause can
-    /// be scrubbed. **Off by default** (owner's call, 2026-08-07).
+    /// be scrubbed. **On by default** since 2026-09-01 (owner's call,
+    /// reversing 2026-08-07).
     ///
-    /// A default is a claim about what the app IS, and by default this
-    /// one is six physics labs where pause means the room holds still.
-    /// The capsule is a second, larger idea on top of that — a machine
-    /// for interrogating a moment — and someone meeting the app for the
-    /// first time should meet the labs.
+    /// The 08-07 argument — a default is a claim about what the app IS,
+    /// and someone meeting it for the first time should meet the labs —
+    /// was made against a build that put a 34 cm rail in every pause.
+    /// The reel answered that the same day: a pause shows one small
+    /// object and nothing else until it is pinched, so with the capsule
+    /// on the first thing a wearer meets is still six labs. What OFF
+    /// cost was that every buyer met the app without its most
+    /// distinctive feature. DECISIONS.md 2026-09-01.
     ///
     /// It gates the RECORDING, not just the reel, and that is the whole
     /// reason it is a setting rather than a preference about furniture:
     /// switched off, no model snapshots itself, so the several megabytes
-    /// and the per-frame copy are not spent on a capability nobody asked
-    /// for. `TimeCapsuleRecording.isRecordingEnabled` reads this, and
+    /// and the per-frame copy are not spent on a capability the wearer
+    /// declined. `TimeCapsuleSettings.isEnabled` reads this, and
     /// turning it off drops whatever was already recorded — a capsule
     /// that survived being switched off would be a recording made after
     /// the user said stop.
@@ -108,13 +112,14 @@ final class AppSettings {
         let defaults = UserDefaults.standard
         masterVolume = defaults.object(forKey: "settings.masterVolume") as? Double ?? 1.0
         ambientAudio = defaults.object(forKey: "settings.ambientAudio") as? Bool ?? true
-        var capsule = defaults.object(forKey: "settings.timeCapsule") as? Bool ?? false
+        var capsule = defaults.object(forKey: "settings.timeCapsule") as? Bool ?? true
         #if DEBUG
-        // `-timeCapsule 1` switches the feature on for a launch without
-        // writing the preference. The toggle is a hand's reach away in
-        // Settings and the simulator has no hand — and every other Time
-        // Capsule argument is inert without this one, since with the
-        // feature off there is by design nothing recorded to scrub.
+        // `-timeCapsule 0` switches the feature OFF for a launch without
+        // writing the preference — the way to photograph a plain pause
+        // now that recording is the default. (`-timeCapsule 1` still
+        // works, and is a no-op on a fresh install.) The argument domain
+        // stores a string; `bool(forKey:)` reads "0" as false, the same
+        // conversion `-kinBalls` relies on.
         if defaults.object(forKey: "timeCapsule") != nil {
             capsule = defaults.bool(forKey: "timeCapsule")
         }
