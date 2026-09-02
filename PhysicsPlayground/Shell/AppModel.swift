@@ -329,15 +329,37 @@ final class AppModel {
         // freezes it. Some labs have nothing to freeze at t=0 — a thrown
         // bob is still in the hand, an orbit has not swept — so freezing
         // from launch shows a room at rest and proves nothing.
+        //
+        // STAGED HERE, FIRED FROM THE LAB'S SCENE (2026-09-02). It used to
+        // sleep from init, and the space builds only once the prop cache
+        // is warm — about fifteen seconds in a cold simulator — so the
+        // pause landed before the lab had run a single step: a room at
+        // rest and a capsule two frames long, which is why the reel was
+        // absent from every paused screenshot. `PlaygroundSpaceView`
+        // starts the clock when the module's scene mounts.
         let pauseAfter = UserDefaults.standard.double(forKey: "pauseAfter")
         if pauseAfter > 0 {
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(pauseAfter))
-                self?.activeModule?.togglePause()
-            }
+            pauseAfterSeconds = pauseAfter
         }
         #endif
     }
+
+    #if DEBUG
+    /// Seconds of simulation to allow before `-pauseAfter` freezes the
+    /// active lab; consumed by the first scene that mounts.
+    var pauseAfterSeconds: Double?
+
+    /// The staged pause, counted from the moment a lab's scene is on
+    /// screen. Cancelled with the scene, so leaving the lab first is
+    /// simply no pause.
+    func runStagedPause(for module: ModuleDescriptor) async {
+        guard let seconds = pauseAfterSeconds else { return }
+        pauseAfterSeconds = nil
+        try? await Task.sleep(for: .seconds(seconds))
+        guard !Task.isCancelled, activeModuleID == module.id else { return }
+        module.togglePause()
+    }
+    #endif
 
     // MARK: Per-module models — created on first entry, retained so a
     // module's state survives leaving and re-entering it.

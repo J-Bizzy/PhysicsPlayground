@@ -103,17 +103,21 @@ cyclotron radius, drawn at full size in your room.
 
 Circuit Workshop — Build from racks of real parts: batteries, resistors,
 capacitors, inductors, motors, LEDs. Solved every frame. Probe it with a
-multimeter, then switch on Electron View and shrink into the copper to
-watch the drift velocity — which is millimetres per second, and is the
-single most common misconception in introductory electricity.
+multimeter, push a resistor past its rating and watch it scorch, tune the
+AC source by hand, switch on the field layer and see the coil become a
+magnet — then shrink into the copper with Electron View to watch the
+drift velocity, which is millimetres per second and the single most
+common misconception in introductory electricity.
 
 Magnetism — Bar magnets that attract, repel and snap into alignment,
 their looping field closing on itself in real time. Carry a compass
 through it.
 
 Projectile Motion — Throw anything. Real drag and restitution, gravity
-from zero-g to Jupiter, and bounces off your actual walls, floor and
-ceiling.
+from zero-g to Jupiter, and bounces off your actual walls, floor,
+ceiling and table. Stand a hoop anywhere and the launcher solves for it
+— both arcs, exactly — or arm it to drop the instant you fire and watch
+the ball meet it in mid-air on every world.
 
 Pendulums — Full nonlinear swings, a Newton's cradle you can break apart
 and rebuild, a double pendulum that never repeats itself, and a true
@@ -152,7 +156,9 @@ kind. Nothing you do leaves your device.
 
 Requires visionOS 26.0 or later.
 ```
-*2,937 characters* of 4,000. Counted, not estimated.
+*3,758 characters* of 4,000. Counted, not estimated (2026-09-02; it was
+2,937 before the Time Capsule paragraph and the new Projectiles and
+Circuits sentences).
 
 **Do not keyword-stuff this field.** Apple indexes the name, subtitle and
 keywords — not the description — so repetition here buys nothing and
@@ -264,7 +270,9 @@ shot () {   # shot <name> <args...>
   local name=$1; shift
   xcrun simctl terminate $D com.jbizzell.physicsplayground 2>/dev/null
   xcrun simctl launch $D com.jbizzell.physicsplayground "$@"
-  sleep 22                                   # scenes settle; fields trace
+  sleep 32   # ~15 s of prop-cache warm-up before the lab mounts (a cold
+             # simulator), then scenes settle and fields trace. `-pauseAfter`
+             # counts from the mount, not from launch (2026-09-02).
   xcrun simctl io $D screenshot "$name.png"
 }
 
@@ -275,7 +283,14 @@ shot 4-gravity   -openModule gravitylab     -gravBinary 1
 shot 5-orbitring -openModule gravitylab     -selectBody Earth -gravRing 1 -apsisDrag far,2.2
 shot 6-home                                 # no arguments at all
 shot 7-capsule   -openModule kinematics     -kinBalls 1 -pauseAfter 4 -scrubBack 1.5
+shot 8-hoops     -openModule kinematics     -kinHoops 1 -kinSolve 1
+shot 9-coil      -openModule circuits       -circCoil 1
 ```
+
+(Shots 8 and 9 are the 2026-09-02 features — a hoop with both solved arcs
+through it and its angle callout; the coil's own field over the bench —
+and are optional: the store takes up to ten, and seven already carry the
+argument.)
 
 (Shot 7 needs no `-timeCapsule` argument: recording is the default. Pass
 `-timeCapsule 0` to photograph a plain pause with no reel.)

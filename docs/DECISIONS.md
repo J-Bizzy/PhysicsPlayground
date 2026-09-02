@@ -16,6 +16,186 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-09-02 — The ten circuit parts are milled from the same stock as the room
+
+**Decision:** Batch H. `Tools/circuitparts.py` is the generator for all
+ten parts on the bench, in the stocks the gallery's platforms and the
+multimeter already wear — near-black anodised with the clearcoat
+`RenderKit.Materials.graphite` is defined by, steel, copper, champagne
+keylines, glass where a part has an envelope. One file per part; the
+renderer's own moving and lit pieces (the bulb's filament and glow, the
+LED's glow, the motor's rotor, the switch's lever) stay in Swift at the
+positions they always had. The resistor's ceramic BODY stays procedural
+— its colour bands are a live texture painted from the value, and the
+UV layout of a RealityKit cylinder is the one that texture knows — so
+only its steel end caps are milled and mounted under it.
+
+**Context:** Four of the parts (battery, bulb, capacitor, switch) shipped
+on 2026-07-17 as hand-built assets with no generator, before the rule
+that a binary nobody can regenerate is a decision nobody can revisit
+(`appicon.py`, 2026-08-24). The other six were procedural cylinders with
+a colour on them — the one place on the bench that read as programmer
+art beside a modelled meter. The owner asked for better models with the
+feature work; the script is the answer that survives the next
+re-proportioning.
+
+**The contract with the renderer** is written into the script and held
+by `CircuitPropTests`: every body lies along X inside |x| < 0.059 (the
+carry box's clamp at the leads' inner edge, so `CircuitsAlignmentTests`
+and the collider criterion keep their assumptions), the bulb and the LED
+stand up with their glass above +y 0.012, the motor's shaft end is +X
+where the rotor mounts, and the battery's positive nipple is −X —
+terminal 0, the nodeA convention the solver and the renderer share.
+The procedural bodies survive as the fallback, so a missing asset
+never blanks a part.
+
+**Consequences:** The rack previews and the hub miniature pick the new
+models up unchanged (`partPreview` is `makeBody`; the miniature loads
+the battery, the bulb and the switch by name). Judged by screenshot at
+1× and in Electron View at 4×, where a model's edges show; the device
+pass judges them under passthrough. The Blender MCP was not connected
+and was not needed: the pipeline is headless scripts, as it was for
+every asset before these.
+
+## 2026-09-02 — Circuits: the coil is a magnet, a resistor can scorch, and an AC source has its own frequency
+
+**Decision:** Batch G of the release plan — three features the owner
+chose on 2026-09-01 (C1, C3, C4; C2 swap-in-place declined):
+
+1. **The coil is a magnet.** `inductorCurrent` was integrated every
+   frame and read by nothing. It now drives a `BarMagnet` through
+   `CurrentLoop.magnet`, and the Magnetic-field layer samples the
+   model's `magneticField(at:)` — every wire segment PLUS every coil —
+   with extra rings around each carrying inductor's axis. The turn
+   count is derived, not invented: for an air core of the drawn
+   geometry (0.07 m long, 0.019 m windings) L = μ₀N²A/ℓ, so the default
+   0.5 H is about 4,960 turns, and the card says "≈4,960 turns · air
+   core". Reverse the battery and the field flips. This answers
+   2026-08-02 ("Circuits and Magnetism stop being one apparatus") rather
+   than reopening it: the coil is a part on the bench you built, not a
+   second apparatus cabled to it.
+2. **Heat.** Resistors carry a rating (2 W, stated on the card as "0.17 W
+   of 2 W"); past it the excess accumulates as `thermalEnergy`, under it
+   it cools, and four joules of excess scorches the part — a slow fuse,
+   with a glow on the way (the body's emissive rises in four steps, then
+   goes black and reads "scorched"; Replace makes it whole). Only
+   resistors: the bulb's job is to run hot, the fuse and the LED already
+   fail their own way, and a WIRE stays ideal — the solver treats a wire
+   as a net, so a wire's I²R would need it to become an element, which
+   this release does not do.
+3. **AC you can tune.** Each AC source carries `acFrequency` (0.1–5 Hz,
+   0.5 by default); a rail hangs under a selected source, hung off the
+   renderer's root through the zoom rig so it never scales out of reach.
+   Persisted as an optional stored field, so every bench written before
+   today decodes at the old 0.5 Hz (`CircuitsBenchMigrationTests`).
+   `Component` gains a tolerant `init(from:)` for the same reason.
+
+**Context:** All three make the bench say more about what it is already
+doing. The solver was always time-stepped, so an AC source at any
+frequency is honest without new physics; the power was always solved
+per part; the inductor's current was always integrated. What was
+missing was a reader and, for heat, a threshold with a stated number.
+
+**Consequences:** `-circCoil 1`, `-circHeat 1`, `-circAC <Hz>` stage the
+three. Tests: `CircuitsModelTests` — the inductance implies the turn
+count and recovers it; the field on the coil's axis is the loop's far
+field (`CurrentLoop.axialField`) within five percent and flips with the
+battery; a 10 Ω resistor on 9 V survives a spike, scorches under a
+sustained overload, reads as open, and is whole after Replace while
+470 Ω never warms; a 2.5 Hz source peaks a quarter period in and troughs
+three quarters in, and the rail clamps. The field layer's change gate
+now keys on the coils as well as the segments. `VectorFieldArrows`
+normalises against the frame, so beside a five-thousand-turn coil the
+wire arrows go faint — which is the physics, and the reason the coil
+is the demo.
+
+## 2026-09-02 — A table is a surface you can land on, and a hand is a thing you can swat with
+
+**Decision:** Batch F's last item (P3). Two changes to what the ROOM is
+in Projectiles, no new control:
+
+1. **Tables and seats become finite walls.** `RoomModel.consumePlanes`
+   passed only vertical planes into the wall table; a horizontal plane
+   ARKit classifies as `.table` or `.seat` now goes in too, through the
+   same `wall(from:)`. In the model, an upward-facing wall is a SUPPORT
+   rather than something to bounce off: `supportHeight(under:)` finds the
+   highest one under the ball and the floor law runs against it, so a
+   ball dropped on a table bounces on the top, comes to rest on it, rolls
+   along it, and — the case that makes the rest honest — rolls off its
+   edge and falls (`strikeWalls` excludes upward faces so a landing is
+   never double-counted as a strike). `.unknown` planes stay out: an
+   unclassified horizontal plane is an invisible shelf in mid-air.
+2. **Hands strike.** `RoomModel` publishes the tracked hand joints as
+   `SphereStrike.Sphere`s with finite-difference velocities, and the
+   model bounces a ball off them (`PhysicsCore.SphereStrike`, the wall
+   contract for a moving sphere: the relative velocity reflects, the
+   hand's own motion is added back). A hand moving slower than
+   `swatSpeed` (1.2 m/s) is waiting, and catches as before; faster, it
+   swats — the SpaceView routes the fingertips by speed.
+
+**Context:** "1:1 with your room" stopped at four walls and a ceiling.
+The room already knew about tables — every horizontal plane fed the
+bounds — and about hands — nine joints as an obstacle field for a module
+that no longer ships — and Projectiles read neither. `-roomTable <y>`
+stands a synthetic table in the simulator, which has no furniture to
+classify; the physics is proven there and by the tests, and whether
+ARKit classifies YOUR table is the device judgement recorded in the
+release plan's risk list.
+
+The predicted arc still bounces off a table as a strike (it has no rest
+law) — the first bounce agrees with the ball, the settling does not, and
+the arc ends where a bounce budget ends it. Accepted for 1.0 and noted
+here rather than hidden.
+
+**Consequences:** `TableWallTests` pins that the strike law was always
+normal-agnostic (a drop onto a table bounces, beside it falls past, the
+underside is a surface); `SphereStrikeTests` pins the swat numbers (a
+resting ball leaves at the hand's speed × (1 + e)); `KinematicsModelTests`
+holds rest-on-the-table, roll-off-the-edge and the swat by the model's
+own laws. The hand-joint velocities are the first time `RoomModel`
+publishes motion rather than position.
+
+## 2026-09-02 — Monkey and hunter, and a pause that counts from the lab
+
+**Decision:** A hoop's ring gains "Drop when fired" (Batch F, P7). Armed,
+the hoop is re-hung on its anchor and let go at the instant a shot
+leaves the launcher; it falls in a vacuum, and the ball meets it
+wherever the two coincide — from any side, because that meeting is the
+demo. The next shot re-hangs and drops it again; disarming re-hangs it;
+a hand on it ends the fall. The hoop's callout says "drops when fired"
+while it is armed. The ring's three petals are now Aim (a fan of the two
+arcs), Drop when fired, and Delete — the two aim petals of the earlier
+entry became a fan because a momentary N-way choice is a fan and the
+ring's ceiling is three.
+
+**And `-pauseAfter` counts from the lab, not from launch.** The argument
+slept from `AppModel.init`; since 2026-08-22 the space builds only once
+the prop cache is warm — about fifteen seconds in a cold simulator — so
+`-pauseAfter 4` paused a lab that had never run a step. The reel was
+absent from every paused screenshot taken today, forced on or default,
+and an instrumented run showed why: paused, a capsule two frames long,
+`wantsPresence` false. The clock now starts when the module's scene
+mounts (`PlaygroundSpaceView` → `AppModel.runStagedPause`), and the
+staging notes budget the warm-up.
+
+**Context:** The physics is the classic: aimed straight at the target
+with no lead, hunter and monkey fall the same distance in the same time,
+so the ball arrives where the hoop has fallen to — on the Moon and on
+Jupiter, which the worlds picker shows in one tap. The falling hoop
+ignores drag, and its callout says so, because drag on the target would
+break the claim the demo exists to show. The hit test is proximity
+rather than a plane crossing because in the falling frame the ball moves
+in a straight line at the launch velocity, which is upward for any shot
+aimed above the horizon.
+
+**Consequences:** `Ring` carries `dropOnFire`, `falling` and
+`fallSpeed`, so the capsule records them without anyone remembering to.
+`-kinHunter 1` arms the first hoop, aims straight at it and fires; with
+`-pauseAfter 0.6` the two are photographed meeting. `KinematicsModelTests`
+holds the meeting for g = 1.62, 9.81 and 24.79 by the scoring law, that
+the same line of sight misses a hoop that stays put, and the re-hang.
+The `sleep 22` in every staging script became `sleep 32`.
+
 ## 2026-09-02 — Projectiles: the hoops come out of their mothball, and the launcher solves for them
 
 **Decision:** Four features on the Projectiles bench, chosen by the

@@ -65,6 +65,16 @@ struct KinematicsSpaceView: View {
                 PickerChoice(id: $0.rawValue, label: $0.displayName,
                              symbol: KinematicsSpaceView.symbol(for: $0))
             })
+    /// The two answers to "which arc reaches this hoop", as a fan opened
+    /// from the hoop's Aim petal (2026-09-01) — a momentary N-way choice
+    /// is a fan, never a cycle button, and the hoop's ring already holds
+    /// its three petals.
+    @State private var aimPicker = SpatialPicker(
+        accessibilityNoun: "Arc",
+        choices: [
+            PickerChoice(id: "low", label: "Low arc", symbol: "arrow.down.right"),
+            PickerChoice(id: "high", label: "High arc", symbol: "arrow.up.right"),
+        ])
     /// The world you are throwing on, as four discs.
     ///
     /// Zero-g is in this bank and NOT in Pendulums' — a pendulum in
@@ -167,6 +177,11 @@ struct KinematicsSpaceView: View {
 
             renderer.root.addChild(bloom.root)
             renderer.root.addChild(ballPicker.root)
+            renderer.root.addChild(aimPicker.root)
+            aimPicker.onSelect = { [ring] id in
+                guard let hoop = ring.openID, hoop != Self.launcherRingID else { return }
+                model.aim(atSolution: id == "high" ? .high : .low, for: hoop)
+            }
             ballPicker.onSelect = { id in
                 guard let kind = KinematicsModel.ProjectileKind(rawValue: id) else { return }
                 model.kind = kind
@@ -300,6 +315,18 @@ struct KinematicsSpaceView: View {
                 ring.openID = first
                 model.aimTargetID = first
             }
+            // `-kinHunter 1` arms the first hoop to drop, aims the launcher
+            // straight at it and fires, so `-pauseAfter` can catch the
+            // ball and the hoop meeting in mid-air.
+            if UserDefaults.standard.bool(forKey: "kinHunter"),
+               let first = model.rings.first {
+                model.setDropOnFire(id: first.id, true)
+                let toHoop = first.position - model.launcherPosition
+                model.setAim(
+                    elevationDegrees: atan2(toHoop.y, simd_length(SIMD2(toHoop.x, toHoop.z))) * 180 / .pi,
+                    azimuthDegrees: atan2(toHoop.z, toHoop.x) * 180 / .pi)
+                model.fire()
+            }
             // `-kinBall custom -kinMass 2.0` picks a ball and, for the
             // custom one, its mass; `-kinAir 1` switches the air on with
             // no wind, which is what the vacuum ghost needs (`-kinWind`
@@ -370,12 +397,27 @@ struct KinematicsSpaceView: View {
                         model.roomBounds = appModel.room.bounds
                             .translated(by: -placement)
                     }
+                    // Hands are things a ball bounces off (2026-09-02):
+                    // every tracked joint with the speed it is moving at,
+                    // in module space like the walls.
+                    model.handStrikes = appModel.room.handStrikes.map { sphere in
+                        var moved = sphere
+                        moved.center -= placement
+                        return moved
+                    }
                     model.step(dt: event.deltaTime)
                     // A ball reaching an open hand is caught. Device-only
                     // (the simulator reports no fingertips); fingertips
-                    // cross into module space like the walls do.
-                    model.catchBalls(atFingertips:
-                        appModel.room.fingertips.map { $0 - placement })
+                    // cross into module space like the walls do. A hand
+                    // moving faster than `swatSpeed` is swinging, not
+                    // waiting — it swats (above) rather than catching.
+                    let tips = appModel.room.fingertips
+                    let tipVelocities = appModel.room.fingertipVelocities
+                    let waiting = tips.indices.filter { index in
+                        index >= tipVelocities.count
+                            || simd_length(tipVelocities[index]) < KinematicsModel.swatSpeed
+                    }.map { tips[$0] - placement }
+                    model.catchBalls(atFingertips: waiting)
                     renderer?.tick(model)
                     wells?.update(dt: event.deltaTime,
                                   nearestHand: appModel.room.nearestFingertip(
@@ -414,6 +456,7 @@ struct KinematicsSpaceView: View {
             // opens on a folded ring like every other module.
             ring.openID = nil
             model.aimTargetID = nil
+            aimPicker.close()
         }
         .task {
             // Plane detection: device-only, quietly absent in the sim.
@@ -526,33 +569,45 @@ struct KinematicsSpaceView: View {
         // carries its own ring.
         if let id = ring.openID, id != Self.launcherRingID,
            let hoop = model.rings.first(where: { $0.id == id }) {
-            // Three petals — `Petal`'s own ceiling. The two aims are dim
-            // while the hoop is out of range at the current speed; the
-            // solve is memoised, so asking every frame is cheap.
+            // Three petals — `Petal`'s own ceiling. Aim opens the fan of
+            // the two arcs and is dim while the hoop is out of range at
+            // the current speed (the solve is memoised, so asking every
+            // frame is cheap). "Drop when fired" is the monkey-and-hunter
+            // latch; its armed state is read off the hoop's own callout,
+            // not the petal, because a petal's name is fixed at retarget.
             bloom.retarget(
                 id,
                 petals: [
-                    .init(name: "Aim low", symbol: "arrow.down.right",
+                    .init(name: "Aim", symbol: "scope",
                           tint: UIColor(DesignTokens.Palette.kinematicsAccent),
-                          isAvailable: { model.solutions(for: id) != nil }) {
-                        model.aim(atSolution: .low, for: id)
+                          isAvailable: { model.solutions(for: id) != nil }) { [aimPicker] in
+                        aimPicker.toggle()
                     },
-                    .init(name: "Aim high", symbol: "arrow.up.right",
-                          tint: UIColor(DesignTokens.Palette.kinematicsAccent),
-                          isAvailable: { model.solutions(for: id) != nil }) {
-                        model.aim(atSolution: .high, for: id)
+                    .init(name: "Drop when fired", symbol: "arrow.down.to.line",
+                          tint: DesignTokens.Palette.neutralActionUI) {
+                        let armed = model.rings.first { $0.id == id }?.dropOnFire ?? false
+                        model.setDropOnFire(id: id, !armed)
                     },
                     .init(name: "Delete", symbol: "trash",
-                          tint: DesignTokens.Palette.neutralActionUI) { [ring] in
+                          tint: DesignTokens.Palette.neutralActionUI) { [ring, aimPicker] in
                         model.removeRing(id: id)
                         ring.openID = nil
+                        aimPicker.close()
                     },
                 ],
                 grip: nil)
             bloom.update(anchor: SIMD3<Float>(hoop.position) + SIMD3(0, 0.12, 0),
                          viewer: viewer, revealTarget: 1, dt: dt)
+            // The arc fan opens above the ring's petals, riding the hoop.
+            let hoopAnchor = SIMD3<Float>(hoop.position) + SIMD3(0, 0.32, 0)
+            aimPicker.update(anchor: hoopAnchor, viewer: viewer, dt: dt,
+                             nearestHand: appModel.room.nearestFingertip(to: hoopAnchor))
             return
         }
+        // No hoop selected: the arc fan is shut, wherever it was.
+        aimPicker.close()
+        aimPicker.update(anchor: SIMD3<Float>(model.launcherPosition), viewer: viewer,
+                         dt: dt, nearestHand: nil)
         let anchor = SIMD3<Float>(model.launcherPosition) + SIMD3(0, 0.12, 0)
         bloom.retarget(
             "launcher",
@@ -702,6 +757,7 @@ struct KinematicsSpaceView: View {
     private func handleObjectTap(on entity: Entity) {
         // The fan first: its discs sit above the launcher and
         // would otherwise be read as a tap on the launcher.
+        if aimPicker.handleTap(entity) { return }
         if ballPicker.handleTap(entity) { return }
         if worldPicker.handleTap(entity) { return }
         if layers?.handleTap(entity) == true { return }

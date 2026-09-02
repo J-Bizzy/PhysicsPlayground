@@ -54,13 +54,22 @@ contradicts this section, this section is current.
       overhand at a real wall: it bounces AT the wall. Tap Jupiter (arc
       collapses), Zero-g (dead straight). Catch a ball on your fingertips.
       Air on: the wind rail appears, a wind bends the flight.
-      **[F]** Pull a hoop from its well, stand it across the room, tap it
-      → "Aim low": two ghost arcs through the rim, the bead snaps to the
-      one you pinch, Fire → chime, the plate counts. "Drop when fired":
-      the hoop falls as you fire and the ball meets it — on the Moon too.
-      Air on: the vacuum ghost stands beside the real arc. Throw at your
-      coffee table: it bounces off the top and comes to rest on it; swat
-      a ball out of the air. **[C]** Tap the launcher: its ring unfolds
+      **[F]** Pull a hoop from its well (the mint mouth beside the ball's)
+      and stand it across the room. Tap it: its ring — Aim, Drop when
+      fired, Delete — and under it a callout reading "low 32° · high 74°"
+      (or "out of range at 6.0 m/s"); two faint ghost arcs pass through
+      the rim. Pinch Aim: a two-disc fan, Low arc / High arc; pick one and
+      the launcher's bead swings to it. Fire → chime, the plate counts.
+      Pinch "Drop when fired": the callout adds "drops when fired"; fire
+      straight at the hoop and it falls as the shot leaves — the ball
+      meets it in mid-air, on the Moon and on Jupiter too, and the next
+      shot re-hangs it. Pick Custom in the ball fan: a Mass rail hangs
+      under the launcher; pull it and the arc changes only with Air on.
+      Air on: the vacuum ghost stands beside the real arc and the landing
+      ring reads both ranges. Throw at your coffee table: it bounces off
+      the top and comes to rest on it, rolls off the edge and falls; swat
+      a ball out of the air with an open hand, and confirm a still hand
+      still CATCHES. **[C]** Tap the launcher: its ring unfolds
       (Fire / Balls / Clear + the speed grip); tap empty space: it folds;
       the aim bead works with the ring folded.
 - [ ] **3 · Time Capsule** (ships ON now — no Settings visit). Pinch the

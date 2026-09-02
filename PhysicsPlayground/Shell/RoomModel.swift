@@ -138,7 +138,22 @@ final class RoomModel {
         case "failed": sensing = .failed
         default: break
         }
+        // `-roomTable 0.75` stands a 0.9 × 0.7 m table top at that height
+        // in the launcher's line, since the simulator has no furniture
+        // to classify. It enters through the same wall table the real
+        // planes use, and marks the room scanned so the module takes
+        // the walls the way it would on device.
+        let tableHeight = UserDefaults.standard.double(forKey: "roomTable")
+        if tableHeight > 0 {
+            wallsByAnchor[Self.debugTableID] = RoomWalls.Wall(
+                center: SIMD3(-0.6, tableHeight, -2.3), normal: SIMD3(0, 1, 0),
+                uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 0, 1), halfU: 0.45, halfV: 0.35)
+            walls = Array(wallsByAnchor.values)
+            hasScannedRoom = true
+            recomputeCollisionWalls()
+        }
     }
+    private static let debugTableID = UUID()
     #endif
 
     // (An `occluder` entity mirrored the scene-reconstruction mesh here
@@ -392,6 +407,17 @@ final class RoomModel {
             } else {
                 if anchor.alignment == .vertical {
                     wallsByAnchor[anchor.id] = Self.wall(from: anchor)
+                } else if anchor.classification == .table || anchor.classification == .seat {
+                    // A TABLE IS A SURFACE YOU CAN LAND ON (2026-09-02).
+                    // Horizontal planes used to feed only the room's
+                    // bounds; a table or a seat is now a finite two-sided
+                    // wall like any other, so a ball bounces off its top,
+                    // comes to rest on it, and rolls off its edge —
+                    // Projectiles' "1:1 with your room" made literal.
+                    // Only CLASSIFIED planes: an `.unknown` horizontal
+                    // plane would be an invisible shelf in mid-air, and
+                    // the floor is the model's own contact law.
+                    wallsByAnchor[anchor.id] = Self.wall(from: anchor)
                 }
                 planeCorners[anchor.id] = Self.corners(of: anchor)
             }
@@ -500,22 +526,59 @@ final class RoomModel {
             .map { SIMD3<Float>($0) }
     }
 
+    /// The hands as things a ball can bounce off (2026-09-02): the same
+    /// joints as the obstacle field, each carrying the velocity it moved
+    /// at since its last update, so a swat adds the hand's motion to the
+    /// ball. Velocities are finite differences over the anchor stream's
+    /// own timing; a hand that reappears after a gap starts at rest
+    /// rather than at a spurious teleport speed.
+    private(set) var handStrikes: [SphereStrike.Sphere] = []
+    /// One velocity per entry of `fingertips`, same order — so a module
+    /// can tell a hand held out to catch from a hand swung to swat.
+    private(set) var fingertipVelocities: [SIMD3<Double>] = []
+    private var previousHandSamples: [HandAnchor.Chirality: (time: Double, centers: [SIMD3<Double>])] = [:]
+    private var handStrikesByChirality: [HandAnchor.Chirality: [SphereStrike.Sphere]] = [:]
+
     private func consumeHands() async {
         for await update in hands.anchorUpdates {
             let anchor = update.anchor
             guard anchor.isTracked, let skeleton = anchor.handSkeleton else { continue }
             var spheres: [ObstacleField.Sphere] = []
             var tips: [SIMD3<Double>] = []
+            var centers: [SIMD3<Double>] = []
             for (joint, radius) in Self.trackedJoints {
                 let transform = anchor.originFromAnchorTransform
                     * skeleton.joint(joint).anchorFromJointTransform
                 let c = transform.columns.3
                 let point = SIMD3(Double(c.x), Double(c.y), Double(c.z))
                 spheres.append(ObstacleField.Sphere(center: point, radius: radius))
+                centers.append(point)
                 if joint == .indexFingerTip { tips.append(point) }
             }
+            // Velocities from the previous sample of the same hand; a
+            // gap longer than a quarter second is a reappearance, not a
+            // sprint, so it starts at rest.
+            let now = CACurrentMediaTime()
+            var velocities = Array(repeating: SIMD3<Double>.zero, count: centers.count)
+            if let previous = previousHandSamples[anchor.chirality],
+               previous.centers.count == centers.count {
+                let dt = now - previous.time
+                if dt > 1e-4, dt < 0.25 {
+                    for index in centers.indices {
+                        velocities[index] = (centers[index] - previous.centers[index]) / dt
+                    }
+                }
+            }
+            previousHandSamples[anchor.chirality] = (now, centers)
+            handStrikesByChirality[anchor.chirality] = zip(spheres, velocities).map {
+                SphereStrike.Sphere(center: $0.center, radius: $0.radius, velocity: $1)
+            }
+            handStrikes = handStrikesByChirality.values.flatMap { $0 }
             handSpheres[anchor.chirality] = spheres
             fingertips = tips
+            if let tipIndex = Self.trackedJoints.firstIndex(where: { $0.0 == .indexFingerTip }) {
+                fingertipVelocities = [velocities[tipIndex]]
+            }
             rebuildObstacles()
         }
     }

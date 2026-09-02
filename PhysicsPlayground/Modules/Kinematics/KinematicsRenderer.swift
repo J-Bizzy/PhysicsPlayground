@@ -1013,15 +1013,22 @@ final class KinematicsRenderer {
     /// were found rather than derived; or why there is nothing to aim.
     private static func aimText(for ring: KinematicsModel.Ring,
                                 in model: KinematicsModel) -> String {
-        guard ring.id == model.aimTargetID else { return "" }
-        guard let roots = model.solutions(for: ring.id) else {
-            return "out of range at "
-                + PhysicsFormat.measurement(model.launchSpeed, "m/s", decimals: 1)
+        var parts: [String] = []
+        // The monkey-and-hunter latch reads off the hoop itself: a petal's
+        // name is fixed at retarget, so the hoop says whether it is armed.
+        if ring.dropOnFire { parts.append("drops when fired") }
+        if ring.id == model.aimTargetID {
+            if let roots = model.solutions(for: ring.id) {
+                let low = Int((roots.low * 180 / .pi).rounded())
+                let high = Int((roots.high * 180 / .pi).rounded())
+                parts.append(low == high ? "one arc · \(low)°" : "low \(low)° · high \(high)°")
+                if model.airResistance { parts.append("with drag") }
+            } else {
+                parts.append("out of range at "
+                    + PhysicsFormat.measurement(model.launchSpeed, "m/s", decimals: 1))
+            }
         }
-        let low = Int((roots.low * 180 / .pi).rounded())
-        let high = Int((roots.high * 180 / .pi).rounded())
-        let angles = low == high ? "one arc · \(low)°" : "low \(low)° · high \(high)°"
-        return model.airResistance ? angles + " · with drag" : angles
+        return parts.joined(separator: " · ")
     }
 
     private func syncRings(_ model: KinematicsModel) {

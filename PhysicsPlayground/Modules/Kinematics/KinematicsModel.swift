@@ -91,6 +91,28 @@ final class KinematicsModel {
     /// Whether flights bounce off walls and ceiling. Defaults ON; the unscanned box stands in until the shared room model supplies detected walls.
     var respectRoomWalls = true
     var roomWalls: [RoomWalls.Wall] = RoomWalls.box(of: .unscanned)
+    /// The walls a flying ball bounces off: everything but an upward-
+    /// facing surface, which is a floor-like support and goes through
+    /// the floor law instead (2026-09-02 — tables and seats arrive as
+    /// walls now, and a ball must be able to come to REST on one).
+    private var strikeWalls: [RoomWalls.Wall] { roomWalls.filter { $0.normal.y < 0.9 } }
+    /// The height of whatever the ball would land on directly below
+    /// `point`: the highest upward-facing wall under it, else the floor.
+    func supportHeight(under point: SIMD3<Double>) -> Double {
+        var best = 0.0
+        for wall in roomWalls where wall.normal.y >= 0.9 && wall.center.y <= point.y + 1e-6 {
+            let offset = point - wall.center
+            guard abs(simd_dot(offset, wall.uAxis)) <= wall.halfU,
+                  abs(simd_dot(offset, wall.vAxis)) <= wall.halfV else { continue }
+            best = max(best, wall.center.y)
+        }
+        return best
+    }
+    /// The hands as things a ball can bounce off, in module space, fed
+    /// by the SpaceView each frame. A hand moving faster than `swatSpeed`
+    /// is a swat; slower, it catches (`catchBalls`).
+    var handStrikes: [SphereStrike.Sphere] = []
+    nonisolated static let swatSpeed = 1.2                    // m/s
     /// The room's box for the containment clamp — no ball ever ends a frame outside the room.
     var roomBounds: RoomBox = .unscanned
 
@@ -322,6 +344,16 @@ final class KinematicsModel {
     }
 
     func fire() {
+        // MONKEY AND HUNTER. Every hoop armed to drop is re-hung on its
+        // anchor and let go at the instant the shot leaves, so each shot
+        // is the whole demo again: aimed straight at the hoop, the ball
+        // falls exactly as far as the hoop does and meets it — on the
+        // Moon and on Jupiter alike, which is the point.
+        for index in rings.indices where rings[index].dropOnFire {
+            rings[index].position = rings[index].anchor
+            rings[index].falling = true
+            rings[index].fallSpeed = 0
+        }
         var flight = Flight(
             id: UUID(),
             projectile: projectile,
@@ -422,7 +454,14 @@ final class KinematicsModel {
         var position: SIMD3<Double>
         var phase: Double
         var score = 0
+        /// Monkey and hunter (2026-09-01): armed, the hoop lets go the
+        /// instant a shot leaves the launcher and falls with the ball.
+        var dropOnFire = false
+        var falling = false
+        var fallSpeed = 0.0
     }
+    /// Where a dropped hoop comes to rest: lying on the floor.
+    nonisolated static let fallenHoopHeight = 0.02
 
     private(set) var rings: [Ring] = []
     /// Bumped shortly after a score so observers re-render the flash off.
@@ -609,14 +648,42 @@ final class KinematicsModel {
         var clamped = point
         clamped.y = max(clamped.y, 0.3)
         rings[index].anchor = clamped
+        // A hand on a hoop ends its fall — it is placed, not dropped.
+        rings[index].falling = false
+        rings[index].fallSpeed = 0
         if !hoopsOrbit {
             rings[index].position = clamped
+        }
+    }
+
+    /// The hoop's "Drop when fired" petal. Disarming re-hangs it.
+    func setDropOnFire(id: UUID, _ armed: Bool) {
+        guard let index = rings.firstIndex(where: { $0.id == id }) else { return }
+        rings[index].dropOnFire = armed
+        if !armed {
+            rings[index].falling = false
+            rings[index].fallSpeed = 0
+            rings[index].position = rings[index].anchor
         }
     }
 
     /// Advances hoop motion (independent of whether anything is flying).
     private func stepRings(dt: Double) {
         for index in rings.indices {
+            if rings[index].falling {
+                // Free fall, in a vacuum: the demo's claim is that the
+                // hoop and the ball fall the same, and drag on the hoop
+                // would break the claim the demo exists to show. The
+                // hoop's callout says so.
+                rings[index].fallSpeed += gravity * dt
+                rings[index].position.y -= rings[index].fallSpeed * dt
+                if rings[index].position.y <= Self.fallenHoopHeight {
+                    rings[index].position.y = Self.fallenHoopHeight
+                    rings[index].falling = false
+                    rings[index].fallSpeed = 0
+                }
+                continue
+            }
             if hoopsOrbit {
                 rings[index].phase += Self.hoopOrbitSpeed * dt
                 rings[index].position = rings[index].anchor + SIMD3(
@@ -624,7 +691,12 @@ final class KinematicsModel {
                     0,
                     Self.hoopOrbitRadius * sin(rings[index].phase)
                 )
-            } else if rings[index].position != rings[index].anchor {
+            } else if !rings[index].dropOnFire,
+                      rings[index].position != rings[index].anchor {
+                // Orbit switched off: back to the anchor. NOT for an armed
+                // hoop — a dropped one lies where it fell until the next
+                // shot re-hangs it (this snap re-hung it a frame after
+                // landing, and the test caught it).
                 rings[index].position = rings[index].anchor
             }
         }
@@ -640,13 +712,22 @@ final class KinematicsModel {
         var newlyScored: Set<UUID> = []
         for index in rings.indices where !alreadyScored.contains(rings[index].id) {
             let ring = rings[index]
-            // Downward pass through the ring's horizontal plane…
-            guard previous.y > ring.position.y, current.y <= ring.position.y else { continue }
-            let fraction = (previous.y - ring.position.y) / (previous.y - current.y)
-            let crossing = previous + fraction * (current - previous)
-            // …inside the rim (ball center comfortably within the ring).
-            let planar = SIMD2(crossing.x - ring.position.x, crossing.z - ring.position.z)
-            if simd_length(planar) < Self.ringRadius - ballRadius * 0.5 {
+            let met: Bool
+            if ring.falling {
+                // Falling with the ball, the hoop is met wherever the
+                // two coincide, from any side — that meeting IS the
+                // monkey-and-hunter demo.
+                met = simd_length(current - ring.position) < Self.ringRadius - ballRadius * 0.5
+            } else {
+                // Downward pass through the ring's horizontal plane…
+                guard previous.y > ring.position.y, current.y <= ring.position.y else { continue }
+                let fraction = (previous.y - ring.position.y) / (previous.y - current.y)
+                let crossing = previous + fraction * (current - previous)
+                // …inside the rim (ball center comfortably within the ring).
+                let planar = SIMD2(crossing.x - ring.position.x, crossing.z - ring.position.z)
+                met = simd_length(planar) < Self.ringRadius - ballRadius * 0.5
+            }
+            if met {
                 rings[index].score += 1
                 newlyScored.insert(ring.id)
                 emitSound(.chime, at: ring.position, volume: 1)
@@ -728,6 +809,7 @@ final class KinematicsModel {
 
         // Wall contact: step time left after contact runs along the reflection and can strike again (a corner takes two bounces in one frame); bounded so a wedge never hangs a frame.
         if respectRoomWalls, !roomWalls.isEmpty {
+            let walls = strikeWalls
             var segmentStart = previous.position
             var timeLeft = dt
             for _ in 0..<3 {
@@ -736,7 +818,7 @@ final class KinematicsModel {
                     velocity: flight.state.velocity,
                     radius: flight.projectile.diameter / 2,
                     restitution: flight.projectile.restitution,
-                    walls: roomWalls) else { break }
+                    walls: walls) else { break }
                 flight.bounces += 1
                 emitSound(.thud, at: hit.position, volume: min(hit.impactSpeed / 6, 1))
                 timeLeft *= (1 - hit.t)
@@ -747,10 +829,29 @@ final class KinematicsModel {
                 if timeLeft <= 1e-6 { break }
             }
         }
+        // A HAND IN THE WAY (2026-09-02): an open hand swats a ball the
+        // way a wall bounces it, plus the hand's own motion. A slow hand
+        // catches instead — the SpaceView routes fingertips under
+        // `swatSpeed` to `catchBalls`, and every hand joint here.
+        if !handStrikes.isEmpty,
+           let hit = SphereStrike.strike(
+               previous: previous.position, current: flight.state.position,
+               velocity: flight.state.velocity,
+               radius: flight.projectile.diameter / 2,
+               restitution: flight.projectile.restitution,
+               spheres: handStrikes, dt: dt) {
+            flight.bounces += 1
+            flight.wasThrown = true
+            emitSound(.thud, at: hit.position, volume: min(hit.impactSpeed / 6, 1))
+            flight.state = ParticleDynamics.State(
+                position: hit.position + hit.velocity * dt * (1 - hit.t),
+                velocity: hit.velocity)
+        }
         contain(&flight)
 
-        // Floor contact (ball center at its radius above y = 0).
-        let floor = flight.projectile.diameter / 2
+        // Floor contact: the ball's centre at its radius above whatever
+        // is under it — the floor, or a table it is falling onto.
+        let floor = supportHeight(under: previous.position) + flight.projectile.diameter / 2
         if flight.state.position.y <= floor, flight.state.velocity.y < 0 {
             let dip = previous.position.y - flight.state.position.y
             let fraction = dip > 0 ? (previous.position.y - floor) / dip : 0
@@ -809,19 +910,33 @@ final class KinematicsModel {
         var velocity = flight.state.velocity * decay
         velocity.y = 0
         let previous = flight.state.position
+        let radius = flight.projectile.diameter / 2
         var position = previous + dt * velocity
-        position.y = flight.projectile.diameter / 2
+        let supportBefore = supportHeight(under: previous)
+        // ROLLED OFF THE EDGE (2026-09-02): the surface under the ball
+        // is lower than the one it was rolling on — a table's edge — so
+        // it is flying again, with the speed it rolled off at.
+        let supportAfter = supportHeight(under: position)
+        if supportAfter < supportBefore - 0.02 {
+            flight.status = .flying
+            flight.state = ParticleDynamics.State(
+                position: SIMD3(position.x, supportBefore + radius, position.z),
+                velocity: velocity)
+            flights[index] = flight
+            return
+        }
+        position.y = supportAfter + radius
 
         // Rolling balls respect walls too.
         if respectRoomWalls, !roomWalls.isEmpty,
            let hit = RoomWalls.strike(
                previous: previous, current: position,
                velocity: velocity,
-               radius: flight.projectile.diameter / 2,
+               radius: radius,
                restitution: flight.projectile.restitution * 0.5,
-               walls: roomWalls) {
+               walls: strikeWalls) {
             position = hit.position
-            position.y = flight.projectile.diameter / 2
+            position.y = supportHeight(under: position) + radius
             velocity = SIMD3(hit.velocity.x, 0, hit.velocity.z)
         }
 

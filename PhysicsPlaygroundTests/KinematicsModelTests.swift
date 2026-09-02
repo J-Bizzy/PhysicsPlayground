@@ -198,10 +198,15 @@ final class KinematicsModelTests: XCTestCase {
 
     // MARK: The aim solves for a hoop (2026-09-01)
 
+    /// Steps until the shot is no longer flying — landed, rolling, or
+    /// GONE: a long shot on the Moon flies past `escapeRadius` and is
+    /// culled, which is why this reads `first` rather than `[0]`.
     private func fireUntilLanded(_ model: KinematicsModel) {
         model.fire()
-        for _ in 0..<3000 where model.flights[0].status == .flying {
+        var steps = 0
+        while let flight = model.flights.first, flight.status == .flying, steps < 3000 {
             model.step(dt: 1.0 / 90.0)
+            steps += 1
         }
     }
 
@@ -266,6 +271,151 @@ final class KinematicsModelTests: XCTestCase {
         model.aimTargetID = id
         model.reset()
         XCTAssertNil(model.aimTargetID)
+    }
+
+    // MARK: Monkey and hunter (2026-09-01)
+
+    /// The demo's whole claim: aimed straight at an armed hoop — no lead
+    /// — the ball meets it in the air on every world, because the two
+    /// fall the same. Held by the scoring law, for three values of g.
+    func testTheMonkeyAndTheHunterMeetOnEveryWorld() throws {
+        for g in [1.62, 9.81, 24.79] {
+            let model = bareModel()
+            model.gravity = g
+            model.launchSpeed = 10
+            let offset = SIMD3<Double>(2.5, 1.2, 0)
+            let id = try XCTUnwrap(model.addRing(at: model.launcherPosition + offset))
+            model.setDropOnFire(id: id, true)
+            model.setAim(elevationDegrees: atan2(offset.y, offset.x) * 180 / .pi,
+                         azimuthDegrees: 0)
+            fireUntilLanded(model)
+            XCTAssertEqual(model.rings[0].score, 1,
+                           "g = \(g): the ball must meet the falling hoop")
+        }
+    }
+
+    /// The same line of sight at a hoop that stays put passes under it —
+    /// which is why the hunter aims straight only because the monkey
+    /// lets go.
+    func testTheLineOfSightMissesAHoopThatStaysPut() throws {
+        let model = bareModel()
+        model.launchSpeed = 10
+        let offset = SIMD3<Double>(2.5, 1.2, 0)
+        let id = try XCTUnwrap(model.addRing(at: model.launcherPosition + offset))
+        model.setAim(elevationDegrees: atan2(offset.y, offset.x) * 180 / .pi,
+                     azimuthDegrees: 0)
+        fireUntilLanded(model)
+        XCTAssertEqual(model.rings[0].score, 0)
+        XCTAssertEqual(model.rings[0].position, model.rings[0].anchor, "an unarmed hoop never moves")
+        _ = id
+    }
+
+    /// A dropped hoop lies on the floor until the next shot re-hangs it
+    /// and drops it again; disarming re-hangs it too.
+    func testADroppedHoopIsReHungByTheNextShot() throws {
+        let model = bareModel()
+        model.launchSpeed = 10
+        let id = try XCTUnwrap(model.addRing(at: model.launcherPosition + SIMD3(2.5, 1.2, 0)))
+        model.setDropOnFire(id: id, true)
+        fireUntilLanded(model)
+        XCTAssertEqual(model.rings[0].position.y, KinematicsModel.fallenHoopHeight, accuracy: 1e-9)
+        XCTAssertFalse(model.rings[0].falling)
+
+        model.clearFlights()
+        model.fire()
+        XCTAssertEqual(model.rings[0].position, model.rings[0].anchor)
+        XCTAssertTrue(model.rings[0].falling)
+
+        model.setDropOnFire(id: id, false)
+        XCTAssertFalse(model.rings[0].falling)
+        XCTAssertEqual(model.rings[0].position, model.rings[0].anchor)
+    }
+
+    // MARK: A table to land on, and a hand to swat with (2026-09-02)
+
+    private func table(at height: Double, center: SIMD2<Double>,
+                       halfU: Double = 0.45, halfV: Double = 0.35) -> RoomWalls.Wall {
+        RoomWalls.Wall(center: SIMD3(center.x, height, center.y), normal: SIMD3(0, 1, 0),
+                       uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 0, 1), halfU: halfU, halfV: halfV)
+    }
+
+    private func stepUntilRested(_ model: KinematicsModel, frames: Int = 4000) {
+        for _ in 0..<frames where model.flights[0].status != .rested {
+            model.step(dt: 1.0 / 90.0)
+        }
+    }
+
+    /// Dropped onto a table, a ball bounces on its top and comes to rest
+    /// ON it — its centre one radius above the table, not the floor.
+    func testABallComesToRestOnATable() {
+        let model = bareModel()
+        let tableTop = 0.70
+        model.roomWalls = [table(at: tableTop, center: SIMD2(0.5, -1.0))]
+        model.moveLauncher(to: SIMD3(0.5, 1.6, -1.0))
+        model.setAim(elevationDegrees: -85, azimuthDegrees: 0)
+        model.launchSpeed = 1
+        model.fire()
+        stepUntilRested(model)
+
+        let ball = model.flights[0]
+        XCTAssertEqual(ball.status, .rested)
+        XCTAssertEqual(ball.state.position.y, tableTop + ball.projectile.diameter / 2,
+                       accuracy: 1e-6, "rested on the table top, not on the floor")
+        XCTAssertGreaterThan(ball.bounces, 0, "it bounced on the top before settling")
+    }
+
+    /// Rolled off the table's edge, it falls and finishes on the floor.
+    func testABallRolledOffTheEdgeFalls() {
+        let model = bareModel()
+        // A short table whose far edge is at x = 0.75.
+        model.roomWalls = [table(at: 0.70, center: SIMD2(0.5, -1.0), halfU: 0.25, halfV: 0.35)]
+        model.moveLauncher(to: SIMD3(0.1, 1.0, -1.0))
+        model.setAim(elevationDegrees: -15, azimuthDegrees: 0)
+        model.launchSpeed = 2.5
+        model.fire()
+        stepUntilRested(model)
+
+        let ball = model.flights[0]
+        XCTAssertEqual(ball.status, .rested)
+        XCTAssertEqual(ball.state.position.y, ball.projectile.diameter / 2, accuracy: 1e-6,
+                       "on the floor: it left the table")
+        XCTAssertGreaterThan(ball.state.position.x, 0.75, "past the table's edge")
+    }
+
+    /// Beside the table, the same drop falls straight past it.
+    func testADropBesideTheTableFallsPast() {
+        let model = bareModel()
+        model.roomWalls = [table(at: 0.70, center: SIMD2(0.5, -1.0), halfU: 0.25, halfV: 0.35)]
+        model.moveLauncher(to: SIMD3(1.2, 1.6, -1.0))
+        model.setAim(elevationDegrees: -85, azimuthDegrees: 0)
+        model.launchSpeed = 1
+        model.fire()
+        stepUntilRested(model)
+        XCTAssertEqual(model.flights[0].state.position.y,
+                       model.flights[0].projectile.diameter / 2, accuracy: 1e-6)
+    }
+
+    /// A hand swung through a ball sends it off faster than the hand.
+    func testASwatSendsTheBallAwayFasterThanTheHand() {
+        let model = bareModel()
+        model.launchSpeed = 1
+        model.setAim(elevationDegrees: 0, azimuthDegrees: 0)
+        model.fire()
+        model.step(dt: 1.0 / 90.0)
+        let ball = model.flights[0]
+        // The hand ENDS the frame overlapping the ball, having swept in
+        // from 4.4 cm behind it at 4 m/s — the strike lands mid-frame.
+        let hand = SphereStrike.Sphere(
+            center: ball.state.position - SIMD3(0.03, 0, 0), radius: 0.03,
+            velocity: SIMD3(4, 0, 0))
+        model.handStrikes = [hand]
+        model.step(dt: 1.0 / 90.0)
+        model.handStrikes = []
+
+        XCTAssertEqual(model.flights[0].status, .flying)
+        XCTAssertGreaterThan(model.flights[0].state.velocity.x, 4,
+                             "the swat adds the hand's speed to the bounce")
+        XCTAssertTrue(model.flights[0].wasThrown, "a swatted ball is a thrown ball for the readouts")
     }
 
     // MARK: The custom ball, and the ghost of vacuum (2026-09-01)

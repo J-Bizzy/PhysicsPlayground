@@ -109,6 +109,56 @@ struct PlaygroundSpaceView: View {
         if defaults.bool(forKey: "notebookOpen") {
             openWindow(id: NotebookView.windowID)
         }
+        // Batch G staging (2026-09-02). Each clears the bench and builds
+        // one small loop a hand could have built, then selects the part
+        // the feature is about so its card and rail are on screen.
+        // `-circCoil 1`: battery → resistor → inductor, field layer lit.
+        if defaults.bool(forKey: "circCoil") {
+            let circuits = appModel.circuitsModel
+            circuits.clearBench()
+            if let battery = circuits.add(.battery, at: SIMD3(-0.45, 1.25, -0.85)),
+               let resistor = circuits.add(.resistor, at: SIMD3(0, 1.5, -0.85)),
+               let coil = circuits.add(.inductor, at: SIMD3(0.45, 1.25, -0.85)) {
+                _ = circuits.connectTerminals(.init(componentID: battery, end: 1),
+                                              .init(componentID: resistor, end: 0))
+                _ = circuits.connectTerminals(.init(componentID: resistor, end: 1),
+                                              .init(componentID: coil, end: 0))
+                _ = circuits.connectTerminals(.init(componentID: coil, end: 1),
+                                              .init(componentID: battery, end: 0))
+                circuits.select(id: coil)
+            }
+            circuits.showMagneticField = true
+        }
+        // `-circHeat 1`: a 9 V battery across a 10 Ω resistor — 8 W into
+        // a 2 W part, which scorches in under a second of overload.
+        if defaults.bool(forKey: "circHeat") {
+            let circuits = appModel.circuitsModel
+            circuits.clearBench()
+            if let battery = circuits.add(.battery, at: SIMD3(-0.35, 1.3, -0.85)),
+               let resistor = circuits.add(.resistor, at: SIMD3(0.35, 1.3, -0.85)) {
+                circuits.setComponentValue(id: resistor, 10)
+                _ = circuits.connectTerminals(.init(componentID: battery, end: 1),
+                                              .init(componentID: resistor, end: 0))
+                _ = circuits.connectTerminals(.init(componentID: resistor, end: 1),
+                                              .init(componentID: battery, end: 0))
+                circuits.select(id: resistor)
+            }
+        }
+        // `-circAC 3`: an AC source across a bulb at that many hertz, the
+        // source selected so its frequency rail hangs under it.
+        if defaults.object(forKey: "circAC") != nil {
+            let circuits = appModel.circuitsModel
+            circuits.clearBench()
+            if let source = circuits.add(.acSource, at: SIMD3(-0.35, 1.3, -0.85)),
+               let bulb = circuits.add(.bulb, at: SIMD3(0.35, 1.3, -0.85)) {
+                circuits.setACFrequency(id: source, defaults.double(forKey: "circAC"))
+                _ = circuits.connectTerminals(.init(componentID: source, end: 1),
+                                              .init(componentID: bulb, end: 0))
+                _ = circuits.connectTerminals(.init(componentID: bulb, end: 1),
+                                              .init(componentID: source, end: 0))
+                circuits.select(id: source)
+            }
+        }
         // `-seedCircuits 1` drops a few parts (one aimed off-axis) so
         // component visuals can be screenshot-checked from the CLI.
         guard defaults.bool(forKey: "seedCircuits") else { return }
@@ -205,6 +255,11 @@ struct PlaygroundSpaceView: View {
                         AmbientLabAudioView()
                             .id("ambient")
                     }
+                    #if DEBUG
+                    // `-pauseAfter` counts from HERE — the lab on screen —
+                    // not from launch; see `AppModel.runStagedPause`.
+                    .task(id: module.id) { await appModel.runStagedPause(for: module) }
+                    #endif
                 } else {
                     HubSpaceView()
                         .id("hub")
