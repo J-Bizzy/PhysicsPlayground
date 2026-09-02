@@ -128,6 +128,12 @@ final class InstrumentReachCriterionTests: XCTestCase {
             .init(name: "Projectiles ball well",
                   anchor: KinematicsSpaceView.wellAnchor,
                   halfExtents: SIMD3(0.10, 0.10, 0.10)),
+            // The hoop's mouth (2026-09-01), outboard of the ball's on the
+            // same row — the one place a second mouth fits, and the one
+            // that had to be measured rather than reasoned.
+            .init(name: "Projectiles hoop well",
+                  anchor: KinematicsSpaceView.hoopWellAnchor,
+                  halfExtents: SIMD3(0.10, 0.10, 0.10)),
             .init(name: "Projectiles worlds picker",
                   anchor: KinematicsSpaceView.worldsAnchor,
                   halfExtents: SIMD3(0.15, 0.10, 0.15)),

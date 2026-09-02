@@ -42,8 +42,15 @@ struct KinematicsSpaceView: View {
     /// the launch-speed grip lives behind the tap; the aim bead is the
     /// renderer's own sibling entity and stays reachable folded.
     @State private var ring = RingState()
-    /// The one id this module's ring can hold — there is one launcher.
+    /// The one id this module's ring can hold for the launcher — there is
+    /// one launcher; hoops use their own ids.
     static let launcherRingID = UUID()
+
+    /// Where the custom ball's mass rail hangs: under the launcher,
+    /// riding it when it is carried.
+    static func massRailCenter(launcher: SIMD3<Double>) -> SIMD3<Float> {
+        SIMD3<Float>(launcher) + SIMD3(0, -0.16, 0)
+    }
     /// Which ball you are throwing, chosen in the room instead of from a
     /// menu on a card. A golf ball and a table-tennis ball are 17× apart
     /// in mass and behave nothing alike in air, so this is the module's
@@ -51,8 +58,9 @@ struct KinematicsSpaceView: View {
     /// collapsed section.
     @State private var ballPicker = SpatialPicker(
         accessibilityNoun: "Ball",
+        // `.custom` was filtered out until 2026-09-01; its mass rail hangs
+        // under the launcher while it is the pick.
         choices: KinematicsModel.ProjectileKind.allCases
-            .filter { $0 != .custom }
             .map {
                 PickerChoice(id: $0.rawValue, label: $0.displayName,
                              symbol: KinematicsSpaceView.symbol(for: $0))
@@ -80,6 +88,12 @@ struct KinematicsSpaceView: View {
     /// already in flight when air resistance goes off must not keep
     /// setting a wind speed nothing is applying.
     @State private var windTrack: SpatialTrackControl?
+    /// The custom ball's mass, on a rail UNDER THE LAUNCHER — the thing
+    /// that fires it — present only while the fan says Custom, the way
+    /// the wind rail exists only while the air does (2026-09-01). A rail
+    /// rather than a ring grip: one grip per ring is the vocabulary's
+    /// ceiling and mass has no extent of its own.
+    @State private var massTrack: SpatialTrackControl?
     /// Whether the room's walls are real, and whether the air is.
     @State private var layers: SpatialLayerBank?
     @State private var activeTrack: SpatialTrackControl?
@@ -103,7 +117,23 @@ struct KinematicsSpaceView: View {
     private static let wallZ: Float = -0.94
 
     /// Internal since 2026-08-09 so the reach criterion can measure it.
-    static let wellAnchor = SIMD3<Float>(wallX, 1.70, wallZ)
+    ///
+    /// TWO MOUTHS ON THE WELL ROW since 2026-09-01 — the ball inboard,
+    /// the hoop outboard — at the pitch Electric Fields' four mouths
+    /// share (0.095), centred on the column's x. The row is the only
+    /// place a second mouth fits: sideways toward the launcher is the
+    /// firing line, further outboard fails reach (√(1.06² + 0.94²) is
+    /// 1.41 m before any height), and a sixth row would push the bank
+    /// below knee height. Measured, not reasoned: the hoop mouth's near
+    /// face is 1.20 m from a standing viewer against the 1.25 limit, and
+    /// the ball mouth's inboard edge stays 0.15 m clear of the launcher's
+    /// line — `InstrumentReachCriterionTests` holds both.
+    static let wellAnchor = SIMD3<Float>(wallX + 0.0475, 1.70, wallZ)
+    /// The hoop's mouth: a target you make, beside the ball you throw at
+    /// it. Hoops are MATERIALS, not instruments — pulled from a well like
+    /// a ball or a magnet, nothing standing at rest, which is the answer
+    /// to the 2026-07-29 clutter objection that put them in a mothball.
+    static let hoopWellAnchor = SIMD3<Float>(wallX - 0.0475, 1.70, wallZ)
     static let worldsAnchor = SIMD3<Float>(wallX, 1.50, wallZ)
     static let gravityCenter = SIMD3<Float>(wallX, 1.30, wallZ)
     static let windCenter = SIMD3<Float>(wallX, 1.10, wallZ)
@@ -197,6 +227,20 @@ struct KinematicsSpaceView: View {
             renderer.root.addChild(wind.root)
             windTrack = wind
 
+            let mass = SpatialTrackControl(
+                name: "Mass",
+                center: Self.massRailCenter(launcher: model.launcherPosition),
+                normal: SIMD3(0, 0, 1),
+                accent: UIColor(DesignTokens.Palette.kinematicsAccent),
+                range: KinematicsModel.customMassRange,
+                read: { model.customMass },
+                write: { model.customMass = $0 },
+                format: { PhysicsFormat.measurement($0, "kg", decimals: 2) },
+                subtitle: { _ in "Ø 10 cm — same size, different mass" })
+            mass.isEnabled = model.kind == .custom
+            renderer.root.addChild(mass.root)
+            massTrack = mass
+
             // The ball well, on the instrument wall under the switch
             // bank — out of the firing line with the rest of the
             // furniture, and deliberately NOT riding the launcher. A
@@ -220,6 +264,16 @@ struct KinematicsSpaceView: View {
                           model.grabBall(id: id)
                           return id
                       }),
+                // The hoop (2026-09-01). Born at the hand and carried by
+                // the same gesture — `apply(drag:)` already routes a
+                // ring's id to `moveRing`. Nil at the budget of three
+                // fades the mouth in refusal.
+                .init(name: "Hoop",
+                      tint: DesignTokens.Palette.targetUI,
+                      label: "Add hoop",
+                      preview: { KinematicsRenderer.hoopPreview() },
+                      position: Self.hoopWellAnchor,
+                      spawn: { point in model.addRing(at: point) }),
             ])
             renderer.root.addChild(sources.root)
             wells = sources
@@ -234,6 +288,33 @@ struct KinematicsSpaceView: View {
             // since 2026-09-01, and the simulator cannot tap the launcher.
             if UserDefaults.standard.bool(forKey: "kinRing") {
                 ring.openID = Self.launcherRingID
+            }
+            // `-kinHoops 2` stands two hoops in the spawn layout — the
+            // well's pull needs a hand the simulator does not have.
+            let hoops = UserDefaults.standard.integer(forKey: "kinHoops")
+            for _ in 0..<max(0, hoops) { model.addRing() }
+            // `-kinSolve 1` opens the first hoop's ring and aims at it,
+            // which is what draws the two ghost arcs and the callout.
+            if UserDefaults.standard.bool(forKey: "kinSolve"),
+               let first = model.rings.first?.id {
+                ring.openID = first
+                model.aimTargetID = first
+            }
+            // `-kinBall custom -kinMass 2.0` picks a ball and, for the
+            // custom one, its mass; `-kinAir 1` switches the air on with
+            // no wind, which is what the vacuum ghost needs (`-kinWind`
+            // implies a wind).
+            if let raw = UserDefaults.standard.string(forKey: "kinBall"),
+               let kind = KinematicsModel.ProjectileKind(rawValue: raw) {
+                model.kind = kind
+            }
+            if UserDefaults.standard.object(forKey: "kinMass") != nil {
+                let mass = UserDefaults.standard.double(forKey: "kinMass")
+                model.customMass = min(max(mass, KinematicsModel.customMassRange.lowerBound),
+                                       KinematicsModel.customMassRange.upperBound)
+            }
+            if UserDefaults.standard.bool(forKey: "kinAir") {
+                model.airResistance = true
             }
             // `-kinGravity 1.62` moves the g rail's bead AND lights the
             // Moon disc — a value, not a flag, because a bead parked at
@@ -332,6 +413,7 @@ struct KinematicsSpaceView: View {
             // A selection, so it does not survive the lab: the next entry
             // opens on a folded ring like every other module.
             ring.openID = nil
+            model.aimTargetID = nil
         }
         .task {
             // Plane detection: device-only, quietly absent in the sim.
@@ -360,7 +442,7 @@ struct KinematicsSpaceView: View {
                         return
                     }
                     if drag == nil {
-                        for track in [gravityTrack, windTrack].compactMap({ $0 })
+                        for track in [gravityTrack, windTrack, massTrack].compactMap({ $0 })
                         where track.owns(value.entity) {
                             activeTrack = track
                             track.adjust(hand: hand)
@@ -437,6 +519,40 @@ struct KinematicsSpaceView: View {
     /// stretches across the room as you pull. You are aiming a throw by
     /// changing the shape of where it lands.
     private func syncBloom(dt: Double) {
+        let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
+        // A HOOP'S RING (2026-09-01): the one Bloom retargets to whichever
+        // hoop is selected — Delete, and the aim solutions once they
+        // exist. Its anchor rides the hoop, so a hoop being carried
+        // carries its own ring.
+        if let id = ring.openID, id != Self.launcherRingID,
+           let hoop = model.rings.first(where: { $0.id == id }) {
+            // Three petals — `Petal`'s own ceiling. The two aims are dim
+            // while the hoop is out of range at the current speed; the
+            // solve is memoised, so asking every frame is cheap.
+            bloom.retarget(
+                id,
+                petals: [
+                    .init(name: "Aim low", symbol: "arrow.down.right",
+                          tint: UIColor(DesignTokens.Palette.kinematicsAccent),
+                          isAvailable: { model.solutions(for: id) != nil }) {
+                        model.aim(atSolution: .low, for: id)
+                    },
+                    .init(name: "Aim high", symbol: "arrow.up.right",
+                          tint: UIColor(DesignTokens.Palette.kinematicsAccent),
+                          isAvailable: { model.solutions(for: id) != nil }) {
+                        model.aim(atSolution: .high, for: id)
+                    },
+                    .init(name: "Delete", symbol: "trash",
+                          tint: DesignTokens.Palette.neutralActionUI) { [ring] in
+                        model.removeRing(id: id)
+                        ring.openID = nil
+                    },
+                ],
+                grip: nil)
+            bloom.update(anchor: SIMD3<Float>(hoop.position) + SIMD3(0, 0.12, 0),
+                         viewer: viewer, revealTarget: 1, dt: dt)
+            return
+        }
         let anchor = SIMD3<Float>(model.launcherPosition) + SIMD3(0, 0.12, 0)
         bloom.retarget(
             "launcher",
@@ -469,7 +585,6 @@ struct KinematicsSpaceView: View {
                 write: { model.launchSpeed = $0 },
                 format: { PhysicsFormat.measurement($0, "m/s", decimals: 1) },
                 radius: { 0.10 }))
-        let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
         // Open only while selected — `Bloom` eases the fold itself, and a
         // grip mid-drag pins it open whatever this says.
         bloom.update(anchor: anchor, viewer: viewer,
@@ -494,6 +609,14 @@ struct KinematicsSpaceView: View {
         // speed nothing is applying.
         windTrack?.isEnabled = model.airResistance
         if model.airResistance { windTrack?.refresh() }
+        // The mass rail exists exactly while the custom ball is the pick,
+        // and rides the launcher it hangs under.
+        let custom = model.kind == .custom
+        massTrack?.isEnabled = custom
+        if custom, let mass = massTrack {
+            mass.root.position = Self.massRailCenter(launcher: model.launcherPosition)
+            mass.refresh()
+        }
     }
 
     /// The glyph each ball wears on its disc — Kinematics vocabulary, not
@@ -504,7 +627,7 @@ struct KinematicsSpaceView: View {
         case .basketball: "basketball.fill"
         case .golfBall: "circle.dotted"
         case .cannonball: "circle.fill"
-        case .custom: nil
+        case .custom: "scalemass"
         }
     }
 
@@ -586,14 +709,41 @@ struct KinematicsSpaceView: View {
         // dim petal returns false and the tap falls through to the fold,
         // exactly as Magnetism's does.
         if bloom.handleTap(entity) { return }
+        // A hoop toggles its own ring, ahead of the launcher's grammar.
+        // The model mirrors the selection so the renderer can draw the
+        // ghost arcs and the callout for the hoop being aimed at.
+        if let hoop = Self.hoopID(under: entity, rings: model.rings) {
+            let open = ring.openID != hoop
+            SoundPalette.play(open ? .pop : .releaseTick, on: entity,
+                              volume: open ? 0.35 : 0.3)
+            ring.openID = open ? hoop : nil
+            model.aimTargetID = open ? hoop : nil
+            return
+        }
         let wasOpen = ring.openID == Self.launcherRingID
         let open = Self.launcherRingOpen(afterTapOn: entity, wasOpen: wasOpen)
-        if open != wasOpen {
+        if open != (ring.openID != nil) {
             // The unfold pops; a silent fold read as broken.
             SoundPalette.play(open ? .pop : .releaseTick, on: entity,
                               volume: open ? 0.35 : 0.3)
         }
         ring.openID = open ? Self.launcherRingID : nil
+        if model.aimTargetID != nil { model.aimTargetID = nil }
+    }
+
+    /// The hoop a tap landed on, by walking the parent chain to the
+    /// entity the renderer named with the ring's id — nil for anything
+    /// that is not a hoop. Pure, so `LauncherRingTests` can drive it.
+    static func hoopID(under entity: Entity, rings: [KinematicsModel.Ring]) -> UUID? {
+        var current: Entity? = entity
+        while let candidate = current {
+            if let id = UUID(uuidString: candidate.name),
+               rings.contains(where: { $0.id == id }) {
+                return id
+            }
+            current = candidate.parent
+        }
+        return nil
     }
 
     /// What a tap does to the launcher's ring, as a pure function of what

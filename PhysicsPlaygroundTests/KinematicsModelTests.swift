@@ -158,6 +158,143 @@ final class KinematicsModelTests: XCTestCase {
         }
     }
 
+    // MARK: Hoops from a well (2026-09-01)
+
+    /// The well's spawn: a hoop is born where the hand is, anchor and
+    /// position alike, and no lower than a hoop can be placed.
+    func testAHoopIsBornWhereTheHandIs() throws {
+        let model = bareModel()
+        let hand = SIMD3<Double>(0.4, 1.3, -1.1)
+        let id = try XCTUnwrap(model.addRing(at: hand))
+        let ring = try XCTUnwrap(model.rings.first { $0.id == id })
+        XCTAssertEqual(ring.position, hand)
+        XCTAssertEqual(ring.anchor, hand)
+
+        let low = try XCTUnwrap(model.addRing(at: SIMD3(0, 0.05, -1)))
+        XCTAssertEqual(model.rings.first { $0.id == low }?.position.y, 0.3,
+                       "the floor `moveRing` keeps applies at birth too")
+    }
+
+    /// Nil at the budget — the well's cue to fade in refusal.
+    func testTheHoopWellRefusesAtTheBudget() {
+        let model = bareModel()
+        for index in 0..<KinematicsModel.ringBudget {
+            XCTAssertNotNil(model.addRing(at: SIMD3(Double(index), 1, -1)))
+        }
+        XCTAssertNil(model.addRing(at: SIMD3(0, 1, -1)))
+        XCTAssertEqual(model.rings.count, KinematicsModel.ringBudget)
+    }
+
+    /// The Delete petal takes only its own hoop, and Reset takes them all.
+    func testRemoveRingTakesOnlyThatHoopAndResetTakesAll() throws {
+        let model = bareModel()
+        let first = try XCTUnwrap(model.addRing(at: SIMD3(0, 1, -1)))
+        let second = try XCTUnwrap(model.addRing(at: SIMD3(1, 1, -1)))
+        model.removeRing(id: first)
+        XCTAssertEqual(model.rings.map(\.id), [second])
+        model.reset()
+        XCTAssertTrue(model.rings.isEmpty)
+    }
+
+    // MARK: The aim solves for a hoop (2026-09-01)
+
+    private func fireUntilLanded(_ model: KinematicsModel) {
+        model.fire()
+        for _ in 0..<3000 where model.flights[0].status == .flying {
+            model.step(dt: 1.0 / 90.0)
+        }
+    }
+
+    /// The criterion the feature rests on: aim at either solution and
+    /// the ball goes through the rim. Checked by the scoring law itself,
+    /// not by comparing angles to angles.
+    func testTheAimSolvesForAHoopAndBothArcsGoThroughIt() throws {
+        for pick in [KinematicsModel.AimSolution.low, .high] {
+            let model = bareModel()
+            model.launchSpeed = 6
+            let hoop = model.launcherPosition + SIMD3(2.0, 0.4, -0.8)
+            let id = try XCTUnwrap(model.addRing(at: hoop))
+            let roots = try XCTUnwrap(model.solutions(for: id))
+            XCTAssertLessThan(roots.low, roots.high)
+
+            model.aim(atSolution: pick, for: id)
+            fireUntilLanded(model)
+            XCTAssertEqual(model.rings[0].score, 1,
+                           "the \(pick) solution must put the ball through the rim")
+        }
+    }
+
+    /// With the air on the roots are found rather than derived, and they
+    /// still have to put a table-tennis ball — the draggiest thing on the
+    /// bench — through the rim.
+    func testTheDragSolveStillPutsTheBallThroughTheRim() throws {
+        let model = bareModel()
+        model.kind = .tableTennisBall
+        model.airResistance = true
+        model.launchSpeed = 8
+        let id = try XCTUnwrap(model.addRing(at: model.launcherPosition + SIMD3(2.0, 0.3, 0)))
+        model.aim(atSolution: .low, for: id)
+        fireUntilLanded(model)
+        XCTAssertEqual(model.rings[0].score, 1)
+    }
+
+    func testOutOfRangeHasNoSolutionAndAimingIsANoOp() throws {
+        let model = bareModel()
+        model.launchSpeed = 2
+        let id = try XCTUnwrap(model.addRing(at: model.launcherPosition + SIMD3(10, 0, 0)))
+        XCTAssertNil(model.solutions(for: id))
+        let before = model.aimDirection
+        model.aim(atSolution: .low, for: id)
+        XCTAssertEqual(model.aimDirection, before, "nothing to aim at, nothing moves")
+    }
+
+    /// The solve is memoised on its inputs; moving the hoop invalidates it.
+    func testTheSolveFollowsTheHoop() throws {
+        let model = bareModel()
+        model.launchSpeed = 6
+        let id = try XCTUnwrap(model.addRing(at: model.launcherPosition + SIMD3(2.0, 0.4, 0)))
+        let near = try XCTUnwrap(model.solutions(for: id))
+        model.moveRing(id: id, to: model.launcherPosition + SIMD3(3.0, 0.4, 0))
+        let far = try XCTUnwrap(model.solutions(for: id))
+        XCTAssertGreaterThan(far.low, near.low, "a farther hoop needs a higher low arc")
+    }
+
+    /// Reset clears the selection with everything else.
+    func testResetClearsTheAimTarget() throws {
+        let model = bareModel()
+        let id = try XCTUnwrap(model.addRing(at: model.launcherPosition + SIMD3(2, 0, 0)))
+        model.aimTargetID = id
+        model.reset()
+        XCTAssertNil(model.aimTargetID)
+    }
+
+    // MARK: The custom ball, and the ghost of vacuum (2026-09-01)
+
+    /// Same diameter, different mass: nothing changes without air, and
+    /// the heavier ball flies farther with it.
+    func testMassChangesTheArcOnlyInAir() {
+        func range(mass: Double, air: Bool) -> Double {
+            let model = bareModel()
+            model.kind = .custom
+            model.customMass = mass
+            model.airResistance = air
+            model.launchSpeed = 6
+            return model.prediction.range
+        }
+        XCTAssertEqual(range(mass: 0.1, air: false), range(mass: 2.0, air: false), accuracy: 1e-9)
+        XCTAssertLessThan(range(mass: 0.1, air: true), range(mass: 2.0, air: true))
+    }
+
+    func testTheVacuumGhostExistsOnlyInAirAndFliesFarther() throws {
+        let model = bareModel()
+        model.kind = .tableTennisBall
+        model.launchSpeed = 8
+        XCTAssertNil(model.vacuumPrediction, "no air, no gap to show")
+        model.airResistance = true
+        let ghost = try XCTUnwrap(model.vacuumPrediction)
+        XCTAssertGreaterThan(ghost.range, model.prediction.range)
+    }
+
     /// One pass through a hoop scores exactly once; a miss scores nothing.
     func testBallThroughHoopScoresOnceAndMissesDoNot() {
         let model = bareModel()

@@ -261,3 +261,122 @@ public enum ProjectileMotion {
         )
     }
 }
+
+// MARK: - Aiming at a point
+
+/// The projectile problem solved the other way round: given where the
+/// hoop is, which launch angles reach it? Two in a vacuum — the low
+/// arc and the high arc — and the room draws both (Projectiles' "Aim
+/// here", 2026-09-01).
+public extension ProjectileMotion {
+    /// Both drag-free launch angles, in radians above horizontal, that
+    /// carry a projectile launched at `speed` through a point `x` metres
+    /// away horizontally and `y` metres above the muzzle (negative for
+    /// below). `low <= high`. Nil when the point is out of range at that
+    /// speed — the discriminant of tan θ's quadratic is negative.
+    ///
+    ///     tan θ = (v² ± √(v⁴ − g(g·x² + 2·y·v²))) / (g·x)
+    ///
+    /// Two honest edge cases: in zero gravity the flight is a straight
+    /// line and both angles are `atan2(y, x)`; straight above or below
+    /// (x ≈ 0) the shot is vertical, reachable downward always and upward
+    /// only while v² ≥ 2gy.
+    static func launchAngles(toReachHorizontal x: Double, vertical y: Double,
+                             speed v: Double, gravity g: Double)
+    -> (low: Double, high: Double)? {
+        guard v > 0, x >= 0 else { return nil }
+        if g <= 1e-12 {
+            let straight = atan2(y, x)
+            return (straight, straight)
+        }
+        if x < 1e-9 {
+            if y <= 0 { return (-.pi / 2, -.pi / 2) }
+            return v * v >= 2 * g * y ? (.pi / 2, .pi / 2) : nil
+        }
+        let discriminant = v * v * v * v - g * (g * x * x + 2 * y * v * v)
+        guard discriminant >= 0 else { return nil }
+        let root = discriminant.squareRoot()
+        let low = atan((v * v - root) / (g * x))
+        let high = atan((v * v + root) / (g * x))
+        return (min(low, high), max(low, high))
+    }
+
+    /// The horizontal distance, from the launch point, at which the
+    /// launched shot passes through the target's range — i.e. `x` — and
+    /// the height it has there, read off a simulated arc by linear
+    /// interpolation between samples. Nil when the arc never gets that
+    /// far (it fell short, or landed first).
+    static func heightWhenReaching(horizontal x: Double,
+                                   along trajectory: Trajectory,
+                                   from start: SIMD3<Double>) -> Double? {
+        var previous: SIMD3<Double>?
+        for point in trajectory.points {
+            let travelled = simd_length(SIMD2(point.x - start.x, point.z - start.z))
+            if let p = previous, travelled >= x {
+                let before = simd_length(SIMD2(p.x - start.x, p.z - start.z))
+                let span = travelled - before
+                let fraction = span > 1e-12 ? (x - before) / span : 0
+                return p.y + fraction * (point.y - p.y)
+            }
+            previous = point
+        }
+        return nil
+    }
+
+    /// The same question with air in the way: no closed form, so the
+    /// arc is shot numerically. Angles are scanned every 5° from −85° to
+    /// 85° for sign changes of (height at the target's range − target
+    /// height) and each bracket is bisected on the angle until it is
+    /// narrower than `tolerance` (0.006° by default — the miss at the
+    /// target is then well under a millimetre). Up to two roots come
+    /// back, low first; a single root is returned as both. Nil when no
+    /// angle reaches the point. The readout that shows these should say
+    /// "with drag": they are found, not derived.
+    ///
+    /// The shot is simulated from a kilometre up so the floor in
+    /// `simulate` (y = radius) cannot end an arc that is on its way to
+    /// a target below the muzzle; heights come back relative to launch.
+    static func launchAnglesWithDrag(toReachHorizontal x: Double, vertical y: Double,
+                                     speed v: Double, gravity g: Double,
+                                     drag: Drag, radius: Double,
+                                     tolerance: Double = 1e-4)
+    -> (low: Double, high: Double)? {
+        guard v > 0, x > 1e-6 else { return nil }
+        let start = SIMD3<Double>(0, 1000, 0)
+        func miss(_ angle: Double) -> Double? {
+            let velocity = SIMD3(v * cos(angle), v * sin(angle), 0)
+            let arc = simulate(from: start, launchVelocity: velocity,
+                               gravity: g, drag: drag, maxBounces: 0,
+                               radius: radius, timeStep: 1.0 / 240.0,
+                               maxDuration: 30, pointStride: 1)
+            guard let height = heightWhenReaching(horizontal: x, along: arc,
+                                                  from: start) else { return nil }
+            return height - start.y - y
+        }
+        let step = 5.0 * .pi / 180
+        var angle = -85.0 * .pi / 180
+        var previousAngle = angle
+        var previousMiss = miss(angle)
+        var roots: [Double] = []
+        while angle < 85.0 * .pi / 180 - 1e-9 {
+            angle += step
+            let current = miss(angle)
+            if let a = previousMiss, let b = current, (a <= 0) != (b <= 0) {
+                var lo = previousAngle, hi = angle
+                var loMiss = a
+                var iterations = 0
+                while hi - lo > tolerance, iterations < 60 {
+                    iterations += 1
+                    let mid = (lo + hi) / 2
+                    guard let m = miss(mid) else { break }
+                    if (m <= 0) == (loMiss <= 0) { lo = mid; loMiss = m } else { hi = mid }
+                }
+                roots.append((lo + hi) / 2)
+            }
+            previousAngle = angle
+            previousMiss = current
+        }
+        guard let first = roots.first, let last = roots.last else { return nil }
+        return (first, last)
+    }
+}

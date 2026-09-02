@@ -23,6 +23,11 @@ final class KinematicsModel {
     /// Shared `PhysicsCore.SurfaceGravity` presets (zero-g included).
     nonisolated static let gravityPresets = SurfaceGravity.all
     nonisolated static let windSpeedRange = 0.0...15.0        // m/s
+    /// The custom ball's mass. Its diameter stays at 10 cm on purpose:
+    /// drag depends on the diameter, so "same size, different mass" is
+    /// the clean experiment — mass does nothing to the arc without air
+    /// and everything with it (2026-09-01).
+    nonisolated static let customMassRange = 0.05...5.0        // kg
     nonisolated static let timeScaleRange = 0.1...2.0
 
     // MARK: Budgets (degrade by not drawing, never by dropping frames)
@@ -442,9 +447,161 @@ final class KinematicsModel {
                           phase: Double(rings.count) * 2.1))
     }
 
+    /// A hoop born AT THE HAND — the well's spawn (2026-09-01, when the
+    /// hoops came out of their mothball through a well rather than a
+    /// plate: fold the instruments, never the materials). Nil at the
+    /// budget, which is the well's cue to fade in refusal rather than
+    /// pop. Held no lower than a hoop can be placed, the same floor
+    /// `moveRing` keeps.
+    @discardableResult
+    func addRing(at point: SIMD3<Double>) -> UUID? {
+        guard rings.count < Self.ringBudget else { return nil }
+        var clamped = point
+        clamped.y = max(clamped.y, 0.3)
+        let ring = Ring(id: UUID(), anchor: clamped, position: clamped,
+                        phase: Double(rings.count) * 2.1)
+        rings.append(ring)
+        return ring.id
+    }
+
     func removeLastRing() {
         guard !rings.isEmpty else { return }
         rings.removeLast()
+    }
+
+    /// The hoop's own Delete petal.
+    func removeRing(id: UUID) {
+        rings.removeAll { $0.id == id }
+        if aimTargetID == id { aimTargetID = nil }
+    }
+
+    // MARK: Aiming at a hoop (2026-09-01)
+
+    /// Which hoop the launcher is being aimed at — a SELECTION, mirrored
+    /// from the view's ring state so the renderer can draw the two ghost
+    /// arcs and the hoop's callout. Out of the capsule snapshot and, like
+    /// every selection, cleared by `reset()`.
+    var aimTargetID: UUID?
+
+    enum AimSolution: Equatable { case low, high }
+
+    private struct AimKey: Equatable {
+        var hoop: SIMD3<Double>
+        var launcher: SIMD3<Double>
+        var speed: Double
+        var gravity: Double
+        var air: Bool
+        var wind: SIMD3<Double>
+        var projectile: Projectile
+    }
+    @ObservationIgnored private var aimCache: (key: AimKey, roots: (low: Double, high: Double)?)?
+
+    /// Both launch angles, in radians above horizontal, that put the ball
+    /// through `ringID` — low arc first — or nil when the hoop is out of
+    /// range at the current speed. Exact in a vacuum
+    /// (`ProjectileMotion.launchAngles`); found numerically with the air
+    /// on (`launchAnglesWithDrag`), which the hoop's callout discloses.
+    ///
+    /// The muzzle rides the aim (`barrelLength` along it), so each root
+    /// is refined against its own muzzle: three fixed-point passes,
+    /// which converge because the barrel is short next to any range
+    /// worth solving for. Memoised on its inputs, because the drag
+    /// search costs tens of simulations and a petal's `isAvailable`
+    /// asks every frame.
+    func solutions(for ringID: UUID) -> (low: Double, high: Double)? {
+        guard let ring = rings.first(where: { $0.id == ringID }) else { return nil }
+        let key = AimKey(hoop: ring.position, launcher: launcherPosition,
+                         speed: launchSpeed, gravity: gravity, air: airResistance,
+                         wind: wind, projectile: projectile)
+        if let cached = aimCache, cached.key == key { return cached.roots }
+        let roots = computeSolutions(hoop: ring.position)
+        aimCache = (key, roots)
+        return roots
+    }
+
+    private func computeSolutions(hoop: SIMD3<Double>) -> (low: Double, high: Double)? {
+        let flat = SIMD2(hoop.x - launcherPosition.x, hoop.z - launcherPosition.z)
+        guard simd_length(flat) > 1e-6 else { return nil }
+        let azimuthDegrees = atan2(flat.y, flat.x) * 180 / .pi
+        let drag = drag(for: projectile)
+        func roots(fromMuzzle muzzle: SIMD3<Double>) -> (low: Double, high: Double)? {
+            let x = simd_length(SIMD2(hoop.x - muzzle.x, hoop.z - muzzle.z))
+            let y = hoop.y - muzzle.y
+            if let drag {
+                return ProjectileMotion.launchAnglesWithDrag(
+                    toReachHorizontal: x, vertical: y, speed: launchSpeed, gravity: gravity,
+                    drag: drag, radius: projectile.diameter / 2)
+            }
+            return ProjectileMotion.launchAngles(
+                toReachHorizontal: x, vertical: y, speed: launchSpeed, gravity: gravity)
+        }
+        func refine(_ pick: ((low: Double, high: Double)) -> Double) -> Double? {
+            var muzzle = launcherPosition
+            var angle: Double?
+            for _ in 0..<3 {
+                guard let found = roots(fromMuzzle: muzzle) else { return nil }
+                let picked = pick(found)
+                angle = picked
+                muzzle = launcherPosition + Self.barrelLength * Self.direction(
+                    elevationDegrees: picked * 180 / .pi, azimuthDegrees: azimuthDegrees)
+            }
+            return angle
+        }
+        guard let low = refine({ $0.low }), let high = refine({ $0.high }) else { return nil }
+        return (min(low, high), max(low, high))
+    }
+
+    /// The bearing from the launcher to a hoop, in `direction`'s degrees.
+    private func azimuthDegrees(to hoop: SIMD3<Double>) -> Double {
+        atan2(hoop.z - launcherPosition.z, hoop.x - launcherPosition.x) * 180 / .pi
+    }
+
+    /// Points the launcher along the chosen solution for `ringID`. A
+    /// no-op when the hoop is out of range — there is nothing to aim at.
+    func aim(atSolution solution: AimSolution, for ringID: UUID) {
+        guard let ring = rings.first(where: { $0.id == ringID }),
+              let roots = solutions(for: ringID) else { return }
+        let elevation = (solution == .low ? roots.low : roots.high) * 180 / .pi
+        setAim(elevationDegrees: elevation, azimuthDegrees: azimuthDegrees(to: ring.position))
+    }
+
+    /// The whole flight at one solution — bounces, walls and any
+    /// cross-wind included — so the ghost shows exactly where that angle
+    /// sends the ball, including a miss the in-plane solve cannot see.
+    func solutionArc(_ solution: AimSolution, for ringID: UUID) -> ProjectileMotion.Trajectory? {
+        guard let ring = rings.first(where: { $0.id == ringID }),
+              let roots = solutions(for: ringID) else { return nil }
+        let direction = Self.direction(
+            elevationDegrees: (solution == .low ? roots.low : roots.high) * 180 / .pi,
+            azimuthDegrees: azimuthDegrees(to: ring.position))
+        return ProjectileMotion.simulate(
+            from: launcherPosition + Self.barrelLength * direction,
+            launchVelocity: launchSpeed * direction,
+            gravity: gravity,
+            drag: drag(for: projectile),
+            restitution: projectile.restitution,
+            maxBounces: 4,
+            walls: respectRoomWalls ? roomWalls : [],
+            radius: projectile.diameter / 2,
+            maxDuration: 12)
+    }
+
+    /// The arc the same launch would follow in a vacuum — drawn faintly
+    /// beside the real one while the air is on, so drag is visible as
+    /// the gap between them (2026-09-01). Nil with the air off: there is
+    /// no gap to show.
+    var vacuumPrediction: ProjectileMotion.Trajectory? {
+        guard airResistance else { return nil }
+        return ProjectileMotion.simulate(
+            from: muzzlePoint,
+            launchVelocity: launchSpeed * aimDirection,
+            gravity: gravity,
+            drag: nil,
+            restitution: projectile.restitution,
+            maxBounces: 4,
+            walls: respectRoomWalls ? roomWalls : [],
+            radius: projectile.diameter / 2,
+            maxDuration: 12)
     }
 
     func moveRing(id: UUID, to point: SIMD3<Double>) {
@@ -730,6 +887,8 @@ final class KinematicsModel {
         lastCatch = nil
         catchingEnabled = true
         aimDirection = Self.direction(elevationDegrees: 45, azimuthDegrees: 0)
+        aimTargetID = nil
+        aimCache = nil
         clearCapsule()
 
         // Welcome scene: one shot already in the air, born at the muzzle — every ball comes from the barrel tip, never mid-air.

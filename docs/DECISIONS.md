@@ -16,6 +16,72 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-09-02 — Projectiles: the hoops come out of their mothball, and the launcher solves for them
+
+**Decision:** Four features on the Projectiles bench, chosen by the
+owner on 2026-09-01 (Batch F of the release plan, first half):
+
+1. **Hoops from a well.** The hoop-and-scoring layer mothballed on
+   2026-07-31 — "hoops read as clutter around a bench about
+   trajectories" — is restored through a well mouth beside the ball's,
+   not a plate. Nothing stands at rest: a hoop exists only once you
+   pull one, is carried by the gesture that made it, and has its own
+   ring (Aim low, Aim high, Delete). Reset clears them. The notebook
+   writes Hoops, Score and Best streak when any stand.
+2. **The aim solves for the hoop.** Tap a hoop, pinch Aim low or Aim
+   high: two ghost arcs, the projectile problem run backwards —
+   `ProjectileMotion.launchAngles`, tan θ = (v² ± √(v⁴ − g(gx² +
+   2yv²))) / (gx), exact — and the launcher points along the one you
+   chose. With the air on the roots are found by bisection over the
+   simulated arc (`launchAnglesWithDrag`) and the hoop's callout says
+   "with drag". The muzzle rides the aim, so each root is refined
+   against its own muzzle.
+3. **The custom ball, by mass.** The fifth ball kind gets its door: a
+   Mass rail under the launcher while Custom is picked — a rail, not a
+   grip, because one grip per ring is the vocabulary's ceiling and mass
+   has no extent. Its diameter stays 10 cm on purpose: same size,
+   different mass, so nothing changes without air and everything with
+   it.
+4. **The ghost of vacuum.** With the air on, the no-drag arc stands
+   faintly beside the real one and the landing ring reads both ranges.
+   The gap is drag, made visible.
+
+**Context:** The mothball entry said restoring the hoops "is a decision
+rather than a cleanup", and the decision that unlocks it is the owner's
+own from 2026-08-08, reversing the parts drawer: *fold the instruments,
+never the materials.* A hoop is a material — a thing you make and place —
+so it comes from a well like a ball or a magnet, and the clutter
+objection that put it away is answered by the count: nothing stands
+until a hand asks for it. Placement was measured, not reasoned: two
+mouths on the well row at Electric Fields' pitch (0.095), the hoop
+outboard with its near face 1.20 m from a standing viewer against the
+1.25 limit, the ball inboard with its edge 0.15 m clear of the launcher's
+line; `InstrumentReachCriterionTests` holds both. Sideways toward the
+launcher is the firing line, further outboard fails reach before any
+height, and a sixth row would push the bank below knee height.
+
+The ghost arcs are one mesh in the arc's own colour at 0.22 opacity,
+cased like it, rebuilt only when an input changes; the solve is memoised
+on its inputs because a petal's `isAvailable` asks every frame and the
+drag search costs tens of simulations. The solve works in the vertical
+plane through the hoop and ignores a cross-wind; the ghost is the full
+three-dimensional flight, so a cross-wind miss shows as a ghost that
+misses, which is the honest picture.
+
+**Consequences:** Projectiles' standing count stays at ten — the ring
+fold took one, the hoop mouth added one. New arguments: `-kinHoops <n>`,
+`-kinSolve 1`, `-kinBall <kind>`, `-kinMass <kg>`, `-kinAir 1`. Tests:
+`ProjectileAimTests` (PhysicsCore — both vacuum roots land within a
+millimetre, maximum range collapses the roots onto 45°, straight up
+needs v² ≥ 2gy, the drag roots land within a millimetre and admit
+defeat out of range), `KinematicsModelTests` (a hoop born at the hand,
+the well's refusal at the budget, both solutions score through the rim
+by the scoring law itself, the drag solve too, out of range is a no-op,
+mass changes the arc only in air, the vacuum ghost only exists in air),
+`LauncherRingTests` (a hoop's tube resolves to its hoop), and the reach
+criterion gains the hoop mouth. Monkey-and-hunter and the table bounce
+follow as their own entries.
+
 ## 2026-09-01 — Release 1.0: the demo script sets the scope
 
 **Decision:** Version 1.0 is planned backwards from a 180-second demo

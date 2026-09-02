@@ -78,6 +78,7 @@ final class KinematicsRenderer {
         subscriptions = []
         arcPipeline?.cancel()
         pathPipeline?.cancel()
+        ghostPipeline?.cancel()
     }
 
     static let launcherName = "launcher"
@@ -115,6 +116,18 @@ final class KinematicsRenderer {
     private let arcCasingEntity = ModelEntity()
     private let arcCasingMaterial =
         Materials.contrastLine(DesignTokens.Palette.predictedArcUI).casing
+    /// Ghost arcs (2026-09-01): "would be" lines in the arc's own colour
+    /// at a fraction of its opacity, cased like it — the two aim
+    /// solutions for the hoop being aimed at, and the vacuum arc while
+    /// the air is on. One mesh, rebuilt only when their inputs change.
+    private let ghostEntity = ModelEntity()
+    private let ghostCasingEntity = ModelEntity()
+    private let ghostMaterial: UnlitMaterial = {
+        var material = UnlitMaterial(color: DesignTokens.Palette.predictedArcUI)
+        material.blending = .transparent(opacity: 0.22)
+        return material
+    }()
+    private var ghostPipeline: GeometryPipeline<[[SIMD3<Float>]], ArcTube>?
     /// Core radius of the predicted-arc tube; the casing is swept from
     /// it. `nonisolated` because the pipeline's compute closure reads it
     /// off the main actor.
@@ -139,8 +152,12 @@ final class KinematicsRenderer {
         let tube: ModelEntity
         /// The score over the hoop, on the house dark plate.
         let scoreLabel: BackedLabel
+        /// The aim callout under it — "low 23° · high 67°", or why not —
+        /// shown only on the hoop being aimed at (2026-09-01).
+        let aimLabel: BackedLabel
         var appliedID: UUID?
         var appliedScore = -1
+        var appliedAimText = ""
         var flashUntil = 0.0
         var appliedFlashing = false
     }
@@ -198,6 +215,12 @@ final class KinematicsRenderer {
         var projectile: Projectile
     }
     private var lastArcInputs: ArcInputs?
+    private struct GhostInputs: Equatable {
+        var arc: ArcInputs
+        var target: UUID?
+        var hoop: SIMD3<Double>?
+    }
+    private var lastGhostInputs: GhostInputs?
 
     init() {
         // FIRST, and as a local: everything below is built before the
@@ -259,6 +282,10 @@ final class KinematicsRenderer {
         self.arcMaterial = arcMaterial
         root.addChild(arcCasingEntity)
         root.addChild(arcEntity)
+        ghostEntity.isEnabled = false
+        ghostCasingEntity.isEnabled = false
+        root.addChild(ghostCasingEntity)
+        root.addChild(ghostEntity)
 
         // The recorded paths, same casing recipe, disabled until a scrub.
         var recorded = UnlitMaterial(color: DesignTokens.Palette.projectileUI)
@@ -394,7 +421,10 @@ final class KinematicsRenderer {
             slot.entity.addChild(pivot)
             let label = BackedLabel(size: 0.12)
             pivot.addChild(label.root)
-            ringSlots.append(RingSlot(tube: slot.payload, scoreLabel: label))
+            let aim = BackedLabel(size: 0.036)
+            aim.root.position = [0, -0.11, 0]
+            pivot.addChild(aim.root)
+            ringSlots.append(RingSlot(tube: slot.payload, scoreLabel: label, aimLabel: aim))
         }
         root.addChild(ringPool.root)
 
@@ -422,6 +452,17 @@ final class KinematicsRenderer {
                         radius: Materials.casingRadius(forCore: Self.pathRadius)))
             },
             apply: { [weak self] in self?.applyRecordedPaths($0) }
+        )
+
+        ghostPipeline = GeometryPipeline(
+            compute: { lines in
+                ArcTube(
+                    core: TubeMesh.buffers(lines: lines, radius: Self.arcRadius),
+                    casing: TubeMesh.buffers(
+                        lines: lines,
+                        radius: Materials.casingRadius(forCore: Self.arcRadius)))
+            },
+            apply: { [weak self] in self?.applyGhost($0) }
         )
 
         buildFlightAnnotations()
@@ -504,7 +545,8 @@ final class KinematicsRenderer {
     }
 
     private func updateFlightAnnotations(
-        _ model: KinematicsModel, trajectory: ProjectileMotion.Trajectory
+        _ model: KinematicsModel, trajectory: ProjectileMotion.Trajectory,
+        vacuum: ProjectileMotion.Trajectory? = nil
     ) {
         // Peak height, where the peak actually is.
         if let apex = trajectory.points.max(by: { $0.y < $1.y }), apex.y > 0.3 {
@@ -524,9 +566,13 @@ final class KinematicsRenderer {
         if trajectory.landed, let landing = trajectory.landingPoint {
             landingMarker.isEnabled = true
             landingMarker.position = SIMD3(Float(landing.x), 0.004, Float(landing.z))
-            landingLabel.setText(String(
-                format: "%.1f m · %.1f s", trajectory.range, trajectory.flightTime),
-                color: Self.annotationWhite)
+            // With the air on, the vacuum range stands beside the real
+            // one: the gap between the two numbers is drag (2026-09-01).
+            var text = String(format: "%.1f m · %.1f s", trajectory.range, trajectory.flightTime)
+            if let vacuum, vacuum.landed {
+                text += String(format: " · vacuum %.1f m", vacuum.range)
+            }
+            landingLabel.setText(text, color: Self.annotationWhite)
         } else {
             landingMarker.isEnabled = false
         }
@@ -563,6 +609,20 @@ final class KinematicsRenderer {
                                                    materials: [arcCasingMaterial])
         } else {
             arcCasingEntity.model = nil
+        }
+    }
+
+    private func applyGhost(_ tube: ArcTube) {
+        if let mesh = TubeMesh.mesh(from: tube.core) {
+            ghostEntity.model = ModelComponent(mesh: mesh, materials: [ghostMaterial])
+        } else {
+            ghostEntity.model = nil
+        }
+        if let casingMesh = TubeMesh.mesh(from: tube.casing) {
+            ghostCasingEntity.model = ModelComponent(mesh: casingMesh,
+                                                     materials: [arcCasingMaterial])
+        } else {
+            ghostCasingEntity.model = nil
         }
     }
 
@@ -703,11 +763,39 @@ final class KinematicsRenderer {
             // vertex math is what moves to the worker.
             let trajectory = model.prediction
             arcPipeline?.submit(trajectory.points.map { SIMD3<Float>($0) })
-            updateFlightAnnotations(model, trajectory: trajectory)
+            updateFlightAnnotations(model, trajectory: trajectory,
+                                    vacuum: model.vacuumPrediction)
+        }
+
+        // Ghost arcs: the aim solutions for the hoop being aimed at, and
+        // the vacuum arc while the air is on. Rebuilt on a change of
+        // inputs only — the solve is memoised in the model, the tubes
+        // are not free.
+        let ghostInputs = GhostInputs(
+            arc: arcInputs, target: model.aimTargetID,
+            hoop: model.aimTargetID.flatMap { id in
+                model.rings.first { $0.id == id }?.position
+            })
+        if ghostInputs != lastGhostInputs {
+            lastGhostInputs = ghostInputs
+            var lines: [[SIMD3<Float>]] = []
+            if let id = model.aimTargetID {
+                for solution in [KinematicsModel.AimSolution.low, .high] {
+                    if let arc = model.solutionArc(solution, for: id) {
+                        lines.append(arc.points.map { SIMD3<Float>($0) })
+                    }
+                }
+            }
+            if let vacuum = model.vacuumPrediction {
+                lines.append(vacuum.points.map { SIMD3<Float>($0) })
+            }
+            ghostEntity.isEnabled = !lines.isEmpty
+            ghostCasingEntity.isEnabled = !lines.isEmpty
+            if !lines.isEmpty { ghostPipeline?.submit(lines) }
         }
 
         syncFlights(model.flights)
-        syncRings(model.rings)
+        syncRings(model)
         syncRecordedPaths(model)
     }
 
@@ -871,6 +959,23 @@ final class KinematicsRenderer {
     /// The ball as the WELL shows it — the basketball, the module's
     /// default hand-thrown ball. Static and model-free so `Well` can
     /// build the preview before any flight exists.
+    /// The hoop's miniature for its well mouth (2026-09-01): the same
+    /// torus recipe as the hoops themselves at about a quarter size, so
+    /// the preview and the thing you pull out are recognisably one
+    /// object — the Well's own rule for a good miniature.
+    static func hoopPreview() -> Entity {
+        let circle: [SIMD3<Float>] = (0...32).map { index in
+            let angle = 2 * Float.pi * Float(index) / 32
+            return SIMD3(cos(angle), 0, sin(angle)) * 0.06
+        }
+        let mesh = TubeMesh.tube(lines: [circle], radius: 0.007, sides: 8)
+            ?? MeshResource.generateSphere(radius: 0.03)
+        return ModelEntity(
+            mesh: mesh,
+            materials: [Materials.energized(DesignTokens.Palette.targetUI,
+                                            roughness: 0.2, glow: 0.3)])
+    }
+
     static func ballPreview() -> Entity {
         var material = PhysicallyBasedMaterial()
         if let texture = BallTextures.texture(for: Projectile.basketball.name) {
@@ -903,7 +1008,24 @@ final class KinematicsRenderer {
 
     // MARK: Hoops
 
-    private func syncRings(_ rings: [KinematicsModel.Ring]) {
+    /// What the hoop being aimed at says about itself: both angles, whole
+    /// degrees (so the texture is stable), and "with drag" when the roots
+    /// were found rather than derived; or why there is nothing to aim.
+    private static func aimText(for ring: KinematicsModel.Ring,
+                                in model: KinematicsModel) -> String {
+        guard ring.id == model.aimTargetID else { return "" }
+        guard let roots = model.solutions(for: ring.id) else {
+            return "out of range at "
+                + PhysicsFormat.measurement(model.launchSpeed, "m/s", decimals: 1)
+        }
+        let low = Int((roots.low * 180 / .pi).rounded())
+        let high = Int((roots.high * 180 / .pi).rounded())
+        let angles = low == high ? "one arc · \(low)°" : "low \(low)° · high \(high)°"
+        return model.airResistance ? angles + " · with drag" : angles
+    }
+
+    private func syncRings(_ model: KinematicsModel) {
+        let rings = model.rings
         let now = CACurrentMediaTime()
         for index in 0..<ringPool.budget {
             let poolSlot = ringPool.slots[index]
@@ -917,7 +1039,13 @@ final class KinematicsRenderer {
             if ringSlots[index].appliedID != ring.id {
                 ringSlots[index].appliedID = ring.id
                 ringSlots[index].appliedScore = -1
+                ringSlots[index].appliedAimText = ""
                 ringSlots[index].tube.name = ring.id.uuidString
+            }
+            let aimText = Self.aimText(for: ring, in: model)
+            if ringSlots[index].appliedAimText != aimText {
+                ringSlots[index].appliedAimText = aimText
+                ringSlots[index].aimLabel.setText(aimText, color: DesignTokens.Palette.targetUI)
             }
             if ring.id != manipulatingRingID {
                 poolSlot.entity.position = SIMD3<Float>(ring.position)

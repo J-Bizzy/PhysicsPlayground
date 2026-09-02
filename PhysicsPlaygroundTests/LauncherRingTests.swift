@@ -73,6 +73,31 @@ final class LauncherRingTests: XCTestCase {
         XCTAssertTrue(KinematicsSpaceView.launcherRingOpen(afterTapOn: child, wasOpen: false))
     }
 
+    // MARK: Hoops have rings too (2026-09-01)
+
+    /// The renderer names a hoop's tube with the ring's id; a tap on it
+    /// or on anything under it resolves to that hoop, and nothing else
+    /// does.
+    func testATapOnAHoopResolvesToThatHoop() {
+        let model = KinematicsModel()
+        model.clearFlights()
+        let id = model.addRing(at: SIMD3(0, 1, -1))!
+        let tube = Entity()
+        tube.name = id.uuidString
+        let child = Entity()
+        tube.addChild(child)
+        let stranger = Entity()
+        stranger.name = UUID().uuidString
+
+        XCTAssertEqual(KinematicsSpaceView.hoopID(under: tube, rings: model.rings), id)
+        XCTAssertEqual(KinematicsSpaceView.hoopID(under: child, rings: model.rings), id)
+        XCTAssertNil(KinematicsSpaceView.hoopID(under: stranger, rings: model.rings),
+                     "a UUID-named entity that is not a hoop is not a hoop")
+        model.removeRing(id: id)
+        XCTAssertNil(KinematicsSpaceView.hoopID(under: tube, rings: model.rings),
+                     "a deleted hoop's tube no longer resolves")
+    }
+
     // MARK: The fold is real
 
     /// Folded, the ring offers nothing: no petal takes a tap and the

@@ -53,8 +53,13 @@ enum KinematicsModule {
                 rows.append(.init("Flight time", PhysicsFormat.fixed(last.flightTime, decimals: 3), "s"))
                 rows.append(.init("Launched by", last.wasThrown ? "hand" : "launcher"))
             }
-            // No Score row: hoops are a MOTHBALL — the surface is gone, `addRing`
-            // has no caller outside tests, so the score is structurally 0.
+            // The hoops came out of their mothball on 2026-09-01, through
+            // a well; a bench with hoops on it writes its score.
+            if !model.rings.isEmpty {
+                rows.append(.init("Hoops", "\(model.rings.count)"))
+                rows.append(.init("Score", "\(model.totalScore)"))
+                rows.append(.init("Best streak", "\(model.bestStreak)"))
+            }
             return rows
     }
 
