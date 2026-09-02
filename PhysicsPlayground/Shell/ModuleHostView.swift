@@ -62,10 +62,14 @@ struct ModuleHostView: View {
                 // choosing belongs — the front door, which is the rule
                 // this project has now arrived at three separate times.
                 //
-                // (The palette bead does NOT carry lab switching either,
-                // despite being the obvious place to look: its four
-                // petals are pause, capture, settings and reset, and a
-                // fifth was refused on the record.)
+                // (The palette bead DOES carry lab switching — its ring
+                // slots are the six labs as live vignettes, and
+                // `Palette.onSelect` goes through `AppModel.go(to:)` —
+                // and it has six petals: home, pause, capture, dim,
+                // settings, reset. This comment said "four petals, no
+                // switching" from 2026-07-29 until 2026-09-01, three
+                // weeks after both stopped being true; the bar still
+                // carries no switch because the bead already does.)
                                 Spacer(minLength: 12)
 
                 // Center: the module's identity.
@@ -237,26 +241,31 @@ struct ModuleHostView: View {
                 }
             }
 
-            // The one-time hint, WHILE THE ROOM IS SHUT.
+            // The one-time hint, room open or shut (2026-09-01).
             //
-            // The teach moved into the room on 2026-08-08 (`RoomTeach`),
-            // because the apparatus stood through it here — RealityKit
-            // content renders in front of a window behind it, and the
-            // first photograph of a lab in a room showed five bobs and
-            // four vector arrows crossing the sentence.
+            // Its history is three moves. The teach moved into the room
+            // on 2026-08-08 (`RoomTeach`, deleted the next day) because
+            // the apparatus stood through it HERE — RealityKit content
+            // renders in front of a window behind it, and the first
+            // photograph of a lab in a room showed five bobs and four
+            // vector arrows crossing the sentence. When the room card was
+            // cut, the hint stayed here gated on the space being CLOSED,
+            // which was reasonable while the window was the launch scene.
+            // On 2026-08-22 the space became the launch scene, and from
+            // that day the condition had zero readers: nobody reaches a
+            // lab's window with the room shut, so no lab ever showed its
+            // one sentence. Found on 2026-09-01 while scripting the demo.
             //
-            // It is still drawn here while the immersive space is
-            // CLOSED, and that is not the same thing as keeping it in
-            // two places: the room card does not exist yet at that
-            // moment, so the two are never on screen together. The flat
-            // window is the accessibility path — a wearer who never
-            // opens the room would otherwise be the only one who never
-            // reads the sentence, which is the wrong person to drop.
-            //
-            // Both dismissals write the same receipt, so reading it in
-            // either place is reading it.
-            if !appModel.settings.hasSeenHint(module.id),
-               !appModel.isImmersiveSpaceOpen {
+            // What changed to make showing it here safe again is the
+            // 2026-08-30 lift: the bar is top-aligned in a taller frame
+            // and rides ~0.35 m above the apparatus band in all six
+            // modules (photo-verified per module), so the sentence under
+            // it clears the physics it describes. That claim is judged
+            // by screenshot (`-resetHints 1 -openModule <id>`, each lab)
+            // and on device — a SwiftUI body cannot be rendered in a
+            // test, and the gate below collapses to `hasSeenHint`, which
+            // `AppSettingsTests` already covers.
+            if !appModel.settings.hasSeenHint(module.id) {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "hand.point.up.left")
                         .font(.footnote)
