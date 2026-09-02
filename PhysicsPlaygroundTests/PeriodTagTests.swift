@@ -71,6 +71,47 @@ final class PeriodTagTests: XCTestCase {
             """)
     }
 
+    /// A chaotic rig has no period, so it wears no tag — in the room, on
+    /// its card, or in the notebook. `Pendulum.period(gravity:)` is
+    /// 2π√(L/g) of the upper rod alone, which the double stamped over a
+    /// system whose whole point is that it never repeats (2026-09-01).
+    /// The double is the ONLY pendulum here and is selected by
+    /// `addDoublePendulum`, so neither the crowding rule nor the
+    /// selection rule can be the reason the tag is absent — the
+    /// symmetric case above shows a lone simple pendulum gets one.
+    func testTheDoublePendulumWearsNoPeriodTag() throws {
+        let appModel = AppModel()
+        let model = appModel.pendulumsModel
+        model.reset()
+        while let last = model.pendulums.last {
+            model.removePendulum(id: last.id)
+        }
+        let id = try XCTUnwrap(model.addDoublePendulum())
+        XCTAssertEqual(model.selectedID, id)
+        XCTAssertEqual(model.pendulums.count, 1)
+
+        let renderer = PendulumsRenderer()
+        renderer.tick(dt: 1.0 / 90.0, model: model)
+
+        // The same thin-plate filter as the plated-tag test: a lone
+        // simple pendulum produces exactly this, a lone double must not.
+        let plates = modelEntities(under: renderer.root).filter { entity in
+            guard let mesh = entity.model?.mesh else { return false }
+            let extents = mesh.bounds.extents
+            return extents.z < 0.001 && extents.x > 0 && extents.y > 0
+        }
+        XCTAssertTrue(plates.isEmpty, """
+            a double pendulum is wearing a period tag. 2π√(L/g) is the \
+            upper rod's small-angle period; a chaotic system has none.
+            """)
+
+        let readings = PendulumsModule.readings(appModel: appModel)
+        XCTAssertTrue(readings.contains { $0.name == "Length" },
+                      "the double is selected, so its length is written")
+        XCTAssertFalse(readings.contains { $0.name.hasPrefix("Period") },
+                       "the notebook must not write a period for a chaotic rig")
+    }
+
     func testThePeriodTagIsCentredOnBothAxes() {
         // Straight at the type, rather than through the renderer: the
         // claim is about BackedLabel's centring, and the tag's only job

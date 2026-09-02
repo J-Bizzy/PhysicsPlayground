@@ -635,8 +635,13 @@ struct PendulumInfoCard: View {
             let length = (pendulum.length * 100).rounded() / 100
             let period = (pendulum.period(gravity: model.gravity) * 100).rounded() / 100
             VStack(alignment: .leading, spacing: 3) {
-                Text("L \(PhysicsFormat.measurement(length, "m", decimals: 2))   "
-                     + "T \(PhysicsFormat.measurement(period, "s", decimals: 2))")
+                // No T for a double: 2π√(L/g) is the upper rod's small-
+                // angle period, and a chaotic rig has none (2026-09-01,
+                // same rule as the in-room tag).
+                Text(pendulum.kind == .double
+                     ? "L \(PhysicsFormat.measurement(length, "m", decimals: 2))   chaotic"
+                     : "L \(PhysicsFormat.measurement(length, "m", decimals: 2))   "
+                       + "T \(PhysicsFormat.measurement(period, "s", decimals: 2))")
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                 Text("θ \(PhysicsFormat.angle(degrees, decimals: 0))   "
                      + "v \(PhysicsFormat.measurement(speed, "m/s", decimals: 2))")

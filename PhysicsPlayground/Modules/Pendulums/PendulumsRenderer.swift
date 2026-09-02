@@ -620,6 +620,14 @@ final class PendulumsRenderer {
     /// this file's private glyph cache in favour of the shared one.
     private func syncPeriodLabel(for pendulum: PendulumsModel.Pendulum,
                                  gravity: Double, visible: Bool = true) {
+        // A CHAOTIC RIG HAS NO PERIOD. `Pendulum.period(gravity:)` is
+        // 2π√(L/g) of the UPPER rod alone, and stamping it over a double
+        // pendulum labelled a system whose whole point is that it never
+        // repeats. The guard sits before the lookup so no holder is ever
+        // built for a double — `kind` is fixed at birth, so there is
+        // nothing to remove later. Found while scripting the demo on
+        // 2026-09-01; `PeriodTagTests` pins it.
+        guard pendulum.kind != .double else { return }
         let label: (holder: Entity, backed: BackedLabel)
         if let existing = periodLabels[pendulum.id] {
             label = existing

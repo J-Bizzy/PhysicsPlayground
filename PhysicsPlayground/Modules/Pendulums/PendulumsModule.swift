@@ -69,9 +69,13 @@ enum PendulumsModule {
         if let selected = model.selected {
             rows.append(.init("Length", PhysicsFormat.fixed(selected.length, decimals: 3), "m"))
             rows.append(.init("Mass", PhysicsFormat.fixed(selected.mass, decimals: 3), "kg"))
-            rows.append(.init("Period 2π√(L/g)",
-                              PhysicsFormat.fixed(selected.period(gravity: model.gravity),
-                                                  decimals: 3), "s"))
+            // A double pendulum writes no period: the formula is the
+            // upper rod's alone and the system has none (2026-09-01).
+            if selected.kind != .double {
+                rows.append(.init("Period 2π√(L/g)",
+                                  PhysicsFormat.fixed(selected.period(gravity: model.gravity),
+                                                      decimals: 3), "s"))
+            }
             rows.append(.init("Speed",
                               PhysicsFormat.fixed(simd_length(selected.state.velocity),
                                                   decimals: 3), "m/s"))
