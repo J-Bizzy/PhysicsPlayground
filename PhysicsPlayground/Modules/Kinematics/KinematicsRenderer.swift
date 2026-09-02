@@ -568,9 +568,10 @@ final class KinematicsRenderer {
             landingMarker.position = SIMD3(Float(landing.x), 0.004, Float(landing.z))
             // With the air on, the vacuum range stands beside the real
             // one: the gap between the two numbers is drag (2026-09-01).
-            var text = String(format: "%.1f m · %.1f s", trajectory.range, trajectory.flightTime)
+            var text = PhysicsFormat.measurement(trajectory.range, "m", decimals: 1) + " · "
+                + PhysicsFormat.measurement(trajectory.flightTime, "s", decimals: 1)
             if let vacuum, vacuum.landed {
-                text += String(format: " · vacuum %.1f m", vacuum.range)
+                text += " · vacuum " + PhysicsFormat.measurement(vacuum.range, "m", decimals: 1)
             }
             landingLabel.setText(text, color: Self.annotationWhite)
         } else {
