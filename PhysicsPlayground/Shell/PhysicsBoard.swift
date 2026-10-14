@@ -68,14 +68,6 @@ final class PhysicsBoard {
                 spokenName: item.label)
             unfold.addChild(rail.root)
             rails.append(rail)
-
-            // The quantity's name under its rail, as a well's or a world
-            // disc's name sits under it; the rail's own bubble above is the
-            // value.
-            let plate = HubScene.namePlate(item.label, accent: UIColor(white: 0.95, alpha: 1),
-                                           size: PlateStyle.labelSize)
-            plate.position = center + SIMD3(0, -0.040, 0.004)
-            unfold.addChild(plate)
         }
 
         unfold.scale = SIMD3(repeating: 0.001)

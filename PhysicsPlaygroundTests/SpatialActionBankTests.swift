@@ -110,17 +110,13 @@ final class SpatialActionBankTests: XCTestCase {
         XCTAssertEqual(counter.count, 1)
     }
 
-    /// The walk-up contract every station in this app keeps: a pinch ray
-    /// lands on whatever child geometry it hit — a lamp, an icon, a
-    /// nameplate — and must resolve to the plate that owns it.
-    func testATapOnAChildResolvesToItsPlate() throws {
+    /// A plate is one target, with no child for a pinch to land on instead.
+    func testAPlateIsOneTarget() throws {
         let (bank, counter) = makeBank()
         let plate = try plate(bank, "clear")
-        let child = try XCTUnwrap(plate.children.first,
-                                  "The plate should have a lamp to hit.")
-
-        XCTAssertTrue(bank.handleTap(child))
-        XCTAssertEqual(counter.count, 1, "A tap on the lamp did not fire the plate.")
+        XCTAssertTrue(plate.children.isEmpty)
+        XCTAssertTrue(bank.handleTap(plate))
+        XCTAssertEqual(counter.count, 1)
     }
 
     /// A bank must not eat taps meant for the apparatus standing beside it.
@@ -224,39 +220,31 @@ final class SpatialActionBankTests: XCTestCase {
 
     // MARK: The collider — the defect class that has broken modules here
 
-    /// An input-targetable collider must be no larger than the thing it
-    /// represents: these plates hang beside apparatus.
-    func testTheColliderIsNoBiggerThanThePlate() throws {
+    /// The plate carries no collider of its own: its glass is the target,
+    /// so nothing invisible can stand between a hand and the apparatus the
+    /// bank hangs beside.
+    func testThePlateCarriesNoColliderOfItsOwn() throws {
         let (bank, _) = makeBank()
         let plate = try plate(bank, "clear")
-        let collision = try XCTUnwrap(plate.components[CollisionComponent.self],
-                                      "The plate must be pressable.")
-        let extents = collision.shapes[0].bounds.extents
-
-        XCTAssertLessThan(extents.x, 0.10, "Wider than the plate it represents.")
-        XCTAssertLessThan(extents.y, 0.07, "Taller than the plate it represents.")
-        XCTAssertLessThan(extents.z, 0.03,
-                          "Deep enough to sit between a hand and the apparatus behind it.")
+        XCTAssertNil(plate.components[CollisionComponent.self])
+        XCTAssertNil(plate.components[InputTargetComponent.self])
+        XCTAssertTrue(ControlAttachment.isControl(plate))
     }
 
     // MARK: Accessibility
 
-    /// The armed state has to speak too: one tap from wiping a bench and
-    /// two taps from it must not read the same to someone who cannot see
-    /// the lamp.
-    func testVoiceOverIsToldTheArmedState() throws {
+    /// The armed state has to show (and speak — the family's button reads
+    /// "armed — tap again to confirm"): one tap from wiping a bench and two
+    /// taps from it must not look the same.
+    func testTheArmedStateReachesTheGlass() throws {
         let (bank, _) = makeBank(confirms: true)
         let plate = try plate(bank, "clear")
-
-        let resting = try XCTUnwrap(plate.components[AccessibilityComponent.self])
-        XCTAssertNotNil(resting.label, "The plate has no name.")
+        XCTAssertEqual(bank.control(for: "clear")?.isArmed, false)
 
         bank.handleTap(plate)
-        open(bank)                       // repaint runs in update, as in the app
+        open(bank)                       // the state is written in update, as in the app
 
-        let armed = try XCTUnwrap(plate.components[AccessibilityComponent.self])
-        XCTAssertNotEqual(String(localized: try XCTUnwrap(armed.value)),
-                          String(localized: try XCTUnwrap(resting.value)),
-                          "Arming a destructive plate said nothing to VoiceOver.")
+        XCTAssertEqual(bank.control(for: "clear")?.isArmed, true,
+                       "Arming a destructive plate changed nothing on it.")
     }
 }

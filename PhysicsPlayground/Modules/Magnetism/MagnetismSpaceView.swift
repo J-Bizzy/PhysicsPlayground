@@ -247,15 +247,15 @@ struct MagnetismSpaceView: View {
         var entity: Entity
     }
 
-    /// The house acknowledgement of a grab and of letting go — the flash
-    /// and tick every other lab's objects answer a hand with. Magnetism
-    /// had neither until 2026-10-14.
+    /// The house acknowledgement of a grab and of letting go — the live
+    /// glow and the tick every other lab's objects answer a hand with.
     private static func acknowledgeGrab(_ entity: Entity) {
-        PickupPulse.flash(on: entity)
+        LiveGlow.set(true, on: entity)
         SoundPalette.play(.grabTick, on: entity, volume: 0.2)
     }
 
     private static func acknowledgeRelease(_ session: GrabSession) {
+        LiveGlow.set(false, on: session.entity)
         SoundPalette.play(.releaseTick, on: session.entity, volume: 0.18)
     }
 

@@ -394,3 +394,52 @@ tests and the streak test. Screenshots:
 `docs/redesign-shots/step2-home.jpg` (utility bar: Lab list, Settings,
 About) and `step2-kinematics-hoops.jpg` (two hoops, aim callout, no score;
 title bar without the book).
+
+### Step 3 — one control language (2026-10-14)
+
+Built `Packages/RenderKit/Sources/RenderKit/Controls/`: `ControlButton`
+(standard / prominent / destructive, arm-then-fire), `ControlToggle`
+(button and settings-row presentations), `ControlSlider`, `MoreButton` +
+`ControlPanel` + `ControlSection`, `LiveGlow` + `LiveGlowTracker`, and
+`ControlAttachment` / `RoomControl`. The last pair hosts the same SwiftUI
+views on an entity through visionOS 26's `ViewAttachmentComponent`. Stock
+glass, system hover, SF Symbols, ≥ 60 pt.
+
+Migrated with no behaviour change:
+- **Windows:** the module title bar, the home window and catalog rows,
+  Settings, the Load button, the home utility bar.
+- **In the room**, each kept its API, layout and tests' tap contract:
+  - the layer bank, the action bank (and the Time reel's plates);
+  - the folding tab, the picker (its fan now widens until no two choices
+    touch), Bloom's petals, the palette's petals;
+  - the rail (`SpatialTrackControl` is now the family's slider on glass;
+    the Physics box's and Time rail's included).
+- **Grabs:** in every lab, the grab flash (`PickupPulse`, deleted) became
+  `LiveGlow`, which stays on what the hand holds until it lets go. Bloom's
+  grip bead glows while dragged.
+
+Deleted: `PodButtonStyle`, `PanelSection` / `ModulePanel.swift`,
+`PickupPulse`, every plate, disc and petal mesh builder, and the rail's
+bead, fill, ticks and extruded value text.
+
+New criterion: `ControlLanguageCriterionTests`. It fails on any
+`ButtonStyle`, `.buttonStyle(`, `.toggleStyle(`, `Slider(`, `Toggle(` or
+`Picker(` in the app target, and on a room control with its own mesh or
+collider. It also checks that the live glow follows the hand and is never a
+target.
+
+Tests: the 20 that asserted the old meshes were rewritten:
+- child-label targets became "one target, name inside";
+- entity colliders became "no collider of its own";
+- entity-level VoiceOver became "the press path arms first".
+
+Five old rail-bead tests and two plate-mesh tests were deleted.
+PhysicsCore 469/469. App 898/898. Screenshots:
+`docs/redesign-shots/step3-home.jpg`, `step3-electrostatics.jpg` (glass
+layer toggles, red Delete petal), `step3-gravitylab.jpg` (Show tab open,
+clock tab, verbs, G slider, ring petals), `step3-circuits.jpg`,
+`step3-kinematics.jpg` (world picker, Physics box sliders, launcher
+petals), `step3-settings.jpg`.
+
+Not migrated, on purpose: the palette's six lab discs and the gallery's
+exhibits. Both are cut in steps 4 and 5.

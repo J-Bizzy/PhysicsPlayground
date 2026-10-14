@@ -786,6 +786,7 @@ final class KinematicsRenderer {
         let heldID = flights.first { $0.status == .held }?.id
         if heldID == nil {
             if pulsedGrabID != nil, let entity = pulsedGrabEntity {
+                LiveGlow.set(false, on: entity)
                 SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
             }
             pulsedGrabID = nil
@@ -825,8 +826,12 @@ final class KinematicsRenderer {
                 // Acknowledged once per grab. The model carries the held ball
                 // (`holdBall`), so its transform is written like any other.
                 pulsedGrabID = flight.id
+                // Live while held: the glow stays until the hand lets go.
+                if let previous = pulsedGrabEntity, previous !== slot.entity {
+                    LiveGlow.set(false, on: previous)
+                }
                 pulsedGrabEntity = slot.entity
-                PickupPulse.flash(on: slot.entity)
+                LiveGlow.set(true, on: slot.entity)
                 SoundPalette.play(.grabTick, on: slot.entity, volume: 0.2)
             }
             slot.entity.position = SIMD3<Float>(flight.state.position)

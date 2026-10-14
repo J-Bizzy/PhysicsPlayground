@@ -6,8 +6,9 @@
 //  `summary` of whatever it hides, and a pinch unfolds that. For the
 //  things a room accumulates — a second row of overlays, a ten-preset
 //  fan, a clock set once and read often — never for a control used
-//  continuously or a destructive verb. It wears the action bank's
-//  machined stock, because it is a door, at `PlateStyle` geometry.
+//  continuously or a destructive verb. It is the family's toggle — open
+//  reads as the system's selected platter — with the summary on its own
+//  glass beneath.
 //
 
 import RealityKit
@@ -21,7 +22,6 @@ final class SummonHandle {
 
     /// The tab's own name, e.g. "Clock" or "Analysis".
     private let title: String
-    private let accent: UIColor
 
     /// The live one-line state of whatever this hides, read every frame
     /// like every other readout.
@@ -33,21 +33,26 @@ final class SummonHandle {
     /// Called when the tab is pressed, with the new state.
     var onToggle: ((Bool) -> Void)?
 
-    private let tab = ModelEntity()
-    private var titleLabel: Entity?
-    private var summaryLabel: Entity?
-    private var lastSummary: String?
+    private let control: RoomControl
+    private var tab = Entity()
     private var reveal: Float = 0
 
-    /// The whole tab, labels included, for a carrier laying it out clear of
-    /// its neighbours.
-    var footprint: BoundingBox { root.visualBounds(relativeTo: root) }
+    /// The whole tab, summary included, for a carrier laying it out clear
+    /// of its neighbours. Measured from the label's type, since the glass
+    /// is drawn by SwiftUI after layout.
+    var footprint: BoundingBox {
+        let half = RoomControlFootprint.halfWidth(forLongestOf: [title])
+        let height = RoomControlFootprint.height
+        return BoundingBox(min: [-half, -height, -0.005],
+                           max: [half, height / 2, 0.005])
+    }
 
+    /// `accent` is kept for callers; open is the system's selected platter.
     init(title: String, symbol: String, accent: UIColor) {
         self.title = title
-        self.accent = accent
+        self.control = RoomControl(title: title, systemImage: symbol)
         root.isEnabled = false
-        buildTab(symbol: symbol)
+        buildTab()
     }
 
     // MARK: Per frame
@@ -64,20 +69,10 @@ final class SummonHandle {
             root.orientation = facing
         }
 
-        // The summary is a readout: repainted only when the string changes,
-        // since a text mesh per frame tanks a scene.
+        // The summary is a readout, written only when the string changes.
         let text = summary?() ?? ""
-        if text != lastSummary {
-            lastSummary = text
-            summaryLabel?.removeFromParent()
-            guard !text.isEmpty else { summaryLabel = nil; return }
-            let plate = HubScene.namePlate(text, accent: accent,
-                                           size: PlateStyle.labelSize)
-            plate.position = [0, -PlateStyle.height / 2 - PlateStyle.labelGap
-                                 - Float(PlateStyle.labelSize), PlateStyle.faceLift]
-            root.addChild(plate)
-            summaryLabel = plate
-        }
+        control.setDetail(text.isEmpty ? nil : text)
+        control.setOn(isOpen)
 
         // Anchor in world space, not the argument: `anchor` is in the parent's
         // (possibly scaled) frame while a fingertip is world space.
@@ -91,14 +86,18 @@ final class SummonHandle {
     func handleTap(_ entity: Entity) -> Bool {
         guard entity === tab || entity.isDescendant(of: tab) || entity === root
                 || entity.isDescendant(of: root) else { return false }
+        press()
+        return true
+    }
+
+    private func press() {
         isOpen.toggle()
+        control.setOn(isOpen)
         // Open keeps the pop; close answers with the gentler tick, so the
         // pair reads as unfold/fold rather than as two unfolds — the
         // rule `SoundPalette.releaseTick` was added for.
         SoundPalette.play(isOpen ? .pop : .releaseTick, on: tab, volume: 0.4)
-        applyLook()
         onToggle?(isOpen)
-        return true
     }
 
     /// Unfolds or folds it without a tap — for the debug launch arguments
@@ -106,7 +105,7 @@ final class SummonHandle {
     func setOpen(_ open: Bool) {
         guard open != isOpen else { return }
         isOpen = open
-        applyLook()
+        control.setOn(open)
         onToggle?(open)
     }
 
@@ -114,67 +113,17 @@ final class SummonHandle {
     func close() {
         guard isOpen else { return }
         isOpen = false
-        applyLook()
+        control.setOn(false)
         onToggle?(false)
     }
 
     // MARK: Build
 
-    private func buildTab(symbol: String) {
-        tab.name = "summon-\(title.lowercased())"
-        tab.model = ModelComponent(
-            mesh: Primitives.box(width: PlateStyle.width,
-                               height: PlateStyle.height,
-                               depth: PlateStyle.depth,
-                               cornerRadius: PlateStyle.corner),
-            materials: [Materials.machined(UIColor(white: 0.30, alpha: 1))])
+    private func buildTab() {
+        tab = ControlAttachment.control(
+            control, kind: .toggle(iconOnly: false),
+            name: "summon-\(title.lowercased())",
+            press: { [weak self] in self?.press() })
         root.addChild(tab)
-
-        if let texture = Bloom.symbolTexture(symbol) {
-            var material = UnlitMaterial()
-            material.color = .init(tint: accent, texture: .init(texture))
-            let icon = ModelEntity(
-                mesh: Primitives.plane(width: 0.016, height: 0.016),
-                materials: [material])
-            icon.position = [-PlateStyle.width / 2 + 0.016, 0, PlateStyle.faceLift]
-            tab.addChild(icon)
-        }
-
-        let name = HubScene.namePlate(title, accent: UIColor(white: 0.95, alpha: 1),
-                                      size: PlateStyle.labelSize)
-        name.position = [0.010, 0, PlateStyle.faceLift]
-        tab.addChild(name)
-        titleLabel = name
-
-        // The label is part of the target: a second box over the label extent,
-        // or the word is a hole you can pinch through.
-        let span = HubScene.namePlateWidth(title, size: PlateStyle.labelSize)
-        tab.components.set(InputTargetComponent())
-        tab.components.set(CollisionComponent(shapes: [
-            Primitives.collisionBox(width: max(PlateStyle.width, span + 0.020),
-                         height: PlateStyle.height + 0.014,
-                         depth: PlateStyle.depth + 0.014),
-        ]))
-        tab.components.set(HoverEffectComponent())
-
-        applyLook()
-    }
-
-    private func applyLook() {
-        // Open reads as pressed-in and lit; closed as raised stock. The
-        // accent only appears when something is unfolded, so a room of
-        // closed handles is quiet.
-        tab.model?.materials = [
-            isOpen
-                ? Materials.energized(accent, glow: 0.35)
-                : Materials.machined(UIColor(white: 0.30, alpha: 1)),
-        ]
-        tab.position.z = isOpen ? -0.002 : 0
-        // Re-published on every change, and wired to the same toggle the pinch
-        // takes.
-        SpatialActions.attach(
-            to: tab, label: title,
-            value: isOpen ? "showing" : "hidden",
-            activate: { [weak self] in _ = self?.handleTap(self?.tab ?? Entity()) })
     }
 }

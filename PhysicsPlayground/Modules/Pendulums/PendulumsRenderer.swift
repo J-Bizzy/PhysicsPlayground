@@ -274,6 +274,7 @@ final class PendulumsRenderer {
 
         if grabbedID == nil {
             if pulsedGrabID != nil, let entity = pulsedGrabEntity {
+                LiveGlow.set(false, on: entity)
                 SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
             }
             pulsedGrabID = nil
@@ -284,8 +285,12 @@ final class PendulumsRenderer {
 
             if pendulum.id == grabbedID, pulsedGrabID != pendulum.id {
                 pulsedGrabID = pendulum.id
+                // Live while held: the glow stays until the hand lets go.
+                if let previous = pulsedGrabEntity, previous !== visual.bob {
+                    LiveGlow.set(false, on: previous)
+                }
                 pulsedGrabEntity = visual.bob
-                PickupPulse.flash(on: visual.bob)
+                LiveGlow.set(true, on: visual.bob)
                 SoundPalette.play(.grabTick, on: visual.bob, volume: 0.2)
             }
             visual.pivot.position = SIMD3<Float>(pendulum.pivot)

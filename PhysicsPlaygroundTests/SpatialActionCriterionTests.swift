@@ -92,7 +92,11 @@ final class SpatialActionCriterionTests: XCTestCase {
 
     // MARK: The primitives
 
-    func testLayerBankPlatesCanBeOperatedWithoutHands() {
+    /// A switch is the family's SwiftUI toggle, so VoiceOver reads and
+    /// presses it as it does any system control; the press runs the same
+    /// closure a tap does. There is no second, entity-level route left to
+    /// drift from it.
+    func testLayerBankPlatesCanBeOperatedWithoutHands() throws {
         var flipped: [String] = []
         let bank = SpatialLayerBank(accent: .white, layers: [
             LayerSwitch(id: "lines", label: "Field lines", isOn: { true },
@@ -103,9 +107,11 @@ final class SpatialActionCriterionTests: XCTestCase {
         for _ in 0..<40 { bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90) }
         assertOperable(bank.root, "SpatialLayerBank")
 
-        // And the action must reach the same closure a tap does.
-        let plate = try? XCTUnwrap(bank.root.children.first { $0.name == "layer-grid" })
-        XCTAssertTrue(SpatialActions.activate(plate ?? Entity()))
+        let plate = try XCTUnwrap(bank.root.children.first { $0.name == "layer-grid" })
+        XCTAssertTrue(ControlAttachment.isControl(plate))
+        XCTAssertNil(plate.components[SpatialActionComponent.self],
+                     "a second, entity-level route is a route that can drift")
+        XCTAssertTrue(bank.handleTap(plate))
         XCTAssertEqual(flipped, ["grid"])
     }
 
@@ -121,9 +127,9 @@ final class SpatialActionCriterionTests: XCTestCase {
         assertOperable(bank.root, "SpatialActionBank")
     }
 
-    /// A destructive plate must still confirm. Routing VoiceOver
-    /// straight at `fire` would hand the one user who cannot see the
-    /// plate light up a single-tap way to wipe a bench.
+    /// A destructive plate must still confirm, however it is pressed: the
+    /// glass button's action is the bank's own arm-then-fire path, and the
+    /// plate offers no entity-level shortcut straight at `fire`.
     func testADestructivePlateStillConfirmsForVoiceOver() throws {
         var fired = 0
         let bank = SpatialActionBank(accent: .white, actions: [
@@ -133,14 +139,14 @@ final class SpatialActionCriterionTests: XCTestCase {
         for _ in 0..<40 {
             bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90, resetNonce: 0)
         }
-        let plate = try XCTUnwrap(bank.root.children.first {
-            $0.components[SpatialActionComponent.self] != nil
-        })
+        let plate = try XCTUnwrap(bank.root.children.first { $0.name == "action-clear" })
+        XCTAssertNil(plate.components[SpatialActionComponent.self])
 
-        XCTAssertTrue(SpatialActions.activate(plate))
-        XCTAssertEqual(fired, 0, "one activation fired a destructive verb")
-        XCTAssertTrue(SpatialActions.activate(plate))
-        XCTAssertEqual(fired, 1, "the second activation should confirm it")
+        XCTAssertTrue(bank.handleTap(plate))
+        XCTAssertEqual(fired, 0, "one press fired a destructive verb")
+        XCTAssertEqual(bank.control(for: "clear")?.isArmed, true)
+        XCTAssertTrue(bank.handleTap(plate))
+        XCTAssertEqual(fired, 1, "the second press should confirm it")
     }
 
     // MARK: The criterion over the SOURCE
@@ -333,8 +339,8 @@ final class SpatialActionCriterionTests: XCTestCase {
         XCTAssertEqual(value, 1.0, accuracy: 1e-9)
     }
 
-    /// A `confirms` petal must take two activations, exactly as it takes
-    /// two taps — the reason activation goes through `handleTap`.
+    /// A `confirms` petal takes two presses however it is pressed: its
+    /// glass button runs the ring's own arm-then-fire path.
     func testAConfirmingPetalStillConfirmsForVoiceOver() throws {
         var fired = 0
         let bloom = Bloom()
@@ -345,16 +351,12 @@ final class SpatialActionCriterionTests: XCTestCase {
         for _ in 0..<80 {
             bloom.update(anchor: .zero, viewer: [0, 0, 1], revealTarget: 1, dt: 1 / 90)
         }
-        let petal = try XCTUnwrap(bloom.root.children.first {
-            $0.components[SpatialActionComponent.self] != nil
-        })
-        XCTAssertTrue(SpatialActions.activate(petal))
-        XCTAssertEqual(fired, 0, "one activation fired a destructive petal")
-        // And arming must not have stripped the action it needs to finish.
-        let armed = try XCTUnwrap(petal.components[AccessibilityComponent.self])
-        XCTAssertTrue(armed.systemActions.contains(.activate),
-                      "arming took away the Activate needed to confirm")
-        XCTAssertTrue(SpatialActions.activate(petal))
+        let petal = try XCTUnwrap(bloom.root.children.first { $0.name == "bloom-Clear" })
+        XCTAssertNil(petal.components[SpatialActionComponent.self])
+        XCTAssertTrue(bloom.handleTap(petal))
+        XCTAssertEqual(fired, 0, "one press fired a destructive petal")
+        XCTAssertEqual(bloom.control(named: "Clear")?.isArmed, true)
+        XCTAssertTrue(bloom.handleTap(petal))
         XCTAssertEqual(fired, 1)
     }
 
@@ -370,17 +372,17 @@ final class SpatialActionCriterionTests: XCTestCase {
         picker.open()
         for _ in 0..<80 { picker.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90) }
         assertOperable(picker.root, "SpatialPicker")
+        XCTAssertEqual(picker.control(for: "a")?.isOn, true)
 
-        // Selection republishes the spoken value; that must not remove
-        // the action from the disc it just marked.
+        // The current choice follows the model, not the last press.
         selection = "b"
         for _ in 0..<4 { picker.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90) }
-        assertOperable(picker.root, "SpatialPicker after a selection change")
-        let disc = try XCTUnwrap(picker.root.children.first {
-            $0.components[SpatialActionComponent.self] != nil
-        })
-        XCTAssertTrue(SpatialActions.activate(disc))
-        XCTAssertNotNil(chosen)
+        XCTAssertEqual(picker.control(for: "a")?.isOn, false)
+        XCTAssertEqual(picker.control(for: "b")?.isOn, true)
+        let disc = try XCTUnwrap(picker.root.children.first { $0.name == "picker-a" })
+        XCTAssertTrue(ControlAttachment.isControl(disc))
+        XCTAssertTrue(picker.handleTap(disc))
+        XCTAssertEqual(chosen, "a")
     }
 
     func testSummonHandleCanBeOperatedWithoutHands() {

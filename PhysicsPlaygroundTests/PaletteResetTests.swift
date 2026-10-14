@@ -11,6 +11,7 @@
 
 import XCTest
 import RealityKit
+import RenderKit
 @testable import PhysicsPlayground
 
 @MainActor
@@ -73,14 +74,9 @@ final class PaletteResetTests: XCTestCase {
 
     func testArmedReadsTapAgain() throws {
         let (palette, reset) = try openPalette()
-        func shown(_ name: String) -> Bool {
-            reset.children.first { $0.name == name }?.isEnabled ?? false
-        }
-        XCTAssertTrue(shown("petal-label"))
-        XCTAssertFalse(shown("petal-label-armed"))
-
+        XCTAssertEqual(palette.control(named: "palette-reset")?.isArmed, false)
         _ = palette.handleTap(reset)
-        XCTAssertFalse(shown("petal-label"))
-        XCTAssertTrue(shown("petal-label-armed"))
+        XCTAssertEqual(palette.control(named: "palette-reset")?.isArmed, true,
+                       "the armed petal must say Tap again")
     }
 }

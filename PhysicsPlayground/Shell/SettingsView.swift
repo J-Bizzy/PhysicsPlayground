@@ -8,6 +8,7 @@
 //  `-settingsOpen 1`.
 //
 
+import RenderKit
 import SwiftUI
 
 struct SettingsView: View {
@@ -23,27 +24,20 @@ struct SettingsView: View {
                 Text("Settings")
                     .font(DesignTokens.TypeScale.cardTitle)
 
-                PanelSection("Sound") {
-                    row("Effects volume") {
-                        // The ends say which way is louder, as the system's own
-                        // volume control does.
-                        Slider(value: $settings.masterVolume, in: 0...1) {
-                            Text("Effects volume")
-                        } minimumValueLabel: {
-                            Image(systemName: "speaker.fill")
-                                .foregroundStyle(.secondary)
-                        } maximumValueLabel: {
-                            Image(systemName: "speaker.wave.3.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Toggle("Lab room tone", isOn: $settings.ambientAudio)
-                        .font(DesignTokens.TypeScale.control)
+                ControlSection("Sound") {
+                    ControlSlider("Effects volume", systemImage: "speaker.wave.2.fill",
+                                  range: 0...1,
+                                  read: { settings.masterVolume },
+                                  write: { settings.masterVolume = $0 },
+                                  format: { "\(Int(($0 * 100).rounded())) %" })
+                    ControlToggle("Lab room tone", systemImage: "waveform",
+                                  presentation: .row, isOn: $settings.ambientAudio)
                 }
 
-                PanelSection("Time Capsule") {
-                    Toggle("Record the last 30 seconds", isOn: $settings.timeCapsule)
-                        .font(DesignTokens.TypeScale.control)
+                ControlSection("Time Capsule") {
+                    ControlToggle("Record the last 30 seconds",
+                                  systemImage: "clock.arrow.circlepath",
+                                  presentation: .row, isOn: $settings.timeCapsule)
                     caption("Every lab remembers what just happened. Pause and "
                             + "a reel appears — pinch it to draw out a rail, "
                             + "then scrub the whole room backwards and walk "
@@ -55,18 +49,6 @@ struct SettingsView: View {
             }
             .padding(DesignTokens.Panel.outerPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    // MARK: Rows
-
-    @ViewBuilder
-    private func row(_ label: String,
-                     @ViewBuilder control: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(DesignTokens.TypeScale.label)
-            control()
         }
     }
 

@@ -10,6 +10,7 @@
 
 import XCTest
 import RealityKit
+import RenderKit
 @testable import PhysicsPlayground
 
 @MainActor
@@ -111,19 +112,19 @@ final class BloomPetalTests: XCTestCase {
                        "petals fired the wrong actions, or fired extra ones")
     }
 
-    /// The walk-up contract: a pinch lands on the glyph or the casing,
-    /// not on the petal root, and must still resolve to the petal.
-    func testATapOnAPetalsChildResolvesToThePetal() throws {
+    /// A petal is one target: the family's glass button, with no glyph or
+    /// casing beneath it for a pinch to land on instead.
+    func testAPetalIsOneTargetWithNothingBeneathToMiss() throws {
         let counter = Counter()
         let bloom = Bloom()
         bloom.retarget("launcher", petals: [petal("Clear", counter)], grip: nil)
         reveal(bloom)
 
         let petalEntity = try entity(bloom, named: "Clear")
-        let child = try XCTUnwrap(petalEntity.children.first,
-                                  "a petal should have a glyph to hit")
-
-        XCTAssertTrue(bloom.handleTap(child))
+        XCTAssertTrue(petalEntity.children.isEmpty,
+                      "a petal grew a child a pinch could land on")
+        XCTAssertTrue(ControlAttachment.isControl(petalEntity))
+        XCTAssertTrue(bloom.handleTap(petalEntity))
         XCTAssertEqual(counter.fired, ["Clear"])
     }
 
@@ -203,9 +204,8 @@ final class BloomPetalTests: XCTestCase {
                       "An unavailable petal must still be in the ring.")
         let petalEntity = try entity(bloom, named: "Clear")
         XCTAssertTrue(petalEntity.isEnabled)
-        let opacity = petalEntity.components[OpacityComponent.self]?.opacity
-        XCTAssertNotNil(opacity)
-        XCTAssertLessThan(opacity ?? 1, 0.9, "It must read as unavailable.")
+        XCTAssertEqual(bloom.control(named: "Clear")?.isEnabled, false,
+                       "It must read as unavailable.")
     }
 
     // MARK: Confirmation

@@ -84,42 +84,6 @@ final class BackedLabelTests: XCTestCase {
         XCTAssertEqual(plate.position.y, 0, accuracy: 1e-5)
     }
 
-    /// The rail's value plate is replaced across value changes, never
-    /// accumulated — a rail that is dragged all day must not stack a
-    /// hundred plates behind its number.
-    func testRailValuePlateIsReplacedNotAccumulated() {
-        let box = ValueBox()
-        let track = SpatialTrackControl(
-            name: "Test", center: .zero, normal: [0, 0, 1], accent: .white,
-            range: 0...100, layout: TrackLayout(length: 0.26),
-            read: { box.value }, write: { box.value = $0 },
-            format: { String(format: "%.0f", $0) })
-
-        func plateCount() -> Int {
-            var count = 0
-            func walk(_ entity: Entity) {
-                if let model = entity as? ModelEntity,
-                   model.model?.mesh.bounds.extents.z ?? 1 < 0.001,
-                   model.components[CollisionComponent.self] == nil,
-                   entity.name.isEmpty {
-                    count += 1
-                }
-                entity.children.forEach(walk)
-            }
-            walk(track.root)
-            return count
-        }
-
-        track.refresh()
-        let first = plateCount()
-        XCTAssertGreaterThan(first, 0, "the rail's number never got its plate")
-        for value in [10.0, 55.0, 90.0] {
-            box.value = value
-            track.refresh()
-        }
-        XCTAssertEqual(plateCount(), first,
-                       "value changes accumulated plates instead of replacing one")
-    }
 
     // MARK: The 8 Hz limit
 

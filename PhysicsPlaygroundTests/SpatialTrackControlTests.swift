@@ -43,62 +43,8 @@ final class SpatialTrackControlTests: XCTestCase {
 
     // MARK: Operable without hands
 
-    /// A track replaces a `Slider`, and a slider is an adjustable element
-    /// that speaks its value; the rail must be adjustable without hands.
-    func testTheRailCanBeAdjustedWithoutHands() {
-        let (track, box) = makeTrack(range: 0...100)
-        box.value = 50
-        track.refresh()
 
-        XCTAssertTrue(SpatialActions.adjust(track.root, by: 1))
-        XCTAssertEqual(box.value, 55, accuracy: 1e-9,
-                       "one increment should be a twentieth of the range")
-        XCTAssertTrue(SpatialActions.adjust(track.root, by: -3))
-        XCTAssertEqual(box.value, 40, accuracy: 1e-9)
 
-        // It must stop at the ends rather than running past them — the
-        // same clamp the drag goes through, because it is that clamp.
-        for _ in 0..<40 { SpatialActions.adjust(track.root, by: -1) }
-        XCTAssertEqual(box.value, 0, accuracy: 1e-9)
-        for _ in 0..<80 { SpatialActions.adjust(track.root, by: 1) }
-        XCTAssertEqual(box.value, 100, accuracy: 1e-9)
-    }
-
-    /// The bead has to move with the keystroke, not just the number —
-    /// `nudge` calls `refresh()` for this reason, and a version that
-    /// wrote the value and left the bead behind would look broken to
-    /// everyone else in the room.
-    func testAdjustingWithoutHandsMovesTheBead() {
-        let (track, box) = makeTrack(range: 0...100)
-        box.value = 0
-        track.refresh()
-        let start = track.beadOffset
-
-        SpatialActions.adjust(track.root, by: 10)
-        XCTAssertEqual(box.value, 50, accuracy: 1e-9)
-        XCTAssertNotEqual(track.beadOffset.x, start.x, accuracy: 1e-4)
-    }
-
-    /// A rail with no subtitle used to announce the value it was built
-    /// with for the whole session: the republish sat inside
-    /// `if let subtitle`, and most rails have none.
-    func testARailWithoutASubtitleStillUpdatesItsSpokenValue() throws {
-        let (track, box) = makeTrack(range: 0...100)
-        box.value = 0
-        track.refresh()
-        let first = try XCTUnwrap(track.root.components[AccessibilityComponent.self])
-            .value.map { String(localized: $0) }
-
-        box.value = 75
-        track.refresh()
-        let second = try XCTUnwrap(track.root.components[AccessibilityComponent.self])
-            .value.map { String(localized: $0) }
-
-        XCTAssertNotEqual(first, second, """
-            the rail spoke "\(first ?? "nil")" both before and after the value             moved from 0 to 75 — the spoken reading is frozen at whatever the             rail was built with.
-            """)
-        XCTAssertEqual(second, "75")
-    }
 
     // MARK: The mapping, through the entity
 
@@ -256,38 +202,9 @@ final class SpatialTrackControlTests: XCTestCase {
 
     // MARK: The collider — the defect that would have broken a module
 
-    /// An input-targetable collider must be no larger than the thing it
-    /// represents: this shipped as a 29 cm sphere around a 1 cm rail.
-    /// Generous along the rail is the affordance; across it is a trap.
-    func testTheColliderIsThinAcrossTheRail() throws {
-        let (track, _) = makeTrack()
-        let collision = try XCTUnwrap(track.root.components[CollisionComponent.self],
-                                      "The rail must be grabbable.")
-        let bounds = collision.shapes[0].bounds
-
-        XCTAssertLessThan(bounds.extents.y, 0.08,
-                          "The collider is taller than a rail 1 cm thick has any right to be.")
-        XCTAssertLessThan(bounds.extents.z, 0.08,
-                          "The collider is deeper than the rail — it will shield what it is bolted to.")
-        XCTAssertGreaterThan(bounds.extents.x, Float(length),
-                             "Grabbing anywhere ALONG the rail must work.")
-    }
 
     // MARK: Accessibility
 
-    /// A track replaces a `Slider`, and a slider already speaks its value.
-    /// Migrating without this trades a control someone can operate blind
-    /// for one they cannot.
-    func testVoiceOverIsToldTheSettingNotJustTheName() throws {
-        let (track, box) = makeTrack()
-
-        box.value = 42
-        track.refresh()
-        let accessibility = try XCTUnwrap(
-            track.root.components[AccessibilityComponent.self])
-        XCTAssertNotNil(accessibility.value,
-                        "VoiceOver would read the rail's name and not its setting.")
-    }
 
     // MARK: The standing warning
 

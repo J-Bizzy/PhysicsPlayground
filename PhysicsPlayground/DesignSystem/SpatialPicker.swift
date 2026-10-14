@@ -2,9 +2,10 @@
 //  SpatialPicker.swift
 //  Physics Playground — Design System
 //
-//  The app's only N-way picker: pinch a petal, a fan of labelled discs
-//  unfolds in the room, pick one, it folds. Geometry is shared in
-//  `RenderKit.FanLayout`, where it is tested.
+//  The app's only N-way picker: pinch a petal, a fan of the family's
+//  toggles unfolds in the room — the current choice reads as selected —
+//  pick one, it folds. Geometry is shared in `RenderKit.FanLayout`, where
+//  it is tested; the fan widens itself until no two choices touch.
 //
 //  Taps resolve by entity identity, not by parsing the entity's name.
 //
@@ -32,9 +33,8 @@ struct PickerChoice: Identifiable, Equatable {
 
 @MainActor
 final class SpatialPicker {
-    /// The lateral span of one disc's touch target (wider than the 0.052 m
-    /// face), and the number a fan must space its discs by — named here so
-    /// `FanLayout` and its tests cannot disagree with the collider.
+    /// The narrowest a choice's footprint is allowed to be in a fan, and
+    /// the number `FanLayout`'s tests space discs by.
     static let colliderSpan: Float = 0.068
 
     let root = Entity()
@@ -43,13 +43,11 @@ final class SpatialPicker {
     var onSelect: ((String) -> Void)?
 
     /// Which choice is current, read every frame — a closure, not a stored
-    /// id, so the model stays the truth and a reset moves the lit disc.
+    /// id, so the model stays the truth and a reset moves the lit choice.
     var selectedID: (() -> String?)?
 
-    /// Spoken before each choice's label, so a fan of shapes and a fan of
-    /// materials don't both just announce "Cube".
-    private let accessibilityNoun: String
-    private let layout: FanLayout
+    private let requestedLayout: FanLayout
+    private var layout: FanLayout
     /// A permanent switch bank rather than a menu: it starts open and
     /// choosing does not fold it away. For a small set changed often whose
     /// current value must stay visible (Orbital Mechanics' clock speed).
@@ -59,29 +57,22 @@ final class SpatialPicker {
     private struct Disc {
         let id: String
         let label: String
-        let entity: ModelEntity
-        /// The ring behind the face, lit when this choice is the current
-        /// one — the same device Bloom's petals use to carry meaning.
-        let rim: ModelEntity
-        /// Last painted state, so an unchanged fan writes no materials.
-        var wasSelected: Bool?
+        let entity: Entity
+        let control: RoomControl
     }
     private var discs: [Disc] = []
 
-    private let litRim: UnlitMaterial
-    private let dimRim: UnlitMaterial
-
+    /// `accessibilityNoun` and `accent` are kept for callers; the choice's
+    /// own name is what VoiceOver reads, and selection is the system's
+    /// selected platter.
     init(accessibilityNoun: String,
          choices: [PickerChoice] = [],
          staysOpen: Bool = false,
          accent: UIColor = .white,
          layout: FanLayout = FanLayout()) {
-        self.accessibilityNoun = accessibilityNoun
+        self.requestedLayout = layout
         self.layout = layout
         self.staysOpen = staysOpen
-        self.litRim = UnlitMaterial(color: accent)
-        let dim = Materials.unlit(UIColor(white: 0.30, alpha: 1), opacity: 0.55)
-        self.dimRim = dim
         root.isEnabled = false
         setChoices(choices)
     }
@@ -93,17 +84,36 @@ final class SpatialPicker {
         for disc in discs { disc.entity.removeFromParent() }
         discs.removeAll()
         for choice in choices {
-            let (disc, rim) = makeDisc(choice)
-            root.addChild(disc)
+            let (entity, control) = makeDisc(choice)
+            root.addChild(entity)
             discs.append(Disc(id: choice.id, label: choice.label,
-                              entity: disc, rim: rim))
+                              entity: entity, control: control))
         }
+        // As wide as the widest choice needs, never narrower than asked.
+        let itemSpan = Double(max(
+            2 * RoomControlFootprint.halfWidth(forLongestOf: choices.map(\.label)),
+            Self.colliderSpan))
+        let spread = FanLayout.spread(
+            count: choices.count, itemSpan: itemSpan,
+            reach: requestedLayout.reach,
+            verticalScale: requestedLayout.verticalScale,
+            lift: requestedLayout.lift, stagger: requestedLayout.stagger,
+            clearance: 0.08,
+            maxSpan: max(requestedLayout.span, 150 * .pi / 180))
+        layout = spread.span < requestedLayout.span && spread.reach <= requestedLayout.reach
+            ? requestedLayout : spread
         isOpen = staysOpen
         openness = staysOpen ? 1 : 0
         root.isEnabled = staysOpen && !choices.isEmpty
     }
 
     var isEmpty: Bool { discs.isEmpty }
+
+    /// What the choice `id` is showing — for tests, which cannot read the
+    /// glass.
+    func control(for id: String) -> RoomControl? {
+        discs.first { $0.id == id }?.control
+    }
 
     func toggle() { isOpen.toggle() }
     func open() { isOpen = true }
@@ -119,7 +129,7 @@ final class SpatialPicker {
         root.position = anchor
 
         // Yaw only — a fan that pitched to face a viewer looking down at
-        // it would tip its discs edge-on to the room.
+        // it would tip its choices edge-on to the room.
         if let viewer, let facing = yaw(facing: viewer, from: anchor) {
             root.orientation = facing
         }
@@ -132,19 +142,7 @@ final class SpatialPicker {
             disc.entity.position = SIMD3<Float>(placement.offset)
             disc.entity.scale = SIMD3(repeating: Float(placement.scale))
             disc.entity.isEnabled = placement.isVisible
-
-            // Repaint only on change — a material write per disc per frame
-            // is the defect this codebase sweeps out of its renderers.
-            guard selectedID != nil else { continue }
-            let selected = disc.id == current
-            if disc.wasSelected != selected {
-                discs[index].wasSelected = selected
-                disc.rim.model?.materials = [selected ? litRim : dimRim]
-                // Republish rather than rebuild: a fresh component carries
-                // empty systemActions and strips Activate from the disc.
-                SpatialActions.republish(
-                    value: selected ? "selected" : "not selected", on: disc.entity)
-            }
+            disc.control.setOn(selectedID != nil && disc.id == current)
         }
 
         // Anchor in world space, not the argument: `anchor` is in the
@@ -160,9 +158,7 @@ final class SpatialPicker {
         var current: Entity? = entity
         while let candidate = current {
             if let match = discs.first(where: { $0.entity === candidate }) {
-                onSelect?(match.id)
-                SoundPalette.play(.chime, on: candidate, volume: 0.5)
-                if !staysOpen { isOpen = false }
+                choose(match.id, on: candidate)
                 return true
             }
             if candidate === root { return false }
@@ -171,69 +167,27 @@ final class SpatialPicker {
         return false
     }
 
-    private func makeDisc(_ choice: PickerChoice) -> (ModelEntity, ModelEntity) {
-        let disc = ModelEntity(
-            mesh: Primitives.cylinder(height: 0.005, radius: 0.026),
-            materials: [Materials.frostedGlass()])
-        disc.name = "picker-\(choice.id)"
-        disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        disc.components.set(GroundingShadowComponent(castsShadow: true))
+    private func choose(_ id: String, on entity: Entity) {
+        onSelect?(id)
+        SoundPalette.play(.chime, on: entity, volume: 0.5)
+        if !staysOpen { isOpen = false }
+    }
 
-        // The glass edge, proud of the face all round. It sits under the
-        // brighter coloured selection ring — the hairline and the ring must
-        // not be the same cue.
-        let border = ModelEntity(
-            mesh: Primitives.cylinder(height: 0.0042,
-                                    radius: 0.026 + Materials.glassEdgeInset),
-            materials: [Materials.glassEdge()])
-        disc.addChild(border)
-
-        // The selection ring, behind the face. Starts dim; `update` lights
-        // whichever disc the model says is current.
-        let rim = ModelEntity(
-            mesh: Primitives.cylinder(height: 0.003, radius: 0.0302),
-            materials: [dimRim])
-        rim.position = [0, -0.002, 0]
-        disc.addChild(rim)
-
-        if let symbol = choice.symbol, let texture = Bloom.symbolTexture(symbol) {
-            var iconMaterial = UnlitMaterial()
-            iconMaterial.color = .init(tint: .white, texture: .init(texture))
-            iconMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
-            let icon = ModelEntity(
-                mesh: Primitives.plane(width: 0.028, height: 0.028),
-                materials: [iconMaterial])
-            icon.position = [0, 0.004, 0]
-            icon.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
-            disc.addChild(icon)
-        }
-
-        let label = HubScene.namePlate(choice.label,
-                                       accent: UIColor(white: 0.95, alpha: 1),
-                                       size: PlateStyle.labelSize)
-        label.position = [0, 0.005, 0.042]
-        label.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
-        disc.addChild(label)
-
-        disc.components.set(InputTargetComponent())
-        // A disc is flat: the collider box is thin in Y so it does not
-        // become a slab hanging above and below the fan. The label is part
-        // Of the target (a second box), clamped to `colliderSpan` laterally
-        // so a long name does not push neighbouring targets into each other.
-        let labelSpan = min(HubScene.namePlateWidth(choice.label, size: PlateStyle.labelSize),
-                            Self.colliderSpan)
-        disc.components.set(CollisionComponent(shapes: [
-            Primitives.collisionBox(size: [Self.colliderSpan, 0.038, Self.colliderSpan]),
-            Primitives.collisionBox(size: [labelSpan, 0.020, 0.026], offset: [0, 0.005, 0.042]),
-        ]))
-        disc.components.set(HoverEffectComponent())
-        SpatialActions.attach(
-            to: disc, label: "\(accessibilityNoun): \(choice.label)",
-            activate: { [weak self, weak disc] in
-                guard let self, let disc else { return }
-                _ = self.handleTap(disc)
+    private func makeDisc(_ choice: PickerChoice) -> (Entity, RoomControl) {
+        let control = RoomControl(title: choice.label,
+                                  systemImage: choice.symbol ?? "circle")
+        // Found again by id when pressed: the view's closure must not hold
+        // the entity that holds the view.
+        let entity = ControlAttachment.control(
+            control, kind: .toggle(iconOnly: false),
+            name: "picker-\(choice.id)",
+            press: { [weak self] in
+                guard let self, self.root.isEnabled,
+                      let disc = self.discs.first(where: { $0.id == choice.id })
+                else { return }
+                self.choose(disc.id, on: disc.entity)
             })
-        disc.isEnabled = false
-        return (disc, rim)
+        entity.isEnabled = false
+        return (entity, control)
     }
 }

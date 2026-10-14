@@ -32,7 +32,9 @@ final class Palette {
     private var beadLabel: Entity?
     var beadEntity: Entity { bead }
     private var slots: [(id: String, holder: Entity, animate: (Double) -> Void)] = []
-    private var petals: [ModelEntity] = []
+    private var petals: [Entity] = []
+    /// What each petal shows, by petal name.
+    private var petalControls: [String: RoomControl] = [:]
 
     /// 0 folded, 1 open. Everything else is derived from this.
     private(set) var openness: Float = 0
@@ -84,18 +86,9 @@ final class Palette {
     /// bar's Reset asks first and so does every Clear plate; a petal one
     /// pinch from wiping a bench that survives relaunch did not.
     private(set) var resetArmed: Double?
-    private var resetPetal: ModelEntity?
-    /// The petal's lit face and its two names, swapped by `isEnabled` —
-    /// built once, never rebuilt on the per-frame path.
-    private var resetLamp: Entity?
-    private var resetRestLabel: Entity?
-    private var resetArmedLabel: Entity?
 
     /// Read every frame so the pause petal says what it will do.
     var isPaused: (() -> Bool)?
-    private var pausePetal: ModelEntity?
-    private var pauseRest: [Entity] = []
-    private var pauseResume: [Entity] = []
     private var shownPaused = false
 
     /// Arms the reset petal without a pinch and holds it there — for the
@@ -106,15 +99,7 @@ final class Palette {
     }
 
     private func paintReset() {
-        let armed = resetArmed != nil
-        resetLamp?.isEnabled = armed
-        resetRestLabel?.isEnabled = !armed
-        resetArmedLabel?.isEnabled = armed
-        if let resetPetal {
-            SpatialActions.republish(
-                value: armed ? "armed — tap again to confirm" : "button",
-                on: resetPetal)
-        }
+        petalControls["palette-reset"]?.setArmed(resetArmed != nil)
     }
 
     /// One ring slot's identity: the module, its short label, its color.
@@ -183,30 +168,23 @@ final class Palette {
 
         // Pause and reset keep the outer spots hands have learned; home and dim
         // ride the ring because folded petals cost nothing at rest.
-        petals = [
-            Self.makePetal(name: "home", symbol: "square.grid.2x2.fill"),
-            Self.makePetal(name: "pause", symbol: "pause.fill"),
-            Self.makePetal(name: "dim", symbol: "circle.lefthalf.filled"),
-            Self.makePetal(name: "settings", symbol: "gearshape.fill"),
-            Self.makePetal(name: "reset", symbol: "arrow.counterclockwise"),
-        ]
-        if let reset = petals.last {
-            resetPetal = reset
-            decorateReset(reset)
-        }
-        if let pause = petals.first(where: { $0.name == "palette-pause" }) {
-            decoratePause(pause)
-        }
-        petals.forEach { petal in
+        for (name, symbol) in [("home", "square.grid.2x2.fill"),
+                               ("pause", "pause.fill"),
+                               ("dim", "circle.lefthalf.filled"),
+                               ("settings", "gearshape.fill"),
+                               ("reset", "arrow.counterclockwise")] {
+            let control = RoomControl(title: name.capitalized, systemImage: symbol)
+            let petalName = "palette-\(name)"
+            // Through `handle(name:)`, where the ring's own fold rules live.
+            let petal = ControlAttachment.control(
+                control,
+                kind: .button(name == "reset" ? .destructive : .standard, iconOnly: true),
+                name: petalName,
+                press: { [weak self] in _ = self?.handle(name: petalName) })
+            petal.isEnabled = false
             root.addChild(petal)
-            // Through `handleTap`, where the ring's own fold rules live.
-            SpatialActions.attach(
-                to: petal, label: petal.name.replacingOccurrences(
-                    of: "palette-", with: "").capitalized,
-                activate: { [weak self, weak petal] in
-                    guard let self, let petal else { return }
-                    _ = self.handleTap(petal)
-                })
+            petals.append(petal)
+            petalControls[petalName] = control
         }
     }
 
@@ -338,6 +316,12 @@ final class Palette {
     /// Routes a tap. Returns true if the palette consumed it.
     func handleTap(_ entity: Entity) -> Bool {
         guard let name = Self.ownName(of: entity, under: root) else { return false }
+        return handle(name: name)
+    }
+
+    /// One press on the part of that name: a petal's own action, and the
+    /// end of every walk-up from a tapped entity.
+    private func handle(name: String) -> Bool {
         if name == bead.name {
             isOpen.toggle()
             SoundPalette.play(.pop, on: bead, volume: 0.5)
@@ -378,6 +362,10 @@ final class Palette {
     }
 
     func close() { isOpen = false }
+
+    /// What the named petal is showing — for tests, which cannot read the
+    /// glass.
+    func control(named name: String) -> RoomControl? { petalControls[name] }
 
     private static func ownName(of entity: Entity, under root: Entity) -> String? {
         var current: Entity? = entity
@@ -436,130 +424,13 @@ final class Palette {
         return ModelEntity(mesh: mesh, materials: [Materials.unlit(color, opacity: 0.55)])
     }
 
-    private static let petalLabelName = "petal-label"
-    private static let petalLabelPosition = SIMD3<Float>(0, 0.005, 0.047)
-    private static let petalLabelOrientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
-
-    /// The reset petal's armed state: a face in the destructive red over the
-    /// casing (red is the one tinted petal colour — `destructiveUI`), and
-    /// "Tap again" in place of its name, as an armed Clear plate reads.
-    private func decorateReset(_ petal: ModelEntity) {
-        let lamp = ModelEntity(
-            mesh: Primitives.cylinder(height: 0.0055, radius: 0.0242),
-            materials: [Materials.unlit(DesignTokens.Palette.destructiveUI, opacity: 0.9)])
-        lamp.isEnabled = false
-        petal.addChild(lamp)
-        resetLamp = lamp
-
-        resetRestLabel = petal.children.first { $0.name == Self.petalLabelName }
-        let armed = HubScene.namePlate(SpatialActionBank.armedLabel,
-                                       accent: UIColor(white: 0.95, alpha: 1),
-                                       size: PlateStyle.labelSize)
-        armed.name = Self.petalLabelName + "-armed"
-        armed.position = Self.petalLabelPosition
-        armed.orientation = Self.petalLabelOrientation
-        armed.isEnabled = false
-        petal.addChild(armed)
-        resetArmedLabel = armed
-    }
-
-    private static let petalIconName = "petal-icon"
-
-    /// A petal's glyph, lying on its face.
-    private static func makePetalIcon(_ symbol: String) -> ModelEntity? {
-        guard let texture = Bloom.symbolTexture(symbol) else { return nil }
-        var iconMaterial = UnlitMaterial()
-        iconMaterial.color = .init(tint: .white, texture: .init(texture))
-        iconMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
-        let icon = ModelEntity(
-            mesh: Primitives.plane(width: 0.026, height: 0.026),
-            materials: [iconMaterial])
-        icon.name = petalIconName
-        icon.position = [0, 0.004, 0]
-        icon.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
-        return icon
-    }
-
-    /// The pause petal's other face: a play glyph and "Resume", shown while
-    /// the lab is paused. It said "Pause" either way until 2026-10-14, so
-    /// the petal that resumes a paused room offered to pause it.
-    private func decoratePause(_ petal: ModelEntity) {
-        pauseRest = petal.children.filter {
-            $0.name == Self.petalIconName || $0.name == Self.petalLabelName
-        }
-        var resume: [Entity] = []
-        if let icon = Self.makePetalIcon("play.fill") {
-            icon.isEnabled = false
-            petal.addChild(icon)
-            resume.append(icon)
-        }
-        let plate = HubScene.namePlate("Resume", accent: UIColor(white: 0.95, alpha: 1),
-                                       size: PlateStyle.labelSize)
-        plate.position = Self.petalLabelPosition
-        plate.orientation = Self.petalLabelOrientation
-        plate.isEnabled = false
-        petal.addChild(plate)
-        resume.append(plate)
-        pauseResume = resume
-        pausePetal = petal
-    }
-
     private func showPaused(_ paused: Bool) {
         guard paused != shownPaused else { return }
         shownPaused = paused
-        pauseRest.forEach { $0.isEnabled = !paused }
-        pauseResume.forEach { $0.isEnabled = paused }
-        if let pausePetal,
-           var accessibility = pausePetal.components[AccessibilityComponent.self] {
-            accessibility.label = LocalizedStringResource(
-                stringLiteral: paused ? "Resume" : "Pause")
-            pausePetal.components.set(accessibility)
-        }
-    }
-
-    private static func makePetal(name: String, symbol: String) -> ModelEntity {
-        var casing = PhysicallyBasedMaterial()
-        casing.baseColor = .init(tint: UIColor(white: 0.06, alpha: 1))
-        casing.roughness = 0.28
-        casing.clearcoat = .init(floatLiteral: 1.0)
-        casing.blending = .transparent(opacity: .init(floatLiteral: 0.92))
-        let disc = ModelEntity(
-            mesh: Primitives.cylinder(height: 0.005, radius: 0.024),
-            materials: [casing])
-        disc.name = "palette-\(name)"
-        disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        disc.components.set(GroundingShadowComponent(castsShadow: true))
-        if let icon = makePetalIcon(symbol) {
-            disc.addChild(icon)
-        }
-        // The petal's name beneath it. The disc is rotated π/2 about X, so
-        // "below, facing the viewer" is local +Z with the icon's counter-rotation.
-        let plate = HubScene.namePlate(name.capitalized,
-                                       accent: UIColor(white: 0.95, alpha: 1),
-                                       size: PlateStyle.labelSize)
-        plate.name = petalLabelName
-        plate.position = petalLabelPosition
-        plate.orientation = petalLabelOrientation
-        disc.addChild(plate)
-
-        disc.components.set(InputTargetComponent())
-        // The label is part of the target, clamped to the petal pitch so it
-        // never overlaps the petal beside it.
-        let petalLabelSpan = min(
-            HubScene.namePlateWidth(name.capitalized, size: PlateStyle.labelSize),
-            Self.petalColliderSpan)
-        disc.components.set(CollisionComponent(shapes: [
-            Primitives.collisionSphere(radius: 0.034),
-            Primitives.collisionBox(size: [petalLabelSpan, 0.020, 0.024], offset: [0, 0.005, 0.047]),
-        ]))
-        disc.components.set(HoverEffectComponent())
-        // Label only; the action is attached in `init`, where there is a `self`.
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(stringLiteral: name)
-        disc.components.set(accessibility)
-        disc.isEnabled = false
-        return disc
+        // The pause petal says what it will do: Resume while paused.
+        guard let control = petalControls["palette-pause"] else { return }
+        control.title = paused ? "Resume" : "Pause"
+        control.systemImage = paused ? "play.fill" : "pause.fill"
     }
 }
 

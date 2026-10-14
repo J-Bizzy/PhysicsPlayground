@@ -465,17 +465,22 @@ final class CircuitsRenderer {
         render(model, dt: dt)
     }
 
-    /// Acknowledge a grab: a light pulse and a tick on the part just taken.
+    /// Acknowledge a grab: the live glow and a tick on the part just taken.
+    /// The glow stays until `flashRelease`.
     func flashPickup(id: UUID) {
         guard let holder = visuals[id]?.holder else { return }
+        if let previous = pulsedGrabEntity, previous !== holder {
+            LiveGlow.set(false, on: previous)
+        }
         pulsedGrabEntity = holder
-        PickupPulse.flash(on: holder)
+        LiveGlow.set(true, on: holder)
         SoundPalette.play(.grabTick, on: holder, volume: 0.2)
     }
 
     /// Answer a release, on whatever was last picked up.
     func flashRelease() {
         guard let entity = pulsedGrabEntity else { return }
+        LiveGlow.set(false, on: entity)
         SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
         pulsedGrabEntity = nil
     }

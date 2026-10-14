@@ -9,6 +9,7 @@
 //  nothing may be reachable only in space — so this window never blanks.
 //
 
+import RenderKit
 import SwiftUI
 
 struct HubView: View {
@@ -37,8 +38,9 @@ struct HubView: View {
                             .foregroundStyle(.orange)
                         Text("The Gallery couldn't open.")
                             .font(DesignTokens.TypeScale.footnote)
-                        Button("Try Again") { Task { await openGallery() } }
-                            .font(DesignTokens.TypeScale.footnote.weight(.semibold))
+                        ControlButton("Try Again", systemImage: "arrow.clockwise") {
+                            Task { await openGallery() }
+                        }
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
@@ -49,15 +51,10 @@ struct HubView: View {
                 // The way back, not the way in: the app launches into the gallery, so
                 // this is reached by putting the gallery away or by the Digital Crown,
                 // and it must reopen what the catalog lists.
-                Button {
+                ControlButton("Enter the Gallery", systemImage: "sparkles",
+                              emphasis: .prominent(.accentColor)) {
                     Task { await openGallery() }
-                } label: {
-                    Label("Enter the Gallery", systemImage: "sparkles")
-                        .font(.title3)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
                 }
-                .buttonStyle(.podProminent)
                 .accessibilityHint("Places the Gallery — the exhibit terraces — in your room")
 
                 RoomSensingNote()
@@ -71,17 +68,12 @@ struct HubView: View {
                 // The way out of the room entirely — the only `dismissImmersiveSpace`
                 // in the app. The palette's home petal leaves a lab; this leaves the
                 // room. Seen when the window is asked for while the gallery is up.
-                Button {
+                ControlButton("Put the Gallery away", systemImage: "xmark.circle") {
                     Task {
                         appModel.closeForDismissal()
                         await dismissImmersiveSpace()
                     }
-                } label: {
-                    Label("Put the Gallery away", systemImage: "xmark.circle")
-                        .font(DesignTokens.TypeScale.footnote)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
                 .accessibilityHint("Closes the room and returns to this window")
             }
 
@@ -196,41 +188,12 @@ private struct HubCatalogRow: View {
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
-        Button {
+        // One line: the name. The promise survives as the row's spoken hint.
+        ControlButton(module.title, systemImage: module.icon, fillsWidth: true) {
             appModel.go(to: module.id)
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: module.icon)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(module.accent)
-                    .frame(width: 28, height: 28)
-                    .background(module.accent.opacity(0.18),
-                                in: RoundedRectangle(cornerRadius: DesignTokens.Panel.chipRadius,
-                                                     style: .continuous))
-                // One line: the name. The promise survives as the row's spoken hint.
-                Text(module.title)
-                    .font(.callout)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.forward")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cardRadius, style: .continuous))
-        .hoverEffect()
-        // Named as one control, or VoiceOver reads the row as four things and a
-        // UI test cannot address it by name.
-        .accessibilityElement(children: .combine)
+        // Named, or a UI test cannot address the row.
         .accessibilityIdentifier("lab.\(module.id)")
-        .accessibilityLabel(module.title)
-        .accessibilityAddTraits(.isButton)
         .accessibilityHint("Opens \(module.title). \(HubDomain.promise(for: module.id))")
     }
 }

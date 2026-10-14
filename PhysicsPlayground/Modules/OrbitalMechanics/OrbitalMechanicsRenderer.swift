@@ -848,8 +848,12 @@ final class OrbitalMechanicsRenderer {
             // carries a held body, so its transform is written like any other.
             if orbiting.id == model.heldBodyID, pulsedGrabID != orbiting.id {
                 pulsedGrabID = orbiting.id
+                // Live while held: the glow stays until the hand lets go.
+                if let previous = pulsedGrabEntity, previous !== slot.entity {
+                    LiveGlow.set(false, on: previous)
+                }
                 pulsedGrabEntity = slot.entity
-                PickupPulse.flash(on: slot.entity)
+                LiveGlow.set(true, on: slot.entity)
                 SoundPalette.play(.grabTick, on: slot.entity, volume: 0.2)
             }
             slot.entity.position = SIMD3<Float>(orbiting.body.position) * scale
@@ -861,6 +865,7 @@ final class OrbitalMechanicsRenderer {
         }
         if model.heldBodyID == nil {
             if pulsedGrabID != nil, let entity = pulsedGrabEntity {
+                LiveGlow.set(false, on: entity)
                 SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
             }
             pulsedGrabID = nil

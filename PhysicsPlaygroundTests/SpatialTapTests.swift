@@ -67,18 +67,15 @@ final class SpatialTapTests: XCTestCase {
         XCTAssertEqual(log.state["field"], false)
     }
 
-    /// The plate carries a label as a child entity, and a pinch ray can
-    /// land on the label rather than the plate. The walk up the parent
-    /// chain is what makes the whole plate tappable rather than just the
-    /// slab underneath its text.
-    func testATapOnAPlatesLabelStillFlipsThePlate() throws {
+    /// The plate's name is inside its own glass now, not a child entity a
+    /// pinch could land on beside it: one target, no hole.
+    func testThePlateIsOneTargetWithItsNameInside() throws {
         let log = Log()
         let bank = makeBank(log)
         let target = try plate(bank, "lines")
-        let child = try XCTUnwrap(target.children.first,
-                                  "A plate should carry its label as a child.")
-
-        XCTAssertTrue(bank.handleTap(child))
+        XCTAssertTrue(target.children.isEmpty)
+        XCTAssertTrue(ControlAttachment.isControl(target))
+        XCTAssertTrue(bank.handleTap(target))
         XCTAssertEqual(log.toggled, ["lines"])
     }
 
@@ -168,17 +165,14 @@ final class SpatialTapTests: XCTestCase {
         XCTAssertEqual(log.selected, ["moon"])
     }
 
-    /// Same parent-chain walk as the bank: a disc carries its label and
-    /// its icon as children, and both are in front of the disc itself.
-    func testATapOnADiscsLabelStillChoosesIt() throws {
+    /// A choice's name is inside its own glass: one target, no hole.
+    func testAChoiceIsOneTargetWithItsNameInside() throws {
         let log = Log()
         let picker = makePicker(log)
-        let target = try disc(picker, "jupiter")
-        let child = try XCTUnwrap(target.children.first,
-                                  "A disc should carry its label as a child.")
-
-        XCTAssertTrue(picker.handleTap(child))
-        XCTAssertEqual(log.selected, ["jupiter"])
+        let target = try disc(picker, "moon")
+        XCTAssertTrue(target.children.isEmpty)
+        XCTAssertTrue(picker.handleTap(target))
+        XCTAssertEqual(log.selected, ["moon"])
     }
 
     func testThePickerRefusesTapsItDoesNotOwn() throws {

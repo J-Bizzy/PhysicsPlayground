@@ -14,36 +14,6 @@ import RealityKit
 @MainActor
 final class PlateStyleTests: XCTestCase {
 
-    func testBothBanksBuildTheSamePlateSilhouette() throws {
-        let layerBank = SpatialLayerBank(
-            accent: .white,
-            layers: [LayerSwitch(id: "grid", label: "Grid",
-                                 isOn: { true }, toggle: {})])
-        let actionBank = SpatialActionBank(
-            accent: .white,
-            actions: [.init(id: "clear", label: "Clear", symbol: "trash.slash",
-                            isAvailable: { true }, confirms: false, fire: {})])
-        for _ in 0..<40 {
-            layerBank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1.0 / 90.0)
-            actionBank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1.0 / 90.0)
-        }
-
-        let layerPlate = try XCTUnwrap(
-            layerBank.root.children.first { $0.name == "layer-grid" } as? ModelEntity)
-        let actionPlate = try XCTUnwrap(
-            actionBank.root.children.first { $0.name == "action-clear" } as? ModelEntity)
-
-        let layerExtents = try XCTUnwrap(layerPlate.model).mesh.bounds.extents
-        let actionExtents = try XCTUnwrap(actionPlate.model).mesh.bounds.extents
-
-        XCTAssertEqual(layerExtents.x, actionExtents.x, accuracy: 1e-5,
-                       "the two banks' plates differ in width")
-        XCTAssertEqual(layerExtents.y, actionExtents.y, accuracy: 1e-5,
-                       "the two banks' plates differ in height")
-        XCTAssertEqual(layerExtents.z, actionExtents.z, accuracy: 1e-5,
-                       "the two banks' plates differ in thickness — the exact "
-                       + "drift PlateStyle exists to close")
-    }
 
     // MARK: The nameplate sizes
 

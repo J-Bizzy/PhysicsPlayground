@@ -203,12 +203,17 @@ final class FieldRenderer {
         if let id = heldChargeID {
             if pulsedGrabID != id, let entity = chargeEntities[id] {
                 pulsedGrabID = id
+                // Live while held: the glow stays until the hand lets go.
+                if let previous = pulsedGrabEntity, previous !== entity {
+                    LiveGlow.set(false, on: previous)
+                }
                 pulsedGrabEntity = entity
-                PickupPulse.flash(on: entity)
+                LiveGlow.set(true, on: entity)
                 SoundPalette.play(.grabTick, on: entity, volume: 0.2)
             }
         } else {
             if pulsedGrabID != nil, let entity = pulsedGrabEntity {
+                LiveGlow.set(false, on: entity)
                 SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
             }
             pulsedGrabID = nil

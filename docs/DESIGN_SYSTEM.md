@@ -16,6 +16,47 @@ Physics colours are owned separately by `RenderKit.VectorPalette` (see
 
 ---
 
+## One control language (2026-10-14)
+
+Every control the app draws is one of four, from
+`Packages/RenderKit/Sources/RenderKit/Controls/`:
+
+| Control | What it is | Use it for |
+|---|---|---|
+| `ControlButton` | Stock bordered button at extra-large size: glass platter, system hover, an SF Symbol, ≥ 60 pt. Standard, **prominent** (one per surface, filled in a colour) or **destructive**, which can arm first ("Tap again", red), fire on a second press within 4 s, and disarm on its own. | A momentary act. |
+| `ControlToggle` | Stock button-style toggle. On is the system's **selected platter**, never a glow. `.row` presentation is a name and a system switch, for a settings list. | A display layer, a mode, an open tab, the current choice in a picker. |
+| `ControlSlider` | Name, live value and a stock slider, ≥ 60 pt tall. | A quantity with no extent of its own to stretch. |
+| `MoreButton` + `ControlPanel` | An ellipsis toggle, and the glass panel that holds what it opened. | Everything secondary. Nothing else folds a set of controls away. |
+
+**In the room they are the same views.** `ControlAttachment` hangs the
+family's SwiftUI view on an entity through `ViewAttachmentComponent`
+(visionOS 26), on its own capsule of glass. The owning primitive (a bank, a
+tab, a fan, a ring) positions, turns and folds the entity. SwiftUI draws it,
+hit-tests it, hovers it and reads it to VoiceOver. So a room control has **no
+mesh, no collider and no input target of its own**: the glass is the target,
+and nothing invisible stands in front of the apparatus. The owner tells the
+view what to show through a `RoomControl` and writes it only when it changes,
+because the per-frame path must not churn SwiftUI.
+`ControlLanguageCriterionTests` fails the build on a `ButtonStyle`,
+`.buttonStyle(`, `.toggleStyle(`, `Slider(`, `Toggle(` or `Picker(`
+anywhere in the app target. It also fails if a room control carries a mesh
+or a collider.
+
+**One glow, one meaning: live.** `LiveGlow` is a soft champagne aura (the
+app's accent, one hue). It appears around whatever a hand is holding, or
+around a slider while it is dragged, and nowhere else. The room version is
+light drawn from the inside of a sphere: the body occludes the near half
+and the glow shows as a rim, never as geometry. `LiveGlowTracker` keeps it
+on exactly one thing. It replaced `PickupPulse`, the one-shot grab flash.
+Lit lamps, open tabs, selected discs and the hub's focus pool all glowed in
+different senses before. They now read through the system's selected state
+or not at all.
+
+**Retired with it:** `PodButtonStyle` (`.podProminent`, `.podQuiet`),
+`PanelSection`, the machined verb plate, the frosted layer plate, the folding
+tab's energized glow, the picker's accent rim, the dark clear-coat petal, the
+bead-on-a-rail track and its extruded value text.
+
 ## The control vocabulary
 
 This is the part the previous drafts omitted entirely, and it is now the
@@ -93,7 +134,7 @@ default, not a canon — so there are several, and the choice carries meaning.
 | `energized(_:glow:)` | Lit energy | Charges, bobs, abstract physics objects |
 | `machined(_:)` | A built thing | Instruments, casings, apparatus (metallic stops at 0.62 — that is the point, not a parameter) |
 | `graphite`, `glossy` | Built, matte / built, polished | Structure and finished surfaces |
-| `frostedGlass(opacity:)` | visionOS glass | Plates, rails, panes |
+| `frostedGlass(opacity:)` | A dark, light-scattering scrim | Apparatus panes (the dielectric slab). Controls stand on stock glass, not this. |
 | `contrastLine(_:)` | A line that survives passthrough | Field lines and any drawn line — returns a **two-pass** (casing, core) pair |
 
 **Contours beat surfaces indoors, and casings beat glows.** A glowing band has

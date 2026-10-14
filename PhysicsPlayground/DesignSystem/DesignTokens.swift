@@ -130,7 +130,7 @@ enum DesignTokens {
 
         /// A whole flat window's container.
         static let windowRadius: CGFloat = 28
-        /// A titled section inside a window (`PanelSection`).
+        /// A titled section inside a window.
         static let cornerRadius: CGFloat = 20
         /// A floating card: readouts, catalog entries, the first-run hint.
         static let cardRadius: CGFloat = 14

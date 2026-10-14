@@ -1548,58 +1548,18 @@ final class HubScene {
     }
 }
 
-/// The button over the pad while a lab stands on it. The explicit
-/// `.hoverEffect` is load-bearing: `.buttonStyle(.plain)` gives up the
-/// platform highlight, and the bare default was invisible on device.
+/// The button over the pad while a lab stands on it: the lab's one
+/// primary action, filled in its accent.
 private struct HubLoadButton: View {
     let module: ModuleDescriptor
     let enter: () -> Void
 
     var body: some View {
-        Button(action: enter) {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle().fill(module.accent.gradient)
-                    Image(systemName: module.icon)
-                        // Semantic, so the glyph scales with Dynamic Type.
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 46, height: 46)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    // "Lab", the word the wearer reads everywhere else.
-                    Text("LOAD LAB")
-                        .font(.caption2.weight(.semibold))
-                        .tracking(1.7)
-                        .foregroundStyle(.secondary)
-                    Text(module.title)
-                        .font(.title2.weight(.semibold))
-                }
-
-                Image(systemName: "chevron.right")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(module.accent)
-            }
-            .padding(.leading, 13)
-            .padding(.trailing, 20)
-            .padding(.vertical, 11)
-            // Stroke inside the glass — a ring outside it reads as a second object.
-            .overlay {
-                Capsule().strokeBorder(module.accent.opacity(0.45), lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .contentShape(.hoverEffect, Capsule())
-        .hoverEffect(.highlight)
-        .hoverEffect { effect, isActive, _ in
-            effect.animation(.easeOut(duration: 0.15)) {
-                $0.scaleEffect(isActive ? 1.06 : 1)
-            }
-        }
-        .glassBackgroundEffect(in: Capsule())
-        .accessibilityLabel("Load \(module.title)")
-        .accessibilityHint("Opens \(module.title)")
+        ControlButton("Load \(module.title)", systemImage: module.icon,
+                      emphasis: .prominent(module.accent), action: enter)
+            .padding(6)
+            .glassBackgroundEffect(in: Capsule())
+            .accessibilityHint("Opens \(module.title)")
     }
 }
 
@@ -1611,37 +1571,21 @@ private struct HubUtilityBar: View {
     let openCatalog: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: ControlMetrics.spacing) {
             // The flat catalog's only door: `syncMainWindow` dismisses the main
             // window while the gallery is up, and nothing may be reachable only in
             // space.
-            Button(action: openCatalog) {
-                Image(systemName: "list.bullet.rectangle")
-                    .font(.title3)
-            }
-            .help("Lab list")
-            .accessibilityLabel("Lab list")
-            .accessibilityHint("Opens a flat list of every lab in a window")
-
-            Button(action: openSettings) {
-                Image(systemName: "gearshape.fill")
-                    .font(.title3)
-            }
-            .help("Settings")
-            .accessibilityLabel("Settings")
-            .accessibilityHint("Sound, room tone and the Time Capsule")
-
-            Button(action: openAbout) {
-                Image(systemName: "info.circle")
-                    .font(.title3)
-            }
-            .help("About")
-            .accessibilityLabel("About Physics Playground")
-            .accessibilityHint("Credits and version")
+            ControlButton("Lab list", systemImage: "list.bullet.rectangle",
+                          iconOnly: true, action: openCatalog)
+                .accessibilityHint("Opens a flat list of every lab in a window")
+            ControlButton("Settings", systemImage: "gearshape",
+                          iconOnly: true, action: openSettings)
+                .accessibilityHint("Sound, room tone and the Time Capsule")
+            ControlButton("About", systemImage: "info.circle",
+                          iconOnly: true, action: openAbout)
+                .accessibilityHint("Credits and version")
         }
-        .buttonStyle(.borderless)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(6)
         .glassBackgroundEffect(in: Capsule())
     }
 }

@@ -67,7 +67,9 @@ final class Bloom {
     let root = Entity()
 
     private var petals: [Petal] = []
-    private var petalEntities: [ModelEntity] = []
+    private var petalEntities: [Entity] = []
+    /// What each petal shows: armed, available.
+    private var petalControls: [RoomControl] = []
     private var grip: Grip?
     private var gripEntity: ModelEntity?
     /// The rail the bead travels: track line, end ticks, −/+ glyphs.
@@ -105,9 +107,6 @@ final class Bloom {
     // Sizes are in metres at one metre, then scaled by distance so the
     // bloom holds constant angular size at any range. Sized and placed to
     // Clear the physics, not sit beside it.
-    private static let petalRadius: Float = 0.030
-    /// The glyph plane's entity name, so the armed checkmark can find it.
-    private static let iconName = "bloom-petal-icon"
     private static let ringRadius: Float = 0.235
     /// The visible rail the bead travels; the bead's position is the value
     /// — min at the object, max at the far tick.
@@ -151,21 +150,26 @@ final class Bloom {
         self.grip = grip
         petalEntities.forEach { $0.removeFromParent() }
         petalEntities = []
+        petalControls = []
         petalReveals = Array(repeating: 0, count: petals.count)
 
         for petal in petals {
-            let entity = Self.makePetal(petal)
+            let control = RoomControl(title: petal.name, systemImage: petal.symbol)
+            // Through `press(named:)`, not straight at `petal.action`: that
+            // path checks availability and arms a `confirms` petal instead of
+            // firing. Found again by name: the view's closure must not hold
+            // the entity that holds the view.
+            let name = "bloom-\(petal.name)"
+            let entity = ControlAttachment.control(
+                control,
+                kind: .button(Self.isDestructive(petal) ? .destructive : .standard,
+                              iconOnly: true),
+                name: name,
+                press: { [weak self] in _ = self?.press(named: name) })
+            entity.isEnabled = false
             root.addChild(entity)
             petalEntities.append(entity)
-            // Through `handleTap`, not straight at `petal.action`: the tap
-            // path checks availability and arms a `confirms` petal instead
-            // of firing.
-            SpatialActions.attach(
-                to: entity, label: petal.name,
-                activate: { [weak self, weak entity] in
-                    guard let self, let entity else { return }
-                    _ = self.handleTap(entity)
-                })
+            petalControls.append(control)
         }
 
         gripEntity?.removeFromParent()
@@ -249,6 +253,8 @@ final class Bloom {
 
         layoutPetals(dt: dt)
         layoutGrip(scale: scale)
+        // The bead under a hand is live.
+        if let gripEntity { LiveGlow.set(gripDrag != nil, on: gripEntity) }
     }
 
     private func layoutPetals(dt: Double) {
@@ -289,7 +295,7 @@ final class Bloom {
             // Dim, never absent: the layout derives from the count, so
             // removing a petal would shift the rest under the finger.
             let available = index < petals.count ? petals[index].isAvailable() : true
-            entity.components.set(OpacityComponent(opacity: available ? 1 : 0.35))
+            if index < petalControls.count { petalControls[index].setEnabled(available) }
         }
     }
 
@@ -351,8 +357,14 @@ final class Bloom {
     /// True if `entity` (or an ancestor) is one of this bloom's petals,
     /// in which case its action has been run.
     func handleTap(_ entity: Entity) -> Bool {
-        guard root.isEnabled else { return false }
         guard let name = Self.ownName(of: entity, under: root) else { return false }
+        return press(named: name)
+    }
+
+    /// One press on the petal of that name: the glass button's own action,
+    /// and the end of every walk-up from a tapped entity.
+    private func press(named name: String) -> Bool {
+        guard root.isEnabled else { return false }
         guard let index = petalEntities.firstIndex(where: { $0.name == name }) else {
             return false
         }
@@ -400,26 +412,23 @@ final class Bloom {
         applyArmedLook(index: armed.index, armed: false)
     }
 
-    /// Swap the glyph to a checkmark while armed, and light the casing so
-    /// the change is legible without reading the icon.
+    /// While armed the petal reads "Tap again" with a checkmark, filled in
+    /// the destructive red — and says so to VoiceOver.
     private func applyArmedLook(index: Int, armed: Bool) {
-        guard petalEntities.indices.contains(index) else { return }
-        let petal = petals[index]
-        let entity = petalEntities[index]
-        let symbol = armed ? "checkmark" : petal.symbol
-        if let texture = Self.symbolTexture(symbol),
-           let icon = entity.children.first(where: { $0.name == Self.iconName })
-            as? ModelEntity {
-            var material = UnlitMaterial()
-            material.color = .init(tint: .white, texture: .init(texture))
-            material.blending = .transparent(opacity: .init(floatLiteral: 1))
-            icon.model?.materials = [material]
-        }
-        // Republish, do not rebuild: a fresh AccessibilityComponent would
-        // carry empty systemActions and strip Activate, stranding a
-        // VoiceOver user mid-confirmation.
-        SpatialActions.republish(
-            value: armed ? "armed, tap again to confirm" : "", on: entity)
+        guard petalControls.indices.contains(index) else { return }
+        petalControls[index].setArmed(armed)
+    }
+
+    /// What the named petal is showing — for tests, which cannot read the
+    /// glass.
+    func control(named name: String) -> RoomControl? {
+        petalEntities.firstIndex { $0.name == "bloom-\(name)" }
+            .flatMap { petalControls.indices.contains($0) ? petalControls[$0] : nil }
+    }
+
+    /// Whether a petal deletes or clears: its tint says so.
+    private static func isDestructive(_ petal: Petal) -> Bool {
+        petal.confirms || petal.tint.isEqual(DesignTokens.Palette.destructiveUI)
     }
 
     func beginGrip(_ entity: Entity, hand: SIMD3<Float>) -> Bool {
@@ -471,51 +480,6 @@ final class Bloom {
     }
 
     // MARK: Building
-
-    private static func makePetal(_ petal: Petal) -> ModelEntity {
-        // A dark casing with a white glyph: legible over a bright room and
-        // a coloured field, where tinted glass reads as a smudge.
-        let disc = ModelEntity(
-            mesh: Primitives.cylinder(height: 0.005, radius: petalRadius),
-            materials: [casing()])
-        disc.name = "bloom-\(petal.name)"
-        disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        disc.components.set(GroundingShadowComponent(castsShadow: true))
-
-        // A thin accent rim carries the meaning (red = destructive).
-        let rimMaterial = Materials.unlit(petal.tint, opacity: 0.95)
-        let rim = ModelEntity(
-            mesh: Primitives.cylinder(height: 0.0032, radius: petalRadius * 1.16),
-            materials: [rimMaterial])
-        rim.position = [0, -0.0012, 0]
-        disc.addChild(rim)
-
-        if let texture = symbolTexture(petal.symbol) {
-            var iconMaterial = UnlitMaterial()
-            iconMaterial.color = .init(tint: .white, texture: .init(texture))
-            iconMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
-            let icon = ModelEntity(
-                mesh: Primitives.plane(width: petalRadius * 1.15,
-                                     height: petalRadius * 1.15),
-                materials: [iconMaterial])
-            // Named so `applyArmedLook` can find it to swap in the checkmark.
-            icon.name = iconName
-            icon.position = [0, 0.0045, 0]
-            icon.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
-            disc.addChild(icon)
-        }
-
-        disc.components.set(InputTargetComponent())
-        disc.components.set(CollisionComponent(
-            shapes: [Primitives.collisionSphere(radius: petalRadius * 1.4)]))
-        disc.components.set(HoverEffectComponent())
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(stringLiteral: petal.name)
-        disc.components.set(accessibility)
-        disc.isEnabled = false
-        return disc
-    }
 
     /// The bead's instrument: a translucent rail the length of the
     /// whole range, a tick at each end, a small − at the weak end and
@@ -589,12 +553,6 @@ final class Bloom {
         bead.components.set(accessibility)
         bead.isEnabled = false
         return bead
-    }
-
-    /// A petal's pane. Frosted glass, more solid than the banks' — a petal
-    /// is a button and its glyph must stay legible.
-    private static func casing() -> RealityKit.Material {
-        Materials.frostedGlass(opacity: 0.66)
     }
 
     /// SF Symbols as textures.

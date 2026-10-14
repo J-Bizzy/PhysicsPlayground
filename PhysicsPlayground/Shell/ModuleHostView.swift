@@ -8,6 +8,7 @@
 //  no panel and no hint; the apparatus explains itself.
 //
 
+import RenderKit
 import SwiftUI
 
 struct ModuleHostView: View {
@@ -26,16 +27,12 @@ struct ModuleHostView: View {
         VStack(spacing: 14) {
             HStack(spacing: 10) {
                 // Left: navigation.
-                Button {
+                ControlButton("Home", systemImage: "chevron.left", iconOnly: true) {
                     appModel.go(to: nil)
-                } label: {
-                    Image(systemName: "chevron.left")
                 }
-                .help("Home")
-                .accessibilityLabel("Home")
                 .accessibilityHint("Leaves this lab for the gallery of labs")
 
-                                Spacer(minLength: 12)
+                Spacer(minLength: 12)
 
                 // Center: the module's identity.
                 HStack(spacing: 10) {
@@ -59,47 +56,27 @@ struct ModuleHostView: View {
                 // Right: modes.
                 // The Physics box: the lab's live numbers on a card in the
                 // room, with a rail for each quantity you can set.
-                Button {
-                    appModel.physicsBoardOpen.toggle()
-                } label: {
-                    Image(systemName: "function")
-                        .foregroundStyle(appModel.physicsBoardOpen ? module.accent : .primary)
-                }
-                .help(appModel.physicsBoardOpen ? "Hide the physics" : "Show the physics")
-                .accessibilityLabel("Physics")
-                .accessibilityValue(appModel.physicsBoardOpen ? "shown" : "hidden")
-                .accessibilityHint("Shows this lab's live physics values in the room, with rails for the ones you can set")
+                ControlToggle("Physics", systemImage: "function", iconOnly: true,
+                              isOn: Bindable(appModel).physicsBoardOpen)
+                    .accessibilityHint("Shows this lab's live physics values in the room, with rails for the ones you can set")
 
-                Button {
-                    appModel.labPlacement.isPlacing.toggle()
-                } label: {
-                    Image(systemName: appModel.labPlacement.isPlacing
-                          ? "scope" : "arrow.up.left.and.down.right.and.arrow.up.right.and.down.left")
-                }
-                .help(appModel.labPlacement.isPlacing ? "Done placing" : "Place the lab")
-                .accessibilityLabel("Place the lab")
-                .accessibilityHint("Shows an anchor you can drag to move the whole lab to where you have room")
+                ControlToggle("Place the lab", systemImage: "move.3d", iconOnly: true,
+                              isOn: Bindable(appModel.labPlacement).isPlacing)
+                    .accessibilityHint("Shows an anchor you can drag to move the whole lab to where you have room")
 
-                Button {
-                    appModel.studioMode.toggle()
-                } label: {
-                    Image(systemName: appModel.studioMode ? "moon.stars.fill" : "moon.stars")
-                }
-                .help(appModel.studioMode ? "Back to your room" : "Studio Mode")
-                .accessibilityLabel("Studio Mode")
-                .accessibilityHint("Replaces your room with a dark studio")
+                ControlToggle("Studio Mode", systemImage: "moon.stars", iconOnly: true,
+                              isOn: Bindable(appModel).studioMode)
+                    .accessibilityHint("Replaces your room with a dark studio")
 
                 // Shown only when the app cannot see the room, so the bar is unchanged
                 // in the ordinary case; a popover rather than a row, so no panel grows
                 // back.
                 if appModel.room.sensing != .fine {
-                    Button {
+                    ControlButton("Room sensing unavailable",
+                                  systemImage: "exclamationmark.triangle",
+                                  iconOnly: true) {
                         showingSensing.toggle()
-                    } label: {
-                        Image(systemName: "exclamationmark.triangle")
                     }
-                    .help("Room sensing unavailable")
-                    .accessibilityLabel("Room sensing unavailable")
                     .accessibilityHint(Self.sensingHeadline(appModel.room.sensing))
                     .popover(isPresented: $showingSensing,
                              attachmentAnchor: .point(.bottom)) {
@@ -118,13 +95,10 @@ struct ModuleHostView: View {
 
                 // Reset asks first: in Circuit Workshop it wipes a bench that persists
                 // across launches.
-                Button {
+                ControlButton("Reset", systemImage: "arrow.counterclockwise",
+                              iconOnly: true) {
                     confirmingReset = true
-                } label: {
-                    Image(systemName: "arrow.counterclockwise")
                 }
-                .help("Reset")
-                .accessibilityLabel("Reset")
                 .accessibilityHint("Returns this lab to its starting state")
                 .confirmationDialog("Reset \(module.title)?",
                                     isPresented: $confirmingReset,
@@ -137,10 +111,11 @@ struct ModuleHostView: View {
                     Text("Everything you have set up here goes back to how the lab opened.")
                 }
             }
-            .buttonBorderShape(.circle)
 
             if !appModel.isImmersiveSpaceOpen {
-                Button {
+                ControlButton("Show in room", systemImage: "sparkles",
+                              emphasis: .prominent(module.accent),
+                              fillsWidth: true) {
                     Task {
                         withAnimation(.easeOut(duration: 0.2)) {
                             showInRoomFailed = false
@@ -155,13 +130,7 @@ struct ModuleHostView: View {
                             }
                         }
                     }
-                } label: {
-                    Label("Show in room", systemImage: "sparkles")
-                        .font(.body)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 4)
                 }
-                .buttonStyle(.podProminent(module.accent))
                 .accessibilityHint("Places this lab in your room")
 
                 // Says so when the space refused to open, with a manual retry and never
