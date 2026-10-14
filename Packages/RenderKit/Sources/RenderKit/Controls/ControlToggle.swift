@@ -22,12 +22,14 @@ public struct ControlToggle: View {
     }
 
     private let title: String
-    private let systemImage: String
+    /// Nil for a choice among several, where the selected platter already
+    /// says which one is chosen and a glyph would only cost width.
+    private let systemImage: String?
     private let iconOnly: Bool
     private let presentation: Presentation
     @Binding private var isOn: Bool
 
-    public init(_ title: String, systemImage: String,
+    public init(_ title: String, systemImage: String?,
                 iconOnly: Bool = false, presentation: Presentation = .button,
                 isOn: Binding<Bool>) {
         self.title = title
@@ -39,7 +41,7 @@ public struct ControlToggle: View {
 
     /// For an owner that keeps the state behind closures — a model flag
     /// read every frame.
-    public init(_ title: String, systemImage: String, iconOnly: Bool = false,
+    public init(_ title: String, systemImage: String?, iconOnly: Bool = false,
                 presentation: Presentation = .button,
                 isOn: @escaping () -> Bool,
                 set: @escaping (Bool) -> Void) {
@@ -53,8 +55,15 @@ public struct ControlToggle: View {
         switch presentation {
         case .button:
             Toggle(isOn: $isOn) {
-                Label(title, systemImage: systemImage)
-                    .labelStyle(.controlLabel(iconOnly: iconOnly))
+                if let systemImage {
+                    Label(title, systemImage: systemImage)
+                        .labelStyle(.controlLabel(iconOnly: iconOnly))
+                } else {
+                    Text(title)
+                        .font(.body.weight(.medium))
+                        .lineLimit(1)
+                        .frame(minHeight: ControlMetrics.minimumTarget - 16)
+                }
             }
             .toggleStyle(.button)
             .buttonStyle(.bordered)
@@ -64,7 +73,7 @@ public struct ControlToggle: View {
             .accessibilityLabel(title)
         case .row:
             Toggle(isOn: $isOn) {
-                Label(title, systemImage: systemImage)
+                Label(title, systemImage: systemImage ?? "circle")
                     .labelStyle(.controlLabel(iconOnly: false))
             }
             .toggleStyle(.switch)

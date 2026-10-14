@@ -202,7 +202,6 @@ final class OrbitalMechanicsRenderer {
         let head: ModelEntity
     }
     private var velocityArrow: Arrow!
-    private var accelerationArrow: Arrow!
     private var forceArrow: Arrow!
 
     private var frameCounter = 0
@@ -296,9 +295,8 @@ final class OrbitalMechanicsRenderer {
 
         // Vector arrows on the selected body.
         velocityArrow = Self.makeArrow(color: DesignTokens.Palette.velocityVectorUI)
-        accelerationArrow = Self.makeArrow(color: DesignTokens.Palette.accelerationVectorUI)
         forceArrow = Self.makeArrow(color: DesignTokens.Palette.forceVectorUI)
-        for arrow in [velocityArrow!, accelerationArrow!, forceArrow!] {
+        for arrow in [velocityArrow!, forceArrow!] {
             systemRoot.addChild(arrow.container)
         }
 
@@ -1092,7 +1090,6 @@ final class OrbitalMechanicsRenderer {
         guard let selected = model.selectedBody,
               let readout = model.readout(for: selected) else {
             Fade.tick(velocityArrow.container, visible: false)
-            Fade.tick(accelerationArrow.container, visible: false)
             Fade.tick(forceArrow.container, visible: false)
             return
         }
@@ -1113,12 +1110,9 @@ final class OrbitalMechanicsRenderer {
         let acceleration = NBody.accelerations(
             bodies: all, gravitationalConstant: model.effectiveG,
             softening: model.softeningRadii)[index]
+        // The net force is m·a along a: one arrow says both (an acceleration
+        // arrow drawn beside it was the same line at another length).
         let magnitude = simd_length(acceleration)
-        update(arrow: accelerationArrow,
-               visible: model.showAccelerationVector,
-               origin: origin,
-               direction: acceleration,
-               length: 0.03 + 0.04 * log10(1 + magnitude * 1e3))
         update(arrow: forceArrow,
                visible: model.showForceVector,
                origin: origin,

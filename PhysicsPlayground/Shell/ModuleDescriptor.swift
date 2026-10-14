@@ -100,6 +100,10 @@ enum MoreItem: Identifiable {
                 selected: () -> String?, select: (String) -> Void)
     /// A quantity with no object to stretch.
     case slider(PhysicsAdjustable, isEnabled: () -> Bool = { true })
+    /// A set of like verbs — things you could add — as one wrapping grid.
+    case verbs(id: String, title: String,
+               items: [(id: String, label: String, symbol: String)],
+               run: (String) -> Void)
 
     var id: String {
         switch self {
@@ -107,6 +111,7 @@ enum MoreItem: Identifiable {
         case .action(let id, _, _, _, _, _, _): id
         case .choice(let id, _, _, _, _): id
         case .slider(let adjustable, _): adjustable.id
+        case .verbs(let id, _, _, _): id
         }
     }
 }

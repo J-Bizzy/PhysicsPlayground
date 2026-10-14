@@ -89,7 +89,6 @@ final class ResetCoverageTests: XCTestCase {
                 case "keplerSweepOn": model.keplerSweepOn.toggle()
                 case "isPaused": model.isPaused.toggle()
                 case "showVelocityVector": model.showVelocityVector.toggle()
-                case "showAccelerationVector": model.showAccelerationVector.toggle()
                 case "showForceVector": model.showForceVector.toggle()
                 case "showLagrangePoints": model.showLagrangePoints.toggle()
                 case "playOrbitalChord": model.playOrbitalChord.toggle()

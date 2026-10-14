@@ -23,29 +23,6 @@ struct OrbitalMechanicsSpaceView: View {
     /// render loop (see RingState's header for why it's a reference).
     @State private var ring = RingState()
     @State private var wells: Well?
-    /// The module's two standing verbs — "Twin suns" and the plate that
-    /// opens the preset worlds.
-    @State private var verbs: SpatialActionBank?
-    /// The ten preset worlds, as a momentary fan (unlike the clock and
-    /// layer banks, a list of things you could add reports nothing, so it
-    /// folds away when done).
-    @State private var worldPicker = SpatialPicker(
-        accessibilityNoun: "Preset world",
-        choices: OrbitalMechanicsModel.Preset.allCases.map {
-            PickerChoice(id: $0.id, label: $0.displayName, symbol: "globe")
-        },
-        staysOpen: false,
-        accent: UIColor(DesignTokens.Palette.gravityAccent),
-        // Ten discs need ~0.08 m pitch, so ~0.8 m of arc: 0.58 m at 120° gives
-        // 1.21 m. Opens centred under the system; a fan this wide cannot hang
-        // off a flank.
-        layout: FanLayout(span: 120 * .pi / 180, reach: 0.58,
-                          verticalScale: 0.22, lift: 0, stagger: 0))
-    /// Newton's G, as a rail at the foot of the fore column. Under `root`,
-    /// unscaled: a track's collider is sized to the rail.
-    @State private var gravityTrack: SpatialTrackControl?
-    /// The rail's live drag, if any.
-    @State private var activeTrack: SpatialTrackControl?
     /// The last `model.viewResetNonce` this view acted on, so Reset also
     /// snaps the two-hand scale and turn back to 1x.
     @State private var seenResetNonce = 0
@@ -54,81 +31,13 @@ struct OrbitalMechanicsSpaceView: View {
     /// room you walk through.
     @State private var scaleRig = SpatialScaleRig(
         pivot: OrbitalMechanicsRenderer.systemPosition, range: 0.4...9.0)
-    /// The clock: −20× / −1× / 1× / 5× / 20× / 100×, a permanent bank.
-    /// At 1× an Earth year takes ~2 minutes, so speed decides whether an
-    /// orbit is watched or waited for. Stays open — it is also a readout.
-    @State private var clockPicker = SpatialPicker(
-        accessibilityNoun: "Clock speed",
-        choices: OrbitalMechanicsModel.timeScales.map {
-            PickerChoice(id: String(Int($0)), label: PhysicsFormat.multiplier($0),
-                         symbol: "clock")
-        },
-        staysOpen: true,
-        // A bank is a row, not a fan: a flat vertical squash keeps the discs
-        // tidy. The span derives from the count, so it keeps fitting when
-        // `timeScales` grows.
-        layout: FanLayout.spread(
-            count: OrbitalMechanicsModel.timeScales.count,
-            itemSpan: Double(SpatialPicker.colliderSpan),
-            reach: 0.34, verticalScale: 0.25, lift: 0, stagger: 0))
-    /// The clock, folded: the tab keeps the readout ("Clock · 5×").
-    @State private var clockHandle = SummonHandle(
-        title: "Clock", symbol: "clock",
-        accent: UIColor(DesignTokens.Palette.gravityAccent))
-
-    /// Everything drawn on the system rather than being it — the selected
-    /// body's three vectors, the Kepler sweep, the Lagrange points — behind
-    /// one tab that reads out which are on. The vectors are global flags,
-    /// not per-body ones.
-    @State private var showHandle = SummonHandle(
-        title: "Show", symbol: "eye",
-        accent: UIColor(DesignTokens.Palette.gravityAccent))
-    /// The five plates the Show tab unfolds, above it.
-    @State private var showBank: SpatialLayerBank?
-
     /// Identifies the floating readout above the selected body.
     private static let dataCardID = "gravity-data"
 
-    /// Left, deep: the Show tab at the system's flank, its column unfolding
-    /// above it and the world well under it. Named `bankAnchor` because
-    /// `InstrumentReachCriterionTests` measures every module's standing
-    /// layer instrument by that name. 0.20 fore of the system's depth, or
-    /// the tab is out of a standing reach; x −0.62 threads between Earth's
-    /// crossing and Mars's.
-    static let bankAnchor = OrbitalMechanicsRenderer.systemPosition
-        + SIMD3<Float>(-0.62, 0.06, 0.20)
-    /// Where the unfolded column centres: 0.25 above the tab puts the
-    /// lowest plate 7 cm clear of it and the highest at 1.69.
-    static let showColumnAnchor = bankAnchor + SIMD3<Float>(0, 0.25, 0)
-    /// The world well, under the Show tab, in the system's frame (it hangs
-    /// under `systemRoot`, rig-compensated).
+    /// The world well, on the system's left flank where every control in
+    /// the house stands, in the system's frame (it hangs under `systemRoot`,
+    /// rig-compensated). Its clock, overlays, verbs and G live in More.
     static let wellOffset = SIMD3<Float>(-0.62, -0.10, 0.20)
-    /// Newton's G, at the foot of the fore column under the Worlds and
-    /// Twin-suns labels: G is a thing you do to the system as a whole, like
-    /// them.
-    static let gravityRailAnchor = OrbitalMechanicsRenderer.systemPosition
-        + SIMD3<Float>(-0.85, -0.13, 0.40)
-    /// Faces the standing viewer across the fore column's corner, so the
-    /// rail runs across their view rather than edge-on.
-    static let gravityRailNormal = SIMD3<Float>(0.73, 0, 0.69)
-    /// Where the ten-preset fan opens: over the near edge of the system at
-    /// eye height, 30 cm above the ecliptic, under the title bar.
-    static let worldsFanAnchor = OrbitalMechanicsRenderer.systemPosition
-        + SIMD3<Float>(0, 0.30, 0.58)
-
-    /// Left and fore — what you make and unmake: Binary and Worlds. At the
-    /// system's own depth the reach limit and the two plates' widths cannot
-    /// both fit, so the column comes forward, and 0.40 of z keeps its
-    /// sightline shadow clear of the tab column and the G rail.
-    static let verbAnchor = OrbitalMechanicsRenderer.systemPosition
-        + SIMD3<Float>(-0.85, 0.07, 0.40)
-
-    /// The clock's folding tab, stacked above the verbs on their x —
-    /// one column, clock at the head, clear of each other by 8.5 cm.
-    /// Measured by `InstrumentReachCriterionTests`.
-    static let clockAnchor = OrbitalMechanicsRenderer.systemPosition
-        + SIMD3<Float>(-0.85, 0.29, 0.40)
-
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -170,91 +79,6 @@ struct OrbitalMechanicsSpaceView: View {
                 renderer.selectedAnchor.addChild(card)
                 renderer.compensateForRig(card)
             }
-
-            // Under `root`, not `viewRoot`: the rig reaches 9×. One column: the
-            // three vectors on the selected body, then the two overlays. The
-            // Lagrange plate shows L1–L5 for the selected planet against the Sun.
-            let overlays = SpatialLayerBank(
-                accent: UIColor(DesignTokens.Palette.gravityAccent),
-                layers: [
-                    .init(id: "velocity", label: "Velocity", symbol: "arrow.right",
-                          isOn: { model.showVelocityVector },
-                          toggle: { model.showVelocityVector.toggle() }),
-                    .init(id: "acceleration", label: "Acceleration",
-                          symbol: "arrow.up.right",
-                          isOn: { model.showAccelerationVector },
-                          toggle: { model.showAccelerationVector.toggle() }),
-                    .init(id: "force", label: "Force", symbol: "arrow.down.right",
-                          isOn: { model.showForceVector },
-                          toggle: { model.showForceVector.toggle() }),
-                    .init(id: "sweep", label: "Kepler sweep", symbol: "triangle",
-                          isOn: { model.keplerSweepOn },
-                          toggle: { model.keplerSweepOn.toggle() }),
-                    .init(id: "lagrange", label: "Lagrange points",
-                          symbol: "circlebadge.2",
-                          isOn: { model.showLagrangePoints },
-                          toggle: { model.showLagrangePoints.toggle() }),
-                ])
-            renderer.root.addChild(overlays.root)
-            showBank = overlays
-
-            // The summary is what makes folding honest: "v F", "v F · sweep",
-            // "off".
-            showHandle.summary = {
-                let vectors = [model.showVelocityVector ? "v" : nil,
-                               model.showAccelerationVector ? "a" : nil,
-                               model.showForceVector ? "F" : nil].compactMap { $0 }
-                let analysis = [model.keplerSweepOn ? "sweep" : nil,
-                                model.showLagrangePoints ? "Lagrange" : nil]
-                    .compactMap { $0 }
-                let parts = [vectors.joined(separator: " "),
-                             analysis.joined(separator: ", ")]
-                    .filter { !$0.isEmpty }
-                return parts.isEmpty ? "off" : parts.joined(separator: " · ")
-            }
-            renderer.root.addChild(showHandle.root)
-            clockHandle.summary = { PhysicsFormat.multiplier(model.timeScale) }
-            renderer.root.addChild(clockHandle.root)
-
-            // Under `root` like every other instrument here: a control that grew
-            // with the system would leave reach exactly when you walked in to use
-            // it.
-            let systemVerbs = SpatialActionBank(
-                accent: UIColor(DesignTokens.Palette.gravityAccent),
-                actions: [
-                    .init(id: "worlds", label: "Worlds", symbol: "globe",
-                          fire: { worldPicker.toggle() }),
-                    .init(id: "binary", label: "Twin suns", symbol: "sun.max",
-                          fire: { model.makeBinary() }),
-                ])
-            renderer.root.addChild(systemVerbs.root)
-            verbs = systemVerbs
-
-            renderer.root.addChild(worldPicker.root)
-            worldPicker.onSelect = { id in
-                guard let preset = OrbitalMechanicsModel.Preset(rawValue: id) else { return }
-                model.spawn(preset)
-            }
-
-            let gravity = SpatialTrackControl(
-                name: "Gravity",
-                center: Self.gravityRailAnchor,
-                normal: Self.gravityRailNormal,
-                accent: UIColor(DesignTokens.Palette.gravityAccent),
-                range: 0.2...4.0,
-                read: { model.gMultiplier },
-                write: { model.gMultiplier = $0 },
-                format: { PhysicsFormat.measurement($0, "× G", decimals: 2) })
-            renderer.root.addChild(gravity.root)
-            gravityTrack = gravity
-
-            renderer.root.addChild(clockPicker.root)
-            clockPicker.onSelect = { id in
-                guard let scale = Double(id) else { return }
-                model.timeScale = scale
-            }
-            // The lit disc reads from the model, so a reset moves it too.
-            clockPicker.selectedID = { String(Int(model.timeScale)) }
 
             // Pull a world out of the well and let go: it takes the circular orbit
             // at the radius you let go at, bent by whatever throw the hand added.
@@ -309,47 +133,6 @@ struct OrbitalMechanicsSpaceView: View {
                     wells?.update(dt: event.deltaTime,
                                   nearestHand: appModel.room.nearestFingertip(
                                     to: OrbitalMechanicsRenderer.systemPosition))
-                    let head = appModel.room.headPosition.map { SIMD3<Float>($0) }
-                    let clockAnchor = Self.clockAnchor
-                    let hand = appModel.room.nearestFingertip(to: clockAnchor)
-                    // The tab stands where the fan used to; the fan
-                    // unfolds above it only when asked.
-                    clockHandle.update(anchor: clockAnchor, viewer: head,
-                                       dt: event.deltaTime, nearestHand: hand)
-                    clockPicker.root.isEnabled = clockHandle.isOpen
-                    if clockHandle.isOpen {
-                        clockPicker.update(
-                            anchor: clockAnchor + SIMD3(0, 0.13, 0),
-                            viewer: head,
-                            dt: event.deltaTime)
-                    }
-                    // Every control stands on the left: what is shown deep at the flank,
-                    // what you make fore of it — the same depth split Electric Fields uses.
-                    let showHand = appModel.room.nearestFingertip(to: Self.bankAnchor)
-                    showHandle.update(anchor: Self.bankAnchor, viewer: head,
-                                      dt: event.deltaTime, nearestHand: showHand)
-                    showBank?.root.isEnabled = showHandle.isOpen
-                    if showHandle.isOpen {
-                        showBank?.update(anchor: Self.showColumnAnchor,
-                                         viewer: head, dt: event.deltaTime,
-                                         nearestHand: showHand)
-                    }
-                    // Under the clock, on the same flank: the clock decides how fast the
-                    // system runs, these decide what is in it.
-                    verbs?.update(
-                        anchor: Self.verbAnchor,
-                        viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
-                        dt: event.deltaTime,
-                        resetNonce: appModel.resetNonce)
-                    // Over the system's near edge, not on the plate that opens it — see
-                    // `worldsFanAnchor`.
-                    worldPicker.update(
-                        anchor: Self.worldsFanAnchor,
-                        viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
-                        dt: event.deltaTime)
-                    // Nothing ticks a track by itself — the caller's duty,
-                    // stated on `SpatialTrackControl.refresh`.
-                    gravityTrack?.refresh()
                     if let renderer {
                         syncBloom(renderer: renderer, dt: event.deltaTime)
                     }
@@ -409,17 +192,6 @@ struct OrbitalMechanicsSpaceView: View {
             if UserDefaults.standard.bool(forKey: "gravBinary") {
                 model.makeBinary()
             }
-            // `-gravWorlds 1` opens the ten-preset fan, the one control here
-            // invisible until something opens it.
-            if UserDefaults.standard.bool(forKey: "gravWorlds") {
-                worldPicker.toggle()
-            }
-            // `-gravShowOpen 1` unfolds the Show tab's five plates — the
-            // column exists only while the tab is open, and the simulator
-            // cannot pinch it.
-            if UserDefaults.standard.bool(forKey: "gravShowOpen") {
-                showHandle.setOpen(true)
-            }
             // `-gravRing 1` opens the first orbiting body's control
             // ring at launch, for CLI screenshots.
             if UserDefaults.standard.bool(forKey: "gravRing"),
@@ -478,25 +250,7 @@ struct OrbitalMechanicsSpaceView: View {
                     let hand = renderer.displayPoint(fromWorld: SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
                     if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
-                    // A gesture already in flight is never re-claimed.
-                    if let track = activeTrack {
-                        guard track.isEnabled else {
-                            activeTrack = nil
-                            return
-                        }
-                        // The rail lives under `root`, which the rig does not scale, so it
-                        // reads a room point.
-                        track.adjust(hand: SIMD3<Double>(SIMD3<Float>(value.convert(
-                            value.location3D, from: .local, to: .scene))))
-                        return
-                    }
                     if drag == nil {
-                        if let track = gravityTrack, track.owns(value.entity) {
-                            activeTrack = track
-                            track.adjust(hand: SIMD3<Double>(SIMD3<Float>(value.convert(
-                                value.location3D, from: .local, to: .scene))))
-                            return
-                        }
                         if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
                         // An orbit bead: only the selected body has a ring, so these two
                         // colliders can carry literal names.
@@ -556,8 +310,6 @@ struct OrbitalMechanicsSpaceView: View {
                     defer {
                         bloom.endGrip()
                         model.endOrbitEdit()
-                        activeTrack?.endAdjust()
-                        activeTrack = nil
                         drag = nil
                     }
                     guard let renderer, let drag,
@@ -591,9 +343,15 @@ struct OrbitalMechanicsSpaceView: View {
             bloom.clearTarget()
             return
         }
-        // The star's mass is a bead like every planet's, in solar masses. No
+        // The star's mass is a grip like every planet's, in solar masses. No
         // delete petal: deleting the Sun deletes the system.
         let isPrimary = body.id == model.primaryBody?.id
+        // Where a body is now, in the system's display frame — the frame the
+        // ring and the hands share.
+        let center: (UUID) -> SIMD3<Float> = { id in
+            model.bodies.first { $0.id == id }
+                .map { SIMD3<Float>($0.body.position * model.simToDisplay) } ?? .zero
+        }
         bloom.retarget(
             uuid,
             petals: isPrimary ? [] : [
@@ -616,7 +374,11 @@ struct OrbitalMechanicsSpaceView: View {
                     write: { model.setMass(id: uuid, suns: $0) },
                     format: { PhysicsFormat.count($0, singular: "Sun", plural: "Suns",
                                                   decimals: 2) },
-                    radius: { Float(model.displayRadius(id: uuid)) + 0.05 })
+                    radius: { Float(model.displayRadius(id: uuid)) },
+                    stretch: Self.massStretch(
+                        center: { center(uuid) },
+                        radius: { Float(model.displayRadius(id: uuid)) },
+                        read: { model.massInSuns(id: uuid) }))
                 : .init(
                     name: "Mass",
                     range: OrbitalMechanicsModel.massRangeEarths,
@@ -628,7 +390,11 @@ struct OrbitalMechanicsSpaceView: View {
                         ? PhysicsFormat.scientific($0) + " Earths"
                         : PhysicsFormat.count($0, singular: "Earth", plural: "Earths",
                                               decimals: $0 < 1 ? 2 : 0) },
-                    radius: { Float(model.displayRadius(id: uuid)) + 0.03 }))
+                    radius: { Float(model.displayRadius(id: uuid)) },
+                    stretch: Self.massStretch(
+                        center: { center(uuid) },
+                        radius: { Float(model.displayRadius(id: uuid)) },
+                        read: { model.massInEarths(id: uuid) })))
 
         let viewer = appModel.room.headPosition.map {
             renderer.systemRoot.convert(position: SIMD3<Float>($0), from: nil)
@@ -637,19 +403,27 @@ struct OrbitalMechanicsSpaceView: View {
                      viewer: viewer, revealTarget: 1, dt: dt)
     }
 
+    /// Mass is pulled out of the body itself: the handle sits on its
+    /// surface, and a body's drawn radius goes as the cube root of its
+    /// mass, so drawing the handle out to radius r asks for the mass whose
+    /// body is that big — the planet swells under the hand.
+    static func massStretch(center: @escaping () -> SIMD3<Float>,
+                            radius: @escaping () -> Float,
+                            read: @escaping () -> Double) -> Bloom.Grip.Stretch {
+        let gap: Float = 0.02
+        return Bloom.Grip.Stretch(
+            origin: { center() },
+            handle: { axis in center() + axis * (radius() + gap) },
+            value: { hand, axis in
+                let reach = simd_dot(hand - center(), axis) - gap
+                let ratio = Double(max(reach, 0.004) / max(radius(), 1e-4))
+                return read() * ratio * ratio * ratio
+            })
+    }
+
     /// The tap routing, out of the gesture closure so VoiceOver reaches it
     /// too.
     private func handleObjectTap(on entity: Entity) {
-        // The handles get first refusal: a door answers before the room behind
-        // it.
-        if clockHandle.handleTap(entity) { return }
-        if showHandle.handleTap(entity) { return }
-        if showHandle.isOpen,
-           showBank?.handleTap(entity) == true { return }
-        if clockHandle.isOpen,
-           clockPicker.handleTap(entity) { return }
-        if worldPicker.handleTap(entity) { return }
-        if verbs?.handleTap(entity) == true { return }
         if bloom.handleTap(entity) { return }
         // A tap toggles the body's ring and selects it. Matched on the body's
         // UUID, which is what the renderer names its spheres.

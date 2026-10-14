@@ -106,6 +106,18 @@ struct MoreItemView: View {
                     .font(.body.weight(.medium))
                 ChoiceRow(options: options, selected: selected(), select: select)
             }
+        case let .verbs(_, title, items, run):
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.body.weight(.medium))
+                let columns = [GridItem(.adaptive(minimum: 150), spacing: ControlMetrics.spacing)]
+                LazyVGrid(columns: columns, alignment: .leading, spacing: ControlMetrics.spacing) {
+                    ForEach(items, id: \.id) { item in
+                        ControlButton(item.label, systemImage: item.symbol,
+                                      fillsWidth: true) { run(item.id) }
+                    }
+                }
+            }
         case let .slider(adjustable, isEnabled):
             ControlSlider(adjustable.label, range: adjustable.range,
                           read: adjustable.read, write: adjustable.write,
@@ -124,11 +136,10 @@ private struct ChoiceRow: View {
 
     var body: some View {
         // Wraps rather than squeezing: a clock with six speeds is two rows.
-        let columns = [GridItem(.adaptive(minimum: 96), spacing: ControlMetrics.spacing)]
+        let columns = [GridItem(.adaptive(minimum: 100), spacing: ControlMetrics.spacing)]
         LazyVGrid(columns: columns, alignment: .leading, spacing: ControlMetrics.spacing) {
             ForEach(options, id: \.id) { option in
-                ControlToggle(option.label, systemImage: selected == option.id
-                                  ? "checkmark.circle.fill" : "circle",
+                ControlToggle(option.label, systemImage: nil,
                               isOn: { selected == option.id },
                               set: { _ in select(option.id) })
             }

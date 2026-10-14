@@ -213,7 +213,6 @@ final class OrbitalMechanicsModel {
     var isPaused = false
 
     var showVelocityVector = true
-    var showAccelerationVector = false
     var showForceVector = true
     /// Kepler's third law as a chord: every bound body's pitch is set by
     /// its period.
@@ -1032,7 +1031,6 @@ final class OrbitalMechanicsModel {
         timeScale = 1.0
         isPaused = false
         showVelocityVector = true
-        showAccelerationVector = false
         showForceVector = true
         showLagrangePoints = false
         lagrangeSecondaryID = nil

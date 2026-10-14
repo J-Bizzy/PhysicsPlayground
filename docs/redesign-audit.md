@@ -566,3 +566,45 @@ criterion now counts labs whose layers live in More. Screenshots:
 Noted, not changed: `CircuitsModelTests.testPresetsAndClearingAreSaved`
 waits on a 1 s debounced save with a 1.3 s timer, and failed once under
 the parallel run. It passes alone. It is pre-existing and timing-sensitive.
+
+### Step 5.2 — Orbital Mechanics (2026-10-14)
+
+Removed from the room: the Clock tab and its six discs, the Show tab and
+its plates, the Worlds plate and its nine-world fan, Twin suns, and the G
+rail. In More: Clock (−20× to 100×), Velocity, Net force, Kepler sweep,
+Lagrange points, "Add a world" (the nine presets as buttons), Twin suns
+(disabled once no single star named Sun is left), and G.
+
+Cut:
+- **Acceleration arrow** (`showAccelerationVector`). The net-force arrow
+  already points along a.
+- **Star-mass rail.** It wrote `sunMassMultiplier` while the Sun's grip
+  wrote the body's own mass, so the two went stale against each other.
+  The Sun's grip stays.
+- **Values rows the data card already shows.** Values keeps Bodies,
+  Elapsed, the star's mass in Suns, and the selected body's escape speed.
+
+Replaced with direct manipulation: a body's Mass grip is now a handle
+pulled out of the body's surface. The body's radius goes as m^⅓, so the
+handle's distance from the centre sets the mass as
+m = m₀·((reach − gap)/r)³. The handle sits on the sphere you see, and
+the sphere grows with it.
+
+Kept: the world well, bodies (drag, throw, tap → ring), Predict and
+Delete, the orbit ring and its apsis beads, and the data card.
+
+Retired arguments: `-gravWorlds`, `-gravShowOpen` (use `-moreOpen 1`).
+
+Controls: **13 visible at open → 4** (well, Home, More, Pause). **59
+reachable → 35** (21 lab items and 5 room items in More, 3 on a body's
+ring, 2 apsis beads, and the 4 above).
+
+Tests: full suite green (201 s). The reach criterion drops the Orbits
+flank tests. Its world well is still measured. Screenshots:
+`step5-orbits.jpg`, `step5-orbits-more.jpg`, `step5-orbits-ring.jpg`.
+
+Noted: `OrbitalMechanicsModel.sunMassMultiplier` stays in the model with
+no control. Removing it would touch the capsule snapshot's shape. A body
+nearer than the window can stand in front of the More panel (the comet's
+label in `step5-orbits-more.jpg`): the panel is an ornament, not part of
+the scene.

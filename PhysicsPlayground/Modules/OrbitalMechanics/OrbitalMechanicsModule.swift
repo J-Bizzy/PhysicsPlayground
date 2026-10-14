@@ -31,60 +31,82 @@ enum OrbitalMechanicsModule {
                         .environment(appModel.orbitalMechanicsModel)
                 )
             },
+            // What the data card on the selected body does not already say:
+            // the system, its star and its clock, and how fast the selected
+            // body would have to go to leave.
             readings: {
                 let model = appModel.orbitalMechanicsModel
                 var rows: [Reading] = [
                     .init("Bodies", "\(model.bodies.count)"),
                     .init("Elapsed", PhysicsFormat.fixed(model.simulatedDays, decimals: 1), "days"),
-                    .init("G multiplier", PhysicsFormat.fixed(model.gMultiplier, decimals: 2)),
-                    .init("Sun mass", PhysicsFormat.fixed(model.sunMassMultiplier, decimals: 2), "× real"),
                 ]
+                if let star = model.primaryBody {
+                    rows.append(.init("Star mass",
+                                      PhysicsFormat.fixed(model.massInSuns(id: star.id),
+                                                          decimals: 2), "Suns"))
+                }
                 if let body = model.selectedBody, let readout = model.readout(for: body) {
-                    rows.append(.init("Selected", body.body.name))
-                    if let elements = model.orbitElements(for: body.id) {
-                        if let a = elements.semiMajorAxis {
-                            rows.append(.init(
-                                "Semi-major axis",
-                                PhysicsFormat.fixed(a / CelestialBody.astronomicalUnit,
-                                                    decimals: 3),
-                                "AU"))
-                        }
-                        rows.append(.init("Eccentricity",
-                                          PhysicsFormat.fixed(elements.eccentricity,
-                                                              decimals: 3)))
-                        rows.append(.init("Inclination",
-                                          PhysicsFormat.angle(elements.inclination * 180 / .pi)))
-                    }
-                    rows.append(.init("Total energy",
-                                      PhysicsFormat.scientific(readout.totalEnergy), "J"))
-                    rows.append(.init("Distance", PhysicsFormat.fixed(readout.distanceAU, decimals: 3), "AU"))
-                    rows.append(.init("Speed", PhysicsFormat.fixed(readout.speedKmPerS, decimals: 3), "km/s"))
                     rows.append(.init("Escape speed",
                                       PhysicsFormat.fixed(readout.escapeSpeedKmPerS,
                                                           decimals: 3), "km/s"))
-                    // The data card's own word for it: a fate, not a switch.
-                    rows.append(.init("Orbit", readout.isBound ? "bound" : "leaving"))
-                    if let period = readout.periodDays {
-                        rows.append(.init("Period", PhysicsFormat.fixed(period, decimals: 2), "days"))
-                    }
                 }
                 return rows
             },
+            // G alone: the star's mass is its own grip, on the star.
             adjustables: [
                 .init(id: "gravitationalConstant", label: "G", unit: "× G",
                       range: 0.2...4.0, decimals: 2,
                       read: { appModel.orbitalMechanicsModel.gMultiplier },
                       write: { appModel.orbitalMechanicsModel.gMultiplier = $0 }),
-                .init(id: "sunMass", label: "Star mass", unit: "× Sun",
-                      range: OrbitalMechanicsModel.primaryMassRangeSuns, decimals: 2,
-                      read: { appModel.orbitalMechanicsModel.sunMassMultiplier },
-                      write: { appModel.orbitalMechanicsModel.sunMassMultiplier = $0 }),
             ],
+            more: more(appModel.orbitalMechanicsModel),
             timeScrub: .init(model: appModel.orbitalMechanicsModel),
             reset: {
                 appModel.orbitalMechanicsModel.reset()
             }
         )
+    }
+
+    /// What More holds for the sky: the clock, what is drawn on it, and
+    /// what you can add to it.
+    static func more(_ model: OrbitalMechanicsModel) -> [MoreItem] {
+        [
+            // At 1× an Earth year takes about two minutes: the clock decides
+            // whether an orbit is watched or waited for. Negative runs it back.
+            .choice(id: "clock", title: "Clock",
+                    options: OrbitalMechanicsModel.timeScales.map {
+                        (id: String(Int($0)), label: PhysicsFormat.multiplier($0))
+                    },
+                    selected: { String(Int(model.timeScale)) },
+                    select: { id in
+                        if let scale = Double(id) { model.timeScale = scale }
+                    }),
+            .toggle(id: "velocity", title: "Velocity", symbol: "arrow.right",
+                    isOn: { model.showVelocityVector },
+                    set: { model.showVelocityVector = $0 }),
+            .toggle(id: "force", title: "Net force", symbol: "arrow.down.right",
+                    isOn: { model.showForceVector },
+                    set: { model.showForceVector = $0 }),
+            .toggle(id: "sweep", title: "Kepler sweep", symbol: "triangle",
+                    isOn: { model.keplerSweepOn },
+                    set: { model.keplerSweepOn = $0 }),
+            .toggle(id: "lagrange", title: "Lagrange points", symbol: "circlebadge.2",
+                    isOn: { model.showLagrangePoints },
+                    set: { model.showLagrangePoints = $0 }),
+            .verbs(id: "worlds", title: "Add a world",
+                   items: OrbitalMechanicsModel.Preset.allCases.map {
+                       (id: $0.id, label: $0.displayName, symbol: "globe")
+                   },
+                   run: { id in
+                       if let preset = OrbitalMechanicsModel.Preset(rawValue: id) {
+                           model.spawn(preset)
+                       }
+                   }),
+            // Splits a star named Sun; once there is none it has nothing to do.
+            .action(id: "binary", title: "Twin suns", symbol: "sun.max",
+                    isEnabled: { model.bodies.contains { $0.body.name == "Sun" } },
+                    run: { model.makeBinary() }),
+        ]
     }
 
 }

@@ -47,11 +47,6 @@ final class InstrumentReachCriterionTests: XCTestCase {
             .init(name: "Magnetism layers",
                   anchor: MagnetismSpaceView.bankAnchor,
                   halfExtents: Self.bankHalfExtents),
-            // Orbital Mechanics' one standing layer instrument is a
-            // `SummonHandle` tab, measured on the tab's own tight box.
-            .init(name: "Orbital Mechanics show tab",
-                  anchor: OrbitalMechanicsSpaceView.bankAnchor,
-                  halfExtents: Self.summonTabHalfExtents),
             .init(name: "Pendulums layers",
                   anchor: PendulumsSpaceView.bankAnchor,
                   halfExtents: Self.bankHalfExtents),
@@ -61,33 +56,14 @@ final class InstrumentReachCriterionTests: XCTestCase {
         ]
     }
 
-    /// Orbital Mechanics' fore column, measured as a flank for the reason
-    /// Projectiles is measured as a wall.
+    /// What else stands on a lab's flank for a hand: Orbital Mechanics'
+    /// world well (its clock, overlays, verbs and G moved into More).
     private var verbBanks: [Instrument] {
         [
-            .init(name: "Orbital Mechanics verbs",
-                  anchor: OrbitalMechanicsSpaceView.verbAnchor,
-                  halfExtents: Self.verbHalfExtents),
-            .init(name: "Orbital Mechanics clock tab",
-                  anchor: OrbitalMechanicsSpaceView.clockAnchor,
-                  halfExtents: Self.summonTabHalfExtents),
-            // The fan the tab unfolds: a folded instrument that would be
-            // unreachable when opened is still unreachable.
-            .init(name: "Orbital Mechanics clock fan",
-                  anchor: OrbitalMechanicsSpaceView.clockAnchor + SIMD3(0, 0.13, 0),
-                  halfExtents: SIMD3(0.15, 0.10, 0.15)),
-            // The deep flank's other objects: the Show column (only while open),
-            // the world well under the tab, and the G rail at the fore column's foot.
-            .init(name: "Orbital Mechanics show column",
-                  anchor: OrbitalMechanicsSpaceView.showColumnAnchor,
-                  halfExtents: Self.fivePlateHalfExtents),
             .init(name: "Orbital Mechanics world well",
                   anchor: OrbitalMechanicsRenderer.systemPosition
                       + OrbitalMechanicsSpaceView.wellOffset,
                   halfExtents: Self.wellHalfExtents),
-            .init(name: "Orbital Mechanics G rail",
-                  anchor: OrbitalMechanicsSpaceView.gravityRailAnchor,
-                  halfExtents: Self.railHalfExtents),
         ]
     }
 
@@ -214,68 +190,12 @@ final class InstrumentReachCriterionTests: XCTestCase {
         }
     }
 
-    /// Moving something into reach can move it into something else: the
-    /// verb bank's flank is shared with the clock's tab.
-    func testOrbitalMechanicsForeColumnInstrumentsDoNotCrowd() {
-        let verbs = Instrument(name: "Orbital Mechanics verbs",
-                               anchor: OrbitalMechanicsSpaceView.verbAnchor,
-                               halfExtents: Self.verbHalfExtents)
-        let clock = Instrument(name: "Orbital Mechanics clock tab",
-                               anchor: OrbitalMechanicsSpaceView.clockAnchor,
-                               halfExtents: Self.summonTabHalfExtents)
 
-        // Only the gap between them: asserting neither stands inside the
-        // orrery needs a declared station box, and Orbital Mechanics' extent is
-        // whatever preset is loaded.
-        let gap = verbs.box.separation(from: clock.box)
-        XCTAssertGreaterThan(gap, InstrumentClearance.separation, """
-            the verb bank clears the clock tab by \(String(format: "%.3f", gap)) m, \
-            which is not MORE than the \(InstrumentClearance.separation) m minimum.
 
-            Exactly at the limit is not clearance, it is a coincidence — the \
-            first draft of this move landed on 0.030 and read as fine.
-            """)
-        // And the G rail at the column's foot clears the
-        // verbs above it — their labels, not just their plates.
-        let rail = Instrument(name: "Orbital Mechanics G rail",
-                              anchor: OrbitalMechanicsSpaceView.gravityRailAnchor,
-                              halfExtents: Self.railHalfExtents)
-        XCTAssertGreaterThan(rail.box.separation(from: verbs.box),
-                             InstrumentClearance.separation,
-                             "the G rail stands on the verb plates' labels")
-    }
-
-    /// The deep flank must not stand on itself: the tab, its column and
-    /// the well that hangs under the tab.
-    func testOrbitalMechanicsDeepFlankDoesNotStackOnItself() {
-        let tab = Instrument(name: "Orbital Mechanics show tab",
-                             anchor: OrbitalMechanicsSpaceView.bankAnchor,
-                             halfExtents: Self.summonTabHalfExtents)
-        let column = Instrument(name: "Orbital Mechanics show column",
-                                anchor: OrbitalMechanicsSpaceView.showColumnAnchor,
-                                halfExtents: Self.fivePlateHalfExtents)
-        let well = Instrument(name: "Orbital Mechanics world well",
-                              anchor: OrbitalMechanicsRenderer.systemPosition
-                                  + OrbitalMechanicsSpaceView.wellOffset,
-                              halfExtents: Self.wellHalfExtents)
-        for (a, b) in [(tab, column), (tab, well), (column, well)] {
-            let gap = a.box.separation(from: b.box)
-            XCTAssertGreaterThan(gap, InstrumentClearance.separation, """
-                \(a.name) and \(b.name) are \(String(format: "%.3f", gap)) m \
-                apart, not MORE than the \(InstrumentClearance.separation) m \
-                minimum — one stands on the other.
-                """)
-        }
-        // And the column, which opens upward, stays under a raised arm.
-        XCTAssertLessThan(column.box.maximum.y,
-                          InstrumentClearance.workingHeight.upperBound,
-                          "the unfolded Show column climbs out of the working band")
-    }
-
-    /// Not vacuous: the list has to actually cover the app.
-    /// The labs whose layers live in the title bar's More (2026-10-14):
+    /// Not vacuous: the list has to actually cover the app. The labs
+    /// whose layers live in the title bar's More (2026-10-14):
     /// nothing of theirs stands in the room to be out of reach.
-    private static let banksInMore: Set<String> = ["circuits"]
+    private static let banksInMore: Set<String> = ["circuits", "gravitylab"]
 
     func testTheCriterionCoversEveryModule() {
         XCTAssertEqual(banks.count + Self.banksInMore.count, ModuleCatalog.allIDs.count, """
