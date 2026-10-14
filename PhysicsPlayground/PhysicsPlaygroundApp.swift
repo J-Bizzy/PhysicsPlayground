@@ -4,7 +4,7 @@
 //
 //  The scenes: one shared ImmersiveSpace whose content follows the
 //  active module, a main window (the flat catalog or the module's title
-//  bar) and three utility windows. The space is declared first because
+//  bar) and two utility windows. The space is declared first because
 //  Info.plist makes it the launch scene and visionOS picks the first
 //  one declared.
 //
@@ -47,7 +47,7 @@ struct PhysicsPlaygroundApp: App {
         .defaultSize(width: 560, height: 960)
 
         // The utility windows keep the system glass and are value-less
-        // WindowGroups, so reopening one brings it forward. All three ask for
+        // WindowGroups, so reopening one brings it forward. Both ask for
         // `.utilityPanel`: without a placement visionOS anchors them off the key
         // window, which while the gallery is up is the parked, empty main window.
         WindowGroup(id: SettingsView.windowID) {
@@ -57,14 +57,6 @@ struct PhysicsPlaygroundApp: App {
         // Tall enough to show the whole form at default type; the ScrollView is
         // for Dynamic Type.
         .defaultSize(width: 460, height: 780)
-        .windowResizability(.contentSize)
-        .defaultWindowPlacement { _, _ in WindowPlacement(.utilityPanel) }
-
-        WindowGroup(id: NotebookView.windowID) {
-            NotebookView()
-                .environment(appModel)
-        }
-        .defaultSize(width: 480, height: 760)
         .windowResizability(.contentSize)
         .defaultWindowPlacement { _, _ in WindowPlacement(.utilityPanel) }
 

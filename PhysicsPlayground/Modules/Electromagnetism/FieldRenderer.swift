@@ -58,7 +58,7 @@ final class FieldRenderer {
     static let probeEntityName = "probe"
 
     // MARK: Visual constants — always the DesignTokens conventions, so the
-    // in-space entities and the shell-rendered legend can never drift apart.
+    // in-space entities and the window UI can never drift apart.
     static let positiveColor = DesignTokens.Palette.positiveUI
     static let negativeColor = DesignTokens.Palette.negativeUI
     static let probePositiveColor = DesignTokens.Palette.probePositiveUI

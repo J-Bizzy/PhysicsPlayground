@@ -3,7 +3,7 @@
 //  Physics Playground — Shell
 //
 //  The module's window is a title bar: back to the catalog, the module's
-//  name, and notebook, place-the-lab, studio and Reset. Beneath it, only
+//  name, and the Physics box, place-the-lab, studio and Reset. Beneath it, only
 //  while the immersive space is closed, "Show in room". Nothing else —
 //  no panel and no hint; the apparatus explains itself.
 //
@@ -15,7 +15,6 @@ struct ModuleHostView: View {
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
-    @Environment(\.openWindow) private var openWindow
     /// The icon tile scales with the type it frames.
     @ScaledMetric(relativeTo: .headline) private var iconTile = 30.0
     @State private var confirmingReset = false
@@ -58,15 +57,6 @@ struct ModuleHostView: View {
                 Spacer(minLength: 12)
 
                 // Right: modes.
-                Button {
-                    openWindow(id: NotebookView.windowID)
-                } label: {
-                    Image(systemName: "book.closed")
-                }
-                .help("Lab Notebook")
-                .accessibilityLabel("Lab Notebook")
-                .accessibilityHint("Your recorded observations — capture, read, export")
-
                 // The Physics box: the lab's live numbers on a card in the
                 // room, with a rail for each quantity you can set.
                 Button {
@@ -144,7 +134,7 @@ struct ModuleHostView: View {
                     }
                     Button("Cancel", role: .cancel) { }
                 } message: {
-                    Text("Everything you have set up here goes back to how the lab opened. Recorded notebook entries are kept.")
+                    Text("Everything you have set up here goes back to how the lab opened.")
                 }
             }
             .buttonBorderShape(.circle)

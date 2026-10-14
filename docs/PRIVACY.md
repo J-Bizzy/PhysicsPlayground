@@ -41,15 +41,11 @@ warning in its title bar telling you where in Settings to turn it back on.
 
 Stored locally in the app's own container, never transmitted:
 
-- **Lab Notebook entries** — the observations you choose to capture, with
-  the physics readings at that moment.
 - **Settings** — volume, gallery placement, which first-run hints you
   have dismissed.
 - **Your circuit bench** — Circuit Workshop remembers what you built.
 
-Deleting the app deletes all of it. The Notebook's export button hands a
-CSV or Markdown file to the system share sheet; where it goes from there
-is entirely your choice, and the app is not involved.
+Deleting the app deletes all of it. Nothing is exported or shared.
 
 ## Children
 

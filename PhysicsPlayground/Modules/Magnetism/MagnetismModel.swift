@@ -414,7 +414,7 @@ final class MagnetismModel {
                                            Self.strengthRange.upperBound)
     }
 
-    // MARK: Field readout for the notebook
+    // MARK: Field readout for the Physics box
 
     /// |B| in millitesla at the region centre — a live sense of the field.
     var centerFieldMilliTesla: Double {

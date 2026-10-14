@@ -24,11 +24,13 @@ final class SellingCopyCriterionTests: XCTestCase {
         "-penFoucault", // the staging arguments the old shot 5 used
         "-penSpin",
         "next step",    // the experiments system's affordance (2026-08-09)
+        "Notebook",     // the Lab Notebook, capture and CSV export (2026-10-14)
+        "-notebookOpen", "-notebookSeed", // its staging arguments
+        "best streak",  // the hoop streak, the last progress tracking (2026-10-14)
     ]
 
     // Deliberately not on that list: "experiment" is ordinary English the
-    // copy uses, and "streak" is a live feature (the hoop streak). Ban only
-    // names that can mean nothing but the dead feature.
+    // copy uses. Ban only names that can mean nothing but the dead feature.
 
     private func repositoryRoot() throws -> URL {
         let thisFile = URL(fileURLWithPath: #filePath)

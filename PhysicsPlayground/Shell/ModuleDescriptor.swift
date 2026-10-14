@@ -32,18 +32,12 @@ struct ModuleDescriptor: Identifiable {
     /// How far out this module wants the dimming shell, metres; larger only
     /// when the apparatus is larger than the default.
     var preferredDimmingRadius: Float = RoomDimmerView.defaultRadius
-    /// Rendered by the shell in the shared legend style.
-    let legend: [LegendItem]
     /// Freeze-everything state, driving the shared in-space pause orb.
     let isPaused: () -> Bool
     let togglePause: () -> Void
     let makeScene: () -> AnyView
-    /// The readings the notebook writes down when the user captures a
-    /// moment, read live from the model.
-    var captureReadings: () -> [NotebookEntry.Reading] = { [] }
-    /// What the Physics box shows, when a module wants a shorter list than
-    /// the notebook records; nil shows `captureReadings`.
-    var physicsRows: (() -> [NotebookEntry.Reading])? = nil
+    /// The lab's live numbers, read from the model, for the Physics box.
+    var readings: () -> [Reading] = { [] }
     /// One line of disclosure under the numbers, or nil.
     var physicsNote: () -> String? = { nil }
     /// The quantities the Physics box lets you set, one rail each.
@@ -104,19 +98,17 @@ struct TimeScrubControls {
         stepFrames: { _ in }, resume: {})
 }
 
-/// One row of a module's legend. The swatch shapes match how the concept
-/// is actually drawn in the scene, so the legend reads as a key, not prose.
-struct LegendItem: Identifiable {
-    enum Swatch {
-        case fill(Color)
-        case stroke(Color)
-        case line(Color)
-        case symbol(String, Color)
-    }
+/// One live number: a name, a formatted value and its unit.
+struct Reading: Equatable {
+    var name: String
+    var value: String
+    var unit: String
 
-    let id = UUID()
-    let swatch: Swatch
-    let text: String
+    init(_ name: String, _ value: String, _ unit: String = "") {
+        self.name = name
+        self.value = value
+        self.unit = unit
+    }
 }
 
 @MainActor

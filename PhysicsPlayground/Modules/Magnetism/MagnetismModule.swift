@@ -2,7 +2,7 @@
 //  MagnetismModule.swift
 //  Physics Playground — Magnetism bench
 //
-//  Catalog entry, legend, and notebook readings. Bar magnets whose
+//  Catalog entry and live readings. Bar magnets whose
 //  looping field fills the room in 3D.
 //
 
@@ -22,13 +22,12 @@ enum MagnetismModule {
             accent: DesignTokens.Palette.magnetismAccent,
             // Opens part-dimmed: the looping lines are the module.
             preferredDimming: 0.35,
-            legend: legendItems,
             isPaused: { appModel.magnetismModel.isPaused },
             togglePause: { appModel.magnetismModel.togglePauseRespectingScrub() },
             makeScene: {
                 AnyView(MagnetismSpaceView().environment(appModel.magnetismModel))
             },
-            captureReadings: { readings(appModel: appModel) },
+            readings: { readings(appModel: appModel) },
             adjustables: [
                 // The selected magnet's moment, or the first magnet's when
                 // nothing is selected: the box always has a magnet to turn.
@@ -49,10 +48,10 @@ enum MagnetismModule {
             reset: { appModel.magnetismModel.reset() }
         )
     }
-    /// The readings this bench writes into the lab notebook.
-    static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
+    /// The live numbers the Physics box shows.
+    static func readings(appModel: AppModel) -> [Reading] {
         let model = appModel.magnetismModel
-        var rows: [NotebookEntry.Reading] = [
+        var rows: [Reading] = [
             .init("Magnets", "\(model.magnets.count)"),
             .init("|B| at center",
                   PhysicsFormat.metric(model.centerFieldMilliTesla / 1000, "T",
@@ -78,29 +77,5 @@ enum MagnetismModule {
         }
         return rows
     }
-
-    static let legendItems: [LegendItem] = [
-        LegendItem(swatch: .fill(DesignTokens.Palette.positive),
-                   text: "North pole (red)"),
-        LegendItem(swatch: .fill(DesignTokens.Palette.negative),
-                   text: "South pole (blue)"),
-        LegendItem(swatch: .line(Color(uiColor: MagnetismRenderer.lineColor)),
-                   text: "Field lines — closed loops running N to S outside the magnet, seeded THROUGH the room so the field fills the space you stand in. Every curve is a true streamline of B, and a stronger magnet sends out more of them; within one picture the lines are spread by volume, so exact local density is the field's shape rather than a flux count."),
-        LegendItem(swatch: .symbol("location.north.fill", Color(uiColor: MagnetismRenderer.lineColor)),
-                   text: "The hand compass points along the local field — and it is a SPHERE, with its needle free to swing in any direction. A flat dial can only show the part of B lying in the dial; between two poles the field usually points out of it."),
-        LegendItem(swatch: .stroke(DesignTokens.Palette.selectionHalo),
-                   text: "Halo marks the selected magnet"),
-        // A disclosed fudge: the fields, force and torque are exact, but
-        // the motion is a capped quasi-static mobility law, not Newton's —
-        // the bars have no mass or moment of inertia here.
-        LegendItem(
-            swatch: .symbol("arrow.triangle.2.circlepath",
-                            Color(uiColor: MagnetismRenderer.lineColor)),
-            text: "The magnets GLIDE rather than accelerate. Every field, force and torque on this bench is exact — but a magnet's speed is set by the force on it and its turn rate by the torque, so it slides into alignment and stops. A real bar magnet has mass and rotational inertia: released at an angle it would swing PAST north and ring back and forth before settling. Nothing here overshoots, and that is a simplification, not the physics."
-        ),
-        LegendItem(
-            swatch: .symbol("globe", Color(uiColor: MagnetismRenderer.lineColor)),
-            text: "Earth's field is here too, at its real 50 µT — and a 6 A·m² bar magnet matches that at about 30 cm, so a compass carried an arm's length clear of the bench hands over to the planet. It is NOT horizontal: it runs 65° into the ground, which is why the needle tips down when it settles, and why a dip circle is a separate instrument in a real lab. Which way north lies is a convention — visionOS gives no heading — but the strength and the dip are real. Earth pulls on the hand compass only, not on the bar magnets."),
-    ]
 
 }

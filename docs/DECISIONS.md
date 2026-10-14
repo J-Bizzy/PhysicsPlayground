@@ -16,6 +16,38 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-14 — The Lab Notebook and the last progress tracking are cut
+
+**Decision:** The owner's subtraction brief (`docs/redesign-audit.md`) cuts
+the Lab Notebook, any challenges, and progress tracking. Removed with the
+Notebook:
+- `LabNotebook`, `NotebookView` and the Notebook window;
+- the capture petal and the title bar's and home's book buttons;
+- `-notebookOpen` and `-notebookSeed`;
+- `LabNotebookTests`;
+- the module legends (`LegendItem`, `LegendView`, every `legend:`), whose
+  only surface was the Notebook window.
+
+Removed from Projectiles: the hoop streak, the persisted best streak
+(`kinematics.bestStreak`) and the score number over each hoop. A hoop
+still flashes and chimes when a ball passes down through it, and the model
+counts `passes`, not `score`. An upgraded install forgets the Notebook's
+entries and the best streak, as it already forgot `visited.modules`.
+`NotebookEntry.Reading` becomes `Reading`. `captureReadings` becomes
+`readings`, the Physics box's one list; `physicsRows` existed only so the
+Notebook could record more than the box showed, and goes.
+
+**Context:** This reverses 2026-07-29 ("The Lab Notebook goes live") and
+the demo's notebook beat from the release plan. No daily-challenge surface
+ever shipped. The experiments system and its progress ring went on
+2026-08-09. That left the streak as the last thing that counted the
+wearer.
+
+**Consequences:** Readings are now only for reading, in the Physics box.
+Nothing exports. `SellingCopyCriterionTests` bans "Notebook", its two
+arguments and "best streak" from the selling copy. Demo beat 9 shows the
+Physics box instead. PRIVACY no longer lists notebook entries.
+
 ## 2026-10-14 — The labs answer a hand the same way, and their words agree
 
 **Decision:** A polish pass across all six labs, no new controls. Three

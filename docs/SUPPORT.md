@@ -45,12 +45,6 @@ The cross-hair button in the title bar. Drag the cross-hair to put the
 apparatus where you actually have space; **tap** it to snap back to the
 middle; press the title-bar button again when you are done.
 
-### Can I get my readings out?
-
-Yes. The book button opens the Lab Notebook. Capture records the physics
-exactly as it was at that instant, and the whole notebook exports as CSV
-or Markdown through the share sheet.
-
 ### Is the physics real?
 
 Yes, and that is the point of the app. SI units, real constants, and

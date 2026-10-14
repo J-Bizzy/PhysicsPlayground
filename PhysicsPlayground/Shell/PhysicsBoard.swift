@@ -6,7 +6,7 @@
 //  room, with a rail beside it for each quantity the lab lets you set.
 //  Opened by the title bar's ƒ button, folded by it again. One
 //  implementation serves all six modules through `ModuleDescriptor`:
-//  `physicsRows`/`captureReadings` are the numbers, `adjustables` the
+//  `readings` are the numbers, `adjustables` the
 //  rails. Stands high on the left, clear of every flank instrument, and
 //  follows the lab placement.
 //
@@ -194,7 +194,7 @@ struct PhysicsCard: View {
                         .foregroundStyle(.secondary)
                 }
 
-                let rows = module.physicsRows?() ?? module.captureReadings()
+                let rows = module.readings()
                 Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 5) {
                     ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                         GridRow {

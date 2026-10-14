@@ -49,7 +49,7 @@ final class PeriodTagTests: XCTestCase {
     }
 
     /// A chaotic rig has no period, so the double wears no tag — in the
-    /// room, on its card, or in the notebook. It is the only pendulum here
+    /// room, on its card, or in the Physics box. It is the only pendulum here
     /// and selected, so neither crowding nor selection can explain an
     /// absent tag.
     func testTheDoublePendulumWearsNoPeriodTag() throws {
@@ -82,7 +82,7 @@ final class PeriodTagTests: XCTestCase {
         XCTAssertTrue(readings.contains { $0.name == "Length" },
                       "the double is selected, so its length is written")
         XCTAssertFalse(readings.contains { $0.name.hasPrefix("Period") },
-                       "the notebook must not write a period for a chaotic rig")
+                       "the Physics box must not show a period for a chaotic rig")
     }
 
     func testThePeriodTagIsCentredOnBothAxes() {

@@ -2,7 +2,7 @@
 //  ElectromagnetismModule.swift
 //  Physics Playground — Electromagnetism module
 //
-//  Catalog registration for Electric Fields: descriptor, readings and legend.
+//  Catalog registration for Electric Fields: descriptor and readings.
 //
 
 import SwiftUI
@@ -11,7 +11,7 @@ import simd
 
 @MainActor
 enum ElectromagnetismModule {
-    // Keys this bench's notebook history.
+    // The module's identity in the catalog.
     static let id = "electrostatics"
 
     static func descriptor(appModel: AppModel) -> ModuleDescriptor {
@@ -24,13 +24,12 @@ enum ElectromagnetismModule {
             // Opens part-dimmed: field lines are thin glowing filaments —
             // they need something to glow against.
             preferredDimming: 0.35,
-            legend: legendItems,
             isPaused: { appModel.electromagnetismModel.isPaused },
             togglePause: { appModel.electromagnetismModel.togglePauseRespectingScrub() },
             makeScene: {
                 AnyView(FieldSpaceView().environment(appModel.electromagnetismModel))
             },
-            captureReadings: { readings(appModel: appModel) },
+            readings: { readings(appModel: appModel) },
             physicsNote: {
                 // 50 kT is a stage light, not a measurement — about a thousand
                 // times the strongest steady field ever built, needed to bend a
@@ -65,10 +64,10 @@ enum ElectromagnetismModule {
         ]
     }
 
-    /// The readings this bench writes into the lab notebook.
-    static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
+    /// The live numbers the Physics box shows.
+    static func readings(appModel: AppModel) -> [Reading] {
         let model = appModel.electromagnetismModel
-        var rows: [NotebookEntry.Reading] = [
+        var rows: [Reading] = [
             .init("Charges", "\(model.charges.count)"),
             .init("Net charge",
                   PhysicsFormat.scientific(
@@ -116,41 +115,4 @@ enum ElectromagnetismModule {
         return rows
     }
 
-    static let legendItems: [LegendItem] = [
-        LegendItem(
-            swatch: .fill(DesignTokens.Palette.positive),
-            text: "Positive charge"
-        ),
-        LegendItem(
-            swatch: .fill(DesignTokens.Palette.negative),
-            text: "Negative charge"
-        ),
-        LegendItem(
-            swatch: .fill(DesignTokens.Palette.probePositive),
-            text: "Positive test charge (accelerates via F = qE)"
-        ),
-        LegendItem(
-            swatch: .fill(DesignTokens.Palette.probeNegative),
-            text: "Negative test charge"
-        ),
-        LegendItem(
-            swatch: .line(DesignTokens.Palette.fieldLine),
-            text: "Field lines run from positive to negative"
-        ),
-        LegendItem(
-            swatch: .stroke(DesignTokens.Palette.selectionHalo),
-            text: "Halo marks the selected charge"
-        ),
-        LegendItem(
-            swatch: .symbol("arrow.up.right", DesignTokens.Palette.fieldLine),
-            text: "Arrowheads ride the field lines, pointing along E"
-        ),
-        // A disclosed fudge: `chargesRespond` moves source charges by an
-        // overdamped mobility law (velocity ∝ force, capped), not F = ma. The
-        // field, force and potential are exact Coulomb; only the travel is.
-        LegendItem(
-            swatch: .symbol("arrow.left.and.right", DesignTokens.Palette.fieldLine),
-            text: "Free charges DRIFT rather than accelerate: with the switch on, a charge's speed is set by the force on it instead of its acceleration, so the flock slides into place and settles rather than overshooting and oscillating. The field, the force and the potential are exact Coulomb; only the travel is a simplification, chosen so a pair you release finds equilibrium in front of you instead of ringing about it forever."
-        ),
-    ]
 }

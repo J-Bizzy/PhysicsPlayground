@@ -224,7 +224,7 @@ final class KinematicsModelTests: XCTestCase {
 
             model.aim(atSolution: pick, for: id)
             fireUntilLanded(model)
-            XCTAssertEqual(model.rings[0].score, 1,
+            XCTAssertEqual(model.rings[0].passes, 1,
                            "the \(pick) solution must put the ball through the rim")
         }
     }
@@ -240,7 +240,7 @@ final class KinematicsModelTests: XCTestCase {
         let id = try XCTUnwrap(model.addRing(at: model.launcherPosition + SIMD3(2.0, 0.3, 0)))
         model.aim(atSolution: .low, for: id)
         fireUntilLanded(model)
-        XCTAssertEqual(model.rings[0].score, 1)
+        XCTAssertEqual(model.rings[0].passes, 1)
     }
 
     func testOutOfRangeHasNoSolutionAndAimingIsANoOp() throws {
@@ -289,7 +289,7 @@ final class KinematicsModelTests: XCTestCase {
             model.setAim(elevationDegrees: atan2(offset.y, offset.x) * 180 / .pi,
                          azimuthDegrees: 0)
             fireUntilLanded(model)
-            XCTAssertEqual(model.rings[0].score, 1,
+            XCTAssertEqual(model.rings[0].passes, 1,
                            "g = \(g): the ball must meet the falling hoop")
         }
     }
@@ -305,7 +305,7 @@ final class KinematicsModelTests: XCTestCase {
         model.setAim(elevationDegrees: atan2(offset.y, offset.x) * 180 / .pi,
                      azimuthDegrees: 0)
         fireUntilLanded(model)
-        XCTAssertEqual(model.rings[0].score, 0)
+        XCTAssertEqual(model.rings[0].passes, 0)
         XCTAssertEqual(model.rings[0].position, model.rings[0].anchor, "an unarmed hoop never moves")
         _ = id
     }
@@ -445,8 +445,8 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertGreaterThan(ghost.range, model.prediction.range)
     }
 
-    /// One pass through a hoop scores exactly once; a miss scores nothing.
-    func testBallThroughHoopScoresOnceAndMissesDoNot() {
+    /// One pass through a hoop counts exactly once; a miss counts nothing.
+    func testBallThroughHoopCountsOnceAndMissesDoNot() {
         let model = bareModel()
         model.addRing()
         let ringPosition = SIMD3<Double>(0.5, 1.0, -1.0)
@@ -459,8 +459,7 @@ final class KinematicsModelTests: XCTestCase {
         for _ in 0..<3000 where model.flights[0].status == .flying {
             model.step(dt: 1.0 / 90.0)
         }
-        XCTAssertEqual(model.rings[0].score, 1, "one pass through the hoop = one point")
-        XCTAssertEqual(model.totalScore, 1)
+        XCTAssertEqual(model.rings[0].passes, 1, "one pass through the hoop counts once")
 
         model.clearFlights()
         model.moveLauncher(to: ringPosition + SIMD3(1.0, 1.0, 0))
@@ -468,7 +467,7 @@ final class KinematicsModelTests: XCTestCase {
         for _ in 0..<3000 where model.flights[0].status == .flying {
             model.step(dt: 1.0 / 90.0)
         }
-        XCTAssertEqual(model.rings[0].score, 1, "a miss must not score")
+        XCTAssertEqual(model.rings[0].passes, 1, "a miss must not count")
     }
 
     /// Slow motion halves simulated progress per wall-time frame.
@@ -526,35 +525,6 @@ final class KinematicsModelTests: XCTestCase {
         model.hoopsOrbit = false
         model.step(dt: 1.0 / 90.0)
         XCTAssertEqual(model.rings[0].position, anchor)
-    }
-
-    /// A score grows the streak (and best); a landed miss with hoops up resets it.
-    func testStreakGrowsOnScoresAndDiesOnMisses() {
-        UserDefaults.standard.removeObject(forKey: "kinematics.bestStreak")
-        let model = bareModel()
-        model.addRing()
-        let ringPosition = SIMD3<Double>(0.5, 1.0, -1.0)
-        model.moveRing(id: model.rings[0].id, to: ringPosition)
-
-        func fire(over target: SIMD3<Double>) {
-            model.clearFlights()
-            model.moveLauncher(to: target + SIMD3(0, 1.0, 0))
-            model.setAim(elevationDegrees: -85, azimuthDegrees: 0)
-            model.launchSpeed = 1
-            model.fire()
-            for _ in 0..<3000 where model.flights.first?.status == .flying {
-                model.step(dt: 1.0 / 90.0)
-            }
-        }
-
-        fire(over: ringPosition)                      // swish
-        XCTAssertEqual(model.streak, 1)
-        fire(over: ringPosition)                      // swish again
-        XCTAssertEqual(model.streak, 2)
-        XCTAssertEqual(model.bestStreak, 2)
-        fire(over: ringPosition + SIMD3(1, 0, 0))     // air ball
-        XCTAssertEqual(model.streak, 0, "a landed miss with hoops up kills the streak")
-        XCTAssertEqual(model.bestStreak, 2, "the best survives")
     }
 
     /// Containment: with room bounds set, no ball ever ends a frame outside the
@@ -679,7 +649,6 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(model.flights.count, 1)
         XCTAssertTrue(model.flights.contains { $0.status == .flying },
                       "the module is alive the instant it appears")
-        XCTAssertEqual(model.totalScore, 0)
         // The default launch must land inside a room: range = v²/g at 45°.
         let range = model.launchSpeed * model.launchSpeed / model.gravity
         XCTAssertLessThan(range, 3.0,

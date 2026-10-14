@@ -4,8 +4,8 @@
 //
 //  Navigation, as one object: the app's only permanent piece of
 //  interface. Pinch the bead and it unfolds into a ring of the labs
-//  themselves — live miniatures — plus six petals: home, pause, capture,
-//  dim, settings, reset. The open row's width derives from the petal
+//  themselves — live miniatures — plus five petals: home, pause, dim,
+//  settings, reset. The open row's width derives from the petal
 //  count (`petalRowSpan`), so a new petal cannot overlap its neighbours.
 //  Reset arms before it fires, like every destructive plate in the room.
 //
@@ -73,8 +73,6 @@ final class Palette {
     var onPause: (() -> Void)?
     var onReset: (() -> Void)?
     var onSettings: (() -> Void)?
-    /// Returns whether anything was written down; a refusal thuds.
-    var onCapture: (() -> Bool)?
     /// Back to the gallery.
     var onHome: (() -> Void)?
     /// Steps the room dimmer off → half → full.
@@ -188,7 +186,6 @@ final class Palette {
         petals = [
             Self.makePetal(name: "home", symbol: "square.grid.2x2.fill"),
             Self.makePetal(name: "pause", symbol: "pause.fill"),
-            Self.makePetal(name: "capture", symbol: "square.and.pencil"),
             Self.makePetal(name: "dim", symbol: "circle.lefthalf.filled"),
             Self.makePetal(name: "settings", symbol: "gearshape.fill"),
             Self.makePetal(name: "reset", symbol: "arrow.counterclockwise"),
@@ -349,18 +346,9 @@ final class Palette {
         }
         guard isOpen else { return false }
         if name == "palette-pause" { onPause?(); isOpen = false; return true }
-        if name == "palette-capture" {
-            // Capture stays open: a run of captures is one errand. A lab with
-            // nothing to say gets the house "no", not a chime for a page that
-            // was never written.
-            let wrote = onCapture?() ?? false
-            SoundPalette.play(wrote ? .chime : .thud, on: bead,
-                              volume: wrote ? 0.5 : 0.35)
-            return true
-        }
         if name == "palette-home" { onHome?(); isOpen = false; return true }
         if name == "palette-dim" {
-            // Stays open, like capture: dimming is tuned by looking at the result.
+            // Stays open: dimming is tuned by looking at the result.
             onDim?()
             SoundPalette.play(.pop, on: bead, volume: 0.35)
             return true
@@ -597,7 +585,6 @@ struct PaletteView: View {
             made.isPaused = { module.isPaused() }
             made.onReset = { appModel.resetActiveModule(module) }
             made.onSettings = { openWindow(id: SettingsView.windowID) }
-            made.onCapture = { appModel.captureNotebookEntry() }
             // Home clears the active module, which swaps the module scene for
             // `HubSpaceView` inside the same immersive space.
             made.onHome = { appModel.go(to: nil) }

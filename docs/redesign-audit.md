@@ -368,3 +368,29 @@ Baseline screenshots, taken with the simulator at launch defaults:
 `docs/redesign-shots/before-home.jpg`, `before-electrostatics.jpg`,
 `before-magnetism.jpg`, `before-kinematics.jpg`, `before-circuits.jpg`,
 `before-pendulums.jpg`, `before-gravitylab.jpg`.
+
+### Step 2 — the Notebook, the streak and the legends are cut (2026-10-14)
+
+Removed: `LabNotebook`, `NotebookView`, the Notebook window, the capture
+petal, the book buttons (title bar, home utility bar), `-notebookOpen`,
+`-notebookSeed`, `LabNotebookTests`. Also the module legends, whose only
+surface was the Notebook window: `LegendItem`, `LegendView`, six `legend:`
+arrays. In Projectiles: the hoop streak, the persisted best streak, the
+score number over each hoop and the "Hoops / Score / Best streak" rows. The
+model now counts `passes`, which still drive the hoop's flash and chime.
+
+`NotebookEntry.Reading` became `Reading`, and `captureReadings` became
+`readings`, the Physics box's one list. `physicsRows` went with the
+Notebook. An upgraded install forgets `notebook.entries.v1` and
+`kinematics.bestStreak`.
+
+Docs: App Store copy (count re-measured, 3,626 characters), Support,
+Privacy, demo beat 9 (now the Physics box), the device checklist,
+CLAUDE.md's argument list, DECISIONS. `SellingCopyCriterionTests` now bans
+"Notebook", its two arguments and "best streak" from the selling copy.
+
+Tests: PhysicsCore 469/469. App 901/901: 908 before, minus six Notebook
+tests and the streak test. Screenshots:
+`docs/redesign-shots/step2-home.jpg` (utility bar: Lab list, Settings,
+About) and `step2-kinematics-hoops.jpg` (two hoops, aim callout, no score;
+title bar without the book).

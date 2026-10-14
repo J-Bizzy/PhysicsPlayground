@@ -62,24 +62,6 @@ struct PlaygroundSpaceView: View {
         if defaults.bool(forKey: "physicsOpen") {
             appModel.physicsBoardOpen = true
         }
-        // `-notebookSeed 1` fills the notebook with sample observations.
-        if defaults.bool(forKey: "notebookSeed"),
-           appModel.notebook.entries.isEmpty {
-            appModel.notebook.record(
-                moduleID: "electrostatics", moduleTitle: "Electric Fields",
-                title: "Seeded observation 1",
-                readings: [.init("Charges", "2"),
-                           .init("Net charge", "0.0", "C"),
-                           .init("|E| 10 cm away", "8.99e5", "N/C")])
-            appModel.notebook.record(
-                moduleID: "pendulums", moduleTitle: "Pendulums",
-                title: "Seeded observation 1",
-                readings: [.init("Length", "0.80", "m"),
-                           .init("Period", "1.79", "s")])
-        }
-        if defaults.bool(forKey: "notebookOpen") {
-            openWindow(id: NotebookView.windowID)
-        }
         // Each of these clears the bench, builds one small loop a hand could
         // have built, and selects the part the feature is about.
         // `-circCoil 1`: battery → resistor → inductor, field layer lit.

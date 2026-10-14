@@ -250,8 +250,8 @@ final class KinematicsModel {
         /// Where this arc began, for the range readout.
         var launchPoint = SIMD3<Double>.zero
         var wasThrown = false
-        /// Each flight can score each hoop once — a bounce back up through the rim must not re-score.
-        var scoredRings: Set<UUID> = []
+        /// Each flight can pass each hoop once — a bounce back up through the rim must not count again.
+        var passedRings: Set<UUID> = []
 
         enum Status: Equatable {
             /// Hovering, waiting to be grabbed.
@@ -406,7 +406,7 @@ final class KinematicsModel {
         flights[index].elapsed = 0
         flights[index].nextDotTime = Self.dotInterval
         flights[index].bounces = 0
-        flights[index].scoredRings.removeAll()
+        flights[index].passedRings.removeAll()
     }
 
     /// `timestamp` defaults to the wall clock; tests inject exact times.
@@ -448,7 +448,8 @@ final class KinematicsModel {
         var anchor: SIMD3<Double>
         var position: SIMD3<Double>
         var phase: Double
-        var score = 0
+        /// Balls that have passed down through it — what lights it.
+        var passes = 0
         /// Monkey and hunter: armed, the hoop lets go the
         /// instant a shot leaves the launcher and falls with the ball.
         var dropOnFire = false
@@ -459,7 +460,7 @@ final class KinematicsModel {
     nonisolated static let fallenHoopHeight = 0.02
 
     private(set) var rings: [Ring] = []
-    /// Bumped shortly after a score so observers re-render the flash off.
+    /// Bumped shortly after a pass so observers re-render the flash off.
     private(set) var ringFlashNonce = 0
 
     /// Moving targets: hoops circle their anchors — the skill mode.
@@ -467,11 +468,6 @@ final class KinematicsModel {
     nonisolated static let hoopOrbitRadius = 0.25
     nonisolated static let hoopOrbitSpeed = 0.55  // rad/s (simulated time)
 
-    var totalScore: Int { rings.reduce(0) { $0 + $1.score } }
-
-    /// Consecutive scoring flights; a landed miss (with hoops up) resets it.
-    private(set) var streak = 0
-    private(set) var bestStreak = UserDefaults.standard.integer(forKey: "kinematics.bestStreak")
 
     func addRing() {
         guard rings.count < Self.ringBudget else { return }
@@ -681,15 +677,15 @@ final class KinematicsModel {
         }
     }
 
-    /// Returns the hoops newly scored by this segment of flight.
+    /// Returns the hoops newly passed by this segment of flight.
     private func checkRings(
         previous: SIMD3<Double>,
         current: SIMD3<Double>,
         ballRadius: Double,
-        alreadyScored: Set<UUID>
+        alreadyPassed: Set<UUID>
     ) -> Set<UUID> {
-        var newlyScored: Set<UUID> = []
-        for index in rings.indices where !alreadyScored.contains(rings[index].id) {
+        var newlyPassed: Set<UUID> = []
+        for index in rings.indices where !alreadyPassed.contains(rings[index].id) {
             let ring = rings[index]
             let met: Bool
             if ring.falling {
@@ -705,8 +701,8 @@ final class KinematicsModel {
                 met = simd_length(planar) < Self.ringRadius - ballRadius * 0.5
             }
             if met {
-                rings[index].score += 1
-                newlyScored.insert(ring.id)
+                rings[index].passes += 1
+                newlyPassed.insert(ring.id)
                 emitSound(.chime, at: ring.position, volume: 1)
                 let generation = ringFlashNonce
                 Task { [weak self] in
@@ -716,7 +712,7 @@ final class KinematicsModel {
                 }
             }
         }
-        return newlyScored
+        return newlyPassed
     }
 
     // MARK: Stepping
@@ -768,11 +764,11 @@ final class KinematicsModel {
         flight.elapsed += dt
         flight.maxHeight = max(flight.maxHeight, flight.state.position.y)
 
-        flight.scoredRings.formUnion(checkRings(
+        flight.passedRings.formUnion(checkRings(
             previous: previous.position,
             current: flight.state.position,
             ballRadius: flight.projectile.diameter / 2,
-            alreadyScored: flight.scoredRings
+            alreadyPassed: flight.passedRings
         ))
 
         // Strobe dots at exact simulated-time intervals, interpolated inside the frame so spacing genuinely encodes speed.
@@ -842,17 +838,6 @@ final class KinematicsModel {
                     flightTime: contactTime,
                     wasThrown: flight.wasThrown
                 )
-                if !rings.isEmpty {
-                    if flight.scoredRings.isEmpty {
-                        streak = 0
-                    } else {
-                        streak += 1
-                        if streak > bestStreak {
-                            bestStreak = streak
-                            UserDefaults.standard.set(bestStreak, forKey: "kinematics.bestStreak")
-                        }
-                    }
-                }
             }
             emitSound(.thud, at: contact,
                       volume: min(abs(flight.state.velocity.y) / 6, 1))
@@ -958,7 +943,6 @@ final class KinematicsModel {
         clearFlights()
         rings.removeAll()
         hoopsOrbit = false
-        streak = 0
         launcherPosition = Self.launcherHome
         launchSpeed = Self.roomFittingSpeed
         gravity = 9.81
@@ -992,7 +976,7 @@ final class KinematicsModel {
 
 extension KinematicsModel: TimeCapsuleRecording {
     /// The experiment, not the observer: flights, hoops, aim, environment.
-    /// Excluded: room walls/bounds (the live room feeds them), settings, streaks, sounds.
+    /// Excluded: room walls/bounds (the live room feeds them), settings, sounds.
     struct CapsuleSnapshot: Equatable {
         var flights: [Flight]
         var rings: [Ring]

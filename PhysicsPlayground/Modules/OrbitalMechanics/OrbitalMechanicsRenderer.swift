@@ -1081,7 +1081,7 @@ final class OrbitalMechanicsRenderer {
         predictionPipeline?.submit(PredictionJob(inputs: inputs, scale: scale))
     }
 
-    // MARK: Vectors (lengths are log-scaled; the legend says so)
+    // MARK: Vectors (lengths are log-scaled)
 
     private func syncVectors(_ model: OrbitalMechanicsModel) {
         guard let selected = model.selectedBody,

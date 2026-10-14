@@ -1,6 +1,6 @@
 //
 //  KinematicsModule.swift
-//  Physics Playground — Kinematics: catalog registration — descriptor, legend, notebook readings.
+//  Physics Playground — Kinematics: catalog registration — descriptor and readings.
 //
 
 import SwiftUI
@@ -19,14 +19,13 @@ enum KinematicsModule {
             accent: DesignTokens.Palette.kinematicsAccent,
             // The house dimming (Orbital Mechanics' 0.85 is the one exception).
             preferredDimming: 0.35,
-            legend: legend,
             isPaused: { appModel.kinematicsModel.isPaused },
             // Through the capsule: un-pausing from a scrubbed instant resumes from it.
             togglePause: { appModel.kinematicsModel.togglePauseRespectingScrub() },
             makeScene: {
                 AnyView(KinematicsSpaceView().environment(appModel.kinematicsModel))
             },
-            captureReadings: { readings(appModel: appModel) },
+            readings: { readings(appModel: appModel) },
             adjustables: [
                 .init(id: "gravity", label: "Gravity g", unit: "m/s²",
                       range: KinematicsModel.gravityRange, decimals: 2,
@@ -47,10 +46,10 @@ enum KinematicsModule {
         )
     }
 
-    /// The readings this bench writes into the lab notebook.
-    static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
+    /// The live numbers the Physics box shows.
+    static func readings(appModel: AppModel) -> [Reading] {
             let model = appModel.kinematicsModel
-            var rows: [NotebookEntry.Reading] = [
+            var rows: [Reading] = [
                 .init("Projectile", model.kind.displayName),
                 .init("Mass", PhysicsFormat.fixed(model.projectile.mass, decimals: 3), "kg"),
                 .init("Gravity", PhysicsFormat.fixed(model.gravity, decimals: 2), "m/s²"),
@@ -64,32 +63,7 @@ enum KinematicsModule {
                 rows.append(.init("Flight time", PhysicsFormat.fixed(last.flightTime, decimals: 3), "s"))
                 rows.append(.init("Launched by", last.wasThrown ? "hand" : "launcher"))
             }
-            // A bench with hoops on it writes its score.
-            if !model.rings.isEmpty {
-                rows.append(.init("Hoops", "\(model.rings.count)"))
-                rows.append(.init("Score", "\(model.totalScore)"))
-                rows.append(.init("Best streak", "\(model.bestStreak)"))
-            }
             return rows
     }
 
-    /// The bench's full legend.
-    static let legend: [LegendItem] = [
-        LegendItem(
-            swatch: .fill(DesignTokens.Palette.projectile),
-            text: "Balls at their real sizes — grab and throw any of them, anywhere"
-        ),
-        LegendItem(
-            swatch: .stroke(DesignTokens.Palette.kinematicsAccent),
-            text: "Aim bead — pinch and drag to point the launcher; grab the launcher body to move it"
-        ),
-        LegendItem(
-            swatch: .line(DesignTokens.Palette.predictedArc),
-            text: "Predicted arc from the launcher, bounces included"
-        ),
-        LegendItem(
-            swatch: .fill(DesignTokens.Palette.projectile),
-            text: "Strobe dots — one per 1/15 s of simulated time, so wider spacing means faster"
-        ),
-    ]
 }

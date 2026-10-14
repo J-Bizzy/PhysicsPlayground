@@ -90,7 +90,6 @@ struct HubSpaceView: View {
                 HubUtilityBar(
                     openSettings: { openWindow(id: SettingsView.windowID) },
                     openAbout: { openWindow(id: AboutView.windowID) },
-                    openNotebook: { openWindow(id: NotebookView.windowID) },
                     // Never a second one — see `AppModel.mainWindowCount`.
                     openCatalog: {
                         if appModel.wantsMainWindow {
@@ -1604,12 +1603,11 @@ private struct HubLoadButton: View {
     }
 }
 
-/// Utility bar under the wordmark: Lab list, Settings, Notebook, About.
+/// Utility bar under the wordmark: Lab list, Settings, About.
 /// No Exit button — visionOS offers no supported way for an app to quit.
 private struct HubUtilityBar: View {
     let openSettings: () -> Void
     let openAbout: () -> Void
-    let openNotebook: () -> Void
     let openCatalog: () -> Void
 
     var body: some View {
@@ -1632,14 +1630,6 @@ private struct HubUtilityBar: View {
             .help("Settings")
             .accessibilityLabel("Settings")
             .accessibilityHint("Sound, room tone and the Time Capsule")
-
-            Button(action: openNotebook) {
-                Image(systemName: "book.closed.fill")
-                    .font(.title3)
-            }
-            .help("Lab Notebook")
-            .accessibilityLabel("Lab Notebook")
-            .accessibilityHint("Your captured observations")
 
             Button(action: openAbout) {
                 Image(systemName: "info.circle")

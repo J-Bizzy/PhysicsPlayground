@@ -208,10 +208,9 @@ final class PhysicsFormatTests: XCTestCase {
 
     // MARK: One spelling per fact
 
-    /// The notebook had three spellings of a switched state — "on/off",
+    /// The readouts had three spellings of a switched state — "on/off",
     /// "free/frozen", "yes/no — unbound" — depending on which room wrote
-    /// the row. A notebook is a comparison surface; that is the one thing
-    /// it must not do.
+    /// the row. Rows read side by side must not disagree on spelling.
     func testASwitchedStateHasOneSpelling() {
         XCTAssertEqual(PhysicsFormat.state(true), "on")
         XCTAssertEqual(PhysicsFormat.state(false), "off")

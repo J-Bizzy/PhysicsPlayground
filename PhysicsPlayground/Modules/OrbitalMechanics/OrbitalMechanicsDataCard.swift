@@ -3,7 +3,7 @@
 //  The selected body's orbit and energy, floating above the body (via `selectedAnchor`, rig-compensated).
 //  Five lines, two readings each, at label size: where it is and how fast, the orbit's size and
 //  shape, its two apsides, its tilt and period, and its energy with the word that matters. The
-//  orientation angles and the energy split stay in the notebook's capture, not on the body.
+//  orientation angles and the energy split stay in the Physics box, not on the body.
 //  Values are quantised to the digits shown: the attachment rasterises to a texture, so it
 //  rerenders only when a reading changes.
 //

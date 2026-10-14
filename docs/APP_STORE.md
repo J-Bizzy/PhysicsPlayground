@@ -144,11 +144,6 @@ retraces its arc, the bounce un-happens — then walk around the frozen
 instant with its velocity and force arrows standing on it, step it one
 physics tick at a time, and resume from any moment you choose.
 
-A LAB NOTEBOOK
-
-Capture a moment and it records exactly what the physics said at that
-instant. Export the whole book as CSV or Markdown.
-
 PRIVACY
 
 No accounts, no analytics, no advertising, and no network code of any
@@ -156,7 +151,8 @@ kind. Nothing you do leaves your device.
 
 Requires visionOS 26.0 or later.
 ```
-*3,758 characters* of 4,000. Counted, not estimated (2026-09-02; it was
+*3,626 characters* of 4,000. Counted, not estimated (2026-10-14, after the
+capture-and-export paragraph left with its feature — 3,758 before that;
 2,937 before the Time Capsule paragraph and the new Projectiles and
 Circuits sentences).
 
@@ -360,7 +356,7 @@ notes, verbatim:
 > "Load …" button above it. In a lab, every control is an object: plates
 > beside the apparatus toggle layers, a bead on a rail changes a
 > quantity, pull from a well to make a new object, tap an object for its
-> ring. The palette bead low on your right holds pause, notebook capture,
+> ring. The palette bead low on your right holds pause,
 > room dimming, settings, reset, home, and the six labs. Pause any lab
 > and pinch the reel that appears to rewind the last 30 seconds. No
 > account, no purchase, no network.

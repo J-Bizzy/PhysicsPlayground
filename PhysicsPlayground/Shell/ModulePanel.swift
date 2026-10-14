@@ -2,9 +2,7 @@
 //  ModulePanel.swift
 //  Physics Playground — Shell
 //
-//  Two shared building blocks: PanelSection, the material card the
-//  notebook and the settings window build from, and LegendView, a
-//  module's legend in the house style.
+//  PanelSection, the material card the settings window builds from.
 //
 
 import SwiftUI
@@ -42,42 +40,5 @@ struct PanelSection<Content: View>: View {
             .regularMaterial,
             in: RoundedRectangle(cornerRadius: DesignTokens.Panel.cornerRadius, style: .continuous)
         )
-    }
-}
-
-/// A module's legend in the one house style; swatch shapes match how
-/// each concept is drawn in the scene.
-struct LegendView: View {
-    let items: [LegendItem]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(items) { item in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    swatch(item.swatch)
-                        .frame(width: 22, height: 16)
-                    Text(item.text)
-                        .font(DesignTokens.TypeScale.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func swatch(_ swatch: LegendItem.Swatch) -> some View {
-        switch swatch {
-        case .fill(let color):
-            Circle().fill(color).frame(width: 14, height: 14)
-        case .stroke(let color):
-            Circle().stroke(color, lineWidth: 2).frame(width: 13, height: 13)
-        case .line(let color):
-            Capsule().fill(color).frame(width: 22, height: 3)
-        case .symbol(let name, let color):
-            Image(systemName: name)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(color)
-        }
     }
 }

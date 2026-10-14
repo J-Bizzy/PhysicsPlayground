@@ -4,7 +4,7 @@
 //
 //  Renders room-scale projectile motion at 1:1 — physics space is the
 //  room: the free-floating launcher, the predicted arc, pooled balls
-//  with strobe-dot trails and floor shadows, and scoreable hoops. Pools
+//  with strobe-dot trails and floor shadows, and hoops that light when a ball passes. Pools
 //  are built once and the per-frame work is transform writes; the arc
 //  tube rebuilds only when an aim input changes, on a GeometryPipeline
 //  worker. Pooled slots are renamed to the flight or ring they show;
@@ -106,13 +106,11 @@ final class KinematicsRenderer {
 
     private struct RingSlot {
         let tube: ModelEntity
-        /// The score over the hoop, on the house dark plate.
-        let scoreLabel: BackedLabel
-        /// The aim callout under it — "low 23° · high 67°", or why not —
+        /// The aim callout over the hoop — "low 23° · high 67°", or why not —
         /// shown only on the hoop being aimed at.
         let aimLabel: BackedLabel
         var appliedID: UUID?
-        var appliedScore = -1
+        var appliedPasses = -1
         var appliedAimText = ""
         var flashUntil = 0.0
         var appliedFlashing = false
@@ -290,7 +288,7 @@ final class KinematicsRenderer {
         }
         root.addChild(shadowPool.root)
 
-        // Hoops: torus via TubeMesh circle, score text floating above.
+        // Hoops: torus via TubeMesh circle, the aim callout floating above.
         // A crafted target: a glossy, softly-glowing mint hoop that flares
         // bright glowing green the instant a ball drops through it.
         ringMaterial = Materials.energized(DesignTokens.Palette.targetUI,
@@ -330,7 +328,7 @@ final class KinematicsRenderer {
                     ])
             }
             tube.components.set(CollisionComponent(shapes: rim))
-            Self.setAccessibility(on: tube, label: "Hoop. Drag to place it; balls passing down through it score.")
+            Self.setAccessibility(on: tube, label: "Hoop. Drag to place it; a ball passing down through it lights it.")
             container.addChild(tube)
             return tube
         }
@@ -339,12 +337,10 @@ final class KinematicsRenderer {
             pivot.position = [0, 0.3, 0]
             pivot.components.set(BillboardComponent())
             slot.entity.addChild(pivot)
-            let label = BackedLabel(size: 0.12)
-            pivot.addChild(label.root)
             let aim = BackedLabel(size: 0.036)
             aim.root.position = [0, -0.11, 0]
             pivot.addChild(aim.root)
-            ringSlots.append(RingSlot(tube: slot.payload, scoreLabel: label, aimLabel: aim))
+            ringSlots.append(RingSlot(tube: slot.payload, aimLabel: aim))
         }
         root.addChild(ringPool.root)
 
@@ -974,7 +970,7 @@ final class KinematicsRenderer {
 
             if ringSlots[index].appliedID != ring.id {
                 ringSlots[index].appliedID = ring.id
-                ringSlots[index].appliedScore = -1
+                ringSlots[index].appliedPasses = -1
                 ringSlots[index].appliedAimText = ""
                 ringSlots[index].tube.name = ring.id.uuidString
             }
@@ -986,15 +982,13 @@ final class KinematicsRenderer {
             poolSlot.entity.position = SIMD3<Float>(ring.position)
             ringSlots[index].tube.position = .zero
 
-            // Score text + a brief green flash when it changes.
-            if ringSlots[index].appliedScore != ring.score,
-               ringSlots[index].scoreLabel.setText(
-                   ring.score > 0 ? "\(ring.score)" : "",
-                   color: DesignTokens.Palette.targetUI) {
-                if ringSlots[index].appliedScore >= 0 {
+            // A brief green flash when a ball passes through. No number:
+            // the hoop is a target, not a scoreboard.
+            if ringSlots[index].appliedPasses != ring.passes {
+                if ringSlots[index].appliedPasses >= 0 {
                     ringSlots[index].flashUntil = now + 0.45
                 }
-                ringSlots[index].appliedScore = ring.score
+                ringSlots[index].appliedPasses = ring.passes
             }
             let flashing = now < ringSlots[index].flashUntil
             if ringSlots[index].appliedFlashing != flashing {

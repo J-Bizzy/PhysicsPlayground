@@ -183,9 +183,9 @@ final class PhysicsBoardTests: XCTestCase {
     func testFieldRowsCarryTheTestChargeWhileOneIsOut() {
         let appModel = AppModel()
         let module = ModuleCatalog.descriptor(id: "electrostatics", appModel: appModel)!
-        XCTAssertFalse(module.captureReadings().contains { $0.name == "E at charge" })
+        XCTAssertFalse(module.readings().contains { $0.name == "E at charge" })
         appModel.electromagnetismModel.dropProbe()
-        let rows = module.captureReadings()
+        let rows = module.readings()
         for name in ["Test charge q", "E at charge", "Potential", "Force qE", "Speed"] {
             XCTAssertTrue(rows.contains { $0.name == name }, "missing \(name)")
         }
@@ -196,7 +196,7 @@ final class PhysicsBoardTests: XCTestCase {
     func testCircuitsBoxRowsAreCardSized() {
         let appModel = AppModel()
         let module = ModuleCatalog.descriptor(id: "circuits", appModel: appModel)!
-        let rows = module.physicsRows?() ?? []
+        let rows = module.readings()
         XCTAssertLessThanOrEqual(rows.count, 2 + 2 * 3)
         XCTAssertEqual(rows.first?.name, "Components")
     }

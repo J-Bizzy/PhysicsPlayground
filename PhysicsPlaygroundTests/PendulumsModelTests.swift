@@ -112,7 +112,7 @@ final class PendulumsModelTests: XCTestCase {
     // MARK: The worlds bank — which disc lights
 
     /// The standing bank of worlds decides which disc is lit with exactly
-    /// this comparison, so the lamp and the notebook cannot drift apart.
+    /// this comparison, so the lamp and the readout cannot drift apart.
     private func litWorld(_ model: PendulumsModel) -> String? {
         SurfaceGravity.bodies
             .first { abs($0.gravity - model.gravity) < 0.01 }?.name

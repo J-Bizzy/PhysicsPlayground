@@ -3,7 +3,7 @@
 //  Physics Playground — Shell
 //
 //  App-wide state: the active module, the shared immersive space, the
-//  room, the notebook and the atmosphere. Module models are created on
+//  room and the atmosphere. Module models are created on
 //  first entry and retained, so switching labs keeps their state. (The
 //  catalog's `timeScrub` closures force all six models the first time a
 //  descriptor is built.)
@@ -81,19 +81,6 @@ final class AppModel {
     /// launch is an arrival; a walk back from a lab is not.
     var hasPlayedArrival = false
 
-    /// Writes the active module's live readings into the notebook. Returns
-    /// false when no module is open or it has nothing to say.
-    @discardableResult
-    func captureNotebookEntry() -> Bool {
-        guard let module = activeModule else { return false }
-        let readings = module.captureReadings()
-        guard !readings.isEmpty else { return false }
-        let count = notebook.entries(forModule: module.id).count
-        notebook.record(moduleID: module.id, moduleTitle: module.title,
-                        title: "Observation \(count + 1)", readings: readings)
-        return true
-    }
-
     /// Studio Mode: full immersion that shuts the room out and stages the
     /// physics in a dark gallery. Overrides every module's immersion
     /// preference until switched off.
@@ -153,9 +140,6 @@ final class AppModel {
     /// module; the ARKit session is reference-counted.
     let room = RoomModel()
 
-    /// The lab notebook: captured moments with their parameters.
-    let notebook = LabNotebook()
-
     /// Where the active module's apparatus sits in the user's room.
     /// A pure display offset, remembered per module.
     let labPlacement = LabPlacement()
@@ -181,10 +165,13 @@ final class AppModel {
     }
 
     init() {
-        // The app tracks nothing about its wearer. Builds before 2026-10-14
-        // kept a list of every lab visited for "New" badges that no longer
-        // exist; an upgraded install forgets it.
-        UserDefaults.standard.removeObject(forKey: "visited.modules")
+        // The app keeps no record of its wearer. Earlier builds kept a list of
+        // every lab visited (for "New" badges), the Lab Notebook's captured
+        // observations and the hoop best streak; an upgraded install forgets
+        // all three.
+        for retired in ["visited.modules", "notebook.entries.v1", "kinematics.bestStreak"] {
+            UserDefaults.standard.removeObject(forKey: retired)
+        }
         // `-openModule <id>` jumps straight into a module; the simulator cannot
         // be gaze-pinched from the command line.
         #if DEBUG

@@ -625,7 +625,7 @@ final class OrbitalMechanicsModel {
             mu: mu(for: orbiting, about: primary))
     }
 
-    /// The same orbit in classical elements, for readouts and the notebook.
+    /// The same orbit in classical elements, for the readouts.
     func orbitElements(for id: UUID) -> OrbitalElements? {
         orbitFrame(for: id)?.elements
     }

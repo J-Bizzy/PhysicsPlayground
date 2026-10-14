@@ -121,9 +121,8 @@ contradicts this section, this section is current.
 - [ ] **8 · Pendulums.** Release the cradle: click-click. Pull "Double"
       from the well and flick it: the lower bob leaves a chaotic trail and
       wears NO period tag. Throw a bob sideways: a true 3-D orbit.
-- [ ] **9 · Notebook.** Tap a bob (card: L, T, θ, v), pinch the capture
-      petal (chime), open the book from the title bar: the entry with its
-      readings; CSV and Markdown share buttons present.
+- [ ] **9 · The Physics box.** Tap a bob (card: L, T, θ, v), then the
+      title bar's ƒ: the lab's live numbers on a card in the room.
 - [ ] **10 · Close.** Home petal: dissolve, the gallery fades back up
       under its wordmark.
 - [ ] **Judgement calls, answered in writing:** the pink field lines
@@ -150,12 +149,9 @@ contradicts this section, this section is current.
       seconds: it goes back to Reset. Pinch it twice: the lab resets and
       the ring folds. Arm it and fold the ring: reopened, it reads Reset.
       `-paletteReset 1` photographs the armed state.
-- [ ] **Capture says no.** Pinch the capture petal in a lab: a chime and
-      a new notebook entry. A capture that writes nothing (a lab with no
-      readings to give) thuds instead of chiming.
 - [ ] **Look at an icon in the title bar or the home's utility bar**:
-      its name appears (Home, Lab Notebook, Show the physics, Place the
-      lab, Studio Mode, Reset; Lab list, Settings, Lab Notebook, About).
+      its name appears (Home, Show the physics, Place the lab, Studio
+      Mode, Reset; Lab list, Settings, About).
 - [ ] **Settings › Effects volume** wears a quiet speaker at the left end
       and a loud one at the right.
 
@@ -288,9 +284,8 @@ working session:
   - [ ] Tap the bar (a press that doesn't move): the gallery glides
         home and swings round to face you.
   - [ ] Quit and relaunch: the gallery opens EXACTLY where you left it.
-- [ ] **The utility bar:** ⚙ Settings, 📖 Lab Notebook, ℹ About. All
-      three open as utility panels in front of you, centred in view and
-      clear of the pad.
+- [ ] **The utility bar:** ⚙ Settings, ℹ About. Both open as utility
+      panels in front of you, centred in view and clear of the pad.
 - [ ] **About fits its window.** No clipped line, no cut-off
       description.
 - [ ] ⟳ **Settings has no "Gallery" section at all** — no distance or
@@ -1359,9 +1354,9 @@ reading "seconds ago".
       the rail asks what already happened. Changing the picker while
       scrubbed should take effect only on resume. Judge whether the two
       ever read as fighting each other.
-- [ ] **Capture a scrubbed instant.** With the room frozen in its past,
-      tap the notebook petal. The entry should record the physics of the
-      instant on screen, not of the live present.
+- [ ] **Read a scrubbed instant.** With the room frozen in its past,
+      open the Physics box. It should show the physics of the instant on
+      screen, not of the live present.
 - [ ] **The rail's placement.** The reel stands at chest height in front
       of the apparatus and the rail draws out to its right. Both were
       placed against the simulator's fixed viewport, which is not a
@@ -1452,8 +1447,7 @@ reading "seconds ago".
       now launches into the room and a hint shown only while it is shut
       had no readers). Check it stands ABOVE the apparatus band, never
       through it.
-- [ ] **The notebook** captures a moment from each lab with sane
-      numbers and units.
+- [ ] **The Physics box** reads sane numbers and units in each lab.
 - [ ] **Leave and re-enter a lab**: its state survives.
 - [ ] **Leave and re-enter the hub repeatedly**: no slowdown.
 
@@ -1531,7 +1525,7 @@ in a room.
       counts your progress. (This said "a tally and ONE next step —
       complete that experiment" until 2026-08-09; the experiments system
       was deleted and the check outlived it.)
-- [ ] **Capture a notebook entry in three different labs and compare
+- [ ] **Open the Physics box in three different labs and compare
       them.** Every row should read in one voice.
 - [ ] **Orbital Mechanics at 100× clock, watching the data card.** ν reads to
       a tenth of a degree and the card should feel steadier, not
@@ -1589,8 +1583,8 @@ proves nothing about the room.
 
 ### Corner radii and nameplate sizes
 
-- [ ] **Settings, the Notebook, a module window and the flat catalog,
-      in one sitting.** Four radii are now named steps — window 28,
+- [ ] **Settings, a module window and the flat catalog, in one
+      sitting.** Four radii are now named steps — window 28,
       section 20, card 14, chip 9 — and two near-duplicate pairs were
       collapsed (a hint card 12 → 14, a chip 8 → 9). Sub-2pt each;
       the question is whether the four steps read as a scale.
@@ -1631,9 +1625,9 @@ proves nothing about the room.
       That is where "Put the Gallery away" lives now — the only
       `dismissImmersiveSpace` in the app, one deliberate step away
       rather than standing in front of the terraces.
-- [ ] **Look at the utility bar under the wordmark.** Settings, Notebook
-      and About were behind the catalog window before and are now the
-      home's only chrome. Confirm all three still open.
+- [ ] **Look at the utility bar under the wordmark.** Settings and About
+      were behind the catalog window before and are now the home's only
+      chrome. Confirm both still open.
 
 ### Prediction arc — unreachable from the CLI
 
