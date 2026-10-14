@@ -273,7 +273,8 @@ private struct AccessibilityActionRouter: View {
     }
 }
 
-/// An invisible emitter looping the synthesized laboratory ambience.
+/// An invisible emitter looping the house music (`AmbientScore`). It is
+/// played head-locked, so where the emitter stands does not matter.
 private struct AmbientLabAudioView: View {
     @Environment(AppModel.self) private var appModel
     @State private var controller: AudioPlaybackController?
@@ -295,8 +296,9 @@ private struct AmbientLabAudioView: View {
     private func start() {
         guard controller == nil else { return }
         Task { @MainActor in
-            // warmUp synthesizes off-launch; retry briefly until ready.
-            for _ in 0..<40 where controller == nil {
+            // warmUp renders the score off-launch, after the one-shots; on a
+            // first launch that can take a few seconds, so wait for it.
+            for _ in 0..<120 where controller == nil {
                 guard appModel.settings.ambientAudio else { return }
                 if let started = SoundPalette.startAmbient(on: emitter) {
                     controller = started
@@ -308,7 +310,7 @@ private struct AmbientLabAudioView: View {
     }
 
     private func stop() {
-        controller?.stop()
+        if let controller { SoundPalette.stopAmbient(controller) }
         controller = nil
     }
 }

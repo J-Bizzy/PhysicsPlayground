@@ -3,8 +3,10 @@
 //  Physics Playground — Design system
 //
 //  All sounds are synthesized, written once as WAVs into Caches, and loaded
-//  as spatial AudioFileResources. Models publish SpatialSoundEvents;
-//  renderers position an emitter and play. No-ops if loading fails.
+//  as AudioFileResources. Models publish SpatialSoundEvents; renderers
+//  position an emitter and play. The one sound that is not in the room is
+//  the house music (`AmbientScore`), a head-locked stereo bed. No-ops if
+//  loading fails.
 //
 
 import Foundation
@@ -40,7 +42,6 @@ enum SoundPalette {
     /// Every WAV this palette needs, once they exist on disk.
     private nonisolated struct CachedSounds: Sendable {
         var oneShots: [Sound: URL] = [:]
-        var ambient: URL?
         var resonanceTone: URL?
     }
 
@@ -48,6 +49,10 @@ enum SoundPalette {
     /// Synthesis must stay off the main actor: an unstructured `Task {}`
     /// here inherits @MainActor, so the sample math runs detached
     /// (`nonisolated`); only the resource loads come back here.
+    ///
+    /// The one-shots come first: the opening's bell plays within seconds of
+    /// a first launch, and the score takes about a second to render — it
+    /// must never queue in front of them.
     static func warmUp() {
         guard !warmed else { return }
         warmed = true
@@ -57,7 +62,6 @@ enum SoundPalette {
                 for sound in Sound.allCases {
                     cached.oneShots[sound] = try? writeIfNeeded(sound)
                 }
-                cached.ambient = try? writeAmbientIfNeeded()
                 cached.resonanceTone = try? writeResonanceToneIfNeeded()
                 return cached
             }.value
@@ -67,14 +71,18 @@ enum SoundPalette {
                     resources[sound] = resource
                 }
             }
-            if let url = cached.ambient {
-                ambientResource = try? await AudioFileResource(
-                    contentsOf: url,
-                    configuration: .init(shouldLoop: true))
-            }
             if let url = cached.resonanceTone {
                 resonanceToneResource = try? await AudioFileResource(
                     contentsOf: url,
+                    configuration: .init(shouldLoop: true))
+            }
+
+            let ambient = await Task.detached(priority: .utility) {
+                try? writeAmbientIfNeeded()
+            }.value
+            if let ambient {
+                ambientResource = try? await AudioFileResource(
+                    contentsOf: ambient,
                     configuration: .init(shouldLoop: true))
             }
         }
@@ -126,82 +134,56 @@ enum SoundPalette {
         }
     }
 
-    // MARK: Ambient laboratory room tone
+    // MARK: The house music
 
     private static var ambientResource: AudioFileResource?
+    /// How long the music takes to come up from silence when it starts.
+    static let ambientFadeIn: TimeInterval = 4
 
-    /// Starts the looping lab ambience on `entity` (very quiet).
-    /// Returns nil until warmUp's synthesis has finished.
+    /// Starts the looping house music on `entity`, rising out of silence.
+    /// It is a stereo bed, not a thing in the room: `ChannelAudioComponent`
+    /// plays it head-locked and unspatialized, the way visionOS plays
+    /// background music, where the old mono pad hung at one point a metre
+    /// in front of the wearer and changed as they walked. Returns nil until
+    /// warmUp's synthesis has finished.
     static func startAmbient(on entity: Entity, gainDecibels: Double = -22) -> AudioPlaybackController? {
         guard let ambientResource else { return nil }
-        entity.components.set(SpatialAudioComponent(gain: Audio.Decibel(gainDecibels)))
-        return entity.playAudio(ambientResource)
+        entity.components.remove(SpatialAudioComponent.self)
+        entity.components.set(ChannelAudioComponent(gain: Audio.Decibel(gainDecibels)))
+        let controller = entity.playAudio(ambientResource)
+        controller.gain = -60
+        controller.fade(to: 0, duration: ambientFadeIn)
+        return controller
     }
+
+    /// Lets the music fall away rather than cutting it off.
+    static func stopAmbient(_ controller: AudioPlaybackController) {
+        controller.fade(to: -60, duration: 1.2)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1_300))
+            controller.stop()
+        }
+    }
+
+    /// The score (`AmbientScore`), rendered once to a stereo WAV. The
+    /// version is in the name: bump it whenever the score changes, or
+    /// nobody who has launched before will ever hear the change.
+    private nonisolated static let ambientFileName = "ambient-score-1.wav"
 
     private nonisolated static func writeAmbientIfNeeded() throws -> URL {
-        let url = try soundsDirectory().appendingPathComponent("ambient-lab-4.wav")
+        let directory = try soundsDirectory()
+        let url = directory.appendingPathComponent(ambientFileName)
         if !FileManager.default.fileExists(atPath: url.path) {
-            try wavData(samples: synthesizeAmbient()).write(to: url)
+            let (left, right) = AmbientScore.render(sampleRate: sampleRate)
+            try wavData(channels: [left, right]).write(to: url)
+        }
+        // Earlier soundtracks (`ambient-lab-1…4`, the mono pad) are dead
+        // weight in Caches once the score exists.
+        let stale = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        for name in stale where name.hasPrefix("ambient-") && name != ambientFileName {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
         }
         return url
-    }
-
-    /// The house soundscape: a 36 s seamless suspended pad, purely tonal.
-    /// Every sustained frequency, detune and swell is quantised to whole
-    /// cycles per loop; the bell glints decay to silence inside it.
-    private nonisolated static func synthesizeAmbient() -> [Float] {
-        let loop = 36.0
-        let grid = { (frequency: Double) in (frequency * loop).rounded() / loop }
-
-        // Fifths, ninths, octaves — no third: suspended, open, glassy.
-        let voices: [(frequency: Double, amplitude: Double)] = [
-            (grid(55.0), 0.10),
-            (grid(110.0), 0.16),
-            (grid(164.81), 0.14),
-            (grid(220.0), 0.12),
-            (grid(246.94), 0.08),
-            (grid(329.63), 0.07),
-            (grid(493.88), 0.04),
-            (grid(659.26), 0.025),
-            (grid(880.0), 0.015),
-        ]
-
-        // Three soft far-off bells; attack eased so there is no click,
-        // tails die out before the loop ends.
-        let glints: [(at: Double, frequency: Double, amplitude: Double)] = [
-            (6.0, 1318.51, 0.020),   // E6
-            (17.5, 880.0, 0.016),    // A5
-            (28.0, 987.77, 0.018),   // B5
-        ]
-
-        return render(duration: loop) { t, _ in
-            var pad = 0.0
-            for (index, voice) in voices.enumerated() {
-                // Detuned pairs whose beats complete whole cycles per loop
-                // — shimmer that never repeats within a pass yet loops exactly.
-                let detune = Double(index + 1) / loop
-                let pair = 0.5 * (sin(2 * .pi * voice.frequency * t)
-                    + sin(2 * .pi * (voice.frequency + detune) * t + 0.7))
-                // Independent swells at 36/18/12 s periods; high voices
-                // ride the slowest.
-                let cycles = Double((index % 3) + 1)
-                let swell = 0.68 + 0.32 * sin(2 * .pi * cycles * t / loop
-                                              + Double(index) * 2.1)
-                pad += voice.amplitude * pair * swell
-            }
-            // One long communal breath across the whole loop.
-            let breath = 1 + 0.06 * sin(2 * .pi * t / loop)
-
-            var bells = 0.0
-            for glint in glints where t >= glint.at {
-                let age = t - glint.at
-                let envelope = (1 - exp(-age * 9)) * exp(-age * 0.9)
-                bells += glint.amplitude * envelope
-                    * (sin(2 * .pi * glint.frequency * age)
-                        + 0.35 * sin(2 * .pi * glint.frequency * 2.41 * age))
-            }
-            return pad * breath + bells
-        }
     }
 
     // When a module leaves, check `CachedSounds` against its callers — a
@@ -319,9 +301,17 @@ enum SoundPalette {
 
     /// Minimal mono 16-bit PCM WAV container.
     private nonisolated static func wavData(samples: [Float]) -> Data {
-        let dataSize = samples.count * 2
-        // Reserve up front — the 36 s pad is 3.2 MB; growing two bytes at
-        // a time reallocates dozens of times.
+        wavData(channels: [samples])
+    }
+
+    /// Minimal 16-bit PCM WAV container, channels interleaved; every
+    /// channel the same length.
+    nonisolated static func wavData(channels: [[Float]]) -> Data {
+        let count = channels.count
+        let frames = channels.first?.count ?? 0
+        let dataSize = frames * count * 2
+        // Reserve up front — the score is 11 MB; growing two bytes at a
+        // time reallocates dozens of times.
         var data = Data()
         data.reserveCapacity(44 + dataSize)
 
@@ -330,13 +320,15 @@ enum SoundPalette {
         func append16(_ value: UInt16) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
 
         append("RIFF"); append32(UInt32(36 + dataSize)); append("WAVE")
-        append("fmt "); append32(16); append16(1); append16(1)
-        append32(UInt32(sampleRate)); append32(UInt32(sampleRate) * 2)
-        append16(2); append16(16)
+        append("fmt "); append32(16); append16(1); append16(UInt16(count))
+        append32(UInt32(sampleRate)); append32(UInt32(sampleRate) * UInt32(count) * 2)
+        append16(UInt16(count * 2)); append16(16)
         append("data"); append32(UInt32(dataSize))
-        for sample in samples {
-            let clamped = max(-1, min(1, sample))
-            append16(UInt16(bitPattern: Int16(clamped * 32_767)))
+        for frame in 0..<frames {
+            for channel in channels {
+                let clamped = max(-1, min(1, channel[frame]))
+                append16(UInt16(bitPattern: Int16(clamped * 32_767)))
+            }
         }
         return data
     }

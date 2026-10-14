@@ -16,6 +16,45 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-14 — The house music becomes a score
+
+**Decision:** The ambient loop is now `DesignSystem/AmbientScore`: a 64 s
+seamless stereo loop of four suspended chords (Amaj9 → F♯m9 → Dmaj9♯11 →
+Esus). Each chord is warm detuned saws under a soft 24 dB/oct low-pass,
+with the old pad's glassy sines kept on top. A dozen soft FM bells answer
+in stereo echoes, and all of it sits in a long Freeverb-style room. It
+plays head-locked through `ChannelAudioComponent`, fades in over 4 s and
+falls away over 1.2 s.
+
+**Context:** The owner likes the old ambience's ethereal synth character
+and asked for it more polished. The old pad was nine pure sines in one
+chord, mono, with no reverb. It hung at one point a metre in front of the
+wearer, so it changed as they moved, and its three bells struck at the
+same moments every 36 s. The score keeps the suspended, open voicings and
+the glass. What it adds is warmth, space, width and slow harmonic
+motion. Every pad voice shares a tone with the next chord, and E and G♯
+ring through three of the four. A first draft let the saws through a
+2-pole filter at up to 2.6 kHz, and a spectrogram showed harmonics to
+6 kHz only 35 dB down: buzz, not air. The cutoff is now 2.2× the note,
+300–1,100 Hz, through two stages.
+
+**Consequences:**
+- The loop is rendered past its end and the overhang folded back onto
+  the start. The mix is linear up to the limiter, so the seam is exactly
+  what the previous pass would have left ringing.
+  `AmbientScoreTests.testTheLoopHasNoSeam` holds it below an ordinary
+  sample step.
+- Bells are placed by a seeded generator, so every device writes the
+  same file.
+- Each channel is levelled to the old pad's −17.3 dBFS RMS, so the room
+  is no louder.
+- The file is 11 MB in Caches, rendered once in about a second, after
+  the one-shots so the opening's bell never waits behind it.
+- Its name carries the version (`ambient-score-1.wav`), and older
+  `ambient-*` files are deleted. **Change the score, bump the name.**
+- The gain stays −22 dB. Head-locked stereo and a spatial point at 1 m
+  are not the same loudness, so the level is a device judgement.
+
 ## 2026-10-14 — The room holds the apparatus; More holds the rest
 
 **Decision:** A lab's title bar is Home, More, the lab's name and
