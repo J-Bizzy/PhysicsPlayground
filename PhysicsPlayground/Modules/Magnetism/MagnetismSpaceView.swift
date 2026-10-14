@@ -34,17 +34,11 @@ struct MagnetismSpaceView: View {
     /// side-on. A pure view transform — the tesla stay honest.
     @State private var scaleRig = SpatialScaleRig(
         pivot: SIMD3<Float>(MagnetismModel.regionCenter), range: 0.5...4.0)
-    /// What is drawn, and whether the magnets are free. Four plates: field
-    /// lines, hand compass, Earth's field, and the dynamics switch — the
-    /// last is not a display layer, so its label says what it does.
-    @State private var layers: SpatialLayerBank?
-
-    /// Beside the magnets, at the region's own depth, on the left like
-    /// every module's bank. Not under `viewRoot`: the scale rig reaches 4×,
-    /// and a bank that grew with the field would push its plates out of
-    /// reach. Internal so the reach criterion can measure it.
-    static let bankAnchor = SIMD3<Float>(MagnetismModel.regionCenter)
-        + SIMD3(-0.80, 0.10, 0.08)
+    /// The magnet well, off the left shoulder below the region. Internal
+    /// so the reach criterion can measure it. What is drawn and whether the
+    /// magnets are free are in More.
+    static let wellAnchor = SIMD3<Float>(MagnetismModel.regionCenter)
+        + SIMD3(-0.72, -0.20, 0.34)
 
     var body: some View {
         RealityView { content in
@@ -61,37 +55,12 @@ struct MagnetismSpaceView: View {
                       tint: UIColor(DesignTokens.Palette.magnetismAccent),
                       label: "Add magnet",
                       preview: { MagnetismRenderer.magnetPreview() },
-                      position: SIMD3<Float>(MagnetismModel.regionCenter)
-                          + SIMD3(-0.72, -0.20, 0.34),
+                      position: Self.wellAnchor,
                       spawn: { point in model.addMagnet(at: point) }),
             ])
             renderer.viewRoot.addChild(sources.root)
             renderer.viewRoot.addChild(bloom.root)
             wells = sources
-
-            let bank = SpatialLayerBank(
-                accent: UIColor(DesignTokens.Palette.magnetismAccent),
-                layers: [
-                    .init(id: "dynamics", label: "Magnets move",
-                          symbol: "arrow.triangle.merge",
-                          isOn: { model.dynamicsOn },
-                          toggle: { model.dynamicsOn.toggle() }),
-                    .init(id: "lines", label: "Field lines", symbol: "scribble",
-                          isOn: { model.showFieldLines },
-                          toggle: { model.showFieldLines.toggle() }),
-                    .init(id: "handCompass", label: "Hand compass",
-                          symbol: "location.north.circle",
-                          isOn: { model.compassOn },
-                          toggle: { model.compassOn.toggle() }),
-                    // Whether the room is standing on a planet. Switching it off is the
-                    // comparison: the compass stops knowing north and reads only the bench.
-                    .init(id: "earth", label: "Earth's field",
-                          symbol: "globe",
-                          isOn: { model.earthFieldOn },
-                          toggle: { model.earthFieldOn.toggle() }),
-                ])
-            renderer.root.addChild(bank.root)
-            layers = bank
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
@@ -105,12 +74,8 @@ struct MagnetismSpaceView: View {
                     // for the pinch it exists to forget.
                     expireStaleGrabs(now: CACurrentMediaTime())
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
-                    let hand = appModel.room.nearestFingertip(to: Self.bankAnchor)
+                    let hand = appModel.room.nearestFingertip(to: Self.wellAnchor)
                     wells?.update(dt: event.deltaTime, nearestHand: hand)
-                    layers?.update(
-                        anchor: Self.bankAnchor,
-                        viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
-                        dt: event.deltaTime, nearestHand: hand)
                     if let renderer {
                         syncBloom(renderer: renderer, dt: event.deltaTime)
                     }
@@ -121,8 +86,6 @@ struct MagnetismSpaceView: View {
                     // The lab's placement: a pure display offset, safe because every grab
                     // moves a body by hand displacement.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // Every instrument is a child of `renderer.root`, so it rides the same
-                    // offset: a rail belongs to the thing it sets.
                 }
             )
             #if DEBUG
@@ -141,8 +104,8 @@ struct MagnetismSpaceView: View {
                let first = model.magnets.first {
                 ring.openID = first.id
             }
-            // `-magLayers 0` darkens every plate, the only way to photograph the
-            // dark state (`earthFieldOn` has no argument).
+            // `-magLayers 0` switches the field lines, the compass and the
+            // dynamics off, as More would (`earthFieldOn` has no argument).
             if UserDefaults.standard.object(forKey: "magLayers") != nil,
                !UserDefaults.standard.bool(forKey: "magLayers") {
                 model.showFieldLines = false
@@ -355,9 +318,9 @@ struct MagnetismSpaceView: View {
     }
 
     /// Tap a magnet and it offers exactly what a magnet offers:
-    /// reverse its poles, remove it, or pull its strength up — and the
-    /// field loops thicken and reach further as you pull, which is the
-    /// only readout that matters.
+    /// reverse its poles, remove it, or draw its strength out from under
+    /// it — and the field loops thicken and reach further as you pull,
+    /// which is the only readout that matters.
     private func syncBloom(renderer: MagnetismRenderer, dt: Double) {
         if let openID = ring.openID,
            !model.magnets.contains(where: { $0.id == openID }) {
@@ -388,7 +351,13 @@ struct MagnetismSpaceView: View {
                 read: { model.strength(id: uuid) },
                 write: { model.setStrength(id: uuid, $0) },
                 format: { PhysicsFormat.measurement($0, "A\u{00B7}m\u{00B2}", decimals: 1) },
-                radius: { Float(MagnetismModel.magnetLength) * 0.6 }))
+                radius: { Float(MagnetismModel.magnetLength) * 0.6 },
+                // Out of the underside, not a pole: attracted magnets sit nose to
+                // tail, so a handle off the north pole was buried in its partner.
+                stretch: .track(range: MagnetismModel.strengthRange, under: {
+                    model.magnets.first(where: { $0.id == uuid })
+                        .map { SIMD3<Float>($0.position) } ?? .zero
+                }, read: { model.strength(id: uuid) })))
 
         let viewer = appModel.room.headPosition.map {
             renderer.viewRoot.convert(position: SIMD3<Float>($0), from: nil)
@@ -401,9 +370,6 @@ struct MagnetismSpaceView: View {
     /// The tap routing, out of the gesture closure so VoiceOver reaches it
     /// too.
     private func handleTap(on entity: Entity) {
-        // The bank gets first refusal, or flicking a switch would also fold the
-        // open ring.
-        if layers?.handleTap(entity) == true { return }
         if bloom.handleTap(entity) { return }
         // A tap on a magnet toggles its control ring; a tap on anything
         // else folds it away.

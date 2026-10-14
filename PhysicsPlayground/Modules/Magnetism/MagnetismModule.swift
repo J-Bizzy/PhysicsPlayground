@@ -28,27 +28,32 @@ enum MagnetismModule {
                 AnyView(MagnetismSpaceView().environment(appModel.magnetismModel))
             },
             readings: { readings(appModel: appModel) },
-            adjustables: [
-                // The selected magnet's moment, or the first magnet's when
-                // nothing is selected: the box always has a magnet to turn.
-                .init(id: "moment", label: "Magnet moment", unit: "A·m²",
-                      range: MagnetismModel.strengthRange, decimals: 1,
-                      read: {
-                          let model = appModel.magnetismModel
-                          return (model.selectedMagnet ?? model.magnets.first)?.strength ?? 0
-                      },
-                      write: {
-                          let model = appModel.magnetismModel
-                          if let target = model.selectedMagnet ?? model.magnets.first {
-                              model.setStrength(id: target.id, $0)
-                          }
-                      }),
-            ],
+            more: more(appModel.magnetismModel),
             timeScrub: .init(model: appModel.magnetismModel),
             reset: { appModel.magnetismModel.reset() }
         )
     }
-    /// The live numbers the Physics box shows.
+    /// What More holds for the bench: whether the magnets are free, and
+    /// what is drawn. A magnet's strength is drawn out of its own north
+    /// pole, so it has no slider here.
+    static func more(_ model: MagnetismModel) -> [MoreItem] {
+        [
+            // Not a display layer, and the title says what it does.
+            .toggle(id: "dynamics", title: "Magnets move", symbol: "arrow.triangle.merge",
+                    isOn: { model.dynamicsOn }, set: { model.dynamicsOn = $0 }),
+            .toggle(id: "lines", title: "Field lines", symbol: "scribble",
+                    isOn: { model.showFieldLines }, set: { model.showFieldLines = $0 }),
+            .toggle(id: "handCompass", title: "Hand compass", symbol: "location.north.circle",
+                    isOn: { model.compassOn }, set: { model.compassOn = $0 }),
+            // Whether the room stands on a planet. Only the compass reads it,
+            // so without the compass it has nothing to change.
+            .toggle(id: "earth", title: "Earth's field", symbol: "globe",
+                    isOn: { model.earthFieldOn }, set: { model.earthFieldOn = $0 },
+                    isEnabled: { model.compassOn }),
+        ]
+    }
+
+    /// The live numbers More shows.
     static func readings(appModel: AppModel) -> [Reading] {
         let model = appModel.magnetismModel
         var rows: [Reading] = [
@@ -56,7 +61,6 @@ enum MagnetismModule {
             .init("|B| at center",
                   PhysicsFormat.metric(model.centerFieldMilliTesla / 1000, "T",
                                        decimals: 2)),
-            .init("Magnets move", PhysicsFormat.state(model.dynamicsOn)),
         ]
         if let selected = model.selectedMagnet {
             rows.append(.init("Selected moment",

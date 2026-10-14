@@ -99,6 +99,30 @@ final class Bloom {
                         return read() * ratio * ratio * ratio
                     })
             }
+
+            /// For an object whose size is not its value (a circuit part, a
+            /// bar magnet): the stalk drops out of the object's underside —
+            /// clear of the leads or poles that join it to its neighbours
+            /// along its own axis — and runs toward the viewer's right, as
+            /// long as the value is far through its range.
+            static func track(range: ClosedRange<Double>,
+                              under center: @escaping () -> SIMD3<Float>,
+                              read: @escaping () -> Double) -> Stretch {
+                let drop = SIMD3<Float>(0, -0.065, 0)
+                let gap: Float = 0.018
+                let reach: Float = 0.14
+                let span = max(range.upperBound - range.lowerBound, .leastNonzeroMagnitude)
+                return Stretch(
+                    origin: { center() + drop },
+                    handle: { axis in
+                        let t = Float(min(max((read() - range.lowerBound) / span, 0), 1))
+                        return center() + drop + axis * (gap + reach * t)
+                    },
+                    value: { hand, axis in
+                        let along = simd_dot(hand - (center() + drop), axis) - gap
+                        return range.lowerBound + Double(min(max(along / reach, 0), 1)) * span
+                    })
+            }
         }
 
         init(name: String, range: ClosedRange<Double>,

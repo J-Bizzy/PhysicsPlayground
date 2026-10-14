@@ -478,8 +478,8 @@ file). What follows is the standing script.
       itself, and the whole lab with it.
 - [ ] **Nothing but the magnets is in the room.** Bar magnets and the
       hand compass — no coil, no cable, and ⟳ **no compass grid**: the
-      245-needle lattice came out with its bank plate. The bank is four
-      plates now.
+      245-needle lattice came out with its bank plate, and the bank's
+      other four switches are in More now.
 - [ ] Carry a magnet toward another: they pull head-to-tail, push
       N-to-N, and swing to align.
 - [ ] **Two attracting magnets COME TO REST.** They should glide
@@ -492,7 +492,7 @@ file). What follows is the standing script.
         flanks.
   - [ ] The near-field shape follows the BAR, not a point.
   - [ ] Lines bunch at the poles and thin at the equator.
-  - [ ] ⟳ **Pull the strength bead and the loop COUNT changes** — a
+  - [ ] ⟳ **Draw the strength handle out and the loop COUNT changes** — a
         weak magnet draws visibly fewer loops, a strong one visibly
         more. This did nothing at all before (fixed budget of 26).
 - [ ] The hand-held compass needle points along the local field as you
@@ -517,23 +517,22 @@ file). What follows is the standing script.
   - [ ] One hand pulling a NEW magnet from the well while the other
         holds an existing one: both behave.
 
-### The switch bank
+### More, and the strength handle
 
-- [ ] ⟳ **Visible without hunting**, off your LEFT shoulder now — every
-      module's switch bank stands on the left as of 2026-08-04 — at
-      about the same glance as the magnets themselves. Four plates:
-      Magnets move, Field lines, Hand compass, Earth's field. Check it
-      does not crowd the Add-magnet well, which shares that flank lower
-      down.
-- [ ] Each label sits BESIDE its plate, never across it.
-- [ ] **It does not grow when you zoom.**
+- [ ] **More holds the four switches**: Magnets move, Field lines, Hand
+      compass, Earth's field. Earth's field greys out while the compass
+      is off.
 - [ ] **"Magnets move" is the physics switch.** Bring two magnets
       close, switch it off: they must stop dead and hold. Switch it on:
       they resume closing.
-- [ ] The other plates only change what is DRAWN — hiding the field
-      lines must not nudge a magnet.
-- [ ] **Reset relights the bank's defaults**, and the magnets come back
-      free.
+- [ ] The others only change what is DRAWN — hiding the field lines
+      must not nudge a magnet.
+- [ ] **Tap a magnet: Flip poles, Delete, and a handle under it.**
+      Draw the handle out toward your right: the loops multiply and
+      reach further; push it back: they thin. With two magnets snapped
+      nose to tail, the handle is still in the open, not buried in the
+      partner.
+- [ ] **Reset restores the defaults**, and the magnets come back free.
 
 ## Electric Fields
 

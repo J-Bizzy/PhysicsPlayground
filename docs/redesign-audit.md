@@ -702,3 +702,34 @@ the wells. Screenshots: `step5-fields.jpg` (the opening),
 Noted: the room's field lines and the capacitor callout can draw in front
 of the More panel, because the apparatus stands nearer than the window.
 The window is the wearer's to place, so this is left alone.
+
+### Step 5.5 — Magnetism (2026-10-14)
+
+Removed from the room: the four-plate bank. In More: Magnets move, Field
+lines, Hand compass, and Earth's field. Earth's field is disabled while
+the compass is off, because only the compass reads it; it used to stand
+lit and change nothing.
+
+Cut: the magnet-moment slider from the old Physics box. It wrote the
+selected magnet, or the first one when nothing was selected, so it could
+change a magnet you were not looking at. The grip on the magnet does the
+same job.
+
+Replaced with direct manipulation: Strength is a handle drawn out from
+under the magnet toward the viewer's right. It has 14 cm of travel from
+1 to 12 A·m², and the loops multiply as it comes out. A bar magnet's size
+is fixed, so here the stalk's length is the value, unlike the charges and
+planets, which grow. The audit planned the handle at the north pole. The
+first screenshot showed why not: attracted magnets sit nose to tail, so a
+handle out of the pole was buried in its partner. Circuit Workshop's parts
+had already solved the same problem, so that stretch moved into Bloom as
+`Stretch.track`, shared by both. Values drop "Magnets move", which is
+More's switch.
+
+Kept: the magnets (multi-hand grab), the compass and its µT, the well,
+and the ring's Flip poles and Delete.
+
+Controls: **12 visible at open → 4** (well, Home, More, Pause). **34
+reachable → 16** (4 lab items and 5 room items in More, 3 on the ring,
+and the 4 above).
+

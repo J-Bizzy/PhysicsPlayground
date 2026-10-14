@@ -578,12 +578,10 @@ struct CircuitsSpaceView: View {
                         write: { model.setComponentValue(id: uuid, $0) },
                         format: { CircuitsModel.formatValue($0, for: part.kind) },
                         radius: { 0.05 },
-                        stretch: Self.valueStretch(range: range, read: {
-                            model.componentValue(id: uuid)
-                        }, center: {
+                        stretch: .track(range: range, under: {
                             model.components.first { $0.id == uuid }
                                 .map { SIMD3<Float>($0.position) } ?? .zero
-                        }))
+                        }, read: { model.componentValue(id: uuid) }))
                 : nil)
 
         let viewer = appModel.room.headPosition.map {
@@ -591,29 +589,6 @@ struct CircuitsSpaceView: View {
         }
         bloom.update(anchor: SIMD3<Float>(part.position),
                      viewer: viewer, revealTarget: 1, dt: dt)
-    }
-
-    /// A part's value is pulled out from under it: the stalk leaves the
-    /// part's underside — clear of its leads, which run along its own
-    /// axis into the wires — and runs toward the viewer's right, as long as
-    /// the value is far through its range.
-    static func valueStretch(range: ClosedRange<Double>,
-                             read: @escaping () -> Double,
-                             center: @escaping () -> SIMD3<Float>) -> Bloom.Grip.Stretch {
-        let drop = SIMD3<Float>(0, -0.065, 0)
-        let gap: Float = 0.018
-        let reach: Float = 0.14
-        let span = max(range.upperBound - range.lowerBound, .leastNonzeroMagnitude)
-        return Bloom.Grip.Stretch(
-            origin: { center() + drop },
-            handle: { axis in
-                let t = Float(min(max((read() - range.lowerBound) / span, 0), 1))
-                return center() + drop + axis * (gap + reach * t)
-            },
-            value: { hand, axis in
-                let along = simd_dot(hand - (center() + drop), axis) - gap
-                return range.lowerBound + Double(min(max(along / reach, 0), 1)) * span
-            })
     }
 
     /// What a pinch landed on: a pure static over entity names (the
