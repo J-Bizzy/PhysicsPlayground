@@ -57,9 +57,6 @@ final class PendulumsRenderer {
         trailBirths = Array(repeating: -1e9, count: Self.trailBudget)
     }
 
-    /// Parent for the selected pendulum's info attachment.
-    let infoAnchor = Entity()
-
     private struct PendulumVisual {
         let pivot: ModelEntity
         let cable: ModelEntity
@@ -71,7 +68,6 @@ final class PendulumsRenderer {
         let cable2: ModelEntity
         let elbow: ModelEntity
         let velocityArrow: Arrow
-        let accelerationArrow: Arrow
         let gravityArrow: Arrow
         let tensionArrow: Arrow
         let netArrow: Arrow
@@ -190,9 +186,6 @@ final class PendulumsRenderer {
 
         root.addChild(ghostEntity)
 
-        infoAnchor.components.set(BillboardComponent())
-        root.addChild(infoAnchor)
-
         audioEmitter.components.set(SpatialAudioComponent())
         root.addChild(audioEmitter)
     }
@@ -250,13 +243,6 @@ final class PendulumsRenderer {
         syncTrail(dt: dt, model: model)
         syncGhost(model)
 
-        if let selected = model.selected {
-            infoAnchor.isEnabled = true
-            infoAnchor.position = SIMD3<Float>(selected.bobWorld)
-                + SIMD3(0, Float(selected.bobRadius) + 0.1, 0)
-        } else {
-            infoAnchor.isEnabled = false
-        }
     }
 
     private func syncPendulums(_ model: PendulumsModel) {
@@ -265,7 +251,7 @@ final class PendulumsRenderer {
             let visual = visuals[id]
             [visual?.pivot, visual?.cable, visual?.bob,
              visual?.cable2, visual?.elbow].forEach { $0?.removeFromParent() }
-            [visual?.velocityArrow, visual?.accelerationArrow, visual?.gravityArrow,
+            [visual?.velocityArrow, visual?.gravityArrow,
              visual?.tensionArrow, visual?.netArrow].forEach { $0?.holder.removeFromParent() }
             visuals[id] = nil
             periodLabels[id]?.holder.removeFromParent()
@@ -368,11 +354,6 @@ final class PendulumsRenderer {
             let tensionForce = -direction * tensionMagnitude
             let netForce = gravityForce + tensionForce
                 - pendulum.damping * velocity
-            Fade.tick(visual.accelerationArrow.holder, visible: model.showAcceleration)
-            if model.showAcceleration {
-                visual.accelerationArrow.update(
-                    origin: origin, vector: netForce / pendulum.mass, reference: 2)
-            }
             let showForces = model.showForces
             Fade.tick(visual.gravityArrow.holder, visible: showForces)
             Fade.tick(visual.tensionArrow.holder, visible: showForces)
@@ -525,13 +506,12 @@ final class PendulumsRenderer {
             pivot: pivot, cable: cable, bob: bob,
             cable2: cable2, elbow: elbow,
             velocityArrow: Arrow(color: VectorPalette.velocity),
-            accelerationArrow: Arrow(color: VectorPalette.acceleration),
             // Gravity is a force and a component of the net force drawn beside it,
             // so it cannot be the same red — see `VectorPalette.gravity`.
             gravityArrow: Arrow(color: DesignTokens.Palette.gravityVectorUI),
             tensionArrow: Arrow(color: Self.tensionYellow),
             netArrow: Arrow(color: VectorPalette.force))
-        [visual.velocityArrow, visual.accelerationArrow, visual.gravityArrow,
+        [visual.velocityArrow, visual.gravityArrow,
          visual.tensionArrow, visual.netArrow].forEach { root.addChild($0.holder) }
         visuals[pendulum.id] = visual
         return visual

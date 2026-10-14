@@ -733,3 +733,41 @@ Controls: **12 visible at open → 4** (well, Home, More, Pause). **34
 reachable → 16** (4 lab items and 5 room items in More, 3 on the ring,
 and the 4 above).
 
+### Step 5.6 — Pendulums (2026-10-14)
+
+Removed from the room: the bank. In More: Velocity, Force, and Air
+resistance.
+
+Cut:
+- **Acceleration.** Its arrow was the Force layer's net arrow divided by
+  m: the model flag, the renderer's arrow, and the reset and coverage
+  cases for it are gone.
+- **The collar's own ring** (Delete, Length), which duplicated the bob's.
+  A press on a collar that never moves it now opens the bob's ring, and
+  so does VoiceOver's action on the collar. `-penPivotRing` is retired.
+- **The card floating over the selected bob** (L, T, θ, v). The period
+  tag, the length handle's readout and Values say the same.
+
+Replaced with direct manipulation: Length is a handle just past the bob,
+on the line of the cable. Drawing it down pays the cable out by exactly
+that much. It is read relative to where the bob is now, so it holds on a
+double pendulum, whose lower bob is not one length from the pivot. The
+grip now reads the hand in the ring's own frame (`renderer.root`, which
+carries the lab placement). It used to read the hand in world space.
+
+Fixed: the new reach criterion measured the double-pendulum well for the
+first time. It stood outboard at x −1.10, 1.38 m from a standing wearer,
+past the 1.25 m limit, because only the bank above it had ever been
+checked. It now stands above the single well at (−0.85, 1.62, −0.95),
+1.19 m away, where the bank stood. At 1.50 m, the first try, its
+nameplate sat on the single well's collar.
+
+Controls: **13 visible at open → 5** (two wells and the three shell
+controls). **36 reachable → 16** (3 lab items and 5 room items in More,
+the bob ring's 3, and the 5 above).
+
+Tests (5.5 and 5.6): the reach criterion no longer lists banks. It
+measures every well standing in the room, per lab, and requires every
+lab but Circuit Workshop (whose shelf has its own test) to have one
+measured. `PendulumsModelTests` and `ResetCoverageTests` lose the
+acceleration flag.

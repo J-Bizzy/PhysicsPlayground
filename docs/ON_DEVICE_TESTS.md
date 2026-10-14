@@ -638,33 +638,30 @@ file). The new well and the standing script:
       that is the cradle's job, not the well's.)
 - [ ] ⟳ **The cable cannot stretch.** Grab a bob and pull outward: the
       bob stays exactly one cable-length from the pivot, steering round
-      the sphere under your hand. Only the length bead changes L.
-- [ ] **Pull a bob's length bead.** The pendulum holds still while the
-      bead is held, the cable pays out, the period tag climbs as √L,
-      and letting go returns the swing without throwing it.
+      the sphere under your hand. Only the length handle changes L.
+- [ ] **Tap a bob: Mass, Delete, and a handle just past the bob, on the
+      line of the cable.** Draw it down: the pendulum holds still, the
+      cable pays out, the period tag climbs as √L, and letting go
+      returns the swing without throwing it. Push it up: the cable
+      shortens. On a double pendulum the handle hangs off the lower bob
+      and still lengthens the cable.
   - [ ] Then grab a bob normally. It must be a bob grab, not a length
         edit.
+- [ ] **Press a collar without moving it**: the same ring opens on its
+      bob. Drag the collar: the rig re-hangs, and no ring opens.
+- [ ] **No card floats over the selected bob** — the period tag is the
+      one number in the room.
 - [ ] **Pull a pendulum out of the spawn well; it hangs where you let
       go.**
   - [ ] Pull one out when the lab is already full: the well should go
         **dark and NOT pop**.
-- [ ] ⟳ **There is no Foucault rig.** The feature came out whole at the
-      owner's direction: no "Earth turns" plate, no globe, no spin
-      rail, no floor markers, anywhere. The bank is FOUR plates:
-      Velocity, Acceleration, Force, Air resistance.
-
-### The switch bank
-
-- [ ] **Can you SEE the bank without hunting?** Off your left shoulder,
-      at the pivot plane's depth, in the ~14° band.
+- [ ] ⟳ **There is no Foucault rig**, and no switch bank: Velocity,
+      Force and Air resistance are in More. Switch Air resistance off
+      and the swing stops decaying — the one switch here that changes
+      the physics rather than the picture.
 - [ ] **Nothing is inside the swing.** Let a bob swing wide, and pull one
-      out to a 1.6 m cable. No instrument should be swept through.
-- [ ] **The four-plate bank.** Each plate lights when its layer is on.
-  - [ ] Every label sits BESIDE its plate, never across it.
-  - [ ] Switch Air resistance off and the swing stops decaying — the
-        one plate on this bank that changes the physics rather than
-        the picture.
-- [ ] **Reset returns all four plates to their defaults.**
+      out to a 1.6 m cable. Neither well should be swept through.
+- [ ] **Reset returns the three switches to their defaults.**
 
 ## Orbital Mechanics
 

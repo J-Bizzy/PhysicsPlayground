@@ -27,19 +27,34 @@ enum PendulumsModule {
                 AnyView(PendulumsSpaceView().environment(appModel.pendulumsModel))
             },
             readings: { readings(appModel: appModel) },
+            more: more(appModel.pendulumsModel),
             timeScrub: .init(model: appModel.pendulumsModel),
             reset: { appModel.pendulumsModel.reset() }
         )
     }
 
-    /// The live numbers the Physics box shows.
+    /// What More holds for the bench: the two arrow layers, and whether
+    /// the air is real. (Acceleration was a third layer until 2026-10-14:
+    /// its arrow was the Force layer's net arrow over m.)
+    static func more(_ model: PendulumsModel) -> [MoreItem] {
+        [
+            .toggle(id: "velocity", title: "Velocity", symbol: "arrow.right",
+                    isOn: { model.showVelocity }, set: { model.showVelocity = $0 }),
+            .toggle(id: "force", title: "Force", symbol: "arrow.down.right",
+                    isOn: { model.showForces }, set: { model.showForces = $0 }),
+            // Not a display layer, and the title says so: off, the pendulum
+            // is ideal and swings for ever.
+            .toggle(id: "friction", title: "Air resistance", symbol: "wind",
+                    isOn: { model.frictionOn }, set: { model.frictionOn = $0 }),
+        ]
+    }
+
+    /// The live numbers More shows.
     static func readings(appModel: AppModel) -> [Reading] {
         let model = appModel.pendulumsModel
         var rows: [Reading] = [
             .init("Pendulums", "\(model.pendulums.count)"),
             .init("Gravity", PhysicsFormat.fixed(model.gravity, decimals: 2), "m/s²"),
-            // Named for the plate that switches it.
-            .init("Air resistance", PhysicsFormat.state(model.frictionOn)),
         ]
         if let selected = model.selected {
             rows.append(.init("Length", PhysicsFormat.fixed(selected.length, decimals: 3), "m"))

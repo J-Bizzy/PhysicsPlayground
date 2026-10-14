@@ -128,7 +128,6 @@ final class ResetCoverageTests: XCTestCase {
                 switch name {
                 case "frictionOn": model.frictionOn.toggle()
                 case "showVelocity": model.showVelocity.toggle()
-                case "showAcceleration": model.showAcceleration.toggle()
                 case "showForces": model.showForces.toggle()
                 case "isPaused": model.isPaused.toggle()
                 default:

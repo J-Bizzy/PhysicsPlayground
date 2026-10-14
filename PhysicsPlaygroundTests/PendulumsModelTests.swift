@@ -204,7 +204,6 @@ final class PendulumsModelTests: XCTestCase {
     func testResetRestoresEveryLayerTheBankShows() {
         let model = PendulumsModel()
         model.showVelocity = false
-        model.showAcceleration = true
         model.showForces = true
         model.frictionOn = false
         model.gravity = 1.62
@@ -213,7 +212,6 @@ final class PendulumsModelTests: XCTestCase {
         model.reset()
 
         XCTAssertTrue(model.showVelocity)
-        XCTAssertFalse(model.showAcceleration)
         XCTAssertFalse(model.showForces)
         XCTAssertTrue(model.frictionOn)
         XCTAssertEqual(model.gravity, 9.81, accuracy: 1e-9)

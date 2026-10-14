@@ -124,7 +124,6 @@ final class PendulumsModel {
     var scrubNonce = 0
 
     var showVelocity = true
-    var showAcceleration = false
     var showForces = false
 
     // MARK: Editing
@@ -440,7 +439,6 @@ final class PendulumsModel {
         isPaused = false
         timeScale = 1.0
         showVelocity = true
-        showAcceleration = false
         showForces = false
         // Reset must restore every plate-backed flag — ResetCoverageTests
         // reflects over Bools.

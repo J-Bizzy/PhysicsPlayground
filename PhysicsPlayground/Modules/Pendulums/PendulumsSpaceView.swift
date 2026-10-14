@@ -22,12 +22,9 @@ struct PendulumsSpaceView: View {
     /// Which bob's ring is open — shared by the tap gesture and the
     /// render loop (see RingState's header for why it's a reference).
     @State private var ring = RingState()
-    /// Which pendulum's pivot is open. A separate ring from the bob's;
-    /// tapping a pivot and tapping a bob are exclusive, so one `Bloom`
-    /// serves both.
-    @State private var pivotRing = RingState()
     /// The collar this press started on, and whether it has moved. A
-    /// press that never moves is a tap; see the drag's `onEnded`.
+    /// press that never moves is a tap, and opens the pendulum's ring; see
+    /// the drag's `onEnded`.
     @State private var pressedPivot: (id: UUID, moved: Bool)?
     /// The bob this press landed on, before it has moved far enough to be a
     /// grab: a tap on a bob must not stop the pendulum and wipe the trails.
@@ -47,22 +44,19 @@ struct PendulumsSpaceView: View {
     /// rather than flicked.
     @State private var handSampler = ThrowSampler(window: 0.14)
 
-    // MARK: The instruments
-
-    /// What is drawn, and whether the air is real. Five plates — the
-    /// fifth (air resistance) is not a display layer but a labelled
-    /// discrete choice, and one lone plate beside a bank of four is worse.
-    @State private var layers: SpatialLayerBank?
     // `gravity` and `timeScale` are retired capabilities: this bench is
     // Earth at 1×, and `-penGravity`/`-penTime` exist only for screenshots.
+    // What is drawn and whether the air is real are in More.
 
-    // Placement: every instrument sits at the apparatus's own depth (the
-    // pivot plane), in the ~14° band below eye — controls on a console
-    // below the thing they belong to are never seen.
-    private static let instrumentZ: Float = -1.08
-    /// Left of the swing, above the well. Internal so
-    /// `InstrumentReachCriterionTests` can measure it.
-    static let bankAnchor = SIMD3<Float>(-0.92, 1.58, instrumentZ)
+    /// The wells, left of the swing at the pivot plane's depth, one above
+    /// the other. Internal so `InstrumentReachCriterionTests` can measure
+    /// them: the double's mouth stood outboard at x −1.10 until 2026-10-14,
+    /// 1.38 m from a standing wearer, and nothing measured it — only the
+    /// bank above it was checked. It stands where the bank stood now, 32 cm
+    /// up, because a well's preview hangs about 20 cm under its mouth and
+    /// its nameplate under that.
+    static let wellAnchor = SIMD3<Float>(-0.85, 1.30, -0.95)
+    static let doubleWellAnchor = SIMD3<Float>(-0.85, 1.62, -0.95)
 
     /// Walks up from a tapped entity to a pivot collar, if it is one.
     /// The renderer names them `pivot-<uuid>`.
@@ -77,29 +71,20 @@ struct PendulumsSpaceView: View {
         return nil
     }
 
-    /// Identifies the floating readout above the selected bob.
-    private static let infoCardID = "pendulum-info"
-
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
-        RealityView { content, attachments in
+        RealityView { content in
             let renderer = PendulumsRenderer()
             renderer.onObjectTap = { handleObjectTap(on: $0) }
             renderer.onPivotAction = { entity in
-                if let id = Self.pivotID(of: entity) { togglePivotRing(id, on: entity) }
+                if let id = Self.pivotID(of: entity) { toggleRing(id, on: entity) }
             }
             content.add(renderer.root)
             // Disabled here and raised by `Fade.tick`, so the apparatus arrives
             // rather than appears.
             renderer.root.isEnabled = false
             renderer.root.addChild(bloom.root)
-
-            // The selected bob's numbers, on the bob.
-            if let card = attachments.entity(for: Self.infoCardID) {
-                stripInput(from: card)
-                renderer.infoAnchor.addChild(card)
-            }
 
             // Pull a pendulum out and hang it wherever you let go. The
             // pivot lands at your fingertips, so rigging one and moving
@@ -109,7 +94,7 @@ struct PendulumsSpaceView: View {
                       tint: UIColor(DesignTokens.Palette.pendulumsAccent),
                       label: "Add pendulum",
                       preview: { PendulumsRenderer.pendulumPreview() },
-                      position: SIMD3(-0.85, 1.30, -0.95),
+                      position: Self.wellAnchor,
                       spawn: { point in
                           // Born hanging plumb, at rest: a pendulum pulled out by hand must hold
                           // still until the hand swings it.
@@ -120,35 +105,13 @@ struct PendulumsSpaceView: View {
                 .init(name: "Double", tint: UIColor(DesignTokens.Palette.pendulumsAccent),
                       label: "Double pendulum",
                       preview: { PendulumsRenderer.doublePendulumPreview() },
-                      position: SIMD3(-1.10, 1.30, -0.95),
+                      position: Self.doubleWellAnchor,
                       spawn: { point in
                           model.addDoublePendulum(at: point)
                       }),
             ])
             renderer.root.addChild(sources.root)
             wells = sources
-
-            let bank = SpatialLayerBank(
-                accent: UIColor(DesignTokens.Palette.pendulumsAccent),
-                layers: [
-                    .init(id: "velocity", label: "Velocity", symbol: "arrow.right",
-                          isOn: { model.showVelocity },
-                          toggle: { model.showVelocity.toggle() }),
-                    .init(id: "acceleration", label: "Acceleration",
-                          symbol: "arrow.up.right",
-                          isOn: { model.showAcceleration },
-                          toggle: { model.showAcceleration.toggle() }),
-                    .init(id: "force", label: "Force", symbol: "arrow.down.right",
-                          isOn: { model.showForces },
-                          toggle: { model.showForces.toggle() }),
-                    // Not a display layer, and the label says so: off, the pendulum is
-                    // ideal and swings for ever.
-                    .init(id: "friction", label: "Air resistance", symbol: "wind",
-                          isOn: { model.frictionOn },
-                          toggle: { model.frictionOn.toggle() }),
-                ])
-            renderer.root.addChild(bank.root)
-            layers = bank
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
@@ -158,18 +121,14 @@ struct PendulumsSpaceView: View {
                                   duration: AppModel.departure)
                     }
                     renderer?.tick(dt: event.deltaTime, model: model)
-                    let hand = appModel.room.nearestFingertip(to: Self.bankAnchor)
+                    let hand = appModel.room.nearestFingertip(to: Self.wellAnchor)
                     wells?.update(dt: event.deltaTime, nearestHand: hand)
                     syncBloom(dt: event.deltaTime)
-                    let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
-                    layers?.update(anchor: Self.bankAnchor,
-                                   viewer: viewer, dt: event.deltaTime,
-                                   nearestHand: hand)
                     // The lab's placement: a pure display offset, safe because every grab
                     // moves a body by hand displacement.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // Every bank, rail, well and ring is a child of
-                    // `renderer.root`, so the whole lab travels together.
+                    // Every well and ring is a child of `renderer.root`, so
+                    // the whole lab travels together.
                 }
             )
             #if DEBUG
@@ -178,13 +137,6 @@ struct PendulumsSpaceView: View {
             if UserDefaults.standard.bool(forKey: "penRing"),
                let first = model.pendulums.first {
                 ring.openID = first.id
-            }
-            // `-penPivotRing 1` opens the collar's ring (cable bead and trash),
-            // which a press-without-moving opens.
-            if UserDefaults.standard.bool(forKey: "penPivotRing"),
-               let first = model.pendulums.first {
-                pivotRing.openID = first.id
-                ring.openID = nil
             }
             // Each instrument argument sets a value: `-penGravity 1.62` is the Moon.
             let forcedGravity = UserDefaults.standard.double(forKey: "penGravity")
@@ -200,25 +152,14 @@ struct PendulumsSpaceView: View {
                                           PendulumsModel.timeScaleRange.lowerBound),
                                       PendulumsModel.timeScaleRange.upperBound)
             }
-            // `-penLayers 1` lights every plate on the bank.
+            // `-penLayers 1` switches on everything More draws.
             if UserDefaults.standard.bool(forKey: "penLayers") {
                 model.showVelocity = true
-                model.showAcceleration = true
                 model.showForces = true
                 model.frictionOn = true
             }
             #endif
             self.renderer = renderer
-        } attachments: {
-            Attachment(id: Self.infoCardID) {
-                PendulumInfoCard()
-                    // An attachment carries a collider for its content, and this one floats
-                    // directly above a bob you are meant to grab.
-                    .allowsHitTesting(false)
-                    // The environment does not flow into an attachment the way it flows
-                    // down a view tree.
-                    .environment(model)
-            }
         }
         // Leaving the lab must not leave anything running or held: `teardown`
         // cancels subscriptions and geometry jobs, and an in-flight grab that
@@ -241,9 +182,13 @@ struct PendulumsSpaceView: View {
                 .onChanged { value in
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
-                    if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
+                    // The ring hangs under `renderer.root`, which carries the lab's
+                    // placement; its grip reads the hand in that frame.
+                    let ringHand = renderer?.root.convert(position: SIMD3<Float>(hand), from: nil)
+                        ?? SIMD3<Float>(hand)
+                    if bloom.updateGrip(hand: ringHand) { return }
                     if drag == nil {
-                        if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) {
+                        if bloom.beginGrip(value.entity, hand: ringHand) {
                             // Hold the swing still for the length edit: the bead rides the bob,
                             // which was sweeping past at a metre a second.
                             if let id = ring.openID { model.beginGrab(id: id) }
@@ -323,13 +268,14 @@ struct PendulumsSpaceView: View {
                     // and the tap recogniser below owns it.
                     pressedBob.cancel()
 
-                    // A press on the collar that never moved it opens the length bead.
-                    // Folded into this drag rather than a `TapGesture`: two recognisers
-                    // over one entity were ambiguous and the rig refused to be re-hung.
+                    // A press on the collar that never moved it opens the pendulum's
+                    // ring. Folded into this drag rather than a `TapGesture`: two
+                    // recognisers over one entity were ambiguous and the rig refused to
+                    // be re-hung.
                     if let pressed = pressedPivot {
                         pressedPivot = nil
                         if !pressed.moved {
-                            togglePivotRing(pressed.id, on: value.entity)
+                            toggleRing(pressed.id, on: value.entity)
                         }
                         drag = nil
                         bloom.endGrip()
@@ -380,44 +326,11 @@ struct PendulumsSpaceView: View {
     }
 
 
-    /// A bob's own controls. Length is the grip and its extent is the
-    /// cable: pull the bead and the cable pays out, and the period tag
-    /// climbs as the square root of length while the hand is still moving.
+    /// A pendulum's controls, on its bob. Length is pulled along the
+    /// cable: the handle hangs just past the bob, and drawing it down pays
+    /// the cable out — the period tag climbs as the square root of length
+    /// while the hand is still moving.
     private func syncBloom(dt: Double) {
-        // The pivot's ring: a bead for the cable (the quantity a pivot
-        // owns) and Delete. The bob's ring keeps its own Delete — you can
-        // throw a rig away from either end, as you can pick one up.
-        if let openPivot = pivotRing.openID,
-           !model.pendulums.contains(where: { $0.id == openPivot }) {
-            // Deleted out from under the ring — by its own trash petal, the bob's,
-            // or a reset.
-            pivotRing.openID = nil
-            bloom.clearTarget()
-        }
-        if let pivotID = pivotRing.openID,
-           let pendulum = model.pendulums.first(where: { $0.id == pivotID }) {
-            bloom.retarget(
-                "pivot-\(pivotID)",
-                petals: [
-                    .init(name: "Delete", symbol: "trash",
-                          tint: DesignTokens.Palette.destructiveUI) {
-                        model.removePendulum(id: pivotID)
-                    },
-                ],
-                grip: .init(
-                    name: "Length",
-                    range: PendulumsModel.lengthRange,
-                    read: { model.pendulums.first(where: { $0.id == pivotID })?.length ?? 0.8 },
-                    write: { model.setLength(id: pivotID, $0) },
-                    format: { PhysicsFormat.measurement($0, "m", decimals: 2) },
-                    radius: { 0.07 }))
-            let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
-            bloom.update(anchor: SIMD3<Float>(pendulum.pivot),
-                         viewer: viewer, revealTarget: 1, dt: dt)
-            return
-        }
-        if pivotRing.openID != nil { pivotRing.openID = nil }
-
         if let openID = ring.openID,
            !model.pendulums.contains(where: { $0.id == openID }) {
             ring.openID = nil     // deleted out from under the ring
@@ -452,24 +365,53 @@ struct PendulumsSpaceView: View {
                 read: { model.pendulums.first(where: { $0.id == uuid })?.length ?? 0.8 },
                 write: { model.setLength(id: uuid, $0) },
                 format: { PhysicsFormat.measurement($0, "m", decimals: 2) },
-                radius: { Float(pendulum.bobRadius) + 0.03 }))
+                radius: { Float(pendulum.bobRadius) + 0.03 },
+                stretch: Self.lengthStretch(
+                    pendulum: { model.pendulums.first(where: { $0.id == uuid }) })))
 
         let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
         bloom.update(anchor: SIMD3<Float>(pendulum.bobWorld),
                      viewer: viewer, revealTarget: 1, dt: dt)
     }
 
-    /// Opens or folds a collar's ring — from a press that never moved the
-    /// collar, or from VoiceOver — and answers with the pop and tick every
-    /// other ring in the house makes. It opened and closed silently until
-    /// 2026-10-14.
-    private func togglePivotRing(_ id: UUID, on entity: Entity) {
-        ring.openID = nil
-        if pivotRing.openID == id {
-            pivotRing.openID = nil
+    /// Length runs along the cable, from the pivot through the bob: the
+    /// handle stands just past the bob's surface, and a hand drawn further
+    /// down asks for a longer cable by exactly that much. Read relative to
+    /// where the bob is now, so it holds on a double pendulum too, whose
+    /// lower bob is not one length from the pivot.
+    static func lengthStretch(
+        pendulum: @escaping () -> PendulumsModel.Pendulum?
+    ) -> Bloom.Grip.Stretch {
+        let gap: Float = 0.02
+        func frame() -> (bob: SIMD3<Float>, down: SIMD3<Float>, clearance: Float, length: Double) {
+            guard let current = pendulum() else { return (.zero, [0, -1, 0], gap, 0.8) }
+            let bob = SIMD3<Float>(current.bobWorld)
+            let cable = bob - SIMD3<Float>(current.pivot)
+            let down = simd_length(cable) > 1e-4 ? simd_normalize(cable) : SIMD3<Float>(0, -1, 0)
+            return (bob, down, Float(current.bobRadius) + gap, current.length)
+        }
+        return Bloom.Grip.Stretch(
+            origin: { frame().bob },
+            handle: { _ in
+                let f = frame()
+                return f.bob + f.down * f.clearance
+            },
+            value: { hand, _ in
+                let f = frame()
+                return f.length + Double(simd_dot(hand - f.bob, f.down) - f.clearance)
+            })
+    }
+
+    /// Opens or folds a pendulum's ring — from a tap on its bob, a press
+    /// that never moved its collar, or VoiceOver — with the pop and tick
+    /// every ring in the house makes.
+    private func toggleRing(_ id: UUID, on entity: Entity) {
+        model.select(id: id)
+        if ring.openID == id {
+            ring.openID = nil
             SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
         } else {
-            pivotRing.openID = id
+            ring.openID = id
             SoundPalette.play(.pop, on: entity, volume: 0.35)
         }
     }
@@ -477,10 +419,7 @@ struct PendulumsSpaceView: View {
     /// The tap routing, out of the gesture closure so VoiceOver reaches it
     /// too.
     private func handleObjectTap(on entity: Entity) {
-        // The instruments get first refusal, or tapping a plate would also fold
-        // the open ring.
-        if layers?.handleTap(entity) == true { return }
-        // No pivot branch here: the collar's bead opens from a press that does
+        // No pivot branch here: the collar's ring opens from a press that does
         // not move it, inside the drag gesture; a tap target on the collar
         // competed with its own drag.
         if bloom.handleTap(entity) { return }
@@ -493,61 +432,16 @@ struct PendulumsSpaceView: View {
         while let candidate = current {
             if let id = UUID(uuidString: candidate.name),
                model.pendulums.contains(where: { $0.id == id }) {
-                model.select(id: id)
-                pivotRing.openID = nil
-                if ring.openID == id {
-                    ring.openID = nil
-                    SoundPalette.play(.releaseTick, on: entity,
-                                      volume: 0.3)
-                } else {
-                    ring.openID = id
-                    SoundPalette.play(.pop, on: entity, volume: 0.35)
-                }
+                toggleRing(id, on: entity)
                 return
             }
             current = candidate.parent
         }
-        // A tap elsewhere folds whichever ring is open, the collar's too.
-        if ring.openID != nil || pivotRing.openID != nil {
+        // A tap elsewhere folds the ring.
+        if ring.openID != nil {
             SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
         }
         ring.openID = nil
-        pivotRing.openID = nil
-    }
-
-}
-
-/// The card floating above the selected bob. Every value is quantised
-/// to its displayed precision: an attachment is rasterised, so what
-/// costs is how often the output changes.
-struct PendulumInfoCard: View {
-    @Environment(PendulumsModel.self) private var model
-
-    var body: some View {
-        if let pendulum = model.selected {
-            let speed = (simd_length(pendulum.state.velocity) * 100).rounded() / 100
-            let degrees = (pendulum.state.angle(length: pendulum.length)
-                           * 180 / .pi).rounded()
-            let length = (pendulum.length * 100).rounded() / 100
-            let period = (pendulum.period(gravity: model.gravity) * 100).rounded() / 100
-            VStack(alignment: .leading, spacing: 3) {
-                // No T for a double: 2π√(L/g) is the upper rod's small-
-                // angle period, and a chaotic rig has none (the same rule
-                // as the in-room tag).
-                Text(pendulum.kind == .double
-                     ? "L \(PhysicsFormat.measurement(length, "m", decimals: 2))   chaotic"
-                     : "L \(PhysicsFormat.measurement(length, "m", decimals: 2))   "
-                       + "T \(PhysicsFormat.measurement(period, "s", decimals: 2))")
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                Text("θ \(PhysicsFormat.angle(degrees, decimals: 0))   "
-                     + "v \(PhysicsFormat.measurement(speed, "m/s", decimals: 2))")
-                    .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-            }
-            // A card in a room: it has to hold its shape against a sunlit wall, a
-            // dark studio, and the furniture behind it.
-            .readoutCard()
-            .accessibilityElement(children: .combine)
-        }
     }
 
 }
