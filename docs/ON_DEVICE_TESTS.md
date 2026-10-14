@@ -537,19 +537,24 @@ file). What follows is the standing script.
 
 ## Electric Fields
 
-Every control here is an object in the room, so **this section is the
-only place most of them can be tested at all.**
+The room holds the charges, the capacitor and two wells; the layers, ΔV,
+B, Deflect shot and Clear all are in More (2026-10-14). A charge's sign
+and size are the charge's own, so **this section is the only place they
+can be tested at all.**
 
-- [ ] ⟳ **The bank is FOUR plates now** — Field lines, Free charges,
-      Capacitor, Uniform B. The flux meter, its "Open disc" plate and
-      the four-disc particle bank are all gone at the owner's direction.
-      Nothing in the room should reference them.
-- [ ] **Flick each plate.** Each apparatus should ARRIVE, and the ones
-      that carry an instrument should bring it: Capacitor puts a ΔV
-      rail on top of the plates, Uniform B puts a strength rail under
-      the bank.
-- [ ] **Pull each of the four wells.** The new charge or probe is IN
-      YOUR HAND and STAYS there all the way in.
+- [ ] **Two wells, Charge and Test charge.** Pull each: the new charge
+      or probe is IN YOUR HAND and STAYS there all the way in. Both come
+      out positive, as their previews show.
+- [ ] **Tap a charge → its ring: Flip, Delete, and a handle on its
+      surface.** Flip: the sphere turns blue with a −, and the field
+      lines reverse at once. Pull the handle outward: the sphere SWELLS
+      under it and the field strengthens live; push it in and it
+      shrinks. The handle stays on the surface the whole way.
+- [ ] **Tap the probe → the same ring at its scale.** Flip turns it
+      round mid-flight; its handle grows it from 1 to 50 nC.
+- [ ] **In More, flick each switch.** Capacitor makes the plates ARRIVE
+      and wakes Plate voltage ΔV and Deflect shot; Uniform B wakes its
+      own slider. Off, each dependent control greys out.
 - [ ] ⟳ **THERE ARE NO WALLS.** Drag a charge three metres across your
       real room: it goes exactly where your hand goes, stopped only by
       the floor. Same for the capacitor — carry it anywhere. If
@@ -561,33 +566,18 @@ only place most of them can be tested at all.**
       the room clip, kept on purpose.)
 - [ ] **Pull the test charge out with Uniform B on and throw it
       sideways.** It must curve into a circle and draw one — a fading
-      trail that visibly CLOSES on its own tail. ⟳ A + probe and a −
-      probe (the two test wells) wind opposite ways.
+      trail that visibly CLOSES on its own tail. Flip it and throw
+      again: it winds the other way.
   - [ ] Grab the probe again mid-flight: the trail clears.
-- [ ] **Drag each rail's bead.** The number follows your hand, the fill
-      grows behind the bead, half way along the rail is half way through
-      the range, and dragging off the end pins rather than wraps.
-- [ ] **Drag along a rail with your hand drifting up and down.** The
-      value must not wander with the drift.
-- [ ] ⟳ **Switch the Capacitor plate OFF while dragging its ΔV bead**
-      (two hands: left on the bank, right on the rail). This was
-      impossible on device — the second hand's pinch never reached the
-      plate. A raw-pinch path now routes a second-hand tap to the bank:
-      the plate must toggle, the rail vanishes, the voltage stops
-      changing, and your dragging hand is released. Also check a
-      NORMAL one-handed plate tap still toggles exactly once.
-- [ ] **Carry the capacitor low, then high.** Its rail stays on top of
-      the plates the whole way.
 - [ ] **Pinch a charge that is between the capacitor plates.** It must
       be grabbable through the plates' 26 cm collision spheres.
 - [ ] Drag a charge: the field lines re-trace and follow, sticking to
       your hand rather than lagging visibly.
-- [ ] Tap a charge → ring; pull the strength bead → the sphere grows
-      and the field answers live. The bead's rail is under the charge.
-- [ ] **Tap the probe → its own ring**, with its charge bead.
-- [ ] **Two-hand pinch to 4×.** The field grows; the bank and the wells
-      do NOT, and stay reachable. And per the same-object rule: a
-      charge in each hand moves two charges, resizes nothing.
+- [ ] **Clear all, in More, arms first** ("Tap again"), then empties
+      the room; the switches stay as they were.
+- [ ] **Two-hand pinch to 4×.** The field grows; the wells do NOT, and
+      stay reachable. And per the same-object rule: a charge in each
+      hand moves two charges, resizes nothing.
 
 ## Projectiles — the one that is 1:1 with your room
 
@@ -1480,7 +1470,7 @@ in a room.
       rail moves too — same value, two handles). Press ƒ again: it folds.
       It must never catch a pinch aimed at the apparatus behind it.
 - [ ] **Electric Fields opens with NO test charge.** The dipole stands
-      alone; pull a probe from the Test + or Test − well and it rides
+      alone; pull a probe from the Test charge well and it rides
       the field from your hand. Reset leaves it probe-free too.
 - [ ] **Both ampersands wear their keyline on the FRONT.** "& Magnetism"
       and "& Energy": the bright chamfer band runs round every edge of

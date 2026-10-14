@@ -41,9 +41,6 @@ final class InstrumentReachCriterionTests: XCTestCase {
     /// this cannot drift from what ships.
     private var banks: [Instrument] {
         [
-            .init(name: "Electric Fields layers",
-                  anchor: SIMD3<Float>(FieldInstrumentLayout.leftRail.head),
-                  halfExtents: Self.bankHalfExtents),
             .init(name: "Magnetism layers",
                   anchor: MagnetismSpaceView.bankAnchor,
                   halfExtents: Self.bankHalfExtents),
@@ -54,9 +51,13 @@ final class InstrumentReachCriterionTests: XCTestCase {
     }
 
     /// What else stands on a lab's flank for a hand: Orbital Mechanics'
-    /// world well (its clock, overlays, verbs and G moved into More).
+    /// world well and Electric Fields' two (their clocks, layers, verbs
+    /// and rails moved into More).
     private var verbBanks: [Instrument] {
         [
+            .init(name: "Electric Fields wells",
+                  anchor: SIMD3<Float>(FieldInstrumentLayout.foreRail.head),
+                  halfExtents: FieldInstrumentLayout.wellHalfExtents),
             .init(name: "Orbital Mechanics world well",
                   anchor: OrbitalMechanicsRenderer.systemPosition
                       + OrbitalMechanicsSpaceView.wellOffset,
@@ -181,7 +182,8 @@ final class InstrumentReachCriterionTests: XCTestCase {
     /// Not vacuous: the list has to actually cover the app. The labs
     /// whose layers live in the title bar's More (2026-10-14):
     /// nothing of theirs stands in the room to be out of reach.
-    private static let banksInMore: Set<String> = ["circuits", "gravitylab", "kinematics"]
+    private static let banksInMore: Set<String> = [
+        "circuits", "electrostatics", "gravitylab", "kinematics"]
 
     func testTheCriterionCoversEveryModule() {
         XCTAssertEqual(banks.count + Self.banksInMore.count, ModuleCatalog.allIDs.count, """

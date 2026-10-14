@@ -38,33 +38,58 @@ enum ElectromagnetismModule {
                     ? "B is fictional at this strength; the circle r = mv/qB is exact."
                     : nil
             },
-            adjustables: adjustables(appModel: appModel),
+            more: more(appModel.electromagnetismModel),
             timeScrub: .init(model: appModel.electromagnetismModel),
             reset: { appModel.electromagnetismModel.reset() }
         )
     }
 
-    /// The two numbers the Physics box can turn: the plates' voltage and
-    /// the uniform B. The test charge's q stays on the probe's own ring.
-    static func adjustables(appModel: AppModel) -> [PhysicsAdjustable] {
-        let model = appModel.electromagnetismModel
-        // The box works in kV, kT and nC; the model in V, T and C.
+    /// What More holds for the field: what is drawn, how the charges
+    /// behave, the two apparatus with their one number each, and Clear.
+    /// A dependent control stands under the switch it needs, disabled
+    /// until that switch is on.
+    static func more(_ model: FieldModel) -> [MoreItem] {
+        // More works in kV and kT; the model in V and T.
         func scaled(_ range: ClosedRange<Double>, by factor: Double) -> ClosedRange<Double> {
             (range.lowerBound * factor)...(range.upperBound * factor)
         }
         return [
-            .init(id: "plateVoltage", label: "Plate voltage ΔV", unit: "kV",
-                  range: scaled(FieldModel.plateVoltageRange, by: 1e-3), decimals: 1,
-                  read: { model.plateVoltage / 1000 },
-                  write: { model.setPlateVoltage($0 * 1000) }),
-            .init(id: "uniformB", label: "Uniform field B", unit: "kT",
-                  range: scaled(FieldModel.magneticFieldRange, by: 1e-3), decimals: 0,
-                  read: { model.magneticFieldTesla / 1000 },
-                  write: { model.magneticFieldTesla = $0 * 1000 }),
+            .toggle(id: "lines", title: "Field lines", symbol: "scribble",
+                    isOn: { model.showLines }, set: { model.showLines = $0 }),
+            .toggle(id: "free", title: "Free charges", symbol: "arrow.left.and.right",
+                    isOn: { model.chargesRespond }, set: { model.chargesRespond = $0 }),
+            // "Capacitor", not "Parallel plates": it names the apparatus.
+            .toggle(id: "plates", title: "Capacitor", symbol: "square.split.2x1",
+                    isOn: { model.capacitorOn }, set: { model.capacitorOn = $0 }),
+            // A voltage has no extent to stretch; the plates' gap does, and
+            // that is a drag on a plate.
+            .slider(.init(id: "plateVoltage", label: "Plate voltage ΔV", unit: "kV",
+                          range: scaled(FieldModel.plateVoltageRange, by: 1e-3), decimals: 1,
+                          read: { model.plateVoltage / 1000 },
+                          write: { model.setPlateVoltage($0 * 1000) }),
+                    isEnabled: { model.capacitorOn }),
+            // The CRT demo: the test charge fired crosswise through the gap.
+            // It does not confirm: re-firing is the point.
+            .action(id: "deflect", title: "Deflect shot", symbol: "arrow.turn.down.right",
+                    isEnabled: { model.capacitorOn },
+                    run: { model.launchProbeThroughGap() }),
+            .toggle(id: "bfield", title: "Uniform B", symbol: "arrow.up",
+                    isOn: { model.magneticFieldOn }, set: { model.magneticFieldOn = $0 }),
+            .slider(.init(id: "uniformB", label: "Uniform field B", unit: "kT",
+                          range: scaled(FieldModel.magneticFieldRange, by: 1e-3), decimals: 0,
+                          read: { model.magneticFieldTesla / 1000 },
+                          write: { model.magneticFieldTesla = $0 * 1000 }),
+                    isEnabled: { model.magneticFieldOn }),
+            // Everything placed goes, the test charge included; the switches
+            // stay, because a layer is a setting, not a placed object.
+            .action(id: "clear", title: "Clear all", symbol: "trash.slash",
+                    confirms: true, destructive: true,
+                    isEnabled: { !model.charges.isEmpty || model.probe != nil },
+                    run: { model.clearEverything() }),
         ]
     }
 
-    /// The live numbers the Physics box shows.
+    /// The live numbers More shows.
     static func readings(appModel: AppModel) -> [Reading] {
         let model = appModel.electromagnetismModel
         var rows: [Reading] = [
@@ -97,18 +122,14 @@ enum ElectromagnetismModule {
                     simd_length(model.fieldVector(
                         at: selected.position + SIMD3(0.1, 0, 0)))), "N/C"))
         }
+        // ΔV and B are More's own sliders; E between the plates is the
+        // capacitor's callout, measured — V/d here contradicted it, since the
+        // real plates fringe.
         if model.capacitorOn {
-            rows.append(.init("Plate voltage",
-                              PhysicsFormat.metric(model.plateVoltage, "V", decimals: 1)))
             rows.append(.init("Plate gap",
                               PhysicsFormat.fixed(model.plateSeparation, decimals: 3), "m"))
-            rows.append(.init("E between plates",
-                PhysicsFormat.metric(model.plateVoltage / model.plateSeparation,
-                                     "V/m", decimals: 1)))
         }
         if model.magneticFieldOn {
-            rows.append(.init("B", PhysicsFormat.metric(
-                model.magneticFieldTesla, "T", decimals: 2)))
             rows.append(.init("Cyclotron radius",
                               PhysicsFormat.fixed(model.cyclotronRadius, decimals: 3), "m"))
         }

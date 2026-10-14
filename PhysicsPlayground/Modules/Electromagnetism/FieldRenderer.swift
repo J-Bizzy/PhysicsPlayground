@@ -74,6 +74,24 @@ final class FieldRenderer {
         return Self.chargeRadius * entity.scale.x
     }
     static let probeRadius: Float = 0.018
+
+    /// How big the test charge is drawn right now, for its ring's grip.
+    var probeDisplayRadius: Float {
+        Self.probeRadius * (probeEntity?.scale.x ?? 1)
+    }
+
+    /// A charge is drawn with a volume in proportion to |q|: 1 µC is the
+    /// house size, 6 µC 1.8× as wide, 0.2 µC 0.6×. Size is the one channel
+    /// a magnitude can show without a number, and the surface grip that
+    /// sets it rides the same sphere.
+    static func chargeScale(coulombs: Double) -> Float {
+        Float(cbrt(abs(coulombs) / FieldModel.defaultMagnitude))
+    }
+
+    /// The test charge on the same rule, about its own 10 nC.
+    static func probeScale(coulombs: Double) -> Float {
+        Float(cbrt(abs(coulombs) / FieldModel.defaultProbeCharge))
+    }
     /// Arrowheads are hidden inside this distance of a charge, where the
     /// 1/r² field diverges and a finite arrow is meaningless.
     static let arrowExclusionRadius = 0.09
@@ -715,6 +733,8 @@ final class FieldRenderer {
             seen.insert(charge.id)
             let entity = chargeEntities[charge.id] ?? makeChargeEntity(for: charge)
             entity.position = SIMD3<Float>(charge.position)
+            let scale = Self.chargeScale(coulombs: charge.charge)
+            if entity.scale.x != scale { entity.scale = SIMD3(repeating: scale) }
             if appliedPolarity[charge.id] != charge.isPositive {
                 entity.model?.materials = [Self.chargeMaterial(isPositive: charge.isPositive)]
                 appliedPolarity[charge.id] = charge.isPositive
@@ -883,6 +903,9 @@ final class FieldRenderer {
             entity.components.set(accessibility)
         }
         entity.position = SIMD3<Float>(probe.position)
+        let scale = Self.probeScale(
+            coulombs: model?.probeChargeMagnitude ?? FieldModel.defaultProbeCharge)
+        if entity.scale.x != scale { entity.scale = SIMD3(repeating: scale) }
     }
 
     // MARK: The probe's trail

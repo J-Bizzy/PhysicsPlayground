@@ -648,3 +648,57 @@ wells. The slider clamp test now covers sliders declared in `more` too.
 Screenshots: `step5-projectiles.jpg`, `step5-projectiles-speed.jpg` (bead
 at 9 m/s, ring open), `step5-projectiles-more.jpg` (Moon, Custom, air).
 
+### Step 5.4 — Electric Fields (2026-10-14)
+
+Removed from the room:
+- the layers bank (Field lines, Free charges, Capacitor, Uniform B);
+- the Clear all and Deflect shot plates;
+- the ΔV rail bolted over the capacitor;
+- the B rail under the bank;
+- the second-hand raw-pinch path that existed only to reach the bank
+  while the other hand held a rail.
+
+In More, each dependent control sits under the switch it needs:
+- Field lines;
+- Free charges;
+- Capacitor, with Plate voltage ΔV and Deflect shot under it (both
+  disabled while it is off);
+- Uniform B, with its B slider;
+- Clear all (arms first, red).
+
+Merged: four wells became two, **Charge** and **Test charge**, both
+positive out of the mouth. A charge's sign is now a property of the
+charge: its ring has **Flip**, and so does the test charge's (the model
+already flipped the probe live).
+
+Replaced with direct manipulation: a charge is drawn with a volume in
+proportion to |q|. It is 1 µC at the house size, 0.6× as wide at 0.2 µC
+and 1.8× at 6 µC, and the test charge follows the same rule about its
+10 nC. Each ring's grip is a handle on the sphere's surface. Pulling it
+out grows the sphere it leaves, using the same `Bloom.Grip.Stretch.surface`
+as a planet's mass, which is now shared rather than private to Orbits.
+Before this, the strength grip promised that "the sphere grows", but
+the sphere never did.
+
+Values drop Plate voltage and B, which are More's sliders, and "E between
+plates = V/d". That last one contradicted the capacitor's measured
+callout, because the real plates fringe.
+
+Arguments: `-emStrength <µC>` is new (the selected charge's |q|).
+`-emClear` is retired.
+
+Controls: **17 visible at open → 5** (two wells, Home, More, Pause). **43
+reachable → 24** (8 lab items and 5 room items in More, 3 on each of the
+two rings, and the 5 above; the plates and slab are the apparatus).
+
+Tests: full suite green with Projectiles (123 s, 855 app and UI tests).
+`FieldInstrumentLayoutTests` loses the bank, Clear-plate and two rail
+tests. It now pins the two mouths at (−1.02, 1.58, −0.60) and one pitch
+below, the middle of where the four stood. The reach criterion measures
+the wells. Screenshots: `step5-fields.jpg` (the opening),
+`step5-fields-ring.jpg` (+4 µC beside −1 µC, its ring open),
+`step5-fields-more.jpg`.
+
+Noted: the room's field lines and the capacitor callout can draw in front
+of the More panel, because the apparatus stands nearer than the window.
+The window is the wearer's to place, so this is left alone.

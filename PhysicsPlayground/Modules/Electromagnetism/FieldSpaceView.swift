@@ -2,12 +2,12 @@
 //  FieldSpaceView.swift
 //  Physics Playground — Electromagnetism module
 //
-//  The electrostatics immersive scene — the module's only surface.
-//  Everything stands off the left shoulder, split by depth: deep at the
-//  station's plane, a layers bank with a B-strength rail under it; fore
-//  of it, four wells with the Clear plate at their base; and a ΔV rail
-//  over the capacitor. The gesture chains' order is load-bearing, and
-//  `FieldInstrumentLayout` keeps the furniture 12 cm clear of the physics.
+//  The electrostatics immersive scene. The room holds the charges, the
+//  capacitor and two wells off the left shoulder — a charge and a test
+//  charge; a charge's sign and size are the charge's own (Flip on its
+//  ring, a handle on its surface). Its layers, ΔV, B and verbs are in
+//  More. The gesture chains' order is load-bearing, and
+//  `FieldInstrumentLayout` keeps the wells 12 cm clear of the physics.
 //
 
 import PhysicsCore
@@ -33,24 +33,12 @@ struct FieldSpaceView: View {
     @State private var renderer: FieldRenderer?
     @State private var drag: RelativeDrag?
 
-    /// The per-object control ring: delete, and the strength bead.
+    /// The per-object control ring: flip, delete, and the size handle.
     @State private var bloom = Bloom()
     @State private var ring = FieldRingState()
 
-    /// What exists. Built in the make closure because every switch reads
-    /// and writes the model.
-    @State private var bank: SpatialLayerBank?
-    /// The module's one standing verb: clear every charge. See `install`.
-    @State private var verbs: SpatialActionBank?
-    /// What you make.
+    /// What you make: a charge, and a test charge.
     @State private var wells: Well?
-
-    /// ΔV across the plates. Bolted to the capacitor and carried with it.
-    @State private var voltageTrack: SpatialTrackControl?
-    /// B strength, under the bank plate that summons the field.
-    @State private var fieldTrack: SpatialTrackControl?
-    /// The rail a hand is currently dragging, if any.
-    @State private var activeTrack: SpatialTrackControl?
 
     /// The hand's recent travel, for the throw that launches the probe.
     @State private var flick = ThrowSampler(window: 0.12)
@@ -112,40 +100,8 @@ struct FieldSpaceView: View {
             drag = nil
         }
         .spatialScale(scaleRig)
-        .simultaneousGesture(secondHandTap)
         .simultaneousGesture(tap)
         .simultaneousGesture(drags)
-    }
-
-    /// The pinches currently down, for `secondHandTap`.
-    @State private var activePinchIDs: Set<SpatialEventCollection.Event.ID> = []
-
-    /// The two-handed tap the recognisers cannot see: while one hand holds
-    /// a drag, SwiftUI never delivers the other hand's pinch to the
-    /// `TapGesture`. A passive `SpatialEventGesture` hands a second pinch on
-    /// the layers bank to the bank directly; a lone pinch stays the
-    /// TapGesture's.
-    private var secondHandTap: some Gesture {
-        SpatialEventGesture()
-            .onChanged { events in
-                for event in events {
-                    if event.phase == .active {
-                        guard !activePinchIDs.contains(event.id) else { continue }
-                        if !activePinchIDs.isEmpty,
-                           let target = event.targetedEntity {
-                            _ = bank?.handleTap(target)
-                        }
-                        activePinchIDs.insert(event.id)
-                    } else {
-                        activePinchIDs.remove(event.id)
-                    }
-                }
-            }
-            .onEnded { events in
-                for event in events where event.phase != .active {
-                    activePinchIDs.remove(event.id)
-                }
-            }
     }
 
     // MARK: Installing the instruments
@@ -154,155 +110,41 @@ struct FieldSpaceView: View {
     // under `viewRoot`, so its coordinates and the hand's agree.
 
     private func install(into renderer: FieldRenderer) {
-        let bank = SpatialLayerBank(
-            accent: UIColor(DesignTokens.Palette.fieldLine),
-            layers: [
-                .init(id: "lines", label: "Field lines", symbol: "scribble",
-                      isOn: { model.showLines },
-                      toggle: { model.showLines.toggle() }),
-                .init(id: "free", label: "Free charges", symbol: "arrow.left.and.right",
-                      isOn: { model.chargesRespond },
-                      toggle: { model.chargesRespond.toggle() }),
-                // "Capacitor", not "Parallel plates": the bank's own switches are also
-                // plates, and two things in one room called the same word was
-                // unfindable on device.
-                .init(id: "plates", label: "Capacitor", symbol: "square.split.2x1",
-                      isOn: { model.capacitorOn },
-                      toggle: { model.capacitorOn.toggle() }),
-                .init(id: "bfield", label: "Uniform B", symbol: "arrow.up",
-                      isOn: { model.magneticFieldOn },
-                      toggle: { model.magneticFieldOn.toggle() }),
-            ])
-        renderer.root.addChild(bank.root)
-        self.bank = bank
-
-        // Clear, at the head of the well column that made every charge. It
-        // confirms: a plate beside the thing it empties is otherwise one stray
-        // pinch from wiping the room.
-        let verbs = SpatialActionBank(
-            accent: DesignTokens.Palette.negativeUI,
-            actions: [
-                .init(id: "clear", label: "Clear all", symbol: "trash.slash",
-                      // Read every frame; available while anything placed is in the room,
-                      // the probe included.
-                      isAvailable: { !model.charges.isEmpty || model.probe != nil },
-                      confirms: true,
-                      fire: { model.clearEverything() }),
-                // The CRT demo: fire the test charge crosswise through the gap. With
-                // the verbs because it places the probe, but it does not confirm:
-                // re-firing is the point.
-                .init(id: "deflect", label: "Deflect shot",
-                      symbol: "arrow.turn.down.right",
-                      isAvailable: { model.capacitorOn },
-                      fire: { model.launchProbeThroughGap() }),
-            ])
-        renderer.root.addChild(verbs.root)
-        self.verbs = verbs
-
         // Wells hang off `viewRoot`: a charge is born at the fingertips and
         // handed to a drag, so mouth and hand must agree about where they are.
+        // One of each: a charge comes out positive and its ring flips it, so
+        // the sign is a property of the thing you hold, not of where it came
+        // from.
         let wells = Well([
-            .init(name: "Positive", tint: DesignTokens.Palette.positiveUI,
-                  label: "Add +",
+            .init(name: "Charge", tint: DesignTokens.Palette.positiveUI,
+                  label: "Charge",
                   preview: { FieldRenderer.chargePreview(isPositive: true) },
                   position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 0)),
                   spawn: { model.addCharge(positive: true, at: $0) }),
-            .init(name: "Negative", tint: DesignTokens.Palette.negativeUI,
-                  label: "Add −",
-                  preview: { FieldRenderer.chargePreview(isPositive: false) },
-                  position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 1)),
-                  spawn: { model.addCharge(positive: false, at: $0) }),
-            // Two test-charge mouths, one per polarity: the probe's sign is chosen
-            // by which mouth you pull from.
-            .init(name: "Test +", tint: DesignTokens.Palette.probePositiveUI,
-                  label: "Test +",
+            .init(name: "Test charge", tint: DesignTokens.Palette.probePositiveUI,
+                  label: "Test charge",
                   preview: { FieldRenderer.probePreview(isPositive: true) },
-                  position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 2)),
+                  position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 1)),
                   spawn: { point in
+                      // Positive out of the well, as its preview promises.
                       model.probeIsPositive = true
-                      model.holdProbe(at: point)
-                      return Self.probeWellID
-                  }),
-            .init(name: "Test −", tint: DesignTokens.Palette.probeNegativeUI,
-                  label: "Test −",
-                  preview: { FieldRenderer.probePreview(isPositive: false) },
-                  position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 3)),
-                  spawn: { point in
-                      model.probeIsPositive = false
                       model.holdProbe(at: point)
                       return Self.probeWellID
                   }),
         ])
         renderer.viewRoot.addChild(wells.root)
         self.wells = wells
-
-        let voltage = SpatialTrackControl(
-            name: "Plate voltage",
-            center: SIMD3<Float>(FieldInstrumentLayout.voltageTrackCenter(
-                capacitorCenter: model.capacitorCenter)),
-            normal: [0, 0, 1],
-            accent: DesignTokens.Palette.positiveUI,
-            range: FieldModel.plateVoltageRange,
-            read: { model.plateVoltage },
-            // Snapped to 500 V so the bead lands on honest values.
-            write: { model.setPlateVoltage($0) },
-            format: { PhysicsFormat.measurement($0 / 1000, "kV", decimals: 0) },
-            // E = V/d, live under the rail; follows a plate drag (d) as well as the
-            // bead (V).
-            subtitle: { _ in
-                "E = " + PhysicsFormat.measurement(model.plateFieldkVPerM, "kV/m", decimals: 1)
-            })
-        renderer.viewRoot.addChild(voltage.root)
-        self.voltageTrack = voltage
-
-        let field = SpatialTrackControl(
-            name: "Magnetic field",
-            center: SIMD3<Float>(FieldInstrumentLayout.fieldTrackAnchor),
-            normal: SIMD3<Float>(FieldInstrumentLayout.fieldTrackNormal),
-            accent: DesignTokens.Palette.probeNegativeUI,
-            range: FieldModel.magneticFieldRange,
-            read: { model.magneticFieldTesla },
-            write: { model.magneticFieldTesla = $0 },
-            format: { PhysicsFormat.measurement($0 / 1000, "kT", decimals: 0) })
-        renderer.viewRoot.addChild(field.root)
-        self.fieldTrack = field
     }
 
     // MARK: Per frame
 
     private func syncInstruments(renderer: FieldRenderer, dt: Double) {
-        let head = appModel.room.headPosition.map { SIMD3<Float>($0) }
-
-        // The bank and the picker live under `root`, which carries the
-        // lab-placement offset, so the viewer is converted into that frame.
-        let headInRoot = head.map {
-            renderer.root.convert(position: $0, from: nil)
-        }
-        // World space, unlike `headInRoot`: recession compares the hand against
-        // each instrument's own world position.
+        // World space: recession compares the hand against the mouths' own
+        // world positions.
         let hand = appModel.room.nearestFingertip(
-            to: renderer.root.convert(
-                position: SIMD3<Float>(FieldInstrumentLayout.bankAnchor), to: nil))
-        bank?.update(anchor: SIMD3<Float>(FieldInstrumentLayout.bankAnchor),
-                     viewer: headInRoot, dt: dt, nearestHand: hand)
-        verbs?.update(anchor: SIMD3<Float>(FieldInstrumentLayout.clearPlateAnchor),
-                      viewer: headInRoot, dt: dt,
-                      resetNonce: appModel.resetNonce, nearestHand: hand)
+            to: renderer.viewRoot.convert(
+                position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 0)), to: nil))
         wells?.update(dt: dt, nearestHand: hand)
-
-        // Each rail exists exactly when its apparatus does.
-        voltageTrack?.isEnabled = model.capacitorOn
-        fieldTrack?.isEnabled = model.magneticFieldOn
-
-        if model.capacitorOn, let voltage = voltageTrack {
-            voltage.root.position = SIMD3<Float>(
-                FieldInstrumentLayout.voltageTrackCenter(
-                    capacitorCenter: model.capacitorCenter))
-            voltage.refresh()
-        }
-        // `refresh()` is the caller's job: a rail ticks nothing of its own, and
-        // would show a stale value after a reset.
-        if fieldTrack?.isEnabled == true { fieldTrack?.refresh() }
     }
 
     /// Keeps the ring on its object: anchored every frame so it follows a
@@ -329,20 +171,31 @@ struct FieldSpaceView: View {
             bloom.retarget(
                 ring.target,
                 petals: [
+                    .init(name: "Flip", symbol: "plusminus",
+                          tint: charge.isPositive
+                              ? DesignTokens.Palette.negativeUI
+                              : DesignTokens.Palette.positiveUI) {
+                        model.flipCharge(id: id)
+                    },
                     .init(name: "Delete", symbol: "trash",
                           tint: DesignTokens.Palette.destructiveUI) {
                         model.removeCharge(id: id)
                     },
                 ],
+                // |q| is the charge's size: the handle sits on its surface and
+                // drawing it out grows the sphere it is pulled from.
                 grip: .init(
-                    name: "Strength",
+                    name: "Charge",
                     range: FieldModel.magnitudeRange,
                     read: { model.magnitudeMicroCoulombs(id: id) },
                     write: { model.setMagnitude(id: id, microCoulombs: $0) },
                     format: { PhysicsFormat.measurement($0, "\u{00B5}C", decimals: 1) },
-                    // Rides the charge's own surface, so the handle moves
-                    // outward as the charge grows.
-                    radius: { renderer.displayRadius(forChargeID: id) + 0.02 }))
+                    radius: { renderer.displayRadius(forChargeID: id) + 0.02 },
+                    stretch: .surface(
+                        center: { model.charges.first { $0.id == id }
+                            .map { SIMD3<Float>($0.position) } ?? .zero },
+                        radius: { renderer.displayRadius(forChargeID: id) },
+                        read: { model.magnitudeMicroCoulombs(id: id) })))
             bloom.update(anchor: SIMD3<Float>(charge.position),
                          viewer: viewer, revealTarget: 1, dt: dt)
 
@@ -351,6 +204,12 @@ struct FieldSpaceView: View {
             bloom.retarget(
                 ring.target,
                 petals: [
+                    .init(name: "Flip", symbol: "plusminus",
+                          tint: model.probeIsPositive
+                              ? DesignTokens.Palette.probeNegativeUI
+                              : DesignTokens.Palette.probePositiveUI) {
+                        model.probeIsPositive.toggle()
+                    },
                     .init(name: "Delete", symbol: "trash",
                           tint: DesignTokens.Palette.destructiveUI) {
                         model.removeProbe()
@@ -362,7 +221,11 @@ struct FieldSpaceView: View {
                     read: { model.probeChargeMagnitude },
                     write: { model.setProbeMagnitude($0) },
                     format: { PhysicsFormat.measurement($0 * 1e9, "nC", decimals: 0) },
-                    radius: { 0.05 }))
+                    radius: { renderer.probeDisplayRadius + 0.02 },
+                    stretch: .surface(
+                        center: { model.probe.map { SIMD3<Float>($0.position) } ?? .zero },
+                        radius: { renderer.probeDisplayRadius },
+                        read: { model.probeChargeMagnitude })))
             bloom.update(anchor: SIMD3<Float>(probe.position),
                          viewer: viewer, revealTarget: 1, dt: dt)
 
@@ -407,28 +270,10 @@ struct FieldSpaceView: View {
                 // Gestures already in flight first: a hand holding something is never
                 // re-claimed.
                 if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
-                if let track = activeTrack {
-                    // A rail can go away under a live drag (switch the capacitor off while
-                    // pulling its ΔV bead); the hand must not stay captured by a dead
-                    // instrument.
-                    guard track.isEnabled else {
-                        activeTrack = nil
-                        return
-                    }
-                    track.adjust(hand: hand)
-                    return
-                }
 
                 // B — beginnings.
                 if drag == nil {
                     if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
-                    for track in [voltageTrack, fieldTrack] {
-                        if let track, track.owns(value.entity) {
-                            activeTrack = track
-                            track.adjust(hand: hand)
-                            return
-                        }
-                    }
                     if let id = wells?.pull(value.entity, at: hand) {
                         // Born at the fingertips and dragged by the gesture that made it; the
                         // probe has no UUID, so its well's id names the drag.
@@ -457,8 +302,6 @@ struct FieldSpaceView: View {
                     }
                 }
                 bloom.endGrip()
-                activeTrack?.endAdjust()
-                activeTrack = nil
                 drag = nil
                 flick.reset()
                 model.heldChargeID = nil
@@ -514,9 +357,9 @@ struct FieldSpaceView: View {
     }
 
     // MARK: Debug entry points
-    // Every instrument is an object in the room and the simulator has no
-    // hand, so each apparatus and each continuous quantity needs a launch
-    // argument. The value arguments matter as much as the on/off ones.
+    // The simulator has no hand, so each apparatus and each continuous
+    // quantity needs a launch argument (or `-moreOpen 1` for what is in
+    // More). The value arguments matter as much as the on/off ones.
 
     private func applyDebugArguments() {
         #if DEBUG
@@ -533,11 +376,11 @@ struct FieldSpaceView: View {
             ring.target = .charge(id)
         }
 
-        // `-emClear 1` arms the Clear plate rather than firing it: an emptied
-        // room photographs like an unused one, and the armed state is the half
-        // that cannot otherwise be seen.
-        if defaults.bool(forKey: "emClear") {
-            verbs?.arm("clear", holds: true)
+        // `-emStrength 4` sets the selected charge's |q| in µC, which is its
+        // size: a charge at the house 1 µC proves nothing about the mapping.
+        let strength = defaults.double(forKey: "emStrength")
+        if strength > 0, let id = model.selectedChargeID {
+            model.setMagnitude(id: id, microCoulombs: strength)
         }
 
         // `-emDielectric 0.5` slides the slab half in; the crowding only exists
@@ -599,8 +442,6 @@ struct FieldSpaceView: View {
     /// too; only the module knows that pressing an object opens its ring.
     private func handleObjectTap(on entity: Entity) {
         if bloom.handleTap(entity) { return }
-        if bank?.handleTap(entity) == true { return }
-        if verbs?.handleTap(entity) == true { return }
 
         for name in Self.ancestorNames(of: entity) {
             if name == FieldRenderer.probeEntityName, model.probe != nil {

@@ -20,69 +20,25 @@ final class FieldInstrumentLayoutTests: XCTestCase {
     private let station = FieldInstrumentLayout.station
     private let margin = FieldInstrumentLayout.stationMargin
 
-    // MARK: Labels are part of the object
-
-    /// A label is as much a part of an instrument as its switch, and the
-    /// declared box has to include it.
-    func testTheBanksBoxIncludesItsLabels() {
-        // The bank's actual labels.
-        let reach = SpatialLayerBank.reach(forLabels: [
-            "Field lines", "Free charges", "Capacitor", "Uniform B"])
-        XCTAssertLessThanOrEqual(
-            Double(reach), FieldInstrumentLayout.bankHalfExtents.x,
-            """
-            A bank label reaches \(reach) m from the plate centre but the \
-            declared half-extent is \(FieldInstrumentLayout.bankHalfExtents.x). \
-            Every clearance in this file is then measuring the switches \
-            without their names.
-            """)
-    }
-
-    /// The Clear plate's box must cover its nameplate and the "Tap again" it
-    /// swaps to when armed, or the instrument grows on arming into whatever
-    /// it was cleared of.
-    func testTheClearPlatesBoxIncludesItsLabelsInBothStates() {
-        let reach = SpatialActionBank.reach(forLabels: [
-            "Clear all", SpatialActionBank.armedLabel])
-        XCTAssertLessThanOrEqual(
-            Double(reach), FieldInstrumentLayout.clearPlateHalfExtents.x,
-            """
-            The Clear plate's label reaches \(reach) m from the plate \
-            centre but its declared half-extent is \
-            \(FieldInstrumentLayout.clearPlateHalfExtents.x). Every \
-            clearance checked in this file is then measuring a plate \
-            without its name — and this one stands 0.13 m from a station \
-            wall whose proximity fallback is 0.12.
-            """)
-    }
-
     // MARK: Nothing stands where the physics is
 
-    // MARK: The rails reproduce what the hands placed
+    // MARK: The wells stand where the hands placed them
 
-    /// The rails must reproduce the hand-placed layout: deriving the
-    /// anchors is only safe if it is not also a change of arrangement. The
-    /// clear plate lands at (−1.02, 1.23), exactly Circuits' `clearAnchor`.
-    /// If a future change means to move an instrument, update the literal
-    /// in the same commit.
-    func testTheRailsReproduceTheHandPlacedLayout() {
+    /// The column stands where the hands placed it: the two mouths hang
+    /// at the middle of where the four stood until 2026-10-14, at the same
+    /// x and depth. If a change means to move them, update the literal in
+    /// the same commit.
+    func testTheWellsStandWhereTheyWerePlaced() {
         func same(_ derived: SIMD3<Double>, _ historical: SIMD3<Double>,
                   _ what: String) {
             XCTAssertEqual(derived.x, historical.x, accuracy: 1e-9, "\(what) x")
             XCTAssertEqual(derived.y, historical.y, accuracy: 1e-9, "\(what) y")
             XCTAssertEqual(derived.z, historical.z, accuracy: 1e-9, "\(what) z")
         }
-        same(FieldInstrumentLayout.bankAnchor,
-             SIMD3(-1.05, 1.42, -0.90), "layers bank")
-        same(FieldInstrumentLayout.fieldTrackAnchor,
-             SIMD3(-1.06, 1.10, -0.82), "B rail")
-        same(FieldInstrumentLayout.clearPlateAnchor,
-             SIMD3(-1.02, 1.23, -0.60), "clear plate")
-        // The column head, and the pitch down it.
         same(FieldInstrumentLayout.wellAnchor(index: 0),
-             SIMD3(-1.02, 1.675, -0.60), "well 0")
-        same(FieldInstrumentLayout.wellAnchor(index: 3),
-             SIMD3(-1.02, 1.675 - 3 * 0.095, -0.60), "well 3")
+             SIMD3(-1.02, 1.58, -0.60), "charge well")
+        same(FieldInstrumentLayout.wellAnchor(index: 1),
+             SIMD3(-1.02, 1.58 - 0.095, -0.60), "test-charge well")
     }
 
     /// The spacing must now come from the neighbours' own sizes — that is
@@ -156,19 +112,6 @@ final class FieldInstrumentLayoutTests: XCTestCase {
         }
     }
 
-    /// Instruments must not shield each other either. The wells and the
-    /// Clear plate share a column, so that is the pair that goes wrong.
-    func testInstrumentsDoNotOverlapEachOther() {
-        let all = FieldInstrumentLayout.standingInstruments
-        for i in all.indices {
-            for j in (i + 1)..<all.count {
-                XCTAssertTrue(
-                    all[i].box.isSeparated(from: all[j].box, margin: 0.03),
-                    "The \(all[i].name) and the \(all[j].name) are touching.")
-            }
-        }
-    }
-
     // MARK: Everything is reachable without walking
 
     /// The replacement standard demands an instrument be "operable without
@@ -193,66 +136,6 @@ final class FieldInstrumentLayoutTests: XCTestCase {
                                  "The \(instrument.name) hangs too low to use.")
             XCTAssertLessThan(instrument.box.maximum.y, 1.80,
                               "The \(instrument.name) is above a comfortable reach.")
-        }
-    }
-
-    // MARK: The one instrument inside the station
-
-    /// The ΔV rail rides the capacitor, so it is checked everywhere the
-    /// capacitor can legally be, not at its default.
-    func testTheVoltageRailStaysClearOfThePlatesWhereverTheCapacitorGoes() {
-        let model = FieldModel()
-        model.capacitorOn = true
-
-        // Every corner of the station, both ends of the separation range:
-        // the clamp pulls each back to the furthest legal spot, so this
-        // sweeps everywhere the apparatus can actually be carried.
-        for separation in [FieldModel.plateSeparationRange.lowerBound,
-                           FieldModel.plateSeparationRange.upperBound] {
-            for corner in station.corners {
-                model.plateSeparation = separation
-                // Carrying the assembly is a plate drag; its y/z take the
-                // whole capacitor along.
-                model.movePlate(1, toWorld: corner)
-                let centre = model.capacitorCenter
-                let rail = FieldInstrumentLayout.voltageTrackBox(
-                    capacitorCenter: centre)
-
-                // Never inside the plates: a floor on the old under-mounted position
-                // left the rail threaded through the gap at the lowest legal carry
-                // height.
-                XCTAssertGreaterThan(
-                    rail.minimum.y, centre.y + FieldModel.plateSize / 2,
-                    "The rail is down inside the plates at \(centre).")
-
-                // Reachable relative to its apparatus: a capacitor carried overhead
-                // takes its rail with it.
-                let railReach = rail.distanceRange(
-                    from: FieldInstrumentLayout.viewer).nearest
-                let apparatusReach = simd_distance(centre, FieldInstrumentLayout.viewer)
-                XCTAssertLessThanOrEqual(
-                    railReach, apparatusReach + FieldInstrumentLayout.voltageTrackRise,
-                    "The rail is further away than the capacitor it belongs to, at \(centre).")
-            }
-        }
-    }
-
-    /// The two rails are the pair most likely to collide, because the B
-    /// rail is fixed and the ΔV rail travels.
-    func testTheTwoRailsNeverOccupyTheSameSpace() {
-        let model = FieldModel()
-        model.capacitorOn = true
-        let fieldRail = StationBox(
-            center: FieldInstrumentLayout.fieldTrackAnchor,
-            halfExtents: FieldInstrumentLayout.fieldTrackHalfExtents)
-
-        for corner in station.corners {
-            model.movePlate(1, toWorld: corner)
-            let voltageRail = FieldInstrumentLayout.voltageTrackBox(
-                capacitorCenter: model.capacitorCenter)
-            XCTAssertTrue(
-                voltageRail.isSeparated(from: fieldRail, margin: 0.03),
-                "The ΔV rail reaches the B rail with the capacitor at \(model.capacitorCenter).")
         }
     }
 }

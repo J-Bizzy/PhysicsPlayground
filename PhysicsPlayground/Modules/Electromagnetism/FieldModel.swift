@@ -521,6 +521,13 @@ final class FieldModel {
         return charge.id
     }
 
+    /// Turns a charge over: the same magnitude, the other sign. What the
+    /// ring's Flip does, so one well makes both kinds.
+    func flipCharge(id: UUID) {
+        guard let index = charges.firstIndex(where: { $0.id == id }) else { return }
+        charges[index].charge = -charges[index].charge
+    }
+
     func removeCharge(id: UUID) {
         charges.removeAll { $0.id == id }
         if selectedChargeID == id { selectedChargeID = charges.last?.id }

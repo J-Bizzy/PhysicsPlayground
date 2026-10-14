@@ -375,7 +375,7 @@ struct OrbitalMechanicsSpaceView: View {
                     format: { PhysicsFormat.count($0, singular: "Sun", plural: "Suns",
                                                   decimals: 2) },
                     radius: { Float(model.displayRadius(id: uuid)) },
-                    stretch: Self.massStretch(
+                    stretch: .surface(
                         center: { center(uuid) },
                         radius: { Float(model.displayRadius(id: uuid)) },
                         read: { model.massInSuns(id: uuid) }))
@@ -391,7 +391,7 @@ struct OrbitalMechanicsSpaceView: View {
                         : PhysicsFormat.count($0, singular: "Earth", plural: "Earths",
                                               decimals: $0 < 1 ? 2 : 0) },
                     radius: { Float(model.displayRadius(id: uuid)) },
-                    stretch: Self.massStretch(
+                    stretch: .surface(
                         center: { center(uuid) },
                         radius: { Float(model.displayRadius(id: uuid)) },
                         read: { model.massInEarths(id: uuid) })))
@@ -403,23 +403,6 @@ struct OrbitalMechanicsSpaceView: View {
                      viewer: viewer, revealTarget: 1, dt: dt)
     }
 
-    /// Mass is pulled out of the body itself: the handle sits on its
-    /// surface, and a body's drawn radius goes as the cube root of its
-    /// mass, so drawing the handle out to radius r asks for the mass whose
-    /// body is that big — the planet swells under the hand.
-    static func massStretch(center: @escaping () -> SIMD3<Float>,
-                            radius: @escaping () -> Float,
-                            read: @escaping () -> Double) -> Bloom.Grip.Stretch {
-        let gap: Float = 0.02
-        return Bloom.Grip.Stretch(
-            origin: { center() },
-            handle: { axis in center() + axis * (radius() + gap) },
-            value: { hand, axis in
-                let reach = simd_dot(hand - center(), axis) - gap
-                let ratio = Double(max(reach, 0.004) / max(radius(), 1e-4))
-                return read() * ratio * ratio * ratio
-            })
-    }
 
     /// The tap routing, out of the gesture closure so VoiceOver reaches it
     /// too.

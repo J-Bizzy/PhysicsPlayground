@@ -80,6 +80,25 @@ final class Bloom {
             let handle: (_ axis: SIMD3<Float>) -> SIMD3<Float>
             /// The value a hand at this point asks for.
             let value: (_ hand: SIMD3<Float>, _ axis: SIMD3<Float>) -> Double
+
+            /// For a sphere drawn with a radius that goes as the cube root
+            /// of its value (a planet's mass, a charge's |q|): the handle
+            /// sits just off the surface, and drawing it out to radius r
+            /// asks for the value whose sphere is that big, so the object
+            /// swells under the hand.
+            static func surface(center: @escaping () -> SIMD3<Float>,
+                                radius: @escaping () -> Float,
+                                read: @escaping () -> Double) -> Stretch {
+                let gap: Float = 0.02
+                return Stretch(
+                    origin: { center() },
+                    handle: { axis in center() + axis * (radius() + gap) },
+                    value: { hand, axis in
+                        let reach = simd_dot(hand - center(), axis) - gap
+                        let ratio = Double(max(reach, 0.004) / max(radius(), 1e-4))
+                        return read() * ratio * ratio * ratio
+                    })
+            }
         }
 
         init(name: String, range: ClosedRange<Double>,
