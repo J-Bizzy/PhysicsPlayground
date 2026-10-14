@@ -50,9 +50,6 @@ final class InstrumentReachCriterionTests: XCTestCase {
             .init(name: "Pendulums layers",
                   anchor: PendulumsSpaceView.bankAnchor,
                   halfExtents: Self.bankHalfExtents),
-            .init(name: "Projectiles layers",
-                  anchor: KinematicsSpaceView.bankAnchor,
-                  halfExtents: Self.bankHalfExtents),
         ]
     }
 
@@ -82,14 +79,12 @@ final class InstrumentReachCriterionTests: XCTestCase {
         Double(PlateStyle.height) / 2 + 0.010,
         Double(PlateStyle.depth) / 2)
 
-    /// Projectiles' whole instrument wall: a bank is not a module's only
-    /// control, and checking only banks is how this module passed while
-    /// every one of its five instruments was out of reach.
+    /// What stands on Projectiles' wall: its two wells (its world, air,
+    /// walls and wind moved into More). A bank is not a module's only
+    /// control, and checking only banks is how this module once passed
+    /// while every one of its instruments was out of reach.
     private var projectilesWall: [Instrument] {
         [
-            .init(name: "Projectiles layers",
-                  anchor: KinematicsSpaceView.bankAnchor,
-                  halfExtents: Self.bankHalfExtents),
             .init(name: "Projectiles ball well",
                   anchor: KinematicsSpaceView.wellAnchor,
                   halfExtents: SIMD3(0.10, 0.10, 0.10)),
@@ -97,15 +92,6 @@ final class InstrumentReachCriterionTests: XCTestCase {
             .init(name: "Projectiles hoop well",
                   anchor: KinematicsSpaceView.hoopWellAnchor,
                   halfExtents: SIMD3(0.10, 0.10, 0.10)),
-            .init(name: "Projectiles worlds picker",
-                  anchor: KinematicsSpaceView.worldsAnchor,
-                  halfExtents: SIMD3(0.15, 0.10, 0.15)),
-            .init(name: "Projectiles g rail",
-                  anchor: KinematicsSpaceView.gravityCenter,
-                  halfExtents: SIMD3(0.16, 0.05, 0.07)),
-            .init(name: "Projectiles wind rail",
-                  anchor: KinematicsSpaceView.windCenter,
-                  halfExtents: SIMD3(0.16, 0.05, 0.07)),
         ]
     }
 
@@ -195,7 +181,7 @@ final class InstrumentReachCriterionTests: XCTestCase {
     /// Not vacuous: the list has to actually cover the app. The labs
     /// whose layers live in the title bar's More (2026-10-14):
     /// nothing of theirs stands in the room to be out of reach.
-    private static let banksInMore: Set<String> = ["circuits", "gravitylab"]
+    private static let banksInMore: Set<String> = ["circuits", "gravitylab", "kinematics"]
 
     func testTheCriterionCoversEveryModule() {
         XCTAssertEqual(banks.count + Self.banksInMore.count, ModuleCatalog.allIDs.count, """

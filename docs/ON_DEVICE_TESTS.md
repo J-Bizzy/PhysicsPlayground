@@ -56,9 +56,12 @@ contradicts this section, this section is current.
       the air. Tapping a second miniature sends the first home; tapping
       the docked one does nothing.
 - [ ] **2 · Projectiles.** Pull a basketball from the well and throw it
-      overhand at a real wall: it bounces AT the wall. Tap Jupiter (arc
-      collapses), Zero-g (dead straight). Catch a ball on your fingertips.
-      Air on: the wind rail appears, a wind bends the flight.
+      overhand at a real wall: it bounces AT the wall. In More, slide
+      Gravity onto Jupiter (arc collapses, the readout names it) and
+      Zero-g (dead straight). Catch a ball on your fingertips. Air on in
+      More: the Wind slider wakes, a wind bends the flight. Pull the aim
+      bead outward: the shaft lengthens, the protractor's speed climbs
+      and the arc stretches; inward, all three shrink.
       **[F]** Pull a hoop from its well (the mint mouth beside the ball's)
       and stand it across the room. Tap it: its ring — Aim, Drop when
       fired, Delete — and under it a callout reading "low 32° · high 74°"
@@ -68,14 +71,14 @@ contradicts this section, this section is current.
       Pinch "Drop when fired": the callout adds "drops when fired"; fire
       straight at the hoop and it falls as the shot leaves — the ball
       meets it in mid-air, on the Moon and on Jupiter too, and the next
-      shot re-hangs it. Pick Custom in the ball fan: a Mass rail hangs
-      under the launcher; pull it and the arc changes only with Air on.
+      shot re-hangs it. Pick Custom in the ball fan: More's Custom ball
+      mass wakes; change it and the arc changes only with Air on.
       Air on: the vacuum ghost stands beside the real arc and the landing
       ring reads both ranges. Throw at your coffee table: it bounces off
       the top and comes to rest on it, rolls off the edge and falls; swat
       a ball out of the air with an open hand, and confirm a still hand
       still CATCHES. **[C]** Tap the launcher: its ring unfolds
-      (Fire / Balls / Clear + the speed grip); tap empty space: it folds;
+      (Fire / Balls / Clear); tap empty space: it folds;
       the aim bead works with the ring folded.
 - [ ] **3 · Time Capsule** (ships ON now — no Settings visit). Pinch the
       pause petal: the room holds; ONE reel arrives, still coasting, under
@@ -616,8 +619,10 @@ file). The new well and the standing script:
       which is forbidden for this bench.
 - [ ] **Catch a ball out of the air.** Device-only; inert in the
       simulator.
-- [ ] Drag the launcher anywhere; pinch its bead to aim; the predicted
-      arc updates as you pull.
+- [ ] Drag the launcher anywhere; pinch its bead to aim and pull it
+      out or in to set the speed; the predicted arc updates as you pull.
+      The bead never leaves its 0.36–0.80 m band, however far the hand
+      goes.
 - [ ] The ball fan opens off the launcher's Balls petal, and choosing a
       ball changes the flight.
 - [ ] **Two-handed pinch does NOTHING here.** Projectiles is
@@ -626,25 +631,14 @@ file). The new well and the standing script:
       and one at rest against passthrough, and that the orange aim bead
       still reads as the LIT one of the pair.
 
-### The instrument wall
+### The wells
 
 - [ ] **Fire a dozen shots, sweep the launcher around, throw by hand.**
-      Nothing should ever hit an instrument or pass through one —
-      including the new ball well.
+      Nothing should ever hit a well or pass through one.
 - [ ] **They do not ride the launcher.** Carry it across the room: the
-      instruments stay where they are.
-- [ ] **Four worlds, not three.** Zero-g is on this bank. Tap it: the
-      shot must fly **dead straight**, no arc at all.
-- [ ] Tap Moon, then Jupiter: the arc stretches, then collapses. The
-      matching disc lights each time, and drifting the g rail off a
-      world darkens it.
-- [ ] **The wind rail only exists in air.** With Air resistance off there
-      should be no wind rail at all. Switch air on and it appears; set a
-      wind and the flight visibly bends.
-  - [ ] **Start dragging the wind bead, and while still dragging, have
-        the air switched off.** The rail must go dead, not keep writing.
-- [ ] **Reset makes the room real again.** Switch Walls bounce off, press
-      Reset: walls must come back on with the plate lit.
+      wells stay where they are.
+- [ ] **Reset makes the room real again.** Switch Walls bounce off in
+      More, press Reset: Walls bounce must come back on.
 
 ## Pendulums
 

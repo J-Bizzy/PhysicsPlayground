@@ -32,18 +32,13 @@ struct KinematicsSpaceView: View {
     @State private var bloom = Bloom()
     /// Whether the launcher's ring is open. A selection, not a model flag:
     /// out of `reset()`, the snapshot and the `ResetCoverageTests` sweep.
-    /// The ring folds by tap; only the launch-speed grip lives behind it,
-    /// and the aim bead stays reachable folded.
+    /// The ring folds by tap; the aim bead — angle and speed — stays
+    /// reachable folded.
     @State private var ring = RingState()
     /// The one id this module's ring can hold for the launcher — there is
     /// one launcher; hoops use their own ids.
     static let launcherRingID = UUID()
 
-    /// Where the custom ball's mass rail hangs: under the launcher,
-    /// riding it when it is carried.
-    static func massRailCenter(launcher: SIMD3<Double>) -> SIMD3<Float> {
-        SIMD3<Float>(launcher) + SIMD3(0, -0.16, 0)
-    }
     /// Which ball you are throwing, chosen in the room. A golf ball and a
     /// table-tennis ball are 17× apart in mass and behave nothing alike in
     /// air.
@@ -57,10 +52,8 @@ struct KinematicsSpaceView: View {
         layout: KinematicsSpaceView.ballFanLayout)
 
     /// The ball fan opens above and to the right of the launcher, tighter
-    /// than the house default. At the default 150° straight above it, its
-    /// first disc stood 6° from the world row's Jupiter, nearer and in
-    /// front of it from a standing wearer, so a pinch for a table-tennis
-    /// ball could land on Jupiter (2026-10-14).
+    /// than the house default, so it stays off the arc it is about to
+    /// throw along.
     static let ballFanLayout = FanLayout(span: 120 * .pi / 180, reach: 0.22)
     static let ballFanOffset = SIMD3<Float>(0.10, 0.24, 0)
     /// The two answers to "which arc reaches this hoop", as a fan opened
@@ -71,39 +64,12 @@ struct KinematicsSpaceView: View {
             PickerChoice(id: "low", label: "Low arc", symbol: "arrow.down.right"),
             PickerChoice(id: "high", label: "High arc", symbol: "arrow.up.right"),
         ])
-    /// The world you are throwing on, as four discs. Zero-g is here and not
-    /// in Pendulums': a projectile in zero-g flies dead straight, and the
-    /// straight line is the lesson.
-    @State private var worldPicker = SpatialPicker(
-        accessibilityNoun: "World",
-        choices: KinematicsModel.gravityPresets.map {
-            PickerChoice(id: $0.name, label: $0.name, symbol: "globe")
-        },
-        staysOpen: true,
-        layout: FanLayout(span: 54 * .pi / 180, reach: 0.32,
-                          verticalScale: 0.25, lift: 0, stagger: 0))
-    /// g between and beyond the worlds — including 0, which is why the
-    /// range starts there rather than at the rail's usual floor.
-    @State private var gravityTrack: SpatialTrackControl?
-    /// Wind. Only exists while the air does: a drag already in flight when
-    /// air resistance goes off must not keep setting a wind nothing applies.
-    @State private var windTrack: SpatialTrackControl?
-    /// The custom ball's mass, on a rail under the launcher, present only
-    /// while the fan says Custom. A rail rather than a ring grip: one grip
-    /// per ring is the ceiling.
-    @State private var massTrack: SpatialTrackControl?
-    /// Whether the room's walls are real, and whether the air is.
-    @State private var layers: SpatialLayerBank?
-    @State private var activeTrack: SpatialTrackControl?
     /// The ball well: pull one out and it is already in your hand —
     /// the launcher stops being the only way a ball enters the room.
     @State private var wells: Well?
 
-    // An instrument wall left of the launcher's home, at its depth — never
-    // in the firing line, and not riding the launcher (a carried rail would
-    // shift its own mapping mid-drag). One column, because reach, off-axis
-    // and the firing line leave room for nothing outboard; z −0.94 holds
-    // 43.8° and every instrument inside 1.25 m.
+    // The wells stand left of the launcher's home, at its depth — never in
+    // the firing line. Its world, its air and its walls are in More.
     private static let wallX: Float = -0.90
     private static let wallZ: Float = -0.94
 
@@ -117,14 +83,6 @@ struct KinematicsSpaceView: View {
     /// materials, not instruments: pulled from a well, nothing standing at
     /// rest.
     static let hoopWellAnchor = SIMD3<Float>(wallX - 0.065, 1.70, wallZ)
-    static let worldsAnchor = SIMD3<Float>(wallX, 1.50, wallZ)
-    static let gravityCenter = SIMD3<Float>(wallX, 1.30, wallZ)
-    static let windCenter = SIMD3<Float>(wallX, 1.10, wallZ)
-    static let bankAnchor = SIMD3<Float>(wallX, 0.90, wallZ)
-    /// The wall's bearing from a standing viewer is 43.8°, so that is the
-    /// angle it is turned to.
-    private static let instrumentNormal = SIMD3<Float>(0.42, 0, 0.91)
-
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
@@ -152,74 +110,11 @@ struct KinematicsSpaceView: View {
                 guard let kind = KinematicsModel.ProjectileKind(rawValue: id) else { return }
                 model.kind = kind
             }
-            renderer.root.addChild(worldPicker.root)
-            worldPicker.onSelect = { name in
-                guard let world = KinematicsModel.gravityPresets
-                    .first(where: { $0.name == name }) else { return }
-                model.gravity = world.gravity
-            }
-            // The lit disc is read from the model, so dragging the rail
-            // off a world darkens it and Reset lights Earth again.
-            worldPicker.selectedID = {
-                KinematicsModel.gravityPresets
-                    .first { abs($0.gravity - model.gravity) < 0.01 }?.name
-            }
+            // The lit choice is the ball you will throw: read from the model, so
+            // a reset moves it too.
+            ballPicker.selectedID = { model.kind.rawValue }
 
-            let bank = SpatialLayerBank(
-                accent: UIColor(DesignTokens.Palette.kinematicsAccent),
-                layers: [
-                    // Neither draws anything; both change what the room is — whether its
-                    // walls stop a ball and whether its air does.
-                    .init(id: "walls", label: "Walls bounce",
-                          symbol: "square.dashed",
-                          isOn: { model.respectRoomWalls },
-                          toggle: { model.respectRoomWalls.toggle() }),
-                    .init(id: "air", label: "Air resistance", symbol: "wind",
-                          isOn: { model.airResistance },
-                          toggle: { model.airResistance.toggle() }),
-                ])
-            renderer.root.addChild(bank.root)
-            layers = bank
-
-            let gravity = SpatialTrackControl(
-                name: "Gravity",
-                center: Self.gravityCenter,
-                normal: Self.instrumentNormal,
-                accent: UIColor(DesignTokens.Palette.kinematicsAccent),
-                range: KinematicsModel.gravityRange,
-                read: { model.gravity },
-                write: { model.gravity = $0 },
-                format: { PhysicsFormat.measurement($0, "m/s²", decimals: 2) })
-            renderer.root.addChild(gravity.root)
-            gravityTrack = gravity
-
-            let wind = SpatialTrackControl(
-                name: "Wind",
-                center: Self.windCenter,
-                normal: Self.instrumentNormal,
-                accent: UIColor(DesignTokens.Palette.kinematicsAccent),
-                range: KinematicsModel.windSpeedRange,
-                read: { model.windSpeed },
-                write: { model.windSpeed = $0 },
-                format: { PhysicsFormat.measurement($0, "m/s", decimals: 1) })
-            renderer.root.addChild(wind.root)
-            windTrack = wind
-
-            let mass = SpatialTrackControl(
-                name: "Mass",
-                center: Self.massRailCenter(launcher: model.launcherPosition),
-                normal: SIMD3(0, 0, 1),
-                accent: UIColor(DesignTokens.Palette.kinematicsAccent),
-                range: KinematicsModel.customMassRange,
-                read: { model.customMass },
-                write: { model.customMass = $0 },
-                format: { PhysicsFormat.measurement($0, "kg", decimals: 2) },
-                subtitle: { _ in "Ø 10 cm — same size, different mass" })
-            mass.isEnabled = model.kind == .custom
-            renderer.root.addChild(mass.root)
-            massTrack = mass
-
-            // The ball well, on the instrument wall, out of the firing line and not
+            // The ball well, out of the firing line and not
             // riding the launcher. A ball pulled from it is born at the fingertips,
             // staged and inert, and rides the same grab/hold/release path a caught
             // ball does.
@@ -298,24 +193,31 @@ struct KinematicsSpaceView: View {
             if UserDefaults.standard.bool(forKey: "kinAir") {
                 model.airResistance = true
             }
-            // `-kinGravity 1.62` moves the g rail's bead and lights the
-            // Moon disc — a value, not a flag, because a bead parked at
-            // its default proves nothing about the mapping behind it.
+            // `-kinGravity 1.62` sets g as More's slider would — a value,
+            // not a flag, because a slider at its default proves nothing
+            // about the mapping behind it.
             let forcedGravity = UserDefaults.standard.object(forKey: "kinGravity")
             if forcedGravity != nil {
                 let g = UserDefaults.standard.double(forKey: "kinGravity")
                 model.gravity = min(max(g, KinematicsModel.gravityRange.lowerBound),
                                     KinematicsModel.gravityRange.upperBound)
             }
-            // `-kinWind 8` switches the air on and sets a wind — the only
-            // way to see the wind rail at all, since it is hidden until
-            // there is air for it to blow.
+            // `-kinWind 8` switches the air on and sets a wind: More's
+            // wind slider is disabled until there is air for it to blow.
             if UserDefaults.standard.object(forKey: "kinWind") != nil {
                 model.airResistance = true
                 let speed = UserDefaults.standard.double(forKey: "kinWind")
                 model.windSpeed = min(max(speed,
                                           KinematicsModel.windSpeedRange.lowerBound),
                                       KinematicsModel.windSpeedRange.upperBound)
+            }
+            // `-kinSpeed 12` sets the launch speed, which is where the aim
+            // bead stands: the bead's distance is the speed, and a bead at
+            // its default distance proves nothing about that mapping.
+            if UserDefaults.standard.object(forKey: "kinSpeed") != nil {
+                let speed = UserDefaults.standard.double(forKey: "kinSpeed")
+                model.launchSpeed = min(max(speed, KinematicsModel.speedRange.lowerBound),
+                                        KinematicsModel.speedRange.upperBound)
             }
             #endif
 
@@ -363,7 +265,7 @@ struct KinematicsSpaceView: View {
                     renderer?.tick(model)
                     wells?.update(dt: event.deltaTime,
                                   nearestHand: appModel.room.nearestFingertip(
-                                    to: Self.bankAnchor))
+                                    to: Self.wellAnchor))
                     syncBloom(dt: event.deltaTime)
                     // Constant display offset; every instrument is a child of
                     // `renderer.root`, so the whole lab travels together.
@@ -380,9 +282,6 @@ struct KinematicsSpaceView: View {
             renderer?.teardown()
             // `Bloom` is a class: a live grip would outlive the view.
             bloom.endGrip()
-            // A rail mid-adjust swallows every `onChanged` until an
-            // `onEnded` clears it, against an orphaned control.
-            activeTrack = nil
             drag = nil
             // A pending press sticks (`press` refuses to overwrite), so an
             // `onEnded` that never arrives would let the next gesture promote it
@@ -409,24 +308,7 @@ struct KinematicsSpaceView: View {
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
                     if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
-                    // A gesture already in a rail may not be re-claimed: a
-                    // drag that starts on the wind rail and wanders over a
-                    // ball must not pick the ball up.
-                    if let track = activeTrack {
-                        guard track.isEnabled else {
-                            activeTrack = nil
-                            return
-                        }
-                        track.adjust(hand: hand)
-                        return
-                    }
                     if drag == nil {
-                        for track in [gravityTrack, windTrack, massTrack].compactMap({ $0 })
-                        where track.owns(value.entity) {
-                            activeTrack = track
-                            track.adjust(hand: hand)
-                            return
-                        }
                         if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
                         // Born at the fingertips, and dragged by the
                         // same gesture that made it.
@@ -466,11 +348,6 @@ struct KinematicsSpaceView: View {
                     // A ball press that never became a carry is a tap,
                     // and a tap on a ball does nothing to the ball.
                     pressedBall.cancel()
-                    if let track = activeTrack {
-                        track.endAdjust()
-                        activeTrack = nil
-                        return
-                    }
                     bloom.endGrip()
                     defer { drag = nil }
                     guard let drag else { return }
@@ -487,9 +364,8 @@ struct KinematicsSpaceView: View {
 
     /// Resolves a pinch: launcher body, aim bead, a ball, or a hoop.
 
-    /// The launcher's own control. Launch speed has no size of its own, but
-    /// its consequence does: the predicted arc stretches across the room as
-    /// you pull.
+    /// The launcher's ring: Fire, the ball fan, Clear. Launch speed is not
+    /// on it: the aim bead is the velocity, its distance the speed.
     private func syncBloom(dt: Double) {
         let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
         // A hoop's ring: the one Bloom retargets to whichever hoop is selected,
@@ -556,13 +432,7 @@ struct KinematicsSpaceView: View {
                     model.clearFlights()
                 },
             ],
-            grip: .init(
-                name: "Launch speed",
-                range: KinematicsModel.speedRange,
-                read: { model.launchSpeed },
-                write: { model.launchSpeed = $0 },
-                format: { PhysicsFormat.measurement($0, "m/s", decimals: 1) },
-                radius: { 0.10 }))
+            grip: nil)
         // Open only while selected — `Bloom` eases the fold itself, and a
         // grip mid-drag pins it open whatever this says.
         bloom.update(anchor: anchor, viewer: viewer,
@@ -572,27 +442,6 @@ struct KinematicsSpaceView: View {
         let hand = appModel.room.nearestFingertip(to: anchor)
         ballPicker.update(anchor: anchor + Self.ballFanOffset,
                           viewer: viewer, dt: dt, nearestHand: hand)
-
-        worldPicker.update(anchor: Self.worldsAnchor, viewer: viewer, dt: dt,
-                           nearestHand: hand)
-        layers?.update(anchor: Self.bankAnchor, viewer: viewer, dt: dt,
-                       nearestHand: hand)
-        // Nothing ticks a track by itself — the caller's duty, stated on
-        // `SpatialTrackControl.refresh`.
-        gravityTrack?.refresh()
-        // The wind rail exists only while the air does; `isEnabled` also ends a
-        // drag already in flight, so the rail cannot go on writing a wind
-        // nothing applies.
-        windTrack?.isEnabled = model.airResistance
-        if model.airResistance { windTrack?.refresh() }
-        // The mass rail exists exactly while the custom ball is the pick,
-        // and rides the launcher it hangs under.
-        let custom = model.kind == .custom
-        massTrack?.isEnabled = custom
-        if custom, let mass = massTrack {
-            mass.root.position = Self.massRailCenter(launcher: model.launcherPosition)
-            mass.refresh()
-        }
     }
 
     /// The glyph each ball wears on its disc — Kinematics vocabulary, not
@@ -616,7 +465,8 @@ struct KinematicsSpaceView: View {
                                     target: model.launcherPosition, hand: hand)
             case KinematicsRenderer.aimBeadName:
                 let target = model.launcherPosition
-                    + Double(KinematicsRenderer.beadDistance) * model.aimDirection
+                    + Double(KinematicsRenderer.beadDistance(forSpeed: model.launchSpeed))
+                    * model.aimDirection
                 return RelativeDrag(name: candidate.name, target: target, hand: hand)
             default:
                 if let id = UUID(uuidString: candidate.name),
@@ -655,7 +505,11 @@ struct KinematicsSpaceView: View {
         case KinematicsRenderer.launcherName:
             model.moveLauncher(to: position)
         case KinematicsRenderer.aimBeadName:
+            // The bead is the launch velocity: where it points is the aim,
+            // how far it is from the launcher the speed.
             model.aim(toward: position)
+            model.launchSpeed = KinematicsRenderer.speed(
+                forBeadDistance: Float(simd_length(position - model.launcherPosition)))
         default:
             guard let id = UUID(uuidString: drag.name) else { return }
             if model.rings.contains(where: { $0.id == id }) {
@@ -673,8 +527,6 @@ struct KinematicsSpaceView: View {
         // would otherwise be read as a tap on the launcher.
         if aimPicker.handleTap(entity) { return }
         if ballPicker.handleTap(entity) { return }
-        if worldPicker.handleTap(entity) { return }
-        if layers?.handleTap(entity) == true { return }
         // A petal or the grip took the tap: the ring stays as it is. A
         // dim petal returns false and the tap falls through to the fold,
         // exactly as Magnetism's does.

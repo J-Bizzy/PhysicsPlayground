@@ -608,3 +608,43 @@ no control. Removing it would touch the capsule snapshot's shape. A body
 nearer than the window can stand in front of the More panel (the comet's
 label in `step5-orbits-more.jpg`): the panel is an ornament, not part of
 the scene.
+
+### Step 5.3 — Projectile Motion (2026-10-14)
+
+Removed from the room: the world fan (Zero-g, Moon, Earth, Jupiter), the g
+rail, the wind rail, the Walls bounce and Air resistance plates, and the
+custom-mass rail under the launcher. In More, in order: Gravity (one
+slider, which settles on a world within 0.2 m/s² and names it: "1.62 m/s²
+· Moon"), Walls bounce, Air resistance, Wind (disabled without air), and
+Custom ball mass (disabled unless Custom is the ball).
+
+Replaced with direct manipulation: **the aim bead is the launch
+velocity.** Its direction is the aim. Its distance from the launcher is
+the speed, linear from 0.36 m at 0.5 m/s to 0.80 m at 15 m/s. A thin
+shaft runs from the muzzle to the bead, and the speed is written beside
+the bead. The launcher ring's speed grip is gone. The ball fan now lights
+the ball you are throwing (`selectedID` was never set before).
+
+Fixed in passing: the protractor's angle sat on the aim line, where the
+barrel hid it from a standing wearer (it was half-hidden in
+`before-kinematics.jpg` too). It and the speed label are now lifted off
+the line on the side the arc never bends toward.
+
+Values: Projectile, Mass and the last flight's range, apex and time.
+Gravity, launch speed, elevation, air and "Launched by" are cut, because
+More's controls or the protractor already show each.
+
+Arguments: `-kinSpeed <m/s>` is new (where the bead stands).
+`-kinGravity` and `-kinWind` now set what More's sliders would.
+
+Controls: **16 visible at open → 5** (two wells and the three shell
+controls; the launcher and bead are the apparatus). **52 reachable → 28**
+(5 lab items and 5 room items in More, the launcher ring's 3, the ball
+fan's 5, a hoop ring's 3, the arc fan's 2, and the 5 above).
+
+Tests: full suite green before the label lift (142 s), and again in the
+Step 5.4 run below. The reach criterion's Projectiles wall is the two
+wells. The slider clamp test now covers sliders declared in `more` too.
+Screenshots: `step5-projectiles.jpg`, `step5-projectiles-speed.jpg` (bead
+at 9 m/s, ring open), `step5-projectiles-more.jpg` (Moon, Custom, air).
+

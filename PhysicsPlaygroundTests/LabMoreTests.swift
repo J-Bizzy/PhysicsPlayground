@@ -38,7 +38,10 @@ final class LabMoreTests: XCTestCase {
     func testEverySliderClampsToItsRange() {
         let appModel = AppModel()
         for module in ModuleCatalog.all(appModel: appModel) {
-            for adjustable in module.adjustables {
+            let inMore = module.more.compactMap { item -> PhysicsAdjustable? in
+                if case .slider(let adjustable, _) = item { adjustable } else { nil }
+            }
+            for adjustable in module.adjustables + inMore {
                 let before = adjustable.read()
                 adjustable.write(adjustable.range.upperBound * 10 + 10)
                 XCTAssertLessThanOrEqual(adjustable.read(), adjustable.range.upperBound + 1e-9,

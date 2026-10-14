@@ -63,15 +63,20 @@ struct PhysicsAdjustable: Identifiable {
     let write: (Double) -> Void
     /// Digits after the point on the rail's own readout.
     var decimals: Int = 2
+    /// The readout, when the number alone does not say enough (gravity
+    /// names the world it matches). Nil reads value and unit.
+    var format: ((Double) -> String)?
 
     init(id: String, label: String, unit: String, range: ClosedRange<Double>,
          decimals: Int = 2,
+         format: ((Double) -> String)? = nil,
          read: @escaping () -> Double, write: @escaping (Double) -> Void) {
         self.id = id
         self.label = label
         self.unit = unit
         self.range = range
         self.decimals = decimals
+        self.format = format
         self.read = read
         // Clamped here, once, so no module's setter has to.
         self.write = { value in

@@ -62,10 +62,32 @@ final class KinematicsRenderer {
     private weak var pulsedGrabEntity: Entity?
 
     private static let barrelLength = Float(KinematicsModel.barrelLength)
-    static let beadDistance: Float = 0.42
+    /// The aim bead is the launch velocity: its direction from the
+    /// launcher is the aim, its distance the speed — just past the muzzle
+    /// at the slowest throw, 80 cm out at the fastest.
+    static let beadNear: Float = 0.36
+    static let beadFar: Float = 0.80
+
+    static func beadDistance(forSpeed speed: Double) -> Float {
+        let range = KinematicsModel.speedRange
+        let t = (min(max(speed, range.lowerBound), range.upperBound) - range.lowerBound)
+            / (range.upperBound - range.lowerBound)
+        return beadNear + (beadFar - beadNear) * Float(t)
+    }
+
+    static func speed(forBeadDistance distance: Float) -> Double {
+        let range = KinematicsModel.speedRange
+        let t = Double(min(max((distance - beadNear) / (beadFar - beadNear), 0), 1))
+        return range.lowerBound + t * (range.upperBound - range.lowerBound)
+    }
     private static let baseBallRadius: Float = 0.05
     private static let baseShadowRadius: Float = 0.05
 
+    /// The thin line from the muzzle to the aim bead: the launch velocity
+    /// drawn as a vector.
+    private let velocityShaft = ModelEntity(
+        mesh: Primitives.cylinder(height: 1, radius: 0.0025),
+        materials: [Materials.unlit(UIColor(white: 1, alpha: 1), opacity: 0.7)])
     private let launcherBase: ModelEntity
     private let barrel: ModelEntity
     private let bead: ModelEntity
@@ -148,6 +170,9 @@ final class KinematicsRenderer {
     private var protractorNeedleHolder: Entity!
     private var protractorTextPivot: Entity!
     private var protractorLabel: BackedLabel!
+    /// The speed, beside the bead that sets it.
+    private let speedTextPivot = Entity()
+    private var speedLabel: BackedLabel!
     /// The flight numbers' white — passed to each BackedLabel, whose
     /// plate now carries the contrast the 0.92 alpha used to gesture at.
     private static let annotationWhite = UIColor(white: 1, alpha: 1)
@@ -221,6 +246,9 @@ final class KinematicsRenderer {
             })
         Self.setAccessibility(on: bead, label: "Aim bead. Drag to point the launcher.")
         root.addChild(bead)
+        // Decoration on the vector, never a target: the bead is the handle.
+        velocityShaft.name = "velocity-shaft"
+        root.addChild(velocityShaft)
 
         // Predicted arc. Casing first, core second: darkness under light.
         let arcMaterial = Materials.unlit(DesignTokens.Palette.predictedArcUI, opacity: 0.5)
@@ -455,6 +483,10 @@ final class KinematicsRenderer {
         protractorTextPivot.addChild(protractorLabel.root)
         protractorRoot.addChild(protractorTextPivot)
         root.addChild(protractorRoot)
+        speedTextPivot.components.set(BillboardComponent())
+        speedLabel = BackedLabel(size: 0.036)
+        speedTextPivot.addChild(speedLabel.root)
+        root.addChild(speedTextPivot)
     }
 
     /// Returns whether every label took its text; false means the rate limit
@@ -504,10 +536,23 @@ final class KinematicsRenderer {
         let elevation = asin(max(-1, min(1, aim.y)))
         protractorNeedleHolder.orientation = simd_quatf(
             angle: Float(elevation), axis: [0, 0, 1])
+        // On the aim line the barrel hid it; lifted off it on the side the
+        // arc never bends toward, it reads from where you stand.
         protractorTextPivot.position = [
-            Float(cos(elevation)) * 0.235, Float(sin(elevation)) * 0.235, 0]
+            Float(cos(elevation)) * 0.235 - Float(sin(elevation)) * 0.055,
+            Float(sin(elevation)) * 0.235 + Float(cos(elevation)) * 0.055, 0]
         shown = protractorLabel.setText(
             PhysicsFormat.angle(elevation * 180 / .pi, decimals: 0),
+            color: Self.annotationWhite) && shown
+
+        // The speed, beside the bead that sets it, on the side of the aim
+        // line the arc never bends toward (gravity takes it below).
+        let aimF = SIMD3<Float>(aim)
+        let lift = simd_normalize(SIMD3<Float>(0, 1, 0) - aimF * aimF.y)
+        speedTextPivot.position = SIMD3<Float>(model.launcherPosition)
+            + Self.beadDistance(forSpeed: model.launchSpeed) * aimF + 0.09 * lift
+        shown = speedLabel.setText(
+            PhysicsFormat.measurement(model.launchSpeed, "m/s", decimals: 1),
             color: Self.annotationWhite) && shown
         return shown
     }
@@ -670,7 +715,14 @@ final class KinematicsRenderer {
         launcherBase.position = launcher
         barrel.orientation = VectorFieldArrows.rotationFromYAxis(to: aim)
         barrel.position = launcher + (Self.barrelLength / 2) * aim
-        bead.position = launcher + Self.beadDistance * aim
+        let reach = Self.beadDistance(forSpeed: model.launchSpeed)
+        bead.position = launcher + reach * aim
+        // The vector's shaft, from the muzzle to the bead: the longer it is,
+        // the faster the shot.
+        let muzzle = Self.barrelLength
+        velocityShaft.position = launcher + (muzzle + reach) / 2 * aim
+        velocityShaft.orientation = VectorFieldArrows.rotationFromYAxis(to: aim)
+        velocityShaft.scale = SIMD3(1, max(reach - muzzle, 0.001), 1)
 
         // Predicted arc — rebuild only when an input actually changed.
         let arcInputs = ArcInputs(

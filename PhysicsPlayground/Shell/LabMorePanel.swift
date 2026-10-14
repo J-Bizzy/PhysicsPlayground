@@ -121,8 +121,10 @@ struct MoreItemView: View {
         case let .slider(adjustable, isEnabled):
             ControlSlider(adjustable.label, range: adjustable.range,
                           read: adjustable.read, write: adjustable.write,
-                          format: { PhysicsFormat.measurement($0, adjustable.unit,
-                                                              decimals: adjustable.decimals) })
+                          format: adjustable.format ?? {
+                              PhysicsFormat.measurement($0, adjustable.unit,
+                                                        decimals: adjustable.decimals)
+                          })
                 .disabled(!isEnabled())
         }
     }
