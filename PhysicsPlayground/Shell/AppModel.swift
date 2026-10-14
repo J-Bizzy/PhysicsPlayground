@@ -39,7 +39,7 @@ final class AppModel {
     /// How long a lab takes to leave; matches the arrival ramp.
     static let departure: Double = 0.22
 
-    /// The one door between labs, and between a lab and the gallery. A
+    /// The one door between labs, and between a lab and the home. A
     /// dissolve through passthrough: the old lab fades, the room stands
     /// alone for a beat, the new lab fades up.
     func go(to id: String?) {
@@ -96,7 +96,11 @@ final class AppModel {
     /// contrast against a sunlit wall open part-closed (`preferredDimming`);
     /// the palette bead's dim petal steps off → half → full and sticks until
     /// another module is entered. `dimmingShown` is what the shell wears.
-    var roomDimming: Double = 0
+    var roomDimming: Double = AppModel.homeDimming
+
+    /// The home's dimming: slight, so the portals and the opening's
+    /// particles have contrast while the room stays the room.
+    static let homeDimming: Double = 0.3
 
     /// What the shell wears this frame, eased toward `roomDimming` so a lab
     /// switch never changes the room's brightness in one frame.
@@ -127,7 +131,7 @@ final class AppModel {
     private func adoptModuleAtmosphere() {
         // One descriptor build, not two — see `dimmingRadius`.
         let module = activeModule
-        roomDimming = module?.preferredDimming ?? 0
+        roomDimming = module?.preferredDimming ?? Self.homeDimming
         dimmingRadius = module?.preferredDimmingRadius ?? RoomDimmerView.defaultRadius
         if let id = activeModuleID { labPlacement.adopt(moduleID: id) }
     }
@@ -144,9 +148,6 @@ final class AppModel {
     /// A pure display offset, remembered per module.
     let labPlacement = LabPlacement()
 
-    /// Where the hub gallery stands — dragged by its bar, remembered
-    /// across launches.
-    let galleryPlacement = GalleryPlacement()
     var isImmersiveSpaceOpen = false
     /// How many main windows are on screen. A value-less `WindowGroup` opens
     /// a new window on every `openWindow(id:)`, and three places ask for it,
@@ -169,7 +170,9 @@ final class AppModel {
         // every lab visited (for "New" badges), the Lab Notebook's captured
         // observations and the hoop best streak; an upgraded install forgets
         // all three.
-        for retired in ["visited.modules", "notebook.entries.v1", "kinematics.bestStreak"] {
+        // The gallery's grab-bar placement went with the gallery.
+        for retired in ["visited.modules", "notebook.entries.v1", "kinematics.bestStreak",
+                        "hub.galleryOffset", "hub.galleryYaw"] {
             UserDefaults.standard.removeObject(forKey: retired)
         }
         // `-openModule <id>` jumps straight into a module; the simulator cannot

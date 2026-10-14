@@ -16,6 +16,78 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-14 — The home is six portals, reached through a particle opening
+
+**Decision:** The gallery goes. That means the two terraces (tables, by the
+house rule), the pucks, the domain signs, the bench labels, the
+head-direction focus and its pool of accent light, the podium with its
+latches and Load button, and the grab bar with `GalleryPlacement`. In their
+place, six portals stand on one arc around the wearer at eye level, 1.75 m
+out, 20° apart, E&M on the left and mechanics on the right. Each is a
+stock-glass pane with a thin white rim. Its lab's emblem runs its own
+physics in a loop in front of the pane (`HubVignettes`), and one short word
+in the lab's accent sits under it. **A pinch on a portal enters the lab**:
+one step where there were two. The machined wordmark stays, smaller,
+behind the arc. The flat lab list, Settings and About sit behind one More
+under it. The home dims the room slightly (`AppModel.homeDimming`, 0.3).
+
+The home is the end state of **the opening** (`Hub/Opening.swift`, about
+3.1 s). Particles fade up on a sheet above eye level, then:
+- **Fall and swirl.** They arch in crossed uniform gravity and a
+  horizontal magnetic field: an exact cycloid, at rest again after one
+  cyclotron period. Positive and negative charges part in opposite
+  directions.
+- **Ripple.** They ride an Airy deep-water wave (ω² = gk) under a sin²
+  envelope.
+- **Settle.** A critically damped spring draws them onto the rims as the
+  glass fades up, on the calibration bell.
+
+Every hand-over happens with the particles at rest, so nothing is eased. A
+box of collider around the wearer, there only while the opening plays,
+makes any pinch skip to the end. Under Reduce Motion the portals fade in.
+A walk back from a lab does not replay it. `-hubIntro <s>` pins the clock,
+and `-moreOpen 1` unfolds the More.
+
+**Context:** The owner's brief asked for an opening that "visibly obeys
+physics" and a home where each portal says what its lab does without a
+description. The project's physics standard asked that the opening's
+motion be real. So each phase is a closed-form solution, and
+`OpeningTests` checks it as physics:
+- the swirl satisfies the Lorentz equation, and the field does no work;
+- the ripple obeys deep-water dispersion and starts and ends at rest;
+- the settle never overshoots;
+- nothing jumps between phases;
+- the cloud keeps clear of the wearer's face.
+
+**Consequences:** `HubIntro`, `GalleryLayout`, `GalleryPlacement`,
+`HubDomainTitle` and their tests are gone, and so are `-hubDock` and
+`-hubFocus`. `PortalDoorTests` replace `GalleryDoorTests`. An upgraded
+install forgets `hub.galleryOffset` and `hub.galleryYaw`.
+`HOMESCREEN_SPEC.md` is marked superseded. The audit flags the wordmark as
+the most debatable thing still on the home: it was kept because the owner
+chose it after two auditions.
+
+## 2026-10-14 — One control language
+
+**Decision:** Every control is `ControlButton`, `ControlToggle`,
+`ControlSlider` or `MoreButton` (`RenderKit/Controls`), in a window or in
+the room. In the room, the same SwiftUI views ride entities through
+`ViewAttachmentComponent`. One glow, `LiveGlow`, marks what a hand holds.
+See DESIGN_SYSTEM.md › One control language.
+
+**Context:** Fourteen control styles had grown, one feature at a time. A
+machined verb plate, a frosted layer plate and a dark petal were three
+private languages for "press this". The brief asked for stock glass,
+system hover, SF Symbols and 60 pt targets everywhere, with a single
+signature glow.
+
+**Consequences:** In-room controls have no colliders of their own any
+more. The rule that a collider never be larger than its object now governs
+only objects. VoiceOver reads in-room controls as SwiftUI controls, so the
+entity-level `SpatialActionComponent` survives only on objects and the
+home's portals. `ControlLanguageCriterionTests` fails any app source that
+starts a second language.
+
 ## 2026-10-14 — The Lab Notebook and the last progress tracking are cut
 
 **Decision:** The owner's subtraction brief (`docs/redesign-audit.md`) cuts

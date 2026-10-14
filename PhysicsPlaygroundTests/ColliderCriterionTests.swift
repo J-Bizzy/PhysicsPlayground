@@ -218,26 +218,29 @@ final class ColliderCriterionTests: XCTestCase {
         assertCollidersFit(renderer.root, "Circuits")
     }
 
-    // MARK: The gallery and the shell
+    // MARK: The home and the shell
 
-    /// The first surface every user sees: exhibits stand 0.36 m apart, so
-    /// each one's target must not reach into its neighbour's.
-    func testGalleryCollidersFit() {
+    /// The first surface every user sees. Measured after the opening: its
+    /// skip shield is a deliberate wall of target, there only while it
+    /// plays (`PortalDoorTests` holds that it goes).
+    func testHomeCollidersFit() {
         let scene = HubScene()
+        scene.openingAlreadyPlayed = true
         scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
-        assertCollidersFit(scene.root, "Gallery")
+        assertCollidersFit(scene.root, "Home")
     }
 
     /// Does this collider shield the thing next to it? A target derived
     /// from an entity's visual bounds passes a self-measuring test by
-    /// construction, whatever those bounds contain; the gallery's six
-    /// exhibits at a known pitch are the one place the question can be
+    /// construction, whatever those bounds contain; the home's six
+    /// portals at a known pitch are the one place the question can be
     /// asked directly.
-    func testGalleryExhibitTargetsDoNotOverlapEachOther() {
+    func testPortalTargetsDoNotOverlapEachOther() {
         let scene = HubScene()
+        scene.openingAlreadyPlayed = true
         scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
 
-        // Every per-exhibit target in the gallery, as a world-space box.
+        // Every portal's target, as a world-space box.
         let moduleIDs = Set(ModuleCatalog.all(appModel: AppModel()).map(\.id))
         var targets: [(id: String, min: SIMD3<Float>, max: SIMD3<Float>)] = []
 
@@ -254,8 +257,8 @@ final class ColliderCriterionTests: XCTestCase {
         }
 
         XCTAssertEqual(targets.count, moduleIDs.count,
-                       "expected one target per exhibit; "
-                       + "found \(targets.count) — if the gallery changed shape "
+                       "expected one target per portal; "
+                       + "found \(targets.count) — if the home changed shape "
                        + "this test is measuring the wrong thing")
 
         for (index, a) in targets.enumerated() {

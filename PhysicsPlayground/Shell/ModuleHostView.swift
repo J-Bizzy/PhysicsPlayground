@@ -30,7 +30,7 @@ struct ModuleHostView: View {
                 ControlButton("Home", systemImage: "chevron.left", iconOnly: true) {
                     appModel.go(to: nil)
                 }
-                .accessibilityHint("Leaves this lab for the gallery of labs")
+                .accessibilityHint("Leaves this lab for the home and its six portals")
 
                 Spacer(minLength: 12)
 
@@ -114,13 +114,13 @@ struct ModuleHostView: View {
 
             if !appModel.isImmersiveSpaceOpen {
                 ControlButton("Show in room", systemImage: "sparkles",
-                              emphasis: .prominent(module.accent),
+                              emphasis: .prominent,
                               fillsWidth: true) {
                     Task {
                         withAnimation(.easeOut(duration: 0.2)) {
                             showInRoomFailed = false
                         }
-                        // Assets warm off-main before the space opens, as at the gallery door.
+                        // Assets warm off-main before the space opens, as at the home's door.
                         await PropCache.warmUp()
                         let result = await openImmersiveSpace(
                             id: PlaygroundSpaceView.spaceID)

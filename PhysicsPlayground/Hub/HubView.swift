@@ -2,9 +2,9 @@
 //  HubView.swift
 //  Physics Playground — Hub
 //
-//  The hub's window. Two states: with the gallery not in the room, the
-//  full front door (the app's name, one button that raises the gallery,
-//  and the domain-grouped catalog); with the gallery in the room, the
+//  The hub's window. Two states: with the portals not in the room, the
+//  full front door (the app's name, one button that opens the room, and
+//  the domain-grouped catalog); with the portals in the room, the
 //  same catalog compactly. The flat catalog is the accessibility path —
 //  nothing may be reachable only in space — so this window never blanks.
 //
@@ -36,10 +36,10 @@ struct HubView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
-                        Text("The Gallery couldn't open.")
+                        Text("The room couldn't open.")
                             .font(DesignTokens.TypeScale.footnote)
                         ControlButton("Try Again", systemImage: "arrow.clockwise") {
-                            Task { await openGallery() }
+                            Task { await openRoom() }
                         }
                     }
                     .padding(.horizontal, 14)
@@ -48,27 +48,27 @@ struct HubView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
-                // The way back, not the way in: the app launches into the gallery, so
-                // this is reached by putting the gallery away or by the Digital Crown,
+                // The way back, not the way in: the app launches into the room, so
+                // this is reached by closing the room or by the Digital Crown,
                 // and it must reopen what the catalog lists.
-                ControlButton("Enter the Gallery", systemImage: "sparkles",
-                              emphasis: .prominent(.accentColor)) {
-                    Task { await openGallery() }
+                ControlButton("Show in Room", systemImage: "sparkles",
+                              emphasis: .prominent) {
+                    Task { await openRoom() }
                 }
-                .accessibilityHint("Places the Gallery — the exhibit terraces — in your room")
+                .accessibilityHint("Places the six labs' portals around you")
 
                 RoomSensingNote()
                 HubCatalogList()
             } else {
                 // The compact state: the same catalog without the ceremony, since the
-                // gallery already has its own sign over the door.
+                // room already has its own name over the portals.
                 RoomSensingNote()
                 HubCatalogList(isCompact: true)
 
                 // The way out of the room entirely — the only `dismissImmersiveSpace`
                 // in the app. The palette's home petal leaves a lab; this leaves the
-                // room. Seen when the window is asked for while the gallery is up.
-                ControlButton("Put the Gallery away", systemImage: "xmark.circle") {
+                // room. Seen when the window is asked for while the portals are up.
+                ControlButton("Close the Room", systemImage: "xmark.circle") {
                     Task {
                         appModel.closeForDismissal()
                         await dismissImmersiveSpace()
@@ -100,9 +100,9 @@ struct HubView: View {
         UserDefaults.standard.bool(forKey: "uiTesting")
     }
 
-    private func openGallery() async {
+    private func openRoom() async {
         withAnimation(.easeOut(duration: 0.2)) { openFailed = false }
-        // Assets first, then the door: the gallery parses every prop it cannot
+        // Assets first, then the door: the home parses every prop it cannot
         // find in the cache synchronously on the main thread.
         await PropCache.warmUp()
         let result = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
@@ -114,7 +114,7 @@ struct HubView: View {
 
 /// What the app is about to ask for, or what it lost when the ask was
 /// refused. Pre-explained here because the ARKit session starts from
-/// the gallery about a second after launch, before any lab. The
+/// the home about a second after launch, before any lab. The
 /// sentences are `RoomModel.Sensing`'s.
 struct RoomSensingNote: View {
     @Environment(AppModel.self) private var appModel
@@ -147,7 +147,7 @@ struct RoomSensingNote: View {
 /// The flat catalog: the modules grouped under their domains, mirroring
 /// the terraces the space shows as objects. Shown in both window states.
 struct HubCatalogList: View {
-    /// Shown beside a gallery already in the room: the domain headers stay,
+    /// Shown beside portals already in the room: the domain headers stay,
     /// the vertical rhythm tightens.
     var isCompact = false
 

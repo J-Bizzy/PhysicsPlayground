@@ -225,7 +225,7 @@ struct PlaygroundSpaceView: View {
                     ready = true
                     #if DEBUG
                     LaunchTrace.mark(appModel.activeModuleID.map { "space ready, mounting \($0)" }
-                                     ?? "space ready, mounting the gallery")
+                                     ?? "space ready, mounting the home")
                     #endif
                 }
                 .onDisappear {

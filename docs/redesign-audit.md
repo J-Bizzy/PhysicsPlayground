@@ -443,3 +443,48 @@ petals), `step3-settings.jpg`.
 
 Not migrated, on purpose: the palette's six lab discs and the gallery's
 exhibits. Both are cut in steps 4 and 5.
+
+### Step 4 — the opening and the portal home (2026-10-14)
+
+The gallery is gone: terraces, pucks, domain signs, bench labels, focus
+pool, podium, latches, Load button, grab bar, `GalleryPlacement`,
+`GalleryLayout`, `HubDomainTitle`, `HubIntro`, `-hubDock`, `-hubFocus`.
+
+In its place, six glass portals stand on an arc at eye level (1.75 m, 20°
+apart). Each runs its lab's emblem in a loop and wears a one-word label. A
+pinch enters. The machined wordmark stays above and behind. One More
+under it opens Lab list, Settings and About in a row. The home dims the
+room to 0.3.
+
+The opening (`Hub/Opening.swift`, about 3.1 s):
+1. The particles fade up on a sheet.
+2. They fall and swirl: an exact crossed-field cycloid, red and blue
+   charges parting.
+3. They ripple: an Airy deep-water wave, ω² = gk.
+4. They settle onto the rims (critically damped) as the glass fades up,
+   on the calibration bell.
+
+Any pinch skips (a box of collider around the wearer, only while it
+plays). Reduce Motion fades the portals in instead. A walk back from a lab
+does not replay it.
+
+Also: the "prominent" emphasis is now the stock white platter, never
+tinted. White type on Fields' yellow or the champagne accent was
+unreadable. Window copy: "Enter the Gallery" became "Show in Room", and
+"Put the Gallery away" became "Close the Room".
+
+New launch argument: `-moreOpen 1`. `-hubIntro <s>` now pins the opening
+(`99` shows the home).
+
+Tests:
+- `OpeningTests` (13) checks the opening as physics: the Lorentz
+  equation, no work done by B, g at release, rest-to-rest arches,
+  deep-water dispersion, the ripple starting and ending at rest, no
+  overshoot, no jumps, clearance from the face, landing on the bell.
+- `PortalDoorTests` (8) replace `GalleryDoorTests`.
+
+PhysicsCore 469/469. App 881/881. Screenshots:
+`docs/redesign-shots/step4-swirl.jpg` (t = 0.6 s, the two streams
+mid-arch), `step4-ripple.jpg` (t = 1.45 s), `step4-settle.jpg`
+(t = 2.25 s, particles drawing the rims), `step4-home.jpg` (end state),
+`step4-home-more.jpg`, `step4-window.jpg` (the flat catalog).

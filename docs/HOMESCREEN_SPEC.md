@@ -1,5 +1,11 @@
 # Physics Playground — Homescreen Spec (v4)
 
+> **Superseded 2026-10-14.** The terraces, podium, Load button, grab bar,
+> domain signs and bench labels described below are gone. The home is now
+> six portals standing around the wearer, the end state of a particle
+> opening; see `docs/redesign-audit.md` §2 and §10, `Hub/Opening.swift` and
+> `Hub/HubSpaceView.swift`. What follows is history.
+
 Target: visionOS (Vision Pro), mixed-immersion home space.
 
 **2026-09-04.** No promise line is DRAWN anywhere any more — not under

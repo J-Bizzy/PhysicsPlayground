@@ -5,7 +5,7 @@
 //  The one button. A stock visionOS bordered button — glass platter,
 //  system hover — at extra-large size, so the target clears 60 pt, with
 //  an SF Symbol and a name. Three emphases: standard, prominent (one per
-//  surface, filled in a colour) and destructive. A destructive button can
+//  surface, the stock white platter) and destructive. A destructive button can
 //  arm first: the first press says "Tap again", a second within
 //  `ControlMetrics.armWindow` fires, and the window running out disarms.
 //  The arming lives in the button (window controls) or is handed in by
@@ -17,8 +17,10 @@ import SwiftUI
 public struct ControlButton: View {
     public enum Emphasis {
         case standard
-        /// The surface's one primary action, filled in this colour.
-        case prominent(Color)
+        /// The surface's one primary action: the stock prominent platter,
+        /// white with dark type. Never tinted — a lab's accent under white
+        /// type is unreadable for half the accents in the house.
+        case prominent
         case destructive
     }
 
@@ -112,8 +114,8 @@ struct ControlEmphasisStyle: ViewModifier {
 
     func body(content: Content) -> some View {
         switch emphasis {
-        case .prominent(let color):
-            content.buttonStyle(.borderedProminent).tint(color)
+        case .prominent:
+            content.buttonStyle(.borderedProminent)
         case .destructive where armed:
             content.buttonStyle(.borderedProminent).tint(.red)
         case .destructive, .standard:

@@ -23,7 +23,7 @@ Every control the app draws is one of four, from
 
 | Control | What it is | Use it for |
 |---|---|---|
-| `ControlButton` | Stock bordered button at extra-large size: glass platter, system hover, an SF Symbol, ≥ 60 pt. Standard, **prominent** (one per surface, filled in a colour) or **destructive**, which can arm first ("Tap again", red), fire on a second press within 4 s, and disarm on its own. | A momentary act. |
+| `ControlButton` | Stock bordered button at extra-large size: glass platter, system hover, an SF Symbol, ≥ 60 pt. Standard, **prominent** (one per surface: the stock white platter, never tinted — a light accent under white type is unreadable) or **destructive**, which can arm first ("Tap again", red), fire on a second press within 4 s, and disarm on its own. | A momentary act. |
 | `ControlToggle` | Stock button-style toggle. On is the system's **selected platter**, never a glow. `.row` presentation is a name and a system switch, for a settings list. | A display layer, a mode, an open tab, the current choice in a picker. |
 | `ControlSlider` | Name, live value and a stock slider, ≥ 60 pt tall. | A quantity with no extent of its own to stretch. |
 | `MoreButton` + `ControlPanel` | An ellipsis toggle, and the glass panel that holds what it opened. | Everything secondary. Nothing else folds a set of controls away. |
@@ -174,15 +174,10 @@ Colour is **semantic, never decorative**.
 | Electricity & Magnetism | electrostatics, circuits, magnetism | Green | `#30D158` |
 | Mechanics & Energy | kinematics, pendulums, gravitylab | Orange | `#FF9F0A` |
 
-Domain accent appears in **two** places — the terrace hairline and the door
-signage (`HubDomainTitle`) — and nowhere else.
-
-> It listed four until 2026-08-09. The **progress ring** around each miniature
-> went on 2026-08-04 and the **focus panel's chip** went with the experiments
-> system on 2026-08-09; the sentence outlived both. `Hub/HubDomains.swift`
-> carried the same three-place claim in its own header and is corrected too.
-> Two places is also the more defensible number: the accent is wayfinding, and
-> a hue that appears in four places is decoration.
+Domain accent appears in **one** place: the dot beside each domain's name
+in the flat catalog. The terrace hairlines and the door signage went with
+the gallery on 2026-10-14. The home groups the domains by **order**: the
+three E&M portals on the left, mechanics on the right.
 
 **Per-module accents** (`DesignTokens.Palette.*Accent`) are a separate system
 for module chrome. Owned by `DesignTokens`, never ad hoc.
@@ -247,22 +242,19 @@ All hub motion ticks from `SceneEvents.Update` — never `RealityView`'s
 
 | State | Behaviour | Value |
 |---|---|---|
-| Idle exhibit | Vertical bob; the miniature sways rather than spinning | ~1.2 cm sine; ±0.44 rad |
-| Idle vignette | The module's own physics runs — the exhibit **is** the demo | — |
-| Focus in | Nearest exhibit in the head-direction cone lifts off its mount and grows; the pool of its accent stays on the mount; its bench label brightens | 26° cone with hysteresis; +0.09 m lift; label 0.78 → 1 |
-| Focus out | Unfaced exhibits recede, names fade | — |
-| Arrival | The gallery **fades up** over ~0.18 s on the root, then `OpacityComponent` is removed | 0.18 s |
-| Enter | The exhibit swells toward you and the scene dissolves outward — an arrival, never a hard cut | scale 1.6, +0.22 m, ~0.42 s |
-| Palette bead | Breathes while closed; ring fans across 150°; yaws to face you. Each slot is the lab's emblem (`HubVignettes`) on an accent disc | bead radius 0.026 m |
+| Opening | Particles fall and swirl (crossed-field cycloid), ripple (deep-water wave), and settle onto the portal rims (critically damped); the glass fades up under them (`Hub/Opening.swift`) | ~3.1 s; any pinch skips |
+| Idle portal | The lab's own physics loops in front of the glass — the portal **is** the demo; each on its own phase | — |
+| Wordmark | Each line rakes on its own phase | ±0.028 rad |
+| Enter | The portal swells toward you and the home dissolves — an arrival, never a hard cut | scale 1.35, +0.25 m, 0.42 s |
+| Live | `LiveGlow` fades up around what the hand takes and out when it lets go | 0.15 s |
 
-**Selection** is tap/pinch. Focus is driven by **head direction**
-(`RoomModel.lookRay`), not eye tracking, so it works in the simulator and is
-testable.
+**Selection** is tap/pinch on the portal; hover is the system's.
 
 **Reduce motion** follows the **system** setting only — `accessibilityReduceMotion`.
 The in-app duplicate was deleted; there is no `reduceMotion` in `AppSettings`.
-Under stillness the door signs **park at a composed rest pose** rather than
-freezing mid-flight, and the palette bead stops breathing.
+Under stillness there is no opening — the portals fade in — the previews
+park at their rest pose, the wordmark stops raking, and the palette bead
+stops breathing.
 
 *(Until 2026-08-03 this paragraph described the setting as app-wide while it
 was read in exactly one file, `HubSpaceView` — so the bead, which is the one

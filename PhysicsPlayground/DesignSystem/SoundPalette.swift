@@ -26,12 +26,12 @@ enum SoundPalette {
         /// Grab acknowledgement; `releaseTick` answers a set-down and closes
         /// a ring (open keeps its pop, so the pair reads unfold/fold).
         case grabTick, releaseTick
-        /// The home's arrival swell. Its bell time and `HubIntro.landingTime`
-        /// are pinned to each other in `HubIntroTests` — they must not drift.
+        /// The opening's swell. Its bell time and `Opening.landingTime` are
+        /// pinned to each other in `OpeningTests` — they must not drift.
         case calibration
     }
 
-    /// When `calibration`'s bell strikes, seconds into the file — must match `HubIntro.landingTime`.
+    /// When `calibration`'s bell strikes, seconds into the file — must match `Opening.landingTime`.
     nonisolated static let calibrationLanding = 2.65
 
     private static var resources: [Sound: AudioFileResource] = [:]
