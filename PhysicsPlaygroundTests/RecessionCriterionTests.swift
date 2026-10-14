@@ -57,18 +57,6 @@ final class RecessionCriterionTests: XCTestCase {
             """, file: file, line: line)
     }
 
-    func testLayerBankRecedes() {
-        let bank = SpatialLayerBank(accent: .white, layers: [
-            LayerSwitch(id: "a", label: "Lines", isOn: { true }, toggle: {}),
-        ])
-        assertRecedes("SpatialLayerBank", root: bank.root) { hand in
-            for _ in 0..<90 {
-                bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90,
-                            nearestHand: hand)
-            }
-        }
-    }
-
     func testActionBankRecedes() {
         let bank = SpatialActionBank(accent: .white, actions: [
             .init(id: "reset", label: "Reset", symbol: "arrow.counterclockwise",
@@ -90,17 +78,6 @@ final class RecessionCriterionTests: XCTestCase {
         assertRecedes("SpatialPicker", root: picker.root) { hand in
             for _ in 0..<90 {
                 picker.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90,
-                              nearestHand: hand)
-            }
-        }
-    }
-
-    func testSummonHandleRecedes() {
-        let handle = SummonHandle(title: "Clock", symbol: "clock", accent: .white)
-        handle.summary = { "5×" }
-        assertRecedes("SummonHandle", root: handle.root) { hand in
-            for _ in 0..<90 {
-                handle.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90,
                               nearestHand: hand)
             }
         }

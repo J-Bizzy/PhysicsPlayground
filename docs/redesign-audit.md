@@ -771,3 +771,26 @@ measures every well standing in the room, per lab, and requires every
 lab but Circuit Workshop (whose shelf has its own test) to have one
 measured. `PendulumsModelTests` and `ResetCoverageTests` lose the
 acceleration flag.
+
+### Step 6 — Studio Mode, and the primitives nothing uses (2026-10-14)
+
+Studio Mode: **the two glowing stage rings are cut**, the champagne one at
+2.6 m and the blue one at 5.8 m. The stage is now the sky dome, the
+charcoal floor and its light pool. In this app a glow means "live", and a
+ring on the floor was live for nothing. `StudioEnvironmentTests` holds the
+stage at those three things. The switch itself has been a More row since
+Step 5.0.
+
+Deleted, with no caller left after Steps 5.1–5.6:
+- `DesignSystem/SpatialLayerBank.swift`, the in-room switch bank;
+- `DesignSystem/SummonHandle.swift`, the folding tab.
+
+Their cases are gone from the criterion suites (Recession, SpatialAction,
+LabelTarget, Collider, ControlLanguage, SpatialTap), and those suites
+still cover every primitive that ships: the action bank (the Time
+Capsule's reel plates), the picker, wells, Bloom and the rail. The
+in-room vocabulary is now wells, rings with their handles, two fans, and
+two rails. `docs/DESIGN_SYSTEM.md`'s control table is rewritten to match.
+
+Tests: full suite green (121 s). Screenshot: `step6-studio.jpg`.
+

@@ -89,8 +89,7 @@ final class LabelTargetCriterionTests: XCTestCase {
             \(found.count) visible part(s) of \(label) sit outside their own \
             control's touch target, so aiming at them pinches whatever is \
             behind instead. Widen the collider to cover the part, the way \
-            `SpatialLayerBank` and `SpatialActionBank` already do for their \
-            labels:
+            `SpatialActionBank` already does for its labels:
             \(report)
             """, file: file, line: line)
     }
@@ -132,15 +131,6 @@ final class LabelTargetCriterionTests: XCTestCase {
 
     // MARK: The primitives
 
-    func testLayerBankLabelsAreAimable() {
-        let bank = SpatialLayerBank(accent: .white, layers: [
-            LayerSwitch(id: "lines", label: "Parallel plates", isOn: { true },
-                        toggle: {}),
-        ])
-        for _ in 0..<40 { bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90) }
-        assertNoHoles(bank.root, "SpatialLayerBank")
-    }
-
     func testActionBankLabelsAreAimable() {
         let bank = SpatialActionBank(accent: .white, actions: [
             .init(id: "clear", label: "Clear the bench", symbol: "trash", fire: {}),
@@ -149,14 +139,6 @@ final class LabelTargetCriterionTests: XCTestCase {
             bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90, resetNonce: 0)
         }
         assertNoHoles(bank.root, "SpatialActionBank")
-    }
-
-    func testSummonHandleLabelsAreAimable() {
-        let handle = SummonHandle(title: "Analysis", symbol: "chart.xyaxis.line",
-                                  accent: .white)
-        handle.summary = { "off" }
-        for _ in 0..<40 { handle.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90) }
-        assertNoHoles(handle.root, "SummonHandle")
     }
 
     func testPickerLabelsAreAimable() {

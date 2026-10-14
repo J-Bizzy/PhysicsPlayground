@@ -92,29 +92,6 @@ final class SpatialActionCriterionTests: XCTestCase {
 
     // MARK: The primitives
 
-    /// A switch is the family's SwiftUI toggle, so VoiceOver reads and
-    /// presses it as it does any system control; the press runs the same
-    /// closure a tap does. There is no second, entity-level route left to
-    /// drift from it.
-    func testLayerBankPlatesCanBeOperatedWithoutHands() throws {
-        var flipped: [String] = []
-        let bank = SpatialLayerBank(accent: .white, layers: [
-            LayerSwitch(id: "lines", label: "Field lines", isOn: { true },
-                        toggle: { flipped.append("lines") }),
-            LayerSwitch(id: "grid", label: "Grid", isOn: { false },
-                        toggle: { flipped.append("grid") }),
-        ])
-        for _ in 0..<40 { bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90) }
-        assertOperable(bank.root, "SpatialLayerBank")
-
-        let plate = try XCTUnwrap(bank.root.children.first { $0.name == "layer-grid" })
-        XCTAssertTrue(ControlAttachment.isControl(plate))
-        XCTAssertNil(plate.components[SpatialActionComponent.self],
-                     "a second, entity-level route is a route that can drift")
-        XCTAssertTrue(bank.handleTap(plate))
-        XCTAssertEqual(flipped, ["grid"])
-    }
-
     func testActionBankPlatesCanBeOperatedWithoutHands() {
         var fired = 0
         let bank = SpatialActionBank(accent: .white, actions: [
@@ -385,13 +362,4 @@ final class SpatialActionCriterionTests: XCTestCase {
         XCTAssertEqual(chosen, "a")
     }
 
-    func testSummonHandleCanBeOperatedWithoutHands() {
-        let handle = SummonHandle(title: "Analysis", symbol: "chart.xyaxis.line",
-                                  accent: .white)
-        handle.summary = { "off" }
-        for _ in 0..<40 {
-            handle.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90)
-        }
-        assertOperable(handle.root, "SummonHandle")
-    }
 }

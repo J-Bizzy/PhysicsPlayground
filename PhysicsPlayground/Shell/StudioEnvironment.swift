@@ -4,9 +4,10 @@
 //
 //  Studio Mode's stage: a fully immersive dark gallery in place of the
 //  passthrough room — a star-dusted night sky with a galactic band and
-//  nebula pools, a matte charcoal floor with a lit centre pool, and two
-//  faint glowing rings marking the stage. Everything is procedural: the
-//  sky is a generated gradient and starfield on an inside-out sphere.
+//  nebula pools, and a matte charcoal floor with a lit centre pool.
+//  Nothing in it glows: in this app a glow means "live". Everything is
+//  procedural: the sky is a generated gradient and starfield on an
+//  inside-out sphere.
 //
 
 import RealityKit
@@ -59,33 +60,7 @@ struct StudioEnvironmentView: View {
             root.addChild(sheen)
         }
 
-        // Two glowing rings mark the stage: champagne close in, cool blue far
-        // out, each a crisp core over a fainter glow pass.
-        addRing(to: root, radius: 2.6, y: 0.012,
-                color: UIColor(red: 1.0, green: 0.88, blue: 0.70, alpha: 1),
-                opacity: 0.5)
-        addRing(to: root, radius: 5.8, y: 0.012,
-                color: UIColor(red: 0.45, green: 0.55, blue: 0.85, alpha: 1),
-                opacity: 0.28)
-
         return root
-    }
-
-    @MainActor
-    private static func addRing(to root: Entity, radius: Float, y: Float,
-                                color: UIColor, opacity: Float) {
-        let points: [SIMD3<Float>] = (0...96).map { index in
-            let angle = Float(index) / 96 * 2 * .pi
-            return SIMD3(cos(angle) * radius, y, sin(angle) * radius)
-        }
-        // The glow first (fatter, fainter), the core over it.
-        if let glowMesh = TubeMesh.tube(lines: [points], radius: 0.030, sides: 8) {
-            let glow = Materials.unlit(color, opacity: opacity * 0.22)
-            root.addChild(ModelEntity(mesh: glowMesh, materials: [glow]))
-        }
-        guard let mesh = TubeMesh.tube(lines: [points], radius: 0.008, sides: 8) else { return }
-        let material = Materials.unlit(color, opacity: opacity)
-        root.addChild(ModelEntity(mesh: mesh, materials: [material]))
     }
 
     /// A deep-night gradient under a seeded sky. The galactic band completes

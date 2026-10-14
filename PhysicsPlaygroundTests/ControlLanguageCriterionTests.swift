@@ -72,20 +72,15 @@ final class ControlLanguageCriterionTests: XCTestCase {
 
     // MARK: Every control in the room is the family's
 
-    /// A bank's plate, a tab, a picker choice, a petal: each is an entity
+    /// An action plate, a picker choice, a petal: each is an entity
     /// carrying the family's SwiftUI view. No mesh of its own, no collider
     /// of its own — the glass is the target, so nothing invisible stands
     /// in front of the apparatus.
     func testEveryRoomControlIsTheFamilysView() {
-        let layers = SpatialLayerBank(accent: .white, layers: [
-            LayerSwitch(id: "lines", label: "Field lines", symbol: "scribble",
-                        isOn: { true }, toggle: {}),
-        ])
         let actions = SpatialActionBank(accent: .white, actions: [
             SpatialAction(id: "clear", label: "Clear", symbol: "trash",
                           confirms: true, fire: {}),
         ])
-        let tab = SummonHandle(title: "Views", symbol: "eye", accent: .white)
         let picker = SpatialPicker(accessibilityNoun: "World", choices: [
             PickerChoice(id: "moon", label: "Moon", symbol: "moon"),
         ], staysOpen: true)
@@ -96,9 +91,7 @@ final class ControlLanguageCriterionTests: XCTestCase {
         ], grip: nil)
 
         let controls: [(String, Entity)] = [
-            ("layer plate", layers.root.children.first!),
             ("action plate", actions.root.children.first!),
-            ("folding tab", tab.root.children.first!),
             ("picker choice", picker.root.children.first!),
             ("petal", bloom.root.children.first { $0.name == "bloom-Delete" }!),
         ]

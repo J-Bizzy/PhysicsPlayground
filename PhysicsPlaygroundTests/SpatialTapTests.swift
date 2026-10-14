@@ -2,8 +2,8 @@
 //  SpatialTapTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The tap contract of `SpatialLayerBank` and `SpatialPicker`, which
-//  every SpaceView relies on: the handlers are called in a chain and the
+//  The tap contract of `SpatialPicker`, which Projectiles' ball and arc
+//  fans rely on: the handlers are called in a chain and the
 //  tap is forwarded when the return is `false`. A handler that returned
 //  `true` for something it did not own would eat a gesture meant for
 //  the physics; one that returned `false` for its own plate would let
@@ -23,116 +23,6 @@ final class SpatialTapTests: XCTestCase {
         var toggled: [String] = []
         var selected: [String] = []
         var state: [String: Bool] = [:]
-    }
-
-    // MARK: SpatialLayerBank
-
-    /// A three-plate bank, revealed. `handleTap` refuses while `root` is
-    /// disabled and reveal eases in over time, so every test has to run
-    /// the bank forward first, exactly as the render loop would.
-    private func makeBank(_ log: Log) -> SpatialLayerBank {
-        log.state = ["lines": true, "grid": false, "field": false]
-        let bank = SpatialLayerBank(
-            accent: .white,
-            layers: ["lines", "grid", "field"].map { id in
-                LayerSwitch(id: id, label: id.capitalized,
-                            isOn: { log.state[id] ?? false },
-                            toggle: {
-                                log.toggled.append(id)
-                                log.state[id] = !(log.state[id] ?? false)
-                            })
-            })
-        for _ in 0..<40 {
-            bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1.0 / 90.0)
-        }
-        return bank
-    }
-
-    private func plate(_ bank: SpatialLayerBank, _ id: String) throws -> Entity {
-        try XCTUnwrap(bank.root.children.first { $0.name == "layer-\(id)" },
-                      "No plate was built for \(id).")
-    }
-
-    /// One press, one toggle: a duplicated handler would flip the layer
-    /// twice and read as a dead control.
-    func testATapFlipsExactlyOneLayerOnce() throws {
-        let log = Log()
-        let bank = makeBank(log)
-
-        XCTAssertTrue(bank.handleTap(try plate(bank, "grid")))
-
-        XCTAssertEqual(log.toggled, ["grid"])
-        XCTAssertEqual(log.state["grid"], true)
-        XCTAssertEqual(log.state["lines"], true, "A tap must not disturb its neighbours.")
-        XCTAssertEqual(log.state["field"], false)
-    }
-
-    /// The plate's name is inside its own glass now, not a child entity a
-    /// pinch could land on beside it: one target, no hole.
-    func testThePlateIsOneTargetWithItsNameInside() throws {
-        let log = Log()
-        let bank = makeBank(log)
-        let target = try plate(bank, "lines")
-        XCTAssertTrue(target.children.isEmpty)
-        XCTAssertTrue(ControlAttachment.isControl(target))
-        XCTAssertTrue(bank.handleTap(target))
-        XCTAssertEqual(log.toggled, ["lines"])
-    }
-
-    /// **The forwarding contract.** Every SpaceView reads this return
-    /// value to decide whether to keep routing the gesture. Claiming a
-    /// tap it does not own is how a switch bank eats a pinch aimed at the
-    /// apparatus standing behind it.
-    func testTheBankRefusesTapsItDoesNotOwn() throws {
-        let log = Log()
-        let bank = makeBank(log)
-
-        XCTAssertFalse(bank.handleTap(Entity()),
-                       "An unrelated entity must fall through.")
-        XCTAssertFalse(bank.handleTap(bank.root),
-                       "The root is not a plate; the walk must stop there.")
-        XCTAssertTrue(log.toggled.isEmpty)
-    }
-
-    /// A bank that has not been revealed yet must not answer. Written
-    /// against a bank that is fully built and simply not revealed: hiding
-    /// it by removing its plates would pass for the wrong reason.
-    func testABankThatHasNotBeenRevealedIsDeaf() throws {
-        let log = Log()
-        log.state = ["grid": false]
-        let bank = SpatialLayerBank(
-            accent: .white,
-            layers: [LayerSwitch(id: "grid", label: "Grid",
-                                 isOn: { log.state["grid"] ?? false },
-                                 toggle: { log.toggled.append("grid") })])
-        // Deliberately no update() — the bank is built but unrevealed.
-        XCTAssertFalse(bank.root.isEnabled, "Precondition: the bank starts hidden.")
-
-        let target = try plate(bank, "grid")
-        XCTAssertFalse(bank.handleTap(target),
-                       "An unrevealed bank must not claim the tap.")
-        XCTAssertTrue(log.toggled.isEmpty,
-                      "An unrevealed bank must not write to the model.")
-    }
-
-    /// The plate is a readout as much as a control: it reads `isOn` every
-    /// frame, so a model change from anywhere shows up on the lamp.
-    func testThePlateFollowsTheModelRatherThanTheLastTap() throws {
-        let log = Log()
-        let bank = makeBank(log)
-
-        XCTAssertTrue(bank.handleTap(try plate(bank, "grid")))
-        XCTAssertEqual(log.state["grid"], true)
-
-        // Something other than a tap moves the model — a reset would.
-        log.state["grid"] = false
-        bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1.0 / 90.0)
-
-        // The next tap must act on the model's value, not a cached one:
-        // if the bank had remembered "on", this would turn it off.
-        XCTAssertTrue(bank.handleTap(try plate(bank, "grid")))
-        XCTAssertEqual(log.state["grid"], true,
-                       "The plate must toggle from what the model says now.")
     }
 
     // MARK: SpatialPicker

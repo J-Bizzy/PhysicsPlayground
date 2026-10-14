@@ -84,11 +84,10 @@ final class PanelControlCriterionTests: XCTestCase {
             paragraph BEHIND the bench had a day earlier. Three cards of \
             words rejected in three days. The apparatus explains itself.
 
-            A control belongs on the apparatus: a SpatialLayerBank plate \
-            for a latching state, a SpatialActionBank plate for a standing \
-            verb, a SpatialPicker disc for a choice, a SpatialTrackControl \
-            rail for a quantity, a Well to create with, a Bloom petal or \
-            grip for something that belongs to one object. A readout \
+            A control belongs on the apparatus — a Well to create with, a \
+            Bloom petal or grip for something that belongs to one object, \
+            a SpatialPicker disc for a choice — or behind the title bar's \
+            More, the one panel, for everything secondary. A readout \
             belongs on the thing it measures: a Callout for one line, a \
             RealityView attachment for a card.
             """)

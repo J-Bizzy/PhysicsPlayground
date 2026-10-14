@@ -30,8 +30,8 @@ Every control the app draws is one of four, from
 
 **In the room they are the same views.** `ControlAttachment` hangs the
 family's SwiftUI view on an entity through `ViewAttachmentComponent`
-(visionOS 26), on its own capsule of glass. The owning primitive (a bank, a
-tab, a fan, a ring) positions, turns and folds the entity. SwiftUI draws it,
+(visionOS 26), on its own capsule of glass. The owning primitive (an action
+bank, a fan, a ring) positions, turns and folds the entity. SwiftUI draws it,
 hit-tests it, hovers it and reads it to VoiceOver. So a room control has **no
 mesh, no collider and no input target of its own**: the glass is the target,
 and nothing invisible stands in front of the apparatus. The owner tells the
@@ -72,23 +72,27 @@ for, operable without being discovered, and reachable in the simulator.**
 Nothing is revealed by gaze alone, and nothing may be the only path to a
 capability.
 
-As of 2026-08-01 there are **no module panels at all.** The exit criterion
-was "no `Slider`, `Picker` or `Toggle` in a panel"; it was met by all six and
-then superseded when the panels themselves were deleted, so
-`PanelControlCriterionTests` was rewritten from "no knobs in a panel" to "no
-panel", with a positive anchor so it cannot pass vacuously. Every readout
-stands in the room.
+As of 2026-08-01 there were **no module panels at all**, and every control
+stood in the room. The 2026-10-14 subtraction pass (`docs/redesign-audit.md`)
+kept the first half and reversed the second: the room holds the apparatus
+and what you make it from, and **everything secondary is behind the title
+bar's More** — one panel, the fallback, never the default. A value an object
+can carry is changed by handling the object; only what has no object goes to
+More.
 
 | Shape | Type | Use it for |
 |---|---|---|
-| **Switch bank** | `DesignSystem/SpatialLayerBank` | Display layers, and any labelled on/off. Lit plate = on. **Never folds on its own** — which layer is showing is information you need *while* looking at the physics, so it is control and readout at once. Past four plates it may stand behind a **folding tab** (`DesignSystem/SummonHandle`) whose one-line summary keeps that readout — Orbital Mechanics' Show tab and Circuit Workshop's Views tab (2026-09-04) — because five lamps read as a wall, not a state. |
-| **Rail** | `RenderKit/SpatialTrackControl` | A continuous quantity with **no extent of its own** (G, g, a clock, a wind speed). **Absolute**: the bead's place *is* the value. |
-| **Standing bank of discs** | `DesignSystem/SpatialPicker(staysOpen: true)` | An N-way choice that is also a readout (worlds, clock speeds). Row layout: `FanLayout(span: ~50°, verticalScale: 0.25)` — the default 150° arc is for a menu that folds away, and reads as scattered debris as a permanent bank. |
-| **Fan** | `DesignSystem/SpatialPicker` | A momentary N-way picker, opened from a petal. Never a blind cycle button. |
-| **Well** | `DesignSystem/Well` | Creation as a physical act — reach in and pull the object out, born at your fingertips. Given a `visibleCount`, `facing` and `windowTitle` it becomes a **shelf** (Circuit Workshop's parts): a window of slots with the title above and a hairline spine beside, and on the spine a knurled **crown** (`Models/Shell/ShelfCrown.usdz`) that is the one thing that scrolls — roll it and the column rides the hand one to one, with flick, rubber-banded ends and a detent per slot; it **turns with the column**, so at rest it is a readout of where the shelf is, and on entry the column arrives coasting into place with the crown rolling. Nothing stands behind the parts, and a drag on a part is always a pull. Never a caret, never a scrollbar. |
-| **Physics box** | `Shell/PhysicsBoard` | The lab's live numbers on one readout card in the room, opened by the title bar's ƒ button, with one **rail** beside it per quantity the lab lets you set (`ModuleDescriptor.adjustables`). A readout plus rails — never a panel. |
-| **Ring + grip** | `DesignSystem/Bloom`, `RingState` | Per-object controls, unfolded by **tap** (never gaze). Discrete actions are petals; the object's own extent is the grip. |
-| **The object itself** | — | When the quantity *is* a size, a length, a facing, or a place: a charge's magnitude, a cable's length, the Gauss disc's radius and tilt, a latitude on a globe. |
+| **The object itself** | — | When the quantity *is* a size, a length, a direction or a place: Projectiles' aim bead is the launch velocity (its direction the aim, its distance from the launcher the speed); a capacitor plate dragged sets the gap; the dielectric slab slides in. |
+| **Ring + grip** | `DesignSystem/Bloom`, `RingState` | Per-object controls, unfolded by **tap** (never gaze). Discrete actions are petals (Flip, Delete, Mass, Fire…); the value is a **handle pulled out of the object** on a stalk — `Bloom.Grip.Stretch`: `.surface` for a sphere drawn with volume ∝ value (a planet's mass, a charge's \|q\|), so it swells under the hand; `.track` for an object whose size is not its value (a circuit part, a bar magnet), a stalk out of its underside toward the viewer's right; a pendulum's length runs along its own cable. |
+| **Well** | `DesignSystem/Well` | Creation as a physical act — reach in and pull the object out, born at your fingertips. Given a `visibleCount`, `facing` and `windowTitle` it becomes a **shelf** (Circuit Workshop's parts): a window of slots with the title above and a hairline spine beside, and on the spine a knurled **crown** (`Models/Shell/ShelfCrown.usdz`) that is the one thing that scrolls — roll it and the column rides the hand one to one, with flick, rubber-banded ends and a detent per slot; it **turns with the column**, so at rest it is a readout of where the shelf is. Never a caret, never a scrollbar. |
+| **Fan** | `DesignSystem/SpatialPicker` | A momentary N-way choice opened from a petal: Projectiles' ball fan and the hoop's Low/High arc. The current choice is lit. |
+| **Rail** | `RenderKit/SpatialTrackControl` | Only where a continuous quantity has to stand at its object: the Time Capsule's scrub, and an AC source's frequency under the part. The family's slider on glass. |
+| **More** | `Shell/LabMorePanel`, `ModuleDescriptor.more` | Everything secondary, as `MoreItem`s the shell draws in the family: display layers and modes (`toggle`), verbs (`action`, arming first when they throw work away), named choices (`choice`), a quantity with no object (`slider`), a set of things to add (`verbs`). A control that needs another stands under it, disabled until it is on. Below them the lab's live Values, then the room (Move, Studio Mode, dimming), Settings and Reset. |
+
+Retired on 2026-10-14: the switch bank (`SpatialLayerBank`), the folding tab
+(`SummonHandle`), standing banks of discs (the worlds, the clock), the
+in-room rails for G, g, wind, ΔV and B, and the Physics box — each now a
+More item, or cut.
 
 **Rules learned the hard way, each of which cost a bug:**
 
@@ -186,10 +190,11 @@ for module chrome. Owned by `DesignTokens`, never ad hoc.
 negative; velocity blue / acceleration orange / force red in `VectorPalette`)
 are project-locked and never repurposed for chrome.
 
-**Borrowing another module's accent is a warning.** Circuit Workshop's coil
-switch wears Magnetism's magenta, because what it summons belongs to that
-bench — the colour is the only notice you get that flicking it stands an
-apparatus up beside you.
+**Borrowing another module's accent is a warning.** Circuit Workshop's
+magnetic-field layer draws in Magnetism's magenta, because what it shows
+belongs to that bench. (Its switch wore the magenta too while it was a
+plate in the room; in More it is a stock switch like every other, and the
+field it draws carries the warning.)
 
 ---
 
@@ -253,8 +258,7 @@ All hub motion ticks from `SceneEvents.Update` — never `RealityView`'s
 **Reduce motion** follows the **system** setting only — `accessibilityReduceMotion`.
 The in-app duplicate was deleted; there is no `reduceMotion` in `AppSettings`.
 Under stillness there is no opening — the portals fade in — the previews
-park at their rest pose, the wordmark stops raking, and the palette bead
-stops breathing.
+park at their rest pose, and the wordmark stops raking.
 
 *(Until 2026-08-03 this paragraph described the setting as app-wide while it
 was read in exactly one file, `HubSpaceView` — so the bead, which is the one

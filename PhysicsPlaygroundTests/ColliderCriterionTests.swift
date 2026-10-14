@@ -150,13 +150,6 @@ final class ColliderCriterionTests: XCTestCase {
     // MARK: The design-system primitives
 
     func testDesignSystemPrimitiveCollidersFit() {
-        let bank = SpatialLayerBank(accent: .white, layers: [
-            LayerSwitch(id: "lines", label: "Field lines", isOn: { true }, toggle: {}),
-            LayerSwitch(id: "grid", label: "Grid", isOn: { false }, toggle: {}),
-        ])
-        for _ in 0..<40 { bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90) }
-        assertCollidersFit(bank.root, "SpatialLayerBank")
-
         let actions = SpatialActionBank(accent: .white, actions: [
             .init(id: "clear", label: "Clear", symbol: "trash", confirms: true, fire: {}),
         ])
