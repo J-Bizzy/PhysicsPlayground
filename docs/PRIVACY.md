@@ -41,8 +41,8 @@ warning in its title bar telling you where in Settings to turn it back on.
 
 Stored locally in the app's own container, never transmitted:
 
-- **Settings** — volume, gallery placement, which first-run hints you
-  have dismissed.
+- **Settings** — volume, ambient audio, and whether the Time Capsule
+  records.
 - **Your circuit bench** — Circuit Workshop remembers what you built.
 
 Deleting the app deletes all of it. Nothing is exported or shared.

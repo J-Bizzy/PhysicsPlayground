@@ -105,9 +105,9 @@ Circuit Workshop — Build from racks of real parts: batteries, resistors,
 capacitors, inductors, motors, LEDs. Solved every frame. Probe it with a
 multimeter, push a resistor past its rating and watch it scorch, tune the
 AC source by hand, switch on the field layer and see the coil become a
-magnet — then shrink into the copper with Electron View to watch the
-drift velocity, which is millimetres per second and the single most
-common misconception in introductory electricity.
+magnet — then zoom into the copper at the true drift velocity, which is
+millimetres per second and the single most common misconception in
+introductory electricity.
 
 Magnetism — Bar magnets that attract, repel and snap into alignment,
 their looping field closing on itself in real time. Carry a compass
@@ -130,10 +130,11 @@ at once.
 
 CONTROLS THAT ARE OBJECTS
 
-There are no floating control panels. Switches are plates you press,
-quantities are rails with a bead you slide, and new objects are pulled out
-of wells with your hands. If you want to know what something does, look at
-it.
+You change a value by handling the thing that has it. Pull a charge's
+handle and the charge grows; draw a pendulum's cable down; pull the
+launcher's aim bead further out to throw harder. New objects are pulled
+out of wells with your hands. Everything else waits behind one More button
+beside the lab's name.
 
 THE TIME CAPSULE
 
@@ -151,8 +152,9 @@ kind. Nothing you do leaves your device.
 
 Requires visionOS 26.0 or later.
 ```
-*3,626 characters* of 4,000. Counted, not estimated (2026-10-14, after the
-capture-and-export paragraph left with its feature — 3,758 before that;
+*3,689 characters* of 4,000. Counted, not estimated (2026-10-14, after the
+controls paragraph was rewritten for the subtraction pass — 3,626 before
+that, and 3,758 before the capture-and-export paragraph left with its feature;
 2,937 before the Time Capsule paragraph and the new Projectiles and
 Circuits sentences).
 
@@ -241,12 +243,12 @@ The first two do almost all the work; most people never swipe past three.
 
 | # | Shot | Verdict from the actual frame |
 |---|---|---|
-| 1 | **Projectile Motion** — staged volley, walls on | The best single frame the app produces. Arcs sweep the whole room and visibly bounce off the shelf and wall; `9.81 m/s²`, `1.9 m` and `5.0 m/s` are all legible; the world discs and the ball fan show it is an instrument and not a toy. It is the only shot that carries "in your room" AND "real physics" at once. |
-| 2 | **Circuit Workshop — Electron View** | The most surprising image in the app: you are standing among copper conductors two metres thick with the electron bands crawling along them, under a glowing bulb reading `24 Ω`. Nothing else looks like this, which is exactly what a second screenshot is for. |
+| 1 | **Projectile Motion** — staged volley, walls on | The best single frame the app produces. Arcs sweep the whole room and visibly bounce off the shelf and wall; the apex height, the angle and the speed beside the aim bead are all legible; the ball fan shows it is an instrument and not a toy. It is the only shot that carries "in your room" AND "real physics" at once. |
+| 2 | **Circuit Workshop — zoomed into the copper** | The most surprising image in the app: you are standing among copper conductors two metres thick with the electron bands crawling along them at true drift speed, under a glowing bulb reading `24 Ω`. Nothing else looks like this, which is exactly what a second screenshot is for. |
 | 3 | **Electric Fields — lines + capacitor + B** | The densest "this is real physics" frame — field lines filling the room, the carried capacitor plates with their sign glyphs, the uniform B switched on. (Reframed 2026-08-05: the flux instrument this slot was built around left the app on 2026-08-03 — DECISIONS.md has the story.) Slightly busy, which is why it is third rather than first. |
 | 4 | **Orbital Mechanics — binary star** | Conceptually the best story (two suns, every orbit reshaped) and the weakest *simulator* frame: the orrery sits low, so two-thirds of the image is black. **Shoot this one on device**, standing closer and looking down. |
 | 5 | **Orbital Mechanics — the orbit ring** | Depth, for the person who has already decided to look: Earth's orbit as a ring in the room, apoapsis pulled out to 2.2× under a hand. The module's documented centrepiece. (Reframed 2026-08-05: the previous subject left the app on 2026-08-03 — DECISIONS.md has the story. If two Gravity frames read as repetitive against shot 4, the alternate is Magnetism's room-filling field lines — `-openModule magnetism`, defaults.) |
-| 6 | **Home Screen** | Shows the scope — six labs behind two coloured doors, under the wordmark. A closer, not an opener: it is the least *spatial* frame, because nothing in it is an experiment. |
+| 6 | **Home Screen** | Shows the scope — six portals standing around you, each looping its own physics, under the wordmark. A closer, not an opener: it is the least *spatial* frame, because nothing in it is an experiment. |
 | 7 | **Time Capsule** — the reel with its tape out, a ball rewound mid-arc | The feature nothing else in the category has, photographed as the object it is: the reel, the rail drawn out of it, the recorded path hanging as a tube and the ball frozen part-way back along it. Added 2026-09-01 when the capsule started shipping on. |
 
 ## Staging commands
@@ -348,18 +350,17 @@ In App Store Connect the record is: name from this file, bundle
 `ITSAppUsesNonExemptEncryption = false`, the two URLs above. Review
 notes, verbatim:
 
-> Physics Playground launches straight into an immersive gallery.
-> visionOS will ask for World Sensing and Hand Tracking — both are needed
-> for the labs to stand in the room and be grabbed; nothing is collected
-> or transmitted. To enter a lab: look at a miniature on either shelf and
-> pinch it — it flies to the cradle in front of you — then pinch the
-> "Load …" button above it. In a lab, every control is an object: plates
-> beside the apparatus toggle layers, a bead on a rail changes a
-> quantity, pull from a well to make a new object, tap an object for its
-> ring. The palette bead low on your right holds pause,
-> room dimming, settings, reset, home, and the six labs. Pause any lab
-> and pinch the reel that appears to rewind the last 30 seconds. No
-> account, no purchase, no network.
+> Physics Playground opens in an immersive space: a short particle
+> animation settles into six portals around you (pinch anywhere to skip
+> it). visionOS will ask for World Sensing and Hand Tracking — both are
+> needed for the labs to stand in the room and be grabbed; nothing is
+> collected or transmitted. To enter a lab, pinch its portal. In a lab,
+> handle the objects: pull from a well to make a new one, drag to move,
+> tap an object for its ring, and pull the handle on a ring to change the
+> object's value. The title bar holds Home, More (the lab's switches,
+> live numbers, room dimming, Studio Mode, Settings and Reset) and Pause.
+> Pause any lab and pinch the reel that appears to rewind the last 30
+> seconds. No account, no purchase, no network.
 
 After approval, the docs site (`PRIVACY.html`, `SUPPORT.html`) is
 republished with the subtree commands under **URLs** above.

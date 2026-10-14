@@ -27,6 +27,9 @@ final class SellingCopyCriterionTests: XCTestCase {
         "Notebook",     // the Lab Notebook, capture and CSV export (2026-10-14)
         "-notebookOpen", "-notebookSeed", // its staging arguments
         "best streak",  // the hoop streak, the last progress tracking (2026-10-14)
+        "Electron View", // Circuits' 4× zoom floor (2026-10-14); the zoom and true speed stay
+        "Physics box",  // folded into More (2026-10-14)
+        "palette bead", // pause went to the title bar, the rest to More (2026-10-14)
     ]
 
     // Deliberately not on that list: "experiment" is ordinary English the

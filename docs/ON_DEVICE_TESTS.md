@@ -37,24 +37,16 @@ have landed; skip them on a pass before that and say so in the report.
 The older sections below stay as history and detail — where one of them
 contradicts this section, this section is current.
 
-- [ ] **0 · Arrival.** Cold launch goes STRAIGHT into the gallery: a beat
-      of plain passthrough, then the wordmark fades in and flies to the
-      wall with the bell, terraces and six live miniatures cascade in
-      over ~3.5 s, both door signs legible from where you stand. Turn
-      your head along the crescent: six names lit into the benches' front
-      edges, one under each mount, always legible, and nothing floating
-      over any exhibit (2026-10-14). The one you face lifts; its accent
-      pools ON the mount, not in the air; its name brightens.
-- [ ] **1 · Enter.** Pinch the Projectiles miniature: it flies to the
-      cradle in ~0.5 s and the three latch fingers close AS IT ARRIVES;
-      "Load Projectile Motion" hangs over it, and back on the terrace
-      the empty mount's name dims to a third — still readable, plainly
-      "away" (2026-10-14); it comes back up the moment the lab returns.
-      Pinch Load: swell, pop,
-      hairline flare, dissolve through passthrough, the lab fades up with
-      the room ramping (not snapping) to 0.35, a welcome shot already in
-      the air. Tapping a second miniature sends the first home; tapping
-      the docked one does nothing.
+- [ ] **0 · Arrival.** Cold launch goes STRAIGHT into the space: a beat
+      of plain passthrough, then the room dims slightly and glowing
+      particles fall, swirl, ripple like a wave and settle into six
+      portals around you, each looping its own physics — about three
+      seconds. A pinch anywhere during it skips to the end. With Reduce
+      Motion on, the portals simply fade in. The end state IS the home:
+      the wordmark, six short names, More.
+- [ ] **1 · Enter.** Pinch the Projectiles portal: dissolve through
+      passthrough, the lab fades up with the room ramping (not snapping)
+      to 0.35, a welcome shot already in the air.
 - [ ] **2 · Projectiles.** Pull a basketball from the well and throw it
       overhand at a real wall: it bounces AT the wall. In More, slide
       Gravity onto Jupiter (arc collapses, the readout names it) and
@@ -67,7 +59,7 @@ contradicts this section, this section is current.
       fired, Delete — and under it a callout reading "low 32° · high 74°"
       (or "out of range at 6.0 m/s"); two faint ghost arcs pass through
       the rim. Pinch Aim: a two-disc fan, Low arc / High arc; pick one and
-      the launcher's bead swings to it. Fire → chime, the plate counts.
+      the launcher's bead swings to it. Fire → chime, the hoop flashes.
       Pinch "Drop when fired": the callout adds "drops when fired"; fire
       straight at the hoop and it falls as the shot leaves — the ball
       meets it in mid-air, on the Moon and on Jupiter too, and the next
@@ -80,58 +72,63 @@ contradicts this section, this section is current.
       still CATCHES. **[C]** Tap the launcher: its ring unfolds
       (Fire / Balls / Clear); tap empty space: it folds;
       the aim bead works with the ring folded.
-- [ ] **3 · Time Capsule** (ships ON now — no Settings visit). Pinch the
-      pause petal: the room holds; ONE reel arrives, still coasting, under
-      "Time capsule". Pinch it: the tape draws out and the reel turns ~1.5
-      turns. Drag the bead back: the ball retraces its arc and the bounce
-      un-happens, landing on recorded frames. Walk around the frozen ball:
-      velocity and force arrows sculpted on it, the path a tube. "Back a
-      frame" ×3 through the wall contact. "Resume here": the room runs
-      forward FROM that instant. Settings › Time Capsule OFF, pause again:
-      nothing new appears.
-- [ ] **4 · Circuits** (via the palette bead's Circuits tile — the
-      lab-to-lab door dissolves, no hard cut). The loop is live; pinch the
-      switch: bulb out, beads stop. Pull a resistor from the rack, born at
-      your fingertips; click it nose-to-tail onto the loop. Pull a lead
-      across: wired; tap a lead: the whole net lights green. Electron View:
-      into the copper, beads at mm/s, the field front laps the loop.
-      **[G]** Pull the resistor's bead to 10 Ω: it glows, then scorches
-      and the loop goes dark; Replace. Presets → RC charger; wire in the
-      coil; Views tab → Magnetic field (the five view plates fold behind
-      one tab on the left since 2026-09-04, and the tab reads out which
-      are on): a looping field over the coil, flipping
-      when you reverse the battery, collapsing when you open the switch.
-      Tap the AC source: a frequency rail hangs under it; at 3 Hz the bulb
-      flickers and the capacitor lags. **[H]** Every part in the rack and
-      on the bench reads as one milled family; nothing looks like a
-      cylinder with a colour on it.
-- [ ] **5 · Orbital Mechanics.** The room goes to 0.85 and reads as entering
-      space — no grid on the floor, no dots in the air, nothing standing
-      on the G rail (2026-09-04). The sky is QUIET until you tap Earth;
-      then ring, card and arrows arrive together, the card leading with
-      r and v and wearing no name. Pull the far bead: the ellipse stretches;
-      let go: Earth stays on the orbit you drew. Clock tab → 20×: the
+- [ ] **3 · Time Capsule** (ships ON now — no Settings visit). Pinch
+      Pause in the title bar: the room holds; ONE reel arrives, still
+      coasting, under "Time capsule". Pinch it: the tape draws out and the
+      reel turns ~1.5 turns. Drag the bead back: the ball retraces its arc
+      and the bounce un-happens, landing on recorded frames. Walk around
+      the frozen ball: velocity and force arrows sculpted on it, the path a
+      tube. "Back a frame" ×3 through the wall contact. "Resume here": the
+      room runs forward FROM that instant. Settings › Time Capsule OFF,
+      pause again: nothing new appears.
+- [ ] **4 · Circuits** (Home, then the Circuits portal). The loop is live;
+      pinch the switch: bulb out, beads stop. Pull a resistor from the
+      shelf, born at your fingertips; click it nose-to-tail onto the loop.
+      Pull a lead across: wired; tap a lead: the whole net lights green.
+      More → True drift speed, then two-hand zoom into the copper: beads at
+      mm/s, the field front laps the loop. **[G]** Tap the resistor and
+      pull its value handle out from under it to 10 Ω: it glows, then
+      scorches and the loop goes dark; Replace. More → Load RC charger;
+      wire in the coil; More → Magnetic field: a looping field over the
+      coil, flipping when you reverse the battery, collapsing when you open
+      the switch. Tap the AC source: a frequency slider hangs under it; at
+      3 Hz the bulb flickers and the capacitor lags. **[H]** Every part on
+      the shelf and on the bench reads as one milled family.
+- [ ] **5 · Orbital Mechanics** (Home, then the Orbits portal). The room
+      goes to 0.85 and reads as entering space — nothing stands in it but
+      the system and the world well. The sky is QUIET until you tap Earth;
+      then ring, card and arrows arrive together. Pull the far bead: the
+      ellipse stretches; let go: Earth stays on the orbit you drew. Pull
+      Earth's mass handle out: the sphere swells. More → Clock 20×: the
       beads creep (precession). Two-hand pinch to ~4× and walk in: labels
-      hold their size, the well stays put, the chord plays. Twin suns:
-      every orbit answers. Show → Lagrange; drop a world on L4: it
-      holds, and the capture paragraph appears at the point.
-- [ ] **6 · Electric Fields.** Pull a + charge: the field redraws around
-      your hand. Uniform B on; pull a test probe and throw it sideways: it
-      circles and closes on its tail; the card reads a non-zero qv×B.
+      hold their size, the well stays put, the chord plays. More → Twin
+      suns: every orbit answers. More → Lagrange points; drop a world on
+      L4: it holds, and the capture paragraph appears at the point.
+- [ ] **6 · Electric Fields.** Pull a charge from the Charge well: the
+      field redraws around your hand. Tap it → Flip: the lines reverse;
+      pull its handle out: it swells and the field strengthens. More →
+      Uniform B; pull a test charge and throw it sideways: it circles and
+      closes on its tail; More's Values read a non-zero qv×B.
 - [ ] **7 · Magnetism.** Carry one bar toward the other: it swings and
       snaps head-to-tail; the loops re-trace around you (judge the pink);
-      the hand compass follows.
-- [ ] **8 · Pendulums.** Release the cradle: click-click. Pull "Double"
-      from the well and flick it: the lower bob leaves a chaotic trail and
-      wears NO period tag. Throw a bob sideways: a true 3-D orbit.
-- [ ] **9 · The Physics box.** Tap a bob (card: L, T, θ, v), then the
-      title bar's ƒ: the lab's live numbers on a card in the room.
-- [ ] **10 · Close.** Home petal: dissolve, the gallery fades back up
-      under its wordmark.
+      the hand compass follows. Tap one and draw its strength handle out
+      from under it: the loops multiply.
+- [ ] **8 · Pendulums.** Release the cradle: click-click. Tap a bob and
+      draw its length handle down: the cable pays out, the period tag
+      climbs. Pull "Double" from the upper well and flick it: the lower bob
+      leaves a chaotic trail and wears NO period tag. Throw a bob sideways:
+      a true 3-D orbit.
+- [ ] **9 · More and Studio Mode.** Pinch More: the lab's switches, its
+      live numbers, the room. Studio Mode: a night sky over a dark floor
+      with a soft pool of light, and nothing on it glowing.
+- [ ] **10 · Close.** Home: dissolve, and the six portals stand around
+      you again under the wordmark.
 - [ ] **Judgement calls, answered in writing:** the pink field lines
       through passthrough; whether 45 % recession is legible in your
-      room; the reel's size and where it lands; whether the title bar
-      clears the apparatus in all six labs — Pendulums' cradle hangs from
+      room; the reel's size and where it lands; whether More's panel
+      reads against the field lines that can cross in front of it (Fields,
+      Magnetism); whether a handle on a stalk reads as "pull me" without a
+      word; whether the title bar clears the apparatus in all six labs — Pendulums' cradle hangs from
       1.62 m since 2026-09-04 because at 2.0 m the bar crossed its cables.
 - [ ] **The cut test:** enter all six labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
@@ -231,69 +228,22 @@ working session:
 
 ## The home
 
-- [ Y] **The gallery arrives, doesn't cut.** Launch. The whole room
-      should fade up over about a fifth of a second — terraces, signs
-      and exhibits together, none arriving first.
-- [ Y] **Both door signs read from the doorway**, at a glance, without
-      leaning: `ELECTRICITY & MAGNETISM` in green, `MECHANICS & ENERGY`
-      in bronze.
-- [ ] ⟳ **The signs hold still.** The kinetic bodies — the electron's
-      lap, the bouncing ball — are REMOVED at the owner's direction
-      after two redesigns failed to convince ("remove this for now, can
-      revisit later"). What remains is signage: the flush lockup, and
-      the rule's slow shimmer, parked entirely under Reduce Motion.
-      Nothing should orbit, bounce, or trail anywhere near either sign.
-- [ ] ⟳ **Look at an exhibit.** It lifts off its puck, grows, and its
-      halo lights. Look away: it settles back. **There is no panel any
-      more** — the owner cut the floating card; the gaze answer is the
-      exhibit itself. (This line said "the ONLY way into a lab is
-      carrying it to the pad" from 2026-08-04 until 2026-09-01; since
-      2026-08-09 a tap sends it to the pad, and the catalog and VoiceOver
-      go straight in — see the Release 1.0 gate above.) Check nothing
-      card-shaped appears anywhere while focusing.
-- [ ] ⟳ **Every exhibit's name is ALWAYS legible** — no fading in on
-      gaze. Sweep the room: six names readable at a glance, focused or
-      not.
-- [ ] ⟳ **The two terraces are LEVEL.** Their slab tops share one
-      height now — the staggered "architecture" read as uneven. The
-      slight depth difference between them stays.
-- [ ] **Drag an exhibit to the pad.** It should follow your hand 1:1
-      — no lurching toward the hand — the pad glows as you approach,
-      the exhibit seats itself, and a `Load …` button appears above it.
-      The faint white ring that used to circle each exhibit is gone;
-      only the accent progress arc remains.
-- [ ] **The pad reads as floating, not as broken.** A plate at chest
-      height with a ring of light hanging below it: standing in a real
-      room, does it look suspended on purpose? If the ring is invisible
-      against your floor, say so.
-- [ ] **The Load button hangs over the LAB, not over the room**, and
-      still reads as that exhibit's button. Check the tall exhibits —
-      Pendulums, Circuit Workshop.
-- [ ] ⟳ **Gaze at the Load button.** The default hover was invisible on
-      device; the plaque now swells and highlights explicitly under the
-      gaze. If looking at it still does nothing visible, the pinch has
-      no aiming feedback and that is a real failure.
-- [ ] **The pad hint is legible** from where you naturally stand.
-- [ ] **Press Load.** The lab opens.
-- [ ] ⟳ **THE GALLERY GRAB BAR** — new, replacing the Settings sliders
-      that duplicated the gallery:
-  - [ ] A slim glass bar hangs under the pad, like the bar under a
-        native window. It brightens under the gaze.
-  - [ ] Drag it: the WHOLE gallery comes — terraces, signs, wordmark,
-        pad — smoothly, with no second copy left behind and no rebuild
-        stutter.
-  - [ ] While the gallery is moved, exhibit focus, the exhibit carry
-        and the pad all still work exactly as before.
-  - [ ] Tap the bar (a press that doesn't move): the gallery glides
-        home and swings round to face you.
-  - [ ] Quit and relaunch: the gallery opens EXACTLY where you left it.
-- [ ] **The utility bar:** ⚙ Settings, ℹ About. Both open as utility
-      panels in front of you, centred in view and clear of the pad.
-- [ ] **About fits its window.** No clipped line, no cut-off
-      description.
-- [ ] ⟳ **Settings has no "Gallery" section at all** — no distance or
-      height slider, no Recenter button. Moving the gallery is the
-      bar's job now.
+- [ ] **The opening plays once and ends as the home.** The room dims a
+      little; particles fall under gravity, swirl in a crossed field,
+      ripple like a wave and settle into six portals in an arc around
+      you. It takes about three seconds and the bell lands as they
+      settle.
+- [ ] **A pinch skips it.** Pinch anywhere during the opening: the
+      portals are simply there.
+- [ ] **Reduce Motion:** no particles at all — the portals fade in.
+- [ ] **Each portal previews its physics in a loop** and its short name
+      is legible from where you stand, all six at a glance.
+- [ ] **Hover a portal:** the system highlight. Pinch it: you are in
+      that lab.
+- [ ] **More** under the wordmark opens Lab list, Settings and About in
+      one row; nothing hides behind the portals.
+- [ ] **Coming home** from a lab stands the six portals around you again
+      without replaying the whole opening.
 
 ## Circuit Workshop
 

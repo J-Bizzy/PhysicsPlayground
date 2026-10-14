@@ -794,3 +794,21 @@ two rails. `docs/DESIGN_SYSTEM.md`'s control table is rewritten to match.
 
 Tests: full suite green (121 s). Screenshot: `step6-studio.jpg`.
 
+### Step 7 — the docs sweep (2026-10-14)
+
+Every document that described a removed surface now describes what ships:
+- `DEMO_SCRIPT.md`: all eleven beats re-staged on the portals, More,
+  handles, the aim bead and Studio Mode;
+- `ON_DEVICE_TESTS.md`: the release gate, the home, and every lab
+  section;
+- `APP_STORE.md`: description, screenshot notes and the review notes,
+  re-counted at 3,689 characters;
+- `README.md`, `SUPPORT.md` (where the controls are, how to move a lab),
+  and `PRIVACY.md` (what is actually stored: three settings and the
+  circuit bench);
+- `CLAUDE.md`: launch arguments, the reach paragraph, destructive verbs.
+
+`SellingCopyCriterionTests` now also bans "Electron View", "Physics box"
+and "palette bead" from the selling copy. The device script's older dated
+sections (Phase 1, the 2026-08-09 cleanup, Cross-cutting) are left as the
+history they are. The release gate at its top says it supersedes them.

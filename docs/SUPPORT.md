@@ -26,24 +26,26 @@ bar with the path: **Settings › Privacy & Security › World Sensing**.
 
 ### Where are the controls?
 
-In the room, on the apparatus. Physics Playground deliberately has no
-control panels — the window is a title bar. Look for:
+On the objects first. Physics Playground changes a value by handling the
+thing that has it:
 
-- **Plates** standing beside the apparatus. A lit one is a layer that is
-  switched on; a dark one with a lit edge is a button.
-- **Rails** with a bead you drag, for anything continuous.
-- **Wells** — pinch and pull to make a new charge, magnet or pendulum.
+- **Wells** — pinch and pull to make a new charge, magnet, pendulum,
+  ball, hoop, world or circuit part.
 - **Rings** — tap an object and its own controls unfold around it.
+  Pull the ring's handle to change the object's value: a charge grows,
+  a pendulum's cable pays out, a part's resistance climbs.
+- **The aim bead** in Projectile Motion — where it points is the aim,
+  how far out it stands is the launch speed.
 
-Each lab's first-run hint names its own, once, under the lab's title bar;
-close it with its ✕. If you dismissed them and want them back:
-**Settings › Show hints again**.
+Everything else is behind **More** (the ⋯ beside the lab's name): the
+lab's switches and modes, its live numbers, room dimming, Studio Mode,
+Settings and Reset.
 
 ### How do I move the experiment?
 
-The cross-hair button in the title bar. Drag the cross-hair to put the
+**More › Move the lab.** A cross-hair appears: drag it to put the
 apparatus where you actually have space; **tap** it to snap back to the
-middle; press the title-bar button again when you are done.
+middle; switch Move the lab off when you are done.
 
 ### Is the physics real?
 
@@ -57,8 +59,8 @@ to the number.
 
 ### Something is off-screen or out of reach.
 
-Use the cross-hair to move the lab toward you. Several labs also zoom:
-pinch with both hands and pull.
+Use **More › Move the lab** to bring it toward you. Several labs also
+zoom: pinch with both hands and pull.
 
 ### Which devices?
 

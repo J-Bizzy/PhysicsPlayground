@@ -18,7 +18,7 @@ solver is written from scratch in Swift and tested.
 | | |
 |---|---|
 | **Electric Fields** | Pull charges out of a well and watch the field redraw. A capacitor whose plates you carry, a uniform **B** you can switch on, and a charged test ball that circles in it — the cyclotron, drawn live in your room. |
-| **Circuit Workshop** | Build circuits from racks of real parts you pull out of the air — a resistor that scorches past its rating, an AC source you tune by hand, a coil whose field the bench draws. Nodal analysis every frame, a multimeter you probe with, and an Electron View that shrinks you into the copper so you can watch the drift velocity — which is millimetres per second, and that is the misconception the lab exists to kill. |
+| **Circuit Workshop** | Build circuits from racks of real parts you pull out of the air — a resistor that scorches past its rating, an AC source you tune by hand, a coil whose field the bench draws. Nodal analysis every frame, a multimeter you probe with, and a true-speed view you can zoom into the copper to watch — the drift velocity is millimetres per second, and that is the misconception the lab exists to kill. |
 | **Magnetism** | Bar magnets that attract, repel and align. Field lines that close on themselves, and a compass you carry. |
 | **Projectile Motion** | Throw anything. Real drag, real restitution, and bounces off *your* walls, floor, ceiling and table. Stand a hoop in the room and the launcher solves for it — both arcs, exactly — or arm it to drop as you fire, and the ball meets it in the air on every world. |
 | **Pendulums** | Full nonlinear swings, a Newton's cradle to break apart, a chaotic double pendulum, and a true 3-D orbit you throw a bob into above your own floor. |
@@ -26,13 +26,16 @@ solver is written from scratch in Swift and tested.
 
 ## What is unusual about it
 
-**There are no control panels.** The module window is a title bar. Every
-control and every readout is an object in the room: plates you press,
-rails with beads you drag, wells you pull new objects out of, and rings
-that unfold around whatever you tapped. That boundary is enforced by a
-test — `PanelControlCriterionTests` fails the build if a panel comes
-back — because the project crossed it in the wrong direction once and it
-took 212 commits to get back.
+**You handle the physics, not a panel.** A value an object can carry is
+changed on the object: pull a charge's handle out and the charge grows,
+draw a pendulum's cable down, pull the launcher's aim bead further out to
+throw harder. New objects come out of wells, and a tap unfolds a ring
+around whatever you touched. Everything secondary — layers, modes, the
+lab's live numbers — waits behind one More beside the lab's name, drawn
+in one control language (`RenderKit/Controls`). Tests hold both lines:
+`PanelControlCriterionTests` keeps panels out of the labs themselves, and
+`ControlLanguageCriterionTests` fails the build on a second control
+style.
 
 **Pause is a place you can walk into.** Every lab records its last
 thirty seconds. Pause, pinch the reel that appears, and drag the tape
