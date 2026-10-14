@@ -40,8 +40,11 @@ struct ModuleDescriptor: Identifiable {
     var readings: () -> [Reading] = { [] }
     /// One line of disclosure under the numbers, or nil.
     var physicsNote: () -> String? = { nil }
-    /// The quantities the Physics box lets you set, one rail each.
+    /// The quantities with no object to stretch, one slider each in More.
     var adjustables: [PhysicsAdjustable] = []
+    /// Everything secondary the lab offers — display layers, modes, verbs
+    /// — behind the title bar's More. The room holds only the apparatus.
+    var more: [MoreItem] = []
     /// The Time Capsule: scrubbing the module's recorded past while paused.
     /// `.inert` shows no Time Rail.
     let timeScrub: TimeScrubControls
@@ -73,6 +76,36 @@ struct PhysicsAdjustable: Identifiable {
         // Clamped here, once, so no module's setter has to.
         self.write = { value in
             write(min(max(value, range.lowerBound), range.upperBound))
+        }
+    }
+}
+
+/// One secondary control a lab offers behind More. Drawn by the shell in
+/// the one control language; the lab only says what it is.
+enum MoreItem: Identifiable {
+    /// A display layer or a mode: on or off.
+    case toggle(id: String, title: String, symbol: String,
+                isOn: () -> Bool, set: (Bool) -> Void,
+                isEnabled: () -> Bool = { true })
+    /// A verb. `confirms` arms first ("Tap again"), for anything that
+    /// throws work away.
+    case action(id: String, title: String, symbol: String,
+                confirms: Bool = false,
+                isEnabled: () -> Bool = { true },
+                run: () -> Void)
+    /// One of a few named choices, the current one selected.
+    case choice(id: String, title: String,
+                options: [(id: String, label: String)],
+                selected: () -> String?, select: (String) -> Void)
+    /// A quantity with no object to stretch.
+    case slider(PhysicsAdjustable, isEnabled: () -> Bool = { true })
+
+    var id: String {
+        switch self {
+        case .toggle(let id, _, _, _, _, _): id
+        case .action(let id, _, _, _, _, _): id
+        case .choice(let id, _, _, _, _): id
+        case .slider(let adjustable, _): adjustable.id
         }
     }
 }

@@ -2,10 +2,12 @@
 //  ModuleHostView.swift
 //  Physics Playground — Shell
 //
-//  The module's window is a title bar: back to the catalog, the module's
-//  name, and the Physics box, place-the-lab, studio and Reset. Beneath it, only
-//  while the immersive space is closed, "Show in room". Nothing else —
-//  no panel and no hint; the apparatus explains itself.
+//  A lab's window is a title bar: Home and More on the left, the lab's
+//  name, Pause on the right. More opens one glass panel beside the window
+//  holding everything secondary — the lab's own layers, modes and verbs,
+//  the quantities it has no object for, its live numbers, the room, and
+//  Reset. The room holds the apparatus and nothing else. Beneath the bar,
+//  only while the immersive space is closed, "Show in room".
 //
 
 import RenderKit
@@ -18,23 +20,24 @@ struct ModuleHostView: View {
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     /// The icon tile scales with the type it frames.
     @ScaledMetric(relativeTo: .headline) private var iconTile = 30.0
-    @State private var confirmingReset = false
     @State private var showingSensing = false
     /// Set when "Show in room" fails, so it can say so.
     @State private var showInRoomFailed = false
 
     var body: some View {
+        @Bindable var appModel = appModel
         VStack(spacing: 14) {
-            HStack(spacing: 10) {
-                // Left: navigation.
+            HStack(spacing: ControlMetrics.spacing) {
+                // Left: navigation, and the one way to everything secondary.
                 ControlButton("Home", systemImage: "chevron.left", iconOnly: true) {
                     appModel.go(to: nil)
                 }
                 .accessibilityHint("Leaves this lab for the home and its six portals")
+                MoreButton(isExpanded: $appModel.moreOpen)
 
                 Spacer(minLength: 12)
 
-                // Center: the module's identity.
+                // Center: the lab's identity.
                 HStack(spacing: 10) {
                     Image(systemName: module.icon)
                         // A semantic style, so it scales with Dynamic Type.
@@ -53,21 +56,6 @@ struct ModuleHostView: View {
 
                 Spacer(minLength: 12)
 
-                // Right: modes.
-                // The Physics box: the lab's live numbers on a card in the
-                // room, with a rail for each quantity you can set.
-                ControlToggle("Physics", systemImage: "function", iconOnly: true,
-                              isOn: Bindable(appModel).physicsBoardOpen)
-                    .accessibilityHint("Shows this lab's live physics values in the room, with rails for the ones you can set")
-
-                ControlToggle("Place the lab", systemImage: "move.3d", iconOnly: true,
-                              isOn: Bindable(appModel.labPlacement).isPlacing)
-                    .accessibilityHint("Shows an anchor you can drag to move the whole lab to where you have room")
-
-                ControlToggle("Studio Mode", systemImage: "moon.stars", iconOnly: true,
-                              isOn: Bindable(appModel).studioMode)
-                    .accessibilityHint("Replaces your room with a dark studio")
-
                 // Shown only when the app cannot see the room, so the bar is unchanged
                 // in the ordinary case; a popover rather than a row, so no panel grows
                 // back.
@@ -77,13 +65,13 @@ struct ModuleHostView: View {
                                   iconOnly: true) {
                         showingSensing.toggle()
                     }
-                    .accessibilityHint(Self.sensingHeadline(appModel.room.sensing))
+                    .accessibilityHint(appModel.room.sensing.headline)
                     .popover(isPresented: $showingSensing,
                              attachmentAnchor: .point(.bottom)) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(Self.sensingHeadline(appModel.room.sensing))
+                            Text(appModel.room.sensing.headline)
                                 .font(DesignTokens.TypeScale.sectionHeader)
-                            Text(Self.sensingDetail(appModel.room.sensing))
+                            Text(appModel.room.sensing.detail)
                                 .font(DesignTokens.TypeScale.footnote)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -93,23 +81,16 @@ struct ModuleHostView: View {
                     }
                 }
 
-                // Reset asks first: in Circuit Workshop it wipes a bench that persists
-                // across launches.
-                ControlButton("Reset", systemImage: "arrow.counterclockwise",
+                // Right: time — the one control every lab shares.
+                let paused = module.isPaused()
+                ControlButton(paused ? "Resume" : "Pause",
+                              systemImage: paused ? "play.fill" : "pause.fill",
                               iconOnly: true) {
-                    confirmingReset = true
+                    module.togglePause()
                 }
-                .accessibilityHint("Returns this lab to its starting state")
-                .confirmationDialog("Reset \(module.title)?",
-                                    isPresented: $confirmingReset,
-                                    titleVisibility: .visible) {
-                    Button("Reset", role: .destructive) {
-                        appModel.resetActiveModule(module)
-                    }
-                    Button("Cancel", role: .cancel) { }
-                } message: {
-                    Text("Everything you have set up here goes back to how the lab opened.")
-                }
+                .accessibilityHint(paused
+                    ? "Runs the lab again, from the moment on screen"
+                    : "Freezes the lab; a reel appears to rewind it")
             }
 
             if !appModel.isImmersiveSpaceOpen {
@@ -149,29 +130,25 @@ struct ModuleHostView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
-
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
         // Wide enough for the longest module names beside the circular
         // buttons: "Orbital Mechanics" and "Projectile Motion" (17 characters).
-        // At 620 "Orbital Mecha…" truncated in the simulator (2026-09-06).
-        .frame(minWidth: 690)
+        .frame(minWidth: 620)
         .glassBackgroundEffect(
             in: RoundedRectangle(cornerRadius: DesignTokens.Panel.windowRadius, style: .continuous))
+        // More opens beside the window, on the left, where every control in
+        // the house stands — never over the apparatus in front of you.
+        .ornament(visibility: appModel.moreOpen ? .visible : .hidden,
+                  attachmentAnchor: .scene(.topLeading),
+                  contentAlignment: .topTrailing) {
+            LabMorePanel(module: module)
+                .padding(.trailing, ControlMetrics.spacing)
+        }
         // Top-aligned in the tall frame the window claims, so the bar rides
         // above the apparatus band instead of inside it. The wearer can still
         // park the window anywhere.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    // The sentences live on `RoomModel.Sensing`, so the hub says the same
-    // things where the permission is asked for.
-    private static func sensingHeadline(_ sensing: RoomModel.Sensing) -> String {
-        sensing.headline
-    }
-
-    private static func sensingDetail(_ sensing: RoomModel.Sensing) -> String {
-        sensing.detail
     }
 }

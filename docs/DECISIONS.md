@@ -16,6 +16,30 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-14 — The room holds the apparatus; More holds the rest
+
+**Decision:** A lab's title bar is Home, More, the lab's name and
+Pause/Resume. More is an ornament beside the window. It holds the lab's
+own secondary controls (`ModuleDescriptor.more`), a slider for each
+quantity with no object to stretch (`adjustables`), its live Values, the
+room (Move, Studio Mode, dimming), Settings and Reset. The palette bead is
+deleted. So is the in-room Physics box with its rails, and the Time reel's
+"Resume here".
+
+**Context:** This reverses 2026-08-01 ("there are no module panels") as
+far as secondary controls go. The owner's brief makes a panel the fallback
+and direct manipulation the default. It also asks that each lab open on
+its primary interaction, with the secondary behind one consistent More.
+The bead had duplicated the title bar three times (Home, Reset and its own
+Pause next to the reel's Resume). Its lab ring duplicated the home.
+
+**Consequences:** Nothing secondary stands in the room any more. A module
+declares items, and the shell draws them in the one control family, so a
+module cannot ship a one-off control. Pause is one pinch away in the
+window rather than two in the room. Lab-to-lab is Home, then a portal.
+After the first arrival the home appears instantly, so that is two
+pinches, as the bead's ring was.
+
 ## 2026-10-14 — The home is six portals, reached through a particle opening
 
 **Decision:** The gallery goes. That means the two terraces (tables, by the

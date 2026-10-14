@@ -2,11 +2,10 @@
 //  HubVignettes.swift
 //  Physics Playground — Hub
 //
-//  The six lab emblems the gallery and the palette show, plus the labs
-//  gyroscope. Each is one bold object — the charges, the loop, the
-//  magnet, the launcher, the pendulum, the star — built from a few big
-//  parts and thick lines, so it reads at seven centimetres in the palette
-//  ring as well as at twenty-five on a terrace. Solid parts load from
+//  The six lab emblems the home's portals run. Each is one bold object —
+//  the charges, the loop, the magnet, the launcher, the pendulum, the star
+//  — built from a few big parts and thick lines, so it reads at twenty-two
+//  centimetres across the room. Solid parts load from
 //  usdz; lines, arcs and orbits stay procedural. Three rules:
 //    1. A vignette NEVER writes its own root transform; content hangs off
 //       an inner `frame`.
@@ -31,18 +30,13 @@ enum HubVignettes {
         /// What the miniature's own geometry fills, swept across its whole
         /// cycle — whether what sits inside the square is a picture or a streak.
         let contentExtents: SIMD3<Float>
-        /// Called when the host has an unfold fraction to report, 0…1. Only the
-        /// labs emblem uses it.
-        let setOpenness: ((Float) -> Void)?
 
         init(entity: Entity,
              animate: @escaping (Double) -> Void,
-             contentExtents: SIMD3<Float> = .zero,
-             setOpenness: ((Float) -> Void)? = nil) {
+             contentExtents: SIMD3<Float> = .zero) {
             self.entity = entity
             self.animate = animate
             self.contentExtents = contentExtents
-            self.setOpenness = setOpenness
         }
     }
 
@@ -59,7 +53,6 @@ enum HubVignettes {
         case "kinematics": projectile()
         case "pendulums": pendulums()
         case "gravitylab": gravity()
-        case "labs": gyroscope()
         default: fallback()
         }
     }
@@ -73,8 +66,7 @@ enum HubVignettes {
     private static func fit(root: Entity, frame: Entity,
                             cycle: Double,
                             centredOn pivot: SIMD3<Float>? = nil,
-                            animate: @escaping (Double) -> Void,
-                            setOpenness: ((Float) -> Void)? = nil) -> Built {
+                            animate: @escaping (Double) -> Void) -> Built {
         frame.position = .zero
         frame.scale = .one
 
@@ -113,8 +105,7 @@ enum HubVignettes {
 
         animate(0)
         return Built(entity: root, animate: animate,
-                     contentExtents: reach * 2 * scale,
-                     setOpenness: setOpenness)
+                     contentExtents: reach * 2 * scale)
     }
 
     // MARK: Shared parts
@@ -705,89 +696,6 @@ enum HubVignettes {
             let direction = simd_normalize(SIMD3(offset.x, -drop, offset.z))
             pivot.orientation = rotation(from: [0, -1, 0], to: direction)
         }
-    }
-
-    // MARK: Labs — the gyroscope that opens the ring
-
-    /// The bead's gyroscope: the thing that holds still while everything
-    /// turns. Three separate assets so the closure captures each moving
-    /// part; when the ring opens, the gimbals lay flat into the arc.
-    private static func gyroscope() -> Built {
-        let root = Entity()
-        let frame = Entity()
-        root.addChild(frame)
-
-        // A third level beneath the frame: `fit` owns `frame.scale`, and the
-        // unfold needs a scale of its own.
-        let unfold = Entity()
-        frame.addChild(unfold)
-
-        let outerRadius: Float = 0.080
-
-        func gimbal(_ name: String, radius: Float) -> Entity {
-            if let modeled = prop(name, longest: radius * 2) { return modeled }
-            let holder = Entity()
-            let points = (0...64).map { step -> SIMD3<Float> in
-                let angle = Float(step) / 64 * 2 * .pi
-                return SIMD3(cos(angle) * radius, sin(angle) * radius, 0)
-            }
-            if let hoop = line(points, radius: radius * 0.045,
-                               UIColor(red: 0.78, green: 0.66, blue: 0.36, alpha: 1)) {
-                holder.addChild(hoop)
-            }
-            return holder
-        }
-
-        // Outer ring: the one bolted to the case, upright.
-        let outer = gimbal("GyroGimbalOuter", radius: outerRadius)
-        unfold.addChild(outer)
-
-        // Inner ring: hung inside the outer one, at ninety degrees.
-        let innerPivot = Entity()
-        outer.addChild(innerPivot)
-        let inner = gimbal("GyroGimbalInner", radius: outerRadius * 0.74)
-        inner.orientation = simd_quatf(angle: .pi / 2, axis: [0, 1, 0])
-        innerPivot.addChild(inner)
-
-        // The rotor, and the axle it is heavy on.
-        let rotorPivot = Entity()
-        innerPivot.addChild(rotorPivot)
-        let rotor: Entity
-        if let modeled = prop("GyroRotor", longest: outerRadius * 1.25) {
-            rotor = modeled
-        } else {
-            let disc = ModelEntity(
-                mesh: Primitives.cylinder(height: outerRadius * 0.16,
-                                        radius: outerRadius * 0.53),
-                materials: [Materials.machined(UIColor(white: 0.74, alpha: 1),
-                                               roughness: 0.3)])
-            disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-            rotor = disc
-        }
-        rotorPivot.addChild(rotor)
-
-        var openness: Float = 0
-
-        let cycle = 4.0
-        return fit(root: root, frame: frame, cycle: cycle, animate: { time in
-            // The rotor never stops. Everything else in this app pauses;
-            // the thing you navigate with does not.
-            rotorPivot.orientation = simd_quatf(angle: Float(time) * 3.1,
-                                                axis: [0, 0, 1])
-            // The gimbals hold the rotor level against the bead's own
-            // breathing — which is what a gimbal is for, and reads as an
-            // uncanny stillness at the centre of a moving object.
-            let lean = 0.16 * Float(sin(time * 0.9))
-            outer.orientation = simd_quatf(angle: lean, axis: [0, 1, 0])
-            innerPivot.orientation = simd_quatf(angle: -lean * 0.8 + openness * 1.2,
-                                                axis: [1, 0, 0])
-        }, setOpenness: { value in
-            openness = value
-            // Opening flattens the rings toward the plane the labs fan
-            // across, and draws the emblem back so the miniatures coming
-            // out of it are not competing with a spinning brass object.
-            unfold.scale = SIMD3(repeating: 1 - 0.30 * value)
-        })
     }
 
     // MARK: Fallback — a new module gets something until it has art

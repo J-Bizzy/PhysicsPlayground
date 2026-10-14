@@ -88,14 +88,15 @@ final class AppModel {
         didSet { refreshImmersionStyle() }
     }
 
-    /// The Physics box, opened by the title bar's ƒ button; kept across
-    /// labs, so a wearer who wants the numbers has them in every room.
-    var physicsBoardOpen = false
+    /// The title bar's More: everything secondary in a lab, its live
+    /// numbers included. Kept across labs, so a wearer who wants it open
+    /// has it open in every room.
+    var moreOpen = false
 
     /// The dimming target, 0…1: how far the shell is closed. Modules with no
     /// contrast against a sunlit wall open part-closed (`preferredDimming`);
-    /// the palette bead's dim petal steps off → half → full and sticks until
-    /// another module is entered. `dimmingShown` is what the shell wears.
+    /// More's dimming slider sets it, and it sticks until another module is
+    /// entered. `dimmingShown` is what the shell wears.
     var roomDimming: Double = AppModel.homeDimming
 
     /// The home's dimming: slight, so the portals and the opening's
@@ -115,17 +116,6 @@ final class AppModel {
 
     func setDimming(_ level: Double) {
         roomDimming = min(max(level, 0), 1)
-    }
-
-    /// Steps the shell through off → half → full, for the nav bead.
-    func cycleDimming() {
-        let next: Double
-        switch roomDimming {
-        case ..<0.05: next = 0.55
-        case ..<0.8: next = 1.0
-        default: next = 0
-        }
-        setDimming(next)
     }
 
     private func adoptModuleAtmosphere() {

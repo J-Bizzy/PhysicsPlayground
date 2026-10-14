@@ -65,9 +65,9 @@ ALONG_X = (0, math.pi / 2, 0)   # a Blender cylinder is built along Z
 
 
 def coat(mat, weight, roughness):
-    """The clearcoat `RenderKit.Materials.graphite` is defined by — see
-    `galleryplatforms.py` for why metallic alone came back twice as
-    bright over a real room."""
+    """The clearcoat `RenderKit.Materials.graphite` is defined by:
+    metallic alone came back twice as bright over a real room (the
+    retired gallery script recorded why; see git history)."""
     bsdf = mat.node_tree.nodes["Principled BSDF"]
     for key, value in (("Coat Weight", weight), ("Clearcoat", weight),
                        ("Coat Roughness", roughness),
@@ -87,9 +87,8 @@ def glass(name, colour, alpha, roughness=0.06):
 
 
 def stocks():
-    """One alloy list for every part, tracking the gallery's platforms
-    (`galleryplatforms.py`) so the bench and the room are visibly one
-    system."""
+    """One alloy list for every part, so the bench and the room are
+    visibly one system."""
     return {
         "graphite": coat(material("CircuitGraphite", (0.088, 0.090, 0.096),
                                   roughness=0.30, metallic=0.10), 0.60, 0.25),

@@ -149,14 +149,11 @@ CHAMFER_SLOT = 1
 # see `crisp` for the census that picked it.
 SHARP_ANGLE = 40
 
-# The six lines, and the file each becomes.
+# The wordmark's two lines, and the file each becomes. (The four domain
+# door-sign lines went with the gallery, 2026-10-14.)
 LINES = [
     ("Physics", "HubTitle_Physics"),
     ("Playground", "HubTitle_Playground"),
-    ("Electricity", "HubTitle_Electricity"),
-    ("& Magnetism", "HubTitle_Magnetism"),
-    ("Mechanics", "HubTitle_Mechanics"),
-    ("& Energy", "HubTitle_Energy"),
 ]
 
 SYSTEM_FONT = "/System/Library/Fonts/SFNS.ttf"

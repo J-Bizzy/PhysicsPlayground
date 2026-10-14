@@ -209,41 +209,5 @@ final class LabelTargetCriterionTests: XCTestCase {
         assertNoHoles(well.root, "Well shelf")
     }
 
-    /// A label that is a sibling, not a child — the one shape the walk
-    /// above cannot see: the palette bead's "Labs" plate is added to the
-    /// palette root so it does not inherit the bead's spin.
-    func testThePaletteBeadsSiblingLabelIsInsideItsTarget() throws {
-        let palette = Palette(slots: [])
-        palette.place(at: .zero)
-        let bead = try XCTUnwrap(palette.root.children.first {
-            $0.name == "palette-bead"
-        })
-        let label = try XCTUnwrap(palette.root.children.first {
-            $0 !== bead && $0.visualBounds(relativeTo: palette.root).extents.x > 1e-4
-        })
-        let centre = label.visualBounds(relativeTo: bead).center
-        let target = try XCTUnwrap(targetBounds(of: bead))
-        let inside =
-            centre.x >= target.min.x && centre.x <= target.max.x &&
-            centre.y >= target.min.y && centre.y <= target.max.y &&
-            centre.z >= target.min.z && centre.z <= target.max.z
-        XCTAssertTrue(inside, """
-            the palette bead's label is centred at \(centre) but its target \
-            spans \(target.min)…\(target.max), so the words on the one control \
-            present in every lab cannot be pinched.
-            """)
-    }
 
-    func testPaletteLabelsAreAimable() {
-        let palette = Palette(slots: [
-            .init(id: "gravitylab", title: "Orbits", accent: .white),
-        ])
-        palette.place(at: .zero)
-        // Opened through the bead, since `isOpen` is private — which is
-        // also the path a hand takes.
-        _ = palette.handleTap(palette.root.children.first { $0.name == "palette-bead" }
-                              ?? Entity())
-        for _ in 0..<80 { palette.update(dt: 1 / 90, viewer: [0, 0, 1]) }
-        assertNoHoles(palette.root, "Palette")
-    }
 }

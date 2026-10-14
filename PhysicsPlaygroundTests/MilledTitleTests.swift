@@ -18,9 +18,7 @@ final class MilledTitleTests: XCTestCase {
     /// Every line the home speaks, and the words are the lookup key —
     /// a baked asset only knows the words it was baked with, so a
     /// renamed door sign silently drops back to generated type.
-    private static let lines = ["Physics", "Playground",
-                                "Electricity", "& Magnetism",
-                                "Mechanics", "& Energy"]
+    private static let lines = ["Physics", "Playground"]
 
     /// The load-bearing test. Every one of the six resolves to an
     /// asset, so nothing in the home is falling back.
@@ -94,11 +92,11 @@ final class MilledTitleTests: XCTestCase {
     /// would be set at different weights.
     @MainActor
     func testSizeScalesTheMilledLine() {
-        guard let small = HubTitleStyle.milled("Mechanics", size: 0.10,
+        guard let small = HubTitleStyle.milled("Playground", size: 0.10,
                                                accent: nil),
-              let large = HubTitleStyle.milled("Mechanics", size: 0.20,
+              let large = HubTitleStyle.milled("Playground", size: 0.20,
                                                accent: nil) else {
-            return XCTFail("no asset for Mechanics")
+            return XCTFail("no asset for Playground")
         }
         XCTAssertEqual(large.extents.x, small.extents.x * 2,
                        accuracy: small.extents.x * 0.02,
@@ -166,7 +164,7 @@ final class MilledTitleTests: XCTestCase {
     /// line and the chamfer has no side to run along.
     @MainActor
     func testTheMilledLineIsDeeplyExtruded() {
-        guard let built = HubTitleStyle.milled("Electricity", size: 0.12,
+        guard let built = HubTitleStyle.milled("Physics", size: 0.12,
                                                accent: nil) else {
             return XCTFail("no asset for Electricity")
         }

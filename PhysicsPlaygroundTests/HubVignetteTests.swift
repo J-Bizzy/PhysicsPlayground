@@ -21,7 +21,7 @@ final class HubVignetteTests: XCTestCase {
     /// Every id the two hosts can ask for: the six modules plus the labs
     /// emblem in the palette bead.
     private static let ids = ["electrostatics", "circuits", "magnetism",
-                              "kinematics", "pendulums", "gravitylab", "labs"]
+                              "kinematics", "pendulums", "gravitylab"]
 
     private static let side = HubVignettes.frameHalf * 2
 
@@ -147,54 +147,8 @@ final class HubVignetteTests: XCTestCase {
         }
     }
 
-    // MARK: The bead
 
-    /// Only the labs emblem answers to openness. A gallery exhibit has
-    /// nothing to be open or shut about, and a stray hook there would be
-    /// a sign someone had wired the palette's state into the wrong
-    /// miniature.
-    func testOnlyTheLabsEmblemTakesAnOpenness() {
-        XCTAssertNotNil(HubVignettes.make(for: "labs").setOpenness)
-        for id in Self.ids where id != "labs" {
-            XCTAssertNil(HubVignettes.make(for: id).setOpenness,
-                         "\(id) should not care whether the ring is open")
-        }
-    }
 
-    /// Opening the ring visibly changes the emblem, and closing it puts
-    /// the emblem back. The palette eases `openness` every frame, so a
-    /// hook that only ever grew would leave the bead shrunken forever.
-    func testOpeningTheBeadIsReversible() {
-        let built = HubVignettes.make(for: "labs")
-        built.animate(0)
-        let shut = pose(built.entity)
-
-        built.setOpenness?(1)
-        built.animate(0)
-        XCTAssertNotEqual(pose(built.entity), shut,
-                          "opening the ring did nothing to the emblem")
-
-        built.setOpenness?(0)
-        built.animate(0)
-        XCTAssertEqual(pose(built.entity), shut,
-                       "the emblem did not return when the ring closed")
-    }
-
-    /// And the emblem still measures the same square whatever the ring is
-    /// doing. The unfold writes a scale of its own, and the first version
-    /// wrote it to the very entity `fit` had scaled — so shutting the ring
-    /// left the bead a different size than it started, permanently.
-    func testOpeningTheBeadDoesNotDisturbTheFit() {
-        let built = HubVignettes.make(for: "labs")
-        for value in [Float(0), 0.5, 1, 0.5, 0] {
-            built.setOpenness?(value)
-            built.animate(0)
-            let extents = hostBounds(built.entity).extents
-            XCTAssertEqual(max(extents.x, extents.y), Self.side,
-                           accuracy: Self.side * 0.01,
-                           "openness \(value) resized the bead's own square")
-        }
-    }
 
     // MARK: Unknown ids
 

@@ -488,3 +488,40 @@ PhysicsCore 469/469. App 881/881. Screenshots:
 mid-arch), `step4-ripple.jpg` (t = 1.45 s), `step4-settle.jpg`
 (t = 2.25 s, particles drawing the rims), `step4-home.jpg` (end state),
 `step4-home-more.jpg`, `step4-window.jpg` (the flat catalog).
+
+### Step 5.0 — the shell: one title bar, one More (2026-10-14)
+
+The lab title bar is now Home, More, the lab's name, and Pause/Resume.
+Pause came in from the palette bead.
+
+More opens an ornament beside the window, on the left like every control
+in the house. It holds:
+- the lab's `more` items and a slider per `adjustables` entry;
+- its live Values (the Physics box, folded in);
+- Room: Move the lab, Studio Mode, and a dimming slider in place of the
+  bead's three-step cycle;
+- Settings, and a Reset that arms first instead of opening a dialog.
+
+Removed:
+- the palette bead and its six lab discs (`Palette.swift`);
+- the in-room Physics box and its rails (`PhysicsBoard.swift`);
+- `AppModel.cycleDimming`;
+- the Time reel's "Resume here", because the title bar's Resume resumes
+  from the scrub in every lab.
+
+Dead assets removed: the gallery's five furniture models, the bead's
+three gyroscope parts and the four door-sign titles. That is 12 `.usdz`
+files that `PropCache` was warming at every launch. Their generators
+`Tools/galleryplatforms.py` and `Tools/vignetteprops.py` went too, and
+`Tools/hubtitles.py` keeps only the wordmark's two lines.
+
+Retired arguments: `-paletteOpen`, `-paletteReset`, `-physicsOpen`. Use
+`-moreOpen 1`.
+
+Tests: `PaletteResetTests` and `PhysicsBoardTests` were removed, along
+with the palette's label, collider and bead tests and the gyroscope prop
+tests. `LabMoreTests` is new: every lab has Values, nothing is offered
+twice, sliders clamp, the dimming slider clamps, plus Fields' and
+Circuits' value rows from the old board tests. Screenshots:
+`docs/redesign-shots/step5-shell-more.jpg` (Projectiles with More open)
+and `step5-shell-closed.jpg`.

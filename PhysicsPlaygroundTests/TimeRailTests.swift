@@ -139,14 +139,18 @@ final class TimeRailTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(model.scrubTime), first, accuracy: 1e-12)
     }
 
-    /// The resume plate un-pauses from the frozen instant.
-    func testResumePlateResumes() throws {
+    /// The title bar's Resume un-pauses from the frozen instant: the rail
+    /// carries no resume of its own because the shared pause already does
+    /// exactly this.
+    func testTheTitleBarResumeResumesFromTheScrub() throws {
         let (module, model, _) = makeRecordedModule()
         let rail = TimeRail(module: module)
         settleOpen(rail)
         module.timeScrub.scrub(0.5)
 
-        XCTAssertTrue(rail.handleTap(try plate(rail, "resume")))
+        XCTAssertNil(rail.root.findEntity(named: "action-resume"),
+                     "a second resume came back to the rail")
+        module.togglePause()
         XCTAssertFalse(model.isPaused)
         XCTAssertNil(model.scrubTime)
     }

@@ -36,7 +36,6 @@ final class VignettePropTests: XCTestCase {
                      "CompassBody", "CompassNeedle",
                      "LauncherCarriage", "QuadrantPointer", "TargetStand",
                      "CometNucleus", "ChargePlus", "ChargeMinus",
-                     "GyroGimbalOuter", "GyroGimbalInner", "GyroRotor",
                      "CircuitBattery", "CircuitBulb", "CircuitSwitch",
                      "LauncherBarrel"] {
             _ = try extents(of: name)
@@ -148,33 +147,7 @@ final class VignettePropTests: XCTestCase {
         }
     }
 
-    /// Both gimbal rings and the rotor face the reader: their axis is Z, so
-    /// Z is the thin one — the assertion that catches the Blender-Y trick
-    /// going wrong.
-    func testTheGyroscopePartsFaceTheReader() throws {
-        for name in ["GyroGimbalOuter", "GyroGimbalInner"] {
-            let box = try extents(of: name)
-            XCTAssertLessThan(box.z, min(box.x, box.y) * 0.5,
-                              "\(name) is edge-on — its axis is not Z")
-            // Near-round, not exactly round: each ring carries two pivot bosses,
-            // which is the difference between a gimbal and a pair of hoops.
-            XCTAssertEqual(box.x, box.y, accuracy: min(box.x, box.y) * 0.15,
-                           "\(name) is not round in the XY plane")
-            XCTAssertNotEqual(box.x, box.y, accuracy: min(box.x, box.y) * 0.02,
-                              "\(name) has no pivot bosses standing proud")
-        }
-    }
 
-    /// The rotor's longest dimension is its axle: `HubVignettes` normalises
-    /// on the longest dimension, so this ratio decides how big the disc
-    /// looks inside the rings.
-    func testTheRotorIsAxleDominant() throws {
-        let box = try extents(of: "GyroRotor")
-        XCTAssertGreaterThan(box.z, box.x,
-                             "the rotor's axle should be its longest span")
-        XCTAssertEqual(box.x, box.y, accuracy: box.x * 0.08,
-                       "the rotor disc is not round")
-    }
 
     /// The launcher barrel points up +Y, which is the contract
     /// `KinematicsRenderer` already relies on ("0.30 m base-to-muzzle

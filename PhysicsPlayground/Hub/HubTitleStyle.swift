@@ -101,10 +101,6 @@ enum HubTitleStyle {
     private static let milledAssets: [String: String] = [
         "Physics": "HubTitle_Physics",
         "Playground": "HubTitle_Playground",
-        "Electricity": "HubTitle_Electricity",
-        "& Magnetism": "HubTitle_Magnetism",
-        "Mechanics": "HubTitle_Mechanics",
-        "& Energy": "HubTitle_Energy",
     ]
 
     /// One line of display type, milled rather than generated; nil when

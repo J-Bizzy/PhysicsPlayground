@@ -57,10 +57,11 @@ struct PlaygroundSpaceView: View {
         if defaults.bool(forKey: "settingsOpen") {
             openWindow(id: SettingsView.windowID)
         }
-        // `-physicsOpen 1` unfolds the Physics box, since the simulator cannot
-        // press the title bar's button while photographing the room.
-        if defaults.bool(forKey: "physicsOpen") {
-            appModel.physicsBoardOpen = true
+        // `-moreOpen 1` unfolds the title bar's More (the lab's secondary
+        // controls and its live numbers), since the simulator cannot press it
+        // while photographing the room.
+        if defaults.bool(forKey: "moreOpen") {
+            appModel.moreOpen = true
         }
         // Each of these clears the bench, builds one small loop a hand could
         // have built, and selects the part the feature is about.
@@ -174,16 +175,10 @@ struct PlaygroundSpaceView: View {
                         // you actually have room. Hidden until asked for.
                         LabAnchorView(module: module)
                             .id("lab-anchor-\(module.id)")
-                        // One bead; pinch it and the labs unfold.
-                        PaletteView(module: module)
-                            .id("palette-\(module.id)")
                         // The Time Capsule's rail: folded away until the
                         // module is paused with a recording worth scrubbing.
                         TimeRailView(module: module)
                             .id("time-rail-\(module.id)")
-                        // The Physics box: folded until the title bar's ƒ button.
-                        PhysicsBoardView(module: module)
-                            .id("physics-\(module.id)")
                         // Quiet lab room tone under every module (not the hub); no per-module
                         // id, so it runs seamlessly across switches.
                         AmbientLabAudioView()

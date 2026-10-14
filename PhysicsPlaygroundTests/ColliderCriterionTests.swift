@@ -280,28 +280,7 @@ final class ColliderCriterionTests: XCTestCase {
         }
     }
 
-    /// The palette's petal row at every count it could plausibly reach: a
-    /// span hand-tuned for one count leaves a fifth or sixth petal
-    /// unaimable while looking fine in a screenshot.
-    func testThePetalRowFitsEveryCountItCouldReach() {
-        for count in 2...10 {
-            let span = Palette.petalRowSpan(count: count)
-            let pitch = span / Float(count - 1)
-            XCTAssertGreaterThan(
-                pitch, Palette.petalColliderSpan,
-                String(format: "%d petals pitch at %.4f m against a %.3f m touch "
-                       + "target — adjacent petals cannot be told apart by a "
-                       + "pinch.", count, pitch, Palette.petalColliderSpan))
-        }
-    }
 
-    /// …and the row must stay reachable. A petal you have to walk to is
-    /// not on a bead you are holding.
-    func testThePetalRowStaysWithinArmsReach() {
-        XCTAssertLessThan(Palette.petalRowSpan(count: 6), 0.60,
-                          "six petals need a row wider than a comfortable "
-                          + "two-handed sweep")
-    }
 
     /// The placement puck is the object you move a whole lab with, and
     /// it stands among the lab's own apparatus.
