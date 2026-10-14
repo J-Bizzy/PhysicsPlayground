@@ -2,24 +2,11 @@
 //  CircuitsNetTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The bench's connectivity, cached. Three claims are under test here
-//  and each one used to be an assumption nothing checked:
-//
-//  1. SLOT PARITY. `elements[i]` is `components[i]`, which is how
-//     every readout finds its own current. Before the net cache this
-//     was true by the accident of two loops iterating the same array
-//     in the same order, and it was READ BACK at two places a hundred
-//     lines apart. It is a named function now, and asserted here.
-//
-//  2. GEOMETRY IS NOT TOPOLOGY. Moving a part, dialling a value and
-//     opening a switch must not rebuild the partition — a switch is
-//     an ELEMENT between two nets, never a break in one. If the cache
-//     rebuilds on a move it is not a cache, it is a rename.
-//
-//  3. THE SAME-NET RULE. Two terminals already at one potential
-//     cannot be wired together again. The old rule rejected a
-//     duplicate PAIR and missed a duplicate PATH, which is what
-//     `fanOut` was quietly dividing a branch current across.
+//  The bench's connectivity, cached. Three claims: slot parity
+//  (`elements[i]` is `components[i]`), geometry is not topology (a move,
+//  a value or a switch must not rebuild the partition), and the
+//  same-net rule (two terminals already at one potential cannot be
+//  wired again — a second path, not just a second pair).
 //
 
 import XCTest
@@ -76,7 +63,7 @@ final class CircuitsNetTests: XCTestCase {
         model.clearBench()
         let battery = model.add(.battery)!
         // Two very different resistors in series: if the readouts were
-        // off by one, the currents would still match but the POWERS
+        // off by one, the currents would still match but the powers
         // could not.
         let small = model.add(.resistor)!
         let large = model.add(.resistor)!
@@ -114,7 +101,7 @@ final class CircuitsNetTests: XCTestCase {
     }
 
     /// A switch is an element between two nets, not a break in one —
-    /// so opening it changes the ELEMENT stamped, never the partition.
+    /// so opening it changes the element stamped, never the partition.
     func testOpeningASwitchDoesNotRebuildTheNets() {
         let model = CircuitsModel()
         let (_, toggle, bulb) = buildLoop(on: model)
@@ -140,7 +127,7 @@ final class CircuitsNetTests: XCTestCase {
         XCTAssertEqual(model.netRebuildCount, baseline)
     }
 
-    /// Wiring, on the other hand, IS a topology change — and exactly
+    /// Wiring, on the other hand, is a topology change — and exactly
     /// one per wire. The cache has no invalidation call, so this is
     /// the test that it notices at all.
     func testWiringRebuildsTheNetsExactlyOnce() {
@@ -201,7 +188,7 @@ final class CircuitsNetTests: XCTestCase {
         XCTAssertEqual(model.connectTerminals(plus, .init(componentID: UUID(), end: 0)), .missing)
     }
 
-    /// THE `fanOut` LIE, CLOSED. Twenty attempts at the same
+    /// The `fanOut` lie, closed. Twenty attempts at the same
     /// connection leave one wire — and that wire carries the whole
     /// branch current, not a fraction of it divided across phantom
     /// parallel copies.

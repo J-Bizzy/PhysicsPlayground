@@ -2,55 +2,21 @@
 //  PanelControlCriterionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The exit criterion, as an assertion rather than a promise.
-//
-//  It used to say: no `Slider`, `Picker` or `Toggle` in a module panel
-//  (DECISIONS.md, 2026-07-29). All six modules met that on 2026-08-01,
-//  and what the panels held afterwards was 71 readout `Text`s, 13
-//  buttons — six of them duplicating a control already standing in the
-//  room — and four collapsed cards whose entire content was prose
-//  explaining where a control had gone.
-//
-//  So the criterion is stronger now: **no module has a panel at all.**
-//  `ModuleDescriptor.makeControls` is deleted, the module window is a
-//  title bar, and every control and readout stands on the apparatus.
-//
-//  This test exists because this specific boundary has already been
-//  re-litigated once, in a full round trip: `Phase 0 — demolition: the
-//  glass comes out` → `the object is the interface` → `dials live on the
-//  apparatus now` → … → `the controls come back` → `Every module gets its
-//  one-glance panel`. 212 commits, and it ended on the wrong side. A
-//  criterion nobody can re-check is one that silently regresses, and the
-//  cost of re-crossing this line is measured in months.
-//
-//  It reads the SOURCE, which is unusual and deliberate. The alternative
-//  — instantiating each panel and walking its view tree — cannot work:
-//  SwiftUI's `body` is opaque, a `Slider` nested in a card is not
-//  reachable by reflection, and a test that silently inspected nothing
-//  would be worse than no test at all. Reading the file is crude, but it
-//  fails loudly and for the right reason.
-//
-//  DECISIONS.md, 2026-08-01, states the cost this guards rather than
-//  glossing it: the app now has NO flat control surface, so a regression
-//  in a spatial instrument has no fallback path. That is the trade. This
-//  file is what stops it being unmade by accident.
+//  No module has a panel at all: `makeControls` is deleted, the module
+//  window is a title bar, and every control and readout stands on the
+//  apparatus. Reads the source, because SwiftUI's `body` is opaque and a
+//  test that silently inspected nothing would be worse than none. The
+//  cost this guards: there is no flat fallback surface for a spatial
+//  instrument that regresses.
 //
 
 import XCTest
 
 final class PanelControlCriterionTests: XCTestCase {
 
-    /// Walks up from this file to the repository, then down to the
-    /// modules. `#filePath` is the only anchor available — the test
-    /// bundle's own resources do not include source.
-    ///
-    /// It FAILS rather than skipping when the tree is unreachable, and
-    /// that changed with the rewrite. Every assertion below is now a
-    /// NEGATIVE one ("no module ships a panel"), and a negative
-    /// assertion over a directory that does not exist passes vacuously —
-    /// so the old `XCTSkip` would have meant this criterion quietly
-    /// stopped being checked in exactly the environments where nobody
-    /// was watching.
+    /// Walks up from this file to the repository, then down to the modules.
+    /// Fails rather than skipping when the tree is unreachable: every
+    /// assertion below is negative and would pass vacuously.
     private func moduleDirectory() throws -> URL {
         let thisFile = URL(fileURLWithPath: #filePath)
         // …/PhysicsPlayground/PhysicsPlaygroundTests/ThisFile.swift
@@ -73,12 +39,8 @@ final class PanelControlCriterionTests: XCTestCase {
         return modules
     }
 
-    /// Every Swift file under `PhysicsPlayground/Modules`.
-    ///
-    /// Deliberately NOT `Archive/`, which sits at the repository root
-    /// outside the build and still holds two parked `*ControlsPanel.swift`
-    /// files. Those are cut modules keeping their tested physics; they
-    /// are not shipping surfaces.
+    /// Every Swift file under `PhysicsPlayground/Modules`. Not `Archive/`:
+    /// cut modules keeping their tested physics are not shipping surfaces.
     private func moduleSources() throws -> [URL] {
         let modules = try moduleDirectory()
         return FileManager.default.enumerator(
@@ -88,11 +50,8 @@ final class PanelControlCriterionTests: XCTestCase {
             .sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
     }
 
-    /// The anchor, and the reason the rest of this file means anything.
-    ///
-    /// Without it, deleting `Modules/` outright — or pointing the walk
-    /// at an empty directory — would satisfy every other assertion here.
-    /// A suite of negative checks needs one positive one underneath it.
+    /// The anchor: a suite of negative checks needs one positive one
+    /// underneath it.
     func testTheSourceTreeIsActuallyBeingRead() throws {
         let sources = try moduleSources()
         let modules = sources.filter { $0.lastPathComponent.hasSuffix("Module.swift") }
@@ -138,10 +97,8 @@ final class PanelControlCriterionTests: XCTestCase {
     /// Nothing inside a module builds a panel, a flat control, or offers
     /// one to the shell.
     func testNoModuleSourceBuildsAPanelOrAFlatControl() throws {
-        // Constructor call sites and the contract's own name. The words
-        // appear in these files' prose constantly — most of them in
-        // comments explaining why the controls left — so comment lines
-        // are skipped, exactly as they always were.
+        // Constructor call sites and the contract's own name. Comment lines
+        // are skipped: the words appear in prose constantly.
         let banned = ["Slider(", "Picker(", "Toggle(",
                       "PanelSection(", "CollapsedSection(", "makeControls"]
 
@@ -187,13 +144,9 @@ final class PanelControlCriterionTests: XCTestCase {
         }
     }
 
-    /// Matches a token only at an identifier boundary.
-    ///
-    /// `SpatialPicker(` CONTAINS `Picker(`, and six space views construct
-    /// one — they are the very instruments this law demands. A bare
-    /// `contains` fails on the code that satisfies the rule, which is the
-    /// worst possible false positive: it teaches people to delete the
-    /// check rather than the violation.
+    /// Matches a token only at an identifier boundary: `SpatialPicker(`
+    /// contains `Picker(`, and the picker is the very instrument this law
+    /// demands.
     private static func contains(_ line: String, identifier token: String) -> Bool {
         var search = line[...]
         while let range = search.range(of: token) {

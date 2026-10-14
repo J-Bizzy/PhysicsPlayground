@@ -2,15 +2,8 @@
 //  FieldClampTests.swift
 //  Physics Playground — app tests
 //
-//  What survives of the station's clamps, and what must NOT come back.
-//
-//  The drag walls born in the merged E&M world — `clampToStation` on
-//  every `moveCharge`/`movePlate`, plus the escort that exempted a
-//  freshly-pulled charge — came out on 2026-08-03 at the owner's
-//  direction: this is a room-scale app, and an invisible box that stops
-//  a carried charge mid-air reads as broken. These tests pin the new
-//  contract from both sides: a hand meets no wall but the floor, and
-//  the FREE simulation still cannot run to infinity.
+//  The contract from both sides: a hand meets no wall but the floor,
+//  and the free simulation still cannot run to infinity.
 //
 
 import XCTest
@@ -23,7 +16,7 @@ final class FieldClampTests: XCTestCase {
 
     // MARK: A hand meets no walls
 
-    /// Drag a charge three metres out: it must BE three metres out.
+    /// Drag a charge three metres out: it must be three metres out.
     /// This is the assertion that fails if anyone rebuilds the wall.
     func testADraggedChargeGoesExactlyWhereTheHandGoes() {
         let model = FieldModel()
@@ -78,7 +71,7 @@ final class FieldClampTests: XCTestCase {
     // MARK: The free simulation still cannot escape
 
     /// A mutually repelling pair left to drift for minutes must settle
-    /// inside the room-scale safety box — the ONLY bound the module
+    /// inside the room-scale safety box — the only bound the module
     /// keeps, and it binds the simulation, never the hand.
     func testFreeChargesNeverLeaveTheSafetyBox() {
         let model = FieldModel()

@@ -3,15 +3,15 @@
 //  PhysicsCore — Oscillations
 //
 //  An elastic membrane: masses spring-coupled on a square lattice, which
-//  in the small-displacement limit IS the 2-D wave equation
+//  in the small-displacement limit is the 2-D wave equation
 //
 //      ∂²u/∂t² = c² ∇²u − γ ∂u/∂t
 //
 //  (u is transverse height). sin(mπi/N)·sin(nπj/N) is an exact eigenvector
 //  of the discrete Laplacian, so a struck mode stays a pure standing wave
 //  at the lattice frequency (tests pin this, plus energy conservation and
-//  wavefront speed). Boundaries are FIXED (rim clamped to zero) or FREE
-//  (zero-gradient). Any node can be PINNED to a height — how a hand holds
+//  wavefront speed). Boundaries are fixed (rim clamped to zero) or free
+//  (zero-gradient). Any node can be pinned to a height — how a hand holds
 //  the sheet while the medium responds.
 
 import Foundation
@@ -92,7 +92,7 @@ public struct ElasticSheet: Sendable {
 
     public var pinnedNodes: [Int] { Array(pinned.keys) }
 
-    /// The node nearest a point in the sheet's LOCAL plane coordinates
+    /// The node nearest a point in the sheet's local plane coordinates
     /// (origin at node 0,0; +x along i, +y along j), clamped to the
     /// grid.
     public func nearestNode(localX x: Double, localY y: Double) -> (i: Int, j: Int) {
@@ -245,7 +245,7 @@ public struct ElasticSheet: Sendable {
     }
 
     /// The exact natural frequency (Hz) of the clamped-drumhead standing
-    /// mode (m, p) ON THIS LATTICE — not the continuum approximation. The
+    /// mode (m, p) on this lattice — not the continuum approximation. The
     /// discrete Laplacian's eigenvalue for sin(mπi/(N−1))·sin(pπj/(N−1))
     /// is 4[sin²(mπ/2(N−1)) + sin²(pπ/2(N−1))]/a², and ω = c·√λ. Driving
     /// at this frequency rings mode (m, p) into resonance.

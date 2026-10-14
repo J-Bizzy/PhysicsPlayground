@@ -43,15 +43,9 @@ public struct SphericalPendulum: Sendable, Equatable {
         acos(min(max(-position.y / length, -1), 1))
     }
 
-    /// One step of velocity-Verlet with projection back onto the
-    /// constraint sphere — the standard stable way to keep a cable taut
-    /// forever without spring hacks or drift. `damping` is a linear
-    /// drag coefficient (N·s/m) against the bob's velocity.
-    ///
-    /// (A rotating-frame Ω parameter carried the Coriolis term here from
-    /// the day the Foucault rig was built until 2026-08-03, when that
-    /// feature was removed at the owner's direction. Git history holds
-    /// the term and the sine-law recovery tests that guarded it.)
+    /// One step of velocity-Verlet with projection back onto the constraint
+    /// sphere — the standard stable way to keep a cable taut without spring
+    /// hacks or drift. `damping` is a linear drag coefficient (N·s/m).
     public static func step(
         _ state: SphericalPendulum, dt: Double,
         length: Double, gravity: Double, mass: Double, damping: Double
@@ -80,7 +74,7 @@ public struct SphericalPendulum: Sendable, Equatable {
         let radial = simd_normalize(newPosition)
         newVelocity -= simd_dot(newVelocity, radial) * radial
 
-        // …but the SPEED comes from the work-energy theorem: the cable's
+        // …but the speed comes from the work-energy theorem: the cable's
         // tension does no work, so ΔKE = −mg·Δh − drag work, exactly.
         // This pins energy conservation to machine precision when
         // undamped — the energy bars hold rock steady.

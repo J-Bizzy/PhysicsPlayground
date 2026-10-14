@@ -66,11 +66,8 @@ final class FieldModelTests: XCTestCase {
         XCTAssertNil(model.selectedChargeID)
     }
 
-    /// THE CLEAR PLATE'S ACTUAL PROMISE: an empty room. It fired
-    /// `removeAllCharges` for months and the probe — placed content
-    /// with its own lifecycle — survived every clear, orbiting nothing.
-    /// The plate fires `clearEverything` now, and this holds it to the
-    /// name on the plate.
+    /// The Clear plate's actual promise is an empty room: the probe is
+    /// placed content and must go with the charges.
     func testClearEverythingRemovesTheProbeToo() {
         let model = FieldModel()
         model.addCharge(positive: true)
@@ -104,7 +101,7 @@ final class FieldModelTests: XCTestCase {
 
     /// Dragged at the floor, a charge stops at the floor clearance —
     /// the one boundary a hand still meets after the station walls came
-    /// off the drag paths (2026-08-03).
+    /// off the drag paths.
     func testMoveChargeClampsAboveFloor() {
         let model = FieldModel()
         let id = model.charges[0].id
@@ -134,12 +131,8 @@ final class FieldModelTests: XCTestCase {
 
     // MARK: Sampling region
 
-    /// "Far away" now means the far corner of this bench's STATION, not
-    /// the far corner of the room: since Electric Fields became the
-    /// middle seat of the E&M world, a charge dragged at the wall stops
-    /// at its own boundary rather than drifting into the circuit bench.
-    /// The property under test is unchanged — the sampling region
-    /// follows the charge wherever the charge is allowed to go.
+    /// The sampling region follows the charge wherever the charge is
+    /// allowed to go.
     func testRegionFollowsChargeDraggedFarAway() {
         let model = FieldModel()
         let id = model.charges[0].id
@@ -288,10 +281,8 @@ final class FieldModelTests: XCTestCase {
 
     // MARK: Reset (the shell's Reset button calls this via the descriptor)
 
-    /// The module opens as a DIPOLE, not a monopole: a single charge's
-    /// field is straight rays to infinity, which reads as a starburst
-    /// rather than a field. The pair must be equal and opposite and
-    /// straddle the region centre, so the picture is the textbook one.
+    /// The module opens as a dipole, not a monopole: a single charge's
+    /// field is straight rays to infinity, which reads as a starburst.
     func testResetOpensOnADipole() {
         let model = FieldModel()
         model.addCharge(positive: false)
@@ -320,7 +311,7 @@ final class FieldModelTests: XCTestCase {
         XCTAssertTrue(model.showLines)
     }
 
-    /// The ΔV rail writes through a 500 V snap (2026-08-06): the
+    /// The ΔV rail writes through a 500 V snap: the
     /// displayed "%.0f kV" can never disagree with the model by
     /// sub-display noise, and reaching past the range clamps first.
     func testPlateVoltageWritesSnapTo500VoltSteps() {
@@ -336,11 +327,9 @@ final class FieldModelTests: XCTestCase {
         XCTAssertEqual(model.plateVoltage, 2_000, accuracy: 1e-9)
     }
 
-    /// One arithmetic for the E line everywhere it is shown — and since
-    /// the plates became real (2026-08-14), that number is the MEASURED
-    /// centre field: honestly below the ideal V/d, because a finite
-    /// capacitor leaks field out its sides, and more so as the gap
-    /// opens relative to the plates.
+    /// One arithmetic for the E line everywhere it is shown — the measured
+    /// centre field, honestly below V/d, because a finite capacitor leaks
+    /// field out its sides.
     func testPlateFieldReadsTheMeasuredCentreField() {
         let model = FieldModel()
         model.capacitorOn = true
@@ -374,10 +363,8 @@ final class FieldModelTests: XCTestCase {
         model.holdProbe(at: model.samplingRegion.center)
         model.releaseProbe()
 
-        // The MEASURED centre field, not V/d: the plates are real and
-        // open, so the ideal formula overstates E. The probe stays on
-        // the symmetry axis while it drifts, where the field varies
-        // slowly — a 10% window covers the variation over 0.3 s.
+        // The measured centre field, not V/d; the probe stays on the symmetry
+        // axis, where the field varies slowly.
         let expectedAcceleration = model.probeChargeMagnitude
             * model.capacitorField(at: model.capacitorCenter).x
             / FieldModel.probeMass
@@ -436,20 +423,11 @@ final class FieldModelTests: XCTestCase {
                        "B along y leaves vy alone")
     }
 
-    // (Electron mode's realistic-field test left with the mode itself on
-    // 2026-08-03 — the probe is always the charged ball now. Git history
-    // holds the e/m coverage.)
-
     // MARK: What the card says about the probe
 
-    /// THE CARD REPORTED THE ELECTRIC FORCE WHILE THE DEMO WAS MAGNETIC.
-    ///
-    /// `stepProbe` pushes the probe with the full Lorentz force
-    /// q(E + v×B) — correctly — and `probeReadout` computed `|q||E|` and
-    /// called it "Force". Switch Uniform B on with no charges in the
-    /// room and the card read `Force 0.00 N` while the probe visibly
-    /// circled in front of you. The one number that could have explained
-    /// the orbit said nothing was happening.
+    /// The card must report the magnetic force: `probeReadout` once computed
+    /// `|q||E|` and called it "Force", so a probe circling in a pure B field
+    /// read `0.00 N`.
     func testTheCardReportsTheMagneticForceOnACirclingProbe() throws {
         let model = FieldModel()
         model.removeAllCharges()
@@ -480,7 +458,7 @@ final class FieldModelTests: XCTestCase {
                        "the quoted acceleration is not the one bending the path")
     }
 
-    /// A STATIONARY probe feels no magnetic force, which is the other
+    /// A stationary probe feels no magnetic force, which is the other
     /// half of the same lesson — and the reason the split is worth
     /// showing rather than folding into one number.
     func testAStationaryProbeFeelsNoMagneticForce() throws {
@@ -499,10 +477,8 @@ final class FieldModelTests: XCTestCase {
                        "q v×B is zero when v is zero")
     }
 
-    /// A LARGE FIELD BESIDE `0.00 V` IS THE ONE THING A POTENTIAL CANNOT
-    /// BE. `fieldVector` includes the capacitor plates and the card's
-    /// potential did not, so between the plates the card showed a strong
-    /// E and no potential difference from anywhere to anywhere.
+    /// A large field beside `0.00 V` is the one thing a potential cannot
+    /// be: the card's potential must include the capacitor.
     func testThePotentialIncludesTheCapacitor() throws {
         let model = FieldModel()
         model.removeAllCharges()
@@ -526,11 +502,8 @@ final class FieldModelTests: XCTestCase {
                           + "0.00 V beside a strong E that started all this")
     }
 
-    /// The slab's coverage is physics state (it rides the Time Capsule
-    /// snapshot), and it is a Double — outside `ResetCoverageTests`'s
-    /// Bool reflection — so its reset is held by hand, the same
-    /// arrangement `CircuitsNetHighlightTests` uses for the net
-    /// selection.
+    /// The slab's coverage is a Double, outside `ResetCoverageTests`'s Bool
+    /// reflection, so its reset is held by hand.
     func testResetParksTheDielectric() {
         let model = FieldModel()
         model.capacitorOn = true

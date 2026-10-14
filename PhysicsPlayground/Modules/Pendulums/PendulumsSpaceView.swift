@@ -5,11 +5,7 @@
 //  The pendulum lab immersive scene. A bob is carried by a
 //  `RelativeDrag`: grabbing freezes that pendulum, the bob rides the
 //  hand (cable staying taut), and release rethrows it with the hand's
-//  velocity estimated from the last tenth of a second of motion — a
-//  hard sideways throw whips it, a gentle release barely stirs it.
-//
-//  (This said "route through the ManipulationRouter" until 2026-08-03.
-//  They never did; the router had no callers anywhere and is deleted.)
+//  velocity estimated from the last tenth of a second of motion.
 //
 
 import PhysicsCore
@@ -26,28 +22,19 @@ struct PendulumsSpaceView: View {
     /// Which bob's ring is open — shared by the tap gesture and the
     /// render loop (see RingState's header for why it's a reference).
     @State private var ring = RingState()
-    /// Which pendulum's PIVOT is open.
-    ///
-    /// A separate ring from the bob's, and a reference type for the same
-    /// reason that one is: a `@State` struct read from inside a
-    /// RealityKit closure comes back stale. Tapping a pivot and tapping a
-    /// bob are exclusive — opening either closes the other — so one
-    /// `Bloom` serves both, and what it carries depends on which is open.
+    /// Which pendulum's pivot is open. A separate ring from the bob's;
+    /// tapping a pivot and tapping a bob are exclusive, so one `Bloom`
+    /// serves both.
     @State private var pivotRing = RingState()
     /// The collar this press started on, and whether it has moved. A
     /// press that never moves is a tap; see the drag's `onEnded`.
     @State private var pressedPivot: (id: UUID, moved: Bool)?
-    /// The bob this press landed on, before it has moved far enough to
-    /// be a grab. Held rather than grabbed, so a TAP on a bob does not
-    /// stop the pendulum and wipe the room's trails — see the drag's
-    /// `onChanged`. The collar above has always worked this way; the bob
-    /// did not until 2026-08-07.
+    /// The bob this press landed on, before it has moved far enough to be a
+    /// grab: a tap on a bob must not stop the pendulum and wipe the trails.
     @State private var pressedBob = PressLatch<BobPress>()
 
-    /// A press on a bob — identity only. Where the bob IS is read at
-    /// promotion: it is still swinging, at around a metre a second, so
-    /// its position at press time is stale by more than the threshold
-    /// by the time the threshold is crossed. See `PressLatch`.
+    /// A press on a bob — identity only. Where the bob is gets read at
+    /// promotion: it is still swinging at around a metre a second.
     struct BobPress: Sendable {
         let id: UUID
         let name: String
@@ -66,27 +53,15 @@ struct PendulumsSpaceView: View {
     /// fifth (air resistance) is not a display layer but a labelled
     /// discrete choice, and one lone plate beside a bank of four is worse.
     @State private var layers: SpatialLayerBank?
-    // `gravity` and `timeScale` are RETIRED CAPABILITIES, not hidden ones:
-    // the wearer is not offered them at all (this bench is Earth at 1×),
-    // and `-penGravity`/`-penTime` exist only so a screenshot can put it
-    // elsewhere. Anybody restoring either must restore its rail in the
-    // same commit.
+    // `gravity` and `timeScale` are retired capabilities: this bench is
+    // Earth at 1×, and `-penGravity`/`-penTime` exist only for screenshots.
 
-    // Placement. Every one of these sits at the apparatus's own DEPTH
-    // (z ≈ −1.08, the pivot plane) rather than at a height picked on its
-    // own — the podium mistake this project has now made three times is
-    // to put controls on a console BELOW the thing they belong to, where
-    // they read 38° under the eye line and are simply never seen. Being
-    // close magnifies the drop. The band that works is ~14°, which at
-    // this depth is y ≈ 1.35.
+    // Placement: every instrument sits at the apparatus's own depth (the
+    // pivot plane), in the ~14° band below eye — controls on a console
+    // below the thing they belong to are never seen.
     private static let instrumentZ: Float = -1.08
-    /// Left of the swing, above the well at y = 1.30.
-    ///
-    /// Internal rather than private since 2026-08-09 so
-    /// `InstrumentReachCriterionTests` can measure it. Every module's
-    /// bank used to be a literal buried in a render closure, which is
-    /// why nothing had ever checked whether they were reachable — and
-    /// two of them were not.
+    /// Left of the swing, above the well. Internal so
+    /// `InstrumentReachCriterionTests` can measure it.
     static let bankAnchor = SIMD3<Float>(-0.92, 1.58, instrumentZ)
 
     /// Walks up from a tapped entity to a pivot collar, if it is one.
@@ -111,20 +86,16 @@ struct PendulumsSpaceView: View {
         RealityView { content, attachments in
             let renderer = PendulumsRenderer()
             renderer.onObjectTap = { handleObjectTap(on: $0) }
+            renderer.onPivotAction = { entity in
+                if let id = Self.pivotID(of: entity) { togglePivotRing(id, on: entity) }
+            }
             content.add(renderer.root)
-            // ARRIVES, NEVER APPEARS. Disabled here and raised by
-            // `Fade.tick` below, so the apparatus resolves into the room
-            // instead of being there between one frame and the next.
+            // Disabled here and raised by `Fade.tick`, so the apparatus arrives
+            // rather than appears.
             renderer.root.isEnabled = false
             renderer.root.addChild(bloom.root)
 
-            // The selected bob's numbers, finally attached.
-            //
-            // `infoAnchor` has been built, billboarded, added to the
-            // scene and repositioned above the selected bob every frame
-            // since the renderer was written — with NOTHING on it. The
-            // card it was waiting for existed too, in the window panel's
-            // "Numbers" dropdown. This is the wire that was never run.
+            // The selected bob's numbers, on the bob.
             if let card = attachments.entity(for: Self.infoCardID) {
                 stripInput(from: card)
                 renderer.infoAnchor.addChild(card)
@@ -140,17 +111,12 @@ struct PendulumsSpaceView: View {
                       preview: { PendulumsRenderer.pendulumPreview() },
                       position: SIMD3(-0.85, 1.30, -0.95),
                       spawn: { point in
-                          // Born hanging plumb, at rest. The default
-                          // draw-back is for the cradle cold-open; a
-                          // pendulum pulled out by hand must hold still
-                          // until the hand swings it (owner, 2026-08-03).
+                          // Born hanging plumb, at rest: a pendulum pulled out by hand must hold
+                          // still until the hand swings it.
                           model.addPendulum(angle: 0, at: point)
                       }),
-                // The chaotic one, as its own mouth rather than a mode
-                // on the first. They are different physics — a taut
-                // cable on a sphere versus a two-angle Lagrangian system
-                // — and the interaction law says a discrete choice gets
-                // a labelled object rather than a hidden modifier.
+                // The chaotic one, as its own mouth: different physics, so a labelled
+                // object rather than a hidden modifier.
                 .init(name: "Double", tint: UIColor(DesignTokens.Palette.pendulumsAccent),
                       label: "Double pendulum",
                       preview: { PendulumsRenderer.doublePendulumPreview() },
@@ -175,10 +141,8 @@ struct PendulumsSpaceView: View {
                     .init(id: "force", label: "Force", symbol: "arrow.down.right",
                           isOn: { model.showForces },
                           toggle: { model.showForces.toggle() }),
-                    // Not a display layer, and the label says so plainly:
-                    // switched off the pendulum is ideal and swings for
-                    // ever, which is a statement about the physics and not
-                    // about what is drawn.
+                    // Not a display layer, and the label says so: off, the pendulum is
+                    // ideal and swings for ever.
                     .init(id: "friction", label: "Air resistance", symbol: "wind",
                           isOn: { model.frictionOn },
                           toggle: { model.frictionOn.toggle() }),
@@ -188,11 +152,7 @@ struct PendulumsSpaceView: View {
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
-                    // The lab's own arrival and departure, on the shell's
-                    // one flag. `Fade.tick` settles to a no-op — it drops its
-                    // clock and its OpacityComponent once landed — so this
-                    // costs one comparison for all the frames that are not a
-                    // transition.
+                    // The lab's arrival and departure, on the shell's one flag.
                     if let renderer {
                         Fade.tick(renderer.root, visible: !appModel.isDeparting,
                                   duration: AppModel.departure)
@@ -205,10 +165,8 @@ struct PendulumsSpaceView: View {
                     layers?.update(anchor: Self.bankAnchor,
                                    viewer: viewer, dt: event.deltaTime,
                                    nearestHand: hand)
-                    // The lab's placement in the user's room — a pure
-                    // display offset, safe because every grab in this app
-                    // moves a body by hand DISPLACEMENT, which a constant
-                    // translation leaves untouched.
+                    // The lab's placement: a pure display offset, safe because every grab
+                    // moves a body by hand displacement.
                     renderer?.root.position = appModel.labPlacement.offset
                     // Every bank, rail, well and ring is a child of
                     // `renderer.root`, so the whole lab travels together.
@@ -221,17 +179,14 @@ struct PendulumsSpaceView: View {
                let first = model.pendulums.first {
                 ring.openID = first.id
             }
-            // `-penPivotRing 1` opens the COLLAR's ring (cable bead and
-            // trash), which a press-without-moving opens — not something
-            // the simulator can do.
+            // `-penPivotRing 1` opens the collar's ring (cable bead and trash),
+            // which a press-without-moving opens.
             if UserDefaults.standard.bool(forKey: "penPivotRing"),
                let first = model.pendulums.first {
                 pivotRing.openID = first.id
                 ring.openID = nil
             }
-            // Each instrument arg sets a VALUE, not a flag: a bead parked
-            // at its default proves the rail rendered and nothing about
-            // the mapping behind it. `-penGravity 1.62` is the Moon.
+            // Each instrument argument sets a value: `-penGravity 1.62` is the Moon.
             let forcedGravity = UserDefaults.standard.double(forKey: "penGravity")
             if forcedGravity > 0 {
                 model.gravity = min(max(forcedGravity,
@@ -245,9 +200,7 @@ struct PendulumsSpaceView: View {
                                           PendulumsModel.timeScaleRange.lowerBound),
                                       PendulumsModel.timeScaleRange.upperBound)
             }
-            // `-penLayers 1` lights every plate on the bank, so one shot
-            // shows all four lamps and all four labels rather than the
-            // two that happen to be on by default.
+            // `-penLayers 1` lights every plate on the bank.
             if UserDefaults.standard.bool(forKey: "penLayers") {
                 model.showVelocity = true
                 model.showAcceleration = true
@@ -259,46 +212,27 @@ struct PendulumsSpaceView: View {
         } attachments: {
             Attachment(id: Self.infoCardID) {
                 PendulumInfoCard()
-                    // An attachment carries a collider for its content.
-                    // A readout that intercepted a pinch would be
-                    // `SpatialScaleHandle` all over again — and this one
-                    // floats directly above a bob you are meant to grab.
+                    // An attachment carries a collider for its content, and this one floats
+                    // directly above a bob you are meant to grab.
                     .allowsHitTesting(false)
-                    // The environment does NOT flow into an attachment
-                    // the way it flows down a view tree; `makeControls`
-                    // got the model because the shell injected it, and
-                    // nothing injects it here.
+                    // The environment does not flow into an attachment the way it flows
+                    // down a view tree.
                     .environment(model)
             }
         }
-        // Leaving the lab must not leave anything running or held.
-        //
-        // `teardown` cancels the renderer's event subscriptions and any
-        // geometry job in flight (see `GeometryPipeline.cancel`), and the
-        // drag state is cleared because NOTHING ELSE CAN CLEAR IT: an
-        // in-flight grab that never receives its `onEnded` — the space
-        // closing under it is the ordinary way that happens — otherwise
-        // strands the object wherever the hand left it and re-targets
-        // every later drag at the same one, with no exit but leaving.
+        // Leaving the lab must not leave anything running or held: `teardown`
+        // cancels subscriptions and geometry jobs, and an in-flight grab that
+        // never gets its `onEnded` would re-target every later drag.
         .onDisappear {
             renderer?.teardown()
-            // A GRIP SURVIVES THE SPACE CLOSING, and that is worse than
-            // it sounds. `Bloom` is a class, so `gripDrag` outlives this
-            // view; left set, `updateGrip` claims EVERY subsequent drag
-            // in the module and nothing at all can be grabbed. That
-            // exact failure is documented in PendulumsSpaceView's
-            // `onEnded` — it cost this module every one of its verbs
-            // once already.
+            // `Bloom` is a class: a grip left set would claim every subsequent
+            // drag.
             bloom.endGrip()
-            // A collar press left armed intercepts the NEXT gesture's
-            // `onEnded` and returns early, so the next bob you grab is
-            // never released and stays held forever.
+            // A collar press left armed intercepts the next gesture's `onEnded`.
             pressedPivot = nil
             drag = nil
-            // A pending press now STICKS — `press` refuses to overwrite
-            // one — so an `onEnded` that never arrives would otherwise
-            // let the next gesture promote it on frame one, against a
-            // stale anchor, and grab the object you pressed last time.
+            // A pending press sticks, so an `onEnded` that never arrives would let
+            // the next gesture promote it against a stale anchor.
             pressedBob.cancel()
         }
         .simultaneousGesture(
@@ -310,12 +244,8 @@ struct PendulumsSpaceView: View {
                     if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
                     if drag == nil {
                         if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) {
-                            // Hold the swing still for the length edit.
-                            // The bead rides the bob, and the bob was
-                            // sweeping past at about a metre a second
-                            // while you tried to pinch it — the one
-                            // grip in the app whose handle runs away
-                            // from the hand reaching for it.
+                            // Hold the swing still for the length edit: the bead rides the bob,
+                            // which was sweeping past at a metre a second.
                             if let id = ring.openID { model.beginGrab(id: id) }
                             return
                         }
@@ -325,17 +255,8 @@ struct PendulumsSpaceView: View {
                             return
                         }
 
-                        // THE PIVOT COLLAR. This branch was missing
-                        // entirely: the renderer names the collar
-                        // `pivot-<uuid>` and calls
-                        // `Grabbable.configureTouchTarget` on it, saying
-                        // "a rig you cannot re-hang is furniture, not
-                        // rigging" — but nothing here ever began a drag
-                        // from one. The only `pivot-` drag in the file
-                        // came from pulling a NEW pendulum out of the
-                        // well, so re-hanging an existing rig had never
-                        // once worked. The loop below matches a BARE
-                        // uuid, which a collar's name is not.
+                        // The pivot collar: the renderer names it `pivot-<uuid>`, which the
+                        // bare-uuid loop below does not match.
                         if let id = Self.pivotID(of: value.entity),
                            let pendulum = model.pendulums.first(where: { $0.id == id }) {
                             drag = RelativeDrag(name: "pivot-\(id.uuidString)",
@@ -344,12 +265,9 @@ struct PendulumsSpaceView: View {
                             return
                         }
 
-                        // A press that never moves is NOT a drag: on this
-                        // `minimumDistance: 0` recogniser a bare tap on a
-                        // bob would wipe every trail, zero the swing and
-                        // release it at rest. The press is only RECORDED
-                        // here and promoted to a grab below once the hand
-                        // moves, anchored back at the press so nothing jumps.
+                        // A press that never moves is not a drag: a bare tap on a bob would
+                        // wipe every trail and release it at rest. Recorded here, promoted to a
+                        // grab once the hand moves.
                         var current: Entity? = value.entity
                         while let candidate = current {
                             if let id = UUID(uuidString: candidate.name),
@@ -363,11 +281,9 @@ struct PendulumsSpaceView: View {
                         }
                     }
 
-                    // The promotion. `tapTravel` is the same threshold
-                    // the collar uses — under a finger's width. The bob's
-                    // position is read HERE, at the instant of the grab,
-                    // because it has gone on swinging throughout the
-                    // press.
+                    // The promotion, at the same threshold the collar uses. The bob's
+                    // position is read here, at the instant of the grab, because it has
+                    // gone on swinging.
                     if drag == nil, pressedBob.isPending {
                         guard let grabbed = pressedBob.promote(hand: hand),
                               let pendulum = model.pendulums.first(where: {
@@ -407,34 +323,20 @@ struct PendulumsSpaceView: View {
                     // and the tap recogniser below owns it.
                     pressedBob.cancel()
 
-                    // A PRESS ON THE COLLAR THAT NEVER MOVED IT opens the
-                    // length bead. Folded into this drag rather than
-                    // given its own `TapGesture`, which is how it was
-                    // written first and which cost the collar its drag:
-                    // `DragGesture(minimumDistance: 0)` and a
-                    // `TapGesture` over the same entity are ambiguous, so
-                    // a pinch on the pivot could resolve as the tap and
-                    // the rig would refuse to be re-hung. One recogniser,
-                    // two outcomes, decided by whether the thing moved.
+                    // A press on the collar that never moved it opens the length bead.
+                    // Folded into this drag rather than a `TapGesture`: two recognisers
+                    // over one entity were ambiguous and the rig refused to be re-hung.
                     if let pressed = pressedPivot {
                         pressedPivot = nil
                         if !pressed.moved {
-                            pivotRing.openID =
-                                pivotRing.openID == pressed.id ? nil : pressed.id
-                            ring.openID = nil
+                            togglePivotRing(pressed.id, on: value.entity)
                         }
                         drag = nil
                         bloom.endGrip()
                         return
                     }
-                    // `bloom.endGrip()` — every other module in the app
-                    // called it and this one never did. `gripDrag` then
-                    // stayed non-nil forever after the first touch of a
-                    // length bead, which made `updateGrip` claim EVERY
-                    // subsequent drag in the scene: grabbing a bob,
-                    // re-hanging a pivot, pulling one out of the well
-                    // all silently became length edits on whatever the
-                    // ring had last been open on. One missing line.
+                    // End the grip, or `updateGrip` claims every subsequent drag in the
+                    // scene.
                     let wasGripping = bloom.isGripping
                     bloom.endGrip()
                     defer {
@@ -443,18 +345,15 @@ struct PendulumsSpaceView: View {
                         handSampler.reset()
                     }
                     if wasGripping {
-                        // Hand the swing back exactly as it was. Not
-                        // `.zero`: `release` writes the velocity it is
-                        // given, so releasing a length bead with zero
-                        // would stop a pendulum dead every time anyone
-                        // adjusted its cable — and `setLength` goes to
-                        // some trouble to keep the swing running through
-                        // the edit, which is the lesson (the period
-                        // changes, the motion does not restart).
+                        // Hand the swing back exactly as it was, not with `.zero`: `release`
+                        // writes the velocity it is given, and `setLength` keeps the swing
+                        // running through the edit — the period changes, the motion does not
+                        // restart.
                         if let id = ring.openID,
                            let pendulum = model.pendulums.first(where: { $0.id == id }) {
                             model.release(id: id,
-                                          handVelocity: pendulum.state.velocity)
+                                          handVelocity: pendulum.state.velocity,
+                                          isThrow: false)
                         }
                         return
                     }
@@ -471,10 +370,8 @@ struct PendulumsSpaceView: View {
                                   handVelocity: handSampler.velocity(at: now) ?? .zero)
                 }
         )
-        // `.simultaneousGesture`, NOT `.gesture`: the drag above is
-        // `minimumDistance: 0` and claims a touch the instant it lands, so
-        // a plain `.gesture` tap never resolves and every plate, disc and
-        // rail in the room stops responding.
+        // `.simultaneousGesture`, not `.gesture`: the drag above claims a touch
+        // the instant it lands, so a plain `.gesture` tap never resolves.
         .simultaneousGesture(
             TapGesture()
                 .targetedToAnyEntity()
@@ -483,21 +380,17 @@ struct PendulumsSpaceView: View {
     }
 
 
-    /// A bob's own controls. LENGTH is the grip, and its extent is the
-    /// cable: pull the bead and the cable pays out, the bob falls with
-    /// it, and the period tag over the pivot climbs as the square root
-    /// of length while your hand is still moving.
+    /// A bob's own controls. Length is the grip and its extent is the
+    /// cable: pull the bead and the cable pays out, and the period tag
+    /// climbs as the square root of length while the hand is still moving.
     private func syncBloom(dt: Double) {
         // The pivot's ring: a bead for the cable (the quantity a pivot
         // owns) and Delete. The bob's ring keeps its own Delete — you can
         // throw a rig away from either end, as you can pick one up.
         if let openPivot = pivotRing.openID,
            !model.pendulums.contains(where: { $0.id == openPivot }) {
-            // Deleted out from under the ring — by its own trash petal,
-            // by the bob's, or by a reset. The bob's ring already had
-            // this guard; the pivot's needs it for the same reason, and
-            // now needs it MORE, because its own petal is what usually
-            // triggers it.
+            // Deleted out from under the ring — by its own trash petal, the bob's,
+            // or a reset.
             pivotRing.openID = nil
             bloom.clearTarget()
         }
@@ -566,28 +459,34 @@ struct PendulumsSpaceView: View {
                      viewer: viewer, revealTarget: 1, dt: dt)
     }
 
-    /// EXTRACTED FROM THE TAP CLOSURE, 2026-08-08, so VoiceOver reaches
-    /// the same routing a pinch does.
-    ///
-    /// `Grabbable` has taken an `activate` closure since the mechanism
-    /// moved into RenderKit, and every call site passed nothing — so the
-    /// objects a hand can carry could be reached no other way. It is not
-    /// a sweep: the helper configures entities it did not build and
-    /// cannot know what pressing one should mean. Here it means opening
-    /// that object's control ring, and only the module knows that, so
-    /// the routing had to come out of the gesture first.
+    /// Opens or folds a collar's ring — from a press that never moved the
+    /// collar, or from VoiceOver — and answers with the pop and tick every
+    /// other ring in the house makes. It opened and closed silently until
+    /// 2026-10-14.
+    private func togglePivotRing(_ id: UUID, on entity: Entity) {
+        ring.openID = nil
+        if pivotRing.openID == id {
+            pivotRing.openID = nil
+            SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
+        } else {
+            pivotRing.openID = id
+            SoundPalette.play(.pop, on: entity, volume: 0.35)
+        }
+    }
+
+    /// The tap routing, out of the gesture closure so VoiceOver reaches it
+    /// too.
     private func handleObjectTap(on entity: Entity) {
-        // The instruments get first refusal, before the
-        // fall-through that folds the ring away — otherwise
-        // tapping a switch plate would also close whatever
-        // bob ring was open.
+        // The instruments get first refusal, or tapping a plate would also fold
+        // the open ring.
         if layers?.handleTap(entity) == true { return }
-        // NO pivot branch here. The collar's bead is opened
-        // by a press that does not move it, inside the drag
-        // gesture — see `onEnded`. A tap target on the collar
-        // competed with its own drag and stopped the rig
-        // being re-hung.
+        // No pivot branch here: the collar's bead opens from a press that does
+        // not move it, inside the drag gesture; a tap target on the collar
+        // competed with its own drag.
         if bloom.handleTap(entity) { return }
+        // A tap on a collar belongs to the drag's settled press, which has
+        // already toggled its ring; folding here would undo it.
+        if Self.pivotID(of: entity) != nil { return }
         // A tap on a bob selects it and toggles its control
         // ring; a tap on anything else folds the ring away.
         var current: Entity? = entity
@@ -608,22 +507,19 @@ struct PendulumsSpaceView: View {
             }
             current = candidate.parent
         }
-        if ring.openID != nil {
+        // A tap elsewhere folds whichever ring is open, the collar's too.
+        if ring.openID != nil || pivotRing.openID != nil {
             SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
         }
         ring.openID = nil
-    
+        pivotRing.openID = nil
     }
 
 }
 
-/// The card floating above the selected bob, on the billboarded
-/// `PendulumsRenderer.infoAnchor`.
-///
-/// Every value is QUANTISED to its displayed precision and the strings
-/// built from the quantised numbers: an attachment is rasterised into a
-/// texture, so what costs is how often the rendered output changes. A bob
-/// at 1.2345 m/s then redraws ~10 times a second instead of 90.
+/// The card floating above the selected bob. Every value is quantised
+/// to its displayed precision: an attachment is rasterised, so what
+/// costs is how often the output changes.
 struct PendulumInfoCard: View {
     @Environment(PendulumsModel.self) private var model
 
@@ -636,8 +532,8 @@ struct PendulumInfoCard: View {
             let period = (pendulum.period(gravity: model.gravity) * 100).rounded() / 100
             VStack(alignment: .leading, spacing: 3) {
                 // No T for a double: 2π√(L/g) is the upper rod's small-
-                // angle period, and a chaotic rig has none (2026-09-01,
-                // same rule as the in-room tag).
+                // angle period, and a chaotic rig has none (the same rule
+                // as the in-room tag).
                 Text(pendulum.kind == .double
                      ? "L \(PhysicsFormat.measurement(length, "m", decimals: 2))   chaotic"
                      : "L \(PhysicsFormat.measurement(length, "m", decimals: 2))   "
@@ -647,9 +543,8 @@ struct PendulumInfoCard: View {
                      + "v \(PhysicsFormat.measurement(speed, "m/s", decimals: 2))")
                     .font(DesignTokens.TypeScale.footnote.monospacedDigit())
             }
-            // A card in a ROOM, not on a panel: it has to hold its shape
-            // against a sunlit wall, a dark studio, and whatever the
-            // user's furniture is doing behind it.
+            // A card in a room: it has to hold its shape against a sunlit wall, a
+            // dark studio, and the furniture behind it.
             .readoutCard()
             .accessibilityElement(children: .combine)
         }

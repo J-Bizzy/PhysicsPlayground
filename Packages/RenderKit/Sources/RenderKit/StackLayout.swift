@@ -2,21 +2,10 @@
 //  StackLayout.swift
 //  RenderKit
 //
-//  A vertical column of switches, as pure arithmetic.
-//
-//  The third control shape the app needs, and the one the 35 display
-//  toggles resolve into: one **layers bank** per module (owner's call,
-//  2026-07-29). A fan is for choosing ONE of many and folding away; a
-//  dial is for a continuous quantity; a bank is for several independent
-//  on/off states that must also be READABLE at a glance — which layer is
-//  showing is itself information, so the bank never folds.
-//
-//  A column rather than an arc, deliberately. `FanLayout`'s spray is
-//  right for a momentary menu and wrong for a standing instrument — a
-//  screenshot of Gravity Lab's clock on a 150° arc showed four discs at
-//  four different heights reading as debris rather than one object. With
-//  three to seven switches a column is unambiguous: one thing, stacked,
-//  the way a real panel of breakers is.
+//  A vertical column of switches, as pure arithmetic: one layers bank
+//  per module, for several independent on/off states that must also be
+//  readable at a glance. A column rather than an arc, because a standing
+//  instrument on an arc reads as debris.
 //
 
 import Foundation
@@ -46,13 +35,9 @@ public struct StackLayout: Sendable {
         public var isVisible: Bool
     }
 
-    /// Where switch `index` of `count` sits at a given reveal progress.
-    ///
-    /// The column is centred vertically on the anchor, so a bank of three
-    /// and a bank of seven both hang off the same point without the
-    /// caller compensating — otherwise every module would need its own
-    /// fudge to keep the bank beside the apparatus instead of drifting
-    /// down as switches were added.
+    /// Where switch `index` of `count` sits at a given reveal progress. The
+    /// column is centred vertically on the anchor, so a bank of three and a
+    /// bank of seven hang off the same point.
     public func placement(index: Int, count: Int, reveal: Double) -> Placement {
         let progress = min(max(reveal, 0), 1)
         let centred = Double(index) - Double(max(count, 1) - 1) / 2

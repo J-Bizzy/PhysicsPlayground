@@ -2,19 +2,9 @@
 //  SpatialTrackControlTests.swift
 //  PhysicsPlaygroundTests
 //
-//  First coverage of `SpatialTrackControl`, written the day it got its
-//  first caller. It had been in the tree since 2026-07-29 with **zero
-//  shipping call sites** — its only constructions were in `Archive/`,
-//  which is not in the build — so none of this code had ever run, and
-//  three real defects were sitting in it (a collider the size of a beach
-//  ball, no enabled state, and no accessibility value). Those are fixed;
-//  these tests are what keeps them fixed.
-//
-//  `TrackLayoutTests` covers the arithmetic. This file covers the CONTROL:
-//  the entity it builds, the model it writes, and the guards around both.
-//  It builds real `Entity` objects and calls `adjust` directly, which is
-//  the only kind of interaction testing available here — no automation can
-//  synthesise a pinch (see `docs/ON_DEVICE_TESTS.md`).
+//  The control: the entity it builds, the model it writes, and the
+//  guards around both (`TrackLayoutTests` covers the arithmetic). Its
+//  first real caller found three defects in code that had never run.
 //
 
 import XCTest
@@ -27,15 +17,9 @@ final class SpatialTrackControlTests: XCTestCase {
 
     private let length = 0.26
 
-    /// One part per million of the test range.
-    ///
-    /// Not a fudge, and worth stating once: a hand arrives here as
-    /// `SIMD3<Double>` but is measured against `root.position`, which is
-    /// `SIMD3<Float>` because entity transforms are. So every value crosses
-    /// a float, and a 0…100 range comes back carrying about 2e-6 of float
-    /// epsilon. Asserting to 1e-9 tests the width of a Float's mantissa
-    /// rather than the control's arithmetic. Exact equality is still
-    /// demanded where the code genuinely clamps (see the pinning test).
+    /// One part per million of the test range: a hand arrives as Double but
+    /// is measured against a Float `root.position`, so every value carries
+    /// float epsilon. Exact equality is still demanded where the code clamps.
     private let tolerance = 1e-4
 
     /// A track over 0…100, sitting at the origin facing +z, with its value
@@ -59,16 +43,8 @@ final class SpatialTrackControlTests: XCTestCase {
 
     // MARK: Operable without hands
 
-    /// THE COMPLAINT THIS FILE'S OWN HEADER MADE, finally answered.
-    ///
-    ///     // a track replaces a `Slider`, and a slider is already an
-    ///     // adjustable element that speaks its value. Migrating
-    ///     // without this trades a control someone could operate blind
-    ///     // for one they cannot.
-    ///
-    /// The value was added when that was written; the adjustability was
-    /// not, because `SpatialActions` lived a layer above RenderKit until
-    /// 2026-08-08.
+    /// A track replaces a `Slider`, and a slider is an adjustable element
+    /// that speaks its value; the rail must be adjustable without hands.
     func testTheRailCanBeAdjustedWithoutHands() {
         let (track, box) = makeTrack(range: 0...100)
         box.value = 50
@@ -81,14 +57,14 @@ final class SpatialTrackControlTests: XCTestCase {
         XCTAssertEqual(box.value, 40, accuracy: 1e-9)
 
         // It must stop at the ends rather than running past them — the
-        // same clamp the drag goes through, because it IS that clamp.
+        // same clamp the drag goes through, because it is that clamp.
         for _ in 0..<40 { SpatialActions.adjust(track.root, by: -1) }
         XCTAssertEqual(box.value, 0, accuracy: 1e-9)
         for _ in 0..<80 { SpatialActions.adjust(track.root, by: 1) }
         XCTAssertEqual(box.value, 100, accuracy: 1e-9)
     }
 
-    /// The bead has to MOVE with the keystroke, not just the number —
+    /// The bead has to move with the keystroke, not just the number —
     /// `nudge` calls `refresh()` for this reason, and a version that
     /// wrote the value and left the bead behind would look broken to
     /// everyone else in the room.
@@ -103,7 +79,7 @@ final class SpatialTrackControlTests: XCTestCase {
         XCTAssertNotEqual(track.beadOffset.x, start.x, accuracy: 1e-4)
     }
 
-    /// A rail with NO subtitle used to announce the value it was built
+    /// A rail with no subtitle used to announce the value it was built
     /// with for the whole session: the republish sat inside
     /// `if let subtitle`, and most rails have none.
     func testARailWithoutASubtitleStillUpdatesItsSpokenValue() throws {
@@ -232,7 +208,7 @@ final class SpatialTrackControlTests: XCTestCase {
                              "The bead ignored a change it did not cause.")
     }
 
-    /// The bead sits AT the value — the whole argument for a track over a
+    /// The bead sits at the value — the whole argument for a track over a
     /// dial is that the setting is legible from across the room.
     func testTheBeadSitsAtTheValue() {
         let (track, box) = makeTrack()
@@ -280,12 +256,9 @@ final class SpatialTrackControlTests: XCTestCase {
 
     // MARK: The collider — the defect that would have broken a module
 
-    /// The rule from the `SpatialScaleHandle` ban (DECISIONS, 2026-07-29):
-    /// an input-targetable collider must be no larger than the thing it
-    /// represents. This shipped as a SPHERE of `length * 0.55` — a 29 cm
-    /// ball around an object 1 cm thick — which would have shielded the
-    /// capacitor it is bolted under from every pinch. Generous along the
-    /// rail is the affordance; generous across it is a trap.
+    /// An input-targetable collider must be no larger than the thing it
+    /// represents: this shipped as a 29 cm sphere around a 1 cm rail.
+    /// Generous along the rail is the affordance; across it is a trap.
     func testTheColliderIsThinAcrossTheRail() throws {
         let (track, _) = makeTrack()
         let collision = try XCTUnwrap(track.root.components[CollisionComponent.self],
@@ -318,11 +291,8 @@ final class SpatialTrackControlTests: XCTestCase {
 
     // MARK: The standing warning
 
-    /// `adjust` has no scale term, which is correct for a scaled ANCESTOR
-    /// (the hand and `root.position` are both in the parent's frame, so a
-    /// rig cancels) and wrong for a scaled root. Pinned here so that
-    /// anybody who "helpfully" scales a track meets a failing test rather
-    /// than a rail whose far half is dead.
+    /// `adjust` has no scale term, which is correct for a scaled ancestor
+    /// and wrong for a scaled root; pinned so nobody scales a track.
     func testATrackRootIsNeverScaled() {
         let (track, _) = makeTrack()
         XCTAssertEqual(track.root.scale, SIMD3<Float>(1, 1, 1),

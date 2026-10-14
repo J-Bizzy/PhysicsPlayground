@@ -12,6 +12,7 @@
 
 import XCTest
 import simd
+import RealityKit
 @testable import PhysicsPlayground
 
 @MainActor
@@ -19,15 +20,9 @@ final class GalleryLayoutTests: XCTestCase {
 
     private let allModules = HubDomain.arcOrder   // the live ids, in arc order
 
-    /// Three terraces now, not four: Waves was archived on 2026-07-29 when
-    /// the app narrowed to two labs, so its domain is benched and builds
-    /// nothing.
-    /// Derived from `HubDomain`, not written out — the catalog is being
-    /// folded down to two flagship worlds, and a test that hard-codes
-    /// today's counts fails on every phase of that for no reason. What
-    /// is actually worth asserting is the RELATIONSHIP: one terrace per
-    /// domain that has modules, carrying exactly that domain's modules,
-    /// and none for a domain that has been benched.
+    /// Derived from `HubDomain`, not written out: one terrace per domain
+    /// that has modules, carrying exactly that domain's modules, and none
+    /// for a benched domain.
     func testTerracesFollowTheLiveDomains() {
         let terraces = GalleryLayout.terraces(moduleIDs: allModules)
         let live = HubDomain.allCases.filter { !$0.moduleIDs.isEmpty }
@@ -152,7 +147,7 @@ final class GalleryLayoutTests: XCTestCase {
                            + GalleryLayout.baseWidthMargin,
                        accuracy: 1e-5)
 
-        // …and no OTHER terrace moves or resizes to accommodate it.
+        // …and no other terrace moves or resizes to accommodate it.
         for domain in HubDomain.allCases where domain != .mechanics {
             let a = with.first { $0.domain == domain }!
             let b = without.first { $0.domain == domain }!
@@ -169,11 +164,8 @@ final class GalleryLayoutTests: XCTestCase {
         }
     }
 
-    /// A door with none of its experiences benched builds no terrace —
-    /// which is what makes benching a domain a one-line change to its
-    /// module list. No domain is empty today (the waves case that used
-    /// to prove this was deleted with the four-domain layout), so the
-    /// fixture benches one by omission instead.
+    /// A door with none of its experiences benched builds no terrace; the
+    /// fixture benches one by omission.
     func testBenchedDomainGetsNoTerrace() {
         let mechanicsOnly = HubDomain.mechanics.moduleIDs
         let terraces = GalleryLayout.terraces(moduleIDs: mechanicsOnly)
@@ -186,5 +178,78 @@ final class GalleryLayoutTests: XCTestCase {
         let orphan = GalleryLayout.terraces(moduleIDs: ["waves"])
         XCTAssertEqual(orphan.count, 1)
         XCTAssertEqual(orphan[0].moduleIDs, ["waves"])
+    }
+
+    /// Every lab's name is an inlay on the bench's front edge, under its
+    /// mount, at `HubScene.benchLabelSize` — the one surface a longer module
+    /// title could run into. Measured, so "Orbital Mechanics" (joint-longest
+    /// with "Projectile Motion") is a number rather than a screenshot: a
+    /// label stays inside its own pitch cell, two neighbours keep 3 cm of
+    /// bare graphite between them (nothing backs the type, so the gap is
+    /// all that says where one name ends), and every label fits the face
+    /// it is inlaid in with the chamfers clear.
+    func testEveryExhibitTitleFitsItsPitch() {
+        let pitch = GalleryLayout.basePuckPitch
+        let modules = ModuleCatalog.all(appModel: AppModel())
+        let width = Dictionary(uniqueKeysWithValues: modules.map {
+            ($0.id, HubScene.benchLabelWidth($0.title))
+        })
+        for module in modules {
+            XCTAssertLessThan(width[module.id] ?? .infinity, pitch - 0.03, """
+                \(module.title)'s bench label is \(width[module.id] ?? 0) m wide, \
+                past its own \(pitch) m pitch less a 3 cm gap.
+                """)
+            let height = HubScene.benchLabel(module.title, accent: .white)
+                .visualBounds(relativeTo: nil).extents.y
+            XCTAssertLessThan(height, GalleryLayout.slabThickness - 0.016, """
+                \(module.title)'s bench label is \(height) m tall on a \
+                \(GalleryLayout.slabThickness) m face; it would run into the \
+                chamfers or past the edge.
+                """)
+        }
+        let order = HubDomain.arcOrder
+        for (left, right) in zip(order, order.dropFirst()) {
+            let reach = ((width[left] ?? 0) + (width[right] ?? 0)) / 2
+            XCTAssertLessThan(reach, pitch - 0.03, """
+                the bench labels of \(left) and \(right) reach \(reach) m toward \
+                each other across a \(pitch) m pitch.
+                """)
+        }
+    }
+
+    /// The names are on the bench, so nothing lifted or docked can carry one
+    /// into a door sign: each label stands on its terrace's front face,
+    /// directly under its own exhibit, and nowhere near the sign above.
+    func testEveryLabelStandsUnderItsExhibitOnTheBenchFace() throws {
+        let modules = ModuleCatalog.all(appModel: AppModel())
+        let scene = HubScene()
+        scene.build(modules: modules)
+
+        var labels: [Entity] = []
+        func walk(_ entity: Entity) {
+            if entity.name == "bench-label" { labels.append(entity) }
+            entity.children.forEach(walk)
+        }
+        walk(scene.root)
+        XCTAssertEqual(labels.count, modules.count,
+                       "one label per lab, on its bench")
+
+        for module in modules {
+            let exhibit = try XCTUnwrap(scene.root.children.first { $0.name == module.id })
+            let at = exhibit.position(relativeTo: nil)
+            let label = try XCTUnwrap(labels.min {
+                simd_distance($0.position(relativeTo: nil), at)
+                    < simd_distance($1.position(relativeTo: nil), at)
+            })
+            let labelAt = label.position(relativeTo: nil)
+            let horizontal = simd_length(SIMD2(labelAt.x - at.x, labelAt.z - at.z))
+            XCTAssertLessThan(horizontal, GalleryLayout.slabDepth / 2 + 0.02, """
+                \(module.title)'s label is \(horizontal) m from under its exhibit.
+                """)
+            XCTAssertLessThan(labelAt.y, at.y - GalleryLayout.exhibitLift, """
+                \(module.title)'s label stands above its mount; it belongs on \
+                the bench's edge.
+                """)
+        }
     }
 }

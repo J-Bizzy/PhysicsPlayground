@@ -35,10 +35,8 @@ final class CircuitsModelTests: XCTestCase {
         model.connectTerminals(bMinus, rB)
         model.step(dt: 1.0 / 90.0)
 
-        // The reading is a FORMATTED display now, not a bag of raw
-        // numbers, because the meter has modes and each one answers a
-        // different question. The drop itself is still the solver's —
-        // asserted against `readouts` through the string the meter shows.
+        // The reading is a formatted display: the meter has modes and each
+        // answers a different question. The drop itself is still the solver's.
         model.meterMode = .voltsDC
         model.setProbe(.red, to: rA)
         model.setProbe(.black, to: rB)
@@ -49,18 +47,13 @@ final class CircuitsModelTests: XCTestCase {
                                                unit: "V"),
                        "the meter reads the same drop the solver computes")
 
-        // Probes on the two ends of one WIRE: continuity.
+        // Probes on the two ends of one wire: continuity.
         model.meterMode = .continuity
         model.setProbe(.red, to: bPlus)
         model.setProbe(.black, to: rA)
         XCTAssertTrue(try XCTUnwrap(model.multimeterReading).beeping,
                       "wired-together terminals show continuity")
     }
-
-    // `testScopeBuffersSelectedComponent` went with `scopeSamples` on
-    // 2026-08-26 — a 300-frame buffer with no scope face to draw it. What
-    // it incidentally proved (a selected part's readout tracks the solve)
-    // is covered by the multimeter and readout tests above.
 
     /// A bare LED across a 9 V battery burns out in one live step; a
     /// Replace puts it back in service.
@@ -147,7 +140,7 @@ final class CircuitsModelTests: XCTestCase {
 
         model.release(id: bulb)
         XCTAssertEqual(model.wires.count, 1)
-        // The preview clears for a STRONGER reason than it used to:
+        // The preview clears for a stronger reason than it used to:
         // not "there is already a wire between exactly these two", but
         // "these two are already one electrical point".
         XCTAssertTrue(model.pendingJoins(for: bulb).isEmpty,
@@ -287,26 +280,6 @@ final class CircuitsModelTests: XCTestCase {
                        "moving a part must not interrupt the current")
     }
 
-    // THE JUMPER TEST LIVED HERE. `ComponentKind.wire` was a part
-    // you pulled off the rack, with a length and ~17 mΩ/m of honest
-    // ρL/A copper, and this test checked a battery–wire–bulb–wire loop
-    // against V/(R + r + 2·R_wire). The kind was retired 2026-08-11: a
-    // CONNECTION spans any distance now, so a jumper part had nothing
-    // left to do. The physics claim did not go away with it — it moved
-    // to `CircuitsBenchMigrationTests.testAJumperBecomesADirectWire`,
-    // which loads a saved jumper loop, splices it, and asserts the
-    // spliced circuit carries the current the jumper loop carried.
-
-    // AND THE GRIP TEST LIVED HERE. `dragEnd` pinned one end and
-    // swung the part toward the hand, and the orange end grip was
-    // what called it — the second grab target at each end, 3 cm from
-    // the copper terminal, with hit volumes that overlapped it. That
-    // is the "2 different nodes at each end" the owner reported, and
-    // the grip is deleted (2026-08-11). Aim is a consequence of
-    // connection now: `CircuitsAlignmentTests.testSwingPinsTheWiredEnd`
-    // makes the same claim about `swing`, which finds its own pivot
-    // instead of being handed one.
-
     /// A twist during a carry is adopted on release: setAxis normalizes,
     /// and rejects a degenerate axis rather than corrupting the part.
     func testSetAxisNormalizesAndRejectsDegenerate() {
@@ -324,12 +297,8 @@ final class CircuitsModelTests: XCTestCase {
                        accuracy: 1e-12, "a zero axis must be ignored")
     }
 
-    /// Shorting a battery to itself trips the overload flag; the
-    /// healthy starter loop doesn't.
-    ///
-    /// This used to route the short through a jumper PART, whose 7 mΩ
-    /// sat beside the battery's own 50 mΩ and changed the answer by
-    /// nothing. A battery wired to itself is what a dead short is.
+    /// Shorting a battery to itself trips the overload flag; the healthy
+    /// starter loop does not.
     func testShortCircuitTripsTheOverloadWarning() {
         let model = CircuitsModel()
         model.clearBench()
@@ -345,21 +314,6 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertFalse(model.hasOverloadedBattery,
                        "the starter loop draws well under an amp")
     }
-
-    // TAP-TAP WIRING LIVED HERE, and it is deleted (2026-08-11).
-    // Tap a terminal to arm it, tap another to wire them. It was
-    // invisible from two metres — the armed state was a bead one and a
-    // half times its usual size — it had no cancel except tapping
-    // something else wireable, and it was the path that COLLIDED with
-    // the drag gesture: this view carries one
-    // `DragGesture(minimumDistance: 0)`, so every tap also ran the
-    // drag, and a tap could arm the wiring here AND complete a
-    // different wire there, in an order nothing defined.
-    //
-    // Wiring is one gesture now: pull a lead. The tap-tap SHAPE
-    // survives for VoiceOver, where a sustained pinch that travels is
-    // not available — `CircuitsModel.voiceOverWire`, tested in
-    // `CircuitsLeadPullTests`, and reachable from nowhere else.
 
     /// Removing a component takes its wires with it.
     func testRemovingComponentRemovesItsWires() {
@@ -428,18 +382,9 @@ final class CircuitsModelTests: XCTestCase {
 
     // MARK: The hand meets no wall
 
-    /// A PART IS BORN WHERE YOUR HAND IS.
-    ///
-    /// `Well` spawns from the hand, which is at the rack — `rightColumnX`,
-    /// outside the bench box by the station margin, BY CONSTRUCTION (the
-    /// clearance rule puts it there). `add` clamped to the bench, so every
-    /// part pulled from the rack jumped inward by at least that margin the
-    /// instant it existed: audit P1-28, and the reason it could never be
-    /// fixed by moving the rack.
-    ///
-    /// `ARCHITECTURE.md` has said since 2026-08-03 that a hand meets no
-    /// invisible wall and that `buildHalfExtents` is a layout reference.
-    /// Circuits was the last module still clamping a hand to it.
+    /// A part is born where your hand is: the shelf stands outside the
+    /// bench box by the station margin, by construction, so a clamp on
+    /// `add` jumped every new part inward the instant it existed.
     func testAPartIsBornAtTheHandAndNotDraggedOntoTheBench() {
         let model = CircuitsModel()
         model.clearBench()
@@ -489,19 +434,11 @@ final class CircuitsModelTests: XCTestCase {
         assertInTheRoom(model.components[0].position)
     }
 
-    /// A SAVED BENCH FROM BEFORE THE NARROWING COMES BACK UNTOUCHED.
-    ///
-    /// This is the fact that made a data migration unnecessary when
-    /// `buildHalfExtents.x` went 0.70 → 0.60 on 2026-08-26: the restore
-    /// path (`decodeBench` → `migrated` → `apply`) transforms KINDS, never
-    /// positions. A part saved at the old wall is simply a part outside
-    /// the layout box, which is legal now — the same way a charge outside
-    /// `FieldModel.regionHalfExtents` is legal in Electric Fields.
-    ///
-    /// If someone ever adds a position clamp to `migrated`, this fails and
-    /// tells them they are about to move everybody's saved circuits.
+    /// A bench saved before the bench narrowed comes back untouched: the
+    /// restore path transforms kinds, never positions. A position clamp in
+    /// `migrated` would move everybody's saved circuits.
     func testABenchSavedAtTheOldWidthRestoresWhereItWasSaved() {
-        // This one writes the REAL save key, because the restore path is
+        // This one writes the real save key, because the restore path is
         // what is under test. Put back whatever was there.
         let previous = UserDefaults.standard.data(forKey: CircuitsModel.saveKey)
         defer {
@@ -552,15 +489,6 @@ final class CircuitsModelTests: XCTestCase {
         }
     }
 
-    // `assertOnTheBench` STOOD HERE. It asserted that a dragged part was
-    // inside `buildHalfExtents`, which stopped being true on 2026-08-26
-    // when the bench stopped being a wall. `assertInTheRoom` above is its
-    // replacement and checks the bound that still binds. The reasoning it
-    // carried is worth keeping: the bench was made a BOX, rather than the
-    // 3 m sphere it had been, because a part that can be dragged three
-    // metres is a part that can be parked inside the neighbouring
-    // apparatus — and the safety box is that argument at room scale.
-
     /// Reset restores the welcome scene: the lit starter loop, defaults
     /// back, edits gone.
     func testResetRestoresTheStarterLoop() {
@@ -586,9 +514,6 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertGreaterThan(model.totalSourcePower, 3, "the loop comes back lit")
 
         // Every lamp standing beside this bench, back where it started.
-        // Reset from Electron View used to hand back a bench still
-        // swollen to 4× with three lit plates over it — the worst of the
-        // four reset defects found across the app in one day.
         XCTAssertFalse(model.trueSpeedMode)
         XCTAssertFalse(model.showVoltageHeights)
         XCTAssertFalse(model.electronView, "the bench stayed inside the copper")
@@ -632,7 +557,7 @@ final class CircuitsModelTests: XCTestCase {
 
         model.release(id: bulb.id)
         XCTAssertEqual(model.wires.count, 1, "the close pair self-connects")
-        // And they are now COINCIDENT, not merely wired: the release
+        // And they are now coincident, not merely wired: the release
         // aligns as well as connecting.
         XCTAssertEqual(
             simd_distance(model.components.first { $0.id == bulb.id }!.terminalPosition(0),
@@ -727,6 +652,36 @@ final class CircuitsModelTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey)
     }
 
+    /// Whole-bench changes save like every other edit (2026-10-14). A
+    /// preset and a cleared bench never reached `persistSoon`, so a relaunch
+    /// reopened the bench the wearer had just replaced. An empty save opens
+    /// as the starter loop, which is what a cleared bench should come back as.
+    func testPresetsAndClearingAreSaved() {
+        UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey)
+        defer { UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey) }
+
+        let model = CircuitsModel()
+        model.loadPreset(.parallel)
+        let presetSaved = expectation(description: "the preset is saved")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) { presetSaved.fulfill() }
+        wait(for: [presetSaved], timeout: 3)
+        let afterPreset = CircuitsModel(restoreSaved: true)
+        XCTAssertEqual(afterPreset.components.filter { $0.kind == .bulb }.count, 2,
+                       "a relaunch after a preset reopened some other bench")
+
+        // Build something, save it, then clear the way the plate does.
+        model.add(.resistor)
+        model.persistNow()
+        model.clearBench()
+        model.commitBench()
+        let clearSaved = expectation(description: "the clear is saved")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) { clearSaved.fulfill() }
+        wait(for: [clearSaved], timeout: 3)
+        let afterClear = CircuitsModel(restoreSaved: true)
+        XCTAssertFalse(afterClear.components.contains { $0.kind == .resistor },
+                       "a relaunch after Clear bench brought the cleared bench back")
+    }
+
     /// Named slots: save a build, wreck the bench, load it back exactly;
     /// deletion removes it; a fresh model sees the same slot list.
     func testNamedSaveSlotsRoundTrip() {
@@ -781,13 +736,11 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertNotNil(model.components.first { $0.id == resistor }, "the part stays")
     }
 
-    /// A snapped contact (short at grab time) pops when the part is
-    /// carried past the break distance — pull-apart to detach.
-    func testCarryingASnappedPartFarPopsItOff() {
+    /// A wired part carried any distance keeps its wire: a connection is
+    /// undone by pulling the wire off its terminal, never by distance.
+    func testCarryingAWiredPartFarKeepsItsWire() {
         let model = CircuitsModel()
         model.clearBench()
-        // Two parts whose facing terminals coincide — a zero-length
-        // contact.
         guard let a = model.add(.battery, at: SIMD3(0, 1.2, -0.9)),
               let b = model.add(.resistor, at: SIMD3(0.17, 1.2, -0.9)) else {
             return XCTFail("bench refused parts")
@@ -795,33 +748,12 @@ final class CircuitsModelTests: XCTestCase {
         model.connectTerminals(.init(componentID: a, end: 1), .init(componentID: b, end: 0))
         XCTAssertEqual(model.wires.count, 1)
 
-        model.beginCarry(id: b)
-        model.move(id: b, to: SIMD3(0.9, 1.2, -0.9))   // well past breakDistance
-        model.breakOverstretchedWires(id: b)
-        XCTAssertTrue(model.wires.isEmpty, "the stretched contact snapped off")
-        model.endCarry()
-    }
-
-    /// A deliberately long span wire (already long at grab time) is NOT
-    /// yanked off by moving a part — only short contacts pop.
-    func testLongSpanWireSurvivesACarry() {
-        let model = CircuitsModel()
-        model.clearBench()
-        guard let a = model.add(.battery, at: SIMD3(-0.4, 1.2, -0.9)),
-              let b = model.add(.resistor, at: SIMD3(0.4, 1.2, -0.9)) else {
-            return XCTFail("bench refused parts")
+        for x in stride(from: 0.3, through: 1.2, by: 0.15) {
+            model.drag(id: b, toward: SIMD3(x, 1.2, -0.9))
+            XCTAssertEqual(model.wires.count, 1, "the wire let go at \(x) m")
         }
-        // Facing terminals are ~0.63 apart — a long span from the start.
-        let wire = (CircuitsModel.Terminal(componentID: a, end: 1),
-                    CircuitsModel.Terminal(componentID: b, end: 0))
-        model.connectTerminals(wire.0, wire.1)
-        XCTAssertGreaterThan(model.wireLength(model.wires[0]), CircuitsModel.breakDistance)
-
-        model.beginCarry(id: b)
-        model.move(id: b, to: SIMD3(0.6, 1.2, -0.9))
-        model.breakOverstretchedWires(id: b)
-        XCTAssertEqual(model.wires.count, 1, "an intentional long wire is never auto-broken")
-        model.endCarry()
+        XCTAssertGreaterThan(model.wireLength(model.wires[0]), 0.5,
+                             "the wire should be stretched across the room, still joined")
     }
 
     // MARK: Motor (a real DC motor)
@@ -877,7 +809,7 @@ final class CircuitsModelTests: XCTestCase {
     }
 
     /// Parts released a few centimetres apart still join — the reach
-    /// is forgiving, but it is ONE number now (`leadReach`, 0.06)
+    /// is forgiving, but it is one number now (`leadReach`, 0.06)
     /// rather than a release radius of 0.13 and a drag radius of 0.09
     /// that disagreed about the same fact.
     func testAReleaseJoinsAcrossTheLeadReach() {
@@ -897,7 +829,7 @@ final class CircuitsModelTests: XCTestCase {
 
     // MARK: The meter
 
-    /// A voltmeter goes ACROSS, and reads the potential difference.
+    /// A voltmeter goes across, and reads the potential difference.
     @MainActor
     func testVoltsModeReadsAcrossAComponent() throws {
         let model = CircuitsModel()
@@ -912,14 +844,9 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertTrue(reading.display.hasSuffix("V"), reading.display)
     }
 
-    /// THE ONE THAT MATTERS. An ammeter goes IN SERIES: touching one
-    /// across a component that is already carrying current puts a
-    /// near-zero resistance in parallel with it, which is a short and in
-    /// a real lab a blown fuse.
-    ///
-    /// A simulated meter that quietly printed the right current for that
-    /// placement would be teaching one of the most common mistakes in an
-    /// introductory lab. This asserts that it refuses instead.
+    /// An ammeter goes in series: touching one across a component already
+    /// carrying current is a short. The meter refuses rather than teach the
+    /// classic mistake.
     @MainActor
     func testAmpsModeRefusesToBePutAcrossALiveComponent() throws {
         let model = CircuitsModel()
@@ -939,13 +866,8 @@ final class CircuitsModelTests: XCTestCase {
     }
 
     /// An ohmmeter drives its own current, so it cannot be trusted on a
-    /// live circuit — and says so rather than printing a number.
-    ///
-    /// Built explicitly rather than leaning on the opening bench: what
-    /// this asserts is a relationship between "the source is delivering
-    /// power" and "the ohmmeter refuses", and a test that depended on
-    /// the cold-open's contents would break the next time that scene is
-    /// re-authored, for reasons having nothing to do with the meter.
+    /// live circuit and says so. Built explicitly rather than leaning on
+    /// the opening bench.
     @MainActor
     func testOhmsModeRefusesOnALiveCircuit() throws {
         let model = CircuitsModel(restoreSaved: false)
@@ -976,24 +898,16 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertTrue(dead.display.contains("Ω"), dead.display)
     }
 
-    /// A capacitor has no resistance to report — its opposition to
-    /// current is a REACTANCE that depends on frequency, and calling
-    /// that a resistance would be exactly the quiet simplification this
-    /// app exists not to make.
+    /// A capacitor has no resistance to report — its opposition is a
+    /// reactance that depends on frequency.
     func testACapacitorHasNoResistanceToReport() {
         let capacitor = CircuitsModel.Component(
             id: UUID(), kind: .capacitor, position: .zero, value: 1e-4)
         XCTAssertNil(CircuitsModel.resistance(of: capacitor))
     }
 
-    /// The display auto-ranges the way a real one does.
-    ///
-    /// AND AT ONE RESOLUTION IN EVERY BAND, which the hand-rolled
-    /// prefixer did not: it showed one decimal in milli, three in the
-    /// base unit and two in kilo. A 3½-digit bench meter shows the same
-    /// digits wherever the range lands — that is what auto-ranging is
-    /// for — so the assertions below now pin the resolution as well as
-    /// the prefix.
+    /// The display auto-ranges the way a real one does, at one resolution
+    /// in every band.
     func testTheDisplayAutoRanges() {
         XCTAssertEqual(CircuitsModel.autoRange(0.0042, unit: "A"), "4.200 mA")
         XCTAssertEqual(CircuitsModel.autoRange(9.0, unit: "V"), "9.000 V")
@@ -1019,21 +933,13 @@ final class CircuitsModelTests: XCTestCase {
 
     // MARK: Zombie wires
 
-    /// DELETING AN ARMED PART LEFT A WIRE THAT COULD NEVER BE REMOVED.
-    ///
-    /// Pinch a terminal (arming it, in the tap-tap era), open that
-    /// part's ring, tap Delete.
-    /// The half-made wire still named the destroyed part, so the next
-    /// terminal tap anywhere appended a `Wire` whose `from` component
-    /// does not exist. The renderer disables it, so it is invisible and
-    /// un-pinchable; it permanently consumes one of the 36 budget slots;
-    /// and `persistSoon` writes it to `UserDefaults`, so it comes back
-    /// after a relaunch. There was no way to get rid of it.
+    /// Deleting an armed part must not leave a wire behind: a half-made
+    /// wire naming the destroyed part once appended an invisible,
+    /// un-pinchable, persisted `Wire` on the next tap.
     func testDeletingAnArmedPartCannotLeaveAWireBehind() throws {
         let model = CircuitsModel()
-        // A fresh model arrives with a seeded circuit already wired, so
-        // the bench is cleared first — otherwise the duplicate-wire
-        // guard, not the fix, is what these tests measure.
+        // A fresh model arrives with a seeded circuit already wired, so the
+        // bench is cleared first.
         model.clearBench()
         let battery = try XCTUnwrap(model.add(.battery))
         let bulb = try XCTUnwrap(model.add(.bulb))
@@ -1078,12 +984,8 @@ final class CircuitsModelTests: XCTestCase {
                        "a wire was built onto a component that never existed")
     }
 
-    /// The guard must refuse the impossible wire WITHOUT refusing the
-    /// ordinary one — a fix that simply stopped wiring anything would
-    /// pass the test above.
-    ///
-    /// Its own fixture, because the refusal above consumes the arming
-    /// on its way out and the two cases cannot share a sequence.
+    /// The guard must refuse the impossible wire without refusing the
+    /// ordinary one. Its own fixture: the refusal above consumes the arming.
     func testTheOrdinaryWireIsStillBuilt() throws {
         let model = CircuitsModel()
         model.clearBench()
@@ -1097,21 +999,15 @@ final class CircuitsModelTests: XCTestCase {
 
     // MARK: The ammeter
 
-    /// THE METER REFUSED THE ONE THING IT EXISTS TO REWARD.
-    ///
-    /// A⎓ reports a current only when the probes bracket a component
-    /// whose loop is otherwise BROKEN — the meter completing the circuit
-    /// is the meter being in series, and getting that right is the whole
-    /// lesson. But the "is it already live" guard compared against a
-    /// hand-typed `1e-9`, and `CircuitSolver.leakConductance` is `1e-9`:
-    /// every open element leaks `volts × leakConductance`, so an open
-    /// switch on a 9 V supply carries 9 nA and tripped it. The meter
-    /// told you to break the loop you had just broken.
+    /// A⎓ reports a current only when the probes bracket a component whose
+    /// loop is otherwise broken. The "is it already live" guard once
+    /// compared against a hand-typed `1e-9`, which is the solver's leak
+    /// conductance, so an open switch on 9 V tripped it.
     func testTheAmmeterAcceptsALoopTheUserHasBroken() throws {
         let model = CircuitsModel()
         model.clearBench()
 
-        // Battery — switch — bulb, in a ring, with the switch OPEN.
+        // Battery — switch — bulb, in a ring, with the switch open.
         let battery = try XCTUnwrap(model.add(.battery))
         let switcher = try XCTUnwrap(model.add(.switcher))
         let bulb = try XCTUnwrap(model.add(.bulb))
@@ -1133,17 +1029,8 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertNotEqual(reading.display, "FUSE",
                           "the meter refused a correctly broken loop")
 
-        // THE ASSERTION THIS TEST ASKED FOR. It used to demand
-        // "0.000 A" and say, in its own failure message, that a real
-        // current here would mean the meter had been stamped into the
-        // network and the test should be replaced. It has, and this is
-        // the replacement.
-        //
-        // NO MAGIC NUMBER: the meter and the bulb are in series, so the
-        // meter must read the loop current, which is the bulb's own.
-        // Comparing the two is a stronger claim than any literal — it
-        // would fail if the shunt were stamped in the wrong place, or
-        // sized so badly it changed the loop it was measuring.
+        // The meter and the bulb are in series, so the meter must read the
+        // bulb's own current — a stronger claim than any literal.
         let meter = try XCTUnwrap(model.meterCurrent)
         let loop = try XCTUnwrap(model.readouts[bulb]?.amps)
         XCTAssertGreaterThan(abs(meter), 1e-3,
@@ -1157,14 +1044,9 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertNotEqual(reading.display, "0.000 A")
     }
 
-    /// THE SHUNT MUST NOT DISTURB WHAT IT MEASURES, which is the whole
-    /// design requirement for an ammeter and the reason it is 1 mΩ
-    /// rather than a perfect conductor.
-    ///
-    /// Closing the switch gives the same loop WITHOUT the meter in it,
-    /// so the two currents should agree to well under a percent. A shunt
-    /// sized carelessly would show up here as a loop that runs faster
-    /// when you measure it.
+    /// The shunt must not disturb what it measures: closing the switch
+    /// gives the same loop without the meter, and the two currents agree to
+    /// well under a percent.
     func testTheAmmeterBarelyDisturbsTheLoopItMeasures() throws {
         let model = CircuitsModel()
         model.clearBench()
@@ -1199,7 +1081,7 @@ final class CircuitsModelTests: XCTestCase {
             """)
     }
 
-    /// IN V⎓ THE METER IS NOT AN ELEMENT. A voltmeter's shunt across a
+    /// In V⎓ the meter is not an element. A voltmeter's shunt across a
     /// live part would short it — so the stamp is gated on the mode, and
     /// this is what would catch that gate being dropped.
     func testTheMeterIsNotStampedInVoltageMode() throws {
@@ -1225,7 +1107,7 @@ final class CircuitsModelTests: XCTestCase {
                        "probing a bulb in V⎓ changed the current through it")
     }
 
-    /// …and it must still refuse a LIVE one, or the fix has simply
+    /// …and it must still refuse a live one, or the fix has simply
     /// disabled the guard.
     func testTheAmmeterStillRefusesALiveComponent() throws {
         let model = CircuitsModel()
@@ -1251,14 +1133,9 @@ final class CircuitsModelTests: XCTestCase {
 
     // MARK: The capacitor's own number
 
-    /// THE RAIL SAID "0 mF" WHILE THE PART SAID "100 µF".
-    ///
-    /// `formatValue` printed `%.0f` of `value × 1000`, and a capacitor on
-    /// this bench is measured in MICROfarads: 100 µF is 1e-4 F, times
-    /// 1000 is 0.1, rounded to "0". The whole usable range of the
-    /// component collapsed to the same string, so the readout under the
-    /// rail you were dragging never moved and contradicted the bench
-    /// label on the part itself.
+    /// The rail and the bench label must agree: `formatValue` once printed
+    /// `%.0f` of `value × 1000`, collapsing the whole microfarad range to
+    /// "0 mF".
     func testTheCapacitorRailAgreesWithTheBenchLabel() {
         // Every value the rail can actually reach must print something
         // that is not "0" — a readout that cannot change is not one.
@@ -1283,14 +1160,12 @@ final class CircuitsModelTests: XCTestCase {
     }
 
 
-    // MARK: Batch G (2026-09-02) — the coil, heat, and a tunable AC source
+    // MARK: The coil, heat, and a tunable AC source
 
     /// A closed loop of the given kinds, each part wired end 1 → next
-    /// part's end 0, the last back to the first.
-    /// `reverseFirst` wires the first part the other way round — which
-    /// is what reversing a battery IS: its ends swap places in the loop.
-    /// (Turning the part with `setAxis` moves its terminals but leaves the
-    /// wiring's sense alone, and can stretch its wires past the break.)
+    /// part's end 0, the last back to the first. `reverseFirst` wires the
+    /// first part the other way round — which is what reversing a battery
+    /// is.
     private func loop(_ kinds: [CircuitsModel.ComponentKind],
                       reverseFirst: Bool = false) -> (CircuitsModel, [UUID]) {
         let model = CircuitsModel()

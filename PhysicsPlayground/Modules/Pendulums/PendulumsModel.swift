@@ -16,10 +16,12 @@ import simd
 final class PendulumsModel {
     // MARK: Layout
 
-    /// Where a pendulum lands when you have not said otherwise.
-    nonisolated static let defaultPivot = SIMD3<Double>(0, 2.0, -1.1)
+    /// Where a pendulum lands when you have not said otherwise: collars a
+    /// hand's width under the title bar (which rides at about 1.75 m), bobs
+    /// at 1.07, both inside a standing reach.
+    nonisolated static let defaultPivot = SIMD3<Double>(0, 1.62, -1.1)
     /// Minimum air under a bob at the bottom of its swing; the pivot's
-    /// floor is this PLUS the cable's length.
+    /// floor is this plus the cable's length.
     nonisolated static let minimumPivotHeight = 0.30
 
     nonisolated static let lengthRange = 0.25...1.6      // m
@@ -54,8 +56,8 @@ final class PendulumsModel {
         var isGrabbed = false
 
         // MARK: The double pendulum's extra half
-        // Present only when `kind == .double`; stored flat so the struct
-        // stays `Equatable` and cheap to copy in the render loop.
+        // The double rig's extra fields are stored flat so the struct stays
+        // `Equatable` and cheap to copy.
 
         /// The lower rod's length, m.
         var length2: Double = 0.35
@@ -80,7 +82,7 @@ final class PendulumsModel {
             return pivot + planeAxis * planar.x + SIMD3(0, planar.y, 0)
         }
 
-        /// Where the UPPER bob is for a double pendulum — the elbow.
+        /// Where the upper bob is for a double pendulum — the elbow.
         var upperBobWorld: SIMD3<Double>? {
             guard kind == .double, let doubleState else { return nil }
             let planar = doubleState.upperBob(rig: doubleRig)
@@ -88,7 +90,7 @@ final class PendulumsModel {
         }
 
         var pivot: SIMD3<Double> { pivotPoint }
-        /// The bob a hand grabs and a readout describes — the LOWER bob
+        /// The bob a hand grabs and a readout describes — the lower bob
         /// on a double pendulum.
         var bobWorld: SIMD3<Double> {
             lowerBobWorld ?? (pivot + state.position)
@@ -109,7 +111,7 @@ final class PendulumsModel {
     /// Bob-on-bob restitution, 0…1 (1 = elastic, what a steel cradle very nearly is).
     var bobRestitution = 1.0
     var isPaused = false
-    /// Time scale (pause is separate). The range is stated ONCE, here —
+    /// Time scale (pause is separate). The range is stated once, here —
     /// any control driving it must read this constant.
     nonisolated static let timeScaleRange = 0.1...5.0
     var timeScale = 1.0
@@ -124,14 +126,6 @@ final class PendulumsModel {
     var showVelocity = true
     var showAcceleration = false
     var showForces = false
-
-    // NO INSIGHT LINE. `insightText` and its four written explanations
-    // lived here with twelve writers and zero readers — no card was ever
-    // built for it (DECISIONS.md 2026-08-09), and none will be: three
-    // cards of prose were rejected in three days, and the module window is
-    // the only place a lab explains itself in words. Deleted 2026-08-26
-    // rather than left dormant, which is what happened to the teach card,
-    // the insight card and the experiments system before it.
 
     // MARK: Editing
 
@@ -148,7 +142,7 @@ final class PendulumsModel {
     func addPendulum(length: Double = 0.8, angle: Double = 0.45,
                      mass: Double = 1.0, at: SIMD3<Double>? = nil) -> UUID? {
         guard pendulums.count < Self.pendulumBudget else { return nil }
-        // Clamp at BIRTH — must agree with movePivot's clamp, or the rig
+        // Clamp at birth — must agree with movePivot's clamp, or the rig
         // jumps out of the hand on the first drag frame.
         var pivot = at ?? Self.defaultPivot
         pivot.y = max(pivot.y, Self.minimumPivotHeight + length)
@@ -163,7 +157,7 @@ final class PendulumsModel {
         return pendulum.id
     }
 
-    /// Newton's cradle cold-open: five IDENTICAL bobs (equal masses swap
+    /// Newton's cradle cold-open: five identical bobs (equal masses swap
     /// velocities exactly — the mechanism), zero damping, spaced one diameter
     /// apart; `BobCollision.contactSlop` makes the contact survive float.
     func loadNewtonsCradle() {
@@ -254,7 +248,7 @@ final class PendulumsModel {
         selectedID = id
     }
 
-    /// The bob follows the hand's DIRECTION at the cable's length — the
+    /// The bob follows the hand's direction at the cable's length — the
     /// cable is inextensible; only the length bead changes L.
     func moveGrabbed(id: UUID, toWorld hand: SIMD3<Double>) {
         guard let index = pendulums.firstIndex(where: { $0.id == id }),
@@ -267,9 +261,14 @@ final class PendulumsModel {
         pendulums[index].state.velocity = .zero
     }
 
+    /// Below this a release is a set-down, not a throw, and makes no whoosh —
+    /// the same rule Projectiles and Orbital Mechanics keep.
+    nonisolated static let throwWhooshSpeed = 0.25
+
     /// Release with the hand's velocity: clamp to the sphere, project
-    /// the velocity tangent, resume.
-    func release(id: UUID, handVelocity: SIMD3<Double>) {
+    /// the velocity tangent, resume. `isThrow` false is a handing-back that
+    /// is not the hand's at all (the end of a length edit), and is silent.
+    func release(id: UUID, handVelocity: SIMD3<Double>, isThrow: Bool = true) {
         guard let index = pendulums.firstIndex(where: { $0.id == id }) else { return }
         var pendulum = pendulums[index]
         let direction = simd_normalize(pendulum.state.position)
@@ -279,8 +278,11 @@ final class PendulumsModel {
         pendulum.state.velocity = velocity
         pendulum.isGrabbed = false
         pendulums[index] = pendulum
-        emitSound(.whoosh, at: pendulum.bobWorld,
-                  volume: min(0.3 + simd_length(velocity) * 0.2, 0.9))
+        let speed = simd_length(velocity)
+        if isThrow, speed > Self.throwWhooshSpeed {
+            emitSound(.whoosh, at: pendulum.bobWorld,
+                      volume: min(0.3 + speed * 0.2, 0.9))
+        }
     }
 
     // MARK: Simulation
@@ -336,7 +338,7 @@ final class PendulumsModel {
 
     // MARK: Bobs that meet
 
-    /// Elastic bob collisions along the line of centres. SIMPLE pendulums only
+    /// Elastic bob collisions along the line of centres. Simple pendulums only
     /// (a rod's impulse response couples both angles — a 1-D exchange injects
     /// energy). Sorted sweep: the cradle's impulse must cross one contact at a time.
     private func resolveBobCollisions() {
@@ -346,7 +348,7 @@ final class PendulumsModel {
         guard movable.count > 1 else { return }
 
         // Sweep axis: first→last pivot; if pivots coincide, fall back to bobs.
-        // A degenerate axis skips the SORT, never the resolution.
+        // A degenerate axis skips the sort, never the resolution.
         var axis = pendulums[movable.last!].pivot - pendulums[movable.first!].pivot
         if simd_length(axis) <= 1e-6 {
             axis = pendulums[movable.last!].bobWorld
@@ -373,7 +375,7 @@ final class PendulumsModel {
                 let contact = a.bobRadius + b.bobRadius + BobCollision.contactSlop
                 guard gap <= contact, gap > 1e-9 else { continue }
 
-                // Exchange along the line of CENTRES — the frictionless contact normal.
+                // Exchange along the line of centres — the frictionless contact normal.
                 let normal = separation / gap
                 let va = simd_dot(a.state.velocity, normal)
                 let vb = simd_dot(b.state.velocity, normal)
@@ -382,8 +384,8 @@ final class PendulumsModel {
                 let (na, nb) = BobCollision.exchange((velocity: va, mass: a.mass),
                                                      (velocity: vb, mass: b.mass),
                                                      restitution: bobRestitution)
-                // Off-axis exchange conserves energy — measured Δ3.6e-15 J over
-                // 1800 steps; a tangent-projection "fix" was tried and reverted. Do not re-add it.
+                // Off-axis exchange conserves energy (measured Δ3.6e-15 J over 1800
+                // steps); a tangent-projection "fix" was tried and reverted.
                 pendulums[i].state.velocity += normal * (na - va)
                 pendulums[j].state.velocity += normal * (nb - vb)
                 touched = true

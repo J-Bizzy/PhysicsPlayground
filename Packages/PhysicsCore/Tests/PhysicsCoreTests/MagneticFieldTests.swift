@@ -100,7 +100,7 @@ final class MagneticFieldTests: XCTestCase {
                           + "does not carry the moment it claims")
     }
 
-    /// …and CLOSE to the bar the two must genuinely disagree — the licence for the pole-pair model.
+    /// …and close to the bar the two must genuinely disagree — the licence for the pole-pair model.
     func testTheFiniteBarDepartsFromThePointDipoleNearTheMagnet() {
         let length = 0.16
         let magnet = BarMagnet(position: .zero, moment: SIMD3(0, 6, 0))
@@ -116,7 +116,7 @@ final class MagneticFieldTests: XCTestCase {
 
     // MARK: Seeding
 
-    /// Seeds are spread by equal FLUX: the k-th of n sits at sin²θ = (k + ½)/n,
+    /// Seeds are spread by equal flux: the k-th of n sits at sin²θ = (k + ½)/n,
     /// checked in a tilted frame so a coordinate-axis accident cannot pass.
     func testSeedsAreSpacedByEqualFlux() {
         let axis = simd_normalize(SIMD3<Double>(1, 2, -0.5))
@@ -146,7 +146,7 @@ final class MagneticFieldTests: XCTestCase {
 
     // MARK: Density
 
-    /// Regression: the tracer integrates the NORMALIZED field, so with a fixed
+    /// Regression: the tracer integrates the normalized field, so with a fixed
     /// seed count the strength bead changed nothing; seedCount must scale.
     func testAStrongerMagnetEarnsMoreLines() {
         var config = MagneticFieldLineTracer.Config()
@@ -162,7 +162,7 @@ final class MagneticFieldTests: XCTestCase {
                        config.seedRange.upperBound)
     }
 
-    /// Lines are born and die OUTSIDE the bar (regression: seeding/termination inside the body).
+    /// Lines are born and die outside the bar (regression: seeding/termination inside the body).
     func testLinesAreSeededClearOfTheBarItself() {
         var config = MagneticFieldLineTracer.Config()
         config.magnetLength = 0.16
@@ -235,7 +235,7 @@ final class MagneticVolumeSeedingTests: XCTestCase {
                              "volume seeding did not spread the field out")
     }
 
-    /// THE DEDUP PROPERTY: no two returned loops may be substantially the same curve.
+    /// The dedup property: no two returned loops may be substantially the same curve.
     func testNoTwoLoopsAreTheSameCurve() {
         let lines = MagneticFieldLineTracer.traceThroughVolume(
             magnets: [magnet()], config: config(),
@@ -299,7 +299,7 @@ final class GeomagneticFieldTests: XCTestCase {
         XCTAssertEqual(simd_length(b), GeomagneticField.referenceMagnitude,
                        accuracy: 1e-12)
         XCTAssertGreaterThan(simd_dot(b, GeomagneticField.north), 0)
-        // Vertical component INTO the ground — what a flat dial can never show.
+        // Vertical component into the ground — what a flat dial can never show.
         XCTAssertLessThan(simd_dot(b, GeomagneticField.up), 0)
 
         // 65° below horizontal: the vertical part should be the larger.
@@ -332,7 +332,7 @@ final class GeomagneticFieldTests: XCTestCase {
                        -GeomagneticField.dipDegrees(atLatitude: 30), accuracy: 1e-12)
     }
 
-    /// THE NUMBER THE FEATURE RESTS ON: magnet and Earth comparable at ~0.3 m,
+    /// The number the feature rests on: magnet and Earth comparable at ~0.3 m,
     /// or the walk-away-compass demonstration stops working.
     func testTheCrossoverIsAboutArmsLength() {
         let r = GeomagneticField.crossoverDistance(momentMagnitude: 6.0)
@@ -394,7 +394,7 @@ final class GeomagneticFieldTests: XCTestCase {
             + "genuinely do not, which is why the dynamics moved")
     }
 
-    /// Newton's third law EXACTLY — pole-pole central forces have it by construction.
+    /// Newton's third law exactly — pole-pole central forces have it by construction.
     func testBarForceObeysNewtonsThirdLaw() {
         let L = Self.barLength
         let a = BarMagnet(position: SIMD3(-0.05, 0.02, 0),
@@ -408,7 +408,7 @@ final class GeomagneticFieldTests: XCTestCase {
                        "the pair does not push on each other equally")
     }
 
-    /// Signs checked at TWO bar-lengths, not one — see the singularity test below.
+    /// Signs checked at two bar-lengths, not one — see the singularity test below.
     func testBarForceKeepsTheSignsAUserWouldCheck() {
         let L = Self.barLength
         let a = BarMagnet(position: .zero, moment: SIMD3(1.0, 0, 0))
@@ -425,7 +425,7 @@ final class GeomagneticFieldTests: XCTestCase {
     }
 
     /// The pole model's own singularity sits where the magnets meet: head-to-tail at one
-    /// bar-length the force comes out REPULSIVE for a pair that must attract. Both models are
+    /// bar-length the force comes out repulsive for a pair that must attract. Both models are
     /// unusable at contact — this is why Magnetism's dynamics stayed on the point dipole.
     func testTheBarForceIsUnusableWhereThePolesMeet() {
         let L = Self.barLength

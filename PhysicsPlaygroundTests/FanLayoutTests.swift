@@ -2,39 +2,12 @@
 //  FanLayoutTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The fan is now the app's only N-way picker (DECISIONS.md,
-//  2026-07-29), so every module's choices will pass through this
-//  arithmetic. The failures worth catching here are the ones that only
-//  show up on device: a fan that overlaps itself, opens through the floor,
-//  or divides by a zero item count.
-//
-//  THIS FILE LET A DEVICE-ONLY FAILURE SHIP, on 2026-08-07, and the
-//  three reasons are worth naming because each is a way a test can look
-//  thorough and cover nothing:
-//
-//  1. IT MEASURED THE WRONG THING. `testNeighboursAreSeparatedAtFullOpen`
-//     cleared 0.052 m — the disc's painted FACE. Hit-testing uses the
-//     COLLIDER, which is 0.068 m across. Every gap between 0.052 and
-//     0.068 read as fine here and was unaimable in the room.
-//  2. IT ONLY EVER TESTED `FanLayout()`. Not one of the layouts a module
-//     actually ships was ever passed through it, and the default is the
-//     only layout in the app that nobody uses. Gravity Lab's clock bank
-//     carried a 50° span hand-tuned for four discs while its array grew
-//     to six; the arithmetic was fine, and no test looked at it.
-//  3. ITS CEILING OF NINE WAS SILENT. Nine is not arbitrary — it is
-//     exactly where the default arc runs out of room, which is why
-//     Gravity Lab's ten-world fan carries a bespoke layout. But the test
-//     said only `for count in 2...9`, so the wall was a magic number
-//     with no explanation and nothing to hit if a tenth choice were
-//     added to a picker using the default. It is derived and named
-//     below now.
-//
-//  So `testEveryShippedFanClearsItsColliders` is the load-bearing test
-//  here now: it walks the layouts the app really builds, at the counts
-//  it really builds them with, against the collider width the picker
-//  really uses. The generic tests below still earn their place — they
-//  cover the degenerate counts a module can reach by deleting content —
-//  but they are no longer the whole story.
+//  The fan is the app's only N-way picker. The load-bearing test is
+//  `testEveryShippedFanClearsItsColliders`: it walks the layouts the app
+//  really builds, at the counts it builds them with, against the
+//  collider width the picker really uses — a test that measured the
+//  painted face, only ever tested the default layout, and carried a
+//  silent ceiling of nine let a device-only overlap ship.
 //
 
 import XCTest
@@ -46,32 +19,29 @@ final class FanLayoutTests: XCTestCase {
 
     // MARK: The criterion — what the modules actually build
 
-    /// Every fan the app ships, at the count it ships it with.
-    ///
-    /// Named here rather than reached through the views because a
-    /// `SpatialPicker` lives in a `@State` inside a `View`; this is the
-    /// same arithmetic the view hands it, and the pairing is what
-    /// `testEveryShippedFanClearsItsColliders` is checking. If a module
-    /// gains a picker, add it — and note that the two DERIVED entries
-    /// cannot go wrong when their content grows, which is the whole
-    /// argument for `FanLayout.spread`.
+    /// Every fan the app ships, at the count it ships it with. If a module
+    /// gains a picker, add it; the derived entries cannot go wrong when
+    /// their content grows.
     @MainActor
     private var shippedFans: [(name: String, count: Int, layout: FanLayout)] {
         [
-            ("GravityLab clock speed",
-             GravityLabModel.timeScales.count,
-             FanLayout.spread(count: GravityLabModel.timeScales.count,
+            ("OrbitalMechanics clock speed",
+             OrbitalMechanicsModel.timeScales.count,
+             FanLayout.spread(count: OrbitalMechanicsModel.timeScales.count,
                               itemSpan: Double(SpatialPicker.colliderSpan),
                               reach: 0.34, verticalScale: 0.25,
                               lift: 0, stagger: 0)),
-            ("GravityLab worlds",
-             GravityLabModel.Preset.allCases.count,
+            ("OrbitalMechanics worlds",
+             OrbitalMechanicsModel.Preset.allCases.count,
              FanLayout(span: 120 * .pi / 180, reach: 0.58,
                        verticalScale: 0.22, lift: 0, stagger: 0)),
             ("Projectiles worlds",
              KinematicsModel.gravityPresets.count,
              FanLayout(span: 54 * .pi / 180, reach: 0.32,
                        verticalScale: 0.25, lift: 0, stagger: 0)),
+            ("Projectiles balls",
+             KinematicsModel.ProjectileKind.allCases.count,
+             KinematicsSpaceView.ballFanLayout),
         ]
     }
 
@@ -108,10 +78,7 @@ final class FanLayoutTests: XCTestCase {
 
     // MARK: The derivation
 
-    /// `spread` must fit any count it is handed, not just the ones we
-    /// happen to ship — that is the point of deriving it. The failure it
-    /// exists to prevent is a content array growing past a hand-typed
-    /// span.
+    /// `spread` must fit any count it is handed, not just the ones shipped.
     func testSpreadFitsEveryCountFromTwoToTwentyFour() {
         let itemSpan = 0.068
         for count in 2...24 {
@@ -124,7 +91,7 @@ final class FanLayoutTests: XCTestCase {
         }
     }
 
-    /// It must also be TIGHT. A derivation that answers every question
+    /// It must also be tight. A derivation that answers every question
     /// with the widest legal fan has not derived anything.
     func testSpreadStaysAsNarrowAsTheCountAllows() {
         let itemSpan = 0.068
@@ -205,7 +172,7 @@ final class FanLayoutTests: XCTestCase {
         XCTAssertEqual(first.y, last.y, accuracy: 1e-12)
     }
 
-    /// It opens UPWARD. Every item must sit at or above the anchor —
+    /// It opens upward. Every item must sit at or above the anchor —
     /// a 150° span squashed vertically should never dip below it, because
     /// below is where the apparatus and the floor are.
     func testFanNeverOpensDownward() {
@@ -222,20 +189,10 @@ final class FanLayoutTests: XCTestCase {
         }
     }
 
-    /// Neighbouring items must not land on top of each other, or the fan
-    /// becomes an unreadable pile — the exact failure that made the old
-    /// palette ring go from a 0.26 m radius to 0.40 m.
-    ///
-    /// MEASURED AGAINST THE COLLIDER, not the painted face. This test
-    /// cleared 0.052 m — the disc's visual diameter — until 2026-08-07,
-    /// and a pinch does not land on paint.
-    ///
-    /// The default 150° / 0.27 m arc holds NINE discs and no more. The
-    /// capacity is derived here rather than written in as a loop bound,
-    /// because the number is a real property of the geometry and the
-    /// reason Gravity Lab's ten-world fan carries a bespoke layout — and
-    /// because a bound with no explanation is indistinguishable from
-    /// somebody having stopped counting.
+    /// Neighbouring items must not land on top of each other, measured
+    /// against the collider rather than the painted face. The default arc
+    /// holds nine discs and no more; the capacity is derived here, which is
+    /// why Orbital Mechanics' nine-world fan carries a bespoke layout.
     @MainActor
     func testTheDefaultArcHoldsNineDiscsAndSaysSo() {
         let fan = FanLayout()
@@ -250,7 +207,7 @@ final class FanLayoutTests: XCTestCase {
         XCTAssertEqual(
             capacity, 9,
             "The default arc now holds \(capacity) discs, not 9. That is not "
-            + "automatically wrong — but Gravity Lab's ten-world fan exists "
+            + "automatically wrong — but Orbital Mechanics' nine-world fan exists "
             + "BECAUSE the answer was 9, so if this has moved, check whether "
             + "that layout is still needed and whether anything else was tuned "
             + "around the old number.")
@@ -308,7 +265,4 @@ final class FanLayoutTests: XCTestCase {
         XCTAssertEqual(under.progress, 0, accuracy: 1e-12)
     }
 
-    // The easing tests that were here moved to `MotionTests` with
-    // `FanLayout.ease` itself on 2026-08-07 — see the grave in
-    // `FanLayout.swift`. One ease, and it honours Reduce Motion.
 }

@@ -2,16 +2,10 @@
 //  CircuitsCarryDispatchTests.swift
 //  PhysicsPlaygroundTests
 //
-//  ONE DRAG GESTURE, FOUR OWNERS. Circuits routes every frame of its
-//  single `DragGesture` to exactly one of: the lead pull, the part
-//  carry, the rack, or nobody. `CircuitsSpaceView.carryDispatch` is
-//  that decision lifted out of the gesture closure into arithmetic —
-//  the same move `resolveGrab` made — because the closure once got the
-//  order wrong and nothing headless could see it: the rack outranked a
-//  live carry, the rack's `isDragging` stays true for the whole
-//  gesture even after its one-shot pull is spent, and so a part pulled
-//  from the rack sat frozen at its spawn point until release, when
-//  `onEnded` teleported it to the hand.
+//  One drag gesture, four owners: `CircuitsSpaceView.carryDispatch`
+//  routes each frame to the lead pull, the part carry, the shelf, or
+//  nobody. Lifted out of the gesture closure because the closure once
+//  let the shelf outrank a live carry, freezing a newborn part at it.
 //
 
 import XCTest
@@ -25,8 +19,8 @@ final class CircuitsCarryDispatchTests: XCTestCase {
 
     // MARK: The order
 
-    /// THE REGRESSION. On every frame after the spawn frame, the rack
-    /// is still dragging AND a carry is live — the carry must win, or
+    /// The regression. On every frame after the spawn frame, the rack
+    /// is still dragging and a carry is live — the carry must win, or
     /// the newborn part freezes at the rack.
     func testASpawnedPartIsCarriedWhileTheRackStillHoldsTheGesture() {
         XCTAssertEqual(
@@ -63,15 +57,13 @@ final class CircuitsCarryDispatchTests: XCTestCase {
             .idle)
     }
 
-    // MARK: The trap that makes the order load-bearing
+    // MARK: The shelf never holds a pull
 
-    /// After a pull is classified and spent, the rack keeps reporting
-    /// `isDragging` until the gesture ends, and `updateDrag` returns
-    /// nil forever. This is BY DESIGN (the slot must come back exactly
-    /// once) — but it is why a dispatch that consults the rack before
-    /// the carry starves the carry. If this behaviour ever changes,
-    /// the dispatch order above deserves a fresh look.
-    func testASpentPullLeavesTheRackStillDragging() throws {
+    /// A drag that starts on a slot is the view's pull, not the shelf's:
+    /// the shelf refuses it outright, so a newborn part can never be left
+    /// frozen at a rack that thinks it is still browsing. Only the crown
+    /// holds a gesture, and it holds it until the hand lets go.
+    func testASlotDragNeverEntersTheShelfAndTheCrownHoldsItsGesture() throws {
         let specs = (0..<12).map { index in
             Well.Spec(name: "slot\(index)", tint: .white, label: "Slot \(index)",
                       preview: {
@@ -85,26 +77,17 @@ final class CircuitsCarryDispatchTests: XCTestCase {
         well.update(dt: 1 / 90)
 
         let slot = try XCTUnwrap(well.source(at: 2))
-        XCTAssertTrue(well.beginDrag(slot, hand: .zero))
-        // Travel off the rack's axis until the gesture classifies PULL
-        // and the slot comes back — once.
-        var pulled: Int?
-        for step in 1...20 {
-            if let index = well.updateDrag(hand: [0, 0, Float(step) * 0.01]) {
-                pulled = index
-                break
-            }
-        }
-        XCTAssertEqual(pulled, 2, "the pull never resolved")
+        XCTAssertFalse(well.beginDrag(slot, hand: .zero), "the shelf claimed a slot drag")
+        XCTAssertFalse(well.isDragging)
+        XCTAssertEqual(well.sourceIndex(of: slot), 2, "the view pulls from this slot")
 
-        // The spent state: nil forever, but still dragging.
-        for step in 21...30 {
-            XCTAssertNil(well.updateDrag(hand: [0, 0, Float(step) * 0.01]),
-                         "a spent pull must never return the slot again")
+        let crown = try XCTUnwrap(well.crown)
+        XCTAssertTrue(well.beginDrag(crown, hand: .zero))
+        for step in 1...10 {
+            well.updateDrag(hand: [0, Float(step) * 0.01, 0])
         }
         XCTAssertTrue(well.isDragging,
-                      "the rack holds the gesture until it ends — the fact "
-                      + "that makes the carry-before-rack order load-bearing")
+                      "the crown holds the gesture until it ends — the rack frame")
         well.endDrag()
         XCTAssertFalse(well.isDragging)
     }

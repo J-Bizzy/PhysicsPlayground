@@ -61,7 +61,7 @@ final class CurrentLoopTests: XCTestCase {
             accuracy: 1e-18)
     }
 
-    /// THE test: far along the axis, the exact Biot–Savart loop field and
+    /// The test: far along the axis, the exact Biot–Savart loop field and
     /// the ideal-dipole field built from m = N·I·A must agree. On axis
     /// the dipole field is μ₀·2m/(4π z³).
     func testFarFieldConvergesOnTheIdealDipole() {

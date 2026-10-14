@@ -2,11 +2,10 @@
 //  PlaygroundSpaceView.swift
 //  Physics Playground — Shell
 //
-//  The single shared immersive space. With no module active it shows the
-//  spatial hub menu (floating title + module bubbles); entering a module
-//  swaps in its scene. `.id(module.id)` gives each module its own view
-//  identity so per-module @State (like renderers) is rebuilt cleanly on
-//  switch, while module *models* live on in AppModel.
+//  The single shared immersive space: the spatial hub when no module is
+//  active, the module's scene otherwise. `.id(module.id)` gives each
+//  module its own view identity so per-module @State is rebuilt on a
+//  switch, while module models live on in AppModel.
 //
 
 import RealityKit
@@ -21,51 +20,30 @@ struct PlaygroundSpaceView: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
 
-    /// THE ASSETS ARE READY. Nothing builds until the prop cache is warm.
-    ///
-    /// `PropCache.prototype` falls back to a SYNCHRONOUS `Entity.load`
-    /// when it misses, so a gallery built cold parses twenty usdz on
-    /// Thread 1 and hangs the first frames. That used to be covered by
-    /// warming during the window phase — the front door was on screen
-    /// while the cache filled. Launching straight into the space
-    /// (2026-08-22) deletes that phase, so the wait moves here: the
-    /// space opens on plain passthrough, the cache fills, and only then
-    /// does the arrival choreography start, with everything it needs.
-    /// The user waits exactly as long as before and sees their own room
-    /// instead of a slab.
+    /// Nothing builds until the prop cache is warm: a cold
+    /// `PropCache.prototype` falls back to a synchronous load and would hang
+    /// the first frames. The space opens on plain passthrough, the cache
+    /// fills, then the arrival choreography starts.
     @State private var ready = false
 
-    /// THE FLAT CATALOG DOES NOT STAND BEHIND THE GALLERY: the window is
-    /// a lab's title bar and the way back out, but on the home screen it
-    /// duplicated the exhibits it stood behind. Known cost: with it
-    /// dismissed there is no in-app exit from the home screen, only the
-    /// Digital Crown.
+    /// The flat catalog does not stand behind the gallery: on the home
+    /// screen it duplicated the exhibits. Known cost: no in-app exit from the
+    /// home screen except the Digital Crown.
     private func syncMainWindow() {
         if appModel.activeModuleID == nil {
             dismissWindow(id: MainWindowView.windowID)
-        } else {
+        } else if appModel.wantsMainWindow {
+            // Only when none is up: a second `openWindow` on a value-less group is
+            // a second window.
             openWindow(id: MainWindowView.windowID)
         }
     }
 
     /// XCUITest cannot see into an immersive space, so under `-uiTesting`
-    /// the app has to be a window app.
-    ///
-    /// This USED to be a suppressed auto-open: the window was the launch
-    /// scene, and the argument simply stopped it opening the gallery.
-    /// There is no auto-open left to suppress — the space IS the launch
-    /// scene now, chosen by a static Info.plist key that no launch
-    /// argument can reach — so the only place left to turn round is
-    /// here, on the way in. Not `#if DEBUG`-gated, for the same reason
-    /// `HubView.isUITesting` is not: the UI test target runs the
-    /// shipping configuration, and a hook that vanishes in Release
-    /// cannot test what ships.
-    /// It only DISMISSES; it does not open the window. The `onDisappear`
-    /// below already reopens the main window unconditionally, and
-    /// opening it here as well produced two — the module's title bar in
-    /// one and the catalog still sitting in the other, which is exactly
-    /// what `testTappingALabEntersIt`'s last assertion is written to
-    /// catch ("the module opened but the catalog is still up behind it").
+    /// the app turns round on the way in and becomes a window app. Not
+    /// `#if DEBUG`-gated: the UI test target runs the shipping
+    /// configuration. It only dismisses; `onDisappear` below reopens the
+    /// window, and opening it here as well made two.
     private func retreatForUITesting() -> Bool {
         guard HubView.isUITesting else { return false }
         Task { await dismissImmersiveSpace() }
@@ -74,24 +52,17 @@ struct PlaygroundSpaceView: View {
 
     #if DEBUG
     /// The screenshot hooks that need a scene to have appeared.
-    ///
-    /// MOVED HERE FROM `MainWindowView.task` (2026-08-22) BECAUSE THAT
-    /// WINDOW NO LONGER LAUNCHES. Seven arguments were read there and
-    /// nowhere else, so leaving them behind would have silently broken
-    /// `-settingsOpen`, `-notebookOpen`, `-notebookSeed`, `-seedCircuits`,
-    /// `-seedMotor` and `-circuitVoltageHeights` — the CLI screenshot
-    /// workflow the project leans on precisely because the simulator
-    /// cannot be gaze-pinched. `-openModule`'s companion went the other
-    /// way and was DELETED rather than moved: it existed only to open
-    /// the space for a module launched from the command line, and the
-    /// space is now always open.
     private func applyDebugLaunchArguments() {
         let defaults = UserDefaults.standard
         if defaults.bool(forKey: "settingsOpen") {
             openWindow(id: SettingsView.windowID)
         }
-        // `-notebookSeed 1` fills the notebook with sample observations
-        // first, so the entry cards can be screenshot-checked.
+        // `-physicsOpen 1` unfolds the Physics box, since the simulator cannot
+        // press the title bar's button while photographing the room.
+        if defaults.bool(forKey: "physicsOpen") {
+            appModel.physicsBoardOpen = true
+        }
+        // `-notebookSeed 1` fills the notebook with sample observations.
         if defaults.bool(forKey: "notebookSeed"),
            appModel.notebook.entries.isEmpty {
             appModel.notebook.record(
@@ -109,9 +80,8 @@ struct PlaygroundSpaceView: View {
         if defaults.bool(forKey: "notebookOpen") {
             openWindow(id: NotebookView.windowID)
         }
-        // Batch G staging (2026-09-02). Each clears the bench and builds
-        // one small loop a hand could have built, then selects the part
-        // the feature is about so its card and rail are on screen.
+        // Each of these clears the bench, builds one small loop a hand could
+        // have built, and selects the part the feature is about.
         // `-circCoil 1`: battery → resistor → inductor, field layer lit.
         if defaults.bool(forKey: "circCoil") {
             let circuits = appModel.circuitsModel
@@ -159,8 +129,8 @@ struct PlaygroundSpaceView: View {
                 circuits.select(id: source)
             }
         }
-        // `-seedCircuits 1` drops a few parts (one aimed off-axis) so
-        // component visuals can be screenshot-checked from the CLI.
+        // `-seedCircuits 1` drops a few parts (one aimed off-axis) for a
+        // screenshot.
         guard defaults.bool(forKey: "seedCircuits") else { return }
         let circuits = appModel.circuitsModel
         if circuits.components.isEmpty {
@@ -190,12 +160,11 @@ struct PlaygroundSpaceView: View {
     #endif
 
     var body: some View {
-        // A ZSTACK AROUND THE GROUP, so the flag at the bottom has a
-        // stable sibling to hang off. See the comment down there.
+        // A ZStack around the Group, so the flag at the bottom has a stable
+        // sibling to hang off.
         ZStack {
-            // NOTHING BUILDS UNTIL THE CACHE IS WARM — see `ready`. The
-            // gate is here rather than inside the Group so it covers the
-            // hub and the modules too, not just the backdrop chain.
+            // Nothing builds until the cache is warm; the gate covers the hub and
+            // the modules too.
             if ready {
             Group {
                 // Studio Mode's dark gallery sits behind whatever is active —
@@ -204,24 +173,10 @@ struct PlaygroundSpaceView: View {
                     StudioEnvironmentView()
                         .id("studio")
                 } else {
-                    // The middle setting: the room stays, but a dark shell
-                    // gives the physics its contrast back.
-                    //
-                    // MOUNTED UNCONDITIONALLY, and both halves of that matter.
-                    // It used to hang off `roomDimming > 0.01`, which meant a
-                    // shell whose target had just become 0 was torn out of the
-                    // hierarchy at full opacity — there was no view left to
-                    // ramp DOWN, so leaving a lab could only ever snap. And a
-                    // conditional child changes the `Group`'s child count,
-                    // which is the thing the ZStack note further down already
-                    // frets about. Off, it is one entity with `isEnabled` false.
-                    //
-                    // No `.id()` on the radius any more either: the dome is
-                    // built at unit radius and sized by its transform, and the
-                    // radius itself is read per-frame off `AppModel`. A module
-                    // wanting a 16 m shell no longer needs a new view identity
-                    // to get one — which is what let the Gravity Lab ramp
-                    // survive its own radius change.
+                    // The middle setting: the room stays, a dark shell gives the physics its
+                    // contrast back. Mounted unconditionally so it can ramp down when a lab
+                    // is left; off, it is one disabled entity. The dome is sized by its
+                    // transform, so the radius needs no `.id()`.
                     RoomDimmerView()
                         .id("dimmer")
                 }
@@ -237,26 +192,23 @@ struct PlaygroundSpaceView: View {
                         // you actually have room. Hidden until asked for.
                         LabAnchorView(module: module)
                             .id("lab-anchor-\(module.id)")
-                        // ONE bead, in the slot where RealityView content
-                        // provably renders. Pinch it and the labs unfold.
+                        // One bead; pinch it and the labs unfold.
                         PaletteView(module: module)
                             .id("palette-\(module.id)")
                         // The Time Capsule's rail: folded away until the
                         // module is paused with a recording worth scrubbing.
                         TimeRailView(module: module)
                             .id("time-rail-\(module.id)")
-                        // NO CARD OF WORDS STANDS IN A LAB — the teach lives
-                        // only in the module WINDOW (`ModuleHostView`,
-                        // `ModuleDescriptor.firstRunHint`, gated on
-                        // `AppSettings.seenHints`).
-                        //
-                        // Quiet lab room tone under every module (not the hub);
-                        // no per-module id, so it runs seamlessly across switches.
+                        // The Physics box: folded until the title bar's ƒ button.
+                        PhysicsBoardView(module: module)
+                            .id("physics-\(module.id)")
+                        // Quiet lab room tone under every module (not the hub); no per-module
+                        // id, so it runs seamlessly across switches.
                         AmbientLabAudioView()
                             .id("ambient")
                     }
                     #if DEBUG
-                    // `-pauseAfter` counts from HERE — the lab on screen —
+                    // `-pauseAfter` counts from here — the lab on screen —
                     // not from launch; see `AppModel.runStagedPause`.
                     .task(id: module.id) { await appModel.runStagedPause(for: module) }
                     #endif
@@ -267,86 +219,59 @@ struct PlaygroundSpaceView: View {
             }
             }
 
-            // THE FLAG MUST HANG OFF A SIBLING LEAF, NOT A MODIFIER ON THE
-            // `Group`: a Group applies each modifier to EVERY child, so the
-            // pair would fire once per child and the child count changes
-            // with state (a dimmed module swaps branches). SwiftUI does not
-            // order those callbacks, so the flag could read false with the
-            // space open. `.background` fails the same way — it distributes
-            // too. As a ZStack sibling the leaf exists exactly once.
+            // The flag hangs off a sibling leaf, not a modifier on the Group: a
+            // Group applies each modifier to every child, in no promised order, so
+            // the flag could read false with the space open. As a ZStack sibling
+            // the leaf exists exactly once.
             Color.clear
                 .frame(width: 0, height: 0)
                 .onAppear {
                     appModel.isImmersiveSpaceOpen = true
                     syncMainWindow()
                 }
-                // THE LAUNCH PATH RUNS HERE NOW. It used to live in
-                // `MainWindowView.task`, which was the launch scene; the
-                // space is, so this is the only place guaranteed to run
-                // once on every start.
+                // The launch path: the only place guaranteed to run once on every start.
                 .task {
                     SoundPalette.warmUp()
                     SoundPalette.masterVolume = appModel.settings.masterVolume
-                    // BEFORE THE RETREAT, NOT AFTER. `-uiTesting 1` and a
-                    // screenshot argument arrive together — the settings
-                    // UI test passes both — so putting this behind the
-                    // guard silently dropped `-settingsOpen` for exactly
-                    // the run that needed it.
+                    // Before the retreat, not after: `-uiTesting 1` and a screenshot
+                    // argument arrive together.
                     #if DEBUG
                     applyDebugLaunchArguments()
                     #endif
                     guard !retreatForUITesting() else { return }
                     await PropCache.warmUp()
                     ready = true
+                    #if DEBUG
+                    LaunchTrace.mark(appModel.activeModuleID.map { "space ready, mounting \($0)" }
+                                     ?? "space ready, mounting the gallery")
+                    #endif
                 }
                 .onDisappear {
                     appModel.isImmersiveSpaceOpen = false
-                    // ALWAYS BRING THE WINDOW BACK. This is the leaf
-                    // that outlives it, and it is the only thing that
-                    // can: once the window is dismissed there is no
-                    // view of it left to notice the space closing. If
-                    // this line is ever removed, closing the gallery
-                    // with the Digital Crown leaves the app with no
-                    // scene at all.
-                    openWindow(id: MainWindowView.windowID)
+                    // Always bring the window back: once it is dismissed this leaf is the
+                    // only thing that can notice the space closing. Guarded so one window
+                    // never becomes two.
+                    if appModel.wantsMainWindow {
+                        openWindow(id: MainWindowView.windowID)
+                    }
                 }
-                // The window follows the MODULE, not the space: leaving
-                // a lab by the palette's Home petal returns to the
-                // gallery with the space still open, and that is a
-                // home-screen state like any other.
+                // The window follows the module, not the space: leaving a lab by the
+                // Home petal returns to the gallery with the space still open.
                 .onChange(of: appModel.activeModuleID) { syncMainWindow() }
 
-            // THE ONE PLACE VOICEOVER'S ACTIONS ARRIVE.
-            //
-            // Every plate, petal, disc, rail and well in six labs was
-            // announced, readable and impossible to operate: a grep for
-            // `systemActions` returned zero matches across the whole
-            // project, and since the window panels were deleted there is
-            // no fallback surface, so this app was six rooms of readouts
-            // with no controls in them.
-            //
-            // ONE subscription rather than six, because the routing is
-            // not per-module: `SpatialActionComponent` rides the entity
-            // that knows what to do, so this walks up from whatever was
-            // activated exactly as the gesture chains do. A module that
-            // grows a new control gets this for free — and a module that
-            // forgets is caught by `SpatialActionCriterionTests`, which
-            // fails any interactive primitive that cannot be operated.
+            // The one place VoiceOver's actions arrive. One subscription rather
+            // than six: `SpatialActionComponent` rides the entity that knows what
+            // to do, so this walks up from whatever was activated exactly as the
+            // gesture chains do.
             AccessibilityActionRouter()
         }
     }
 }
 
-/// Delivers VoiceOver's actions to whichever control was activated.
-///
-/// A `RealityView` with nothing in it but two subscriptions: the events
-/// arrive on the scene, not on a view, and this is the smallest thing
-/// that can hold a scene subscription for as long as the space is open.
-///
-/// `.increment` and `.decrement` are one call with a sign, because a
-/// rail and a grip differ only in what a step means and only they know
-/// their own range — `SpatialActionComponent.adjust` takes the sign and
-/// the primitive turns it into `span / 20`.
+/// Delivers VoiceOver's actions to whichever control was activated: a
+/// `RealityView` holding two scene subscriptions for as long as the
+/// space is open. `.increment` and `.decrement` are one call with a
+/// sign; the primitive knows its own range.
 private struct AccessibilityActionRouter: View {
     @State private var subscriptions: [EventSubscription] = []
 

@@ -3,7 +3,7 @@
 //  PhysicsCoreTests
 //
 //  The slab pinned to the textbook: a ray leaves a parallel-faced
-//  block traveling EXACTLY parallel to how it arrived, displaced by
+//  block traveling exactly parallel to how it arrived, displaced by
 //  exactly t·sin(θ₁−θ₂)/cos(θ₂); a steep entry turns the slab into a
 //  light pipe (TIR bounces down its length); a miss flies straight.
 //
@@ -50,7 +50,7 @@ final class GlassBlockTests: XCTestCase {
     /// angle: the internal ray meets the long faces past the critical
     /// angle and bounces down the slab — a light pipe.
     func testSteepEntryBecomesALightPipe() {
-        // A LONG slab, entered through the -x end, angled slightly
+        // A long slab, entered through the -x end, angled slightly
         // toward +z: after refraction the ray runs nearly along +x,
         // striking the z faces far past the 41.8° critical angle.
         let pipeHalf = SIMD3<Double>(0.45, 0.1, 0.05)

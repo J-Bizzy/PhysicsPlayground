@@ -34,7 +34,7 @@ final class DoublePendulumTests: XCTestCase {
                        "energy drifted; the equations of motion are not conservative")
     }
 
-    /// Divergence proves the coupling survived. Assert on AMPLIFICATION, not
+    /// Divergence proves the coupling survived. Assert on amplification, not
     /// absolute separation: Lyapunov ≈ 0.6/s, so 1e-6 rad grows ~1000x in 12 s.
     func testNearbyStartsDivergeExponentially() {
         let perturbation = 1e-6
@@ -146,7 +146,7 @@ final class DoublePendulumTests: XCTestCase {
 
     // MARK: The bobs' velocities
 
-    /// Bob velocities checked against a finite difference of the POSITION
+    /// Bob velocities checked against a finite difference of the position
     /// accessor, so this cannot pass by repeating the same algebra mistake.
     func testBobVelocitiesMatchTheDerivativeOfTheirPositions() {
         let rig = DoublePendulum.Rig(length1: 0.42, length2: 0.31,

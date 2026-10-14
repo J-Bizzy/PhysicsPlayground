@@ -18,11 +18,9 @@ enum MagnetismModule {
         ModuleDescriptor(
             id: id,
             title: "Magnetism",
-            blurb: "Carry bar magnets around the room; their looping field reorganises live and they attract, repel, and snap into alignment.",
             icon: "cylinder.fill",
             accent: DesignTokens.Palette.magnetismAccent,
-            firstRunHint: "Pinch a magnet and carry it. Bring two close and watch — they pull together head-to-tail, push apart N-to-N, and swing to align. Tap a magnet and its controls unfold: flip its poles to switch attraction for repulsion. visionOS will ask to use your room so the lab can stand in it.",
-            // Opens part-dimmed: the looping lines ARE the module.
+            // Opens part-dimmed: the looping lines are the module.
             preferredDimming: 0.35,
             legend: legendItems,
             isPaused: { appModel.magnetismModel.isPaused },
@@ -31,6 +29,22 @@ enum MagnetismModule {
                 AnyView(MagnetismSpaceView().environment(appModel.magnetismModel))
             },
             captureReadings: { readings(appModel: appModel) },
+            adjustables: [
+                // The selected magnet's moment, or the first magnet's when
+                // nothing is selected: the box always has a magnet to turn.
+                .init(id: "moment", label: "Magnet moment", unit: "A·m²",
+                      range: MagnetismModel.strengthRange, decimals: 1,
+                      read: {
+                          let model = appModel.magnetismModel
+                          return (model.selectedMagnet ?? model.magnets.first)?.strength ?? 0
+                      },
+                      write: {
+                          let model = appModel.magnetismModel
+                          if let target = model.selectedMagnet ?? model.magnets.first {
+                              model.setStrength(id: target.id, $0)
+                          }
+                      }),
+            ],
             timeScrub: .init(model: appModel.magnetismModel),
             reset: { appModel.magnetismModel.reset() }
         )
@@ -40,7 +54,7 @@ enum MagnetismModule {
         let model = appModel.magnetismModel
         var rows: [NotebookEntry.Reading] = [
             .init("Magnets", "\(model.magnets.count)"),
-            .init("|B| at centre",
+            .init("|B| at center",
                   PhysicsFormat.metric(model.centerFieldMilliTesla / 1000, "T",
                                        decimals: 2)),
             .init("Magnets move", PhysicsFormat.state(model.dynamicsOn)),
@@ -76,8 +90,8 @@ enum MagnetismModule {
                    text: "The hand compass points along the local field — and it is a SPHERE, with its needle free to swing in any direction. A flat dial can only show the part of B lying in the dial; between two poles the field usually points out of it."),
         LegendItem(swatch: .stroke(DesignTokens.Palette.selectionHalo),
                    text: "Halo marks the selected magnet"),
-        // A DISCLOSED FUDGE: the fields, force and torque are exact, but
-        // the MOTION is a capped quasi-static mobility law, not Newton's —
+        // A disclosed fudge: the fields, force and torque are exact, but
+        // the motion is a capped quasi-static mobility law, not Newton's —
         // the bars have no mass or moment of inertia here.
         LegendItem(
             swatch: .symbol("arrow.triangle.2.circlepath",
@@ -86,7 +100,7 @@ enum MagnetismModule {
         ),
         LegendItem(
             swatch: .symbol("globe", Color(uiColor: MagnetismRenderer.lineColor)),
-            text: "Earth's field is here too, at its real 50 µT — and a 6 A·m² bar magnet matches that at about 30 cm, so a compass carried an arm's length clear of the bench hands over to the planet. It is NOT horizontal: it runs 65° into the ground, which is why the needle tips down when it settles, and why a dip circle is a separate instrument in a real lab. Which way north lies is a convention — visionOS gives no heading — but the strength and the dip are real. Earth pulls on the compasses only, not on the bar magnets."),
+            text: "Earth's field is here too, at its real 50 µT — and a 6 A·m² bar magnet matches that at about 30 cm, so a compass carried an arm's length clear of the bench hands over to the planet. It is NOT horizontal: it runs 65° into the ground, which is why the needle tips down when it settles, and why a dip circle is a separate instrument in a real lab. Which way north lies is a convention — visionOS gives no heading — but the strength and the dip are real. Earth pulls on the hand compass only, not on the bar magnets."),
     ]
 
 }

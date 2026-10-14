@@ -2,17 +2,10 @@
 //  FieldInstrumentLayoutTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Electric Fields' controls moved out of a window panel and into the room
-//  (2026-07-31), which means the module now has furniture standing around
-//  its physics. This file is what stops that furniture becoming the bug it
-//  became last time.
-//
-//  The failure mode is specific and it has happened here: `SpatialScaleHandle`
-//  put a metre-wide invisible collider over the whole region, hit-testing
-//  uses colliders rather than visible geometry, and so every pinch struck
-//  the plate before reaching the charge behind it. The module was silently
-//  non-interactive and the report was "I can't even move them" (DECISIONS,
-//  2026-07-29). Nothing in a screenshot shows this. Arithmetic does.
+//  Electric Fields' furniture stands around its physics, and hit-testing
+//  uses colliders rather than visible geometry: a collider over the
+//  region once made the whole module silently non-interactive. Nothing
+//  in a screenshot shows this; arithmetic does.
 //
 
 import XCTest
@@ -30,15 +23,9 @@ final class FieldInstrumentLayoutTests: XCTestCase {
     // MARK: Labels are part of the object
 
     /// A label is as much a part of an instrument as its switch, and the
-    /// declared bounding box has to include it — otherwise every clearance
-    /// checked in this file is measuring a smaller object than the one in
-    /// the room. The bank's widest label reaches ~0.147 m from a plate's
-    /// centre, which is most of its footprint.
+    /// declared box has to include it.
     func testTheBanksBoxIncludesItsLabels() {
-        // The bank's ACTUAL labels. "Parallel plates" stood here after
-        // the plate was renamed to "Capacitor", so this measured a label
-        // the room does not have — longer than the real one, which is the
-        // safe direction, but still a test checking a different app.
+        // The bank's actual labels.
         let reach = SpatialLayerBank.reach(forLabels: [
             "Field lines", "Free charges", "Capacitor", "Uniform B"])
         XCTAssertLessThanOrEqual(
@@ -51,14 +38,9 @@ final class FieldInstrumentLayoutTests: XCTestCase {
             """)
     }
 
-    /// The Clear plate's box has to cover its nameplate too — AND the
-    /// "Tap again" it swaps to when armed.
-    ///
-    /// This is the failure mode that is unique to a confirming plate: a
-    /// box sized to the resting label is correct until the moment
-    /// somebody arms it, at which point the instrument silently grows
-    /// into whatever it was carefully cleared of. Sizing on the longer of
-    /// the two makes the armed state the one that was measured.
+    /// The Clear plate's box must cover its nameplate and the "Tap again" it
+    /// swaps to when armed, or the instrument grows on arming into whatever
+    /// it was cleared of.
     func testTheClearPlatesBoxIncludesItsLabelsInBothStates() {
         let reach = SpatialActionBank.reach(forLabels: [
             "Clear all", SpatialActionBank.armedLabel])
@@ -78,23 +60,11 @@ final class FieldInstrumentLayoutTests: XCTestCase {
 
     // MARK: The rails reproduce what the hands placed
 
-    /// THE PILOT MUST NOT HAVE MOVED ANYTHING.
-    ///
-    /// On 2026-08-08 the four anchors stopped being typed and started
-    /// being derived from two `InstrumentRail`s. That is a change of
-    /// authorship, and it is only safe if it is ALSO not a change of
-    /// arrangement — every invariant below is a safety net for the
-    /// numbers, so a refactor that shifted them while the nets still
-    /// passed would have proved nothing about either.
-    ///
-    /// The deep-rail literals are the values as of 2026-08-07, copied
-    /// from the file's own history. The fore rail's are the 2026-08-29
-    /// move of the make-column from the right flank to the left (all
-    /// controls left, owner's call) — the clear plate lands at
-    /// (−1.02, 1.23), which is exactly Circuits' `clearAnchor`, and
-    /// that match is the point. If a future change means to move an
-    /// instrument, this test is the one that should fail first, and the
-    /// literal should be updated in the same commit that moves it.
+    /// The rails must reproduce the hand-placed layout: deriving the
+    /// anchors is only safe if it is not also a change of arrangement. The
+    /// clear plate lands at (−1.02, 1.23), exactly Circuits' `clearAnchor`.
+    /// If a future change means to move an instrument, update the literal
+    /// in the same commit.
     func testTheRailsReproduceTheHandPlacedLayout() {
         func same(_ derived: SIMD3<Double>, _ historical: SIMD3<Double>,
                   _ what: String) {
@@ -157,7 +127,7 @@ final class FieldInstrumentLayoutTests: XCTestCase {
                       violations.joined(separator: "\n"))
     }
 
-    /// …and has to be able to FAIL, or the line above is decoration.
+    /// …and has to be able to fail, or the line above is decoration.
     func testTheSharedClearanceCheckerCatchesAnInstrumentInThePhysics() {
         let inside = [(name: "trespasser",
                        box: StationBox(center: FieldModel.regionCenter,
@@ -168,13 +138,10 @@ final class FieldInstrumentLayoutTests: XCTestCase {
                        "an instrument standing inside the station was called legal")
     }
 
-    /// The invariant the whole layout exists to satisfy.
-    ///
-    /// The margin is the proximity-fallback radius, not a taste: when a
-    /// pinch lands on nothing nameable, `resolveCharge` grabs the nearest
-    /// charge within 12 cm. An instrument closer than that to the station
-    /// wall could be grabbed at a point that is ALSO within grabbing
-    /// distance of a legally-clamped charge, and the two would contend.
+    /// The invariant the layout exists to satisfy: the margin is the
+    /// proximity-fallback radius, so an instrument closer than that to the
+    /// station could be grabbed at a point also within grabbing distance of
+    /// a charge.
     func testNoInstrumentStandsWithinGrabbingDistanceOfThePhysics() {
         for instrument in FieldInstrumentLayout.standingInstruments {
             XCTAssertTrue(
@@ -231,10 +198,8 @@ final class FieldInstrumentLayoutTests: XCTestCase {
 
     // MARK: The one instrument inside the station
 
-    /// The ΔV rail rides the capacitor, so it has to be checked over
-    /// everywhere the capacitor can legally BE — not at its default. A
-    /// layout that is only correct at the opening position is a layout that
-    /// breaks the first time somebody carries the apparatus.
+    /// The ΔV rail rides the capacitor, so it is checked everywhere the
+    /// capacitor can legally be, not at its default.
     func testTheVoltageRailStaysClearOfThePlatesWhereverTheCapacitorGoes() {
         let model = FieldModel()
         model.capacitorOn = true
@@ -253,24 +218,15 @@ final class FieldInstrumentLayoutTests: XCTestCase {
                 let rail = FieldInstrumentLayout.voltageTrackBox(
                     capacitorCenter: centre)
 
-                // Never inside the plates. This is the assertion that
-                // caught a `max(y, 0.85)` floor on the old under-mounted
-                // position: at the capacitor's lowest legal carry height
-                // the floor stopped the rail descending and left it 45 cm
-                // above the capacitor's centre — threaded through the gap.
-                // It was correct at the default height and wrong only when
-                // carried, which is precisely the defect a screenshot
-                // never shows.
+                // Never inside the plates: a floor on the old under-mounted position
+                // left the rail threaded through the gap at the lowest legal carry
+                // height.
                 XCTAssertGreaterThan(
                     rail.minimum.y, centre.y + FieldModel.plateSize / 2,
                     "The rail is down inside the plates at \(centre).")
 
-                // Reachable RELATIVE TO ITS APPARATUS, which is the honest
-                // claim for an instrument bolted to something portable. A
-                // capacitor carried overhead takes its rail with it, and
-                // demanding the rail stay at chest height would be
-                // demanding it stop being attached — the thing that makes
-                // it better than a slider.
+                // Reachable relative to its apparatus: a capacitor carried overhead
+                // takes its rail with it.
                 let railReach = rail.distanceRange(
                     from: FieldInstrumentLayout.viewer).nearest
                 let apparatusReach = simd_distance(centre, FieldInstrumentLayout.viewer)
@@ -282,10 +238,7 @@ final class FieldInstrumentLayoutTests: XCTestCase {
     }
 
     /// The two rails are the pair most likely to collide, because the B
-    /// rail is fixed and the ΔV rail travels. They are separated on x in
-    /// the worst case, which is only true while neither yaws to face the
-    /// viewer — see the note in `SpatialTrackControl` about why a rail
-    /// bolted to an apparatus does not swivel.
+    /// rail is fixed and the ΔV rail travels.
     func testTheTwoRailsNeverOccupyTheSameSpace() {
         let model = FieldModel()
         model.capacitorOn = true

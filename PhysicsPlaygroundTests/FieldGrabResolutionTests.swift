@@ -5,7 +5,7 @@
 //  The pinch-to-charge resolver: an entity named with a charge's UUID
 //  wins outright, and an anonymous hit (the invisible two-hand scale
 //  plate spans the whole field region) falls back to the nearest charge
-//  within reach of the hand — so a pinch ON a charge always grabs it,
+//  within reach of the hand — so a pinch on a charge always grabs it,
 //  never silently does nothing.
 //
 
@@ -24,7 +24,7 @@ final class FieldGrabResolutionTests: XCTestCase {
     }
 
     func testUUIDNameResolvesThatCharge() {
-        // Even with the hand right on top of the OTHER charge: an
+        // Even with the hand right on top of the other charge: an
         // explicit name is the user's actual target.
         let id = FieldSpaceView.resolveCharge(
             names: ["some-child", far.uuidString],

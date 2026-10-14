@@ -2,15 +2,11 @@
 //  NotebookView.swift
 //  Physics Playground — Shell
 //
-//  The Lab Notebook's window: the take-away layer, finally visible.
-//  Every capture is a timestamped row of exactly what the physics said
-//  at that instant; here they read as cards, newest first, each opening
-//  into its readings table. The whole book exports as CSV (for a
-//  spreadsheet) or Markdown (for a lab report) via the share sheet.
-//
-//  Capture happens mid-experiment from the palette bead's pencil petal;
-//  this window also carries a Capture button for the active module —
-//  the simulator and accessibility path, per the house parity rule.
+//  The Lab Notebook's window: every capture is a timestamped row of what
+//  the physics said at that instant, read as cards newest first, each
+//  opening into its readings table. The book exports as CSV or Markdown.
+//  Capture happens from the palette bead's Capture petal; this window
+//  also carries a Capture button for the active module.
 //
 
 import SwiftUI
@@ -32,13 +28,13 @@ struct NotebookView: View {
                     Spacer()
                     if !notebook.entries.isEmpty {
                         ShareLink(item: notebook.csv,
-                                  preview: SharePreview("Lab notebook (CSV)")) {
+                                  preview: SharePreview("Lab Notebook (CSV)")) {
                             Label("CSV", systemImage: "tablecells")
                                 .font(DesignTokens.TypeScale.label)
                         }
                         .accessibilityLabel("Share as CSV")
                         ShareLink(item: notebook.markdown,
-                                  preview: SharePreview("Lab notebook (Markdown)")) {
+                                  preview: SharePreview("Lab Notebook (Markdown)")) {
                             Label("Report", systemImage: "doc.richtext")
                                 .font(DesignTokens.TypeScale.label)
                         }
@@ -57,26 +53,10 @@ struct NotebookView: View {
                     .buttonStyle(.podProminent(module.accent))
                     .accessibilityHint("Writes down exactly what the physics says right now")
 
-                    // THE KEY, moved here from a popover on the module's
-                    // title bar (2026-08-02).
-                    //
-                    // It could not simply be deleted with that button,
-                    // and the reason is specific rather than sentimental:
-                    // several of these entries are DISCLOSURES and nothing
-                    // else in the app carries them. Magnetism's says that
-                    // Earth's 50 µT runs 65° into the ground; Gravity
-                    // Lab's says planet sizes are exaggerated, that the
-                    // spacetime grid is an analogy rather than a
-                    // solution, and that Mercury's extra 43″/century
-                    // needs GR, which this lab does not model.
-                    //
-                    // DECISIONS 2026-07-31: a migration that drops those
-                    // "turns a disclosed fiction into an undisclosed
-                    // one". The notebook is the right home — it is
-                    // already the app's reference surface, it already
-                    // knows which module is open, and it is where someone
-                    // reading their own recorded numbers would want the
-                    // key to them.
+                    // The module's key lives here rather than on the title bar: several
+                    // entries are disclosures (Earth's field dips 65°, planet sizes are
+                    // exaggerated, Mercury's extra precession needs GR), and the notebook is
+                    // where someone reading their own numbers wants them.
                     if !module.legend.isEmpty {
                         DisclosureGroup {
                             LegendView(items: module.legend)
@@ -92,8 +72,8 @@ struct NotebookView: View {
 
                 if notebook.entries.isEmpty {
                     PanelSection {
-                        Text("Nothing recorded yet. Inside a lab, pinch the "
-                             + "pencil petal on the palette bead — or the button "
+                        Text("Nothing recorded yet. Inside a lab, pinch "
+                             + "Capture on the palette bead — or the button "
                              + "above — and the moment's numbers are written down.")
                             .font(DesignTokens.TypeScale.footnote)
                             .foregroundStyle(.secondary)

@@ -16,7 +16,7 @@ icon, for three reasons that are about this app rather than about taste:
 
   1. It is the stock physics icon. Every app in the category has some
      version of it, so it identified the SUBJECT and not the product.
-  2. It depicted one lab of six, and loosely — Gravity Lab's orrery is a
+  2. It depicted one lab of six, and loosely — Orbital Mechanics' orrery is a
      real solar system on real orbital elements, not rainbow marbles.
   3. Its palette existed nowhere in the app. The home, the plaques, the
      podium rim and the wordmark are champagne on anodised graphite,
@@ -29,7 +29,7 @@ WHAT IT IS NOW
 
 The orbit ring, as a machined instrument: an anodised body with a
 champagne keyline, inside a champagne band you could have turned on a
-lathe. It is Gravity Lab's documented centrepiece — tap a body and its
+lathe. It is Orbital Mechanics' documented centrepiece — tap a body and its
 orbit becomes a ring you reshape by hand — and it is drawn in the app's
 own material language, so the icon and the wordmark are recognisably the
 same object.
@@ -137,7 +137,7 @@ def turned_band(layer, near):
 
 
 def bead():
-    """The apsis bead — the thing a hand actually grabs in Gravity Lab."""
+    """The apsis bead — the thing a hand actually grabs in Orbital Mechanics."""
     layer = Image.new("RGBA", (W, W), (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
     x, y = ring_point(math.radians(46))

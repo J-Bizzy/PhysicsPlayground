@@ -44,7 +44,7 @@ nonisolated enum PhysicsFormat {
             : "%.\(clamped)f"
     }
 
-    /// U+2212 MINUS SIGN, not the hyphen `%f` emits — matching the authored
+    /// U+2212 minus sign, not the hyphen `%f` emits — matching the authored
     /// labels, and drawn to the width and height of the digits beside it.
     static func typographic(_ string: String) -> String {
         string.replacingOccurrences(of: "-", with: "\u{2212}")
@@ -66,6 +66,22 @@ nonisolated enum PhysicsFormat {
         "\(fixed(value, decimals: decimals)) \(unit)"
     }
 
+    /// A count of things whose noun agrees with the number as shown:
+    /// "1 Earth", "1.00 Sun", "2 Earths", "0.50 Earths". Decided on the
+    /// quantised value, so 1.004 shown as "1.00" is singular too.
+    static func count(_ value: Double, singular: String, plural: String,
+                      decimals: Int = 0) -> String {
+        let shown = quantise(value, decimals: decimals)
+        return measurement(value, abs(shown) == 1 ? singular : plural,
+                           decimals: decimals)
+    }
+
+    /// A speed multiplier, "20×" or "−20×" — a true minus, as every other
+    /// signed number in the room.
+    static func multiplier(_ value: Double, decimals: Int = 0) -> String {
+        "\(fixed(value, decimals: decimals))×"
+    }
+
     /// Degrees, with the symbol closed up against the number.
     static func angle(_ degrees: Double, decimals: Int = angleDecimals) -> String {
         "\(fixed(degrees, decimals: decimals))°"
@@ -83,11 +99,11 @@ nonisolated enum PhysicsFormat {
             (0, ""), (3, "k"), (6, "M"), (9, "G"), (12, "T"),
         ]
         let magnitude = log10(abs(value))
-        // Step DOWN to the prefix whose band this sits in: 999 stays 999,
+        // Step down to the prefix whose band this sits in: 999 stays 999,
         // 1000 becomes 1 k.
         var index = prefixes.lastIndex { Double($0.exponent) <= magnitude }
             ?? prefixes.startIndex
-        // Step up again if ROUNDING pushed it out of the band — otherwise
+        // Step up again if rounding pushed it out of the band — otherwise
         // 999.97 V at one decimal prints "1000.0 V".
         if abs(quantise(value / pow(10, Double(prefixes[index].exponent)),
                         decimals: decimals)) >= 1000,
@@ -107,7 +123,7 @@ nonisolated enum PhysicsFormat {
         guard value.isFinite, value != 0 else { return "0" }
         let exponent = Int(floor(log10(abs(value))))
         guard abs(exponent) >= 3 else { return fixed(value, decimals: 2) }
-        // THROUGH `fixed`, not `String(format:)` — it enforces both the
+        // Through `fixed`, not `String(format:)` — it enforces both the
         // quantisation and the typographic minus for the mantissa.
         let mantissa = value / pow(10, Double(exponent))
         return "\(fixed(mantissa, decimals: 2)) × 10\(superscript(exponent))"

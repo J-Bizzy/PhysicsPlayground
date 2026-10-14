@@ -129,32 +129,13 @@ public enum ProjectileMotion {
         public var bounceCount: Int
     }
 
-    /// Integrates a launch from `start` until the flight ends: at the
-    /// first ground contact when `maxBounces` is 0, otherwise bouncing
-    /// with `restitution` until the bounce budget or the energy runs out.
-    /// Ground crossings are linearly interpolated inside the step, so
-    /// range and flight time don't quantize to the step size.
-    ///
-    /// `radius` IS NOT OPTIONAL DECORATION — pass the ball's. This
-    /// function draws Projectiles' predicted arc, and "predicted arc,
-    /// bounces included" is that module's central claim, so any way in
-    /// which it disagrees with the live flight is a white line promising
-    /// something the ball then fails to do. It disagreed in three ways
-    /// until 2026-08-07, all of them from treating the projectile as a
-    /// point:
-    ///
-    /// · it struck walls with `radius: 0`, so the arc cornered at the
-    ///   wall plane while a basketball (r = 0.121 m) turns 12 cm short
-    ///   of it;
-    /// · it bounced the ball's CENTRE off y = 0 rather than its surface,
-    ///   so every floor contact was drawn 12 cm too low;
-    /// · it discarded `hit.t`, so the remainder of the frame after a
-    ///   bounce was never spent — the exact defect `RoomWalls.Hit.t`'s
-    ///   own doc says "deadened every fast bounce", fixed in the live
-    ///   model on 2026-08-06 and not here.
-    ///
-    /// Each error compounds into the next segment, so by the second
-    /// bounce the arc and the ball are visibly different curves.
+    /// Integrates a launch from `start` until the flight ends: at the first
+    /// ground contact when `maxBounces` is 0, otherwise bouncing with
+    /// `restitution` until the bounce budget or the energy runs out. Ground
+    /// crossings are interpolated inside the step. Pass the ball's `radius`:
+    /// this draws Projectiles' predicted arc, and a point projectile corners
+    /// short of walls, bounces its centre off the floor and drops the rest
+    /// of the frame after a bounce, so the arc and the ball diverge.
     public static func simulate(
         from start: SIMD3<Double> = .zero,
         launchVelocity: SIMD3<Double>,
@@ -204,7 +185,7 @@ public enum ProjectileMotion {
                     velocity: hit.velocity)
             }
 
-            // Touched the ground going down — the ball's SURFACE, so a
+            // Touched the ground going down — the ball's surface, so a
             // basketball rests on the floor rather than half through it.
             if state.position.y < radius, state.velocity.y < 0 {
                 let dip = previous.position.y - state.position.y
@@ -267,7 +248,7 @@ public enum ProjectileMotion {
 /// The projectile problem solved the other way round: given where the
 /// hoop is, which launch angles reach it? Two in a vacuum — the low
 /// arc and the high arc — and the room draws both (Projectiles' "Aim
-/// here", 2026-09-01).
+/// here").
 public extension ProjectileMotion {
     /// Both drag-free launch angles, in radians above horizontal, that
     /// carry a projectile launched at `speed` through a point `x` metres

@@ -2,20 +2,9 @@
 //  BackedLabelTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The dark plate behind an in-room number (2026-08-05, staged into
-//  Circuits first). Two claims worth pinning, both learned elsewhere:
-//
-//  · The plate must WRAP the glyphs — a backing narrower than its text
-//    is worse than none, because the contrast edge lands mid-numeral.
-//    The nameplate's padding arithmetic already failed once by being
-//    fixed instead of scaling with the type; these read the built
-//    meshes, not the formula.
-//  · The backing is decoration and must never be a target — a readout
-//    that intercepts a pinch is `SpatialScaleHandle` again.
-//
-//  Assertions read the scene graph, not the inputs it was built from
-//  (the Multimeter's first probe test passed against the bug it was
-//  written to catch by asserting on a variable).
+//  The dark plate behind an in-room number: it must wrap the glyphs (a
+//  backing narrower than its text is worse than none) and must never be
+//  a target. Assertions read the scene graph, not the inputs.
 //
 
 import XCTest
@@ -65,13 +54,10 @@ final class BackedLabelTests: XCTestCase {
                       "an empty reading leaves no orphaned plate floating in the room")
     }
 
-    // MARK: The 2026-08-06 rollout
+    // MARK: The rollout
 
-    /// The Callout's plate must sit ON the glyph run. The first wiring
-    /// parented the plate to the CENTRE-SHIFTED glyph model, so it
-    /// landed at pivot-minus-centre — off the text by exactly the
-    /// centring shift. Latent while the flag was off; pinned here the
-    /// day the default flipped.
+    /// The Callout's plate must sit on the glyph run, not at
+    /// pivot-minus-centre.
     func testCalloutBackingSitsOnTheGlyphRun() throws {
         let callout = Callout(color: .white)
         callout.setText("12.5 µT")
@@ -135,25 +121,13 @@ final class BackedLabelTests: XCTestCase {
                        "value changes accumulated plates instead of replacing one")
     }
 
-    // MARK: The 8 Hz limit (2026-08-09)
+    // MARK: The 8 Hz limit
 
-    /// The twin of `testEmptyTextClearsTheLabelEntirely`, for the type
-    /// that had the same defect and no test to catch it.
-    ///
-    /// Both labels rate-limit relabelling, because a live number
-    /// otherwise rebuilds a text mesh ninety times a second. Both must
-    /// exempt the EMPTY string: it does not mean "the value changed",
-    /// it means the subject is gone, and a throttled clear leaves a
-    /// reading describing nothing for up to an eighth of a second.
-    ///
-    /// `BackedLabel` had a clearing test and failed the moment the
-    /// limit landed. `Callout` had the identical bug from two days
-    /// earlier and passed, because every one of its tests set a value
-    /// and read it back and none of them cleared one. This is that
-    /// missing test.
+    /// Clearing is never rate-limited: an empty string means the subject is
+    /// gone, and a throttled clear leaves a reading describing nothing.
     func testClearingACalloutIsNotRateLimited() {
         let callout = Callout(color: .white)
-        // Measured against the callout's OWN empty state rather than
+        // Measured against the callout's own empty state rather than
         // zero: the root also carries a leader line, which is furniture
         // and is not what "cleared" is about.
         let empty = countModelEntities(under: callout.root)

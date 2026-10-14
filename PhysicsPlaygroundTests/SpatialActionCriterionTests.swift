@@ -2,41 +2,13 @@
 //  SpatialActionCriterionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  ANNOUNCED, READABLE, AND IMPOSSIBLE TO OPERATE.
-//
-//  `grep -rn "systemActions\|AccessibilityEvents"` returned ZERO matches
-//  across this project. Twenty files set `isAccessibilityElement` and
-//  populate `label` and `value` — so every plate, petal, disc, rail,
-//  well and grip in six labs was spoken correctly and could not be
-//  pressed. And because `makeControls` and the six `*ControlsPanel`
-//  files were deleted on 2026-08-01, `ARCHITECTURE.md` states there is
-//  no fallback surface: for a VoiceOver user this app was six rooms of
-//  readouts with no controls in them at all.
-//
-//  It happened the way every defect in this arc happened — not by a
-//  decision, but because nothing asked. Each primitive was written on a
-//  different day and each author set the two properties they could see
-//  in the autocomplete.
-//
-//  THE CRITERION, and why it is this one. The tempting test is "every
-//  primitive declares `systemActions`", which is a listing test wearing
-//  a criterion's clothes: it passes the moment somebody writes
-//  `systemActions = []`. This asserts the thing that actually matters —
-//  **an entity that is hit-testable and announces itself must be
-//  operable without hands** — over every entity in a built scene. An
-//  entity carrying `InputTargetComponent` and an accessibility label is
-//  by definition a control somebody can aim at; if it cannot also be
-//  activated or adjusted, it is a control only some people have.
-//
-//  AND THAT WAS STILL A LISTING TEST. The walk above is general; the
-//  set of scenes handed to it was not. It saw four primitives — the
-//  four somebody wrote a fixture for — while the app stood controls
-//  from fifteen files, and the eleven it never looked at were all
-//  announced and all inoperable. It went green for four hours. The
-//  enforcement now lives in the source-tree scan below, so a primitive
-//  written tomorrow is caught tomorrow; the fixtures below stay because a file-level
-//  scan proves a closure EXISTS and cannot prove it reaches the right
-//  code.
+//  An entity that is hit-testable and announces itself must be operable
+//  without hands. Every plate, petal, disc, rail, well and grip was once
+//  spoken correctly and could not be pressed, and with no flat fallback
+//  surface that made six rooms of readouts with no controls. Enforced
+//  by a source-tree scan, so a primitive written tomorrow is caught
+//  tomorrow; the fixtures stay because a scan proves a closure exists
+//  and cannot prove it reaches the right code.
 //
 
 import XCTest
@@ -131,7 +103,7 @@ final class SpatialActionCriterionTests: XCTestCase {
         for _ in 0..<40 { bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1 / 90) }
         assertOperable(bank.root, "SpatialLayerBank")
 
-        // And the action must reach the SAME closure a tap does.
+        // And the action must reach the same closure a tap does.
         let plate = try? XCTUnwrap(bank.root.children.first { $0.name == "layer-grid" })
         XCTAssertTrue(SpatialActions.activate(plate ?? Entity()))
         XCTAssertEqual(flipped, ["grid"])
@@ -149,7 +121,7 @@ final class SpatialActionCriterionTests: XCTestCase {
         assertOperable(bank.root, "SpatialActionBank")
     }
 
-    /// A DESTRUCTIVE plate must still confirm. Routing VoiceOver
+    /// A destructive plate must still confirm. Routing VoiceOver
     /// straight at `fire` would hand the one user who cannot see the
     /// plate light up a single-tap way to wipe a bench.
     func testADestructivePlateStillConfirmsForVoiceOver() throws {
@@ -172,46 +144,12 @@ final class SpatialActionCriterionTests: XCTestCase {
     }
 
     // MARK: The criterion over the SOURCE
-    //
-    // EVERYTHING ABOVE IS A LISTING TEST WEARING A CRITERION'S CLOTHES,
-    // and it took four hours to notice. The walk is general, but it only
-    // ever sees the primitives somebody remembered to build a fixture
-    // for — four of them. When this file was written the app had TEN
-    // files standing input-targetable controls in the room, and the six
-    // it did not name (`Bloom`'s petals and bead, `SpatialPicker`,
-    // `Well`, `Palette`'s bead/petals/slots, `TimeRail`'s reel) were all
-    // announced and all inoperable. Every one of them went green.
-    //
-    // That is precisely the failure the standing rule names: *everything
-    // here that shipped twice shipped because a test enumerated the
-    // cases somebody had thought of.* So the enforcement moves off the
-    // fixture list and onto the source tree, where a NEW primitive is
-    // caught the day it is written rather than the day someone
-    // remembers to add it here.
 
-    /// WHAT THE SCAN COVERS, and the one thing it still cannot judge.
-    ///
-    /// `Packages/RenderKit` was outside it until 2026-08-08, because
-    /// `SpatialActions` lived in the app target and RenderKit cannot see
-    /// up a layer. Moving it down fixed the file that mattered most:
-    /// `SpatialTrackControl`, the app's one continuous control, whose own
-    /// header had carried the complaint since it was written.
-    ///
-    /// `Grabbable` WAS the honest remainder, and it is closed as of the
-    /// same day. It stands input targets on every carried object —
-    /// magnets, balls, bobs, circuit parts, charges, celestial bodies —
-    /// and for a few hours it took an `activate` closure that all
-    /// eighteen call sites passed nothing to. The scan stayed green
-    /// throughout, because a default argument is indistinguishable from
-    /// a wired one when all you are doing is reading a file.
-    ///
-    /// So the scan is not the check for those. `testMagnetismObjectsRoute\
-    /// ToTheModule` and its four siblings build each module's renderer
-    /// for real, point `onObjectTap` at a counter, and drive an
-    /// activation through the same ancestor walk VoiceOver uses. That is
-    /// the only check here that can tell "the mechanism exists" from
-    /// "the mechanism is connected", and removing one module's wiring
-    /// fails exactly that module's test.
+    /// Every file that stands an input target. `Grabbable` is the honest
+    /// remainder: it took an `activate` closure that every call site passed
+    /// nothing to, and the scan stayed green because a default argument is
+    /// indistinguishable from a wired one. The per-module routing tests
+    /// below are the only check that can tell "exists" from "connected".
 
     private func scanRoots() throws -> [URL] {
         let thisFile = URL(fileURLWithPath: #filePath)
@@ -220,7 +158,7 @@ final class SpatialActionCriterionTests: XCTestCase {
             .appendingPathComponent("PhysicsPlayground")
         var roots = ["Modules", "Hub", "DesignSystem", "Shell"]
             .map { app.appendingPathComponent($0) }
-        // RenderKit, since 2026-08-08 — see the note above.
+        // RenderKit too: its primitives stand input targets as well.
         roots.append(thisFile.deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Packages/RenderKit/Sources/RenderKit"))
@@ -293,18 +231,9 @@ final class SpatialActionCriterionTests: XCTestCase {
 
     // MARK: The carried objects
 
-    /// THE GAP THE FILE SCAN COULD NOT SEE, now closed and asserted.
-    ///
-    /// `Grabbable` took an `activate` closure from 2026-08-08 and every
-    /// one of its call sites passed nothing, so magnets, balls, bobs,
-    /// circuit parts, charges and celestial bodies were hands-only. The
-    /// scan went green throughout, because a default argument is
-    /// indistinguishable from a wired one when you are reading a file.
-    ///
-    /// This builds each module's renderer for real, points its
-    /// `onObjectTap` at a counter, and drives an activation through the
-    /// same walk VoiceOver uses. It is the only check here that can tell
-    /// "the mechanism exists" from "the mechanism is connected".
+    /// Builds each module's renderer for real, points `onObjectTap` at a
+    /// counter, and drives an activation through the same walk VoiceOver
+    /// uses — the check the file scan cannot make.
     private func assertObjectsRoute(
         _ root: Entity, _ label: String, taps: () -> Int,
         file: StaticString = #filePath, line: UInt = #line
@@ -359,12 +288,12 @@ final class SpatialActionCriterionTests: XCTestCase {
         assertObjectsRoute(renderer.root, "Projectiles", taps: { taps })
     }
 
-    func testGravityLabObjectsRouteToTheModule() {
+    func testOrbitalMechanicsObjectsRouteToTheModule() {
         var taps = 0
-        let renderer = GravityLabRenderer()
+        let renderer = OrbitalMechanicsRenderer()
         renderer.onObjectTap = { _ in taps += 1 }
-        renderer.tick(GravityLabModel())
-        assertObjectsRoute(renderer.root, "Gravity Lab", taps: { taps })
+        renderer.tick(OrbitalMechanicsModel())
+        assertObjectsRoute(renderer.root, "Orbital Mechanics", taps: { taps })
     }
 
     func testElectricFieldsObjectsRouteToTheModule() {
@@ -392,7 +321,7 @@ final class SpatialActionCriterionTests: XCTestCase {
         }
         assertOperable(bloom.root, "Bloom")
 
-        // The bead is the app's only ADJUSTABLE, so it is the one place
+        // The bead is the app's only adjustable, so it is the one place
         // increment has to actually move a number.
         let bead = bloom.root.children.first { $0.name == "bloom-grip" }
         XCTAssertTrue(SpatialActions.adjust(bead ?? Entity(), by: 1))
@@ -421,7 +350,7 @@ final class SpatialActionCriterionTests: XCTestCase {
         })
         XCTAssertTrue(SpatialActions.activate(petal))
         XCTAssertEqual(fired, 0, "one activation fired a destructive petal")
-        // And arming must NOT have stripped the action it needs to finish.
+        // And arming must not have stripped the action it needs to finish.
         let armed = try XCTUnwrap(petal.components[AccessibilityComponent.self])
         XCTAssertTrue(armed.systemActions.contains(.activate),
                       "arming took away the Activate needed to confirm")

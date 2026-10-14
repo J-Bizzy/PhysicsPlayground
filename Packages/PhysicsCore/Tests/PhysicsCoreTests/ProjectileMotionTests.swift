@@ -190,7 +190,7 @@ final class ProjectileMotionTests: XCTestCase {
     }
 
     /// With air on, a tailwind carries the ball farther and a headwind
-    /// shortens the flight; with air OFF wind must do nothing at all.
+    /// shortens the flight; with air off wind must do nothing at all.
     func testWindOnlyActsThroughDrag() {
         let g = 9.81
         let v = launchVelocity(speed: 8, angleDegrees: 45)
@@ -212,15 +212,11 @@ final class ProjectileMotionTests: XCTestCase {
 
     // MARK: The predicted arc is the ball's own path
 
-    /// "PREDICTED ARC, BOUNCES INCLUDED" IS THE MODULE'S CENTRAL CLAIM,
-    /// and until 2026-08-07 the white line and the ball were different
-    /// curves. `simulate` treated the projectile as a POINT three ways:
-    /// it struck walls with `radius: 0`, it bounced the centre off
-    /// y = 0, and it threw away `hit.t` so the rest of the frame after a
-    /// bounce was never spent.
-    ///
-    /// A basketball is 0.121 m in radius, so each of those is a 12 cm
-    /// error, and they compound into every later segment.
+        /// The predicted arc and the ball must be the same curve. `simulate`
+        /// once treated the projectile as a point three ways: walls struck
+        /// with zero radius, the centre bounced off y = 0, and `hit.t` was
+        /// discarded. Each is a 12 cm error for a basketball, compounding
+        /// into every later segment.
     func testTheArcRestsOnTheBallsSurfaceNotItsCentre() {
         let radius = 0.121
         let path = ProjectileMotion.simulate(
@@ -249,7 +245,7 @@ final class ProjectileMotionTests: XCTestCase {
         XCTAssertEqual(landing.y, 0, accuracy: 1e-9)
     }
 
-    /// The ball turns at its SURFACE, not at the wall plane. A wall at
+    /// The ball turns at its surface, not at the wall plane. A wall at
     /// x = 2 stops a basketball's centre at x = 2 − r.
     func testTheArcTurnsAtTheBallsSurfaceNotTheWallPlane() throws {
         let radius = 0.121
@@ -271,11 +267,9 @@ final class ProjectileMotionTests: XCTestCase {
                        + "\(radius) turns at \(2 - radius)")
     }
 
-    /// AND IT KEEPS MOVING THROUGH THE BOUNCE. Discarding `hit.t` parks
-    /// the ball at the contact point for the remainder of the step,
-    /// which is what `RoomWalls.Hit.t`'s own doc calls deadening a fast
-    /// bounce. Measured as: after the turn, the arc has actually come
-    /// back off the wall.
+        /// The ball keeps moving through the bounce: discarding `hit.t`
+        /// parks it at the contact point for the rest of the step. Measured
+        /// as the arc having come back off the wall after the turn.
     func testTheArcSpendsTheRestOfTheFrameAfterABounce() throws {
         // A wall at x = 2 facing back down −x, spanning z and y.
         let wall = RoomWalls.Wall(

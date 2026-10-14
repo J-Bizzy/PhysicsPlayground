@@ -2,13 +2,9 @@
 //  PlateStyleTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The two banks share one plate silhouette by construction now
-//  (`PlateStyle`, 2026-08-05) — the corner radius was deliberately
-//  matched from the start, but the depths had drifted (0.007 vs 0.009
-//  thick) because each file typed its own numbers on a different day.
-//  Asserting `PlateStyle.depth == 0.009` would be vacuous; what matters
-//  is what the banks BUILD, so this reads the constructed plate meshes
-//  — the scene graph, not the constants they were supposed to come from.
+//  The two banks share one plate silhouette by construction. Asserting
+//  the constants would be vacuous; this reads the constructed plate
+//  meshes.
 //
 
 import XCTest
@@ -49,23 +45,12 @@ final class PlateStyleTests: XCTestCase {
                        + "drift PlateStyle exists to close")
     }
 
-    // MARK: The nameplate sizes (2026-08-09)
+    // MARK: The nameplate sizes
 
-    /// `HubScene.namePlate` is asked for at a NAMED size, never a
-    /// hand-typed one.
-    ///
-    /// There were nine — 0.009, 0.010, 0.0104, 0.0108, 0.011, 0.012,
-    /// 0.0132, 0.014 and 0.030 — for one primitive. What makes it worth
-    /// a criterion rather than a one-off tidy is how it happened: every
-    /// call site's comment claimed to be following the house treatment
-    /// ("the house nameplate, small", "the same treatment the palette
-    /// bead wears"). Nine authors each believed they were matching the
-    /// others, and each typed a different number. Nothing about that is
-    /// self-correcting, so the next one would have been a tenth.
-    ///
-    /// Two steps ship: `PlateStyle.labelSize` for something at arm's
-    /// length, `PlateStyle.exhibitLabelSize` for something across the
-    /// room. A third is a decision, not an accident — add it here.
+    /// `HubScene.namePlate` is asked for at a named size, never a
+    /// hand-typed one: there were nine, each call site believing it matched
+    /// the others. Two ship — arm's length and across the room; a third is
+    /// a decision, not an accident.
     func testEveryNamePlateAsksForANamedSize() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -92,9 +77,7 @@ final class PlateStyleTests: XCTestCase {
             }
         }
 
-        // The app source is ~77 files. The bar is a floor against the
-        // tree moving under this test, not a count of it — set at 100
-        // on the first draft, which failed on a codebase that was fine.
+        // A floor against the tree moving under this test, not a count of it.
         XCTAssertGreaterThan(scanned, 50,
                              "walked \(scanned) files — the tree moved and this scans nothing")
         XCTAssertTrue(offenders.isEmpty, """

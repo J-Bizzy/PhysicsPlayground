@@ -2,34 +2,12 @@
 //  SpatialTapTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The two shared controls whose `handleTap` nothing had ever called.
-//
-//  THIS FILE EXISTS BECAUSE OF A NAME THAT DIDN'T. `CLAUDE.md`,
-//  `docs/ON_DEVICE_TESTS.md` and `DECISIONS.md` all cited a
-//  `StationTapTests` as the thing that replaced the XCUITest reach the
-//  no-panels decision gave up — "`handleTap` called directly against
-//  real entities" — and no such file was ever in the repository. The
-//  name is from the merged-worlds era (stations), which was undone on
-//  2026-07-30; the pattern survived the undo and the name did not.
-//
-//  The pattern is real and is carried by `SpatialActionBankTests`,
-//  `BloomPetalTests` and `MultimeterTests`. But going looking turned up
-//  the part that was actually missing: of the four shared types that
-//  expose `handleTap(_:) -> Bool`, two had no direct tap test at all —
-//  and one of them, `SpatialLayerBank`, is used by ALL SIX MODULES and
-//  is the most-tapped object in the app.
-//
-//  So the docs were wrong about the file and right about the principle,
-//  and the honest repair is this file plus a correction to the three
-//  documents. See DECISIONS.md, 2026-08-02.
-//
-//  What is pinned here is the tap CONTRACT the modules rely on, which is
-//  identical in both types and is load-bearing in a specific way: every
-//  SpaceView calls these in a chain — bank first, then bloom — and
-//  forwards the tap onward when the return is `false`. A handler that
-//  returned `true` for something it did not own would silently eat a
-//  gesture meant for the physics; one that returned `false` for its own
-//  plate would let the tap fall through and hit the apparatus behind it.
+//  The tap contract of `SpatialLayerBank` and `SpatialPicker`, which
+//  every SpaceView relies on: the handlers are called in a chain and the
+//  tap is forwarded when the return is `false`. A handler that returned
+//  `true` for something it did not own would eat a gesture meant for
+//  the physics; one that returned `false` for its own plate would let
+//  the tap hit the apparatus behind it.
 //
 
 import XCTest
@@ -75,10 +53,8 @@ final class SpatialTapTests: XCTestCase {
                       "No plate was built for \(id).")
     }
 
-    /// One press, one toggle. A duplicated handler or a chain that failed
-    /// to stop at the first match would flip the layer twice and leave it
-    /// exactly where it started — the failure mode that looks like a dead
-    /// control rather than a broken one.
+    /// One press, one toggle: a duplicated handler would flip the layer
+    /// twice and read as a dead control.
     func testATapFlipsExactlyOneLayerOnce() throws {
         let log = Log()
         let bank = makeBank(log)
@@ -121,19 +97,9 @@ final class SpatialTapTests: XCTestCase {
         XCTAssertTrue(log.toggled.isEmpty)
     }
 
-    /// A bank that has not been revealed yet must not answer. This is the
-    /// `SpatialTrackControl.isEnabled` lesson in the other shape: a
-    /// control that is not on screen must not still be writing to the
-    /// model.
-    ///
-    /// **THE PLATES HAVE TO STILL BE THERE FOR THIS TO TEST ANYTHING.**
-    /// The first version of this test called `setLayers([])` to hide the
-    /// bank, which also removes every plate — so the walk found no match
-    /// and returned `false` for the wrong reason. Deleting
-    /// `guard root.isEnabled` from the primitive left it passing. It is
-    /// written against a bank that is fully built and simply has not been
-    /// revealed yet, which is the real state: `init` disables `root`, and
-    /// only `update` brings it up.
+    /// A bank that has not been revealed yet must not answer. Written
+    /// against a bank that is fully built and simply not revealed: hiding
+    /// it by removing its plates would pass for the wrong reason.
     func testABankThatHasNotBeenRevealedIsDeaf() throws {
         let log = Log()
         log.state = ["grid": false]
@@ -142,7 +108,7 @@ final class SpatialTapTests: XCTestCase {
             layers: [LayerSwitch(id: "grid", label: "Grid",
                                  isOn: { log.state["grid"] ?? false },
                                  toggle: { log.toggled.append("grid") })])
-        // Deliberately NO update() — the bank is built but unrevealed.
+        // Deliberately no update() — the bank is built but unrevealed.
         XCTAssertFalse(bank.root.isEnabled, "Precondition: the bank starts hidden.")
 
         let target = try plate(bank, "grid")
@@ -152,11 +118,8 @@ final class SpatialTapTests: XCTestCase {
                       "An unrevealed bank must not write to the model.")
     }
 
-    /// The plate is a READOUT as much as a control: it reads `isOn` every
-    /// frame rather than remembering the last tap, so a model change from
-    /// anywhere — a reset, a launch argument, another control — has to
-    /// show up on the lamp. This is the property the six reset defects
-    /// were all violations of, pinned at the primitive.
+    /// The plate is a readout as much as a control: it reads `isOn` every
+    /// frame, so a model change from anywhere shows up on the lamp.
     func testThePlateFollowsTheModelRatherThanTheLastTap() throws {
         let log = Log()
         let bank = makeBank(log)

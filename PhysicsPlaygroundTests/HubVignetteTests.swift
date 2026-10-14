@@ -2,32 +2,12 @@
 //  HubVignetteTests.swift
 //  Physics Playground — app tests
 //
-//  The miniatures are the front door: six of them on the home screen and
-//  seven in the labs ring, and nothing about how they are placed is
-//  checkable by eye at review time — a screenshot shows one pose of one
-//  exhibit at one moment.
-//
-//  Both hosts (`HubSpaceView.buildExhibit`, `Palette.init`) fit a
-//  miniature by measuring `visualBounds(...).extents` ONCE, at build
-//  time, and dividing their slot size by `max(x, y)`. Two things follow
-//  from that, and both of them were bugs:
-//
-//    • Neither host consults the bounds CENTRE, so whatever origin a
-//      builder happened to author to became the middle of the bubble.
-//      The pendulum rig hung entirely in the upper half of its slot.
-//    • The measurement happens before a single frame of animation, so a
-//      miniature whose motion leaves its resting bounds is fitted from
-//      a box smaller than the one it uses. The projectile created its
-//      strobe dots at the origin and only put them on the arc on the
-//      first `animate`, so the fit never saw the trajectory at all.
-//
-//  `HubVignettes.fit` fixes both by centring an inner frame and sampling
-//  the closure before it measures. These tests pin that, and in doing so
-//  they pin the assumption the whole arrangement rests on: that
-//  `visualBounds` on an UNPARENTED entity reflects transforms written a
-//  moment earlier, with no scene and no update tick. If that ever stops
-//  being true, this file fails rather than the gallery quietly going
-//  crooked again.
+//  Both hosts fit a miniature by measuring its bounds once at build time
+//  and dividing their slot size by the larger axis. `HubVignettes.fit`
+//  centres an inner frame and samples the animation before it measures;
+//  these pin that, and the platform assumption underneath it — that
+//  `visualBounds` on an unparented entity reflects transforms written a
+//  moment earlier, with no scene and no update tick.
 //
 
 import XCTest
@@ -50,14 +30,8 @@ final class HubVignetteTests: XCTestCase {
         entity.visualBounds(relativeTo: nil)
     }
 
-    /// Every transform in the hierarchy, flattened.
-    ///
-    /// Bounds cannot answer "did anything move" any more, and that is by
-    /// design: `fit` pins an invisible square to the root so the hosts
-    /// measure the same number whatever pose the miniature is in. Which
-    /// means a miniature whose animation closure captured nothing would
-    /// sit perfectly still inside a perfectly correct box. This walks
-    /// what the closure actually writes.
+    /// Every transform in the hierarchy, flattened: `fit` pins an invisible
+    /// square to the root, so bounds cannot answer "did anything move".
     private func pose(_ entity: Entity) -> [SIMD4<Float>] {
         var columns: [SIMD4<Float>] = []
         func walk(_ node: Entity) {
@@ -72,14 +46,9 @@ final class HubVignetteTests: XCTestCase {
 
     // MARK: The assumption everything else rests on
 
-    /// An unparented entity reports bounds that include a child moved
-    /// after it was added — no scene, no update tick.
-    ///
-    /// This is not a test of the app so much as a test of the platform,
-    /// and it is first because `fit` is built entirely on top of it. If
-    /// RealityKit ever starts caching bounds until a frame runs, every
-    /// other test in this file would fail in a confusing way and this
-    /// one would say why.
+    /// An unparented entity reports bounds that include a child moved after
+    /// it was added — a test of the platform, first because `fit` is built
+    /// on it.
     func testVisualBoundsSeeUnparentedTransformsImmediately() {
         let root = Entity()
         let child = ModelEntity(mesh: .generateSphere(radius: 0.01))
@@ -100,7 +69,7 @@ final class HubVignetteTests: XCTestCase {
     /// Every miniature arrives centred on its own origin.
     ///
     /// The hosts place the vignette at `.zero` inside the bubble, so the
-    /// bounds centre IS the offset from the middle of the slot.
+    /// bounds centre is the offset from the middle of the slot.
     func testEveryMiniatureIsCentredOnItsOrigin() {
         for id in Self.ids {
             let bounds = hostBounds(HubVignettes.make(for: id).entity)
@@ -112,12 +81,8 @@ final class HubVignetteTests: XCTestCase {
         }
     }
 
-    /// Every miniature reports the same size to the fit, so the hosts'
-    /// `slotSize / largest` is one number for all of them.
-    ///
-    /// This is what makes six differently-shaped exhibits read as one
-    /// set: without it the widest miniature is scaled by its width and
-    /// comes out a streak beside a square one.
+    /// Every miniature reports the same size to the fit, which is what
+    /// makes six differently shaped exhibits read as one set.
     func testEveryMiniatureNormalisesToTheCommonSquare() {
         for id in Self.ids {
             let extents = hostBounds(HubVignettes.make(for: id).entity).extents
@@ -127,11 +92,8 @@ final class HubVignetteTests: XCTestCase {
         }
     }
 
-    /// And none of them is a sliver on the other axis. `fit` makes the
-    /// sizes consistent; only composition can make the SHAPES
-    /// consistent, and a miniature that fills its square in one
-    /// direction and a third of it in the other still reads as an
-    /// accident next to its neighbours.
+    /// And none of them is a sliver on the other axis: only composition can
+    /// make the shapes consistent.
     func testNoMiniatureIsAStreak() {
         for id in Self.ids {
             let extents = HubVignettes.make(for: id).contentExtents
@@ -145,25 +107,17 @@ final class HubVignetteTests: XCTestCase {
 
     // MARK: Motion stays inside the bubble
 
-    /// Running a miniature through its own cycle never carries it
-    /// outside the square it was fitted to.
-    ///
-    /// This is the regression guard for the whole class of bug: the
-    /// hosts cannot re-measure, so anything the animation reaches that
-    /// the fit did not see is a miniature overflowing its bubble and
-    /// crossing into its neighbour's. A little slack, because a fit
-    /// normalises the LARGER axis and a round bob may bulge a hair past
-    /// it on the other.
+    /// Running a miniature through its own cycle never carries it outside
+    /// the square it was fitted to; a little slack for a round bob bulging
+    /// past the shorter axis.
     func testMotionStaysInsideTheFittedSquare() {
         for id in Self.ids {
             let built = HubVignettes.make(for: id)
             let allowed = Self.side / 2 * 1.06
 
             for step in 0..<32 {
-                // Deliberately not the cycle `fit` sampled: a whole
-                // minute at an unrelated cadence lands between the
-                // samples and catches a miniature that is only tidy at
-                // the two dozen instants it was measured at.
+                // Deliberately not the cycle `fit` sampled, so a miniature that is only
+                // tidy at the instants it was measured at is caught.
                 built.animate(Double(step) * 1.9)
                 let bounds = hostBounds(built.entity)
                 XCTAssertLessThan(

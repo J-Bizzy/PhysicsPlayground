@@ -2,19 +2,9 @@
 //  SpatialActionBankTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Written BEFORE the primitive's first caller, deliberately.
-//
-//  `SpatialTrackControl` sat in the tree for days with no shipping call
-//  site, and the day it got one it turned out to be carrying three real
-//  defects — a 29 cm collider on a 1 cm rail, no enabled state, and no
-//  accessibility value. An unused primitive is not a working primitive,
-//  and the cost of finding out is paid by whoever adopts it first. This
-//  file is that cost, paid up front.
-//
-//  It builds real `Entity` objects and calls `handleTap` directly, which
-//  is the only kind of interaction testing available in this project —
-//  no automation can synthesise a pinch, and XCUITest has no API for a
-//  RealityKit entity at all (`docs/ON_DEVICE_TESTS.md`).
+//  Written before the primitive's first caller: an unused primitive is
+//  not a working primitive. Builds real entities and calls `handleTap`
+//  directly, the only interaction testing available without a headset.
 //
 
 import XCTest
@@ -63,19 +53,10 @@ final class SpatialActionBankTests: XCTestCase {
 
     // MARK: Reset disarms it
 
-    /// **The contract `disarm()` was written for, finally wired.**
-    ///
-    /// This file already asserted that `disarm()` clears an armed plate,
-    /// and commented the call as "what a module's reset() must call".
-    /// Nothing did — for the whole life of the class. A module's reset
-    /// reaches its model, and the armed plate lives in the SpaceView, so
-    /// an armed "Clear bench" survived Reset with its lamp lit and its
-    /// nameplate reading "Tap again": one pinch from wiping a bench the
-    /// user had just restored.
-    ///
-    /// The wiring is `AppModel.resetNonce`, passed into `update`. This
-    /// asserts the behaviour rather than the mechanism, so replacing the
-    /// nonce with something better does not have to break the test.
+    /// A reset disarms an armed plate: a module's reset reaches its model,
+    /// and the armed plate lives in the SpaceView, so an armed "Clear bench"
+    /// once survived Reset one pinch from wiping a restored bench. Wired
+    /// through `AppModel.resetNonce`; asserted as behaviour, not mechanism.
     func testAResetDisarmsAnArmedPlate() throws {
         let (bank, counter) = makeBank(confirms: true)
         let target = try plate(bank, "clear")
@@ -96,18 +77,14 @@ final class SpatialActionBankTests: XCTestCase {
         XCTAssertTrue(bank.isArmed("clear"))
     }
 
-    /// The nonce must only act on a CHANGE. A bank ticked ninety times a
-    /// second at a constant nonce that disarmed every frame would make
-    /// the confirmation step impossible to complete — the plate would
-    /// disarm before the second tap could ever land.
+    /// The nonce must only act on a change, or a bank ticked at a constant
+    /// nonce would disarm before the second tap could land.
     func testAnUnchangedNonceLeavesTheArmedPlateAlone() throws {
         let (bank, _) = makeBank(confirms: true)
         let target = try plate(bank, "clear")
 
-        // Let the bank adopt the nonce BEFORE arming. `makeBank` opens it
-        // at the default 0, so arming and then ticking at 7 would be a
-        // genuine change — which is what the first draft of this test did,
-        // and it failed against a perfectly correct implementation.
+        // Let the bank adopt the nonce before arming, or the tick is a genuine
+        // change.
         bank.update(anchor: .zero, viewer: [0, 0, 1], dt: 1.0 / 90.0, resetNonce: 7)
 
         XCTAssertTrue(bank.handleTap(target))
@@ -168,10 +145,8 @@ final class SpatialActionBankTests: XCTestCase {
 
     // MARK: Availability
 
-    /// The replacement for the panel button's `.disabled`. An unavailable
-    /// plate must also NOT consume the tap — a dim plate that swallowed
-    /// pinches would be worse than one that isn't there, because the
-    /// thing behind it would stop responding for no visible reason.
+    /// An unavailable plate must not consume the tap either: a dim plate
+    /// that swallowed pinches would stop the thing behind it responding.
     func testAnUnavailableActionNeitherFiresNorConsumes() throws {
         let (bank, counter) = makeBank()
         counter.available = false
@@ -220,13 +195,8 @@ final class SpatialActionBankTests: XCTestCase {
                        "A tap after the window expired fired without confirmation.")
     }
 
-    /// `reset()`'s obligation, and the reason `disarm()` is public.
-    ///
-    /// Four modules have now shipped a flag that drifted out of `reset()`
-    /// and stayed wrong because nothing in the room contradicted it. The
-    /// arm timer is this class's only state and it is the same hazard in
-    /// a new costume: a Clear plate left armed across a reset is one
-    /// stray pinch from wiping the thing the reset just rebuilt.
+    /// `reset()`'s obligation: a Clear plate left armed across a reset is
+    /// one stray pinch from wiping what the reset just rebuilt.
     func testResettingDisarms() throws {
         let (bank, counter) = makeBank(confirms: true)
         let plate = try plate(bank, "clear")
@@ -254,10 +224,8 @@ final class SpatialActionBankTests: XCTestCase {
 
     // MARK: The collider — the defect class that has broken modules here
 
-    /// The rule from the `SpatialScaleHandle` ban (DECISIONS, 2026-07-29):
-    /// an input-targetable collider must be no larger than the thing it
-    /// represents. These plates hang beside apparatus, and one oversized
-    /// box would shield whatever it stands next to from every pinch.
+    /// An input-targetable collider must be no larger than the thing it
+    /// represents: these plates hang beside apparatus.
     func testTheColliderIsNoBiggerThanThePlate() throws {
         let (bank, _) = makeBank()
         let plate = try plate(bank, "clear")
@@ -273,10 +241,9 @@ final class SpatialActionBankTests: XCTestCase {
 
     // MARK: Accessibility
 
-    /// A plate replaces a `Button`, and a button already speaks its name.
-    /// The ARMED state has to speak too: a plate one tap from wiping a
-    /// bench and a plate two taps from it must not read the same to
-    /// someone who cannot see it light up.
+    /// The armed state has to speak too: one tap from wiping a bench and
+    /// two taps from it must not read the same to someone who cannot see
+    /// the lamp.
     func testVoiceOverIsToldTheArmedState() throws {
         let (bank, _) = makeBank(confirms: true)
         let plate = try plate(bank, "clear")

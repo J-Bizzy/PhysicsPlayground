@@ -16,7 +16,7 @@ enum GalleryLayout {
         let width: Float
         /// World y of the slab's top face.
         let slabTop: Float
-        /// Centre of each puck's TOP face, world space, one per module,
+        /// Centre of each puck's top face, world space, one per module,
         /// left to right as the user sees them.
         let puckTops: [SIMD3<Float>]
         /// Where each module's miniature centres, world space.
@@ -24,7 +24,7 @@ enum GalleryLayout {
     }
 
     // Per domain: azimuth (degrees, 0 = dead ahead, + right), radial at the 2.0 m default,
-    // slab-top at the 1.4 m default. Slabs share ONE height; ±28° is the collision-test minimum.
+    // slab-top at the 1.4 m default. Slabs share one height; ±28° is the collision-test minimum.
     private static let slots: [HubDomain: (azimuth: Float, radial: Float, top: Float)] = [
         .electricity: (azimuth: -28, radial: 1.95, top: 0.96),
         .mechanics:   (azimuth:  28, radial: 2.05, top: 0.96),

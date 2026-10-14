@@ -11,36 +11,26 @@ import simd
 
 enum CircuitsPartsLayout {
 
-    /// A standing user's head, for reach checks — same viewer
-    /// `FieldInstrumentLayout` uses (a property of people, not modules).
+    /// A standing user's head, for reach checks — the same viewer
+    /// `FieldInstrumentLayout` uses.
     static let viewer = SIMD3<Float>(0, 1.5, 0)
 
     /// Furthest a source may sit from the viewer before reaching becomes
-    /// stepping. Shared with `FieldInstrumentLayout.maximumReach`.
+    /// stepping.
     static let maximumReach: Float = 1.25
 
-    /// Widest off the forward axis a source may sit, in degrees. THE
-    /// BINDING CONSTRAINT here, not `maximumReach`: reach and angle pull
-    /// opposite ways (nearer in z buys reach, spends angle). 48° is the
-    /// shipped layers bank's own angle.
+    /// Widest off the forward axis a source may sit, degrees. The binding
+    /// constraint: nearer in z buys reach and spends angle.
     static let maximumOffAxisAngle: Float = 48
 
-    /// Furniture may stand outside `buildHalfExtents` (0.60) and some of
-    /// it stands inside — the box is where a reset LAYS PARTS OUT and
-    /// where instruments take their bearings, not a wall. The layers bank
-    /// (−0.62) still overlaps it; the rack (0.74) clears it by the
-    /// station margin. Both are correct.
-
-    /// ORDER within the one column, not geography: the racks merged into
-    /// a single right-hand column, and the flanks survive only as the
-    /// grouping that keeps sources-and-interrupters above loads.
+    /// Order within the one column, not geography: sources and interrupters
+    /// above loads.
     enum Flank: CaseIterable {
         case left, right
     }
 
-    /// What DRIVES or INTERRUPTS a circuit first, then what the current
-    /// DOES. Exhaustive by construction — a test fails any unassigned
-    /// kind, so no `ComponentKind` can be authored but unbuildable.
+    /// What drives or interrupts a circuit first, then what the current
+    /// does. Exhaustive by construction; a test fails any unassigned kind.
     static func kinds(on flank: Flank) -> [CircuitsModel.ComponentKind] {
         switch flank {
         case .left: [.battery, .acSource, .switcher, .fuse]
@@ -48,32 +38,12 @@ enum CircuitsPartsLayout {
         }
     }
 
-    /// One scrolling column on the right, cleared of the build volume by
-    /// `InstrumentClearance.stationMargin`. Every number is a constraint,
-    /// not taste.
-    ///
-    /// **x 0.74** clears `buildHalfExtents.x` (0.60) by 0.14, against a
-    /// `stationMargin` of 0.12. NOT 0.72, which is the margin exactly:
-    /// `InstrumentReachCriterionTests` states the rule — *"Exactly at the
-    /// limit is not clearance, it is a coincidence."*
-    ///
-    /// **z −0.77** shrinks the off-axis angle: `atan2(0.74, 0.77)` = 43.9°
-    /// against the 48° limit. It was 46.8° at x 0.82, two-tenths of a
-    /// degree off the margin line — narrowing the bench on 2026-08-26 is
-    /// what bought that budget back.
-    ///
-    /// **Six rows, and six is the ceiling.** Reach to the worst visible
-    /// slot from the viewer at (0, 1.5, 0), by row count:
-    ///
-    ///     5 rows (Δy 0.42):  1.145 m
-    ///     6 rows (Δy 0.525): 1.190 m   ← ships
-    ///     7 rows (Δy 0.63):  1.240 m   ← fails the 1.23 margin line
-    ///
-    /// The comment here used to read *"No depth satisfies reach and angle
-    /// with SIX rows on screen, so the window is five"* — true at x 0.82,
-    /// where six rows reached 1.246 m and all but touched the hard 1.25.
-    /// Do not try seven. `CircuitsPartsLayoutTests` checks the window and
-    /// asserts the seventh row would fail.
+    /// One scrolling column on the right, clear of the build volume by more
+    /// than `InstrumentClearance.stationMargin` (x 0.74 against 0.60 +
+    /// 0.12). z −0.77 keeps the column 43.9° off axis against the 48° limit.
+    /// Six rows reach 1.190 m from the viewer; a seventh would reach 1.240 m
+    /// and fail the margin line, so six is the ceiling
+    /// (`CircuitsPartsLayoutTests`).
     static let rightColumnX: Float = 0.74
     static let rightTopY: Float = 1.50
     static let rightRowPitch: Float = 0.105
@@ -81,9 +51,8 @@ enum CircuitsPartsLayout {
     /// How many are on screen at once; the rest are a drag away.
     static let rightVisibleRows = 6
 
-    /// Where slot `index` stands, in world coordinates. Every slot has a
-    /// position, including ones scrolled out — `Well` hides what falls
-    /// outside the window.
+    /// Where slot `index` stands, in world coordinates; `Well` hides what
+    /// falls outside the window.
     static func rightSlot(index: Int) -> SIMD3<Float> {
         SIMD3(rightColumnX,
               rightTopY - Float(index) * rightRowPitch,
@@ -95,9 +64,8 @@ enum CircuitsPartsLayout {
         simd_distance(slot, viewer)
     }
 
-    /// How far a slot sits off the forward axis, in degrees — the number
-    /// `maximumOffAxisAngle` governs. Horizontal only; height is what
-    /// `maximumReach` catches.
+    /// How far a slot sits off the forward axis, degrees. Horizontal only;
+    /// height is what `maximumReach` catches.
     static func offAxisAngle(to slot: SIMD3<Float>) -> Float {
         let across = abs(slot.x - viewer.x)
         let away = abs(slot.z - viewer.z)

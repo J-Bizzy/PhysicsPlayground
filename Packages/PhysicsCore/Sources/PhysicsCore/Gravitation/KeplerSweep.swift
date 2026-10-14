@@ -1,5 +1,5 @@
 //  KeplerSweep.swift — Kepler's second law: swept area = Σ ½|rᵢ × rᵢ₊₁| over time-stamped
-//  positions RELATIVE TO THE PRIMARY; exact for the sampled polygon, valid in any orbit plane.
+//  positions relative to the primary; exact for the sampled polygon, valid in any orbit plane.
 
 import Foundation
 import simd

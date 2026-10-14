@@ -2,24 +2,11 @@
 //  CircuitsRewireTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Moving a connection from one terminal to another.
-//
-//  The bench never had this gesture. Before it, changing where a wire
-//  went meant DELETING it — by tapping it, which destroyed it on the
-//  first tap with no confirmation, on a bench that survives relaunch —
-//  and then drawing a new one. Every other destructive verb in this
-//  app arms and then fires; this one did not even ask.
-//
-//  Now you pull the plug: grab the cable near the end you want, that
-//  end comes off into your hand, and you put it somewhere. It reuses
-//  the lead-pull machinery exactly, so the three landings are the ones
-//  a lead already had — a terminal, the original terminal, or open
-//  air.
-//
-//  THE WIRE LEAVES `wires` THE MOMENT YOU LIFT IT, and that is the
-//  teach rather than an implementation detail: the circuit goes dark
-//  in your hand. A bulb going out as you lift a wire says what that
-//  wire was doing better than any label on it could.
+//  Moving a connection from one terminal to another: grab the cable near
+//  the end you want, that end comes off into your hand, and you put it
+//  somewhere — a terminal, the original terminal, or open air. The wire
+//  leaves `wires` the moment you lift it: the circuit goes dark in your
+//  hand, which is the teach.
 //
 
 import XCTest
@@ -52,7 +39,7 @@ final class CircuitsRewireTests: XCTestCase {
 
     // MARK: Lifting
 
-    /// Grabbing a wire near an end takes THAT end off, and leaves the
+    /// Grabbing a wire near an end takes that end off, and leaves the
     /// other one where it was.
     func testGrabbingAWireNearItsEndTakesThatEndOff() {
         let model = CircuitsModel()
@@ -78,7 +65,7 @@ final class CircuitsRewireTests: XCTestCase {
         XCTAssertNotNil(model.nearerEnd(of: wire, to: midpoint + SIMD3(-0.01, 0, 0)))
     }
 
-    /// THE CIRCUIT GOES DARK IN YOUR HAND. This is the teach.
+    /// The circuit goes dark in your hand. This is the teach.
     func testTheCircuitGoesOpenWhileTheEndIsInHand() {
         let model = CircuitsModel()
         let (_, bulb, _, wire) = loop(model)
@@ -90,13 +77,9 @@ final class CircuitsRewireTests: XCTestCase {
         model.beginRewire(wire: wire, grabbing: 1, hand: lead(model, bulb, 0))
         model.step(dt: 1.0 / 90.0)
 
-        // NOT "exactly zero", and the difference is the solver's, not
-        // a fudge. `CircuitSolver.leakConductance` is a 1e-9 S leak on
-        // the diagonal that keeps a floating node solvable at all, so
-        // an open 9 V loop carries about 9 nA and always did. What the
-        // lift has to do is kill the CURRENT — seven orders of
-        // magnitude — and a tolerance loose enough to pass a lit bulb
-        // would prove nothing, so this is stated as a ratio.
+        // Not "exactly zero": the solver's leak conductance keeps a floating
+        // node solvable, so an open 9 V loop carries about 9 nA. The lift has to
+        // kill the current by seven orders of magnitude, stated as a ratio.
         let dark = abs(model.readouts[bulb]?.amps ?? 1)
         XCTAssertLessThan(dark, lit * 1e-6,
                           "the bulb must go out while the wire is lifted")
@@ -124,7 +107,7 @@ final class CircuitsRewireTests: XCTestCase {
                        "The wire should have left the old terminal.")
     }
 
-    /// Land back where it came from: restored, and NOT duplicated.
+    /// Land back where it came from: restored, and not duplicated.
     func testAReleaseBackOnTheOriginalRestoresItWithoutADuplicate() {
         let model = CircuitsModel()
         let (battery, bulb, _, wire) = loop(model)
@@ -159,18 +142,9 @@ final class CircuitsRewireTests: XCTestCase {
 
     // MARK: The refusal, and putting it back
 
-    /// A rewire that lands somewhere it cannot go is NOT a deletion —
-    /// the wire goes back where it was. Losing a connection because
-    /// you aimed at an illegal target would be the harshest possible
-    /// reading of a refusal.
-    ///
-    /// THE ASSERTION IS ON THE ENDPOINTS, NOT THE COUNT, and that is
-    /// the whole lesson of this test. The first version checked only
-    /// `wires.count` and passed against a `restore` that rebuilt the
-    /// wire as `anchor → anchor`: a zero-length self-wire, which keeps
-    /// the count identical while silently dropping the far part out of
-    /// the circuit and leaving something invisible, un-grabbable and
-    /// persisted behind. A count is not a connection.
+    /// A refused rewire restores the wire where it was; it is not a
+    /// deletion. Asserted on the endpoints, not the count: a `restore` that
+    /// rebuilt the wire as `anchor → anchor` kept the count identical.
     func testARefusedRewireRestoresTheWireWhereItWas() {
         let model = CircuitsModel()
         model.clearBench()
@@ -244,7 +218,7 @@ final class CircuitsRewireTests: XCTestCase {
 
     // MARK: The save waits for the hand
 
-    /// A save that fires while a wire is IN THE HAND must not write
+    /// A save that fires while a wire is in the hand must not write
     /// the bench without it. `beginRewire` schedules the debounced
     /// save the moment it lifts the wire; if that save landed
     /// mid-pull, a force-quit before the release would lose a
@@ -288,7 +262,7 @@ final class CircuitsRewireTests: XCTestCase {
         XCTAssertTrue(model.wires.contains { $0.id == wire })
     }
 
-    /// A TAP ON A WIRE NEVER DELETES IT. It used to, on the first tap,
+    /// A tap on A wire never deletes it. It used to, on the first tap,
     /// with no confirmation, on a bench that persists across launches.
     func testATapOnAWireNeverDeletesIt() {
         let model = CircuitsModel()
@@ -317,12 +291,8 @@ final class CircuitsRewireTests: XCTestCase {
         XCTAssertNil(model.leadPull)
     }
 
-    /// `deleteWire` is VoiceOver's wire removal (`onWireAction`) — the
-    /// pinch path deletes by pulling an end into open air, a gesture
-    /// VoiceOver cannot make. (This comment once claimed it was "the
-    /// free-air landing and `detachComponent`'s helper"; neither was
-    /// true — both do their own `removeAll` — which is how a dead
-    /// function nearly kept a live test.)
+    /// `deleteWire` is VoiceOver's wire removal (`onWireAction`); the pinch
+    /// path deletes by pulling an end into open air.
     func testDeleteWireStillWorksForTheCallersThatRemain() {
         let model = CircuitsModel()
         let (_, _, _, wire) = loop(model)

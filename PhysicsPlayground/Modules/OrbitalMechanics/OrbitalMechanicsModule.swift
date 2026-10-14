@@ -1,5 +1,5 @@
 //
-//  GravityLabModule.swift
+//  OrbitalMechanicsModule.swift
 //  Catalog registration for the orbital mechanics lab.
 //
 
@@ -7,35 +7,33 @@ import SwiftUI
 import PhysicsCore
 
 @MainActor
-enum GravityLabModule {
+enum OrbitalMechanicsModule {
     static let id = "gravitylab"
 
     static func descriptor(appModel: AppModel) -> ModuleDescriptor {
         ModuleDescriptor(
             id: id,
-            title: "Gravity Lab",
-            shortTitle: "Gravity",
-            blurb: "A real solar system in your room — grab planets, throw them into new orbits, and watch Newton's laws answer instantly.",
+            title: "Orbital Mechanics",
+            shortTitle: "Orbits",
             icon: "sun.max.fill",
             accent: DesignTokens.Palette.gravityAccent,
             // .progressive so the Digital Crown genuinely dims the room; the 0.85 shell does the contrast work.
             immersionStyle: .progressive,
-            firstRunHint: "Tap a planet: its orbit appears as a ring with a bead at each end. Pull a bead and the orbit reshapes under your hand — out to stretch it, sideways to swing it round the Sun, up to tilt it out of the plane. Distant orbits are drawn but out of arm's reach; pinch with both hands to bring them in. visionOS will ask to use your room so the orrery can stand in it.",
             // 0.85: the one allowed departure from the house dimming — pale Sun has no contrast on a lit wall.
             preferredDimming: 0.85,
             // Shell must stand outside the apparatus: 16 m clears Neptune at 1×; the default 3.4 m dome cuts through the rings (AtmosphereCriterionTests).
             preferredDimmingRadius: 16,
             legend: legend,
-            isPaused: { appModel.gravityLabModel.isPaused },
-            togglePause: { appModel.gravityLabModel.togglePauseRespectingScrub() },
+            isPaused: { appModel.orbitalMechanicsModel.isPaused },
+            togglePause: { appModel.orbitalMechanicsModel.togglePauseRespectingScrub() },
             makeScene: {
                 AnyView(
-                    GravityLabSpaceView()
-                        .environment(appModel.gravityLabModel)
+                    OrbitalMechanicsSpaceView()
+                        .environment(appModel.orbitalMechanicsModel)
                 )
             },
             captureReadings: {
-                let model = appModel.gravityLabModel
+                let model = appModel.orbitalMechanicsModel
                 var rows: [NotebookEntry.Reading] = [
                     .init("Bodies", "\(model.bodies.count)"),
                     .init("Elapsed", PhysicsFormat.fixed(model.simulatedDays, decimals: 1), "days"),
@@ -65,16 +63,27 @@ enum GravityLabModule {
                     rows.append(.init("Escape speed",
                                       PhysicsFormat.fixed(readout.escapeSpeedKmPerS,
                                                           decimals: 3), "km/s"))
-                    rows.append(.init("Bound", PhysicsFormat.state(readout.isBound)))
+                    // The data card's own word for it: a fate, not a switch.
+                    rows.append(.init("Orbit", readout.isBound ? "bound" : "leaving"))
                     if let period = readout.periodDays {
                         rows.append(.init("Period", PhysicsFormat.fixed(period, decimals: 2), "days"))
                     }
                 }
                 return rows
             },
-            timeScrub: .init(model: appModel.gravityLabModel),
+            adjustables: [
+                .init(id: "gravitationalConstant", label: "G", unit: "× G",
+                      range: 0.2...4.0, decimals: 2,
+                      read: { appModel.orbitalMechanicsModel.gMultiplier },
+                      write: { appModel.orbitalMechanicsModel.gMultiplier = $0 }),
+                .init(id: "sunMass", label: "Star mass", unit: "× Sun",
+                      range: OrbitalMechanicsModel.primaryMassRangeSuns, decimals: 2,
+                      read: { appModel.orbitalMechanicsModel.sunMassMultiplier },
+                      write: { appModel.orbitalMechanicsModel.sunMassMultiplier = $0 }),
+            ],
+            timeScrub: .init(model: appModel.orbitalMechanicsModel),
             reset: {
-                appModel.gravityLabModel.reset()
+                appModel.orbitalMechanicsModel.reset()
             }
         )
     }
@@ -94,15 +103,15 @@ enum GravityLabModule {
         ),
         LegendItem(
             swatch: .line(DesignTokens.Palette.gravityAccent),
-            text: "The selected body's orbit ring: the two-body ellipse it is on RIGHT NOW — the path it would take if nothing else pulled on it. The trail beside it is what actually happens; the gap between them is Jupiter's pull, and it is real. Grab a bead at either end to reshape the orbit."
+            text: "The selected body's orbit ring: the two-body ellipse it is on RIGHT NOW — the path it would take if nothing else pulled on it. The trail is what actually happens. For the real planets the two lie on each other: the other planets move Earth by kilometers, far under a millimeter here. Make a heavy neighbor — pull a world's mass to 400 Earths beside Earth — and the trail leaves the ring: that gap is the perturbation, and it is real. Grab a bead at either end to reshape the orbit."
         ),
         LegendItem(
             swatch: .symbol("exclamationmark.circle", DesignTokens.Palette.gravityAccent),
-            text: "The precession you can watch here is NEWTONIAN — the other planets tugging. Mercury's famous extra 43 arcseconds per century needs general relativity, which this lab does not model."
+            text: "The beads hold still on an undisturbed orbit and walk forward only when something perturbs it — a heavy neighbor makes them creep within a few orbits. That precession is NEWTONIAN, the other body tugging. Mercury's famous extra 43 arcseconds per century needs general relativity, which this lab does not model."
         ),
         LegendItem(
             swatch: .symbol("arrow.counterclockwise", DesignTokens.Palette.gravityAccent),
-            text: "The clock runs backwards. Verlet integration is time-symmetric, so reverse is the real physics run the other way, not a replay — perturb an orbit and rewind it and it un-perturbs. Merges are the exception: combining two bodies destroys the information needed to separate them again."
+            text: "The clock runs backwards. The integrator is time-symmetric, so reverse is the real physics run the other way, not a replay — perturb an orbit and rewind it and it un-perturbs, and each trail unwinds from the planet's end. Merges are the exception: combining two bodies destroys the information needed to separate them again."
         ),
         LegendItem(
             swatch: .symbol("circlebadge.2", DesignTokens.Palette.gravityAccent),
@@ -110,11 +119,7 @@ enum GravityLabModule {
         ),
         LegendItem(
             swatch: .symbol("arrow.up.right", DesignTokens.Palette.velocityVector),
-            text: "Vectors on the selected body: blue velocity, orange acceleration, red force toward the Sun (lengths log-scaled)"
-        ),
-        LegendItem(
-            swatch: .line(DesignTokens.Palette.gravityAccent),
-            text: "Spacetime grid — an analogy, not a measurement: the dips are drawn to look right, not solved. Every other number here is real"
+            text: "Vectors on the selected body: blue velocity, orange acceleration, red force — the NET pull of everything in the sky, so near a heavy neighbor they leave the line to the Sun (lengths log-scaled)"
         ),
         LegendItem(
             swatch: .symbol("clock", .secondary),

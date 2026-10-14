@@ -2,24 +2,10 @@
 //  RoomSessionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The crash this file exists to prevent:
-//
-//      RoomModel.retain()
-//      ARKitSession.run(_:)
-//      objc_exception_throw
-//      abort()
-//
-//  Opening one module worked. Opening a SECOND one killed the process,
-//  which is exactly what "a lot of the modules glitch the program out"
-//  looks like from the outside. The cause was that RoomModel held its
-//  ARKitSession and its four data providers as constants built once at
-//  init: `session.stop()` retires a provider permanently, so the second
-//  `run` handed ARKit objects it had already finished with, and ARKit
-//  answered with an Objective-C exception — which is not a Swift error,
-//  so the `do/catch` around `run` never saw it and the process aborted.
-//
-//  Both invariants below are about that. The session must be rebuilt
-//  per start, and overlapping retains must not both reach `run`.
+//  Opening a second module once killed the process: a stopped ARKit
+//  provider cannot be run again, and the NSException it raises unwinds
+//  past `catch`. The session must be rebuilt per start, and overlapping
+//  retains must not both reach `run`.
 //
 
 import XCTest
@@ -81,24 +67,9 @@ final class RoomSessionTests: XCTestCase {
 
     // MARK: The room says when it cannot see the room
 
-    /// Every failure path in `retain()` used to be a bare `return`, and
-    /// the app said nothing: deny the permission and Projectiles quietly
-    /// stopped bouncing off your walls, occlusion never appeared, and a
-    /// grep for permission copy across the whole app found comments and
-    /// nothing else.
-    ///
-    /// The invariant, and it is the one that matters: **`sensing` may
-    /// only say `.fine` when sensing is actually running.** Every other
-    /// arrangement is the silence this was added to break — an app that
-    /// reports nothing wrong while Projectiles quietly stops bouncing off
-    /// your walls.
-    ///
-    /// Asserted as an iff rather than as a specific case, deliberately.
-    /// The first version of this test asserted `.unsupported` on the
-    /// theory that the simulator supports no ARKit providers; it does
-    /// support some, so the test failed for a reason that had nothing to
-    /// do with the feature. What is true on every machine is the
-    /// relationship, not the branch.
+    /// `sensing` may only say `.fine` when sensing is actually running —
+    /// asserted as an iff, because which branch the simulator takes depends
+    /// on which providers it supports.
     @MainActor
     func testTheRoomNeverClaimsToBeSensingWhenItIsNot() async {
         let room = RoomModel()
@@ -119,24 +90,10 @@ final class RoomSessionTests: XCTestCase {
         room.release()
     }
 
-    /// LEAVING DURING A START MUST STILL TAKE THE SESSION DOWN.
-    ///
-    /// `release()` was guarded on `isRunning`, which stays false for the
-    /// whole of `retain()` — including the seconds the system permission
-    /// sheet is up on first launch. Leave the lab in that window and the
-    /// release no-oped; `retain` then finished and spawned plane
-    /// detection, hand tracking and scene reconstruction with zero
-    /// clients, and they ran for the lifetime of the process with the
-    /// sensing indicator lit and nobody reading them.
-    ///
-    /// WHAT THIS TEST CAN AND CANNOT SEE. The simulator supports few
-    /// enough providers that `retain()` usually returns before it ever
-    /// reaches `requestAuthorization`, so the seconds-long window itself
-    /// is device-only and is on the on-device script. What is checkable
-    /// everywhere is the bookkeeping the fix rests on: a release that
-    /// arrives before its retain has settled still brings the count to
-    /// zero and leaves nothing pinned open. Under the old guard the
-    /// count went to zero too — and no shutdown was ever scheduled.
+    /// Leaving during a start must still take the session down: `release()`
+    /// was guarded on `isRunning`, which stays false for the whole of
+    /// `retain()`, so a release during the permission sheet no-oped and the
+    /// providers ran for the life of the process with no clients.
     @MainActor
     func testReleasingDuringAStartLeavesNothingPinnedOpen() async {
         let room = RoomModel()
@@ -158,10 +115,9 @@ final class RoomSessionTests: XCTestCase {
                        + "reading them")
     }
 
-    /// The cases are distinct on purpose, and this is the reason: the
-    /// worst version of this feature is one message with a variable in
-    /// it, telling a simulator user to go and grant a permission they
-    /// were never asked for.
+    /// The cases are distinct on purpose: the worst version is one message
+    /// with a variable in it, telling a simulator user to grant a permission
+    /// they were never asked for.
     func testEachSensingCaseIsDistinct() {
         let all: [RoomModel.Sensing] = [.fine, .unsupported, .denied, .failed]
         for (index, one) in all.enumerated() {

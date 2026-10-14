@@ -2,8 +2,8 @@
 //  StationBox.swift
 //  PhysicsCore — Math: the volume one apparatus may occupy; pure geometry
 //  for layout assertions. Two invariants for two station kinds: benches
-//  side by side must be DISJOINT (`separation`); benches inside a
-//  room-sized apparatus are checked for CONTAINMENT (`distanceRange`).
+//  side by side must be disjoint (`separation`); benches inside a
+//  room-sized apparatus are checked for containment (`distanceRange`).
 //
 
 import Foundation

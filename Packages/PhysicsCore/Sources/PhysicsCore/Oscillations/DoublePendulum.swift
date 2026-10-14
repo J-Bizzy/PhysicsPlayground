@@ -2,8 +2,8 @@
 //  DoublePendulum.swift
 //  PhysicsCore — planar double pendulum, exact Euler–Lagrange EOM by RK4.
 //
-//  PLANAR so the result has a closed form to be checked against (a 3-D
-//  double pendulum has none). BOTH ANGLES ARE MEASURED FROM STRAIGHT DOWN
+//  Planar so the result has a closed form to be checked against (a 3-D
+//  double pendulum has none). Both angles are measured from straight down
 //  (the vertical, not the rod above) — the textbook convention; measuring
 //  θ₂ relative to θ₁ gives an equivalent but different-looking system, the
 //  classic way to get a pendulum that looks almost right. Chaos defeats a
@@ -83,7 +83,7 @@ public struct DoublePendulum: Equatable, Sendable {
             / (l2 * denominator)
 
         // Damping enters as a torque opposing each bob's angular rate.
-        // Kept OUT of the conservative terms above so the undamped case
+        // Kept out of the conservative terms above so the undamped case
         // is bit-for-bit the ideal system the energy test checks.
         guard rig.damping > 0 else { return (a1, a2) }
         return (a1 - rig.damping * s.omega1 / m1,
@@ -91,7 +91,7 @@ public struct DoublePendulum: Equatable, Sendable {
     }
 
     /// One RK4 step. RK4 (not Verlet) because the system is not separable:
-    /// accelerations depend on BOTH angular velocities, so there is no
+    /// accelerations depend on both angular velocities, so there is no
     /// position-only force for a kick-drift-kick.
     public static func step(_ s: DoublePendulum, dt: Double,
                             rig: Rig, gravity: Double) -> DoublePendulum {

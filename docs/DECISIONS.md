@@ -16,6 +16,709 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-14 — The labs answer a hand the same way, and their words agree
+
+**Decision:** A polish pass across all six labs, no new controls. Three
+kinds of change.
+
+*Feedback.* Every lab now acknowledges a grab with the pickup flash and
+grab tick and a let-go with the release tick. Projectiles, Orbital
+Mechanics and Electric Fields had both coded but keyed on manipulation
+flags nothing set, left from a grab system the labs no longer use; each
+renderer now reads the held object off its model (`heldBodyID`,
+`heldChargeID`, a ball's `.held` status) and the dead flags and their
+always-true branches are gone. Magnetism had neither and gains both. A
+fired petal pops, as a fired action plate does, so Delete is no longer
+silent. Opening a ring on a magnet or a circuit part selects it, so the
+halo and the readout name the object the ring is on. Electric Fields folds
+its ring with the house tick; Pendulums' collar ring pops and ticks, folds
+on a tap elsewhere, and is reachable from VoiceOver. Pendulums whooshes
+only on a throw (0.25 m/s), not on a still release or the end of a length
+edit. The hoop's Delete and the launcher's Clear wear destructive red like
+every other petal that removes something. The palette's Pause petal reads
+"Resume" with a play glyph while the lab is paused. Projectiles' ball fan
+opens above and right of the launcher, tighter (`ballFanLayout`), because
+at the house default its first disc stood 6° from the world row's Jupiter,
+nearer the wearer and in front of it.
+
+*Correctness that showed.* Circuit Workshop saves after Clear bench, a
+preset and Reset (`commitBench`); none of the three did, so a relaunch
+reopened the bench the wearer had just replaced. The save is not inside
+`reset()` itself, because `init` runs it before restoring and would
+write the starter loop over a bench that failed to restore. Readouts no
+longer freeze on an old number: `Callout.setText` and `BackedLabel.setText`
+return whether the label took the text, and the callers that cache "what
+I last showed" record only what landed (the compass, the catch and flight
+callouts, the arc's apex, landing and protractor labels, hoop aim and
+score, the capacitor readout, the voltage towers, part labels, body
+names). Twin suns no longer moves the selection onto a star. The merge
+flash times out on the clock, not a 90 Hz frame count. Under Reduce
+Motion the planets stop turning on their axes, an armed terminal stops
+breathing, a petal does not swell, and the merge flash does not grow;
+motion that is the physics itself (electron flow, the swing, the arcs)
+stays.
+
+*Words.* Notebook rows say what the plates say: Projectiles' ball is
+"Golf ball", not `golfBall`; Pendulums' "Friction" is "Air resistance";
+Elevation closes its degree sign up like Inclination; Orbital's "Bound:
+on" is "Orbit: bound". A mass grip reads "1 Earth", "1.00 Sun", and a
+comet's 3.7 × 10⁻¹¹ Earths in scientific notation rather than "0.00
+Earths" (`PhysicsFormat.count`); the clock reads "−20×" with the room's
+minus (`PhysicsFormat.multiplier`). The callouts that still used
+`String(format:)` go through `PhysicsFormat`. "AC Source" is "AC source",
+and the meter's notes say "across the battery". Wearer-facing text is
+American, which is how the owner writes; the room-sensing sentences and
+two VoiceOver hints say "lab" for "experiment", and the CSV header says
+"lab" for "module". The Physics box's rails are spoken by their names,
+not as "physics-gravity"; a ring's value readout is renamed on every
+retarget, so the probe's Charge is not announced as Strength. Magnetism's
+legend has one compass, as the room does.
+
+**Context:** Owner, after the home's pass: *"keep going, polish the labs
+too."* Two read-only surveys of the six labs, one of feedback and one of
+words, plus simulator photographs of each lab; every finding was checked
+against the code before it was changed, and several the surveys raised
+were left alone on purpose: single-object deletes do not confirm in any
+lab (consistent, and undo is a pull from the well), the Kinematics hoop
+orbit capability with no door stays parked, and per-frame component
+writes in `Bloom` and `Well` are a performance question for a device
+profile, not a polish pass.
+
+**Consequences:** `PhysicsFormatTests` gains the count and multiplier
+cases; `CircuitsModelTests.testPresetsAndClearingAreSaved`;
+`FanLayoutTests` lists the ball fan among the shipped fans;
+`LabNotebookTests` reads the "lab" header. `SpatialTrackControl` takes an
+optional `spokenName`. The device list has the checks.
+
+## 2026-10-14 — The names go on the bench, and the last chrome inconsistencies close
+
+**Decision:** The gallery's six exhibit names leave the air. Each is a lit
+inlay on its terrace's dark front edge, directly under its mount, in the
+lab's accent at the house exhibit size (`HubScene.benchLabel`). A label
+never moves: it brightens while you face its exhibit, and dims to a third
+while its lab stands on the pad, so an empty mount still says what belongs
+there. The floating name pivots are deleted. The focus pool is
+counter-lifted every frame so it lights the mount while the exhibit rises
+off it. In the labs, the palette's Reset petal arms before it fires
+(destructive red, "Tap again", `SpatialActionBank.armWindow`; folding the
+ring disarms), and the capture petal thuds when the lab had nothing to
+write down instead of chiming over an empty page. Smaller: icon-only
+buttons in the title bar and the home's utility bar name themselves on
+look (`.help`); the Settings volume slider gains speaker glyphs at its
+ends; Orbital Mechanics' capture row "Bound: on" reads "Orbit: bound" or
+"leaving", the data card's word; the home's Settings button stops
+promising an onboarding section deleted on 2026-09-04; the title bar's
+back button is "Home", not "the catalog"; the pad's plaque reads "LOAD
+LAB" and the Reset confirmation "how the lab opened" — "module" was the
+codebase's word showing through, the only two places a wearer met it; and `AppModel.visitedModuleIDs`,
+which wrote every lab visited to `UserDefaults` for "New" badges deleted in
+August, is deleted and its key cleared on launch.
+
+**Context:** Owner, before release: *"make the experience as polished as
+possible. Keep design consistent, make the ui look nicer"*, with the home's
+platforms named, no new modules and nothing more cluttered. Simulator
+photographs of the gallery found two defects the device list had not.
+The names were bright accent type with no casing, the light-on-light
+problem the wordmark and door signs had already been given keylines for,
+and Circuit Workshop's green and Pendulums' magenta nearly vanished
+against a cream wall. And a focused exhibit's name rode its 0.09 m lift
+and 1.22× growth into its terrace's door sign: the sign's rule hangs about
+0.465 m above the bench and the name's centre reached about 0.55 m. That
+is geometry, not perspective, and the space between a lifted exhibit's top
+(about 0.43 m) and the rule cannot hold a line of type. The pool of focus
+light rode the same lift and hung as a smudge above the mount it was
+meant to light. In the labs, a single pinch on the palette's Reset wiped
+the lab, while the title bar's Reset asks and every Clear plate arms
+first; Circuit Workshop's bench survives relaunch, so this was the one
+unguarded path to losing it.
+
+**Why the bench and not a fix in the air.** The owner cut a backing card
+behind the gallery's type twice (the names on 2026-08-04, the wordmark on
+2026-08-09) because a card blocks the room. The bench's front edge is 55 mm
+of dark graphite that is already there: lit type on it gets the contrast
+of a card without adding one. It also removes three tiers of floating type
+down to two (the wordmark and the door signs), puts each name where a
+museum puts it, and makes the dock legible from the terrace. Names stay
+legible at all times, which was the owner's 2026-08-04 requirement.
+
+**Consequences:** `GalleryLayoutTests.testEveryExhibitTitleFitsItsPitch`
+measures the bench labels (3 cm of bare graphite between neighbours, and
+every label clear of the face's chamfers), and
+`testEveryLabelStandsUnderItsExhibitOnTheBenchFace` holds the placement.
+`PaletteResetTests` drives the petal through `handleTap` and `update`:
+one pinch arms and resets nothing, the second fires once, the arm runs out
+after the window, folding the ring disarms, and the armed petal reads
+"Tap again". `-paletteReset 1` opens the ring with Reset armed and held,
+photographed armed and never fired, like `-circClear`. The capture petal's thud closes
+the "refusal sound for a failed capture" item on the 2026-09-01 backlog.
+Whether the inlay reads in a dim room is a device question and is on the
+list.
+
+## 2026-09-07 — The wordmark stays the machined plaque
+
+**Decision:** The home's 3-D title keeps its machined dark plaque with the champagne chamfer, SF Pro Display Bold, milled by `Tools/hubtitles.py`. Two auditions the same day were built, photographed and reverted.
+
+**Context:** The owner asked for three new looks, shown at once, to pick from. Round one put Futura, New York and DIN on the same plaque with per-letter hop, swing and turn motions; it was rejected as the same object in a different face. Round two changed the object — a neon script sign that ignited and hummed, a chalkboard written and wiped, a cyan wireframe hologram that drifted, scanned and glitched — and the owner chose to keep the original instead.
+
+**Consequences:** Nothing of either round ships: no candidate assets, no per-glyph pivots, no `-titleClock` argument. What was learned and is worth keeping is in the git history and this entry: a per-glyph bake (each letter its own named part) is cheap in Blender and grouping by name in Swift takes twenty lines; fontTools can snapshot any system face, static or variable, for Blender; and the outline-as-tube trick makes a wireframe letter. If the title is revisited, start from a different object, not a different typeface — that much of round one's rejection stands.
+
+## 2026-09-06 — The body's data card is five lines
+
+**Decision:** The selected body's floating card is a two-column grid of
+five lines at label size — r and v; a and e; q and Q; i and T; E with
+the word "bound" or "leaving" — in place of fourteen footnote rows, three
+energies, the orientation angles Ω, ω, ν and a paragraph explaining
+their conventions. The angles and the energy split stay in the notebook
+capture.
+
+**Context:** Owner: *"condense the physics ui box on the planets and
+make it easier to read."* The card stood as a tall column of tiny rows
+over the planet, most of them conventions nobody reads on a floating
+card, in a lab whose rule is that nothing explains itself in prose.
+
+## 2026-09-06 — Letting go of a body puts it in orbit
+
+**Decision:** A released body takes the circular prograde orbit at its
+distance from the primary with the hand's throw laid on top as a
+perturbation (`OrbitalMechanicsModel.insertionVelocity`, shared with the
+well's `addBody` through `circularVelocity`). The held-body ghost shows
+the same rule. The primary itself is simply thrown.
+
+**Context:** Owner: *"the orbiting still feels weird and I cant place
+them into orbit around the sun."* Release set the velocity to the
+hand's alone, scaled so 0.35 m/s was orbital speed: a still hand dropped
+the planet into the Sun, and an orbit needed a throw at exactly that
+speed exactly along the orbit — which the checklist's own "let go
+without moving your hand: it holds a circular orbit" already promised
+and the code did not do.
+
+**Consequences:** `testAStillHandPlacesABodyOnACircularOrbit`;
+`testReleaseLaysTheThrowOnTheCircularOrbit` replaces the bare
+hand-velocity test; a hard throw still unbinds. Lagrange capture keeps
+precedence at a point.
+
+## 2026-09-06 — Orbital Mechanics: the orbital system re-approached
+
+**Decision:** Gravity Lab is renamed **Orbital Mechanics** (id `gravitylab`,
+the `-grav*` arguments and `gravityAccent` unchanged; `shortTitle`
+"Orbits"), and the orbital system is rebuilt from the integrator out.
+`NBody.step` is a fourth-order symmetric symplectic composition (PEFRL:
+four force evaluations, palindromic, so exactly time-reversible) with a
+per-body softening floor whose potential matches its force; a held body
+is `frozen` inside the step. The model keeps the system's net momentum
+at zero (`settleMomentum` after every spawn, throw, edit, deletion and
+split), sizes the substep from the shortest two-body timescale present
+(6 h in the default system, capped at 96 per frame), checks merges every
+substep, and records each body's path as `OrbitTrail` — the trailing
+0.75 of its own osculating period, sampled a degree apart about the
+heaviest body inside the substep loop, unwound under reverse time,
+rebuilt for a scrub under the same rule with the live samples spliced
+in. The renderer draws each trail as a `TrailRibbon` (`LowLevelMesh`,
+rewritten in place, keyed by body id), 1.2 mm thick in the room at any
+zoom, in the body's own colour, fading to nothing at the tail. The
+orbit ring's tube is 1.4 mm in the room whatever the orbit or zoom and
+its mesh follows the exact eccentricity. `celestialUI` names every
+body's colour and the textures' base fills read it. The Moon preset is
+removed (nine worlds). Arrows show the net pull.
+
+**Context:** Owner: *"the whole orbiting system just does not feel quite
+right. The colored paths of the planets orbits is inconsistent … I want
+you to take a genuine reapproach at the code behind how the actual
+system works."* Measured on an isolated Sun–Mercury: velocity Verlet at
+the app's 1× step (8 640 s) turned the apse line 19″ per orbit, and at
+the ≥5× step (21 600 s) 119″ — retrograde, 15× and 93× the real
+Newtonian precession from the other planets (1.28″ per orbit,
+prograde) — while conserving energy to 1e-8, which is why the existing
+energy test never saw it; the device checklist told the wearer the creep
+was "real Newtonian precession" and the ring–trail gap "was Jupiter"
+(Jupiter moves Earth by ~0.03 mm of room). `reset()` seeded every planet
+moving −z against a Sun at rest: 3.18e31 kg·m/s of net momentum, a
+barycentre drifting at 16 m/s, 2.5 m of room per half hour at 100×,
+trails smearing into cycloids while the ring rode the Sun. The trail
+mesh rebuilt only when its point count changed, so once a body's 240
+points were full the ribbon froze in space while the planet flew on
+(Mercury after ~46 s at 1×); every body drew the same 1.92 m of ribbon
+(Mercury 1.6 laps, Neptune 2 %); the spacing collapsed to one point per
+frame at 100×; slots were positional, so a merged body's path could stay
+in its colour; coalesced pipeline jobs were dropped; the tube was 1.2 mm
+from Mercury to Neptune and scaled with the rig; a scrub changed every
+trail's length. Four of the ten default bodies were the same teal
+(Saturn, Uranus, Neptune, the comet had no colour and no texture), Earth's
+trail was the velocity arrow's blue over an ocean-blue sphere, the ring
+was 0.33 mm on Mercury and 27 mm on Neptune and popped in 0.03
+eccentricity buckets mid-drag. The Moon preset spawned 30 mm of room
+from Earth, inside the 37 mm merge distance, and merged on frame one.
+
+| Scheme | step | evals/orbit | apsidal drift/orbit |
+|---|---|---|---|
+| velocity Verlet (was, 1×) | 8 640 s | 879 | −19.0″ |
+| velocity Verlet (was, ≥5×) | 21 600 s | 352 | −118.7″ |
+| PEFRL, equal cost | 34 560 s | 879 | −0.037″ |
+| PEFRL at the ≥5× step | 21 600 s | 1 407 | −0.006″ |
+
+Wisdom–Holman was considered and rejected: it needs a dominant primary
+(Twin suns, held bodies and thrown hyperbolic bodies break the
+splitting) and a universal-variable Kepler solver, for accuracy this
+scene cannot display. Linear 0.5 m/AU stays (the owner's call): the
+outer planets are a zoom away, not a compressed picture.
+
+**Consequences:** `NBodyTests` gains the precession test (a mistyped
+coefficient would drop the order to 2 and fail it), reversibility,
+frozen-body and softening-potential tests; `OrbitTrailTests`,
+`OrbitRingTests`, `GalleryLayoutTests.testEveryExhibitTitleFitsItsPitch`
+and eleven model tests (frame, substeps, tunnelling, isolated
+precession, trail fraction at 1× and 100×, uniform angle, a full trail
+following its body, unwind, scrub, merge, the fan) are new;
+`AccentAuthorityTests` holds every body's colour ΔE ≥ 12 from every
+other, the ring's accent and the vector trio. `ARCHITECTURE.md`'s
+per-frame rule records the one exception: a bounded `LowLevelMesh`
+rewritten in place is a buffer write, not regeneration. The legend and
+the checklist no longer attribute integrator error to Jupiter; the
+checklist shows how to MAKE a visible gap (a 400-Earth world beside
+Earth). The Sun starts on the origin and wobbles a few millimetres about
+the barycentre from there — recentring the barycentre was tried and
+dropped, because every hand point and test treats the Sun's start as
+the origin and the millimetres buy nothing.
+
+## 2026-09-06 — The shelf scrolls by a crown
+
+**Decision:** Circuit Workshop's parts column scrolls by a crown: a
+knurled machined thumbwheel (`Models/Shell/ShelfCrown.usdz`, from
+`Tools/shelfcrown.py`) standing edge-on in a gap of the hairline spine
+beside the column, at the window's middle. Roll it and the column rides
+the hand one to one — flick, rubber-banded ends, a detent tick per slot
+and a click on landing, all the arithmetic `RackScroll` already had —
+and the crown turns with the column, arc over radius, so a crown at rest
+is a readout of where the shelf is. On entering the lab the column
+arrives coasting up into place with the crown rolling (`Well.arrive`,
+`RackScroll.coast`); nothing under Reduce Motion. The track and its
+thumb are gone.
+
+**Context:** Owner: *"It not only does not work right now but I want it
+to be something more flagship than just a basic scrollbar. However, do
+not make it look too sloppy or over the top either."* It did not work
+for a reason no test had exercised: the scene's one
+`DragGesture(minimumDistance: 0)` reports the thumb on every frame, the
+view pressed the shelf on every frame, and `Well.beginDrag` re-anchored
+the grab each time — so the travel always measured zero and the thumb
+never moved by hand. The same trap `PressLatch`'s header describes,
+one line down from where it was described. And a thumb on a track is a
+screen's idea: a 1 cm sliver a metre off, geared to move the strip
+twice as far as the hand. The house already had the answer in the Time
+Capsule's reel — give the capability an object, let the object turn as
+a readout — and the headset itself scrolls by a crown.
+
+**Consequences:** `Well.beginDrag` is idempotent (the first press wins,
+like a latch) and the view guards it too; `WellScrollTests` presses
+every frame the way the view does, which is the regression test the
+thumb never had. The shelf reads the hand in the renderer's root frame,
+not the zoomed bench's — it stands outside the zoom, and the old code's
+bench-frame hand would have needed four times the travel in Electron
+View. `Well.Rack` describes the spine and the crown's box, which joined
+the clearance furniture; `ShelfCrownPropTests` holds the asset's axis
+and size against the radius the Swift side turns it by. The crown's
+pinch target is the collider rule's allowance and no more. The slots,
+the window, the fade, VoiceOver paging on the crown and `-circScroll`
+are unchanged. Whether a wearer reads a wheel as "roll me" with no
+caret to prompt it is a device question, on the device list; the
+arrival coast is the apparatus's own answer to it.
+
+## 2026-09-05 — The Physics box
+
+**Decision:** Every lab gets a Physics box: the title bar's ƒ button
+unfolds a readout card in the room with the lab's live numbers, and one
+house rail beside it for each quantity the lab lets you set —
+`ModuleDescriptor.adjustables`. Fields: plate voltage and uniform B (the
+probe's q stays on its own ring); Magnetism: the magnet's moment; Projectiles: g and wind; Gravity
+Lab: G and the star's mass; Circuits and Pendulums: numbers only. It is
+folded until asked and kept across labs once opened.
+
+**Context:** Owner: *"I see the physics box in the top left of the
+electricity module … I like that. But I think we should add a dedicated
+UI button so that there's a physics box and the user can click it and
+see all the physics values. And maybe, depending on the module … places
+that change the value of the electric or magnetic field."* Electric
+Fields alone had a standing readout card; the other five had their
+numbers only in the notebook's capture list. That list already existed
+per module (`captureReadings`), so the card is one shell view over it.
+
+**Consequences:** `Shell/PhysicsBoard.swift` is one implementation for
+six modules: a RealityView attachment (no hit testing) seated high at
+`PhysicsBoard.home` with the rails in a column beside it, following the
+lab placement, plus `SpatialTrackControl` rails. The first build hung
+the rails under the card at 1.63 m, where the screenshots showed them
+standing in Electric Fields' bank and Projectiles' wall; the card went
+up to 1.93 m and the rails moved beside it, and `PhysicsBoardTests`
+now checks every module's rails box against box against every
+module's flank instruments and build volume rather than against three
+bank tops — so it does not reopen the
+2026-08-01 panel question: no `Slider`, no `Toggle`, and
+`PanelControlCriterionTests` still passes. A rail on the box sets the
+same value as the rail on the apparatus, both reading the model every
+frame, so two handles cannot disagree. Electric Fields' own card is
+deleted, its probe rows moved into that module's `readings` (so the
+notebook records them too), and its one disclosure — 50 kT is fictional
+— survives as the box's footnote. Circuit Workshop shows the bench and
+the selected part rather than every part. Pendulums' g stays retired.
+`PhysicsBoardTests` holds the dials' round trips, the reach, the
+clearance over the banks and the fold; `-physicsOpen 1` photographs it.
+
+## 2026-09-05 — Electric Fields opens with no test charge
+
+**Decision:** The probe is no longer dropped when the lab opens. The
+dipole stands alone; a test charge comes out of the Test + or Test −
+well when wanted, and Reset leaves none.
+
+**Context:** Owner: *"remove the test charge being in the electric field
+module immediately. I don't want it to be there first … you should still
+be able to grab it from the side."* The arrival drop (2026-08) existed so
+the lab was not a still diagram; the field lines' riding arrowheads and
+the wells make that argument moot.
+
+**Consequences:** `FieldSpaceView` drops nothing on arrival;
+`ColdOpenTests` asserts the lab opens probe-free and that the well is the
+way in. `-emProbe 1` still stages one for a screenshot.
+
+## 2026-09-05 — The ampersands' solids were inside-out
+
+**Decision:** `Tools/hubtitles.py` checks each glyph's signed volume
+after the bevel and reverses the shell when it is negative.
+
+**Context:** Owner: *"the white bolt around [the ampersand] is only on
+the back of it … missing on the front part of the letters."* Measured on
+the built glyph: the ampersand's chamfer band had 0.0014 of its area
+facing the front and 0.144 facing the wrong way; an M had 0.082 and
+0.003. The ampersand's solid came out of the bevel consistently oriented
+and inside-out, so RealityKit culled every face of it from the front,
+the far cap showed through as a flat dark shape, and the keyline showed
+only round the silhouette from behind. `recalc_face_normals` did not
+cure it — it makes a shell agree with itself and can agree on the
+inside.
+
+**Consequences:** All six title assets regenerated (only the two
+ampersand lines change visibly); the ampersand now measures 0.072
+front, 0.003 wrong-way. The script's `main()` is behind a
+`__name__` guard so a diagnostic can import its stages, and the font
+snapshot needs `fontTools` importable by the system python3 (a
+`PYTHONPATH` to a pip `--target` directory works without touching
+either install).
+
+## 2026-09-05 — The tiles come out; the emblems go in
+
+**Decision:** The palette's ring of six accent discs is back exactly as it
+was, and the work goes into what stands inside each disc: the six lab
+miniatures are rebuilt as emblems — one bold object each, a few big
+parts, lines no thinner than a cable. Two big charges with seven field
+lines and riding arrowheads; a fat copper loop with a big battery and a
+lit bulb; one bar magnet turning slowly with eight field loops turning
+with it; a launcher on a puck, one arc, a ball and a hoop; one brass bob
+on a beam, swinging in a slow ellipse; a star with one world on one
+orbit. The same emblems stand on the gallery's terraces.
+
+**Context:** Owner, an hour after the tiles shipped: *"I was talking
+about the actual models inside the spheres, not you change the actual
+UI … it has these stupid squares, and I don't like that. I want you to
+actually change the models inside of them."* The earlier entry read the
+brief as the picker; the brief was the miniatures. What they were:
+dioramas — integrated dipole fields with sixteen lines, two magnets
+almost snapping with a compass reading their field, a Kepler system
+with two worlds and a comet, a switch with a lever, three pendulums.
+Faithful, and at seven centimetres a smudge.
+
+**Consequences:** `HubVignettes` is 800 lines instead of 1,300; the
+compass, comet, launcher carriage, quadrant, target stand and pendulum
+stand props are no longer used by any miniature (they stay in the
+bundle and in `VignettePropTests`). `HubVignetteTests`' contract —
+centred, one square, no streak, motion inside the square, actually
+moving — is unchanged and still holds. `PaletteTileTests` is deleted;
+no Blender was needed, the emblems are the existing props plus
+primitives. The tile entry below stays as the record of a wrong reading.
+
+## 2026-09-05 — The shelf loses its pane; a drag on a part is always a pull
+
+**Decision:** Nothing stands behind Circuit Workshop's parts: the pane is
+gone, "Parts" floats above the column, and a hairline track with a
+luminous thumb stands beside it. The thumb is the one thing that scrolls
+(drag it, with flick, rubber-banded ends and detents; VoiceOver pages
+it). A drag that starts on a part is a pull, whichever way the hand
+goes, promoted by a `PressLatch` after 12 mm so a tap spawns nothing.
+
+**Context:** Owner: *"the bench doesn't work, and I don't like how there's
+that little gray background too … let me drag out all the parts."* The
+2026-09-04 shelf read every drag's direction to decide scroll or pull;
+a hand that drifted along the column while taking a part scrolled it
+instead, so parts could not reliably be dragged out — the one thing a
+shelf is for. And the frosted pane was a grey slab in the room.
+
+**Consequences:** `ScrollGesture` is deleted from RenderKit with its
+tests; `Well.Rack` describes the track, not a pane, and
+`CircuitsInstrumentClearanceTests` measures the track;
+`CircuitsCarryDispatchTests`' "spent pull" trap is gone with the
+mechanism that made it, replaced by the shelf refusing slot drags. The
+slots, the window, the fade and `-circScroll` are unchanged.
+
+## 2026-09-05 — A wire never lets go because of distance
+
+**Decision:** Carrying a wired part any distance keeps its wires. The 30
+cm `breakDistance` pop, the poppable-contact bookkeeping and
+`beginCarry`/`endCarry` are deleted. A connection comes off only by
+pulling the wire's end off its terminal, cutting it from the part's
+ring, or deleting the part.
+
+**Context:** Owner: *"when I try to move the initial capacitor, it
+automatically breaks the wire connection. So I don't think that should
+happen … figure out a different way."* The pop was meant as pull-apart
+detach for a snapped contact; in practice moving a part of the welcome
+circuit more than a hand's width broke the circuit, with no way to see
+the threshold coming.
+
+**Consequences:** `CircuitsModel.drag` is swing-or-move; a part hanging by
+one lead still swings about its joint within reach and past it aims its
+lead back at the joint with the wire stretching, now without end.
+`CircuitsAlignmentTests` and `CircuitsModelTests` assert the keep where
+they asserted the pop. The rewire gesture (lift an end, land it
+elsewhere, or in open air to delete) is the deliberate way apart.
+
+## 2026-09-05 — The lab picker is two rows of tiles
+
+**Decision:** Pinch the palette bead and the six labs unfold above it as
+two rows of three frosted tiles — the gallery's two terraces, in the
+gallery's order — each carrying the lab's live miniature standing proud
+of its pane, its name under the pane, and one accent rule along the
+pane's foot, lit on the lab you are in and dim on the rest. The pastel
+discs are gone. The grid opens toward the centre of the room from the
+bead's spot at the right shoulder, so every tile is a reach rather than
+a step, and VoiceOver reads the lit tile as "the lab you are in".
+
+**Context:** Owner's brief: *"do an improvement run on all of the 6
+modules spheres with icons inside of them (the things in the homescreen
+and gyro sphere select ball). They look crappy … Rethink it entirely,
+don't just try to slightly change them. And don't make it too
+complicated: it should be simple and communicates what it will look
+like."* The ring fanned six translucent accent discs across 150° with a
+7 cm miniature squeezed inside each — a blob with a smudge in it, in a
+material nothing else in the house wears. What communicates a lab is
+the lab itself: the gallery's miniatures already exist, and the shelf's
+frosted pane already solved contrast against a bright wall.
+
+**Consequences:** `Palette.tileRest` places by `HubDomain` row and
+column, so the picker cannot disagree with the gallery; `PaletteTileTests`
+holds the rows, the pitch, the reach from `Palette.defaultAnchor`, the
+lit rule and the miniature standing in front of its pane, and
+`LabelTargetCriterionTests` still finds every name inside its tile's
+target. The bead stays the gyroscope; the petal row is unchanged. No
+Blender was needed: the tiles are primitives and the miniatures were
+already modelled. Not measured here: whether a tile reads at arm's
+length on the device, which is on the device list.
+
+## 2026-09-05 — Primitives and materials are made once
+
+**Decision:** Every primitive mesh and collider comes from
+`RenderKit/Primitives`, which hands back one resource per shape, and
+every recipe in `Materials` is memoised, with `Materials.unlit` for the
+flat colour at an opacity the app builds most. `PrimitiveCanonCriterionTests`
+fails a bare `generateSphere(` or a hand-built flat colour anywhere in
+the app or RenderKit.
+
+**Context:** RealityKit builds a fresh resource for every `generate*`
+call and every material, and each build is a round trip that blocks the
+main thread on the engine queue (`Blocking engine queue waiting for
+AssetLoadRequest` in the unified log). Measured in the test host: a
+sphere 0.17 ms, a physically based material 0.37 ms, an unlit material
+0.67 ms, an extruded text mesh 1.9 ms. Entering Circuit Workshop paid
+for about a thousand of them — a bench holds hundreds of identical
+terminals, beads, plates and nameplates.
+
+**Consequences:** 222 mesh and collider calls and 49 flat-colour
+materials rerouted by script, byte-for-byte the same arguments; the hub's
+bubble type is measured and built from one cached mesh instead of two.
+Circuit Workshop's entry went from ~1,000 engine-queue blocks to 487 in
+a forty-second window, the gallery's build from 252 to 136 (0.24 s to
+0.16 s). What remains is mostly per-entity: colliders measured from
+each part's own bounds and a backing plane per nameplate width. The
+cache is bounded at a thousand shapes and five hundred materials, and
+clearing it only stops sharing. A copied material is a value
+(`PrimitivesTests` proves it), which is what makes handing out a cached
+one safe.
+
+## 2026-09-05 — The props warm six wide, and the launch says what it is doing
+
+**Decision:** `PropCache.warmUp` loads the bundled `.usdz` files six at a
+time instead of one after another, and debug builds print three
+`[launch]` lines to the console: props warm, space ready, gallery built.
+
+**Context:** Owner's report: *"Whenever I simply try to run the
+simulator, it often never boots up (the actual visionOS simulator pops
+up, but the app never opens), and there are just a lot of thread errors
+that pop up."* Eleven Xcode runs that day were each killed after 13–65
+seconds. Their consoles held only Apple's four startup lines, and the
+simulator's own log of the 19:50 run showed the props finishing warming
+at +5 s and then nothing for 28 s: no gallery build, no ARKit session.
+That is a process stopped in the debugger, not a slow one. World
+tracking is supported in the simulator, so `RoomModel.retain()` runs a
+real session there and reaches the line an enabled Xcode breakpoint sat
+on (`RoomModel.swift:214`, in `xcuserdata`). Under `simctl`, with no
+debugger, the same cold launch reached the gallery in under ten seconds
+every time — five of them spent in the sequential warm-up.
+
+**Consequences:** Cold launch on the same machine: props warm in 0.94 s,
+space ready at 1.40 s, gallery built by 1.65 s. `PropCacheTests` holds
+the warm-up's contract: every bundled asset loads, concurrent callers
+share one pass, an instance is a clone. The old "sequential on purpose"
+note is withdrawn — 3.7 MB of assets never had a memory case, and the
+parse runs off the main thread. Not changed: the ~250 synchronous mesh,
+material and collider generations during the gallery build and ~1,000
+on entering Circuit Workshop, each a round trip that blocks the main
+thread on RealityKit's engine queue (~0.3 s and ~2 s). A primitive and
+material cache is the next optimisation.
+
+## 2026-09-04 — The parts rack is a shelf you scroll by hand
+
+**Decision:** Circuit Workshop's part sources stand on one frosted pane,
+headed "Parts" and yawed to face where the wearer stands, and the column
+scrolls by dragging any slot or the pane itself: one-to-one under the
+hand, carrying on after a flick, pushing back past either end and
+settling on a whole slot with a tick. The two caret buttons are deleted.
+A luminous thumb down the pane's edge is the only "there is more" cue,
+and VoiceOver pages the window with increment/decrement on the pane.
+
+**Context:** Owner's brief: *"make it much nicer, have a better
+appearance, and maybe make it easier to scroll through the list of parts
+rather than have a button."* The rack was twelve loose sources in a
+column with a caret at each end, so reaching a part meant leaving the
+shelf to press a button, six slots at a time, and the slots at the
+window's edge popped in and out. Direct manipulation is the house rule
+on every other surface (a rail's bead is the value; a lead is pulled),
+and the rack was the one place left with a button that scrolled a list.
+
+**Consequences:** `RackScroll` (RenderKit) is the arithmetic — rubber
+band, flick projection, detent settle, a jump under Reduce Motion —
+under `RackScrollTests`; `Well` gained a windowed shelf mode (`facing`,
+`windowTitle`, the pane, `windowOpacity(at:)`) that no other well uses
+yet. The slots did not move, so every placement test still holds, and
+the pane's box joined the clearance furniture. `ScrollGesture.classify`
+still decides scroll against pull by the direction of travel, so pulling
+a part out is unchanged. `-circScroll <n>` stands in for the drag the
+simulator has no hand for. Whether a hand reads "drag the shelf" with no
+caret to prompt it is a device question, now on the device list.
+
+## 2026-09-04 — Comments are cut to what the code cannot say
+
+**Decision:** Every Swift file's comments are trimmed to a short header,
+a doc line or three per declaration, and inline notes that name an
+invariant, a unit, a frame or an ordering. History, dates, quoted
+briefs, capitals and the graves of deleted features leave the source;
+this log and git keep them.
+
+**Context:** Owner's request: *"clean up the code of all of the dense
+comments."* The tree carried essays at the point of use that repeated
+this log, and in places the record of what a line used to do had
+outgrown the line.
+
+**Consequences:** 17,879 comment lines became 12,214 across 293 files,
+with the non-comment text of every file byte-identical to a snapshot
+taken before the pass (the shelf files above excepted, which changed on
+purpose). A comment that survived is one whose absence would cost a
+reader a wrong guess; a comment that wants a date or a quotation belongs
+here.
+
+## 2026-09-04 — The surface gets simpler: what stood in the room at open, and what said its name twice
+
+**Decision:** Owner's direction — *"this app needs a lot of its clutter
+just gone … pretend like you are a user, and ask yourself what you need
+at your immediate disposal … be absolutely certain that no UI/models
+overlap with each other in the initial starts of the modules."* Eleven
+cuts and moves, judged against a baseline photograph of every module's
+opening frame and re-photographed after:
+
+1. **No description under any module's title.** The one-sentence
+   first-run hint under the title bar is deleted — `firstRunHint`, the
+   never-read `blurb`, `AppSettings.seenHints`, Settings › Onboarding
+   and `-resetHints` with it — and so is the promise line under every
+   row of the flat catalog. `HubDomain.promise` survives only as
+   VoiceOver text (the exhibit's label, the catalog row's hint), where
+   it costs no space. The apparatus teaches by being touched; four
+   cards of words have now been rejected.
+2. **One title on the pad.** A docked exhibit's own name plate goes
+   quiet while the Load plaque names it, and returns the moment it
+   leaves — the plate under the plaque was the same title twice.
+3. **One main window, ever.** `AppModel.mainWindowCount`, kept by
+   `MainWindowView`, gates the three openers (the space's sync, its
+   `onDisappear`, the hub's Lab-list button). A value-less
+   `WindowGroup` makes a NEW window on every `openWindow(id:)`, and two
+   title bars over one lab is the other way a title duplicates.
+4. **Gravity Lab loses its two analogies.** The spacetime grid and the
+   field-flow particles are deleted, with their two-plate bank and the
+   black platform disc the grid stood in for. Both were disclosed in the
+   legend as pictures rather than measurements, in a module whose claim
+   is that every other number is real; the grid also covered 2.9 m of
+   floor. The orrery floats like every other apparatus here.
+5. **Gravity Lab's flank is one tab.** Analysis and Vectors merge into a
+   single Show tab (v, a, F, Kepler sweep, Lagrange) whose summary reads
+   "v F · sweep". Its column unfolds UPWARD; the world well hangs under
+   it, and the G rail moves to the foot of the fore column under Worlds
+   and Twin suns (the first after-photograph had the rail under the tab,
+   with the well's sightline landing on both — the well had stood over
+   the Analysis tab the same way since 2026-08-07).
+   The baseline photograph showed the Vectors tab standing ON the G rail
+   — hung 0.23 m under the bank while the rail was 0.25 m under it —
+   since the fold of 2026-08-07, with the rail's "1.00 × G" inside the
+   tab. `InstrumentReachCriterionTests` now asserts the deep flank does
+   not stack on itself, measures the tab on its own tight box, and the
+   flank came 20 cm fore to pass that honestly (its plates were 1.36 m
+   from a standing viewer and green only on the generous box).
+6. **A planet says its name once.** The body's tapped callout (name,
+   speed, distance) is deleted and the data card drops its name line:
+   with the name plate 3 cm over the body and the card 12 cm over that,
+   a selected planet said "Earth" three times. r and v lead the card.
+7. **The Kepler sweep is off until asked for.** A tap on a planet
+   answered with the ring, the card, two arrows, two gold sectors and
+   two area callouts; the sectors and their numbers wait behind Show.
+8. **The palette bead moves to (0.62, 1.50, −0.95).** At (0.72, 1.32)
+   it stood 0.76 m from the Sun in the ecliptic — Mars's orbit to the
+   centimetre — with its "Labs" plate at Mars's height, and brushed the
+   Circuits rack along the sightline. A saved position still wins.
+9. **The worlds fan opens under the title bar.** At 0.55 above the
+   system it opened its ten discs straight through the window, which
+   has ridden at ~1.75 m since 2026-08-30; it opens over the system's
+   near edge at 1.55 now.
+10. **Circuits folds its five views behind one tab**, outside the build
+    volume. The five-plate bank at x −0.62 overlapped the ±0.60 volume
+    by 13 cm — a finding recorded as a passing test since 2026-08-08
+    and declined because the one move on offer was 47.8° off axis. A
+    tab is a fifth the height, so a legal spot exists: x −0.76,
+    z −0.92, 39.6° off axis, 4 cm clear of the Clear plate in depth.
+    `CircuitsInstrumentClearanceTests` asserts the fix in place of the
+    finding. The bench opens on a loop, a rack and three small tabs.
+11. **Two more opening-frame overlaps the photographs found.** The
+    Pendulums cradle hung from 2.0 m put all five cables through the
+    title bar; it hangs from 1.62 (collars a hand's width under the
+    bar, bobs at 1.07, both inside a standing reach). Projectiles' ball
+    and hoop well previews — a 10 cm ball and a 12 cm hoop 9.5 cm apart
+    — touched; the row's pitch is 0.13 and both previews are 3.5 cm
+    tokens, 5 cm apart with the wells' breath allowed for.
+
+**Context:** The 2026-08-07 fold halved Gravity Lab's standing objects
+and was photographed as calmer; what it left was still two plates, two
+tabs, a rail, two verbs, a clock tab and a well, with the grid under
+all of it. The owner's brief on 2026-09-04 was that the surface itself
+was the problem, in Gravity Lab and Circuits first. Every number here
+was checked against the shared clearance rules and against a baseline
+screenshot of each module's first frame — which is also how the
+Pendulums bar and the Projectiles previews were found, neither of which
+any test measured.
+
+**Consequences:** `-gravShowOpen 1` and `-circViewsOpen 1` photograph
+the two columns; `-resetHints` is gone. Gravity Lab's legend loses the
+grid's disclosure line. `SettingsView` has no reset of any kind. The
+UI test that pressed "Show hints again" now finds the room-tone switch.
+Not touched, deliberately: Electric Fields' standing readout card (its
+field lines cross every instrument on the flank by construction, and the
+thick material is the existing answer), Magnetism, and every Time
+Capsule decision of 2026-09-01. The three modules that were not
+photographed as overlapping — Magnetism, Electric Fields, Projectiles'
+wall — keep their layouts.
+
 ## 2026-09-02 — The ten circuit parts are milled from the same stock as the room
 
 **Decision:** Batch H. `Tools/circuitparts.py` is the generator for all

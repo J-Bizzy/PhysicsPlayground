@@ -2,7 +2,7 @@
 //  OrbitalElementsTests.swift
 //  Three groups: round trips over every degenerate configuration; agreement with the
 //  builders that made every Gravity Lab body (catches a retrograde +y-up sign error);
-//  and the drag, whose in-plane cases must be BIT-EXACT (90 fps ulp drift visibly tilts).
+//  and the drag, whose in-plane cases must be bit-exact (90 fps ulp drift visibly tilts).
 //
 
 import XCTest
@@ -158,7 +158,7 @@ final class OrbitalElementsTests: XCTestCase {
             1, accuracy: 1e-12, "the elements disagree with Kepler III")
     }
 
-    /// The orbit ring's claim: this IS the path — one integrated period must not move the shape.
+    /// The orbit ring's claim: this is the path — one integrated period must not move the shape.
     func testTheOsculatingOrbitIsThePathInATwoBodySystem() {
         let a = 1.6 * au, e = 0.35
         let mu = NBody.standardGravitationalParameter(
@@ -254,7 +254,7 @@ final class OrbitalElementsTests: XCTestCase {
         XCTAssertEqual(elements.kind, .hyperbola)
         XCTAssertLessThan(elements.semiMajorAxis!, 0)
         XCTAssertNil(elements.period, "an unbound orbit has no period")
-        // Hyperbolic AND equatorial are reported separately on purpose —
+        // Hyperbolic and equatorial are reported separately on purpose —
         // an enum that conflated them could only report one.
         XCTAssertEqual(elements.degeneracy, .equatorial)
     }
@@ -277,7 +277,7 @@ final class OrbitalElementsTests: XCTestCase {
             argumentOfPeriapsis: 1.2, trueAnomaly: 0.5, mu: sunMu).frame
     }
 
-    /// A radial pull changes one distance and NOTHING else — bit-exact (`==`),
+    /// A radial pull changes one distance and nothing else — bit-exact (`==`),
     /// or an in-plane drag held at 90 fps would creep the plane.
     func testRadialDragLeavesThePlaneBitExact() {
         let frame = earthFrame()
@@ -328,7 +328,7 @@ final class OrbitalElementsTests: XCTestCase {
                        "the plane did not follow the apse line")
     }
 
-    /// The near/far swap happens exactly at e = 0, so the STATE must not jump through it.
+    /// The near/far swap happens exactly at e = 0, so the state must not jump through it.
     func testDraggingNearBeadPastFarBeadDoesNotJump() {
         var frame = earthFrame(eccentricity: 0.4)
         let far = frame.apoapsisRadius
@@ -355,7 +355,7 @@ final class OrbitalElementsTests: XCTestCase {
             previous = now
         }
         XCTAssertTrue(crossed)
-        // Past the crossing the held bead IS the far one: apse line flipped.
+        // Past the crossing the held bead is the far one: apse line flipped.
         XCTAssertLessThan(simd_dot(frame.periapsisDirection, direction), 0,
                           "the apse line never flipped")
     }

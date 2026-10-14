@@ -41,11 +41,16 @@ contradicts this section, this section is current.
       of plain passthrough, then the wordmark fades in and flies to the
       wall with the bell, terraces and six live miniatures cascade in
       over ~3.5 s, both door signs legible from where you stand. Turn
-      your head along the crescent: one promise line under the faced
-      exhibit, never two, never flickering.
+      your head along the crescent: six names lit into the benches' front
+      edges, one under each mount, always legible, and nothing floating
+      over any exhibit (2026-10-14). The one you face lifts; its accent
+      pools ON the mount, not in the air; its name brightens.
 - [ ] **1 · Enter.** Pinch the Projectiles miniature: it flies to the
       cradle in ~0.5 s and the three latch fingers close AS IT ARRIVES;
-      "Load Projectile Motion" hangs over it. Pinch Load: swell, pop,
+      "Load Projectile Motion" hangs over it, and back on the terrace
+      the empty mount's name dims to a third — still readable, plainly
+      "away" (2026-10-14); it comes back up the moment the lab returns.
+      Pinch Load: swell, pop,
       hairline flare, dissolve through passthrough, the lab fades up with
       the room ramping (not snapping) to 0.35, a welcome shot already in
       the air. Tapping a second miniature sends the first home; tapping
@@ -81,7 +86,7 @@ contradicts this section, this section is current.
       frame" ×3 through the wall contact. "Resume here": the room runs
       forward FROM that instant. Settings › Time Capsule OFF, pause again:
       nothing new appears.
-- [ ] **4 · Circuits** (via the palette bead's Circuits vignette — the
+- [ ] **4 · Circuits** (via the palette bead's Circuits tile — the
       lab-to-lab door dissolves, no hard cut). The loop is live; pinch the
       switch: bulb out, beads stop. Pull a resistor from the rack, born at
       your fingertips; click it nose-to-tail onto the loop. Pull a lead
@@ -89,19 +94,23 @@ contradicts this section, this section is current.
       into the copper, beads at mm/s, the field front laps the loop.
       **[G]** Pull the resistor's bead to 10 Ω: it glows, then scorches
       and the loop goes dark; Replace. Presets → RC charger; wire in the
-      coil; Magnetic-field plate: a looping field over the coil, flipping
+      coil; Views tab → Magnetic field (the five view plates fold behind
+      one tab on the left since 2026-09-04, and the tab reads out which
+      are on): a looping field over the coil, flipping
       when you reverse the battery, collapsing when you open the switch.
       Tap the AC source: a frequency rail hangs under it; at 3 Hz the bulb
       flickers and the capacitor lags. **[H]** Every part in the rack and
       on the bench reads as one milled family; nothing looks like a
       cylinder with a colour on it.
-- [ ] **5 · Gravity Lab.** The room goes to 0.85 and reads as entering
-      space. The sky is QUIET until you tap Earth; then ring, card, arrows
-      and sweep arrive together. Pull the far bead: the ellipse stretches;
+- [ ] **5 · Orbital Mechanics.** The room goes to 0.85 and reads as entering
+      space — no grid on the floor, no dots in the air, nothing standing
+      on the G rail (2026-09-04). The sky is QUIET until you tap Earth;
+      then ring, card and arrows arrive together, the card leading with
+      r and v and wearing no name. Pull the far bead: the ellipse stretches;
       let go: Earth stays on the orbit you drew. Clock tab → 20×: the
       beads creep (precession). Two-hand pinch to ~4× and walk in: labels
       hold their size, the well stays put, the chord plays. Twin suns:
-      every orbit answers. Analysis → Lagrange; drop a world on L4: it
+      every orbit answers. Show → Lagrange; drop a world on L4: it
       holds, and the capture paragraph appears at the point.
 - [ ] **6 · Electric Fields.** Pull a + charge: the field redraws around
       your hand. Uniform B on; pull a test probe and throw it sideways: it
@@ -119,10 +128,67 @@ contradicts this section, this section is current.
       under its wordmark.
 - [ ] **Judgement calls, answered in writing:** the pink field lines
       through passthrough; whether 45 % recession is legible in your
-      room; the reel's size and where it lands; whether the first-run
-      hint under the title bar clears the apparatus in all six labs.
+      room; the reel's size and where it lands; whether the title bar
+      clears the apparatus in all six labs — Pendulums' cradle hangs from
+      1.62 m since 2026-09-04 because at 2.0 m the bar crossed its cables.
 - [ ] **The cut test:** enter all six labs in sequence; the room's
-      brightness moves only at Gravity Lab, and ramps rather than steps.
+      brightness moves only at Orbital Mechanics, and ramps rather than steps.
+
+## The 2026-10-14 polish pass
+
+- [ ] **The bench labels.** Stand where you stand for the demo: every
+      lab's name reads on its bench's front edge at a glance, in a bright
+      room AND with the lights down. If the dark edge itself is lost in a
+      dim room, the label still glows; say whether it reads as a label or
+      as a stray light.
+- [ ] **Nothing moves the names.** Face each exhibit in turn: it lifts and
+      grows, its name brightens, nothing collides with a door sign.
+- [ ] **The pool stays on the mount** as the exhibit lifts — a disc of
+      light on the mount's top, never a smudge in the air beside it.
+- [ ] **Reset arms first.** Open the palette, pinch Reset once: the petal
+      turns red and reads "Tap again"; nothing has reset. Wait four
+      seconds: it goes back to Reset. Pinch it twice: the lab resets and
+      the ring folds. Arm it and fold the ring: reopened, it reads Reset.
+      `-paletteReset 1` photographs the armed state.
+- [ ] **Capture says no.** Pinch the capture petal in a lab: a chime and
+      a new notebook entry. A capture that writes nothing (a lab with no
+      readings to give) thuds instead of chiming.
+- [ ] **Look at an icon in the title bar or the home's utility bar**:
+      its name appears (Home, Lab Notebook, Show the physics, Place the
+      lab, Studio Mode, Reset; Lab list, Settings, Lab Notebook, About).
+- [ ] **Settings › Effects volume** wears a quiet speaker at the left end
+      and a loud one at the right.
+
+### The labs, same day
+
+- [ ] **Every lab answers a grab.** Pick up a ball, a planet, a charge, a
+      magnet, the hand compass, a bob, a circuit part: each flashes and
+      ticks as the pinch closes and ticks again where it is let go. Set a
+      bob down without throwing it: no whoosh. Throw it: whoosh.
+- [ ] **The ring and the halo agree.** In Magnetism and Circuit Workshop,
+      with one object selected, tap another: its ring opens AND its halo
+      lights; the readout card follows it.
+- [ ] **Every ring folds with a tick**, including Electric Fields' and the
+      pendulum collar's. Tap a collar: its ring pops open; tap empty
+      space: it folds.
+- [ ] **Petals sound.** Every petal pops when it fires; the hoop's Delete
+      and the launcher's Clear are red like every other Delete.
+- [ ] **Pause says Resume.** Pause from the palette, reopen it: the petal
+      shows a play glyph and reads "Resume"; pinch it and the lab runs.
+- [ ] **The ball fan.** Projectiles › launcher ring › Balls: the five
+      discs open above and right of the launcher, and none of them sits
+      in front of or behind the Moon / Earth / Jupiter discs from where
+      you stand. Pinch Table-tennis ball: the ball changes, the world
+      does not.
+- [ ] **Circuit Workshop remembers a clear.** Clear bench (twice), quit,
+      relaunch: the starter loop, not the bench you cleared. Load a
+      preset, quit, relaunch: the preset.
+- [ ] **Numbers settle.** Drag the launcher's aim bead and stop dead: the
+      protractor and the range land on the final value within a moment,
+      never one degree behind. Same for the compass µT when you stop.
+- [ ] **Reduce Motion on, in Orbital Mechanics:** the planets stop
+      turning on their axes; orbits still run. A merge flashes without
+      growing.
 
 ## Deferred — the owner asked to be reminded
 
@@ -243,11 +309,33 @@ file). What follows is the standing script.
       still flip it, the same grace every other target gets. And a
       clean tap must flip it exactly ONCE: a switch that visibly does
       nothing on a tap is the double-fire, not a dead switch.
-- [ ] **Pull a part out of a rack.** Ten parts and the meter stand
-      free, above the furniture row. The part must be born AT YOUR
-      FINGERTIPS — not at the rack, then flown to your hand — and
-      dropping it with copper ends near another part connects them
-      automatically.
+- [ ] **Pull a part out of the shelf.** The parts and the meter stand in
+      a column with nothing behind them — no pane, no plate — six in the
+      window at a time, "Parts" floating above. Pinch a part and move
+      your hand: the moment it travels, the part is born AT YOUR
+      FINGERTIPS and rides the hand; dropping it with copper ends near
+      another part connects them. A tap on a part spawns nothing.
+- [ ] **Every part comes out, whichever way you pull.** Straight out,
+      sideways, downward: a drag that starts on a part is a pull, never
+      a scroll. Nothing on the shelf reads your direction.
+- [ ] **The column arrives (2026-09-06).** On entering the lab the
+      parts column glides up into its place over about a second, the
+      crown beside it rolling; then it is still. Under Reduce Motion it
+      is simply there.
+- [ ] **The crown scrolls (2026-09-06).** A knurled steel wheel stands
+      edge-on in a gap of the hairline spine beside the column, at the
+      window's middle. Pinch it and move your hand up: the parts move UP
+      with your hand, exactly as far, and the later ones rise into the
+      window with a tick per slot; the wheel turns as they move. Let go
+      and it settles on a whole slot with a click. Flick it and it
+      coasts. Roll past either end: it stretches and springs back. It
+      must move on the FIRST pinch — the thumb it replaced never moved
+      by hand at all (the gesture re-pressed it every frame). Zoom the
+      bench in and check the crown still rides the hand one to one: it
+      stands outside the zoom. VoiceOver reads the crown as "Parts, 1 to
+      6 of 12" and pages it.
+- [ ] **Parts fade at the window's ends** as you scroll, rather than
+      popping into existence at the edge.
 - [ ] **ONE TARGET AT EACH END (2026-08-11).** Pinch each end of a
       part ten times. **The same thing must happen all ten times.**
       Until this pass there were two grab targets at every end — a
@@ -267,9 +355,11 @@ file). What follows is the standing script.
       the joint and the body swings about it as you circle your hand.
       Pull further away: the body follows your hand while its wired
       lead keeps aiming back at the joint, the wire stretching between
-      them. Pull past ~30 cm and the snapped contact pops off into
-      your hand. A part wired at both ends, or at neither, must not
-      swing — it moves rigidly.
+      them — across the whole room if that is where you take it. **A
+      wire never lets go because of distance (2026-09-05):** to undo a
+      connection, pull the wire's end off its terminal, or cut it from
+      the part's ring. A part wired at both ends, or at neither, must
+      not swing — it moves rigidly.
 - [ ] **A part pulled from the rack FOLLOWS your hand from the first
       frame (2026-08-29).** It is born at your fingertips and rides
       the hand all the way to the bench — it must never sit frozen at
@@ -320,8 +410,9 @@ file). What follows is the standing script.
       end, not do nothing. And a pinch at the joint must take the
       LEAD, not the wire — the bead is fatter than the cable and sits
       at its endpoint, which is the whole rule.
-- [ ] **The rack is fully in frame** from where you naturally stand,
-      with every name readable against a real field of view.
+- [ ] **The shelf is fully in frame** from where you naturally stand,
+      turned to face you, with every name and the "Parts" header
+      readable against a real field of view.
 - [ ] **Fill the bench to sixteen parts, then pull one more.** The
       source must FADE — the refusal that says nothing came out of
       here.
@@ -597,22 +688,56 @@ file). The new well and the standing script:
         the picture.
 - [ ] **Reset returns all four plates to their defaults.**
 
-## Gravity Lab
+## Orbital Mechanics
 
 ### The quiet arrival (2026-08-29)
 
 - [ ] **Open the module and touch nothing.** The sky is QUIET: planets,
-      trails, labels, the curvature grid — and no orbit ring, no data
-      card, no vector arrows, no sweep readout. All four of those ride
-      the selection, and nothing is selected until you say "this one".
+      trails, labels — and no orbit ring, no data card, no vector
+      arrows. All three of those ride the selection, and nothing is
+      selected until you say "this one". No grid under the system and no
+      drifting dots around it either (2026-09-04): the module's two
+      analogies came out, and the black disc the grid stood in for went
+      with them.
+- [ ] **The system stays put (2026-09-06).** Run at 100× for a few
+      minutes: the Sun wobbles a few millimetres about one spot and the
+      whole orrery stays centred where it opened. It used to walk across
+      the room at 16 m/s of simulated drift — 2.5 m of room per half hour
+      at 100× — because the opening scene carried net momentum.
+
+### The paths (2026-09-06)
+
+- [ ] **Every body trails about three quarters of ITS OWN loop**, bright
+      at the planet and fading to nothing at the tail — Mercury and
+      Neptune alike. Neptune's fills over hours at 1× and minutes at
+      100×; watch it fill and then hold its length.
+- [ ] **A trail never freezes while its planet flies on.** Leave the lab
+      running at 1× for two minutes: Mercury's and Venus's paths must
+      still end ON the planet. (The old mesh stopped updating once it was
+      full, and left a stationary arc behind.)
+- [ ] **The path is the planet's colour**, the same as its sphere —
+      Saturn gold, Uranus cyan, Neptune deep blue, the comet ice-white.
+      No two bodies share one.
+- [ ] **Same density at every clock speed and every zoom.** Compare
+      Earth's path at 1× and at 100×, and at 1× and 9× zoom: the same
+      smooth line, the same 1.2 mm thickness in the room, no polygon.
+- [ ] **Reverse time eats the trail from the planet's end.** At −1× each
+      path shortens toward its tail; rewind past the recording and the
+      sky is clean.
+- [ ] **Scrub the capsule (pause, pinch the reel):** each trail keeps
+      its own length at the restored instant — except where the 30 s
+      tape does not reach back a whole window, where it is as long as
+      the recording.
+- [ ] **Twin suns: both stars trail their mutual orbit.**
 
 ### The orbit ring
 
 - [ ] **Tap a planet.** Two things must happen at once: its **control
       ring** unfolds (mass bead, delete petal) AND its **orbit ring**
       appears — a conic drawn around the Sun, passing through the planet,
-      with a bead at each end. (And the data card, arrows and sweep
-      readout arrive with it — the room answering the tap.)
+      with a bead at each end. (And the data card and the arrows arrive
+      with it — the room answering the tap. The Kepler sweep waits
+      behind the Show tab, off until asked for.)
 - [ ] **Pull the far bead straight out.** The orbit stretches into an
       ellipse; the near end stays put.
 - [ ] **Pull a bead sideways.** The whole ellipse swings about the Sun
@@ -623,11 +748,24 @@ file). The new well and the standing script:
       orbital plane should come back ROLLED, not where it started.
 - [ ] **Drag the near bead outward past the far one.** The labels swap
       and **nothing may jump.**
-- [ ] **Let go, and watch.** The planet stays on the orbit you drew.
-      Over simulated centuries the beads should creep slowly round the
-      Sun: real Newtonian precession, not drift.
-- [ ] **Watch the ring against the trail.** They should visibly
-      disagree — that gap is Jupiter.
+- [ ] **Let go, and watch.** The planet stays on the orbit you drew and
+      the beads hold still. Any creep on an undisturbed orbit is
+      integrator error, and the suite pins it below 0.05″ per orbit
+      (2026-09-06: the old integrator walked Mercury's beads 19″ per
+      orbit at 1× and 119″ at 5×, backwards, while this line called it
+      "real Newtonian precession").
+- [ ] **Make the perturbation you can see.** Pull a world from the well
+      near Earth's orbit, open its ring and take its mass bead to 400
+      Earths, then run at 20×: Earth's ring walks FORWARD and its trail
+      departs the ring — precession and perturbation, both Newtonian,
+      both real. For the real planets alone, ring and trail lie on each
+      other: the other planets move Earth by kilometres, far under a
+      millimetre of room.
+- [ ] **The ring is the same thickness on Mercury and on Neptune, at
+      1× and at 9×** (2026-09-06). It used to be a hairline on Mercury
+      and a 13 cm hose on Neptune.
+- [ ] **No shape pop while dragging a bead.** The ring used to snap
+      between eccentricity buckets of 0.03 mid-drag.
 - [ ] **A bead behind its own planet is not grabbable.**
 - [ ] **Saturn outward: the ring draws, and has no beads.** Zoom out
       with both hands and Jupiter's should come into range.
@@ -641,19 +779,19 @@ file). The new well and the standing script:
   - [ ] The Sun lights the OUTER planets.
   - [ ] Name labels and every callout hold their size.
   - [ ] **The spawn well stays where it was and stays the size it was.**
-  - [ ] The field-flow particles fill the space around you.
-  - [ ] The spacetime grid switches itself off past ~2.5×.
   - [ ] The dimming shell is outside the orrery, not cutting through it.
 - [ ] **A scale readout appears beside the clock** once you are off 1×.
 - [ ] **Press Reset: the view returns to 1× and untwisted.**
 
 ### The panel emptied
 
-- [ ] **The switch bank on your left**, seven plates: spacetime grid,
-      Kepler sweep, field flow, velocity, acceleration, force,
-      Lagrange points.
-- [ ] **The G rail under the bank.** Drag its bead: orbits speed up and
-      slow down live.
+- [ ] **The Show tab on your left** (2026-09-04): one machined tab
+      reading "v F" (or "off"). Pinch it and five plates unfold ABOVE
+      it — velocity, acceleration, force, Kepler sweep, Lagrange points
+      — none of them touching the tab or each other.
+- [ ] **The G rail at the foot of the fore column**, under Worlds and
+      Twin suns. Drag its bead: orbits speed up and slow down live.
+      Nothing stands on the rail and its readout is not inside anything.
 - [ ] **Tap the SUN.** It gets a mass bead of its own — in solar
       masses — and no delete petal.
 - [ ] **The panel holds no slider, picker or toggle.**
@@ -668,15 +806,22 @@ file). The new well and the standing script:
         within days.
   - [ ] The markers must NOT jump to the new body.
 - [ ] **The body budget is 16.** Check the well goes dark rather than
-      popping when it refuses.
+      popping when it refuses. The fan offers nine worlds: the Moon left
+      it on 2026-09-06 (at 0.5 m/AU a bound Moon sits inside Earth's own
+      drawn sphere, and the preset merged into Earth on its first frame).
 - [ ] **Trails no longer hitch** when several bodies' trails rebuild at
-      once.
+      once — they are ring buffers rewritten in place now, not meshes.
 
 ### Still true from before
 
 - [ ] Crown opens toward blackness (`.progressive` immersion).
 - [ ] Grab a planet: it freezes and shows the orbit it would take if
-      released now; release applies your hand's velocity.
+      released now. **Let go with a still hand and it takes the circular
+      orbit at that radius** (2026-09-06: before this a still hand
+      released it at rest and it fell into the Sun, and orbit needed a
+      throw of exactly 0.35 m/s exactly along the orbit). Toss it gently
+      sideways: an ellipse. Toss it hard: it escapes. The ghost path
+      while you hold it shows exactly what you will get.
 - [ ] Pull a world from the well and let go WITHOUT moving your hand: it
       holds a circular orbit.
 - [ ] The clock bank changes time scale and reads back which is on.
@@ -685,14 +830,12 @@ file). The new well and the standing script:
 
 - [ ] The window shows a title bar and nothing else — no cards, no
       dropdowns, no scroll.
-- [ ] Below it, only two things ever appear, and both only while the
-      immersive space is CLOSED: **Show in room**, and the **first-run
-      hint**. Open the room and the hint leaves the window — it is a
-      card in front of the apparatus from then on (2026-08-08). Dismiss
-      it in either place; it stays gone on re-entry, and dismissing it
-      in the window means the card never appears.
-- [ ] The bar does not truncate the longest name. **Circuit Workshop**
-      at default and at the largest accessibility text size.
+- [ ] Below it, one thing ever appears, and only while the immersive
+      space is CLOSED: **Show in room**. No hint, no card, nothing
+      written under any module's title (2026-09-04).
+- [ ] The bar does not truncate the longest names. **Orbital Mechanics**
+      and **Projectile Motion** (17 characters each, one more than Circuit
+      Workshop) at default and at the largest accessibility text size.
 - [ ] **Key** opens the legend as a popover and it closes on a tap
       outside. Every module's legend is present and matches what is
       drawn — ⟳ including that Magnetism's no longer mentions a compass
@@ -715,7 +858,7 @@ file). The new well and the standing script:
       (2026-08-29). Dim when there are no charges, and a tap on it
       while dim must fall through.
 - [ ] **Circuit Workshop — Clear bench**, on the bench's far left flank.
-- [ ] **Gravity Lab — Twin suns** and **Worlds**, below the clock bank.
+- [ ] **Orbital Mechanics — Twin suns** and **Worlds**, below the clock bank.
 
 **The confirmation, on both Clear plates that have one:**
 
@@ -729,7 +872,7 @@ file). The new well and the standing script:
 
 ### The worlds fan — ten discs, the widest in the app
 
-- [ ] Tap **Worlds** in Gravity Lab. The fan opens ABOVE the system.
+- [ ] Tap **Worlds** in Orbital Mechanics. The fan opens ABOVE the system.
 - [ ] All ten labels are readable and none overlaps its neighbour.
 - [ ] Tapping a disc adds that world and folds the fan.
 
@@ -737,7 +880,7 @@ file). The new well and the standing script:
 
 - [ ] **Pendulums** — tap a bob; the card appears above it with L, T, θ,
       v. Grab that same bob: the card must not steal the grab.
-- [ ] **Gravity Lab** — tap a planet; its elements and energies appear.
+- [ ] **Orbital Mechanics** — tap a planet; its elements and energies appear.
       Pinch to 9×: **the card must not change size.**
 - [ ] **Circuit Workshop** — tap a part; volts, amps and watts appear.
       Electron View: the card must not grow. Short a battery and
@@ -843,11 +986,11 @@ decide whether the phase was worth doing.
       `-roomSensing denied` fakes the refusal: the window should then say
       what is lost and how to turn it back on, not just show a triangle.
 
-- [ ] **⟳⟳ NO CARD OF WORDS STANDS IN A LAB.** Erase the app or use
-      `-resetHints 1`, then enter each of the six. **What CORRECT looks
-      like:** the apparatus, and nothing written floating in front of it
-      — no teach paragraph, no running commentary. The lab's sentence is
-      in the module WINDOW only, while the room is shut.
+- [ ] **⟳⟳ NO CARD OF WORDS STANDS IN A LAB.** Enter each of the six.
+      **What CORRECT looks like:** the apparatus, and nothing written
+      floating in front of it — no teach paragraph, no running
+      commentary, and nothing under the title bar either (the last
+      sentence a lab spoke went on 2026-09-04).
       **What to watch for:** the small backed readouts on the apparatus
       itself (values, switch labels, rack names) are NOT this and must
       still be there — if those have gone, too much was deleted.
@@ -878,7 +1021,7 @@ decide whether the phase was worth doing.
       but the new specular highlights are real and only a headset can
       say whether they pull the eye.
 
-## Phase 2 — Gravity Lab folds, and the room stands back
+## Phase 2 — Orbital Mechanics folds, and the room stands back
 
 **This is the owner's own complaint, so it is a judgement call before it
 is a check.** Everything here is `-openModule gravitylab` unless said
@@ -890,13 +1033,15 @@ otherwise.
       tabs hold what came off. If it does not read as a quieter room,
       say so and the rest of this section does not matter.
 
-- [ ] **The three tabs down the left flank.** Under the two remaining
-      layer plates: Analysis, then Vectors. Each should read as a small
-      machined tab with its own live summary beneath — "off", or
-      "sweep, Lagrange", or "v a F". **The summary is the whole
-      argument for folding**: if you cannot tell what is switched on
-      without opening the tab, this design has failed and the plates
-      should come back out.
+- [ ] **The one tab at the deep flank** (it was three objects — two
+      plates and two tabs — until 2026-09-04). A small machined tab
+      reading "Show" with its live summary beneath — "off", or
+      "v F · sweep, Lagrange" — the world well 7 cm under it, and its
+      five plates unfolding ABOVE it when pinched. It stands 20 cm nearer
+      than the old bank did, because the old bank was a step away.
+      **The summary is the whole argument for folding**: if you cannot
+      tell what is switched on without opening the tab, this design has
+      failed and the plates should come back out.
 
 - [ ] **The clock tab.** At the head of the fore column off your LEFT
       shoulder (moved from the right flank 2026-08-29), reading
@@ -922,10 +1067,11 @@ otherwise.
       fold should snap rather than ease. Nothing anywhere should freeze
       part-way.
 
-- [ ] **Nothing lost.** Kepler sweep, Lagrange points, velocity,
-      acceleration and force must all still work from behind their
-      tabs, and the grid and field flow from the two plates that stayed.
-      The point of the fold is that nothing was removed.
+- [ ] **Nothing lost that was physics.** Kepler sweep, Lagrange points,
+      velocity, acceleration and force must all still work from behind
+      the Show tab. The grid and the field flow ARE gone (2026-09-04) —
+      deliberately, as the module's two disclosed analogies — so their
+      absence is correct, not a regression.
 
 ### VoiceOver can operate the room (2026-08-07)
 
@@ -1046,7 +1192,7 @@ Everything in this pass is mechanical and covered by tests EXCEPT the
 five items here, which are gestures or placement and therefore cannot
 be. The first is a visible change and wants judging, not just checking.
 
-- [ ] **⟳ Gravity Lab's clock bank is now about 40 cm wide, not 25.**
+- [ ] **⟳ Orbital Mechanics' clock bank is now about 40 cm wide, not 25.**
       `-openModule gravitylab`. Six speeds — −20×, −1×, 1×, 5×, 20×,
       100× — and their touch targets are 68 mm across, so they do not
       fit in the old row at any angle: the end pair used to sit 49 mm
@@ -1208,7 +1354,7 @@ reading "seconds ago".
       scrub back past the failure: it should light again, and blow again
       on resume. Also confirm that quitting while scrubbed and relaunching
       gives you the bench you BUILT, not the one you rewound to.
-- [ ] **Gravity Lab's two clocks.** Set the time picker to −1× or 20×,
+- [ ] **Orbital Mechanics' two clocks.** Set the time picker to −1× or 20×,
       let it run, then pause and scrub. The picker sets how time runs;
       the rail asks what already happened. Changing the picker while
       scrubbed should take effect only on resume. Judge whether the two
@@ -1271,7 +1417,7 @@ reading "seconds ago".
 - [ ] **State changes FADE now (2026-08-05).** Select a magnet, a
       charge, a circuit part: the halo arrives over ~0.15 s instead of
       popping. Flip a bank plate: the lamp cross-fades. Toggle the
-      vector layers in Pendulums and Gravity Lab: arrows fade in and
+      vector layers in Pendulums and Orbital Mechanics: arrows fade in and
       out. With the system Reduce Motion on, ALL of these must snap —
       the fade honours the switch by disappearing.
 - [ ] ⟳ **Two hands, two objects — where each module stands.**
@@ -1335,6 +1481,35 @@ in a room.
 
 ### The hub
 
+- [ ] **THE PHYSICS BOX (2026-09-05).** In any lab, press ƒ in the title
+      bar: a card unfolds at the upper left of the apparatus with the
+      lab's live numbers, monospaced, updating as things move, and
+      beside it, toward the room's centre, one rail per quantity you can
+      set — Fields: plate voltage and uniform B; Magnetism: the magnet's moment;
+      Projectiles: g and wind; Orbital Mechanics: G and the star's mass;
+      Circuits and Pendulums: numbers only. Drag a bead: the number on
+      the card and the apparatus change together (the capacitor's own ΔV
+      rail moves too — same value, two handles). Press ƒ again: it folds.
+      It must never catch a pinch aimed at the apparatus behind it.
+- [ ] **Electric Fields opens with NO test charge.** The dipole stands
+      alone; pull a probe from the Test + or Test − well and it rides
+      the field from your hand. Reset leaves it probe-free too.
+- [ ] **Both ampersands wear their keyline on the FRONT.** "& Magnetism"
+      and "& Energy": the bright chamfer band runs round every edge of
+      the & facing you, exactly as on the letters beside it — not only
+      round its silhouette from behind.
+- [ ] **THE EMBLEMS (2026-09-05).** Pinch the bead: the ring of six accent
+      discs fans out as before, and each disc holds the lab's emblem —
+      one bold object, few parts, fat lines: two big charges with seven
+      field lines and riding arrowheads; a copper loop with a big
+      battery and a lit bulb, charge going round; one bar magnet turning
+      slowly with eight field loops turning with it; a launcher on a
+      puck, one fat arc, a ball and a hoop; one big brass bob on a beam,
+      swinging in a slow ellipse; a star with one world on one orbit.
+      Each must be recognisable at arm's length without its name.
+- [ ] **The same emblems stand on the gallery's terraces,** where they
+      read as objects rather than diagrams: nothing thinner than a cable
+      anywhere in them.
 - [ ] **The gyroscope bead and the modelled miniatures** at real
       passthrough contrast, in a bright room and a dim one.
 - [ ] **The wordmark.** If the machined plaque reads as faint against a
@@ -1358,7 +1533,7 @@ in a room.
       was deleted and the check outlived it.)
 - [ ] **Capture a notebook entry in three different labs and compare
       them.** Every row should read in one voice.
-- [ ] **Gravity Lab at 100× clock, watching the data card.** ν reads to
+- [ ] **Orbital Mechanics at 100× clock, watching the data card.** ν reads to
       a tenth of a degree and the card should feel steadier, not
       coarser.
 
@@ -1376,7 +1551,7 @@ proves nothing about the room.
 
 - [ ] **Enter all six labs in sequence, as a demo would cut between
       them.** The room's brightness should not change from lab to lab.
-      Five now open at 0.35; Gravity Lab alone goes to 0.85 and that
+      Five now open at 0.35; Orbital Mechanics alone goes to 0.85 and that
       one step should read as *entering space*, not as a bug.
 
 ### Magnetism's field lines — the riskiest change in the pass
@@ -1396,13 +1571,13 @@ proves nothing about the room.
       pivots crowd, so the default cradle shows none). "T = … s" should
       wear a dark plate and sit centred on its anchor, not hang from its
       baseline.
-- [ ] **Gravity Lab with the Lagrange layer on.** Planet names and
+- [ ] **Orbital Mechanics with the Lagrange layer on.** Planet names and
       Lagrange markers should now wear the same plate. They were two
       different treatments a few centimetres apart.
 
 ### Reach — measured now, but a metre is a body, not a number
 
-- [ ] **Gravity Lab: reach for Binary and Worlds without stepping.**
+- [ ] **Orbital Mechanics: reach for Binary and Worlds without stepping.**
       They came in from 1.36 m on 2026-08-09 and moved to the left
       fore column on 2026-08-29 — closer still.
 - [ ] **And the clock tab, which was a third case at 1.33 m.** It

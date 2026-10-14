@@ -2,8 +2,8 @@
 //  KinematicsModel.swift
 //  Physics Playground — Kinematics: app state for room-scale projectile motion.
 //
-//  Physics space IS the room: 1:1 immersive-space coordinates, real floor at y = 0; a ball that leaves the room is a bug, not a setting.
-//  Strobe dots are equal-Δt in SIMULATED time. The hoop/scoring machinery is dormant: off the surface, kept in the model.
+//  Physics space is the room: 1:1 immersive-space coordinates, real floor at y = 0; a ball that leaves the room is a bug, not a setting.
+//  Strobe dots are equal-Δt in simulated time. The hoop/scoring machinery is dormant: off the surface, kept in the model.
 //
 
 import Foundation
@@ -23,10 +23,8 @@ final class KinematicsModel {
     /// Shared `PhysicsCore.SurfaceGravity` presets (zero-g included).
     nonisolated static let gravityPresets = SurfaceGravity.all
     nonisolated static let windSpeedRange = 0.0...15.0        // m/s
-    /// The custom ball's mass. Its diameter stays at 10 cm on purpose:
-    /// drag depends on the diameter, so "same size, different mass" is
-    /// the clean experiment — mass does nothing to the arc without air
-    /// and everything with it (2026-09-01).
+    /// The custom ball's mass. Its diameter stays 10 cm: drag depends on
+    /// diameter, so "same size, different mass" is the clean experiment.
     nonisolated static let customMassRange = 0.05...5.0        // kg
     nonisolated static let timeScaleRange = 0.1...2.0
 
@@ -88,13 +86,12 @@ final class KinematicsModel {
     var gravity = 9.81
     var airResistance = false
 
-    /// Whether flights bounce off walls and ceiling. Defaults ON; the unscanned box stands in until the shared room model supplies detected walls.
+    /// Whether flights bounce off walls and ceiling. Defaults on; the unscanned box stands in until the shared room model supplies detected walls.
     var respectRoomWalls = true
     var roomWalls: [RoomWalls.Wall] = RoomWalls.box(of: .unscanned)
-    /// The walls a flying ball bounces off: everything but an upward-
-    /// facing surface, which is a floor-like support and goes through
-    /// the floor law instead (2026-09-02 — tables and seats arrive as
-    /// walls now, and a ball must be able to come to REST on one).
+    /// The walls a flying ball bounces off: everything but an upward-facing
+    /// surface, which is a support and goes through the floor law (a ball
+    /// can rest on a table).
     private var strikeWalls: [RoomWalls.Wall] { roomWalls.filter { $0.normal.y < 0.9 } }
     /// The height of whatever the ball would land on directly below
     /// `point`: the highest upward-facing wall under it, else the floor.
@@ -227,7 +224,7 @@ final class KinematicsModel {
             restitution: projectile.restitution,
             maxBounces: 4,
             walls: respectRoomWalls ? roomWalls : [],
-            // The ball's OWN radius — omitted, the arc is drawn for a point and corners short of every wall and floor bounce.
+            // The ball's own radius — omitted, the arc is drawn for a point and corners short of every wall and floor bounce.
             radius: projectile.diameter / 2,
             maxDuration: 12
         )
@@ -344,11 +341,9 @@ final class KinematicsModel {
     }
 
     func fire() {
-        // MONKEY AND HUNTER. Every hoop armed to drop is re-hung on its
-        // anchor and let go at the instant the shot leaves, so each shot
-        // is the whole demo again: aimed straight at the hoop, the ball
-        // falls exactly as far as the hoop does and meets it — on the
-        // Moon and on Jupiter alike, which is the point.
+        // Monkey and hunter: every hoop armed to drop is re-hung and let go the
+        // instant the shot leaves, so the ball and the hoop fall the same and
+        // meet.
         for index in rings.indices where rings[index].dropOnFire {
             rings[index].position = rings[index].anchor
             rings[index].falling = true
@@ -381,7 +376,7 @@ final class KinematicsModel {
         ))
     }
 
-    /// Spawns a staged ball AT THE HAND (the well's spawn), inert until a throw, wearing the ball fan's current kind.
+    /// Spawns a staged ball at the hand (the well's spawn), inert until a throw, wearing the ball fan's current kind.
     @discardableResult
     func spawnBall(at position: SIMD3<Double>) -> UUID {
         let flight = Flight(
@@ -454,7 +449,7 @@ final class KinematicsModel {
         var position: SIMD3<Double>
         var phase: Double
         var score = 0
-        /// Monkey and hunter (2026-09-01): armed, the hoop lets go the
+        /// Monkey and hunter: armed, the hoop lets go the
         /// instant a shot leaves the launcher and falls with the ball.
         var dropOnFire = false
         var falling = false
@@ -486,12 +481,9 @@ final class KinematicsModel {
                           phase: Double(rings.count) * 2.1))
     }
 
-    /// A hoop born AT THE HAND — the well's spawn (2026-09-01, when the
-    /// hoops came out of their mothball through a well rather than a
-    /// plate: fold the instruments, never the materials). Nil at the
-    /// budget, which is the well's cue to fade in refusal rather than
-    /// pop. Held no lower than a hoop can be placed, the same floor
-    /// `moveRing` keeps.
+    /// A hoop born at the hand — the well's spawn. Nil at the budget, which
+    /// is the well's cue to fade in refusal. Held no lower than `moveRing`
+    /// allows.
     @discardableResult
     func addRing(at point: SIMD3<Double>) -> UUID? {
         guard rings.count < Self.ringBudget else { return nil }
@@ -514,12 +506,11 @@ final class KinematicsModel {
         if aimTargetID == id { aimTargetID = nil }
     }
 
-    // MARK: Aiming at a hoop (2026-09-01)
+    // MARK: Aiming at a hoop
 
-    /// Which hoop the launcher is being aimed at — a SELECTION, mirrored
-    /// from the view's ring state so the renderer can draw the two ghost
-    /// arcs and the hoop's callout. Out of the capsule snapshot and, like
-    /// every selection, cleared by `reset()`.
+    /// Which hoop the launcher is being aimed at — a selection mirrored from
+    /// the view's ring state, so the renderer can draw the two ghost arcs
+    /// and the callout. Out of the snapshot; cleared by `reset()`.
     var aimTargetID: UUID?
 
     enum AimSolution: Equatable { case low, high }
@@ -535,18 +526,11 @@ final class KinematicsModel {
     }
     @ObservationIgnored private var aimCache: (key: AimKey, roots: (low: Double, high: Double)?)?
 
-    /// Both launch angles, in radians above horizontal, that put the ball
-    /// through `ringID` — low arc first — or nil when the hoop is out of
-    /// range at the current speed. Exact in a vacuum
-    /// (`ProjectileMotion.launchAngles`); found numerically with the air
-    /// on (`launchAnglesWithDrag`), which the hoop's callout discloses.
-    ///
-    /// The muzzle rides the aim (`barrelLength` along it), so each root
-    /// is refined against its own muzzle: three fixed-point passes,
-    /// which converge because the barrel is short next to any range
-    /// worth solving for. Memoised on its inputs, because the drag
-    /// search costs tens of simulations and a petal's `isAvailable`
-    /// asks every frame.
+    /// Both launch angles, radians above horizontal, that put the ball
+    /// through `ringID` (low arc first), or nil when out of range. Exact in
+    /// a vacuum, numerical with the air on. Each root is refined against
+    /// its own muzzle in three fixed-point passes. Memoised: the drag
+    /// search costs tens of simulations and a petal asks every frame.
     func solutions(for ringID: UUID) -> (low: Double, high: Double)? {
         guard let ring = rings.first(where: { $0.id == ringID }) else { return nil }
         let key = AimKey(hoop: ring.position, launcher: launcherPosition,
@@ -625,10 +609,9 @@ final class KinematicsModel {
             maxDuration: 12)
     }
 
-    /// The arc the same launch would follow in a vacuum — drawn faintly
-    /// beside the real one while the air is on, so drag is visible as
-    /// the gap between them (2026-09-01). Nil with the air off: there is
-    /// no gap to show.
+    /// The arc the same launch would follow in a vacuum, drawn faintly
+    /// beside the real one while the air is on, so drag is the gap between
+    /// them. Nil with the air off.
     var vacuumPrediction: ProjectileMotion.Trajectory? {
         guard airResistance else { return nil }
         return ProjectileMotion.simulate(
@@ -671,10 +654,8 @@ final class KinematicsModel {
     private func stepRings(dt: Double) {
         for index in rings.indices {
             if rings[index].falling {
-                // Free fall, in a vacuum: the demo's claim is that the
-                // hoop and the ball fall the same, and drag on the hoop
-                // would break the claim the demo exists to show. The
-                // hoop's callout says so.
+                // Free fall in a vacuum: the demo's claim is that hoop and ball fall
+                // the same, and drag on the hoop would break it.
                 rings[index].fallSpeed += gravity * dt
                 rings[index].position.y -= rings[index].fallSpeed * dt
                 if rings[index].position.y <= Self.fallenHoopHeight {
@@ -693,10 +674,8 @@ final class KinematicsModel {
                 )
             } else if !rings[index].dropOnFire,
                       rings[index].position != rings[index].anchor {
-                // Orbit switched off: back to the anchor. NOT for an armed
-                // hoop — a dropped one lies where it fell until the next
-                // shot re-hangs it (this snap re-hung it a frame after
-                // landing, and the test caught it).
+                // Orbit switched off: back to the anchor, except for an armed hoop,
+                // which lies where it fell until the next shot re-hangs it.
                 rings[index].position = rings[index].anchor
             }
         }
@@ -714,9 +693,7 @@ final class KinematicsModel {
             let ring = rings[index]
             let met: Bool
             if ring.falling {
-                // Falling with the ball, the hoop is met wherever the
-                // two coincide, from any side — that meeting IS the
-                // monkey-and-hunter demo.
+                // Falling with the ball, the hoop is met wherever the two coincide.
                 met = simd_length(current - ring.position) < Self.ringRadius - ballRadius * 0.5
             } else {
                 // Downward pass through the ring's horizontal plane…
@@ -759,7 +736,7 @@ final class KinematicsModel {
     func step(dt: Double) {
         guard !isPaused else { return }
         let frameDt = min(dt, 1.0 / 30.0) * timeScale
-        // Record AFTER the step, in WALL-CLOCK seconds — the rail's unit must mean the same on every bench.
+        // Record after the step, in wall-clock seconds — the rail's unit must mean the same on every bench.
         defer { recordCapsuleFrame(dt: min(dt, 1.0 / 30.0)) }
         stepRings(dt: frameDt)
         guard flights.contains(where: { $0.status == .flying || $0.status == .rolling }) else { return }
@@ -829,10 +806,8 @@ final class KinematicsModel {
                 if timeLeft <= 1e-6 { break }
             }
         }
-        // A HAND IN THE WAY (2026-09-02): an open hand swats a ball the
-        // way a wall bounces it, plus the hand's own motion. A slow hand
-        // catches instead — the SpaceView routes fingertips under
-        // `swatSpeed` to `catchBalls`, and every hand joint here.
+        // A hand in the way: an open hand swats a ball the way a wall bounces
+        // it, plus the hand's own motion. A slow hand catches instead.
         if !handStrikes.isEmpty,
            let hit = SphereStrike.strike(
                previous: previous.position, current: flight.state.position,
@@ -913,9 +888,8 @@ final class KinematicsModel {
         let radius = flight.projectile.diameter / 2
         var position = previous + dt * velocity
         let supportBefore = supportHeight(under: previous)
-        // ROLLED OFF THE EDGE (2026-09-02): the surface under the ball
-        // is lower than the one it was rolling on — a table's edge — so
-        // it is flying again, with the speed it rolled off at.
+        // Rolled off the edge: the surface under the ball is lower than the one
+        // it rolled on, so it is flying again.
         let supportAfter = supportHeight(under: position)
         if supportAfter < supportBefore - 0.02 {
             flight.status = .flying
@@ -949,7 +923,7 @@ final class KinematicsModel {
         flights[index] = flight
     }
 
-    /// Invariant: a ball NEVER ends a frame outside the room — whatever slips past the strike test is clamped back inside `roomBounds` with velocity reflected.
+    /// Invariant: a ball never ends a frame outside the room — whatever slips past the strike test is clamped back inside `roomBounds` with velocity reflected.
     private func contain(_ flight: inout Flight) {
         guard respectRoomWalls else { return }
         let box = roomBounds

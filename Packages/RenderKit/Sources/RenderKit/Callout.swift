@@ -57,7 +57,7 @@ public final class Callout {
         self.textSize = textSize
         self.offset = offset
 
-        let dotMesh = MeshResource.generateSphere(radius: 0.006)
+        let dotMesh = Primitives.sphere(radius: 0.006)
         let dotModel = ModelEntity(mesh: dotMesh,
                                    materials: [Materials.energized(color, glow: 0.8)])
         dot.addChild(dotModel)
@@ -77,20 +77,24 @@ public final class Callout {
         root.position = worldPosition
     }
 
-    /// How often a changing readout may regenerate glyphs — a LIVE number
+    /// How often a changing readout may regenerate glyphs — a live number
     /// differs every frame, and "skip when unchanged" protects nothing.
     /// 8 Hz is faster than reading. Shared with `BackedLabel` so the two rates cannot drift.
     static let minimumLabelInterval: Double = 1.0 / 8
     private static var minimumInterval: Double { minimumLabelInterval }
 
     /// Updates the text. Free when unchanged, and rate-limited when it
-    /// changes, because generating glyphs is not free.
-    public func setText(_ text: String) {
-        guard text != lastText else { return }
+    /// changes, because generating glyphs is not free. Returns whether the
+    /// callout now shows `text`: false means the rate limit held it back,
+    /// and a caller that caches "what I last showed" must not record it, or
+    /// the readout freezes on the value before.
+    @discardableResult
+    public func setText(_ text: String) -> Bool {
+        guard text != lastText else { return true }
         // Clearing jumps the queue — same exemption as `BackedLabel.setText`.
         if !text.isEmpty {
             let now = CACurrentMediaTime()
-            guard now - lastTextTime >= Self.minimumInterval else { return }
+            guard now - lastTextTime >= Self.minimumInterval else { return false }
             lastTextTime = now
         }
         lastText = text
@@ -99,7 +103,7 @@ public final class Callout {
         guard !text.isEmpty else {
             labelEntity = nil
             backingEntity = nil
-            return
+            return true
         }
         let mesh = Self.textMesh(text, size: textSize, wrapWidth: wrapWidth)
         var material = UnlitMaterial(color: color)
@@ -110,7 +114,7 @@ public final class Callout {
         model.position = [-(bounds.min.x + bounds.max.x) / 2,
                           -(bounds.min.y + bounds.max.y) / 2, 0]
         if showsBacking {
-            // A SIBLING of the centred glyphs, never a child — parenting to
+            // A sibling of the centred glyphs, never a child — parenting to
             // the shifted model lands the plate off by the centring shift.
             let plate = BackedLabel.backing(behind: bounds, size: textSize)
             labelPivot.addChild(plate)
@@ -121,9 +125,10 @@ public final class Callout {
         labelPivot.addChild(model)
         labelEntity = model
         publishAccessibility()
+        return true
     }
 
-    /// Names the quantity for VoiceOver; the VALUE is whatever `setText`
+    /// Names the quantity for VoiceOver; the value is whatever `setText`
     /// last wrote, so set once and the reading follows.
     public func setAccessibilityName(_ name: String) {
         guard name != accessibilityName else { return }
@@ -132,7 +137,7 @@ public final class Callout {
     }
 
     private func publishAccessibility() {
-        // Label and value BOTH — a readout VoiceOver can name but not
+        // Label and value both — a readout VoiceOver can name but not
         // read is merely listed.
         guard let text = lastText, !text.isEmpty else {
             root.components.remove(AccessibilityComponent.self)
@@ -157,10 +162,9 @@ public final class Callout {
         leader.children.forEach { $0.removeFromParent() }
         let length = simd_length(offset)
         guard length > 1e-4 else { return }
-        var material = UnlitMaterial(color: color)
-        material.blending = .transparent(opacity: 0.7)
+        let material = Materials.unlit(color, opacity: 0.7)
         let rod = ModelEntity(
-            mesh: .generateCylinder(height: length, radius: 0.0011),
+            mesh: Primitives.cylinder(height: length, radius: 0.0011),
             materials: [material])
         // generateCylinder runs along +Y; a straight-down offset is the
         // antiparallel case `rotation(from:to:)` exists for.
@@ -179,7 +183,7 @@ public final class Callout {
                                 wrapWidth: CGFloat = 0) -> MeshResource {
         let key = "\(size)|\(wrapWidth)|\(text)"
         if let cached = cache[key] { return cached }
-        // The container must be TALL: `generateText` clips to the frame,
+        // The container must be tall: `generateText` clips to the frame,
         // silently dropping the last line if the height is guessed small.
         let frame = wrapWidth > 0
             ? CGRect(x: -wrapWidth / 2, y: -size * 14,

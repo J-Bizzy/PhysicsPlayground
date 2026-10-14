@@ -6,7 +6,7 @@
 //  so the caller can spend the rest of the frame along the new velocity
 //  instead of freezing the ball at the contact. The sphere's own
 //  velocity matters — a swat is a bounce off something that is moving,
-//  so the reflection is of the RELATIVE velocity and the sphere's motion
+//  so the reflection is of the relative velocity and the sphere's motion
 //  is added back. A ball at rest hit by a hand at 3 m/s leaves at
 //  3·(1 + e) m/s along the hand's line, which is what a swat is.
 
@@ -43,7 +43,7 @@ public enum SphereStrike {
     /// Checks the step segment `previous → current` of a ball of `radius`
     /// against every sphere and returns the earliest strike, or nil if
     /// the ball meets none — or is already moving away from the one it
-    /// touches. The sphere MOVES too: over a step of `dt` it is taken to
+    /// touches. The sphere moves too: over a step of `dt` it is taken to
     /// have travelled `velocity · dt` to arrive at `center`, so the test
     /// runs in the sphere's own frame and a hand swung through a ball
     /// registers even when the two never overlap at a frame boundary

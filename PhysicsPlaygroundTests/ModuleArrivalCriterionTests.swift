@@ -2,27 +2,11 @@
 //  ModuleArrivalCriterionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  EVERY LAB ARRIVES AND DEPARTS, and none of them has to remember to.
-//
-//  Until 2026-08-23 changing the active module flipped a SwiftUI branch and
-//  the apparatus was simply there, between one frame and the next. Six
-//  scenes now ride `AppModel.isDeparting` through `Fade.tick`. A listing
-//  test naming the six would be the same act of attention that forgets the
-//  seventh, so this bans the SHAPE instead: a SpaceView that adds a
-//  renderer root must also fade it.
-//
-//  WHY A TEXT CRITERION rather than a reflective one. `makeScene()` hands
-//  back an `AnyView`, and there is no honest way to render a module
-//  offscreen in a unit test and reach its root entity — so reflection
-//  cannot see whether a scene fades. Reading the source can. In the family
-//  of `MotionCriterionTests` (no hand-rolled ease), `PanelControlCriterionTests`
-//  (no Slider in a module) and `MaterialCanonCriterionTests` (no hand-rolled
-//  glass).
-//
-//  `testTheSearchActuallyReachesTheSource` is not ceremony. A criterion
-//  test that quietly starts looking in an empty directory passes forever
-//  and means nothing, and `MotionCriterionTests` carries the same guard for
-//  the same reason.
+//  Every lab arrives and departs through `Fade.tick` on
+//  `AppModel.isDeparting`. A text criterion rather than a reflective
+//  one: `makeScene()` hands back an `AnyView`, so a scene cannot be
+//  rendered offscreen in a unit test; reading the source can see whether
+//  a SpaceView that adds a renderer root also fades it.
 //
 
 import XCTest
@@ -56,7 +40,7 @@ final class ModuleArrivalCriterionTests: XCTestCase {
                        "expected six module SpaceViews, found \(views.map(\.name))")
     }
 
-    /// THE CRITERION. Add a module tomorrow and it is covered tomorrow.
+    /// The criterion. Add a module tomorrow and it is covered tomorrow.
     func testEverySceneThatAddsARootAlsoFadesIt() throws {
         for view in try moduleSpaceViews() {
             guard view.source.contains("content.add(renderer.root)") else { continue }
@@ -81,7 +65,7 @@ final class ModuleArrivalCriterionTests: XCTestCase {
         }
     }
 
-    /// The fade must ride the SHELL's flag. A module inventing its own
+    /// The fade must ride the shell's flag. A module inventing its own
     /// would drift out of step with the room's dimming ramp and with the
     /// other five.
     func testTheFadeRidesTheSharedDepartureFlag() throws {

@@ -2,27 +2,10 @@
 //  AtmosphereCriterionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  THE ROOM'S BRIGHTNESS IS PART OF THE SET, not a per-module taste.
-//
-//  Until 2026-08-09 three modules opened at `preferredDimming` 0 and
-//  three at 0.35, with Gravity Lab further out at 0.85. Nobody chose a
-//  three-way split; each module picked a number on the day it was
-//  written, and the result was that walking from Circuits into Electric
-//  Fields changed how bright the user's own living room was. In a demo
-//  cut between labs it is the loudest difference between two rooms that
-//  are supposed to feel like one place.
-//
-//  So: one house value, and exceptions that have to argue for
-//  themselves in the descriptor. Gravity Lab is the standing exception
-//  and the reason is real — a pale Sun and specks of planet have no
-//  contrast at all against a lit wall, which is why it also carries a
-//  16 m shell and `.progressive` immersion.
-//
-//  This is a CRITERION, not a snapshot: it does not assert "these six
-//  numbers". It asserts that the set has one house value, that at most
-//  one module departs from it, and that the module which does also
-//  moved its shell — because a heavy dimming with the default 3.4 m
-//  radius is the seam-through-the-apparatus bug the radius exists for.
+//  The room's brightness is part of the set: one house
+//  `preferredDimming`, at most one module departing from it, and that
+//  module must also move its shell out. A criterion, not a snapshot of
+//  six numbers.
 //
 
 import XCTest
@@ -70,7 +53,7 @@ final class AtmosphereCriterionTests: XCTestCase {
                 Heavy dimming at the default radius draws the shell THROUGH \
                 the apparatus: some of the scene reads against darkness and \
                 some against the wall, with the seam moving as the user zooms. \
-                Gravity Lab's 16 m is what that costs to fix.
+                Orbital Mechanics' 16 m is what that costs to fix.
                 """)
         }
     }

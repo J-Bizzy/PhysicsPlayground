@@ -1,6 +1,6 @@
 //
 //  MarchingSquaresTests.swift
-//  Contour extraction checked against exact circles: every vertex must land ON the level.
+//  Contour extraction checked against exact circles: every vertex must land on the level.
 //
 
 import XCTest
@@ -77,7 +77,7 @@ final class MarchingSquaresTests: XCTestCase {
 
     // MARK: Chaining
 
-    /// A closed contour welds into ONE polyline, not 200 sticks.
+    /// A closed contour welds into one polyline, not 200 sticks.
     func testChainingJoinsACircleIntoOnePolyline() {
         let segments = MarchingSquares.contour(
             level: 0.5, scalar: { simd_length($0) },

@@ -4,12 +4,12 @@
 //
 //  Full three-dimensional tracing through ideal thin elements on a
 //  common optical axis (+x). This is not a small-angle approximation
-//  of the 2D bench: an ideal thin lens is DEFINED by the reduced-slope
+//  of the 2D bench: an ideal thin lens is defined by the reduced-slope
 //  transform s' = s − h/f applied to the ray's lateral offset h — in
 //  3D, h and s are 2D lateral vectors, and the same one-line law
 //  focuses a whole cone of rays. Parallel bundles meet the focal
 //  point exactly; a point source images exactly where 1/f = 1/dₒ+1/dᵢ
-//  says — the image EMERGES from the trace, per house rule.
+//  says — the image emerges from the trace, per house rule.
 //
 //  Mirrors are flat and fold the axial direction; screens absorb.
 //  Rays outside an element's aperture pass it untouched.

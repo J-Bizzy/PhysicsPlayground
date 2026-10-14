@@ -2,22 +2,10 @@
 //  HomeChromeUITests.swift
 //  Physics Playground — UI tests
 //
-//  The only tests in this project that actually PRESS things.
-//
-//  Everything else here verifies by calling code or by looking at a
-//  screenshot. Neither catches a button wired to nothing: a screenshot
-//  proves the button was drawn, and a unit test proves the action would
-//  work IF something called it. The gap between those two is exactly
-//  where "I tapped it and nothing happened" lives.
-//
-//  SCOPE, stated honestly, because the boundary is not obvious:
-//  XCUITest can drive SwiftUI — windows, buttons, pickers, lists. It
-//  has NO API for RealityKit entities. Nothing in the immersive space
-//  is addressable: not the exhibits, not the pad, not a magnet, not
-//  a two-handed pinch. Those are covered by `StationTapTests` at the
-//  handler level and by `docs/ON_DEVICE_TESTS.md` in a headset, and
-//  they cannot be covered here. A test file that pretended otherwise
-//  would be worse than this comment.
+//  The only tests in this project that actually press things. XCUITest
+//  can drive SwiftUI windows, buttons and lists; it has no API for
+//  RealityKit entities, so nothing in the immersive space is addressable
+//  here — that is `handleTap` at the handler level and the device script.
 //
 
 import XCTest
@@ -29,10 +17,8 @@ final class HomeChromeUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
         app = XCUIApplication()
-        // The window catalog is the reliable surface in the simulator:
-        // it is what the home shows before (or instead of) the immersive
-        // gallery, and it is the accessibility path the standing rule
-        // requires anyway — nothing may be reachable only in space.
+        // The window catalog is the reliable surface in the simulator, and the
+        // accessibility path the standing rule requires anyway.
         app.launchArguments += ["-uiTesting", "1"]
         app.launch()
     }
@@ -82,23 +68,11 @@ final class HomeChromeUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
 
-        // The catalog is REPLACED by the module's window.
-        //
-        // This used to wait for `Add part`, a button on Circuit
-        // Workshop's control panel. There are no control panels
-        // (DECISIONS.md, 2026-08-01) and there is no `Add part` — parts
-        // come off a tray in the room, which XCUITest cannot see at all.
-        //
-        // "Show in room" is the right replacement, and not merely
-        // because it survived. Under `-uiTesting 1` the immersive space
-        // is deliberately held back (`HubView.isUITesting`), so this
-        // button is on screen for exactly this run; it is a real
-        // capability rather than a decorative label; and it is one of
-        // the three things the module window is now allowed to contain.
-        //
-        // It is deliberately NOT `app.staticTexts["Circuit Workshop"]`:
-        // the catalog row carries that same string as its accessibility
-        // label, so that assertion would have passed before the tap.
+        // The catalog is replaced by the module's window. "Show in room" is on
+        // screen for exactly this run (the space is held back under
+        // `-uiTesting`) and is a real capability. Not the module's title: the
+        // catalog row carries that string as its accessibility label, so that
+        // assertion would pass before the tap.
         let entered = app.buttons["Show in room"].waitForExistence(timeout: 20)
         XCTAssertTrue(entered,
                       "tapping Circuit Workshop did not open its window: no "
@@ -108,21 +82,18 @@ final class HomeChromeUITests: XCTestCase {
                        "the module opened but the catalog is still up behind it")
     }
 
-    /// The settings window's two actions exist as named, pressable
-    /// buttons. The window restyled onto the house button styles on
-    /// 2026-08-05; a style is applied to a `Button`, so if either row
-    /// ever degrades into styled text this stops finding it — the same
-    /// "drawn is not wired" gap the tap test above exists for.
-    func testTheSettingsWindowShowsItsActions() {
+    /// The settings window opens from its launch argument and shows a named,
+    /// operable control; a `Toggle` that degraded into styled text would
+    /// stop being found here.
+    func testTheSettingsWindowShowsItsControls() {
         app.terminate()
         app.launchArguments += ["-settingsOpen", "1"]
         app.launch()
 
-        XCTAssertTrue(app.buttons["Show hints again"].waitForExistence(timeout: 20),
-                      "the settings window never showed its onboarding action")
-        // "Reset experiment progress…" was the second assertion here
-        // until 2026-08-09. The experiments system was deleted and that
-        // destructive action with it, leaving Onboarding as the window's
-        // one button.
+        XCTAssertTrue(app.staticTexts["Settings"].waitForExistence(timeout: 20),
+                      "the settings window never appeared")
+        let roomTone = app.switches["Lab room tone"]
+        XCTAssertTrue(roomTone.waitForExistence(timeout: 5),
+                      "the settings window has no operable room-tone switch")
     }
 }

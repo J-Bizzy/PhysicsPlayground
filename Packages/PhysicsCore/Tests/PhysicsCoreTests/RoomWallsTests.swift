@@ -65,8 +65,8 @@ final class RoomWallsTests: XCTestCase {
         XCTAssertNil(hit)
     }
 
-    /// A zero-radius reflection leaves the ball exactly ON the plane;
-    /// the next step, receding, must NOT strike the back face and undo
+    /// A zero-radius reflection leaves the ball exactly on the plane;
+    /// the next step, receding, must not strike the back face and undo
     /// the bounce (the trajectory-preview double-hit regression).
     func testReflectedBallOnThePlaneIsNotStruckAgain() {
         let hit = RoomWalls.strike(
@@ -110,7 +110,7 @@ final class RoomWallsTests: XCTestCase {
                        "pushed back to the shell surface")
     }
 
-    /// Two walls in the path: the strike reports the FIRST one hit.
+    /// Two walls in the path: the strike reports the first one hit.
     func testEarliestWallWins() {
         let near = RoomWalls.Wall(
             center: SIMD3(1.5, 1.5, 0), normal: SIMD3(1, 0, 0),
@@ -125,14 +125,13 @@ final class RoomWallsTests: XCTestCase {
                        "stopped at the nearer wall")
     }
 
-    // MARK: The 2026-08-06 reliability pass
+    // MARK: The reliability pass
 
-    /// A ceiling graze: the chord crosses the plane inside the step but
-    /// gravity has already flipped v·n by the frame's end. The old
-    /// guard read that END-OF-FRAME velocity and skipped the strike its
-    /// own chord had made — the next step then started past the plane,
-    /// which is the tunnel every "the bouncing is unreliable" report
-    /// begins with. Approach is a position claim now.
+        /// A ceiling graze: the chord crosses the plane inside the step but
+        /// gravity has flipped v·n by the frame's end. A guard reading the
+        /// end-of-frame velocity skipped the strike its own chord had made
+        /// and the next step started past the plane. Approach is a position
+        /// claim now.
     func testGrazeWhoseVelocityFlippedMidFrameStillStrikes() {
         let ceiling = RoomWalls.Wall(
             center: SIMD3(0, 3, 0), normal: SIMD3(0, -1, 0),
@@ -147,7 +146,7 @@ final class RoomWallsTests: XCTestCase {
         XCTAssertLessThanOrEqual(hit!.position.y, 3 - 0.05 + 1e-9,
                                  "contact leaves the ball on the room side")
         // The reflection clamps a receding normal component at zero:
-        // nothing may ADD speed into the wall it is leaving.
+        // nothing may add speed into the wall it is leaving.
         XCTAssertEqual(hit!.velocity.y, -0.2, accuracy: 1e-12)
         XCTAssertEqual(hit!.impactSpeed, 0, accuracy: 1e-12)
     }
@@ -177,7 +176,7 @@ final class RoomWallsTests: XCTestCase {
     }
 
     /// `Hit.t` is the fraction of the step spent reaching the wall —
-    /// what the model uses to spend the REST of the frame along the
+    /// what the model uses to spend the rest of the frame along the
     /// reflection instead of freezing the ball at contact.
     func testHitReportsTheStepFractionConsumed() {
         let hit = RoomWalls.strike(

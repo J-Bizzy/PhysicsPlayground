@@ -72,7 +72,7 @@ final class LabNotebookTests: XCTestCase {
                       "comma-bearing field is quoted")
         XCTAssertTrue(csv.contains("\"The \"\"big\"\" run\""),
                       "quotes are doubled inside a quoted field")
-        XCTAssertTrue(csv.hasPrefix("timestamp,module,observation,quantity,value,unit"))
+        XCTAssertTrue(csv.hasPrefix("timestamp,lab,observation,quantity,value,unit"))
     }
 
     func testMarkdownGroupsByModule() {

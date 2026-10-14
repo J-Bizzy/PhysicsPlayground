@@ -56,7 +56,7 @@ public enum RoomWalls {
         /// How fast it hit, along the wall normal (for sound volume).
         public var impactSpeed: Double
         /// How far along the step's segment the contact happened, 0…1 —
-        /// what a caller needs to SPEND THE REST OF THE FRAME along the
+        /// what a caller needs to spend the rest of the frame along the
         /// reflected velocity instead of freezing the ball at the wall
         /// (which deadened every fast bounce by up to a frame's travel).
         public var t: Double
@@ -97,7 +97,7 @@ public enum RoomWalls {
             let s0 = simd_dot(previous - wall.center, wall.normal)
             let s1 = simd_dot(current - wall.center, wall.normal)
             // The face being approached: the side the ball starts on. A
-            // ball sitting exactly ON the plane — where a zero-radius
+            // ball sitting exactly on the plane — where a zero-radius
             // reflection leaves it — belongs to the side it is moving
             // toward; classifying it by s0's sign alone would read the
             // receding ball as striking the back face and undo the bounce.
@@ -111,19 +111,15 @@ public enum RoomWalls {
 
             let p0 = s0 * side - radius
             let p1 = s1 * side - radius
-            // Approach is a POSITION claim, not a velocity one: the
-            // chord must close on the face. The old guard read the
-            // END-OF-FRAME velocity, so a graze where gravity flipped
-            // v·n inside the step — a ball topping out just under the
-            // ceiling — skipped the strike its own chord had made, and
-            // the next step started past the plane. The velocity's job
-            // is only to build the reflection, below.
+            // Approach is a position claim, not a velocity one: the chord must close
+            // on the face. Reading the end-of-frame velocity skipped a graze where
+            // gravity flipped v·n inside the step.
             guard p1 < p0 - 1e-12 else { continue }
 
             let t: Double
             let contact: SIMD3<Double>
             if p0 >= -1e-9, p1 <= 1e-12 {
-                // Clean crossing within this step. Landing EXACTLY on
+                // Clean crossing within this step. Landing exactly on
                 // the contact surface counts — an integration step can
                 // end right on the plane (e.g. 5 m/s at 1/240 s lands on
                 // x = 2 to the bit), and "reached" must mean "struck" or
@@ -131,12 +127,9 @@ public enum RoomWalls {
                 t = max(p0, 0) / max(p0 - p1, 1e-12)
                 contact = previous + t * (current - previous)
             } else if p0 < 0 {
-                // Started already inside the ball-radius shell (a spawn
-                // near the wall, or numeric residue from a prior bounce)
-                // and burrowing deeper: reflect immediately, pushed back
-                // to the surface — nothing may tunnel through quietly.
-                // (`p0 ≥ -radius` always holds by construction: the side
-                // classification puts `|s0|` at 0 or more.)
+                // Started already inside the ball-radius shell and burrowing deeper:
+                // reflect immediately, pushed back to the surface — nothing may tunnel
+                // through quietly.
                 t = 0
                 contact = current + face * (radius - s1 * side)
             } else {
@@ -148,7 +141,7 @@ public enum RoomWalls {
 
             // Clamped at zero: on a graze the frame-end velocity may
             // already point away, and reflecting a receding component
-            // would push the ball INTO the wall.
+            // would push the ball into the wall.
             let into = min(simd_dot(velocity, face), 0)
             let bounced = velocity - (1 + restitution) * into * face
             let hit = Hit(position: contact, velocity: bounced,

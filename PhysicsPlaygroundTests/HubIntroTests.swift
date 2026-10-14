@@ -2,12 +2,10 @@
 //  HubIntroTests.swift
 //  Physics Playground — app tests
 //
-//  The arrival choreography, held as pure math — which it is
-//  (`HubIntro` computes, the scene applies), so the whole sequence is
-//  testable without a frame ever rendering. The one assertion nothing
-//  else could hold: the calibration sound's bell is baked into a WAV at
-//  a fixed second, and the wordmark's landing must sit exactly on it,
-//  or the room lands out of sync with its own chime forever.
+//  The arrival choreography, held as pure math. The one assertion
+//  nothing else could hold: the calibration sound's bell is baked into
+//  a WAV at a fixed second, and the wordmark's landing must sit exactly
+//  on it.
 //
 
 import XCTest
@@ -15,10 +13,8 @@ import XCTest
 
 final class HubIntroTests: XCTestCase {
 
-    /// THE CROSS-PIN. The sound is synthesized with its bell at
-    /// `SoundPalette.calibrationLanding`; the choreography lands the
-    /// mark at `HubIntro.landingTime`. Neither file imports the other's
-    /// reasoning — this test is the only thing keeping them one clock.
+    /// The cross-pin: neither file imports the other's reasoning, and this
+    /// test is the only thing keeping them one clock.
     func testTheBellStrikesExactlyAtTheLanding() {
         XCTAssertEqual(HubIntro.landingTime, SoundPalette.calibrationLanding,
                        accuracy: 1e-9,
@@ -38,7 +34,7 @@ final class HubIntroTests: XCTestCase {
         XCTAssertEqual(HubIntro.signOpacity(at: early), 0)
     }
 
-    /// The beat is a MINIMUM: at any instant before it the mark has not
+    /// The beat is a minimum: at any instant before it the mark has not
     /// begun to move, however fast the gallery actually built.
     func testTheBeatHolds() {
         for t in stride(from: 0.0, to: HubIntro.minimumBeat, by: 0.1) {
@@ -100,7 +96,7 @@ final class HubIntroTests: XCTestCase {
             XCTAssertEqual(HubIntro.exhibitOpacity(slot: slot, at: t), 1)
             XCTAssertEqual(HubIntro.exhibitScale(slot: slot, at: t), 1)
         }
-        // And a hair earlier it was NOT finished — the flag is the
+        // And a hair earlier it was not finished — the flag is the
         // moment the last curve lands, not a lazy timeout.
         XCTAssertFalse(HubIntro.isFinished(at: t - 0.05, exhibitCount: count))
     }

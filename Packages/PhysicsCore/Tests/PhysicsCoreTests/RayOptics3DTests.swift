@@ -3,7 +3,7 @@
 //  PhysicsCoreTests
 //
 //  The 3D ideal-lens law reproduces the textbook exactly, in full 3D:
-//  a parallel CONE of rays meets the focal point, a point source
+//  a parallel cone of rays meets the focal point, a point source
 //  images at the thin-lens distance with the right magnification, a
 //  diverging lens traces back to its virtual focus, and mirrors fold
 //  the bench. The image emerges from the trace — never painted on.
@@ -70,7 +70,7 @@ final class RayOptics3DTests: XCTestCase {
     }
 
     /// Diverging lens: parallel rays fan out as if from the virtual
-    /// focus a distance f in FRONT of the lens.
+    /// focus a distance f in front of the lens.
     func testDivergingLensTracesBackToVirtualFocus() {
         let lens = RayOptics3D.Element(x: 0, kind: .lens(focalLength: -0.25))
         let rays = RayOptics3D.parallelBeam(

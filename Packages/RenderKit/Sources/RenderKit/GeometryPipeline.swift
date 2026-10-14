@@ -14,22 +14,31 @@ import Foundation
 public final class GeometryPipeline<Job: Sendable, Output: Sendable> {
     private let compute: @Sendable (Job) -> Output
     private let apply: @MainActor (Output) -> Void
+    /// How a job arriving while another waits is folded into it. Without
+    /// one the newest job simply replaces the pending one.
+    private let coalesce: ((Job, Job) -> Job)?
     private var pendingJob: Job?
     private var isRunning = false
     private var worker: Task<Void, Never>?
 
     public init(
         compute: @escaping @Sendable (Job) -> Output,
-        apply: @escaping @MainActor (Output) -> Void
+        apply: @escaping @MainActor (Output) -> Void,
+        coalesce: ((Job, Job) -> Job)? = nil
     ) {
         self.compute = compute
         self.apply = apply
+        self.coalesce = coalesce
     }
 
     deinit { worker?.cancel() }
 
     public func submit(_ job: Job) {
-        pendingJob = job
+        if let coalesce, let waiting = pendingJob {
+            pendingJob = coalesce(waiting, job)
+        } else {
+            pendingJob = job
+        }
         guard !isRunning else { return }
         isRunning = true
         worker = Task { [weak self] in
@@ -38,7 +47,7 @@ public final class GeometryPipeline<Job: Sendable, Output: Sendable> {
                 let output = await Task.detached(priority: .userInitiated) {
                     compute(next)
                 }.value
-                // Checked AFTER the await — the danger is work finishing
+                // Checked after the await — the danger is work finishing
                 // once the scene it was for is gone.
                 guard !Task.isCancelled else { break }
                 self?.apply(output)

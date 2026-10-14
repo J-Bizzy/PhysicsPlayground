@@ -2,8 +2,8 @@
 //  CircuitsWirePathTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Wires are straight (2026-08-29, owner's call — the catenary sag was
-//  removed). What is tested here is the consequence for the distance an
+//  Wires are straight; the catenary sag was removed. What is tested
+//  here is the consequence for the distance an
 //  electron walks: the conducting path is the chord sum, exactly the
 //  distances the true-speed field front walks, so the readout and the
 //  front agree by construction.
@@ -17,7 +17,7 @@ import simd
 @MainActor
 final class CircuitsWirePathTests: XCTestCase {
 
-    /// The conducting path is the CHORD SUM. A wire is drawn taut
+    /// The conducting path is the chord sum. A wire is drawn taut
     /// between its terminals, the electron walks what is drawn, and
     /// the true-speed readout is built on this number.
     func testTheConductingPathIsTheChordSum() {
@@ -43,7 +43,7 @@ final class CircuitsWirePathTests: XCTestCase {
                        "the path must be the straight line the wire draws")
     }
 
-    /// A SNAPPED JOINT CONTRIBUTES NOTHING, because its two leads are
+    /// A snapped joint contributes nothing, because its two leads are
     /// one point. A chained bench measures what its parts measure.
     func testASnappedJointContributesNoExtraLength() {
         let model = CircuitsModel()
@@ -64,7 +64,7 @@ final class CircuitsWirePathTests: XCTestCase {
         _ = battery
     }
 
-    /// The true-speed claim: whatever the geometry, the RATIO between
+    /// The true-speed claim: whatever the geometry, the ratio between
     /// the field and the drift is thirteen-odd orders of magnitude,
     /// because both lap times are computed over the same path.
     func testTheTrueSpeedRatioIsPureSpeed() {

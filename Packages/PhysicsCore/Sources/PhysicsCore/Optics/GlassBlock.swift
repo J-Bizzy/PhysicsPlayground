@@ -7,13 +7,13 @@ import Foundation
 import simd
 
 public enum GlassBlock {
-    /// A face hit: point and the struck face's OUTWARD unit normal.
+    /// A face hit: point and the struck face's outward unit normal.
     public struct FaceHit: Sendable {
         public var point: SIMD3<Double>
         public var normal: SIMD3<Double>
     }
 
-    /// First hit from OUTSIDE (slab method), or nil on a miss.
+    /// First hit from outside (slab method), or nil on a miss.
     public static func entry(
         from origin: SIMD3<Double>, direction: SIMD3<Double>,
         center: SIMD3<Double>, halfExtents: SIMD3<Double>
@@ -45,7 +45,7 @@ public enum GlassBlock {
         return FaceHit(point: origin + tNear * d, normal: normal)
     }
 
-    /// The face a ray INSIDE the box strikes next (exit attempt).
+    /// The face a ray inside the box strikes next (exit attempt).
     static func interiorHit(
         from origin: SIMD3<Double>, direction: SIMD3<Double>,
         center: SIMD3<Double>, halfExtents: SIMD3<Double>
@@ -95,7 +95,7 @@ public enum GlassBlock {
                                          center: center, halfExtents: halfExtents) else { break }
             p = wall.point
             points.append(p)
-            // The refract normal must oppose the ray: the INWARD normal.
+            // The refract normal must oppose the ray: the inward normal.
             if let out = Refraction.refract(
                 direction: d, normal: -wall.normal, n1: n, n2: 1.0) {
                 points.append(p + out * escape)

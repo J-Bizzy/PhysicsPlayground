@@ -2,34 +2,12 @@
 //  Well.swift
 //  Physics Playground — Design System
 //
-//  Creation, as a physical act. Every lab has one or two of these: a
-//  small source you reach into and PULL something out of. The new
-//  object is born at your fingertips and follows your hand until you
-//  let go of it, which means placing a charge and moving a charge are
-//  the same gesture — you never learn a second one.
-//
-//  This replaces "Add +" and "Add −" buttons on a floating card. A
-//  button tells you a thing exists somewhere; a well hands it to you.
-//
-//  THE GLASS CAME OFF (2026-08-01, owner's call). Every well in the app
-//  used to be the same tinted glass sphere with a different letter
-//  floating inside it — "+" in three modules, "N" in one, "q" in
-//  another. So the one affordance whose entire job is to say WHAT YOU
-//  ARE ABOUT TO MAKE said only "something comes out of here", and said
-//  it identically in five places.
-//
-//  What you see now is the thing itself: a bar magnet with its red and
-//  blue poles in Magnetism, a bob on a cable in Pendulums, a world in
-//  Gravity Lab, a red or blue charge in Electric Fields — at the size it
-//  will be when you have it, with its name written under it. The
-//  metaphor survives the glass going: it still breathes, still recoils
-//  when it gives something up, and still dims when the lab is full and
-//  it has nothing to give.
-//
-//  Callers supply the miniature, because only the module knows what its
-//  own object looks like. The rule for a good one: build it out of the
-//  SAME materials and proportions the renderer uses, so the preview and
-//  the thing you pull out are recognisably one object.
+//  A source you reach into and pull an object out of. The preview is the
+//  object itself at final size, named underneath; the new object is born
+//  at the fingertips and follows the hand that pulled it. With a window
+//  set, the column shows that many slots and scrolls by its crown — a
+//  knurled wheel beside the column that the parts ride one to one; a
+//  drag on a slot is always a pull, never a scroll.
 //
 
 import RealityKit
@@ -39,32 +17,20 @@ import simd
 
 @MainActor
 final class Well {
-    /// One source: what it makes, and what it looks like beforehand.
+    /// One source: what it makes and what stands there beforehand.
     struct Spec {
         let name: String
         let tint: UIColor
         /// The words under the object — "Add magnet", "Add world".
         let label: String
-        /// Builds the miniature that stands here. Called once, on the
-        /// main actor, at construction.
+        /// Builds the miniature. Called once, on the main actor.
         let preview: @MainActor () -> Entity
         let position: SIMD3<Float>
-        /// Makes the object at a world point and returns its id, so the
-        /// caller can hand the new thing straight to the drag it was
-        /// born from.
+        /// Makes the object at a world point and returns its id, or nil to
+        /// refuse (the lab is at its budget).
         let spawn: (SIMD3<Double>) -> UUID?
-
-        /// For a ONE-OF-A-KIND object that lives in the shelf rather
-        /// than being manufactured by it.
-        ///
-        /// Circuit Workshop's multimeter is the case: there is exactly
-        /// one, so pulling its slot must hand over the instrument that
-        /// exists rather than mint a second. `spawn` cannot express that
-        /// — returning nil there means "I could not", which dims the
-        /// slot in refusal.
-        ///
-        /// When this is set the slot is a PARKING SPACE, and `pull`
-        /// answers with the pop rather than the flinch.
+        /// For a one-of-a-kind object parked here rather than minted here:
+        /// hands over the existing object instead of calling `spawn`.
         var handOver: (@MainActor (SIMD3<Double>) -> Void)?
 
         init(name: String, tint: UIColor, label: String,
@@ -82,76 +48,165 @@ final class Well {
         }
     }
 
-    /// How many slots are on screen at once, or nil for all of them.
-    ///
-    /// A SHELF, NOT A WALL. Circuit Workshop stands every part kind plus
-    /// the meter (a hand-kept count here drifted to "twelve" — the CLAUDE.md
-    /// launch-args lesson, in a comment) and the owner's note was that a
-    /// full wall at once is a lot to look past; the other five modules
-    /// have three or four sources and want none of this. Nil keeps their
-    /// behaviour exactly as it was — the window is opt-in, so adding it
-    /// could not change a module that did not ask.
-    ///
-    /// Setting this BUILDS the carets, because a caller sets it after
-    /// `init` and the first version built them there — where
-    /// `visibleCount` was still nil, the guard bailed, and the rack
-    /// shipped with no affordance at all. The tests for the affordance
-    /// caught it, which is the whole reason they exist.
+    /// The scroll furniture of a windowed well: a hairline spine beside
+    /// the column with a knurled crown standing in a gap at its middle,
+    /// and the title above. Nothing stands behind the parts. Pure
+    /// geometry, so a placement test can measure the crown without
+    /// building it.
+    enum Rack {
+        /// The spine's offset from the slot line, across the shelf; the
+        /// crown stands on it.
+        static let trackOffset: Float = 0.078
+        /// The spine runs this far past the window's first and last slot.
+        static let trackOverhang: Float = 0.04
+        static let spineWidth: Float = 0.003
+        static let spineDepth: Float = 0.002
+        /// The title's height above the first slot.
+        static let headerLift: Float = 0.064
+        /// The crown, as `Tools/shelfcrown.py` mills it: a 48 mm wheel,
+        /// 14 mm wide, its axis across the shelf.
+        static let crownRadius: Float = 0.024
+        static let crownWidth: Float = 0.014
+        /// How far the crown's centre stands proud of the spine, toward
+        /// the viewer.
+        static let crownLift: Float = 0.006
+        /// The gap in the spine the crown sits in.
+        static let crownGap: Float = 2 * crownRadius + 0.008
+        /// The crown's pinch target: the axle plus 8 mm across, the rim
+        /// plus 30 mm over — the collider rule's allowance, no more. The
+        /// milled rim's crests are bevelled a hair under `crownRadius`.
+        static let crownTarget = SIMD3<Float>(0.044, 0.077, 0.077)
+        /// How far below its place the column arrives from, in pitches,
+        /// and how quickly it closes on it.
+        static let arrivalDrop: Float = 0.45
+        static let arrivalRate: Float = 3.5
+        /// A slot fades out over this fraction of a pitch past the window's ends.
+        static let fadeSpan: Float = 0.6
+
+        /// The spine: where it stands and how long it runs.
+        struct Track: Equatable {
+            var center: SIMD3<Float>
+            /// Axis-aligned half extents of the yawed spine.
+            var halfExtents: SIMD3<Float>
+            var yaw: Float
+            var length: Float
+        }
+
+        /// An axis-aligned box in world coordinates.
+        struct Box: Equatable {
+            var center: SIMD3<Float>
+            var halfExtents: SIMD3<Float>
+        }
+
+        /// Yaw about +y that turns the shelf's face toward `facing`.
+        static func yaw(from head: SIMD3<Float>, toward facing: SIMD3<Float>?) -> Float {
+            guard let facing else { return 0 }
+            let d = facing - head
+            guard d.x * d.x + d.z * d.z > 1e-8 else { return 0 }
+            return atan2(d.x, d.z)
+        }
+
+        /// Where the spine stands for a window of `visible` slots headed at `head`.
+        static func track(head: SIMD3<Float>, pitch: Float, visible: Int,
+                          facing: SIMD3<Float>?) -> Track {
+            let span = Float(max(visible - 1, 0)) * pitch
+            let length = span + 2 * trackOverhang
+            let yaw = yaw(from: head, toward: facing)
+            // The shelf's own +x after the yaw.
+            let across = SIMD3<Float>(cos(yaw), 0, -sin(yaw))
+            let center = SIMD3(head.x, head.y - span / 2, head.z) + across * trackOffset
+            let c = abs(cos(yaw)), sn = abs(sin(yaw))
+            let half = SIMD3(spineWidth / 2 * c + spineDepth / 2 * sn,
+                             length / 2,
+                             spineWidth / 2 * sn + spineDepth / 2 * c)
+            return Track(center: center, halfExtents: half, yaw: yaw, length: length)
+        }
+
+        /// Where the crown's pinch target stands: on the spine at the
+        /// window's middle, lifted toward the viewer.
+        static func crown(head: SIMD3<Float>, pitch: Float, visible: Int,
+                          facing: SIMD3<Float>?) -> Box {
+            let span = Float(max(visible - 1, 0)) * pitch
+            let yaw = yaw(from: head, toward: facing)
+            let across = SIMD3<Float>(cos(yaw), 0, -sin(yaw))
+            // The shelf's own +z after the yaw: toward the viewer.
+            let outward = SIMD3<Float>(sin(yaw), 0, cos(yaw))
+            let center = SIMD3(head.x, head.y - span / 2, head.z)
+                + across * trackOffset + outward * crownLift
+            let c = abs(cos(yaw)), sn = abs(sin(yaw))
+            let target = crownTarget / 2
+            let half = SIMD3(target.x * c + target.z * sn,
+                             target.y,
+                             target.x * sn + target.z * c)
+            return Box(center: center, halfExtents: half)
+        }
+    }
+
+    /// How many slots are on screen at once; nil shows them all with no
+    /// shelf. Setting it builds the spine, the crown and the scroll.
     var visibleCount: Int? {
         didSet {
             guard visibleCount != oldValue else { return }
-            buildCarets()
+            scroll = RackScroll(pitch: slotPitch, count: specs.count,
+                                visible: visibleCount ?? specs.count)
+            rebuildShelf()
             applyWindow()
         }
     }
 
-    /// Which slot is at the top of the window.
-    private(set) var scrollIndex = 0
+    /// The point the shelf faces (a standing viewer). Sources turn to face
+    /// it, and the crown stands edge-on to it.
+    var facing: SIMD3<Float>? {
+        didSet {
+            applyFacing()
+            rebuildShelf()
+        }
+    }
+
+    /// The word above the column, and what VoiceOver calls the shelf.
+    var windowTitle: String? {
+        didSet { rebuildShelf() }
+    }
 
     let root = Entity()
 
-    /// The strip the sources ride, and the only thing that MOVES when
-    /// the rack is scrolled.
-    ///
-    /// Separate from `root` because the carets must not slide with it —
-    /// they mark the WINDOW, which stays where it was authored, and a
-    /// caret that drifts up the room as you browse is worse than none.
-    /// (The first version slid `root` itself and took the carets along.)
+    /// The strip the sources ride — the only thing that moves on a scroll.
+    /// Always `root`'s first child.
     private let rack = Entity()
     private var specs: [Spec] = []
     private var sources: [Entity] = []
-    /// The preview model inside each source, scaled by the breath — kept
-    /// separately from the source root so the LABEL does not breathe
-    /// with it. A name that pulsed would read as an animation; a name
-    /// should just be readable.
+    /// The preview inside each source, scaled by the breath; the label
+    /// hangs off the source so it does not breathe with it.
     private var previews: [Entity] = []
     private var dip: [Float] = []
-    /// The refusal fade when a pull comes up empty — the lab is at its
-    /// object budget and nothing came out, so the preview dims briefly
-    /// instead of popping. (This comment said "dark pulse" long after
-    /// the pulse became a fade — the doc-rot this project keeps
-    /// catching.)
+    /// The refusal fade after a pull came up empty.
     private var refusal: [Float] = []
     private var time: Double = 0
+
+    private var scroll = RackScroll(pitch: 0.105, count: 0, visible: 0)
+    private var lastIndex = 0
+    private var shelf: Entity?
+    /// The crown's pinch target, and the pivot inside it that turns.
+    private var crownMount: Entity?
+    private var spindle: Entity?
+    /// Whether the settle in progress came from a hand, so it lands with
+    /// a click; an arrival lands silently.
+    private var handMoved = false
 
     init(_ specs: [Spec]) {
         root.addChild(rack)
         self.specs = specs
         dip = Array(repeating: 0, count: specs.count)
         refusal = Array(repeating: 0, count: specs.count)
+        scroll = RackScroll(pitch: slotPitch, count: specs.count, visible: specs.count)
         for spec in specs {
             let (source, preview) = Self.makeSource(spec)
             source.position = spec.position
             rack.addChild(source)
             sources.append(source)
             previews.append(preview)
-            // A well is PULLED FROM, and a pull needs a hand position
-            // the activation does not have. It spawns just in front of
-            // and above the well instead — the same place a short pull
-            // would have put it — and then the object is an ordinary
-            // one that every other route can reach. Refusal still
-            // refuses: `pull` is the only path, so a lab at its budget
-            // dims here exactly as it does for a hand.
+            // VoiceOver has no hand position, so an activation spawns just
+            // in front of and above the source, where a short pull would.
             SpatialActions.attach(
                 to: source, label: spec.label,
                 activate: { [weak self, weak source] in
@@ -163,268 +218,310 @@ final class Well {
         }
     }
 
-    /// Per frame: the idle breath, the recoil after a spawn, and the
-    /// recession.
-    ///
-    /// PER SOURCE, NOT PER ROOT, which is the one place this differs
-    /// from every other primitive: a bank is one object at one anchor,
-    /// but wells are spread along a bench, and fading the whole row on
-    /// the nearest one would light up wells half a metre from your hand.
+    /// Per frame: the scroll, the window fade, recession per source (wells
+    /// are spread along a bench, so the row never fades as one), the idle
+    /// breath and the recoil after a spawn.
     func update(dt: Double, nearestHand: SIMD3<Float>? = nil) {
         time += dt
+        let reduced = Motion.isReduced
+        let wasMoving = scroll.isMoving
+        scroll.step(dt: dt, reduceMotion: reduced)
+        if scroll.index != lastIndex {
+            // A detent per slot as the column passes it.
+            if scroll.isMoving, let crownMount {
+                SoundPalette.play(.grabTick, on: crownMount, volume: 0.12)
+            }
+            lastIndex = scroll.index
+            refreshVoice()
+        }
+        // And the landing, when the settle a hand started closes.
+        if wasMoving, !scroll.isMoving {
+            if handMoved, let crownMount {
+                SoundPalette.play(.releaseTick, on: crownMount, volume: 0.15)
+            }
+            handMoved = false
+        }
         applyWindow()
-        for source in sources {
-            Recession.apply(to: source,
-                            anchor: source.position(relativeTo: nil),
+        for (index, source) in sources.enumerated() {
+            let fade = windowOpacity(at: index)
+            source.isEnabled = fade > 0.02
+            let recede = reduced
+                ? 1
+                : Recession.opacity(anchor: source.position(relativeTo: nil),
+                                    nearestHand: nearestHand)
+            Self.setOpacity(recede * fade, on: source)
+        }
+        if let shelf {
+            Recession.apply(to: shelf, anchor: shelf.position(relativeTo: nil),
                             nearestHand: nearestHand)
         }
         for (index, preview) in previews.enumerated() {
             dip[index] = max(0, dip[index] - Float(dt) * 2.6)
             refusal[index] = max(0, refusal[index] - Float(dt) * 2.2)
-            // A PERPETUAL BREATH, IN EVERY LAB — which makes this the
-            // single worst Reduce Motion omission in the app: the other
-            // seven primitives animate when something happens, and this
-            // one never stops. Someone who has asked the system for less
-            // motion gets a still object.
-            let breath = Motion.isReduced
+            let breath = reduced
                 ? Float(1)
                 : 1 + 0.035 * Float(sin(time * 1.4 + Double(index) * 1.1))
-            // The dip is a recoil: it shrinks on giving, then swells back.
             preview.scale = SIMD3(repeating: breath * (1 - 0.42 * dip[index]))
-            // Refusal used to darken a glass halo. With the glass gone
-            // the object itself fades instead, which says the same thing
-            // about the same object: nothing came out of here.
-            let opacity = 1 - 0.6 * refusal[index]
-            if opacity < 0.999 {
-                preview.components.set(OpacityComponent(opacity: opacity))
-            } else {
-                preview.components.remove(OpacityComponent.self)
-            }
+            Self.setOpacity(1 - 0.6 * refusal[index], on: preview)
+        }
+    }
+
+    private static func setOpacity(_ opacity: Float, on entity: Entity) {
+        if opacity > 0.995 {
+            entity.components.remove(OpacityComponent.self)
+        } else {
+            entity.components.set(OpacityComponent(opacity: opacity))
         }
     }
 
     // MARK: The window
 
-    /// Shows only `visibleCount` slots, starting at `scrollIndex`, and
-    /// slides them up so the window always sits where the first slot
-    /// was authored.
-    ///
-    /// The slots keep their AUTHORED positions and the whole rack moves,
-    /// rather than each slot being re-placed. That way the layout stays
-    /// the one thing that decides where parts stand — a scroll is the
-    /// rack sliding past a hole, which is what it looks like.
+    /// Slots keep their authored positions and the strip slides, so the
+    /// window always sits where the first slot was authored.
     private func applyWindow() {
-        guard let visibleCount, !specs.isEmpty else {
-            for source in sources { source.isEnabled = true }
+        guard visibleCount != nil else {
             rack.position.y = 0
             return
         }
-        let last = max(specs.count - visibleCount, 0)
-        scrollIndex = min(max(scrollIndex, 0), last)
-        // Authored positions run DOWN the column, so scrolling forward
-        // lifts the rack by the distance from the first slot to the one
-        // that should now head the window.
+        rack.position.y = scroll.offset
+        turnCrown()
+    }
+
+    /// 1 inside the window, fading to 0 over `Rack.fadeSpan` of a pitch
+    /// past either end; 1 everywhere for a well with no window.
+    func windowOpacity(at index: Int) -> Float {
+        guard let visibleCount, specs.indices.contains(index) else { return 1 }
         let head = specs[0].position.y
-        rack.position.y = head - specs[min(scrollIndex, specs.count - 1)].position.y
-        for (index, source) in sources.enumerated() {
-            source.isEnabled = index >= scrollIndex
-                && index < scrollIndex + visibleCount
-        }
+        let below = head - specs[index].position.y - scroll.offset
+        let span = Float(max(visibleCount - 1, 0)) * slotPitch
+        let outside = max(-below, below - span, 0)
+        return 1 - min(outside / (Rack.fadeSpan * slotPitch), 1)
     }
 
-    /// Scrolls by whole slots — a rack of discrete objects left between
-    /// two positions is a rack with something half out of view.
+    /// Scrolls by whole slots, at once — the debug arguments and
+    /// VoiceOver paging.
     func scroll(by slots: Int) {
-        guard let visibleCount, specs.count > visibleCount else { return }
-        scrollIndex = min(max(scrollIndex + slots, 0), specs.count - visibleCount)
+        guard scroll.canScroll else { return }
+        scroll.jump(toIndex: scroll.index + slots)
+        lastIndex = scroll.index
+        handMoved = false
         applyWindow()
-        refreshCarets()
+        refreshVoice()
     }
 
-    /// True when there is more above or below the window.
-    ///
-    /// READ BY THE CARETS BELOW, not left for a caller to remember. The
-    /// first version of this said "the caller draws whatever tells the
-    /// user so" and no caller did — six slots of the rack on screen and
-    /// nothing saying the rest existed, which is the same
-    /// authored-but-dark defect this project keeps convicting, committed
-    /// by the comment that promised otherwise.
-    var canScrollUp: Bool { scrollIndex > 0 }
-    var canScrollDown: Bool {
-        guard let visibleCount else { return false }
-        return scrollIndex + visibleCount < specs.count
-    }
-
-    // MARK: The carets
-
-    /// The two marks that say the rack goes on.
-    ///
-    /// A DRAG IS INVISIBLE. A rack of six with no affordance is a rack of
-    /// six as far as anyone can tell, and the parts they cannot see are
-    /// the ones they will not build with. These say "more this way" by
-    /// existing, and pressing one moves a whole page — so the feature is
-    /// reachable without knowing the gesture, and reachable by VoiceOver,
-    /// which cannot drag at all.
-    ///
-    /// A PAGE, not a slot: at six visible, one press reaches the end of
-    /// the rack. Stepping one at a time would take a press per hidden
-    /// slot to learn what is down there.
-    private let upCaret = ModelEntity()
-    private let downCaret = ModelEntity()
-
-    static let caretName = "well-caret"
-
-    private func buildCarets() {
-        // Idempotent: the window can be set more than once, and a second
-        // pair of carets would sit exactly on the first.
-        upCaret.removeFromParent()
-        downCaret.removeFromParent()
-        guard let visibleCount, specs.count > visibleCount else { return }
-        let pitch = slotPitch
-        let top = specs[0].position
-        for (caret, direction) in [(upCaret, Float(1)), (downCaret, Float(-1))] {
-            caret.name = "\(Self.caretName)-\(direction > 0 ? "up" : "down")"
-            caret.model = ModelComponent(
-                mesh: .generateCone(height: 0.016, radius: 0.013),
-                materials: [Materials.machined(UIColor(white: 0.62, alpha: 1))])
-            // Pointing the way it takes you.
-            caret.orientation = simd_quatf(angle: direction > 0 ? 0 : .pi,
-                                           axis: [0, 0, 1])
-            let span = Float(visibleCount - 1) * pitch
-            caret.position = SIMD3(top.x,
-                                   direction > 0 ? top.y + 0.055
-                                                 : top.y - span - 0.055,
-                                   top.z)
-            caret.components.set(InputTargetComponent())
-            caret.components.set(CollisionComponent(
-                shapes: [.generateSphere(radius: 0.020)]))
-            caret.components.set(HoverEffectComponent())
-            root.addChild(caret)
-        }
-        refreshCarets()
-    }
-
-    private func refreshCarets() {
-        upCaret.isEnabled = canScrollUp
-        downCaret.isEnabled = canScrollDown
-        // Announced with what pressing them DOES, and re-announced as the
-        // window moves — a caret that still says "6 more below" at the
-        // bottom of the rack is worse than a silent one.
-        SpatialActions.attach(
-            to: upCaret, label: "Earlier parts",
-            value: "\(scrollIndex) above",
-            activate: { [weak self] in self?.page(-1) })
-        SpatialActions.attach(
-            to: downCaret, label: "More parts",
-            value: "\(max(specs.count - scrollIndex - (visibleCount ?? 0), 0)) below",
-            activate: { [weak self] in self?.page(1) })
-    }
-
-    /// One window's worth, the direction the caret points.
+    /// One window's worth in `direction`.
     func page(_ direction: Int) {
         scroll(by: direction * (visibleCount ?? 1))
     }
 
-    /// True if the tap hit a caret — the caller's other tap handling
-    /// should not also run.
-    @discardableResult
-    func handleTap(_ entity: Entity) -> Bool {
-        var current: Entity? = entity
-        while let candidate = current {
-            if candidate === upCaret { page(-1); return true }
-            if candidate === downCaret { page(1); return true }
-            if candidate === root { return false }
-            current = candidate.parent
-        }
-        return false
+    /// The column arrives coasting up into its place, the crown rolling
+    /// with it: the apparatus saying that it moves and what moves it.
+    /// From wherever the window already stands, so a debug scroll holds.
+    /// Nothing under Reduce Motion.
+    func arrive() {
+        guard visibleCount != nil, scroll.canScroll, !Motion.isReduced else { return }
+        scroll.coast(from: scroll.offset - Rack.arrivalDrop * slotPitch,
+                     rate: Rack.arrivalRate)
+        handMoved = false
+        applyWindow()
     }
 
-    // MARK: Dragging the rack
+    var canScrollUp: Bool { scroll.index > 0 }
+    var canScrollDown: Bool {
+        guard let visibleCount else { return false }
+        return scroll.index + visibleCount < specs.count
+    }
+    /// Which slot heads the window.
+    var scrollIndex: Int { scroll.index }
+    /// How far the strip is lifted, metres.
+    var scrollOffset: Float { scroll.offset }
+    var isSettled: Bool { !scroll.isMoving }
+
+    /// True if the tap landed on the shelf's furniture, which swallows it.
+    @discardableResult
+    func handleTap(_ entity: Entity) -> Bool {
+        guard let shelf else { return false }
+        return entity === shelf || entity.isDescendant(of: shelf)
+    }
+
+    // MARK: The shelf
+
+    /// The title, spine and crown of a windowed well, for a test or a
+    /// placement check.
+    var shelfEntity: Entity? { shelf }
+    /// The crown: the one handle that scrolls, present only when there is
+    /// more than the window shows.
+    var crown: Entity? { crownMount }
+    /// The pivot inside the crown that turns with the column.
+    var crownSpindle: Entity? { spindle }
+    /// How far the crown has turned, radians about the shelf's +x: arc
+    /// over radius, its front face rolling with the strip.
+    var crownAngle: Float { -scroll.offset / Rack.crownRadius }
+
+    private var track: Rack.Track? {
+        guard let visibleCount, let head = specs.first?.position else { return nil }
+        return Rack.track(head: head, pitch: slotPitch, visible: visibleCount,
+                          facing: facing)
+    }
+
+    private func applyFacing() {
+        let yaw = Rack.yaw(from: specs.first?.position ?? .zero, toward: facing)
+        let turn = simd_quatf(angle: yaw, axis: [0, 1, 0])
+        for source in sources { source.orientation = turn }
+    }
+
+    private func rebuildShelf() {
+        shelf?.removeFromParent()
+        shelf = nil
+        crownMount = nil
+        spindle = nil
+        guard let visibleCount, let head = specs.first?.position, let track else { return }
+
+        // The shelf's own frame: on the first slot, turned to face the viewer.
+        let shelf = Entity()
+        shelf.name = "well-shelf"
+        shelf.position = head
+        shelf.orientation = simd_quatf(angle: track.yaw, axis: [0, 1, 0])
+
+        if let title = windowTitle {
+            let header = HubScene.namePlate(title, accent: UIColor(white: 0.95, alpha: 1),
+                                            size: PlateStyle.labelSize)
+            header.position = [0, Rack.headerLift, 0]
+            shelf.addChild(header)
+        }
+
+        if scroll.canScroll {
+            let span = track.length - 2 * Rack.trackOverhang
+            let holder = Entity()
+            holder.position = [Rack.trackOffset, -span / 2, 0]
+
+            // The spine, in two lengths with the crown's gap between them.
+            let segment = (track.length - Rack.crownGap) / 2
+            for sign: Float in [1, -1] {
+                let rail = ModelEntity(
+                    mesh: Primitives.box(size: [Rack.spineWidth, segment, Rack.spineDepth],
+                                         cornerRadius: 0.001),
+                    materials: [Materials.glassEdge(opacity: 0.30)])
+                rail.position.y = sign * (Rack.crownGap + segment) / 2
+                holder.addChild(rail)
+            }
+
+            // The crown: `ShelfCrown.usdz` from `Tools/shelfcrown.py`, with a
+            // machined wheel of the same size standing in if it fails to load.
+            let mount = Entity()
+            mount.name = "well-crown"
+            mount.position.z = Rack.crownLift
+            mount.components.set(InputTargetComponent())
+            mount.components.set(CollisionComponent(shapes: [
+                Primitives.collisionBox(size: Rack.crownTarget),
+            ]))
+            mount.components.set(HoverEffectComponent())
+            mount.components.set(GroundingShadowComponent(castsShadow: true))
+            let spindle = Entity()
+            spindle.name = "well-crown-spindle"
+            if let milled = PropCache.instance(named: "ShelfCrown") {
+                spindle.addChild(milled)
+            } else {
+                let fallback = ModelEntity(
+                    mesh: Primitives.cylinder(height: Rack.crownWidth,
+                                              radius: Rack.crownRadius),
+                    materials: [Materials.machined(UIColor(white: 0.55, alpha: 1))])
+                // A cylinder stands on y; the crown lies along x.
+                fallback.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+                spindle.addChild(fallback)
+            }
+            mount.addChild(spindle)
+            holder.addChild(mount)
+            shelf.addChild(holder)
+            self.crownMount = mount
+            self.spindle = spindle
+        }
+
+        root.addChild(shelf)
+        self.shelf = shelf
+        turnCrown()
+        refreshVoice()
+    }
+
+    /// The crown turns for the column's travel — arc over radius — so a
+    /// crown at rest is a readout of where the shelf is.
+    private func turnCrown() {
+        spindle?.orientation = simd_quatf(angle: crownAngle, axis: [1, 0, 0])
+    }
+
+    /// VoiceOver reads the crown as the shelf and pages it by adjusting.
+    private func refreshVoice() {
+        guard let crownMount, let visibleCount else { return }
+        let first = scroll.index + 1
+        let last = min(scroll.index + visibleCount, specs.count)
+        let value = "\(first) to \(last) of \(specs.count)"
+        SpatialActions.attach(
+            to: crownMount, label: windowTitle ?? "Shelf", value: value,
+            adjust: { [weak self] delta in self?.page(delta > 0 ? 1 : -1) })
+    }
+
+    // MARK: Scrolling by the crown
 
     private var dragStart: SIMD3<Float>?
-    private var scrollAtGrab = 0
-    private var gesture: ScrollGesture = .undecided
-    private var draggedIndex: Int?
 
-    /// How far a hand travels along the rack per slot scrolled. Matched
-    /// to the authored pitch so the rack tracks the fingers.
+    /// The authored spacing between the first two slots.
     private var slotPitch: Float {
         guard specs.count > 1 else { return 0.105 }
         return abs(specs[1].position.y - specs[0].position.y)
     }
 
-    /// Begins a drag on the rack. Returns false if the pinch missed it,
-    /// or if there is nothing to scroll — in which case the caller's
-    /// ordinary `pull` should handle it as it always did.
+    /// Begins a drag on the crown, the only thing on a well that scrolls.
+    /// False for anything else — a drag on a slot is the caller's pull.
+    /// The first press wins: a scene's one drag gesture reports the same
+    /// entity every frame, and re-pressing would move the anchor under
+    /// the hand so the crown never turned.
     func beginDrag(_ entity: Entity, hand: SIMD3<Float>) -> Bool {
-        guard visibleCount != nil, specs.count > (visibleCount ?? 0),
-              let name = Self.sourceName(of: entity, under: rack),
-              let index = sources.firstIndex(where: { $0.name == name })
-        else { return false }
-        dragStart = hand
-        scrollAtGrab = scrollIndex
-        gesture = .undecided
-        draggedIndex = index
+        guard scroll.canScroll, let crownMount,
+              entity === crownMount || entity.isDescendant(of: crownMount) else { return false }
+        if dragStart == nil {
+            dragStart = hand
+            scroll.beginDrag()
+        }
         return true
     }
 
-    /// Continues it. Returns the slot to pull, once, when the hand has
-    /// committed to taking something rather than browsing.
-    func updateDrag(hand: SIMD3<Float>) -> Int? {
-        guard let dragStart else { return nil }
-        let travel = hand - dragStart
-        switch gesture {
-        case .pull:
-            return nil                              // already spent
-        case .scroll:
-            applyScroll(travel)
-            return nil
-        case .undecided:
-            gesture = ScrollGesture.classify(travel: travel, axis: .vertical)
-            if gesture == .scroll { applyScroll(travel) }
-            return gesture == .pull ? draggedIndex : nil
-        }
-    }
-
-    private func applyScroll(_ travel: SIMD3<Float>) {
-        guard let visibleCount, slotPitch > 1e-6 else { return }
-        // Drag DOWN to bring later slots up, the way a physical rack
-        // behaves under a finger.
-        let slots = Int((-travel.y / slotPitch).rounded())
-        scrollIndex = min(max(scrollAtGrab + slots, 0),
-                          max(specs.count - visibleCount, 0))
-        applyWindow()
+    /// The column rides the hand one to one: roll the crown's rim up and
+    /// the later slots come up. Read along the column, which is world y
+    /// whatever the shelf's yaw.
+    func updateDrag(hand: SIMD3<Float>) {
+        guard let dragStart else { return }
+        scroll.drag(travel: (hand - dragStart).y)
     }
 
     func endDrag() {
+        guard dragStart != nil else { return }
         dragStart = nil
-        draggedIndex = nil
-        gesture = .undecided
+        handMoved = true
+        scroll.endDrag(reduceMotion: Motion.isReduced)
     }
 
     var isDragging: Bool { dragStart != nil }
 
-    /// How many slots there are, window or no window.
+    /// The slot `entity` belongs to, for a caller about to pull from it.
+    func sourceIndex(of entity: Entity) -> Int? {
+        guard let name = Self.sourceName(of: entity, under: rack) else { return nil }
+        return sources.firstIndex { $0.name == name }
+    }
+
     var slotCount: Int { specs.count }
 
-    /// The slot at `index`, for a caller resolving a committed pull.
     func spec(at index: Int) -> Spec? {
         specs.indices.contains(index) ? specs[index] : nil
     }
 
-    /// The entity standing in slot `index` — what a pull should be
-    /// measured from.
+    /// The entity standing in slot `index`.
     func source(at index: Int) -> Entity? {
         sources.indices.contains(index) ? sources[index] : nil
     }
 
     /// If `entity` belongs to a source, makes its object at `hand` and
-    /// returns the new id — the caller then drags it like anything else.
-    ///
-    /// A slot with a `handOver` gives up the ONE object it parks and
-    /// returns nil, which is a success rather than a refusal: the caller
-    /// has nothing new to drag because the thing already existed and has
-    /// its own drag.
+    /// returns the new id. A `handOver` slot gives up its one object and
+    /// returns nil, which is a success: there is nothing new to drag.
     @discardableResult
     func pull(_ entity: Entity, at hand: SIMD3<Double>) -> UUID? {
         guard let name = Self.sourceName(of: entity, under: rack),
@@ -436,11 +533,7 @@ final class Well {
             SoundPalette.play(.pop, on: sources[index], volume: 0.5)
             return nil
         }
-        // The recoil and the pop are the well SAYING it just gave
-        // something up, so they only happen when it did. A lab at its
-        // budget used to chirp and flinch and hand back nothing — the
-        // gesture read as working and the object simply never arrived,
-        // which is the worst of both answers.
+        // The recoil and the pop only happen when something came out.
         guard let id = specs[index].spawn(hand) else {
             refusal[index] = 1
             return nil
@@ -471,59 +564,34 @@ final class Well {
         let source = Entity()
         source.name = "well-\(spec.name)"
 
-        // The object, at the size it will be when you are holding it.
-        // A pivot sits between it and the source so the breath can scale
-        // the model without touching the label beneath.
+        // A pivot between the model and the source, so the breath scales
+        // the model without touching the label.
         let preview = Entity()
         let model = spec.preview()
-        // The preview is caller-supplied and arbitrarily nested, so the
-        // contact shadow is applied to every model in it — the component
-        // renders per mesh, not per subtree.
         applyGroundingShadow(model)
         preview.addChild(model)
         source.addChild(preview)
 
-        // The name, below the object and NOT breathing with it.
         let plate = HubScene.namePlate(spec.label, accent: spec.tint, size: PlateStyle.labelSize)
         plate.components.set(BillboardComponent())
         source.addChild(plate)
 
-        // The collider is sized to what is actually there, per the rule
-        // that an input-targetable collider must never be larger than
-        // the thing it represents (DECISIONS.md, 2026-07-29 — an
-        // oversized one shields everything behind it from every pinch,
-        // and these stand among the objects they make).
-        //
-        // Measured from the preview rather than assumed, because callers
-        // build their own miniatures and a magnet is not a sphere.
+        // Collider measured from the preview, padded a little for a near
+        // miss, plus a second box over the label so the word is part of
+        // the target. Never wider than the preview: wells stand in a
+        // column in front of the apparatus they make for.
         let bounds = preview.visualBounds(relativeTo: source)
-        // A small generous margin so a near miss still counts — the well
-        // is a target you reach for, not one you have to hit.
         let padded = bounds.extents + SIMD3<Float>(repeating: 0.028)
-        // THE LABEL IS PART OF THE TARGET. "Add magnet" hangs 34 mm below
-        // the miniature — well outside the padded box — so the words
-        // telling you what the well makes were the one part of it you
-        // could not pull from.
-        //
-        // Not widened LATERALLY beyond the padded box: wells stand in a
-        // column and a label-width target would reach across the bench
-        // toward whatever the well is drawn in front of. The box covers
-        // the label's own height and depth at the well's width, which is
-        // where a hand aiming at the word actually arrives.
         let plateDrop = bounds.min.y - 0.034
         source.components.set(InputTargetComponent())
         source.components.set(CollisionComponent(shapes: [
-            .generateBox(size: padded).offsetBy(translation: bounds.center),
-            .generateBox(size: [padded.x, 0.030, 0.020])
-                .offsetBy(translation: [bounds.center.x, plateDrop, 0]),
+            Primitives.collisionBox(size: padded, offset: bounds.center),
+            Primitives.collisionBox(size: [padded.x, 0.030, 0.020], offset: [bounds.center.x, plateDrop, 0]),
         ]))
         source.components.set(HoverEffectComponent())
 
         plate.position = [0, bounds.min.y - 0.034, 0]
 
-        // The label is set here and the ACTION in `init`, because a
-        // static builder has no `self` to call `pull` on. `attach`
-        // overwrites this label with the same words.
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = LocalizedStringResource(

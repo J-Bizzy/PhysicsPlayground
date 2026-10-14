@@ -2,7 +2,7 @@
 //  CircuitTextures.swift
 //  Physics Playground — Circuits module
 //
-//  Procedural resistor textures with the REAL 4-band color code: adjust
+//  Procedural resistor textures with the real 4-band color code: adjust
 //  a resistor's value and its bands repaint to what you'd read on the
 //  physical part (two digits, multiplier, gold tolerance). Cached per
 //  code; a version counter tells the renderer when fresh ones land.

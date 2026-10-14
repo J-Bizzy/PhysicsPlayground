@@ -1,8 +1,12 @@
 //
 //  OrbitRing.swift
 //  The selected body's osculating conic as a grabbable ring; math in PhysicsCore.ApsisFrame.
-//  Meshes cache per eccentricity bucket, so per-frame cost is a transform write; never an anisotropic squash (it fattens the tube's cross-section).
-//  Bead collider equals visual radius, counter-scaled against the 9× rig; the ring carries no collider.
+//  The mesh is a canonical p = 1 conic at the orbit's exact eccentricity, rebuilt on the worker
+//  when e moves past a threshold or the tube's canonical radius changes; per-frame cost is a
+//  transform write, never an anisotropic squash (it fattens the tube's cross-section). The tube
+//  is 1.4 mm in the ROOM whatever the orbit's size or the rig's zoom — the canonical radius is
+//  divided by both — and the beads are counter-scaled against the rig by the same rule.
+//  Bead collider equals visual radius; the ring carries no collider.
 //
 
 import Foundation
@@ -27,18 +31,20 @@ final class OrbitRing {
 
     /// Visual (and collision) radius of a bead, before rig compensation.
     static let beadRadius: Float = 0.014
-    /// Eccentricity bucket width for the mesh cache.
-    static let eccentricityStep = 0.03
-    /// How many points a cached conic is sampled at.
+    /// The core tube's radius in the room, metres.
+    static let roomCoreRadius: Float = 0.0014
+    /// A change of eccentricity this large rebuilds the mesh; below it the
+    /// drawn conic and the beads disagree by less than a tube width.
+    static let eccentricityThreshold = 0.002
+    /// How many points a conic is sampled at.
     static let sampleCount = 256
-    private static let coreRadius: Float = 0.0018
 
-    private var meshCache: [Int: (casing: MeshResource, core: MeshResource)] = [:]
-    private var appliedBucket: Int?
-    private var pendingBucket: Int?
+    /// What the current mesh was built for.
+    private var applied: RingKey?
+    private var pending: RingKey?
     private var pipeline: GeometryPipeline<RingJob, RingResult>?
 
-    /// Abandons any ring rebuild in flight. See `GravityLabRenderer.teardown`.
+    /// Abandons any ring rebuild in flight. See `OrbitalMechanicsRenderer.teardown`.
     func teardown() { pipeline?.cancel() }
 
     /// Last-frame reachability per bead, for the reach hysteresis.
@@ -50,9 +56,9 @@ final class OrbitRing {
             accent, coreOpacity: 0.9, casingOpacity: 0.5)
         conicCasing.model = nil
         conicCore.model = nil
-        conicCasing.components.set(ModelComponent(mesh: .generateSphere(radius: 0.0001),
+        conicCasing.components.set(ModelComponent(mesh: Primitives.sphere(radius: 0.0001),
                                                   materials: [casingMaterial]))
-        conicCore.components.set(ModelComponent(mesh: .generateSphere(radius: 0.0001),
+        conicCore.components.set(ModelComponent(mesh: Primitives.sphere(radius: 0.0001),
                                                 materials: [coreMaterial]))
         // Casing first, core over it — darkness beneath light.
         root.addChild(conicCasing)
@@ -99,6 +105,7 @@ final class OrbitRing {
         root.position = primaryDisplay
 
         let scale = Float(simToDisplay)
+        self.rigScale = rigScale
         orientConic(to: frame, scale: scale)
 
         // Beads sit at the two ends of the apse line, in display metres.
@@ -114,7 +121,7 @@ final class OrbitRing {
     private func orientConic(to frame: ApsisFrame, scale: Float) {
         let p = SIMD3<Float>(frame.periapsisDirection)
         let h = SIMD3<Float>(frame.orbitNormal)
-        // Cached mesh is built with p̂ = +x, ĥ = +y. The third column must be the cross of the first two so the matrix is a rotation, not a reflection: p̂ × ĥ = −q̂.
+        // The mesh is built with p̂ = +x, ĥ = +y. The third column must be the cross of the first two so the matrix is a rotation, not a reflection: p̂ × ĥ = −q̂.
         let basis = simd_float3x3(columns: (p, h, simd_cross(p, h)))
         let orientation = simd_quatf(basis)
         let size = Float(frame.semiLatusRectum) * scale
@@ -122,7 +129,24 @@ final class OrbitRing {
             entity.orientation = orientation
             entity.scale = SIMD3(repeating: size)
         }
-        requestMesh(forEccentricity: frame.eccentricity)
+        requestMesh(RingKey(eccentricity: frame.eccentricity,
+                            radii: Self.canonicalRadii(pDisplay: size, rigScale: rigScale)))
+    }
+
+    /// The rig scale the last `update` saw, for the tube's canonical radius.
+    private var rigScale: Float = 1
+
+    /// Core and casing radii in the canonical p = 1 frame that come out as
+    /// `roomCoreRadius` (and its casing) in the room, whatever the orbit's
+    /// semi-latus rectum or the rig's zoom. Both are bucketed — p by 3 %, the
+    /// rig by 12 % — so an evolving orbit or a two-hand zoom does not ask for
+    /// a new mesh every frame.
+    nonisolated static func canonicalRadii(pDisplay: Float, rigScale: Float)
+        -> (core: Float, casing: Float) {
+        let p = pow(1.03, (log(max(pDisplay, 1e-4)) / log(1.03)).rounded())
+        let rig = pow(1.12, (log(max(rigScale, 1e-3)) / log(1.12)).rounded())
+        let core = roomCoreRadius / (p * rig)
+        return (core, Materials.casingRadius(forCore: roomCoreRadius) / (p * rig))
     }
 
     private func place(bead: ModelEntity, at simPoint: SIMD3<Double>,
@@ -195,70 +219,77 @@ final class OrbitRing {
         return SIMD3<Double>(root.position + bead.position)
     }
 
-    // MARK: The mesh cache
+    // MARK: The mesh
+
+    /// What a mesh is built for: an exact eccentricity and the canonical radii.
+    nonisolated struct RingKey: Sendable, Equatable {
+        var eccentricity: Double
+        var radii: (core: Float, casing: Float)
+
+        static func == (lhs: RingKey, rhs: RingKey) -> Bool {
+            lhs.eccentricity == rhs.eccentricity
+                && lhs.radii.core == rhs.radii.core && lhs.radii.casing == rhs.radii.casing
+        }
+    }
 
     private nonisolated struct RingJob: Sendable {
-        var bucket: Int
+        var key: RingKey
     }
 
     private nonisolated struct RingResult: Sendable {
-        var bucket: Int
-        var casing: TubeBuffers?
-        var core: TubeBuffers?
+        var key: RingKey
+        var casing: TubeBuffers
+        var core: TubeBuffers
     }
 
-    private func requestMesh(forEccentricity e: Double) {
-        let bucket = Self.bucket(forEccentricity: e)
-        if let cached = meshCache[bucket] {
-            if appliedBucket != bucket {
-                conicCasing.model?.mesh = cached.casing
-                conicCore.model?.mesh = cached.core
-                appliedBucket = bucket
-            }
-            return
-        }
-        guard pendingBucket != bucket else { return }
-        pendingBucket = bucket
-        pipeline?.submit(RingJob(bucket: bucket))
+    /// Whether `next` needs a new mesh over `applied`: the eccentricity has
+    /// moved past the threshold, the tube's radius bucket changed, or the
+    /// conic changed kind (an ellipse and a hyperbola are different curves).
+    nonisolated static func needsRebuild(applied: RingKey?, next: RingKey) -> Bool {
+        guard let applied else { return true }
+        if applied.radii.core != next.radii.core { return true }
+        if (applied.eccentricity >= 1) != (next.eccentricity >= 1) { return true }
+        return abs(applied.eccentricity - next.eccentricity) > eccentricityThreshold
     }
 
-    nonisolated static func bucket(forEccentricity e: Double) -> Int {
-        // At/past parabolic shares one open-curve bucket: a hyperbola's drawn arc is dominated by clipping, not e.
-        e >= 1 ? -1 : Int(max(e, 0) / eccentricityStep)
+    private func requestMesh(_ key: RingKey) {
+        guard Self.needsRebuild(applied: applied, next: key) else { return }
+        // A job in flight for something close enough is left to land.
+        if let pending, !Self.needsRebuild(applied: pending, next: key) { return }
+        pending = key
+        pipeline?.submit(RingJob(key: key))
     }
 
-    /// Canonical conic for a bucket: p = 1, periapsis +x, normal +y; everything else is scale + rotation.
-    nonisolated static func canonicalFrame(forBucket bucket: Int) -> ApsisFrame {
-        let e = bucket < 0 ? 1.6 : (Double(bucket) + 0.5) * eccentricityStep
+    /// Canonical conic at an exact eccentricity: p = 1, periapsis +x, normal
+    /// +y; everything else is scale + rotation.
+    nonisolated static func canonicalFrame(eccentricity e: Double) -> ApsisFrame {
+        let clamped = max(e, 0)
         return ApsisFrame(
             periapsisDirection: SIMD3(1, 0, 0),
             orbitNormal: SIMD3(0, 1, 0),
-            periapsisRadius: 1 / (1 + e),
-            apoapsisRadius: abs(1 - e) > 1e-12 ? 1 / (1 - e) : .infinity,
+            periapsisRadius: 1 / (1 + clamped),
+            // Negative past parabolic: that is how the frame writes a hyperbola.
+            apoapsisRadius: abs(1 - clamped) > 1e-12 ? 1 / (1 - clamped) : .infinity,
             trueAnomaly: 0, mu: 1)
     }
 
     private nonisolated static func computeRing(_ job: RingJob) -> RingResult {
-        let points = canonicalFrame(forBucket: job.bucket)
+        let points = canonicalFrame(eccentricity: job.key.eccentricity)
             .sampled(count: sampleCount)
             .map(SIMD3<Float>.init)
         return RingResult(
-            bucket: job.bucket,
-            casing: TubeMesh.buffers(
-                lines: [points],
-                radius: Materials.casingRadius(forCore: coreRadius)),
-            core: TubeMesh.buffers(lines: [points], radius: coreRadius))
+            key: job.key,
+            casing: TubeMesh.buffers(lines: [points], radius: job.key.radii.casing),
+            core: TubeMesh.buffers(lines: [points], radius: job.key.radii.core))
     }
 
     private func applyRing(_ result: RingResult) {
-        guard let casingBuffers = result.casing, let coreBuffers = result.core,
-              let casing = TubeMesh.mesh(from: casingBuffers),
-              let core = TubeMesh.mesh(from: coreBuffers) else { return }
-        meshCache[result.bucket] = (casing, core)
-        if pendingBucket == result.bucket { pendingBucket = nil }
+        guard let casing = TubeMesh.mesh(from: result.casing),
+              let core = TubeMesh.mesh(from: result.core) else { return }
+        if pending == result.key { pending = nil }
         conicCasing.model?.mesh = casing
         conicCore.model?.mesh = core
-        appliedBucket = result.bucket
+        applied = result.key
     }
 
     // MARK: Building
@@ -266,12 +297,12 @@ final class OrbitRing {
     private static func makeBead(name: String, accent: UIColor) -> ModelEntity {
         // Bright and solid: this is the handle, not the surface it sits on.
         let bead = ModelEntity(
-            mesh: .generateSphere(radius: beadRadius),
+            mesh: Primitives.sphere(radius: beadRadius),
             materials: [Materials.grip(emissive: accent, glow: 0.55)])
         bead.name = name
-        // Collider EQUALS the visual radius.
+        // Collider equals the visual radius.
         bead.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: beadRadius)]))
+            shapes: [Primitives.collisionSphere(radius: beadRadius)]))
         bead.components.set(HoverEffectComponent())
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true

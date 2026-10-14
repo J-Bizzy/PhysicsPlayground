@@ -2,20 +2,11 @@
 //  LauncherRingTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The launcher's ring folds by tap (2026-09-01). Until then
-//  `KinematicsSpaceView.syncBloom` passed `revealTarget: 1` every frame,
-//  so the launcher was the one object in the app whose ring never closed
-//  — Fire, Balls, Clear and the speed grip stood over it permanently,
-//  against the design system's "unfolded by tap, never gaze".
-//
-//  Two claims. The ROUTING is a pure static over entity names, in the
-//  `CircuitsSpaceView.resolveGrab` pattern, so a headset is not needed to
-//  prove which tap opens, which folds, and which leaves the ring alone.
-//  The FOLD is real: a `Bloom` at reveal 0 offers no petal and no grip,
-//  so the only way to fire from the ring or pull the speed bead is to
-//  have opened it — which is the whole point, and the reason aiming was
-//  deliberately left OUT of the ring (the aim bead is the renderer's own
-//  sibling entity and works folded).
+//  The launcher's ring folds by tap. The routing is a pure static over
+//  entity names, so no headset is needed to prove which tap opens,
+//  which folds and which leaves the ring alone; and the fold is real,
+//  since a `Bloom` at reveal 0 offers no petal and no grip. Aiming was
+//  deliberately left out of the ring, so it works folded.
 //
 
 import XCTest
@@ -73,7 +64,7 @@ final class LauncherRingTests: XCTestCase {
         XCTAssertTrue(KinematicsSpaceView.launcherRingOpen(afterTapOn: child, wasOpen: false))
     }
 
-    // MARK: Hoops have rings too (2026-09-01)
+    // MARK: Hoops have rings too
 
     /// The renderer names a hoop's tube with the ring's id; a tap on it
     /// or on anything under it resolves to that hoop, and nothing else
@@ -100,10 +91,8 @@ final class LauncherRingTests: XCTestCase {
 
     // MARK: The fold is real
 
-    /// Folded, the ring offers nothing: no petal takes a tap and the
-    /// grip refuses a pull. Open, both answer. This is what makes the
-    /// tap load-bearing rather than cosmetic — and why the aim bead was
-    /// kept OUT of the ring, since aiming must work with the ring shut.
+    /// Folded, the ring offers nothing; open, both answer. This is what
+    /// makes the tap load-bearing, and why the aim bead was kept out.
     func testAFoldedRingOffersNoPetalAndNoGrip() throws {
         var fired = 0
         var speed = 5.0

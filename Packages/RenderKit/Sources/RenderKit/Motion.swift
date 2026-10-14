@@ -3,26 +3,9 @@
 //  RenderKit
 //
 //  One authority for "should this animate", and one ease that obeys it.
-//
-//  Reduce Motion reached TWO of the app's eight animated primitives.
-//  `Fade` and `PickupPulse` honour it; `Bloom`, `SpatialPicker`, both
-//  banks, `Well` (a perpetual breath, in every lab) and `FrozenVectors`
-//  did not. The symptom that gives it away is in one file and one frame:
-//  the hub's terrace hairlines freeze mid-shimmer while the door signs
-//  directly above them park correctly, because the signs were written
-//  after somebody remembered and the hairlines before.
-//
-//  It is the SYSTEM setting and only the system setting. The in-app
-//  duplicate was deleted on 2026-07-31 and must not come back — two
-//  switches for one preference is how a user ends up with motion they
-//  turned off.
-//
+//  The system Reduce Motion setting only — there is no in-app duplicate.
 //  Read here rather than passed down from SwiftUI because the primitives
-//  are RealityKit objects ticked from `SceneEvents.Update`, not views:
-//  the ones that took `stillness` as a parameter got it right exactly as
-//  often as their caller remembered to pass it, which is the failure
-//  this file exists to end. `UIAccessibility` is the same value SwiftUI's
-//  `\.accessibilityReduceMotion` reads.
+//  are RealityKit objects ticked from `SceneEvents.Update`, not views.
 //
 
 import Foundation
@@ -34,12 +17,8 @@ public enum Motion {
     public static var isReduced: Bool { UIAccessibility.isReduceMotionEnabled }
 
     /// The house ease: exponential approach, frame-rate independent,
-    /// snapping when close enough so nothing sits fractionally open.
-    ///
-    /// Under Reduce Motion it JUMPS. That is the whole contract, and it
-    /// is why callers should reach for this rather than rolling
-    /// `value += (target - value) * rate * dt` — which is what six
-    /// primitives did, correctly, and unaccountably.
+    /// snapping when close enough so nothing sits fractionally open. Under
+    /// Reduce Motion it jumps, which is why callers must not roll their own.
     public static func ease(_ value: Float, toward target: Float,
                             dt: Double, rate: Double = 9) -> Float {
         guard !isReduced else { return target }
@@ -48,12 +27,9 @@ public enum Motion {
         return min(max(next, min(value, target)), max(value, target))
     }
 
-    /// The lerp factor itself, for a caller easing SEVERAL values
-    /// against one clock — `Bloom` moves a reveal, a scale and a stagger
-    /// per petal off the same rate, and calling `ease` three times would
-    /// read as three unrelated animations.
-    ///
-    /// Returns 1 under Reduce Motion, which lands everything this frame.
+    /// The lerp factor itself, for a caller easing several values against
+    /// one clock. Returns 1 under Reduce Motion, which lands everything
+    /// this frame.
     public static func rate(dt: Double, _ perSecond: Double = 9) -> Float {
         isReduced ? 1 : Float(min(dt * perSecond, 1))
     }

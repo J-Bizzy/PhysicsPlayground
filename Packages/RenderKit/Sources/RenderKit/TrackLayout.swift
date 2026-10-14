@@ -2,26 +2,11 @@
 //  TrackLayout.swift
 //  RenderKit
 //
-//  A bead on a rail: where the bead sits IS the value.
-//
-//  This replaces the dial (owner's call, 2026-07-29: "the dial does not do
-//  it for me"), and the reason it works better is worth stating because it
-//  applies to `Bloom`'s grip too. Both the dial and the grip are
-//  RELATIVE — they accumulate a delta from wherever the gesture began, so
-//  the value depends on the path your hand took and nothing about the
-//  control's appearance tells you what it is set to until you read the
-//  label. A twist has no home position.
-//
-//  A track is ABSOLUTE. The rail is the range, laid out in the room; the
-//  bead is the current value, sitting at its place along it. You can see
-//  the setting from across the room, you can grab the bead and put it
-//  where you want, and half-way along means half-way through the range.
-//  That is what every physical fader, thermostat and slide rule already
-//  taught, and it is the one thing a rotary gauge cannot do.
-//
-//  Local frame: the rail runs along +x, centred on the anchor, so a track
-//  can be dropped beside an apparatus without the caller compensating for
-//  its length.
+//  A bead on a rail: where the bead sits is the value. A track is
+//  absolute — the rail is the range laid out in the room, and half-way
+//  along means half-way through — where a dial or a grip is relative
+//  and shows nothing until you read the label. Local frame: the rail
+//  runs along +x, centred on the anchor.
 //
 
 import Foundation
@@ -43,7 +28,7 @@ public struct TrackLayout: Sendable {
     }
 
     /// The fraction a hand is pointing at, from a position in the track's
-    /// OWN frame.
+    /// Own frame.
     ///
     /// Only the along-rail component counts: a hand that drifts above or
     /// in front of the rail while dragging still sets the value it is

@@ -1,4 +1,4 @@
-//  CurrentLoop.swift — circuit↔field bridge: a coil IS a magnet, m = N·I·A along the axis
+//  CurrentLoop.swift — circuit↔field bridge: a coil is a magnet, m = N·I·A along the axis
 //  (right-hand rule). Exact throughout; the on-axis Biot–Savart result cross-checks the
 //  dipole far field in tests.
 
@@ -33,7 +33,7 @@ public enum CurrentLoop {
         return BarMagnet(position: position, moment: unit * m)
     }
 
-    /// EXACT on-axis field of a circular loop, T: B(z) = μ₀NIa²/(2(a²+z²)^{3/2}), z from centre.
+    /// Exact on-axis field of a circular loop, T: B(z) = μ₀NIa²/(2(a²+z²)^{3/2}), z from centre.
     public static func axialField(turns: Int, current: Double,
                                   radius: Double, distance z: Double) -> Double {
         let a2 = radius * radius

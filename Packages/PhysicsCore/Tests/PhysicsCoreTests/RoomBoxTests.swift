@@ -3,7 +3,7 @@
 //  PhysicsCoreTests
 //
 //  Clipping is what makes virtual light stop at a real wall, so it has
-//  to be exact: crossings land ON the boundary, a line that leaves and
+//  to be exact: crossings land on the boundary, a line that leaves and
 //  returns comes back as two runs, and a segment that only cuts a corner
 //  still contributes its piece.
 //
@@ -61,7 +61,7 @@ final class RoomBoxTests: XCTestCase {
     }
 
     /// The property the field-line renderers actually depend on: a line
-    /// that exits and re-enters must NOT be joined across the gap.
+    /// that exits and re-enters must not be joined across the gap.
     func testPolylineLeavingAndReturningYieldsTwoRuns() {
         let line = [
             SIMD3<Double>(0, 0, 0),
@@ -119,7 +119,7 @@ final class RoomBoxTests: XCTestCase {
         XCTAssertEqual(point!.z, 0.5, accuracy: 1e-12)
     }
 
-    /// Reaching past the far wall stops AT the far wall — you cannot
+    /// Reaching past the far wall stops at the far wall — you cannot
     /// measure a field outside the region that holds it.
     func testPointOnRayIsPulledBackToTheFarWall() {
         let point = box.point(onRay: SIMD3(0, 0, -3), direction: SIMD3(0, 0, 1), reach: 99)
@@ -141,7 +141,7 @@ final class RoomBoxTests: XCTestCase {
         XCTAssertNil(box.point(onRay: SIMD3(0, 5, -3), direction: SIMD3(0, 0, 1), reach: 3))
     }
 
-    /// And nothing BEHIND the viewer counts, even if the box is there.
+    /// And nothing behind the viewer counts, even if the box is there.
     func testPointOnRayIgnoresWhatIsBehindTheViewer() {
         XCTAssertNil(box.point(onRay: SIMD3(0, 0, -3), direction: SIMD3(0, 0, -1), reach: 3))
     }

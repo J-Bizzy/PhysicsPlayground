@@ -21,11 +21,12 @@ import simd
 @MainActor
 final class PendulumsRenderer {
     /// The SpaceView's tap router, so a carried object can be operated
-    /// without hands — `Grabbable` takes the closure and this supplies
-    /// it. The helper configures entities it did not build and cannot
-    /// invent a meaning for pressing one; only the module knows that a
-    /// tap here opens a control ring.
+    /// without hands; only the module knows a tap opens a ring.
     var onObjectTap: ((Entity) -> Void)?
+    /// VoiceOver's activate on a collar. Not `onObjectTap`: the tap routing
+    /// has no collar branch (a physical press on the collar opens its ring
+    /// from inside the drag), so routing it there only folded the rings.
+    var onPivotAction: ((Entity) -> Void)?
 
     let root = Entity()
     /// Freeze sculpts: paused bobs grow velocity and net-force arrows.
@@ -33,16 +34,8 @@ final class PendulumsRenderer {
     private let frozenVectors = FrozenVectors(budget: 16)
     var subscriptions: [EventSubscription] = []
 
-    /// Called from the SpaceView's `onDisappear`, and the reason it has
-    /// to be called explicitly is that neither of the things it releases
-    /// is tied to this object's lifetime.
-    ///
-    /// An `EventSubscription` outlives the view that made it — cancelled
-    /// nowhere, it keeps calling into a renderer for a scene that is no
-    /// longer on screen and holds the whole entity graph alive behind
-    /// it. And a `GeometryPipeline` job in flight ran to completion and
-    /// then uploaded a mesh and enabled an entity in a scene being torn
-    /// down (see `GeometryPipeline.cancel`).
+    /// Called from the SpaceView's `onDisappear`: subscriptions and
+    /// geometry jobs outlive this object and must be cancelled explicitly.
     func teardown() {
         subscriptions.forEach { $0.cancel() }
         subscriptions = []
@@ -95,10 +88,10 @@ final class PendulumsRenderer {
             let shaftMaterial = UnlitMaterial(color: color)
             let headMaterial = Materials.energized(color, roughness: 0.2, glow: 0.35)
             shaft = ModelEntity(
-                mesh: .generateCylinder(height: 0.1, radius: 0.0035),
+                mesh: Primitives.cylinder(height: 0.1, radius: 0.0035),
                 materials: [shaftMaterial])
             head = ModelEntity(
-                mesh: .generateCone(height: 0.028, radius: 0.011),
+                mesh: Primitives.cone(height: 0.028, radius: 0.011),
                 materials: [headMaterial])
             holder.addChild(shaft)
             holder.addChild(head)
@@ -133,11 +126,9 @@ final class PendulumsRenderer {
     private var trailBirths: [Double] = []
     private var trailClock = 0.0
     private var trailSpawnAccumulator = 0.0
-    /// Tension's yellow — RATIFIED module-local vocabulary, not drift.
-    /// `VectorPalette`'s header names this exact colour as the example:
-    /// per-module DECOMPOSITIONS keep their own colours, and only the
-    /// three cross-module arrows (velocity, acceleration, net force)
-    /// belong to the shared palette.
+    /// Tension's yellow — module-local vocabulary: per-module
+    /// decompositions keep their own colours; only velocity, acceleration
+    /// and net force belong to `VectorPalette`.
     static let tensionYellow = UIColor(red: 0.95, green: 0.85, blue: 0.2, alpha: 1)
 
     private static let trailMaterials: [UnlitMaterial] = {
@@ -150,8 +141,7 @@ final class PendulumsRenderer {
             UIColor(red: 1.0, green: 0.45, blue: 0.1, alpha: 1),
         ]
         return colors.map { color in
-            var material = UnlitMaterial(color: color)
-            material.blending = .transparent(opacity: 0.85)
+            var material = Materials.unlit(color, opacity: 0.85)
             return material
         }
     }()
@@ -160,35 +150,22 @@ final class PendulumsRenderer {
     // Ghost prediction while grabbed.
     private let ghostEntity = ModelEntity()
 
-    // Period tags: T at each pivot — the number that ONLY length and
-    // gravity move, floating exactly where that story is anchored.
-    /// The period tags, one per pendulum. `BackedLabel` owns the glyph
-    /// cache and the "has it changed" check, so this file no longer
-    /// keeps its own `periodKeys`/`periodMeshCache` beside the shared
-    /// ones (deleted 2026-08-09 with the move onto the house plate).
+    /// The period tags, one per pendulum, on `BackedLabel`, which owns the
+    /// glyph cache and the change check.
     private var periodLabels: [UUID: (holder: Entity, backed: BackedLabel)] = [:]
-    /// The period tag's own colour — this module's accent.
-    ///
-    /// It used to be a hand-typed purple that was BYTE-IDENTICAL to the
-    /// gravity-force arrow below, so a period readout was painted in
-    /// the force-vector colour. In an app whose first rule is that
-    /// colour is semantic and never decorative, two different meanings
-    /// cannot share a hex.
+    /// The period tag's colour — this module's accent, not the gravity
+    /// arrow's purple: two meanings cannot share a hex.
     private static let periodTextColor = DesignTokens.Palette.pendulumsAccentUI
     private let ghostMaterial: UnlitMaterial = {
-        var material = UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))
-        material.blending = .transparent(opacity: 0.28)
+        let material = Materials.unlit(UIColor(white: 0.95, alpha: 1), opacity: 0.28)
         return material
     }()
     private var ghostCounter = 0
 
     private let steelMaterial = Materials.machined(UIColor(white: 0.85, alpha: 1))
-    /// The bob: satin steel, not a mirror. It was mirror-polished chrome
-    /// (metallic 1.0, roughness 0.1) and it read as a flat white disc —
-    /// a full mirror in a passthrough room has almost nothing to
-    /// reflect, and a polished face flips between hotspot and shadow as
-    /// you move rather than rolling between them. No glow either way:
-    /// this is a mass, not a source.
+    /// The bob: satin steel, not a mirror — a full mirror in a passthrough
+    /// room has almost nothing to reflect and reads as a flat disc. No
+    /// glow: this is a mass, not a source.
     private static let bobMaterial = Materials.machined(UIColor(white: 0.9, alpha: 1))
     /// Darker and rougher than the bob on purpose — a cable should not
     /// compete with the mass hanging off it.
@@ -200,24 +177,9 @@ final class PendulumsRenderer {
 
     init() {
         root.addChild(Lighting.keyLight())
-        // No beam: each pendulum carries its own anchor, wherever it
-        // was hung — the rig is the room, not a bar overhead. An empty
-        // disabled ModelEntity was still being built and parented here
-        // long after the beam was removed; the corpse is gone now.
+        // No beam: each pendulum carries its own anchor wherever it was hung.
 
-        // The ENERGY BARS stood here — a blue kinetic column and a green
-        // potential one, off to the right, trading height as the bob
-        // swung. Deleted at the owner's request (2026-08-01), and the
-        // whole idea with them: the flag, the switch plate, the legend
-        // rows and the notebook's energy readings.
-        //
-        // Worth stating why it is not a loss. A chart standing beside the
-        // apparatus is the one shape this app spent 200 commits arguing
-        // its way out of — it is a readout that happens to be made of
-        // geometry, and it competes with the physics for the same room.
-        // The trade IS the swing, and the swing is already on screen.
-
-        let trailMesh = MeshResource.generateSphere(radius: 0.005)
+        let trailMesh = Primitives.sphere(radius: 0.005)
         let baseMaterial = Self.trailMaterials[0]
         trailPool = EntityPool(budget: Self.trailBudget) { container in
             container.addChild(ModelEntity(mesh: trailMesh, materials: [baseMaterial]))
@@ -327,17 +289,10 @@ final class PendulumsRenderer {
                 SoundPalette.play(.grabTick, on: visual.bob, volume: 0.2)
             }
             visual.pivot.position = SIMD3<Float>(pendulum.pivot)
-            // A PERIOD LABEL BELONGS TO A PENDULUM YOU ARE ATTENDING
-            // TO, not to every rope in the room. Newton's cradle hangs
-            // five identical bobs 7 cm apart, and five identical
-            // "T = 1.49 s" labels landed on top of each other as one
-            // unreadable smear — five copies of a number that is the
-            // same for all of them and interesting for none.
-            //
-            // So: label a pendulum when it is selected, or when it has
-            // room of its own. The resonance rig spaces its pivots 30 cm
-            // apart precisely because its five periods DIFFER and the
-            // comparison is the point, so it keeps every label.
+            // A period label belongs to a pendulum you are attending to: Newton's
+            // cradle hangs five identical bobs 7 cm apart, and five identical
+            // labels were one smear. Label a pendulum when it is selected, or when
+            // it has room of its own.
             let crowded = model.pendulums.contains {
                 $0.id != pendulum.id
                     && simd_distance($0.pivot, pendulum.pivot) < 0.15
@@ -365,14 +320,8 @@ final class PendulumsRenderer {
                     Float(pendulum.cableThickness / 0.002))
             }
 
-            // The double pendulum's second rod: pivot → elbow → bob.
-            //
-            // The FIRST cable is re-aimed at the elbow rather than at the
-            // bob for a double rig, which is why this runs after the
-            // block above rather than replacing it: `bobWorld` is the
-            // LOWER bob for a double pendulum, so drawing pivot→bob
-            // would have cut the corner and shown one straight rod
-            // through the elbow.
+            // The double pendulum's second rod: pivot → elbow → bob. The first
+            // cable is re-aimed at the elbow, since `bobWorld` is the lower bob.
             if let elbowWorld = pendulum.upperBobWorld.map({ SIMD3<Float>($0) }) {
                 visual.elbow.isEnabled = true
                 visual.cable2.isEnabled = true
@@ -433,16 +382,10 @@ final class PendulumsRenderer {
         }
     }
 
-    /// The pendulum as the WELL shows it, before you have one: a steel
-    /// collar, a short length of cable, and the satin bob — the same
-    /// three parts and the same three materials the real rig is made of,
-    /// hung at a slight angle so it reads as a pendulum rather than as a
-    /// ball on a stick.
-    ///
-    /// Shorter than a real one on purpose (0.16 m of cable against a
-    /// default 0.8 m): the well is an object standing beside the rig,
-    /// and a full-length preview would be a second pendulum hanging in
-    /// the room pretending not to be one.
+    /// The pendulum as the well shows it: a steel collar, a short length of
+    /// cable and the satin bob, the same parts and materials as the real
+    /// rig. Shorter than a real one on purpose, so it does not read as a
+    /// second pendulum hanging in the room.
     static func pendulumPreview() -> Entity {
         let container = Entity()
         let steel = Materials.machined(UIColor(white: 0.85, alpha: 1))
@@ -451,17 +394,17 @@ final class PendulumsRenderer {
         let cableLength: Float = 0.16
 
         let collar = ModelEntity(
-            mesh: .generateCylinder(height: 0.03, radius: 0.014),
+            mesh: Primitives.cylinder(height: 0.03, radius: 0.014),
             materials: [steel])
         container.addChild(collar)
 
         let cable = ModelEntity(
-            mesh: .generateCylinder(height: cableLength, radius: 0.002),
+            mesh: Primitives.cylinder(height: cableLength, radius: 0.002),
             materials: [cableMaterial])
         cable.position = [0, -cableLength / 2, 0]
         container.addChild(cable)
 
-        let bob = ModelEntity(mesh: .generateSphere(radius: 0.035),
+        let bob = ModelEntity(mesh: Primitives.sphere(radius: 0.035),
                               materials: [bobMaterial])
         bob.position = [0, -cableLength, 0]
         container.addChild(bob)
@@ -471,14 +414,9 @@ final class PendulumsRenderer {
         return container
     }
 
-    /// The double pendulum as its well mouth shows it: two rods bent at
-    /// an elbow, which is the one silhouette that tells it apart from
-    /// the mouth beside it at a glance.
-    ///
-    /// Built to the SAME overall size as `pendulumPreview` — collar at
-    /// the top, 0.16 m of rod below it — because the two hang side by
-    /// side and a mouth drawn smaller reads as a lesser version of the
-    /// thing next to it rather than as a different one.
+    /// The double pendulum as its well mouth shows it: two rods bent at an
+    /// elbow, the one silhouette that tells it apart at a glance. The same
+    /// overall size as `pendulumPreview`, since the two hang side by side.
     static func doublePendulumPreview() -> Entity {
         let container = Entity()
         let steel = Materials.machined(UIColor(white: 0.85, alpha: 1))
@@ -486,7 +424,7 @@ final class PendulumsRenderer {
             UIColor(white: 0.25, alpha: 1), roughness: 0.6)
 
         let collar = ModelEntity(
-            mesh: .generateCylinder(height: 0.03, radius: 0.014),
+            mesh: Primitives.cylinder(height: 0.03, radius: 0.014),
             materials: [steel])
         container.addChild(collar)
 
@@ -501,7 +439,7 @@ final class PendulumsRenderer {
             let span = b - a
             let length = simd_length(span)
             let entity = ModelEntity(
-                mesh: .generateCylinder(height: length, radius: 0.002),
+                mesh: Primitives.cylinder(height: length, radius: 0.002),
                 materials: [cableMaterial])
             entity.position = (a + b) / 2
             entity.orientation = VectorFieldArrows.rotationFromYAxis(
@@ -511,11 +449,11 @@ final class PendulumsRenderer {
         container.addChild(rod(from: pivot, to: elbow))
         container.addChild(rod(from: elbow, to: bob))
 
-        let elbowBall = ModelEntity(mesh: .generateSphere(radius: 0.017),
+        let elbowBall = ModelEntity(mesh: Primitives.sphere(radius: 0.017),
                                     materials: [bobMaterial])
         elbowBall.position = elbow
         container.addChild(elbowBall)
-        let bobBall = ModelEntity(mesh: .generateSphere(radius: 0.024),
+        let bobBall = ModelEntity(mesh: Primitives.sphere(radius: 0.024),
                                   materials: [bobMaterial])
         bobBall.position = bob
         container.addChild(bobBall)
@@ -524,36 +462,32 @@ final class PendulumsRenderer {
 
     private func makeVisual(for pendulum: PendulumsModel.Pendulum) -> PendulumVisual {
         let pivot = ModelEntity(
-            mesh: .generateCylinder(height: 0.03, radius: 0.014),
+            mesh: Primitives.cylinder(height: 0.03, radius: 0.014),
             materials: [steelMaterial])
         // The collar is grabbable: a rig you cannot re-hang is
         // furniture, not rigging.
         pivot.name = "pivot-\(pendulum.id.uuidString)"
-        // 0.05 until 2026-08-07, on a collar 0.028 across: collars in a
-        // cradle stand 0.07 m apart, so each one's target reached past
-        // both its neighbours' centres and the middle of a cradle could
-        // not be re-hung.
+        // Collars in a cradle stand 0.07 m apart, so a target larger than the
+        // collar reaches its neighbours' centres.
         Grabbable.configureTouchTarget(
             pivot, collisionRadius: 0.028,
             activate: { [weak self, weak pivot] in
                 guard let pivot else { return }
-                self?.onObjectTap?(pivot)
+                self?.onPivotAction?(pivot)
             })
         root.addChild(pivot)
 
         let cable = ModelEntity(
-            mesh: .generateCylinder(height: 1, radius: 0.002),
+            mesh: Primitives.cylinder(height: 1, radius: 0.002),
             materials: [cableMaterial])
         root.addChild(cable)
 
         let bob = ModelEntity(
-            mesh: .generateSphere(radius: 0.035),
+            mesh: Primitives.sphere(radius: 0.035),
             materials: [Self.bobMaterial])
         bob.name = pendulum.id.uuidString
-        // 0.075 until 2026-08-07, on a ball of radius 0.035. Cradle bobs
-        // touch — they are 0.07 m apart — so a 0.075 target enclosed
-        // BOTH neighbours' centres and the ball you pinched was decided
-        // by hit order rather than by aim.
+        // Cradle bobs touch, so a target larger than the ball encloses both
+        // neighbours' centres and the pinch is decided by hit order.
         Grabbable.configureTouchTarget(
             bob, collisionRadius: 0.048,
             activate: { [weak self, weak bob] in
@@ -567,17 +501,17 @@ final class PendulumsRenderer {
         root.addChild(bob)
 
         let cable2 = ModelEntity(
-            mesh: .generateCylinder(height: 1, radius: 0.002),
+            mesh: Primitives.cylinder(height: 1, radius: 0.002),
             materials: [cableMaterial])
         cable2.isEnabled = false
         root.addChild(cable2)
 
-        // The elbow carries the UPPER mass of a double pendulum. Drawn
+        // The elbow carries the upper mass of a double pendulum. Drawn
         // smaller than the lower bob because the lower one is what the
         // eye should follow — its path is the chaotic figure the whole
         // rig exists to draw.
         let elbow = ModelEntity(
-            mesh: .generateSphere(radius: 0.026),
+            mesh: Primitives.sphere(radius: 0.026),
             materials: [Self.bobMaterial])
         elbow.isEnabled = false
         root.addChild(elbow)
@@ -587,10 +521,8 @@ final class PendulumsRenderer {
             cable2: cable2, elbow: elbow,
             velocityArrow: Arrow(color: VectorPalette.velocity),
             accelerationArrow: Arrow(color: VectorPalette.acceleration),
-            // Gravity is a force AND a component of the net force drawn
-            // beside it, so it cannot be the same red — see
-            // `VectorPalette.gravity`. The legend has said "purple
-            // gravity" since it was written.
+            // Gravity is a force and a component of the net force drawn beside it,
+            // so it cannot be the same red — see `VectorPalette.gravity`.
             gravityArrow: Arrow(color: DesignTokens.Palette.gravityVectorUI),
             tensionArrow: Arrow(color: Self.tensionYellow),
             netArrow: Arrow(color: VectorPalette.force))
@@ -602,31 +534,12 @@ final class PendulumsRenderer {
 
     // MARK: Trail
 
-    /// The period tag over a pivot: "T = 1.42 s".
-    ///
-    /// ON THE HOUSE PLATE SINCE 2026-08-09, and it is the label
-    /// `BackedLabel` was written for. Its header names this exact
-    /// defect — "the modules' live numerals stayed naked unlit text" —
-    /// and this was the last one, an extruded semibold run in the
-    /// module accent with nothing behind it, thirty centimetres from a
-    /// switch bank whose every plate wears a backing.
-    ///
-    /// It also carried the centring bug the hub fixed in January and
-    /// `BackedLabel` was built with: `position = [-(minX+maxX)/2, 0, 0]`
-    /// centres on X only, so the run hung with its BASELINE on the
-    /// anchor and its mass floating above — the same "not actually
-    /// centred" the wordmark's own note describes. Adopting the shared
-    /// type fixes the backing and the baseline in one move, and drops
-    /// this file's private glyph cache in favour of the shared one.
+    /// The period tag over a pivot: "T = 1.42 s", on the house plate.
     private func syncPeriodLabel(for pendulum: PendulumsModel.Pendulum,
                                  gravity: Double, visible: Bool = true) {
-        // A CHAOTIC RIG HAS NO PERIOD. `Pendulum.period(gravity:)` is
-        // 2π√(L/g) of the UPPER rod alone, and stamping it over a double
-        // pendulum labelled a system whose whole point is that it never
-        // repeats. The guard sits before the lookup so no holder is ever
-        // built for a double — `kind` is fixed at birth, so there is
-        // nothing to remove later. Found while scripting the demo on
-        // 2026-09-01; `PeriodTagTests` pins it.
+        // A chaotic rig has no period: 2π√(L/g) is the upper rod's alone. The
+        // guard sits before the lookup so no holder is ever built for a double;
+        // `PeriodTagTests` pins it.
         guard pendulum.kind != .double else { return }
         let label: (holder: Entity, backed: BackedLabel)
         if let existing = periodLabels[pendulum.id] {
@@ -651,13 +564,9 @@ final class PendulumsRenderer {
         label.backed.setText(string, color: Self.periodTextColor)
     }
 
-    /// How long a bob's trail dot lives, seconds.
-    ///
-    /// Was the `.short` arm of a four-case `switch` on
-    /// `model.trailMode`; the other three arms had never run, and the
-    /// enum was deleted 2026-08-09 (see `PendulumsModel`). Long enough
-    /// to draw the arc either side of the low point, short enough that
-    /// a fast swing does not paint a solid disc.
+    /// How long a bob's trail dot lives: long enough to draw the arc either
+    /// side of the low point, short enough that a fast swing does not paint
+    /// a solid disc.
     private static let trailLifetime = 1.4
 
     private func syncTrail(dt: Double, model: PendulumsModel) {
@@ -712,24 +621,11 @@ final class PendulumsRenderer {
 
     // MARK: Ghost prediction
 
-    /// THE ONE PLACE THIS MODULE BUILDS A MESH ON THE FRAME PATH, and it
-    /// is a deliberate exception rather than an oversight. Recorded here
-    /// because a reader checking the rule ("mesh regeneration goes
-    /// through `GeometryPipeline`'s background worker, never inline in
-    /// the render tick" — ARCHITECTURE.md) will otherwise find this and
-    /// assume it was missed. It was measured instead:
-    ///
-    /// · It runs ONLY while a bob is held, and only every sixth frame.
-    /// · The mesh is 60 path points swept as a 3-sided tube — about 180
-    ///   vertices, which is smaller than a single field line.
-    /// · `ghostMaterial` is banked, so nothing is allocated per call.
-    ///
-    /// And the reason NOT to move it is the stronger half: this ghost is
-    /// a live preview of where the bob will go if released from where
-    /// your hand is NOW. Handing it to a background worker buys a
-    /// hitch-free frame that nobody was losing and pays for it in lag on
-    /// the one thing in the module that must track the hand exactly.
-    /// The rule exists to prevent hitches; this is not one.
+    /// The one place this module builds a mesh on the frame path,
+    /// deliberately: it runs only while a bob is held and only every sixth
+    /// frame, the mesh is ~180 vertices, and the material is banked. A
+    /// background worker would trade a hitch nobody was losing for lag on
+    /// the one thing that must track the hand exactly.
     private func syncGhost(_ model: PendulumsModel) {
         guard let grabbedID, let pendulum = model.pendulums.first(where: { $0.id == grabbedID }),
               pendulum.isGrabbed else {

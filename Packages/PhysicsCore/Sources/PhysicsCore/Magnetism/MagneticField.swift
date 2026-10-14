@@ -116,7 +116,7 @@ public enum MagneticField {
         return coeff * (m1r * m2 + m2r * m1 + m1m2 * rHat - 5 * m1r * m2r * rHat)
     }
 
-    /// Net force on `b` as POINT DIPOLES — badly wrong nearer than a few bar lengths; a bench of real bars should use `barForce`.
+    /// Net force on `b` as point dipoles — badly wrong nearer than a few bar lengths; a bench of real bars should use `barForce`.
     public static func netForce(on b: BarMagnet, from others: [BarMagnet]) -> SIMD3<Double> {
         others.reduce(.zero) { $0 + force(on: b, dueTo: $1) }
     }

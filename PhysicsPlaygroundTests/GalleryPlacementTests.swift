@@ -52,12 +52,8 @@ final class GalleryPlacementTests: XCTestCase {
     }
 
     // MARK: The facing rescue
-    //
-    // The relaunch promise above is kept, and one pathological case is
-    // rescued: a saved yaw is relative to where the wearer stood LAST
-    // launch, so relaunching from another chair can open the gallery
-    // behind them. Pure arithmetic, because the headset cannot be asked
-    // to relaunch four times in a unit test.
+    // A saved yaw is relative to where the wearer stood last launch, so
+    // relaunching from another chair can open the gallery behind them.
 
     func testAFacingCloseToTheWearerIsLeftAlone() {
         // A deliberate quarter-turn is a placement, not a mistake.
@@ -70,7 +66,7 @@ final class GalleryPlacementTests: XCTestCase {
                        .pi, accuracy: 1e-6)
     }
 
-    /// THE CASE A NAIVE `abs(a - b)` GETS WRONG. These two facings are 20°
+    /// The case A naive `abs(a - b)` gets wrong. These two facings are 20°
     /// apart, but straddle ±π — subtracting them reads 340° and would spin
     /// a correctly-placed gallery to face a wearer it already faced.
     func testTheComparisonWrapsAcrossPi() {

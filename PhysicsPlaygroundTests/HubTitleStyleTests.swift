@@ -2,11 +2,8 @@
 //  HubTitleStyleTests.swift
 //  Physics Playground — app tests
 //
-//  The engine behind the home's three display texts. There used to be
-//  four voices and half of these tests existed to prove they really
-//  differed; the three losers are gone, and what is left to pin is the
-//  contract the lockup math actually leans on: real measured extents, a
-//  buildable line, capitals, and ONE solid.
+//  The engine behind the home's three display texts: real measured
+//  extents, a buildable line, capitals, and one solid.
 //
 
 import XCTest
@@ -25,10 +22,8 @@ final class HubTitleStyleTests: XCTestCase {
         XCTAssertGreaterThan(extents.z, 0, "no depth at all")
     }
 
-    /// Milled from stock, and the depth is not incidental: the letters'
-    /// own extruded sides ARE the depth cue, which is why `line` can get
-    /// away with a single pass. Flatten this and the type loses the only
-    /// shadow it has.
+    /// Milled from stock: the letters' own extruded sides are the depth
+    /// cue, which is why `line` can get away with a single pass.
     func testTheTypeIsDeeplyExtruded() {
         let extents = HubTitleStyle.extents("Energy", size: 0.12)
         XCTAssertGreaterThan(extents.z, 0.12 * 0.4,
@@ -52,11 +47,9 @@ final class HubTitleStyleTests: XCTestCase {
         }
     }
 
-    /// ONE solid, not a stack. Two meshes sharing a volume is what made
-    /// the letters look doubled and the lines look collided: a dark copy
-    /// has to sit further back than the extrusion is deep, and this type
-    /// is deep, so any offset small enough to read as a shadow punched
-    /// through the faces.
+    /// One solid, not a stack: a dark copy has to sit further back than the
+    /// extrusion is deep, and any offset small enough to read as a shadow
+    /// punched through the faces.
     @MainActor
     func testTheLineIsASingleSolid() {
         let line = HubTitleStyle.line("MECHANICS", size: 0.12,

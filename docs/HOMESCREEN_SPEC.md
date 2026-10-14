@@ -2,6 +2,19 @@
 
 Target: visionOS (Vision Pro), mixed-immersion home space.
 
+**2026-09-04.** No promise line is DRAWN anywhere any more — not under
+an exhibit, not under a catalog row. `HubDomain.promise` is VoiceOver's
+(the exhibit's label, the catalog row's hint). A docked exhibit's own
+name plate goes quiet under the Load plaque. Where the sections below
+describe a caption or a promise line on screen, they are history.
+
+**2026-10-14.** The exhibit names are no longer in the air. Each lab's
+name is a lit inlay on its terrace's dark front edge, under its mount
+(`HubScene.benchLabel`); it brightens while you face the exhibit and dims
+while that lab stands on the pad. The focus pool stays on the mount while
+the exhibit lifts. Where the sections below describe a name plate over or
+in front of an exhibit, they are history; DECISIONS.md has the entry.
+
 **History.** v3 (2026-07-29) documented the rebuilt constellation homescreen and locked its decisions. Later the same day, user direction called for a flagship-quality redesign with a persistent title; the result is the **Gallery**, which replaces the constellation. v4 documents the Gallery as built. Decisions that changed have entries in `DECISIONS.md` (same date); visual values live in `DESIGN_SYSTEM.md`.
 
 ---
@@ -25,7 +38,7 @@ A crescent of **two floating graphite terraces**, one per `HubDomain`, arcing ar
 Each terrace:
 
 - is a **modelled optical bench** (0.42 m deep, 0.055 m thick), tiled from a 0.36 m bay per module plus two 0.04 m end caps (`Tools/galleryplatforms.py` → `GalleryBay.usdz`, `GalleryCap.usdz`), T-slotted along its length, with a **domain-coloured emissive hairline** lying in the machined channel along its front rail — one of the two places domain colour lives, alongside the door signage (the progress ring went with the experiments on 2026-08-09; the focus panel's chip was deleted 2026-08-04);
-- carries one **three-ball kinematic mount** per module (r 0.085 m, 0.36 m pitch — `GalleryMount.usdz`), each holding the module's **shell-free live miniature** (`Hub/HubVignettes.swift`), normalized to a constant 0.24 m world size, with a billboarded bubble-type name plate in front of the mount.
+- carries one **three-ball kinematic mount** per module (r 0.085 m, 0.36 m pitch — `GalleryMount.usdz`), each holding the module's **shell-free live miniature** (`Hub/HubVignettes.swift`), normalized to a constant 0.24 m world size, with the lab's name lit into the bench's front edge directly under the mount (2026-10-14; a billboarded bubble-type plate floated over each exhibit until then).
 
 *(Terraces were plain boxes and the pucks plain cylinders until 2026-08-09. Tiles rather than one asset because the layout sizes a terrace from its module count; nothing here is stretched to fit.)*
 
@@ -59,13 +72,13 @@ A **modelled hexagonal docking cradle** (`GalleryCradle.usdz`) floating front an
 
 ### Focus
 
-Unchanged mechanic (head-direction cone 26° with hysteresis, `RoomModel`'s look ray; `-hubFocus <id>` pins it in the simulator): the focused exhibit **lifts 0.09 m off its puck** and scales to 1.22, and a pool of its accent light appears on the pedestal. Names stay legible at all times (owner, 2026-08-04 — a gallery whose captions vanish until you stare at them cannot be read at a glance); what IS focus-gated is the **promise line** (`HubDomain.promise`), one sentence of "what you actually do here" that fades in under the focused exhibit's name.
+Unchanged mechanic (head-direction cone 26° with hysteresis, `RoomModel`'s look ray; `-hubFocus <id>` pins it in the simulator): the focused exhibit **lifts 0.09 m off its puck** and scales to 1.22, and a pool of its accent light appears on the mount and stays there as the exhibit rises (2026-10-14; it used to ride the lift). Names stay legible at all times (owner, 2026-08-04 — a gallery whose captions vanish until you stare at them cannot be read at a glance): the faced exhibit's bench label brightens from 0.78 to full, and that is the only thing focus does to a name. The promise line is VoiceOver's (2026-09-04).
 
 **THE FOCUS PANEL IS GONE.** `HubFocusPanel` — domain chip, promise line, progress dial, New badge and Enter button — was deleted on 2026-08-04. This section described it as shipping until 2026-08-07. Its two load-bearing jobs were rehomed then: the promise line above, and the Enter button as a **machined ENTER plaque** standing on each puck's terrace (see *Entering*).
 
 ### Entering
 
-**One door, reached two ways** (rewritten 2026-08-09). The door is the **pad**: a lab standing on the modelled cradle front and centre turns there with **Load Module** hanging over it, and that button is the only thing in the room that opens a lab.
+**One door, reached two ways** (rewritten 2026-08-09). The door is the **pad**: a lab standing on the modelled cradle front and centre turns there with its **Load** plaque hanging over it ("LOAD LAB" over the lab's name since 2026-10-14 — "module" was the one place a wearer met the codebase's word), and that button is the only thing in the room that opens a lab.
 
 - **Tap an exhibit** and it flies to the pad by itself (0.5 s), where the cradle's three latch fingers close over it.
 - **Or carry it there** and release inside the 0.34 m snap radius (0.28 s to settle). The better story, and still the one nobody discovers unaided — which is why the tap now demonstrates it.

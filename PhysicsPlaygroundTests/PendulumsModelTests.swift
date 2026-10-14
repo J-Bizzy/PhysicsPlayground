@@ -2,12 +2,9 @@
 //  PendulumsModelTests.swift
 //  PhysicsPlaygroundTests
 //
-//  This file was ONE test function against a 365-line model — the
-//  thinnest coverage in the project, in the module that has just gained
-//  five switch plates, two rails and a standing bank of worlds. What the
-//  instruments write is now pinned here: the ranges they clamp to, the
-//  comparison that decides which world's disc lights, and the promise
-//  `setLength` makes that a cable edit does not stop the swing.
+//  What the instruments write: the ranges they clamp to, the comparison
+//  that decides which world's disc lights, and the promise `setLength`
+//  makes that a cable edit does not stop the swing.
 //
 
 import PhysicsCore
@@ -22,14 +19,8 @@ final class PendulumsModelTests: XCTestCase {
     /// simulated seconds of swinging lose essentially no amplitude —
     /// the energy-exact integrator plus a severed loss term.
     func testFrictionToggleMakesThePendulumIdeal() {
-        // A SOLITARY pendulum, not the opening scene's first bob.
-        //
-        // The module opens with Newton's cradle now (2026-08-02), and a
-        // ball in a cradle is supposed to lose its swing — it hands the
-        // whole of it to the next ball along. This test is about
-        // DAMPING, so it needs a pendulum with nothing to collide with;
-        // asserting the old way would have been asserting that a cradle
-        // does not work.
+        // A solitary pendulum, not the opening cradle: a ball in a cradle is
+        // supposed to lose its swing to the next ball along.
         let model = PendulumsModel()
         model.frictionOn = false
         for pendulum in model.pendulums { model.removePendulum(id: pendulum.id) }
@@ -73,7 +64,7 @@ final class PendulumsModelTests: XCTestCase {
 
     /// A pendulum pulled from the well hangs plumb and at rest until a
     /// hand swings it — the drawn-back birth is the cradle cold-open's,
-    /// not the well's (owner, 2026-08-03).
+    /// not the well's.
     func testAHandSpawnedPendulumHangsStillUntilSwung() {
         let model = PendulumsModel()
         for pendulum in model.pendulums { model.removePendulum(id: pendulum.id) }
@@ -120,10 +111,8 @@ final class PendulumsModelTests: XCTestCase {
 
     // MARK: The worlds bank — which disc lights
 
-    /// The standing bank of worlds is a READOUT as well as a control, and
-    /// it decides which disc is lit with exactly this comparison. Pinning
-    /// it here means the lamp and the panel's own "— Moon" line cannot
-    /// drift apart: they are the same question asked twice.
+    /// The standing bank of worlds decides which disc is lit with exactly
+    /// this comparison, so the lamp and the notebook cannot drift apart.
     private func litWorld(_ model: PendulumsModel) -> String? {
         SurfaceGravity.bodies
             .first { abs($0.gravity - model.gravity) < 0.01 }?.name
@@ -211,11 +200,7 @@ final class PendulumsModelTests: XCTestCase {
 
     // MARK: The switch bank
 
-    /// Every plate the bank shows, and a reset that puts them all back —
-    /// the bank reads its lamps from the model every frame, so a reset
-    /// that missed one would leave a lit plate over a hidden layer.
-    /// (Energy bars were the fifth until 2026-08-01, when the whole idea
-    /// was deleted at the owner's request.)
+    /// Every plate the bank shows, and a reset that puts them all back.
     func testResetRestoresEveryLayerTheBankShows() {
         let model = PendulumsModel()
         model.showVelocity = false
@@ -238,10 +223,9 @@ final class PendulumsModelTests: XCTestCase {
 
     // MARK: The length bead
 
-    /// `setLength` goes to real trouble to re-project the bob onto the
-    /// new sphere keeping its direction and speed, so that paying out
-    /// cable changes the PERIOD without restarting the motion. Nothing
-    /// asserted it, and it is the whole lesson of the grip.
+    /// `setLength` re-projects the bob onto the new sphere keeping its
+    /// direction and speed, so paying out cable changes the period without
+    /// restarting the motion — the whole lesson of the grip.
     func testPayingOutCableChangesThePeriodWithoutStoppingTheSwing() {
         let model = PendulumsModel()
         model.frictionOn = false
@@ -283,10 +267,8 @@ final class PendulumsModelTests: XCTestCase {
 
     // MARK: The physics the bench exists for
 
-    /// T = 2π√(L/g), and the mass is NOT in it. The mass petal cycles
-    /// light → medium → heavy precisely so you can watch the period not
-    /// change; if it ever did, that petal would be teaching the opposite
-    /// of the lesson it exists for.
+    /// T = 2π√(L/g), and the mass is not in it: the mass petal exists so
+    /// you can watch the period not change.
     func testThePeriodFollowsRootLOverGAndIgnoresMass() {
         let model = PendulumsModel()
         let id = model.pendulums[0].id
@@ -329,10 +311,6 @@ final class PendulumsModelTests: XCTestCase {
             "the bob would have swung through the floor")
     }
 
-    // (The Foucault suite stood here until 2026-08-03, when the feature
-    // was removed at the owner's direction. Its sine-law recovery tests
-    // live on in git history alongside the physics they guarded.)
-
     // MARK: The well
 
     func testTheWellRespectsThePendulumBudget() {
@@ -345,7 +323,7 @@ final class PendulumsModelTests: XCTestCase {
 
     // MARK: The cradle and the chaotic one
 
-    /// The module's cold open IS a cradle: five identical bobs, touching,
+    /// The module's cold open is a cradle: five identical bobs, touching,
     /// with the first drawn back.
     @MainActor
     func testTheModuleOpensWithNewtonsCradle() {
@@ -364,20 +342,9 @@ final class PendulumsModelTests: XCTestCase {
         XCTAssertEqual(swinging.count, 1)
     }
 
-    /// One ball in, one ball out — through the real model, not through
-    /// `BobCollision` in isolation.
-    ///
-    /// Measured as peak DISPLACEMENT from plumb over the whole run, not
-    /// as a speed at some instant. My first attempt sampled speed at 1.2 s
-    /// and failed on a cradle that was working perfectly: the far ball
-    /// was at the top of its swing, which is exactly where its speed is
-    /// zero. Displacement has no such phase to get unlucky with — the
-    /// middle balls never leave plumb no matter when you look.
-    ///
-    /// This is the end-to-end version of
-    /// `BobCollisionTests.testOneBallInSendsExactlyOneBallOut`, and it
-    /// checks the two things that test cannot see: the projection onto
-    /// the line of centres, and the write-back into `state.velocity`.
+    /// One ball in, one ball out, through the real model. Measured as peak
+    /// displacement from plumb over the whole run, not as a speed at some
+    /// instant: the far ball's speed is zero at the top of its swing.
     @MainActor
     func testTheCradlePassesTheSwingAcrossToTheFarBall() {
         let model = PendulumsModel()
@@ -439,13 +406,8 @@ final class PendulumsModelTests: XCTestCase {
         XCTAssertEqual(simd_distance(elbow, bob), pendulum.length2, accuracy: 1e-9)
     }
 
-    /// Deleting a pendulum removes it and everything that referred to
-    /// it, whichever end it was thrown away from.
-    ///
-    /// The pivot's ring grew a trash petal on 2026-08-02, matching every
-    /// other module — so deleting from the TOP is now the usual path,
-    /// and a stale `selectedID` left behind by it would leave the info
-    /// card describing a rig that is not there.
+    /// Deleting a pendulum removes it and everything that referred to it,
+    /// whichever end it was thrown away from.
     @MainActor
     func testDeletingAPendulumClearsEverythingThatPointedAtIt() throws {
         let model = PendulumsModel()
@@ -474,22 +436,10 @@ final class PendulumsModelTests: XCTestCase {
 
     // MARK: The double's readouts
 
-    /// EVERY READOUT ABOUT THE DOUBLE PENDULUM USED TO LIE, and they all
-    /// lied for one reason: `step` wrote `doubleState` and never wrote
-    /// `state`, which is what the renderer, the card, the notebook and
-    /// the freeze sculpt all read.
-    ///
-    /// So `state.position` stayed a plumb bob at rest and
-    /// `state.velocity` was identically zero forever. The trail's
-    /// `speed > 0.02` gate never passed, so the chaotic trace the rig
-    /// exists for could not be drawn at all; the force arrows drew a
-    /// constant mg on a bob accelerating hard; the card read
-    /// `v 0.00 m/s` permanently.
-    ///
-    /// This asserts the mirror rather than any particular trajectory —
-    /// chaos makes a stored reference untestable, as this file's own
-    /// header explains, but "the two representations agree" is true on
-    /// every step of every trajectory.
+    /// Every readout about the double pendulum reads `state`, which `step`
+    /// once never wrote for a double: the trail gate never passed, the
+    /// arrows drew a constant mg, the card read zero. Asserts the mirror
+    /// rather than a trajectory, since chaos makes a reference untestable.
     func testTheDoublesStateTracksItsLowerBob() throws {
         let model = PendulumsModel()
         for existing in model.pendulums { model.removePendulum(id: existing.id) }
@@ -523,15 +473,8 @@ final class PendulumsModelTests: XCTestCase {
                       + "still be undrawable")
     }
 
-    /// A NEW double must not inherit the last one's speed.
-    ///
-    /// The mirror above writes `state` from the double's own solution
-    /// every step, so a fresh rig reports a fresh velocity — but the
-    /// first version of this test asserted the wrong thing (that a new
-    /// double is at rest a step later), which is false: it is released
-    /// from θ₁ = 2.2 rad and gravity has it moving inside one frame.
-    /// What is actually worth pinning is that the number describes THIS
-    /// pendulum rather than the one whose slot it took.
+    /// A new double reports its own velocity, not the one whose slot it
+    /// took. Not "at rest a step later": it is released from θ₁ = 2.2 rad.
     func testANewDoubleDoesNotInheritTheLastOnesSpeed() throws {
         let model = PendulumsModel()
         for existing in model.pendulums { model.removePendulum(id: existing.id) }
@@ -557,9 +500,8 @@ final class PendulumsModelTests: XCTestCase {
 
     // MARK: Bobs that meet
 
-    /// Mechanical energy of every simple pendulum on the bench, with the
-    /// pivot as datum. Frictionless, this may fall (a collision with
-    /// restitution < 1 removes some) but must never RISE.
+    /// Mechanical energy of every simple pendulum on the bench, pivot as
+    /// datum. Frictionless, this may fall but must never rise.
     private func benchEnergy(_ model: PendulumsModel) -> Double {
         model.pendulums.filter { $0.kind == .simple }.reduce(0) { total, p in
             let speed = simd_length(p.state.velocity)
@@ -569,41 +511,19 @@ final class PendulumsModelTests: XCTestCase {
         }
     }
 
-    /// A FRICTIONLESS BENCH MUST NOT MAKE ENERGY — an invariant worth
-    /// pinning, and NOT evidence for the claim it was written to test.
-    ///
-    /// Audit P1-25 says off-axis bobs gain energy on every contact,
-    /// because the exchange is applied along the line of centres rather
-    /// than along each bob's own constraint tangent. The reasoning is
-    /// plausible; the effect is not there. Measured on this fixture —
-    /// two bobs whose lengths differ by 0.04 m, tilting the contact
-    /// normal ~34° off tangent while staying inside the 0.07 m contact
-    /// distance, so they genuinely collide — total energy moves by
-    /// 3.6e-15 J over 1800 steps, with and without the projection the
-    /// claim asks for. That fix was written and reverted; the reasoning
-    /// is at the call site in `PendulumsModel`.
-    ///
-    /// So this test does NOT discriminate between the two
-    /// implementations, and saying so is the point: two earlier versions
-    /// of it were vacuous in ways that were not obvious (the first hung
-    /// the bobs 25 cm apart, where they never touched at all), and a
-    /// test whose green nobody has interrogated is how this arc's worst
-    /// defects shipped. What it does buy is a real guard against a
-    /// FUTURE collision change that does inject energy.
+    /// A frictionless bench must not make energy. Not evidence about the
+    /// line-of-centres exchange: measured on this fixture, energy moves by
+    /// 3.6e-15 J over 1800 steps with and without a tangent projection, and
+    /// that fix was reverted. Two earlier versions were vacuous (the bobs
+    /// never touched), so the collision is asserted too.
     func testAFrictionlessBenchNeverGainsEnergyThroughCollisions() throws {
         let model = PendulumsModel()
         for existing in model.pendulums { model.removePendulum(id: existing.id) }
         model.frictionOn = false
 
-        // Two pendulums whose bobs CAN meet but do not meet level.
-        //
-        // The lengths differ by 0.04 m — enough to tilt the contact
-        // normal about 34° off the horizontal, and still inside the
-        // 0.07 m sum of the two bob radii, so they genuinely touch. The
-        // first version of this test used 0.80 and 0.55, which hangs the
-        // bobs 25 cm apart: they never collided at all and the test
-        // passed against the unfixed code, which is the only kind of
-        // green worth being suspicious of.
+        // Two pendulums whose bobs can meet but do not meet level: lengths
+        // 0.04 m apart tilt the contact normal ~34° while staying inside the
+        // 0.07 m contact distance.
         let pivot = PendulumsModel.defaultPivot
         _ = try XCTUnwrap(model.addPendulum(length: 0.80, angle: 0.9, at: pivot))
         _ = try XCTUnwrap(model.addPendulum(length: 0.76, angle: -0.9,
@@ -622,19 +542,15 @@ final class PendulumsModelTests: XCTestCase {
             }
         }
 
-        // A small tolerance for the integrator itself; the defect was
-        // not small — it compounded until the bobs flew.
-        // The measured figure is ~4e-15 J, so the tolerance is generous
-        // by twelve orders of magnitude and still catches anything that
-        // pumps the bench.
+        // The measured figure is ~4e-15 J; the tolerance is generous by twelve
+        // orders of magnitude and still catches anything that pumps the bench.
         XCTAssertLessThan(
             peak, start + 0.02,
             "the bench gained \(peak - start) J across 20 s of off-axis "
             + "collisions — a frictionless bench may lose energy, never make it")
 
-        // And the bobs must actually have COLLIDED, or the assertion
-        // above is about a bench where nothing ever happened. This is
-        // the check the first two versions of this test lacked.
+        // And the bobs must actually have collided, or the assertion above is
+        // about a bench where nothing happened.
         let a = try XCTUnwrap(model.pendulums.first)
         let b = try XCTUnwrap(model.pendulums.last)
         XCTAssertLessThan(closestApproach, a.bobRadius + b.bobRadius,
@@ -642,28 +558,19 @@ final class PendulumsModelTests: XCTestCase {
                           + "test exercised no collision at all")
     }
 
-    /// COLLISIONS USED TO SWITCH OFF FOR THE WHOLE BENCH IF TWO PIVOTS
-    /// COINCIDED.
-    ///
-    /// The sweep is ordered along the line from the first movable pivot
-    /// to the last — ARRAY order, not spatial order — and a zero-length
-    /// axis returned early out of the entire resolution. Pull two
-    /// pendulums from the well without moving either and both land on
-    /// `defaultPivot`, so nothing in the room collided with anything
-    /// from then on, including a cradle standing beside them.
+    /// Collisions once switched off for the whole bench if two pivots
+    /// coincided: the sweep axis is first-to-last pivot in array order, and
+    /// a zero-length axis returned early out of the entire resolution.
     func testTwoPendulumsOnOnePivotDoNotDisableTheWholeBench() throws {
         let model = PendulumsModel()
         for existing in model.pendulums { model.removePendulum(id: existing.id) }
         model.frictionOn = false
 
-        // THE STACKED PAIR GOES AT THE ENDS OF THE ARRAY, because the
-        // old axis was `movable.first.pivot` to `movable.last.pivot` in
-        // ARRAY order — that is the whole bug, and a fixture with the
-        // pair in the middle would leave the axis non-zero and prove
-        // nothing.
+        // The stacked pair goes at the ends of the array, which is where a
+        // zero-length axis came from.
         _ = try XCTUnwrap(model.addPendulum(length: 0.8, angle: 0.2))
 
-        // A cradle-like pair that WILL touch, well away from the origin.
+        // A cradle-like pair that will touch, well away from the origin.
         let rail = PendulumsModel.defaultPivot + SIMD3(0.9, 0, 0)
         _ = try XCTUnwrap(model.addPendulum(length: 0.8, angle: 0.6, at: rail))
         _ = try XCTUnwrap(model.addPendulum(length: 0.8, angle: 0,

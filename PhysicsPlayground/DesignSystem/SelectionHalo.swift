@@ -8,6 +8,7 @@
 //
 
 import RealityKit
+import RenderKit
 
 enum SelectionHalo {
     /// How present the veil is, everywhere.
@@ -21,8 +22,7 @@ enum SelectionHalo {
     /// caller's selection logic wakes it.
     @MainActor
     static func make(mesh: MeshResource) -> ModelEntity {
-        var material = UnlitMaterial(color: DesignTokens.Palette.selectionHaloUI)
-        material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+        let material = Materials.unlit(DesignTokens.Palette.selectionHaloUI, opacity: opacity)
         let halo = ModelEntity(mesh: mesh, materials: [material])
         halo.name = entityName
         halo.isEnabled = false

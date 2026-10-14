@@ -4,7 +4,7 @@
 //
 //  The ring buffer behind the Time Capsule scrubber. Two claims the
 //  feature stands on are proved here rather than assumed: memory is
-//  bounded (by time window AND by a hard frame cap), and a lookup always
+//  bounded (by time window and by a hard frame cap), and a lookup always
 //  returns an exactly-recorded frame — clamped at the ends, never
 //  interpolated, never fabricated.
 //

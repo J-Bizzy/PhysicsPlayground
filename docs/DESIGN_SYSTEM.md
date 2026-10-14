@@ -40,11 +40,12 @@ stands in the room.
 
 | Shape | Type | Use it for |
 |---|---|---|
-| **Switch bank** | `DesignSystem/SpatialLayerBank` | Display layers, and any labelled on/off. Lit plate = on. **Never folds** — which layer is showing is information you need *while* looking at the physics, so it is control and readout at once. |
+| **Switch bank** | `DesignSystem/SpatialLayerBank` | Display layers, and any labelled on/off. Lit plate = on. **Never folds on its own** — which layer is showing is information you need *while* looking at the physics, so it is control and readout at once. Past four plates it may stand behind a **folding tab** (`DesignSystem/SummonHandle`) whose one-line summary keeps that readout — Orbital Mechanics' Show tab and Circuit Workshop's Views tab (2026-09-04) — because five lamps read as a wall, not a state. |
 | **Rail** | `RenderKit/SpatialTrackControl` | A continuous quantity with **no extent of its own** (G, g, a clock, a wind speed). **Absolute**: the bead's place *is* the value. |
 | **Standing bank of discs** | `DesignSystem/SpatialPicker(staysOpen: true)` | An N-way choice that is also a readout (worlds, clock speeds). Row layout: `FanLayout(span: ~50°, verticalScale: 0.25)` — the default 150° arc is for a menu that folds away, and reads as scattered debris as a permanent bank. |
 | **Fan** | `DesignSystem/SpatialPicker` | A momentary N-way picker, opened from a petal. Never a blind cycle button. |
-| **Well** | `DesignSystem/Well` | Creation as a physical act — reach in and pull the object out, born at your fingertips. |
+| **Well** | `DesignSystem/Well` | Creation as a physical act — reach in and pull the object out, born at your fingertips. Given a `visibleCount`, `facing` and `windowTitle` it becomes a **shelf** (Circuit Workshop's parts): a window of slots with the title above and a hairline spine beside, and on the spine a knurled **crown** (`Models/Shell/ShelfCrown.usdz`) that is the one thing that scrolls — roll it and the column rides the hand one to one, with flick, rubber-banded ends and a detent per slot; it **turns with the column**, so at rest it is a readout of where the shelf is, and on entry the column arrives coasting into place with the crown rolling. Nothing stands behind the parts, and a drag on a part is always a pull. Never a caret, never a scrollbar. |
+| **Physics box** | `Shell/PhysicsBoard` | The lab's live numbers on one readout card in the room, opened by the title bar's ƒ button, with one **rail** beside it per quantity the lab lets you set (`ModuleDescriptor.adjustables`). A readout plus rails — never a panel. |
 | **Ring + grip** | `DesignSystem/Bloom`, `RingState` | Per-object controls, unfolded by **tap** (never gaze). Discrete actions are petals; the object's own extent is the grip. |
 | **The object itself** | — | When the quantity *is* a size, a length, a facing, or a place: a charge's magnitude, a cable's length, the Gauss disc's radius and tilt, a latitude on a globe. |
 
@@ -170,8 +171,13 @@ apparatus up beside you.
   which is where a rejected option belongs. A plaque is **one solid, not a
   stack** — held by `testThePlaqueIsASingleSolid`.
   (This said "the other three voices stay in the enum" until 2026-08-09.)
-- **Name plates.** Billboarded, one per exhibit; only the faced exhibit shows
-  its full name. `HubScene.namePlate` returns a pill **centred on its own
+- **Bench labels (2026-10-14).** Each exhibit's name is lit into its
+  terrace's dark front edge, under the mount, in the lab's accent at
+  `PlateStyle.exhibitLabelSize` (`HubScene.benchLabel`). The bench is the
+  backing a floating card was refused for. A label never moves: 0.78 at
+  rest, full while faced, a third while its lab is on the pad.
+- **Name plates.** The label voice on instruments in a lab — wells,
+  plates, petals, rails. `HubScene.namePlate` returns a pill **centred on its own
   origin** — place it by its edge (`namePlateWidth`) or it straddles whatever
   it names.
 - **Module promise.** One line per module (`HubDomains.promise`): what you
@@ -202,11 +208,11 @@ All hub motion ticks from `SceneEvents.Update` — never `RealityView`'s
 |---|---|---|
 | Idle exhibit | Vertical bob; the miniature sways rather than spinning | ~1.2 cm sine; ±0.44 rad |
 | Idle vignette | The module's own physics runs — the exhibit **is** the demo | — |
-| Focus in | Nearest exhibit in the head-direction cone lifts off its puck, grows, names itself | 26° cone with hysteresis; +0.09 m lift |
+| Focus in | Nearest exhibit in the head-direction cone lifts off its mount and grows; the pool of its accent stays on the mount; its bench label brightens | 26° cone with hysteresis; +0.09 m lift; label 0.78 → 1 |
 | Focus out | Unfaced exhibits recede, names fade | — |
 | Arrival | The gallery **fades up** over ~0.18 s on the root, then `OpacityComponent` is removed | 0.18 s |
 | Enter | The exhibit swells toward you and the scene dissolves outward — an arrival, never a hard cut | scale 1.6, +0.22 m, ~0.42 s |
-| Palette bead | Breathes while closed; ring fans across 150°; yaws to face you | bead radius 0.026 m |
+| Palette bead | Breathes while closed; ring fans across 150°; yaws to face you. Each slot is the lab's emblem (`HubVignettes`) on an accent disc | bead radius 0.026 m |
 
 **Selection** is tap/pinch. Focus is driven by **head direction**
 (`RoomModel.lookRay`), not eye tracking, so it works in the simulator and is

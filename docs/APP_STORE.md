@@ -123,7 +123,7 @@ Pendulums — Full nonlinear swings, a Newton's cradle you can break apart
 and rebuild, a double pendulum that never repeats itself, and a true
 3-D orbit you throw a bob into above your own floor.
 
-Gravity Lab — A solar system you can walk into. Tap a planet and its orbit
+Orbital Mechanics — A solar system you can walk into. Tap a planet and its orbit
 becomes a ring with a bead at each end; pull one and the orbit reshapes
 under your hand. Split the star into a binary and watch every orbit answer
 at once.
@@ -226,7 +226,7 @@ a crop changes the pixel dimensions and will be rejected.
 simulator**, and it is worth understanding before spending an evening on
 it. The simulator renders from one fixed viewpoint in a fixed synthetic
 room. You cannot step closer, crouch, or turn your head — so an apparatus
-that sits low, like Gravity Lab's orrery, lands in the bottom third of a
+that sits low, like Orbital Mechanics' orrery, lands in the bottom third of a
 mostly black frame, and there is no legal crop that fixes it.
 
 **Take the store screenshots on device.** Stand where the composition is
@@ -237,7 +237,7 @@ output as a reference for what should be on screen, not as the deliverable.
 ## Ordering
 
 **These were shot before being ranked.** The first ordering in this file
-was written from memory and was wrong twice — Gravity Lab is not the
+was written from memory and was wrong twice — Orbital Mechanics is not the
 strongest frame and Projectiles is much stronger than expected. What
 follows is the order after actually looking.
 
@@ -248,8 +248,8 @@ The first two do almost all the work; most people never swipe past three.
 | 1 | **Projectile Motion** — staged volley, walls on | The best single frame the app produces. Arcs sweep the whole room and visibly bounce off the shelf and wall; `9.81 m/s²`, `1.9 m` and `5.0 m/s` are all legible; the world discs and the ball fan show it is an instrument and not a toy. It is the only shot that carries "in your room" AND "real physics" at once. |
 | 2 | **Circuit Workshop — Electron View** | The most surprising image in the app: you are standing among copper conductors two metres thick with the electron bands crawling along them, under a glowing bulb reading `24 Ω`. Nothing else looks like this, which is exactly what a second screenshot is for. |
 | 3 | **Electric Fields — lines + capacitor + B** | The densest "this is real physics" frame — field lines filling the room, the carried capacitor plates with their sign glyphs, the uniform B switched on. (Reframed 2026-08-05: the flux instrument this slot was built around left the app on 2026-08-03 — DECISIONS.md has the story.) Slightly busy, which is why it is third rather than first. |
-| 4 | **Gravity Lab — binary star** | Conceptually the best story (two suns, every orbit reshaped) and the weakest *simulator* frame: the orrery sits low, so two-thirds of the image is black. **Shoot this one on device**, standing closer and looking down. |
-| 5 | **Gravity Lab — the orbit ring** | Depth, for the person who has already decided to look: Earth's orbit as a ring in the room, apoapsis pulled out to 2.2× under a hand. The module's documented centrepiece. (Reframed 2026-08-05: the previous subject left the app on 2026-08-03 — DECISIONS.md has the story. If two Gravity frames read as repetitive against shot 4, the alternate is Magnetism's room-filling field lines — `-openModule magnetism`, defaults.) |
+| 4 | **Orbital Mechanics — binary star** | Conceptually the best story (two suns, every orbit reshaped) and the weakest *simulator* frame: the orrery sits low, so two-thirds of the image is black. **Shoot this one on device**, standing closer and looking down. |
+| 5 | **Orbital Mechanics — the orbit ring** | Depth, for the person who has already decided to look: Earth's orbit as a ring in the room, apoapsis pulled out to 2.2× under a hand. The module's documented centrepiece. (Reframed 2026-08-05: the previous subject left the app on 2026-08-03 — DECISIONS.md has the story. If two Gravity frames read as repetitive against shot 4, the alternate is Magnetism's room-filling field lines — `-openModule magnetism`, defaults.) |
 | 6 | **Home Screen** | Shows the scope — six labs behind two coloured doors, under the wordmark. A closer, not an opener: it is the least *spatial* frame, because nothing in it is an experiment. |
 | 7 | **Time Capsule** — the reel with its tape out, a ball rewound mid-arc | The feature nothing else in the category has, photographed as the object it is: the reel, the rail drawn out of it, the recorded path hanging as a tube and the ball frozen part-way back along it. Added 2026-09-01 when the capsule started shipping on. |
 
@@ -303,11 +303,6 @@ staging simply did not work. This cost two rounds of confused screenshots.
 
 ## Before you shoot
 
-- [ ] **Dismiss the first-run hint** in each lab (its ✕ under the title
-      bar), or it sits in the frame. It is dismissed per module and
-      persists — so shoot each lab twice: once to dismiss, once for real.
-      (`-resetHints 1` brings them all back if you want the hint *in* a
-      shot.)
 - [ ] **Let each scene settle.** Field lines re-trace, orbits move,
       pendulums swing. 20 seconds is about right; a shot taken at 5
       catches half-built geometry.

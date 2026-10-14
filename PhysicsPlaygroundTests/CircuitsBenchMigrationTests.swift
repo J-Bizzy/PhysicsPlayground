@@ -2,26 +2,10 @@
 //  CircuitsBenchMigrationTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Retiring a component kind must not cost anybody their bench.
-//
-//  `ComponentKind` is `Codable` by rawValue, so decoding a saved file
-//  straight into `[Component]` throws on the first unrecognised kind —
-//  and it throws for the WHOLE array, which `restoreSavedBench` and
-//  `loadSlot` both swallow with `try?`. Deleting `.wire` that way
-//  would have silently emptied every user's auto-saved bench AND all
-//  eight named slots on first launch, with no error and no crash: the
-//  app would have looked like it was working and behaved like it had
-//  never been used.
-//
-//  So a retired kind is DATA. A jumper is spliced — its terminals were
-//  an electrical point like any other, so everything joined through it
-//  stays joined — and an unrecognised kind is dropped without taking
-//  the bench with it.
-//
-//  THE LAST TEST HERE IS THE ONE THAT MATTERS MOST. It uses a kind
-//  that never existed rather than the one just retired, so it goes on
-//  meaning something after `.wire` is ancient history. It is what
-//  makes the next retirement cheap.
+//  Retiring a component kind must not cost anybody their bench:
+//  `ComponentKind` decodes by rawValue and one unknown kind would throw
+//  for the whole array, which both restore paths swallow. A retired
+//  kind is data: spliced, so everything joined through it stays joined.
 //
 
 import XCTest
@@ -45,7 +29,7 @@ final class CircuitsBenchMigrationTests: XCTestCase {
         Stored(id: id, kind: kind, position: CircuitsModel.buildCenter, value: value)
     }
 
-    /// Installs a legacy bench through the REAL decode path — encoded
+    /// Installs a legacy bench through the real decode path — encoded
     /// to JSON, put in UserDefaults, restored by a fresh model — so
     /// nothing here can pass by calling a function the app does not.
     private func restore(_ bench: Bench) -> CircuitsModel {
@@ -56,7 +40,7 @@ final class CircuitsBenchMigrationTests: XCTestCase {
     }
 
     /// battery → jumper → bulb → battery becomes battery → bulb →
-    /// battery, and the assertion is on the SOLVED CURRENT, not the
+    /// battery, and the assertion is on the solved current, not the
     /// wire count: the claim the migration makes is that the circuit
     /// is the same circuit, and 9/(24 + 0.05) is what that means.
     func testAJumperBecomesADirectWire() {
@@ -123,7 +107,7 @@ final class CircuitsBenchMigrationTests: XCTestCase {
         XCTAssertEqual(abs(model.readouts[bulb]?.amps ?? 0), expected, accuracy: expected * 1e-6)
     }
 
-    /// A jumper wired at NEITHER end simply goes.
+    /// A jumper wired at neither end simply goes.
     func testAnUnwiredJumperJustDisappears() {
         let battery = UUID(), jumper = UUID(), bulb = UUID()
         let model = restore(Bench(
@@ -192,10 +176,8 @@ final class CircuitsBenchMigrationTests: XCTestCase {
         XCTAssertEqual(part.capacitorVoltage, 0)
     }
 
-    /// THE TEST THAT MAKES THE NEXT RETIREMENT CHEAP. A kind that
-    /// never existed — a corrupted row, or a file from a version that
-    /// has not shipped yet — is dropped, and everything else survives.
-    /// Before this, one such row emptied the whole bench.
+    /// A kind that never existed is dropped and everything else survives —
+    /// the test that makes the next retirement cheap.
     func testAnUnknownKindDoesNotDestroyTheBench() {
         let battery = UUID(), ghost = UUID(), bulb = UUID()
         let model = restore(Bench(
@@ -214,7 +196,7 @@ final class CircuitsBenchMigrationTests: XCTestCase {
                        "The surviving loop must still light.")
     }
 
-    /// An unknown kind that JOINED two things keeps them joined, the
+    /// An unknown kind that joined two things keeps them joined, the
     /// same as a retired one — the splice does not care why a row is
     /// unreadable.
     func testAnUnknownKindIsSplicedNotJustDropped() {
@@ -296,7 +278,7 @@ final class CircuitsBenchMigrationTests: XCTestCase {
         XCTAssertEqual(abs(model.readouts[bulb]?.amps ?? 0), expected, accuracy: expected * 1e-6)
     }
 
-    /// A bench saved TODAY reloads byte-for-byte the same, which is
+    /// A bench saved today reloads byte-for-byte the same, which is
     /// what says the stored row and the written row are one format.
     func testATodaysBenchRoundTripsThroughTheStoredFormat() {
         let source = CircuitsModel()
@@ -326,7 +308,7 @@ final class CircuitsBenchMigrationTests: XCTestCase {
 
 
     /// A bench written before the AC source had a frequency of its own
-    /// (2026-09-02) runs at the fixed 0.5 Hz it always did; one written
+    /// runs at the fixed 0.5 Hz it always did; one written
     /// after keeps what it stored.
     func testAnACSourceWithoutAStoredFrequencyRunsAtHalfAHertz() throws {
         let old = UUID(), new = UUID()

@@ -4,7 +4,7 @@
 //
 //  Optics against the textbook: Snell's numbers, the critical angle,
 //  mirror reflection, and — the important one — the thin-lens equation
-//  EMERGING from traced rays crossing where 1/f = 1/do + 1/di says.
+//  Emerging from traced rays crossing where 1/f = 1/do + 1/di says.
 //
 
 import XCTest

@@ -78,7 +78,7 @@ final class KinematicsModelTests: XCTestCase {
                        "1 m/s hand motion × boost 2 = 2 m/s release")
     }
 
-    /// A well-spawned ball is born AT THE HAND, staged and inert until thrown.
+    /// A well-spawned ball is born at the hand, staged and inert until thrown.
     func testAWellSpawnedBallIsBornAtTheHandAndHangsStill() {
         let model = bareModel()
         let hand = SIMD3<Double>(0.4, 1.3, -0.7)
@@ -158,7 +158,7 @@ final class KinematicsModelTests: XCTestCase {
         }
     }
 
-    // MARK: Hoops from a well (2026-09-01)
+    // MARK: Hoops from a well
 
     /// The well's spawn: a hoop is born where the hand is, anchor and
     /// position alike, and no lower than a hoop can be placed.
@@ -196,10 +196,10 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertTrue(model.rings.isEmpty)
     }
 
-    // MARK: The aim solves for a hoop (2026-09-01)
+    // MARK: The aim solves for a hoop
 
     /// Steps until the shot is no longer flying — landed, rolling, or
-    /// GONE: a long shot on the Moon flies past `escapeRadius` and is
+    /// Gone: a long shot on the Moon flies past `escapeRadius` and is
     /// culled, which is why this reads `first` rather than `[0]`.
     private func fireUntilLanded(_ model: KinematicsModel) {
         model.fire()
@@ -273,7 +273,7 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertNil(model.aimTargetID)
     }
 
-    // MARK: Monkey and hunter (2026-09-01)
+    // MARK: Monkey and hunter
 
     /// The demo's whole claim: aimed straight at an armed hoop — no lead
     /// — the ball meets it in the air on every world, because the two
@@ -331,7 +331,7 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(model.rings[0].position, model.rings[0].anchor)
     }
 
-    // MARK: A table to land on, and a hand to swat with (2026-09-02)
+    // MARK: A table to land on, and a hand to swat with
 
     private func table(at height: Double, center: SIMD2<Double>,
                        halfU: Double = 0.45, halfV: Double = 0.35) -> RoomWalls.Wall {
@@ -346,7 +346,7 @@ final class KinematicsModelTests: XCTestCase {
     }
 
     /// Dropped onto a table, a ball bounces on its top and comes to rest
-    /// ON it — its centre one radius above the table, not the floor.
+    /// On it — its centre one radius above the table, not the floor.
     func testABallComesToRestOnATable() {
         let model = bareModel()
         let tableTop = 0.70
@@ -403,7 +403,7 @@ final class KinematicsModelTests: XCTestCase {
         model.fire()
         model.step(dt: 1.0 / 90.0)
         let ball = model.flights[0]
-        // The hand ENDS the frame overlapping the ball, having swept in
+        // The hand ends the frame overlapping the ball, having swept in
         // from 4.4 cm behind it at 4 m/s — the strike lands mid-frame.
         let hand = SphereStrike.Sphere(
             center: ball.state.position - SIMD3(0.03, 0, 0), radius: 0.03,
@@ -418,7 +418,7 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertTrue(model.flights[0].wasThrown, "a swatted ball is a thrown ball for the readouts")
     }
 
-    // MARK: The custom ball, and the ghost of vacuum (2026-09-01)
+    // MARK: The custom ball, and the ghost of vacuum
 
     /// Same diameter, different mass: nothing changes without air, and
     /// the heavier ball flies farther with it.
@@ -558,7 +558,7 @@ final class KinematicsModelTests: XCTestCase {
     }
 
     /// Containment: with room bounds set, no ball ever ends a frame outside the
-    /// room — flying, bouncing, or ROLLING — whatever the wall list is doing.
+    /// room — flying, bouncing, or rolling — whatever the wall list is doing.
     func testBallNeverEndsAFrameOutsideTheRoom() {
         let model = bareModel()
         let box = RoomBox(center: SIMD3(0, 1.5, -1), halfExtents: SIMD3(2, 1.5, 2))
@@ -608,7 +608,7 @@ final class KinematicsModelTests: XCTestCase {
     }
 
     func testFirePublishesSoundEvent() {
-        // The welcome scene fires once in init — what matters is that OUR fire publishes a fresh event.
+        // The welcome scene fires once in init — what matters is that our fire publishes a fresh event.
         let model = bareModel()
         let before = model.soundEvent?.id
         model.fire()

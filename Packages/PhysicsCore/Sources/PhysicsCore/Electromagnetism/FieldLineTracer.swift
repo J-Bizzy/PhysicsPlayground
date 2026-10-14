@@ -67,7 +67,7 @@ public enum FieldLineTracer {
     }
 
     /// Point charges plus the calibrated capacitor traced in each other's field. Plate seeds are
-    /// budgeted per band ∝ σ·A (dielectric crowding shows as line density); lines END on conductors — every polyline is cut at a plate crossing.
+    /// budgeted per band ∝ σ·A (dielectric crowding shows as line density); lines end on conductors — every polyline is cut at a plate crossing.
     public static func trace(charges: [PointCharge],
                              capacitor: PlateField.Capacitor?,
                              config: Config) -> [[SIMD3<Double>]] {
@@ -79,7 +79,7 @@ public enum FieldLineTracer {
         }
 
         var streamlineConfig = config.streamlineConfig
-        // Plates are termination surfaces for the INTEGRATOR too, else a landed line burns maxSteps behind the conductor for `cut` to discard.
+        // Plates are termination surfaces for the integrator too, else a landed line burns maxSteps behind the conductor for `cut` to discard.
         // The predicate fires just past the plane (depth under a step) so `cut` still trims to the exact hit, and the depth ceiling keeps it off the outer-face fringe seeds (0.012 clearance).
         let landingDepth = config.stepSize + 0.002
         streamlineConfig.stopWhere = { point in

@@ -64,7 +64,7 @@ public struct NetPartition: Sendable, Equatable {
     }
 
     /// Compact gapless node numbers with `ground`'s net forced to 0 (CircuitSolver grounds node 0).
-    /// Returns a slot-indexed ARRAY (read twice per component per frame), and numbering is deterministic — nets ordered by lowest slot, so a restored bench gets identical node ids.
+    /// Returns a slot-indexed array (read twice per component per frame), and numbering is deterministic — nets ordered by lowest slot, so a restored bench gets identical node ids.
     public mutating func numbering(ground: Int) -> (nodeOfSlot: [Int], nodeCount: Int) {
         guard !parent.isEmpty else { return ([], 0) }
         precondition(parent.indices.contains(ground), "Ground slot \(ground) is outside the partition.")

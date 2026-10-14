@@ -2,7 +2,7 @@
 //  MagneticFieldLineTracer.swift
 //  PhysicsCore — Magnetism: closed-loop streamlines of B for a bar magnet.
 //
-//  No monopoles: each seed is traced BOTH ways along B and the halves
+//  No monopoles: each seed is traced both ways along B and the halves
 //  joined into one continuous loop. RK4 integration is Math's shared
 //  StreamlineTracer; this file owns only the magnetism policy: seeds must
 //  clear the bar's half-length, use the bar (not point-dipole) field, and
@@ -76,7 +76,7 @@ public enum MagneticFieldLineTracer {
             field: { MagneticField.barVector(at: $0, dueTo: magnets, length: length) })
     }
 
-    /// Seed directions on the NORTH half of a sphere around a dipole, one
+    /// Seed directions on the north half of a sphere around a dipole, one
     /// per equal slice of outward flux. Flux through a cap of half-angle θ
     /// is Φ ∝ sin²θ (from B_r ∝ cos θ), so equal flux per line means equal
     /// steps in sin²θ — the square root below. Azimuth spread by the
@@ -106,7 +106,7 @@ public enum MagneticFieldLineTracer {
 
     // MARK: Even through the room
 
-    /// Traces loops seeded EVENLY THROUGH A VOLUME rather than off a small
+    /// Traces loops seeded evenly through A volume rather than off a small
     /// sphere per magnet. Deliberate trade: density here means where there
     /// was room to draw a line, not field strength (the module legend must
     /// say so). Every curve is still a true streamline of B. Dedup is
@@ -134,10 +134,10 @@ public enum MagneticFieldLineTracer {
         streamConfig.stopCenters = magnets.map(\.position)
 
         var accepted: [[SIMD3<Double>]] = []
-        /// Samples kept PER LINE, not pooled: overlap is not symmetric (a
+        /// Samples kept per line, not pooled: overlap is not symmetric (a
         /// short loop lying along a long one is ~100% retraced by it but
         /// not vice versa), so each candidate is compared with each
-        /// accepted line BOTH ways. Subsampled — an O(n·m) sweep, and two
+        /// accepted line both ways. Subsampled — an O(n·m) sweep, and two
         /// loops 11 cm apart are 11 cm apart at every eighth point too.
         var acceptedSamples: [[SIMD3<Double>]] = []
 

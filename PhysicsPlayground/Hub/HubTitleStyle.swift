@@ -2,14 +2,10 @@
 //  HubTitleStyle.swift
 //  Physics Playground — Hub
 //
-//  The typographic voice of the home's three display texts — the wordmark
-//  and the two door signs. One voice, no alternatives: widetracked
-//  uppercase bold, deeply extruded, milled from the labs' own alloy.
-//
-//  A NAMESPACE, not a taxonomy — `HubTitleStyle.line`, not
-//  `.current.line`, because there is no current. Deliberately NOT the
-//  style of every text in the hub: exhibit nameplates and Well glyphs keep
-//  `HubScene.bubbleText`, since those are labels on objects.
+//  The typographic voice of the home's three display texts — the
+//  wordmark and the two door signs: widetracked uppercase bold, deeply
+//  extruded, milled from the labs' own alloy. A namespace, not a
+//  taxonomy. Exhibit nameplates and well glyphs keep `HubScene.bubbleText`.
 //
 
 import RealityKit
@@ -32,10 +28,8 @@ enum HubTitleStyle {
         .systemFont(ofSize: size, weight: .bold)
     }
 
-    /// Leading multiplier. The plaque needs air: it is set in CAPITALS,
-    /// so both lines are cap-height tall, and the flush lockup scales the
-    /// shorter word up hard — two full-cap lines at different scales
-    /// close the gap from both sides at once.
+    /// Leading multiplier. Capitals on both lines and a flush lockup that
+    /// scales the shorter word up need air between them.
     static let leadingFactor: Float = 0.62
 
     /// Extrusion as a fraction of point size. Milled from stock, and the
@@ -48,9 +42,7 @@ enum HubTitleStyle {
         mesh(text, size: size, extrusion: Float(size) * extrusionFactor)
     }
 
-    /// The same type at a chosen depth — the keyline's shell is a deeper
-    /// solid than the letter it backs, so the letter is contained rather
-    /// than merely near it.
+    /// The same type at a chosen depth.
     static func mesh(_ text: String, size: CGFloat,
                      extrusion: Float) -> MeshResource {
         MeshResource.generateText(
@@ -65,13 +57,9 @@ enum HubTitleStyle {
     }
 
     /// One line of display type, centred on its own origin. `accent` nil is
-    /// the wordmark's neutral role; a colour is a door sign in its domain's
-    /// voice.
-    ///
-    /// ONE solid, one material — never a shadow copy behind it. This type is
-    /// deeply extruded, so any offset small enough to read as a shadow is
-    /// small enough to interpenetrate the faces; the extruded sides catching
-    /// the light at their own angle ARE the depth cue.
+    /// the wordmark's neutral role; a colour is a door sign. One solid, one
+    /// material — never a shadow copy: the extruded sides catching the light
+    /// are the depth cue.
     @MainActor
     static func line(_ text: String, size: CGFloat, accent: UIColor?) -> Entity {
         let group = Entity()
@@ -84,11 +72,9 @@ enum HubTitleStyle {
             blend($0, toward: .black, by: 0.32)
         } ?? graphite
         var metal = Materials.machined(stock)
-        // An emissive FLOOR (not a glow) so the letters never fall to pure
-        // black in the shaded parts of the extrusion. Kept low: raising it
-        // does not fix legibility on a bright wall — light-on-light has no
-        // contrast — and the specular highlight must stay what shapes the
-        // bevel, or the plaque reads as a lit sign rather than as metal.
+        // An emissive floor (not a glow) so the letters never crush to black in
+        // the shaded parts of the extrusion; the specular highlight must stay
+        // what shapes the bevel.
         metal.emissiveColor = .init(color: stock)
         metal.emissiveIntensity = 0.16
 
@@ -99,17 +85,8 @@ enum HubTitleStyle {
         return group
     }
 
-    /// A generated line and its extents — the shape `milled` returns,
-    /// for the words it has no asset for.
-    ///
-    /// This is what is left of `keylined`, which was deleted on
-    /// 2026-08-11 along with the casing it existed to build. That
-    /// builder laid a line out glyph by glyph for one reason: a shell
-    /// scaled about a whole STRING lands each letter's swell between
-    /// its neighbours, so it had to swell each glyph about its own
-    /// centre instead. With no shell there is nothing to misregister,
-    /// and a line of text is one mesh again — which is what `line` has
-    /// always made.
+    /// A generated line and its extents — the shape `milled` returns, for
+    /// words it has no asset for.
     @MainActor
     static func generated(_ text: String, size: CGFloat,
                           accent: UIColor?) -> (entity: Entity,
@@ -119,14 +96,8 @@ enum HubTitleStyle {
 
     // MARK: The milled line
 
-    /// The lines that were milled in Blender, and the asset each became.
-    ///
-    /// A BAKED ASSET ONLY KNOWS THE WORDS IT WAS BAKED WITH, which is
-    /// the one real cost of this route and the reason `milled` returns
-    /// an optional rather than trusting a lookup. The home says exactly
-    /// these six things and has since the two doors landed; anything
-    /// else falls through to `keylined` and is merely generated, which
-    /// is what every line was until now.
+    /// The lines milled in Blender and the asset each became. A baked asset
+    /// only knows the words it was baked with, so `milled` is optional.
     private static let milledAssets: [String: String] = [
         "Physics": "HubTitle_Physics",
         "Playground": "HubTitle_Playground",
@@ -136,62 +107,35 @@ enum HubTitleStyle {
         "& Energy": "HubTitle_Energy",
     ]
 
-    // The local `milledCache` went with the shared `PropCache`
-    // (2026-08-15): one prototype cache for the whole app, warmed
-    // off-main before the space opens.
-
-    /// One line of display type, MILLED rather than generated; nil when
-    /// there is no asset for these words.
-    ///
-    /// What the asset buys is THE CHAMFER: `generateText` extrudes a flat
-    /// prism with a sharp ninety-degree edge, and the highlight running
-    /// along a bevel is most of what makes a shape read as a solid object.
-    /// The typeface is unchanged — `Tools/hubtitles.py` snapshots SF Pro at
-    /// wght 700 (Blender cannot read the variable font's Bold) and pins the
-    /// DISPLAY optical cut. BAKE GEOMETRY, NEVER THE DESIGN SYSTEM: the
-    /// asset's meshes are named for their role and coloured here.
+    /// One line of display type, milled rather than generated; nil when
+    /// there is no asset for these words. The asset buys the chamfer:
+    /// `generateText` extrudes a sharp-edged prism, and the highlight along
+    /// a bevel is what makes a solid read as one. `Tools/hubtitles.py`
+    /// snapshots SF Pro Display at wght 700; the meshes are named for their
+    /// role and coloured here.
     @MainActor
     static func milled(_ text: String, size: CGFloat,
                        accent: UIColor?) -> (entity: Entity,
                                              extents: SIMD3<Float>)? {
         guard let asset = milledAssets[text] else { return nil }
         guard let prototype = PropCache.prototype(named: asset) else { return nil }
-        // THE RETURNED ENTITY'S SCALE MUST STAY 1: callers finish with
-        // `entity.scale = ...`, an ASSIGNMENT, so a scale set here would be
-        // thrown away and the asset would revert to its nominal ONE METRE.
-        // `size` therefore goes on a CHILD, leaving the wrapper free.
+        // The returned entity's scale must stay 1: callers assign
+        // `entity.scale`, so `size` goes on a child.
         let group = Entity()
         let model = prototype.clone(recursive: true)
         group.addChild(model)
 
-        // ANODISED DARK, CUT BRIGHT. Chasing legibility with light fails —
-        // the gallery draws over the wearer's room and light-on-light has
-        // no edge — so faces and extrusion walls are dark (graphite, or an
-        // accent pulled a third toward black to keep the wayfinding hue)
-        // while the chamfer band stays a SEPARATE bright alloy mesh. Dark
-        // face holds against a bright wall, bright rim against a dark one.
+        // Anodised dark, cut bright: faces and extrusion walls are dark
+        // (graphite, or the accent pulled toward black) and the chamfer band is
+        // a separate bright alloy mesh. A dark face holds against a bright wall,
+        // a bright rim against a dark one.
         let stock = accent.map {
             blend($0, toward: .black, by: 0.32)
         } ?? graphite
-        // ANODISE, NOT LACQUER — and NOT `Materials.machined` (2026-08-24).
-        //
-        // The canon recipe carries `clearcoat = 0.55` at
-        // `clearcoatRoughness = 0.30`, which is a second specular lobe with
-        // its own Fresnel term. Fresnel goes to ~1 at grazing incidence
-        // WHATEVER the base colour is, and a letter's extrusion walls are
-        // seen at grazing incidence by definition — so every wall blew out
-        // to a pale slab while the face stayed dark. Measured off a studio
-        // capture of the shipped wordmark: face luminance 3.6, walls 119,
-        // against a champagne keyline at 161. The walls covered TWICE the
-        // area of the keyline and came within a third of its brightness, so
-        // the letter read as a light-grey block with a dark front rather
-        // than as dark type with a milled edge.
-        //
-        // Clearcoat is right for the lacquered nameplates it was written
-        // for and wrong here: anodising is a matte oxide, it has no lacquer
-        // layer, and modelling one is what produced the slab. Dropped to
-        // zero, metal well down and roughness well up, so a wall answers
-        // its own dark base colour at every angle.
+        // Anodise, not lacquer, and not `Materials.machined`: its clearcoat's
+        // Fresnel term blows the extrusion walls (seen at grazing incidence by
+        // definition) out to a pale slab. No clearcoat, metal down, roughness
+        // up, so a wall answers its own dark base colour at every angle.
         var metal = PhysicallyBasedMaterial()
         metal.baseColor = .init(tint: stock)
         metal.metallic = .init(floatLiteral: 0.20)
@@ -202,24 +146,11 @@ enum HubTitleStyle {
         metal.emissiveColor = .init(color: stock)
         metal.emissiveIntensity = 0.16
 
-        // THE KEYLINE READS AT EVERY RAKE, WHICH IS THE WHOLE ASK.
-        //
-        // This was a specular effect on a sub-pixel band, and both halves
-        // of that were fighting it. The chamfer is a fortieth of cap
-        // height, split by `BEVEL_RESOLUTION` into two facets, and only the
-        // facet whose normal happened to bisect eye and light lit up — so
-        // the line was about one pixel of champagne, aliased into DASHES on
-        // the diagonals of A and Y, and its coverage swung 3.1x across
-        // PHYSICS and 5.8x across PLAYGROUND depending on where a letter
-        // sat in the line. That is the non-uniformity, measured.
-        //
-        // A specular highlight cannot be uniform across letters at
-        // different rakes — that is what a specular highlight IS. So the
-        // keyline stops being one. The emissive floor carries the band at a
-        // value that does not depend on the rake, the roughness is raised
-        // so what specular remains spreads ACROSS both facets instead of
-        // picking one, and the clearcoat goes for the same reason as above.
-        // The rake still shapes it; it no longer decides whether it exists.
+        // The keyline must read at every rake, so it is not a specular effect:
+        // a chamfer a fortieth of cap height lit only where a facet bisected
+        // eye and light, aliasing into dashes. The emissive floor carries the
+        // band; the raised roughness spreads what specular remains across both
+        // facets.
         var rimMetal = PhysicallyBasedMaterial()
         rimMetal.baseColor = .init(tint: champagne)
         rimMetal.metallic = .init(floatLiteral: 0.30)
@@ -228,16 +159,10 @@ enum HubTitleStyle {
         rimMetal.emissiveColor = .init(color: champagne)
         rimMetal.emissiveIntensity = 0.55
 
-        // Found by the MESH's name, which is what the USD exporter
-        // writes the prim from — naming only the Blender object ships a
-        // file whose part comes back as `Text_007`, and that file loads
-        // and renders perfectly while quietly defeating this lookup.
-        // `Tools/hubtitles.py` names both object and mesh.
-        //
-        // Read off ModelComponent rather than casting to ModelEntity:
-        // `Entity.load` is under no obligation to hand back that
-        // subclass, and a cast that quietly fails would paint nothing
-        // and look like a missing asset.
+        // Found by the mesh's name, which is what the USD exporter writes the
+        // prim from; `Tools/hubtitles.py` names both object and mesh. Read off
+        // ModelComponent rather than casting to ModelEntity, which `Entity.load`
+        // need not return.
         var paintedLetters = false
         var paintedRim = false
         func paint(_ entity: Entity) {
@@ -255,40 +180,27 @@ enum HubTitleStyle {
             for child in entity.children { paint(child) }
         }
         paint(group)
-        // An unrecognised asset would render in Blender's preview greys
-        // — near enough to shippable to go unnoticed, and wrong. And an
-        // asset carrying only `Letters` is from before the rim split:
-        // its chamfer would anodise dark along with the face and the
-        // silhouette would go with it. Rather than show a mark this app
-        // does not own the look of, fall back to the generated line,
-        // which is always current.
+        // An unrecognised asset would render in Blender's preview greys, and
+        // one without a rim mesh would anodise its chamfer dark; fall back to
+        // the generated line rather than ship either.
         guard paintedLetters && paintedRim else { return nil }
 
-        // Built at a nominal point size of 1, so `size` IS the scale.
-        // On the child, per the note above.
+        // Built at a nominal point size of 1, so `size` is the scale — on the
+        // child.
         model.scale = SIMD3(repeating: Float(size))
-        // Measured in the WRAPPER's space, which is where the caller
-        // will read it — so these extents describe the object that
-        // actually gets stacked.
+        // Measured in the wrapper's space, which is what the caller stacks.
         let built = group.visualBounds(relativeTo: group)
-        // Centred on its own origin, the same contract `line` and
-        // `keylined` offer, so the lockup stacking above is unchanged.
-        // The child moves; the wrapper stays at the origin with an
-        // untouched transform.
+        // Centred on its own origin, like `line`; the child moves, the wrapper
+        // stays put.
         model.position -= built.center
         return (group, built.extents)
     }
 
     // MARK: The rake
 
-    /// A slow turn, so the light walks across the letterforms — an
-    /// animation that only works because the type is MILLED: the chamfer
-    /// gives the highlight an edge to travel along. Nothing here animates
-    /// an effect; it moves the geometry and lets the material do the rest,
-    /// so it costs one transform per line and no per-frame material work.
-    ///
-    /// Yaw and pitch run at rates that do not divide into each other, so
-    /// the motion never repeats on a findable beat.
+    /// A slow turn so the light walks along the chamfer — geometry moves,
+    /// the material does the rest. Yaw and pitch run at rates that do not
+    /// divide, so the motion never repeats on a findable beat.
     static func rake(time: Double, phase: Double) -> simd_quatf {
         let yaw = rakeAmplitude * Float(sin(time * rakeRate + phase))
         let pitch = rakeAmplitude * 0.34
@@ -297,9 +209,8 @@ enum HubTitleStyle {
             * simd_quatf(angle: pitch, axis: [1, 0, 0])
     }
 
-    /// About 1.6 degrees. Small enough that nobody catches the sign
-    /// moving; large enough that the highlight does. On a 0.6 m line
-    /// this swings the ends by roughly 8 mm in depth.
+    /// About 1.6°: small enough that nobody catches the sign moving, large
+    /// enough that the highlight does.
     static let rakeAmplitude: Float = 0.028
     /// Roughly a twelve-second cycle. Slower than the wordmark's bob so
     /// the two never lock into one motion.
@@ -307,22 +218,15 @@ enum HubTitleStyle {
 
     // MARK: Shared tones
 
-    /// Deliberately OUTSIDE `DesignTokens.Palette`'s accent system,
-    /// which became the one authority for module and domain hues on
-    /// 2026-08-06: these two are the in-space brand voice — signage,
-    /// not wayfinding — and folding them into the accent table would
-    /// invite exactly the borrowing it exists to prevent.
-    /// The wordmark's neutral letters and its champagne — the same two
-    /// tones the home has always spoken its neutral role in, so the
-    /// podium rim and the title rule (also champagne) keep matching.
+    /// Deliberately outside `DesignTokens.Palette`: these two are the
+    /// in-space brand voice — signage, not wayfinding. The wordmark's
+    /// neutral letters and its champagne, which the podium rim and the
+    /// title rule also wear.
     static let ivory = UIColor(red: 0.99, green: 0.98, blue: 0.95, alpha: 1)
     static let champagne = UIColor(red: 1.0, green: 0.88, blue: 0.70, alpha: 1)
-    /// The anodise the faces wear since 2026-08-13 — dark enough to hold
-    /// against a lit wall, warm enough to stay in the ivory/champagne
-    /// family rather than reading as printer black. The champagne now
-    /// lives on the CUT: the rim mesh is the one place the bare alloy
-    /// shows, which is what ties the dark plaque back to the podium rim
-    /// and the title rule.
+    /// The anodise the faces wear: dark enough to hold against a lit wall,
+    /// warm enough to stay in the ivory/champagne family. The champagne
+    /// lives on the cut.
     static let graphite = UIColor(red: 0.155, green: 0.150, blue: 0.140,
                                   alpha: 1)
 

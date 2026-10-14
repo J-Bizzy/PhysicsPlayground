@@ -2,30 +2,13 @@
 //  GalleryDoorTests.swift
 //  PhysicsPlaygroundTests
 //
-//  THE WAY INTO A LAB, WHICH NOTHING WAS WATCHING FOR MOST OF ITS LIFE.
-//
-//  This file is the successor to `EnterPlaqueTests`, and it inherits that
-//  file's reason for existing. The gallery's door has now been rebuilt
-//  four times — a bare tap (cut 2026-07-29), a focus panel's Load button
-//  (deleted 2026-08-04), an ENTER plaque on every puck (2026-08-07 to
-//  08-09), and now a tap that sends the lab to the pad. Three of those
-//  four transitions broke the door, and TWO OF THEM SHIPPED:
-//
-//  · 2026-08-04 → 08-07, the only way in was a sustained ~1.1 m
-//    pinch-drag onto a 0.105 m plate. Nothing failed.
-//  · 2026-08-09, a spacing change sank every ENTER plaque into the
-//    terrace slab. Still built, still named, still operable, invisible.
-//    605 tests stayed green; a screenshot caught it.
-//
-//  So the assertions here are about the DOOR's behaviour rather than
-//  about any object that currently implements it:
-//
-//  1. A tap on any exhibit puts THAT lab on the pad — all six, by id.
-//  2. The pad holds one lab: docking evicts whatever was standing there.
-//  3. A tap on the lab already on the pad does not re-fly it.
-//  4. A tap during a carry does not fight the hand.
-//  5. The exhibit is operable, and operating it enters THAT lab — the
-//     VoiceOver route, which deliberately skips the pad entirely.
+//  The way into a lab. The door has been rebuilt four times and two of
+//  those rebuilds shipped broken with every test green, so these assert
+//  the door's behaviour rather than any object that implements it: a
+//  tap on any exhibit puts that lab on the pad; the pad holds one lab; a
+//  tap on the docked lab does not re-fly it; a tap during a carry does
+//  not fight the hand; and operating an exhibit enters that lab (the
+//  VoiceOver route, which skips the pad).
 //
 
 import XCTest
@@ -54,9 +37,8 @@ final class GalleryDoorTests: XCTestCase {
         return (scene, modules)
     }
 
-    /// The exhibit entity for a module — the thing a pinch actually lands
-    /// on, found the way the tap handler finds it rather than by name, so
-    /// a rename cannot make this test pass while the door breaks.
+    /// The exhibit entity for a module, found the way the tap handler finds
+    /// it rather than by name.
     private func exhibit(_ id: String, in scene: HubScene) throws -> Entity {
         try XCTUnwrap(scene.root.children.first { $0.name == id },
                       "no exhibit entity for \(id)")
@@ -82,7 +64,7 @@ final class GalleryDoorTests: XCTestCase {
         }
     }
 
-    /// ONE PAD, ONE LAB. The evicted exhibit has to be sent home, or two
+    /// One pad, one lab. The evicted exhibit has to be sent home, or two
     /// miniatures occupy the same 10 cm plate and the Load button names
     /// only one of them.
     func testDockingASecondLabEvictsTheFirst() throws {
@@ -99,11 +81,8 @@ final class GalleryDoorTests: XCTestCase {
             """)
     }
 
-    /// A tap on the lab that is ALREADY there is not a second door. It
-    /// used to be impossible to express — you cannot drag something onto
-    /// the spot it occupies — and a tap can, so it needs saying: re-flying
-    /// an object to where it already is reads as a glitch, and the Load
-    /// button is sitting over it waiting for the real pinch.
+    /// A tap on the lab already on the pad is not a second door: re-flying
+    /// an object to where it already is reads as a glitch.
     func testTappingTheDockedLabIsIgnored() throws {
         let (scene, modules) = builtScene()
         let id = modules[0].id
@@ -139,7 +118,7 @@ final class GalleryDoorTests: XCTestCase {
 
     // MARK: The VoiceOver route
 
-    /// OPERABLE, AND IT ENTERS. The exhibit is what a VoiceOver sweep
+    /// Operable, and it enters. The exhibit is what a VoiceOver sweep
     /// lands on, and it goes straight into the lab rather than through
     /// the pad — the ceremony's whole payload is visual.
     func testActivatingAnExhibitEntersThatLab() throws {
@@ -174,28 +153,11 @@ final class GalleryDoorTests: XCTestCase {
 
     // MARK: Stacked glass
 
-    /// NO TWO TRANSLUCENT DISCS MAY SHARE A PLANE.
-    ///
-    /// The focus pool under each exhibit is three flat discs of the
-    /// module's accent at falling opacity, and all three were built at
-    /// the same y — coplanar to the micron. The depth buffer then picks
-    /// a winner per pixel per frame, so the pool shimmered whenever the
-    /// head moved, worst of all on the pad where a docked lab holds
-    /// still and gives the eye time to watch it.
-    ///
-    /// Reported from a headset, not caught here, because nothing was
-    /// asserting it: every disc was the right size, the right colour and
-    /// in the right place. Coplanarity is invisible to any test that
-    /// checks parts individually, so this one checks them against EACH
-    /// OTHER — which is the only way this class of defect is visible.
-    ///
-    /// SCOPED BY NAME, not by shape. The first version of this looked
-    /// for anything flat, wide and translucent anywhere in an exhibit,
-    /// and failed on Gravity Lab — whose miniature draws two orbit
-    /// TRACKS, rings at different radii sharing the orbital plane and
-    /// overlapping nowhere. A rule that cannot tell a ring from a filled
-    /// disc reports correct geometry as broken, which is how a criterion
-    /// test gets switched off.
+    /// No two translucent discs may share a plane: the focus pool's three
+    /// discs were built coplanar and shimmered as the depth buffer picked a
+    /// winner per pixel. Checked against each other, and scoped by name,
+    /// because Orbital Mechanics' miniature draws two orbit rings that share a
+    /// plane and overlap nowhere.
     @MainActor
     func testNoTwoDiscsInAFocusPoolShareAPlane() throws {
         let (scene, modules) = builtScene()
@@ -231,11 +193,8 @@ final class GalleryDoorTests: XCTestCase {
 
     // MARK: The furniture that is gone
 
-    /// THE PAD'S TEACH CARD IS NOT COMING BACK by accident. "Or carry a
-    /// lab to the pad" hung at the plate's rim — inside the volume the
-    /// carry drag sweeps through, so the sentence describing the gesture
-    /// stood in the way of performing it. If a future pass re-adds a
-    /// billboarded card there, this catches it.
+    /// The pad's teach card is not coming back by accident: it hung inside
+    /// the volume the carry drag sweeps through.
     func testNothingHangsAtThePadsRim() {
         let (scene, _) = builtScene()
         let pad = scene.podiumTop
@@ -247,7 +206,7 @@ final class GalleryDoorTests: XCTestCase {
             let at = entity.position(relativeTo: nil)
             // The rim: below the pad's top, within a hand's width of it.
             guard simd_distance(at, pad) < 0.25, at.y < pad.y else { return }
-            // The gallery's grab bar lives under the pad ON PURPOSE and
+            // The gallery's grab bar lives under the pad on purpose and
             // is the one thing there a pinch is meant to find.
             guard !HubScene.isGalleryBar(entity) else { return }
             offenders.append(entity.name.isEmpty ? "<unnamed>" : entity.name)

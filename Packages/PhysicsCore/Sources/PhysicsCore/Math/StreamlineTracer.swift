@@ -1,7 +1,7 @@
 //
 //  StreamlineTracer.swift
 //  PhysicsCore — Math: streamlines of any vector field, RK4 on the
-//  NORMALIZED field dr/ds = F/|F| — unit-speed arc-length steps, so it
+//  Normalized field dr/ds = F/|F| — unit-speed arc-length steps, so it
 //  neither blows up near singularities nor crawls in weak regions.
 //
 
@@ -19,7 +19,7 @@ public enum StreamlineTracer {
         /// Lines also end past `boundsRadius` from here ("off to infinity").
         public var boundsCenter: SIMD3<Double> = .zero
         public var boundsRadius = 0.85
-        /// Termination test for SURFACE sites (a plate is a rectangle; a stop
+        /// Termination test for surface sites (a plate is a rectangle; a stop
         /// sphere misses its corners or swallows the gap).
         public var stopWhere: (@Sendable (SIMD3<Double>) -> Bool)?
 

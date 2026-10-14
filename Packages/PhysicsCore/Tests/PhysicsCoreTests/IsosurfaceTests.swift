@@ -58,8 +58,8 @@ final class IsosurfaceTests: XCTestCase {
                           + "was refined — that is not convergence.")
     }
 
-    /// Every vertex on the level set to within O(h²), NOT machine precision:
-    /// chord interpolation lands systematically INSIDE a convex level set.
+    /// Every vertex on the level set to within O(h²), not machine precision:
+    /// chord interpolation lands systematically inside a convex level set.
     func testEveryVertexLiesOnTheLevelSetToWithinTheGridResolution() {
         let radius = 0.8
         let resolution = 16

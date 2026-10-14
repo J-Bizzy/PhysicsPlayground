@@ -1,6 +1,6 @@
 //
 //  FluidGrid.swift
-//  Incompressible Euler solver (∂u/∂t + (u·∇)u = −∇p/ρ, ∇·u = 0) on a 3-D staggered MAC grid, operator-split per Stam "Stable Fluids": semi-Lagrangian ADVECT (unconditionally stable) → vorticity CONFINE (Fedkiw; restores curl the discretisation lost, never invents rotation) → pressure PROJECT (∇²p = (ρ/Δt)∇·u), which is what bends flow around solids.
+//  Incompressible Euler solver (∂u/∂t + (u·∇)u = −∇p/ρ, ∇·u = 0) on a 3-D staggered MAC grid, operator-split per Stam "Stable Fluids": semi-Lagrangian advect (unconditionally stable) → vorticity confine (Fedkiw; restores curl the discretisation lost, never invents rotation) → pressure project (∇²p = (ρ/Δt)∇·u), which is what bends flow around solids.
 //  Boundaries: −x face is the inflow (Dirichlet velocity), +x the open outflow (p = 0), side walls free-slip; per-cell solids carry zero face flux and the Poisson solve drops them (homogeneous Neumann — "the wall is a streamline").
 //
 

@@ -13,7 +13,7 @@
 //  law for sound), clamped at r₀ so the source itself stays finite.
 //
 //  The steady-state amplitude envelope is the phasor magnitude
-//  |Σ a·F·e^{i(k·r + φ)}|. Its zero set — the SILENCE SURFACES, nodal
+//  |Σ a·F·e^{i(k·r + φ)}|. Its zero set — the silence surfaces, nodal
 //  hyperboloids in 3D — is what the module extracts as isosurfaces.
 //  The unit tests pin the textbook results: exactly 2A where equal
 //  waves arrive in phase, exactly 0 at λ/2 path difference, and the

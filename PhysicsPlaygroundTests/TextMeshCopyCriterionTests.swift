@@ -2,25 +2,10 @@
 //  TextMeshCopyCriterionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  A TEXT MESH HAS NO MARKUP. IT DRAWS WHAT YOU TYPED.
-//
-//  `MeshResource.generateText` turns a string into glyphs, one per
-//  character, and that includes the ones an author meant as formatting.
-//  Every authored paragraph in this app lands on a mesh — the Lagrange
-//  explanations, the Circuits insights, the experiment steps, the promise
-//  lines — and none of them go through Markdown, AttributedString or
-//  SwiftUI's `Text` initialiser that would interpret it.
-//
-//  Found on 2026-08-08, in the first photograph ever taken of the
-//  Lagrange callout: "displaced bodies orbit *around* the point", with
-//  the asterisks rendered as asterisks, forty degrees from the reader's
-//  eye. Nothing was broken. The string simply said something its author
-//  did not write, and no test could have noticed, because every test
-//  about that paragraph asked whether the paragraph ARRIVED.
-//
-//  So this closes the class rather than the instance. Comments are
-//  skipped — this file's own header uses backticks freely, and so does
-//  every other; the rule is about strings that reach a reader.
+//  A text mesh has no markup; it draws what you typed. Every authored
+//  paragraph lands on a mesh, and the Lagrange callout once rendered
+//  its asterisks. Comments are skipped: the rule is about strings that
+//  reach a reader.
 //
 
 import XCTest
@@ -49,10 +34,8 @@ final class TextMeshCopyCriterionTests: XCTestCase {
         return found
     }
 
-    /// Strips `//` comments and doc comments, leaving code. Crude on
-    /// purpose: a `//` inside a string literal costs us a skipped line,
-    /// which is a false NEGATIVE, and the alternative — a real Swift
-    /// lexer in a test — is worse than the bug it would catch.
+    /// Strips comments, leaving code. Crude on purpose: a `//` inside a
+    /// string costs a skipped line, a false negative.
     private func codeLines(of source: String) -> [(Int, String)] {
         var inBlock = false
         var out: [(Int, String)] = []
@@ -83,9 +66,7 @@ final class TextMeshCopyCriterionTests: XCTestCase {
         var scanned = 0
         var linesWithStrings = 0
         let files = try swiftSources()
-        // A FLOOR, because a scan that walks nothing passes. This arc
-        // already shipped one criterion test that visited four files
-        // while fifteen were in scope, and it was green the whole time.
+        // A floor, because a scan that walks nothing passes.
         XCTAssertGreaterThan(files.count, 60, """
             the walk found \(files.count) Swift files under \
             PhysicsPlayground/. There were 80 on 2026-08-08, so the \

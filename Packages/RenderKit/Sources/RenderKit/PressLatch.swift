@@ -2,18 +2,12 @@
 //  PressLatch.swift
 //  RenderKit — a press that becomes a drag only once it has moved.
 //
-//  One `DragGesture(minimumDistance: 0)` carries every verb in a scene (a
-//  second recogniser over the same entities is ambiguous and costs the
-//  drags), so the gesture fires on a bare press and any branch that ACTS
-//  on the press acts on a tap. This per-branch discriminator gates the
-//  destructive ones.
+//  One `DragGesture(minimumDistance: 0)` carries every verb in a scene,
+//  so the gesture fires on a bare press; this discriminator keeps a
+//  press from acting until it travels. A promotion carries only
+//  identity, never the press-time position: `RelativeDrag` moves by
+//  displacement, and a swinging object's press-time position is stale.
 //
-//  A promotion carries ONLY IDENTITY — deliberately not the object's
-//  press-time position: `RelativeDrag` moves by displacement from its
-//  build pair, so anchoring at the press replays the travelled 12 mm in
-//  one frame, and a still-swinging bob's press-time position is already
-//  stale. The caller reads the object's CURRENT position paired with the
-//  CURRENT hand, so pickup moves nothing and then tracks 12 mm behind.
 
 import simd
 
@@ -30,13 +24,10 @@ public struct PressLatch<Payload>: Sendable where Payload: Sendable {
     /// Whether a press is waiting to see whether it is a drag.
     public var isPending: Bool { pending != nil }
 
-    /// Records a press without acting on the pressed object.
-    ///
-    /// THE FIRST PRESS WINS: a second while one is still pending is
-    /// IGNORED, not replacing it. A `targetedToAnyEntity` gesture reports
-    /// the same entity every frame, so without this guard a re-press each
-    /// frame resets `pending.hand` to the current hand, `promote` always
-    /// measures zero, and the object can never be picked up.
+    /// Records a press without acting on the pressed object. The first
+    /// press wins: a `targetedToAnyEntity` gesture reports the same entity
+    /// every frame, and re-pressing would reset the anchor so `promote`
+    /// always measured zero.
     public mutating func press(_ payload: Payload, at hand: SIMD3<Double>) {
         guard pending == nil else { return }
         pending = (payload, hand)
@@ -52,12 +43,9 @@ public struct PressLatch<Payload>: Sendable where Payload: Sendable {
         return pending.payload
     }
 
-    /// Resolves a press that never became a drag — by construction,
-    /// anything still pending at gesture end stayed within `tapTravel`
-    /// (a travelled press was consumed by `promote` in `onChanged`).
-    /// Returns and clears the payload, so the caller can treat the
-    /// settled press as the tap it was; nil if nothing was pending or
-    /// the press already promoted.
+    /// Resolves a press that never became a drag — anything still pending
+    /// at gesture end stayed within `tapTravel`. Returns and clears the
+    /// payload; nil if nothing was pending or the press already promoted.
     public mutating func settle() -> Payload? {
         defer { pending = nil }
         return pending?.payload

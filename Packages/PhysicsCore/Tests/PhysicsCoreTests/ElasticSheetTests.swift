@@ -187,7 +187,7 @@ final class ElasticSheetTests: XCTestCase {
     }
 
     /// Driven at (1,1)'s frequency the sheet rings up; well between modes it
-    /// stays comparatively dead. That contrast IS resonance.
+    /// stays comparatively dead. That contrast is resonance.
     func testDrivingAtAModeResonates() {
         func steadyRMS(driveHz: Double) -> Double {
             var sheet = ElasticSheet(n: 21, spacing: 0.05, waveSpeed: 1.0,

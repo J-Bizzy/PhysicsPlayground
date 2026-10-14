@@ -1,6 +1,7 @@
 //
 //  NBodyTests.swift
-//  The gravity engine pinned to classical results: stable orbits, energy conservation, Kepler III.
+//  The gravity engine pinned to classical results: stable orbits, energy conservation, Kepler III,
+//  and the integrator's own errors — apsidal drift, reversibility, a frozen body, the softening law.
 //
 
 import XCTest
@@ -139,5 +140,123 @@ final class NBodyTests: XCTestCase {
         }
         let endpoint = try! XCTUnwrap(path.last)
         XCTAssertEqual(simd_distance(endpoint, actual[1].position), 0, accuracy: 1.0)
+    }
+
+    // MARK: The integrator's own errors
+
+    private let au = CelestialBody.astronomicalUnit
+
+    /// The relative eccentricity vector of bodies[1] about bodies[0], and the orbit normal.
+    private func eccentricityVector(_ bodies: [CelestialBody], mu: Double)
+        -> (e: SIMD3<Double>, h: SIMD3<Double>) {
+        let r = bodies[1].position - bodies[0].position
+        let v = bodies[1].velocity - bodies[0].velocity
+        let h = simd_cross(r, v)
+        return (simd_cross(v, h) / mu - simd_normalize(r), h)
+    }
+
+    /// Mercury about the Sun, alone, for `orbits` periods at step `h`: the signed turn of
+    /// the apse line per orbit (arcseconds, positive with the motion) and the change in e.
+    private func apsidalDrift(step h: Double, orbits: Int) -> (perOrbit: Double, eDrift: Double) {
+        let a = 0.387 * au
+        let mercury = CelestialBody.mercury.onEllipticalOrbit(
+            of: .sun, semiMajorAxis: a, eccentricity: 0.2056, inclination: 0)
+        var bodies = [CelestialBody.sun, mercury]
+        let mu = NBody.standardGravitationalParameter(
+            primaryMass: CelestialBody.sun.mass, bodyMass: mercury.mass)
+        let period = NBody.orbitalPeriod(
+            semiMajorAxis: a, centralMass: CelestialBody.sun.mass + mercury.mass)
+        let (e0, normal) = eccentricityVector(bodies, mu: mu)
+        for _ in 0..<Int((Double(orbits) * period / h).rounded()) {
+            NBody.step(bodies: &bodies, dt: h)
+        }
+        let (e1, _) = eccentricityVector(bodies, mu: mu)
+        let turn = atan2(simd_dot(simd_cross(e0, e1), simd_normalize(normal)), simd_dot(e0, e1))
+        let arcseconds = 180 / Double.pi * 3600
+        return (turn * arcseconds / Double(orbits), simd_length(e1) - simd_length(e0))
+    }
+
+    /// An isolated two-body orbit does not precess, so any apsidal drift is the
+    /// integrator's. Leapfrog at these two steps (the app's 1× and ≥5× steps)
+    /// turned Mercury's apse line 19″ and 119″ per orbit, retrograde — 15× and
+    /// 93× the real Newtonian precession from the other planets (~1.3″ per
+    /// orbit, prograde) — while conserving energy to 1e-8. Energy is not the test.
+    func testIsolatedMercuryDoesNotPrecessNumerically() {
+        let coarse = apsidalDrift(step: 21_600, orbits: 20)
+        XCTAssertLessThan(abs(coarse.perOrbit), 0.05,
+                          "the apse line turns \(coarse.perOrbit)″ per orbit at a 6 h step")
+        XCTAssertLessThan(abs(coarse.eDrift), 1e-6, "eccentricity drifted \(coarse.eDrift)")
+        let fine = apsidalDrift(step: 8_640, orbits: 20)
+        XCTAssertLessThan(abs(fine.perOrbit), 0.01,
+                          "the apse line turns \(fine.perOrbit)″ per orbit at the 1× step")
+    }
+
+    /// The composition is palindromic: a negative step retraces a positive one to roundoff.
+    func testStepIsTimeReversible() {
+        var bodies = sunEarth()
+        let start = bodies
+        let dt = 6 * 3600.0
+        for _ in 0..<1000 { NBody.step(bodies: &bodies, dt: dt) }
+        for _ in 0..<1000 { NBody.step(bodies: &bodies, dt: -dt) }
+        for i in bodies.indices {
+            XCTAssertEqual(simd_distance(bodies[i].position, start[i].position), 0, accuracy: 0.1,
+                           "\(bodies[i].name) did not come home")
+            XCTAssertEqual(simd_distance(bodies[i].velocity, start[i].velocity), 0, accuracy: 1e-6)
+        }
+    }
+
+    /// A frozen body is an infinite-mass anchor: it attracts, and it does not move.
+    func testAFrozenBodyAttractsButDoesNotMove() {
+        var bodies = sunEarth()
+        let sun = bodies[0]
+        for _ in 0..<400 {
+            NBody.step(bodies: &bodies, dt: 6 * 3600, frozen: [true, false])
+            XCTAssertEqual(simd_distance(bodies[0].position, bodies[1].position) / au, 1.0,
+                           accuracy: 1e-3, "Earth left its orbit about a frozen Sun")
+        }
+        XCTAssertEqual(bodies[0].position, sun.position, "the frozen Sun moved")
+        XCTAssertEqual(bodies[0].velocity, sun.velocity)
+    }
+
+    /// Σ m·v is a constant of the motion, and the integrator keeps it to roundoff.
+    func testTheIntegratorConservesMomentum() {
+        var bodies = sunEarth()
+        bodies.append(CelestialBody.jupiter.onCircularOrbit(of: .sun, distance: 5.204 * au))
+        let start = NBody.momentum(of: bodies)
+        for _ in 0..<2000 { NBody.step(bodies: &bodies, dt: 6 * 3600) }
+        let scale = bodies.reduce(0) { $0 + $1.mass * simd_length($1.velocity) }
+        XCTAssertLessThan(simd_length(NBody.momentum(of: bodies) - start), scale * 1e-12)
+    }
+
+    /// Inside the softening floor the potential's slope IS the force; the two
+    /// used to disagree there (a 1/r potential over a linear force), so the
+    /// energy readout lied exactly where a held body sits.
+    func testSofteningPotentialIsConsistentWithItsForce() {
+        let s = 5e9
+        let floor = 2 * s
+        func pair(at r: Double) -> [CelestialBody] {
+            var a = CelestialBody.sun
+            a.position = .zero
+            a.velocity = .zero
+            var b = CelestialBody.earth
+            b.position = SIMD3(r, 0, 0)
+            b.velocity = .zero
+            return [a, b]
+        }
+        for fraction in [0.5, 0.99, 1.01, 2.0] {
+            let r = fraction * floor
+            let delta = 1e-5 * r
+            let slope = (NBody.totalEnergy(bodies: pair(at: r + delta), softening: [s, s])
+                         - NBody.totalEnergy(bodies: pair(at: r - delta), softening: [s, s]))
+                / (2 * delta)
+            let pull = simd_length(NBody.accelerations(bodies: pair(at: r), softening: [s, s])[1])
+                * CelestialBody.earth.mass
+            XCTAssertEqual(slope, pull, accuracy: pull * 1e-6,
+                           "at r = \(fraction) ε the potential's slope and the force disagree")
+        }
+        let inside = NBody.totalEnergy(bodies: pair(at: floor * (1 - 1e-9)), softening: [s, s])
+        let outside = NBody.totalEnergy(bodies: pair(at: floor * (1 + 1e-9)), softening: [s, s])
+        XCTAssertEqual(inside, outside, accuracy: abs(outside) * 1e-7,
+                       "the potential jumps at the floor")
     }
 }

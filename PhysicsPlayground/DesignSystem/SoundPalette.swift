@@ -45,7 +45,7 @@ enum SoundPalette {
     }
 
     /// Synthesize (if needed) and load every sound. Call once, early.
-    /// Synthesis MUST stay off the main actor: an unstructured `Task {}`
+    /// Synthesis must stay off the main actor: an unstructured `Task {}`
     /// here inherits @MainActor, so the sample math runs detached
     /// (`nonisolated`); only the resource loads come back here.
     static func warmUp() {
@@ -80,7 +80,7 @@ enum SoundPalette {
         }
     }
 
-    /// The cache directory. CACHE FILENAMES CARRY A VERSION SUFFIX: a file
+    /// The cache directory. Cache filenames carry A version suffix: a file
     /// is only written when absent, so editing a recipe without renaming
     /// its file changes nothing for anyone who has already launched.
     private nonisolated static func soundsDirectory() throws -> URL {
@@ -204,8 +204,8 @@ enum SoundPalette {
         }
     }
 
-    // When a module leaves, check `CachedSounds` against its callers —
-    // a field nobody reads still gets rendered on every cold launch.
+    // When a module leaves, check `CachedSounds` against its callers — a
+    // field nobody reads still renders on every cold launch.
 
     /// Settings' master volume, 0…1. Applied to every one-shot; the
     /// settings window writes it here so callers never have to know.

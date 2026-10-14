@@ -2,40 +2,10 @@
 //  BloomPetalTests.swift
 //  PhysicsPlaygroundTests
 //
-//  `Bloom` has been in the app since the rebuild and carries several
-//  modules' per-object actions, but nothing has ever asserted the one
-//  behaviour every caller silently depends on: **`retarget` rebuilds
-//  only when the target id CHANGES.**
-//
-//  That guard exists for a good reason (a `@State` read from a render
-//  closure came back stale, so the first version reconfigured itself
-//  sixty times a second — the unfold animation reset to zero every frame
-//  and two entities leaked per frame). But it has a consequence nobody
-//  wrote down, and it is a trap:
-//
-//      A caller whose id is CONSTANT gets its petal list evaluated
-//      exactly once, on the first frame, and never again.
-//
-//  Kinematics' launcher bloom is exactly that — its id is the literal
-//  "launcher". So the obvious translation of the window panel's
-//  `.disabled(flights.isEmpty)` — leave the Clear petal out when there
-//  is nothing to clear — would compile, read correctly, and be evaluated
-//  once at launch: the petal would be permanently present or permanently
-//  absent depending on what the room looked like in frame one.
-//
-//  The launcher's Clear petal was unconditional because of this. These
-//  tests pin the behaviour that reasoning rests on, so that changing
-//  `retarget` breaks a test rather than silently un-disabling a control
-//  in another file.
-//
-//  RESOLVED 2026-08-03, and the trap is still real — the escape is that
-//  `Petal.isAvailable` is a CLOSURE rather than a `Bool`. The petal list
-//  is still evaluated once; the condition inside it is read every frame.
-//  So a petal can now track its state without anybody having to re-run
-//  `retarget`, and the reasoning above is preserved rather than
-//  contradicted. `Petal.confirms` arrived in the same change, because
-//  Projectiles' Clear was the one destructive verb in the app with no
-//  guard while the two identical standing plates both confirmed.
+//  `Bloom.retarget` rebuilds only when the target id changes, so a
+//  caller with a constant id gets its petal list evaluated once;
+//  `Petal.isAvailable` is a closure for exactly that reason, and
+//  `Petal.confirms` guards the destructive verb.
 //
 
 import XCTest
@@ -122,10 +92,7 @@ final class BloomPetalTests: XCTestCase {
 
     // MARK: Three petals resolve independently
 
-    /// The launcher now carries three — Fire, Balls, Clear — which is
-    /// the ceiling `Petal`'s own doc sets. Each must fire its own action
-    /// and only its own: a layout that overlapped them, or a resolver
-    /// that matched by index rather than by name, would show up here.
+    /// Three petals, each firing only its own action.
     func testEachOfThreePetalsFiresOnlyItsOwnAction() throws {
         let counter = Counter()
         let bloom = Bloom()
@@ -160,11 +127,8 @@ final class BloomPetalTests: XCTestCase {
         XCTAssertEqual(counter.fired, ["Clear"])
     }
 
-    /// The acknowledge-swell must keep the petal's own orientation.
-    /// Petals are built face-on at π/2 about X; a target `Transform`
-    /// built without a rotation defaults to identity, which animated
-    /// every petal through a visible 90° tumble on every tap — the
-    /// "flipping" seen on Magnetism's Delete and the launcher petals.
+    /// The acknowledge-swell keeps the petal's own orientation; a target
+    /// transform built without one tumbled every petal 90°.
     func testTheSwellTargetPreservesThePetalsOrientation() throws {
         let counter = Counter()
         let bloom = Bloom()
@@ -197,10 +161,8 @@ final class BloomPetalTests: XCTestCase {
 
     // MARK: Availability — the escape from the trap
 
-    /// **The whole point of `isAvailable` being a closure.** The petal
-    /// list is built once and never rebuilt for a constant id, so a
-    /// condition captured as a value would freeze at whatever it was in
-    /// frame one. Read as a closure, it tracks.
+    /// The whole point of `isAvailable` being a closure: read every frame,
+    /// not captured once.
     func testAnAvailabilityClosureIsReadEveryFrameNotOnce() throws {
         let counter = Counter()
         var hasFlights = false
@@ -212,7 +174,7 @@ final class BloomPetalTests: XCTestCase {
         reveal(bloom)
         let petalEntity = try entity(bloom, named: "Clear")
 
-        // Unavailable: refuses, and does NOT consume — a dim petal must
+        // Unavailable: refuses, and does not consume — a dim petal must
         // not be a hole that swallows a gesture aimed past it.
         XCTAssertFalse(bloom.handleTap(petalEntity))
         XCTAssertEqual(counter.fired, [])
@@ -227,7 +189,7 @@ final class BloomPetalTests: XCTestCase {
     }
 
     /// Dim, never absent. Removing a petal would shift its neighbours —
-    /// the ring's angles come from the COUNT — out from under a finger
+    /// the ring's angles come from the count — out from under a finger
     /// already reaching for one.
     func testAnUnavailablePetalDimsRatherThanDisappearing() throws {
         let bloom = Bloom()
@@ -292,7 +254,7 @@ final class BloomPetalTests: XCTestCase {
                        "A disarmed petal must need arming again, not fire.")
     }
 
-    /// A petal WITHOUT `confirms` still fires on the first tap. The
+    /// A petal without `confirms` still fires on the first tap. The
     /// guard is opt-in — pause, polarity and mass are not destructive
     /// and must not grow a second tap.
     func testAnOrdinaryPetalStillFiresOnTheFirstTap() throws {

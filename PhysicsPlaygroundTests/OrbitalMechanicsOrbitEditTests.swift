@@ -1,5 +1,5 @@
 //
-//  GravityLabOrbitEditTests.swift
+//  OrbitalMechanicsOrbitEditTests.swift
 //  Orbit-edit wiring: display space in, sim state out. The math is in
 //  PhysicsCoreTests/OrbitalElementsTests; the pinch itself is on-device only.
 //
@@ -10,16 +10,16 @@ import simd
 @testable import PhysicsPlayground
 
 @MainActor
-final class GravityLabOrbitEditTests: XCTestCase {
+final class OrbitalMechanicsOrbitEditTests: XCTestCase {
 
-    private func earth(in model: GravityLabModel) -> GravityLabModel.OrbitingBody {
+    private func earth(in model: OrbitalMechanicsModel) -> OrbitalMechanicsModel.OrbitingBody {
         model.bodies.first { $0.body.name == "Earth" }!
     }
 
     // MARK: Which bodies earn a ring
 
     func testEveryPlanetHasARingButTheSunDoesNot() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let sun = model.primaryBody!
         XCTAssertNil(model.orbitFrame(for: sun.id),
                      "the primary is the focus, not a thing in orbit")
@@ -29,9 +29,9 @@ final class GravityLabOrbitEditTests: XCTestCase {
         }
     }
 
-    /// A ring is a TWO-BODY statement: with twin suns no body dominates, so the ring goes out.
+    /// A ring is a two-body statement: with twin suns no body dominates, so the ring goes out.
     func testTwinSunsExtinguishTheRing() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let earthID = earth(in: model).id
         XCTAssertNotNil(model.orbitFrame(for: earthID))
         model.makeBinary()
@@ -41,7 +41,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
 
     /// The ring reports the orbit the body is actually on: Earth at 1 AU, period one year.
     func testTheRingAgreesWithTheOrbitTheBodyIsOn() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let elements = model.orbitElements(for: earth(in: model).id)!
         XCTAssertEqual(elements.semiMajorAxis! / CelestialBody.astronomicalUnit,
                        1, accuracy: 1e-6)
@@ -53,7 +53,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
     // MARK: The drag
 
     func testDraggingTheFarBeadStretchesTheOrbit() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let id = earth(in: model).id
         let before = model.orbitFrame(for: id)!
         XCTAssertTrue(model.beginOrbitEdit(bodyID: id, holding: .far))
@@ -75,7 +75,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
     /// a failure means `displayPoint(fromWorld:)` stopped undoing the two-hand rig.
     func testTheDragIsIndependentOfTheViewScale() {
         func orbitAfterDrag() -> ApsisFrame {
-            let model = GravityLabModel()
+            let model = OrbitalMechanicsModel()
             let id = earth(in: model).id
             let start = model.orbitFrame(for: id)!
             model.beginOrbitEdit(bodyID: id, holding: .far)
@@ -91,7 +91,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
 
     /// Lifting a bead out of the ecliptic tilts the whole orbit.
     func testLiftingABeadTiltsTheOrbit() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let id = earth(in: model).id
         let before = model.orbitFrame(for: id)!
         XCTAssertEqual(before.orbitNormal.y, 1, accuracy: 1e-9,
@@ -117,7 +117,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
 
     /// The edited body holds still while everything else keeps orbiting.
     func testTheEditedBodyIsFrozenWhileTheSystemRuns() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let id = earth(in: model).id
         let marsID = model.bodies.first { $0.body.name == "Mars" }!.id
         model.beginOrbitEdit(bodyID: id, holding: .far)
@@ -138,7 +138,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
 
     /// Letting go leaves the body on exactly the orbit the ring showed.
     func testReleasingLeavesTheBodyOnTheOrbitItWasGiven() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let id = earth(in: model).id
         let start = model.orbitFrame(for: id)!
         model.beginOrbitEdit(bodyID: id, holding: .far)
@@ -160,7 +160,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
     }
 
     func testReleasingClearsTheTrailThatDescribedTheOldOrbit() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let id = earth(in: model).id
         for _ in 0..<200 { model.step(dt: 1.0 / 90.0) }
         XCTAssertFalse(model.bodies.first { $0.id == id }!.trail.isEmpty)
@@ -174,9 +174,9 @@ final class GravityLabOrbitEditTests: XCTestCase {
     // MARK: Edges
 
     func testTheFarBeadCannotBeGrabbedOnAnUnboundOrbit() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let id = earth(in: model).id
-        // Escape WITHOUT moving far — `hold` teleports the body, and a big displacement
+        // Escape without moving far — `hold` teleports the body, and a big displacement
         // changes the escape speed being measured. 5 cm in 30 ms × 8.6e4 ≈ 140 km/s vs 42.
         let start = SIMD3<Double>(0.5, 0, 0)
         model.grab(id: id, at: start, timestamp: 0)
@@ -194,7 +194,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
     }
 
     func testAnEditCannotStartWhereThereIsNoRing() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         XCTAssertFalse(
             model.beginOrbitEdit(bodyID: model.primaryBody!.id, holding: .near),
             "the Sun accepted an orbit edit")
@@ -202,7 +202,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
 
     /// Deleting the edited body must not leave a gesture holding nothing.
     func testDeletingTheEditedBodyEndsTheEdit() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let id = earth(in: model).id
         model.beginOrbitEdit(bodyID: id, holding: .far)
         model.removeBody(id: id)
@@ -211,7 +211,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
     }
 
     func testResetEndsAnyEditInFlight() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         model.beginOrbitEdit(bodyID: earth(in: model).id, holding: .far)
         model.reset()
         XCTAssertFalse(model.isEditingOrbit)
@@ -222,7 +222,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
 
     /// Period and escape speed must share one gravitational parameter — GM vs G(M+m) drift is the trap.
     func testTheReadoutUsesOneGravitationalParameter() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let jupiter = model.bodies.first { $0.body.name == "Jupiter" }!
         let readout = model.readout(for: jupiter)!
         let elements = model.orbitElements(for: jupiter.id)!
@@ -244,7 +244,7 @@ final class GravityLabOrbitEditTests: XCTestCase {
     /// A held body's velocity is zeroed, so its osculating conic is a degenerate
     /// radial line — no honest ring; the prediction tube is the instrument for that moment.
     func testAHeldBodyHasNoOrbitRing() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let id = earth(in: model).id
         XCTAssertNotNil(model.orbitFrame(for: id))
 
@@ -257,9 +257,9 @@ final class GravityLabOrbitEditTests: XCTestCase {
         XCTAssertNil(model.heldBodyID)
     }
 
-    /// …but an orbit EDIT borrows `heldID` without being a hold: the ring must survive the gesture that reshapes it.
+    /// …but an orbit edit borrows `heldID` without being a hold: the ring must survive the gesture that reshapes it.
     func testAnOrbitEditKeepsItsRing() {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         let id = earth(in: model).id
         XCTAssertTrue(model.beginOrbitEdit(bodyID: id, holding: .far))
         XCTAssertEqual(model.heldBodyID, id)
@@ -269,33 +269,33 @@ final class GravityLabOrbitEditTests: XCTestCase {
         XCTAssertNotNil(model.orbitFrame(for: id))
     }
 
-    /// A body released at rest has no angular momentum and falls straight in —
-    /// correct physics, pinned so nobody "fixes" it later.
-    func testABodyReleasedAtRestFallsStraightIn() {
-        let model = GravityLabModel()
+    /// A body let go by a still hand takes the circular orbit at that radius
+    /// (2026-09-06). Before this it was released at rest and fell straight
+    /// in, and a test pinned that "so nobody fixes it later": a hand cannot
+    /// express 30 km/s to a few percent, so nobody could place a planet.
+    func testABodyReleasedByAStillHandHoldsItsRadius() {
+        let model = OrbitalMechanicsModel()
         let id = earth(in: model).id
         let sun = model.primaryBody!.body.position
         let start = model.bodies.first { $0.id == id }!.body.position
-        let bearing = simd_normalize(start - sun)
 
         model.grab(id: id, at: start * model.simToDisplay, timestamp: 0)
         model.hold(id: id, at: start * model.simToDisplay, timestamp: 0)
         model.release(id: id, timestamp: 0.05)
 
         for _ in 0..<400 { model.step(dt: 1.0 / 90.0) }
-        let now = model.bodies.first { $0.id == id }!.body.position
-        // Closer to the Sun, and still on the same ray: a radial fall, not an orbit.
-        XCTAssertLessThan(simd_length(now - sun), simd_length(start - sun) * 0.99)
-        XCTAssertEqual(simd_dot(simd_normalize(now - sun), bearing), 1,
-                       accuracy: 1e-6,
-                       "a body released at rest should fall straight in")
+        let now = model.bodies.first { $0.id == id }!.body
+        let primary = model.primaryBody!.body
+        XCTAssertEqual(simd_length(now.position - primary.position) / simd_length(start - sun), 1,
+                       accuracy: 1e-3, "the placed orbit did not hold its radius")
+        XCTAssertEqual(model.orbitElements(for: id)!.eccentricity, 0, accuracy: 1e-3)
     }
 
 
     // MARK: Occlusion is measured in the ring's own frame
 
-    /// Occlusion depends only on the relative arrangement in the RING's frame — the call site
-    /// (`GravityLabRenderer.syncOrbitRing`) must pass ring-frame coordinates, not system ones;
+    /// Occlusion depends only on the relative arrangement in the ring's frame — the call site
+    /// (`OrbitalMechanicsRenderer.syncOrbitRing`) must pass ring-frame coordinates, not system ones;
     /// the renderer half cannot be driven from a test and is verified on device.
     func testOcclusionDoesNotDependOnWhereTheSystemSits() {
         let beadInRingFrame = SIMD3<Float>(0.30, 0, 0)

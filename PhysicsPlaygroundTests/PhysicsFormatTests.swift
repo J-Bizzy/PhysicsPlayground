@@ -2,20 +2,9 @@
 //  PhysicsFormatTests.swift
 //  PhysicsPlaygroundTests
 //
-//  THE QUANTISATION CONTRACT, which is the reason `PhysicsFormat` grew
-//  from two functions into the app's number canon.
-//
-//  An in-room readout is a RealityKit attachment or a text mesh, and what
-//  costs is how often the RENDERED OUTPUT changes — not how often `body`
-//  runs. A live value formatted straight from the model produces a
-//  different string every frame and rebuilds its texture every frame.
-//
-//  Four files remembered that and hand-rolled `(x * 100).rounded() / 100`
-//  before formatting; the rest did not. These tests are what makes it a
-//  property of the formatter rather than a habit: **a value perturbed by
-//  less than its own displayed precision must produce the SAME STRING.**
-//  Break that and the app quietly gets slower in the modules that show
-//  the most numbers.
+//  The quantisation contract: an in-room readout is rasterised, so what
+//  costs is how often the rendered output changes, and a value perturbed
+//  by less than its displayed precision must produce the same string.
 //
 
 import XCTest
@@ -26,19 +15,8 @@ final class PhysicsFormatTests: XCTestCase {
     // MARK: The contract
 
     /// A jitter far below the last displayed digit must not change the
-    /// text. This is the whole point.
-    ///
-    /// **EXCEPT AT A ROUNDING BOUNDARY**, and that exception is real
-    /// rather than a weakness. Exactly on a half-step — 42.5 at zero
-    /// decimals — an arbitrarily small nudge flips 42 to 43, and no
-    /// quantiser can do otherwise; that is what a boundary IS. It costs
-    /// nothing in practice because it happens once per step of the
-    /// displayed value, not once per frame. The first version of this
-    /// test used 42.5 as a base and failed against a perfectly correct
-    /// formatter.
-    ///
-    /// So the bases below deliberately sit away from half-steps, and the
-    /// boundary gets its own test underneath.
+    /// text — except at a rounding boundary, where no quantiser can do
+    /// otherwise; the bases below sit away from half-steps.
     func testAValuePerturbedBelowItsPrecisionFormatsIdentically() {
         for decimals in 0...4 {
             let step = pow(10.0, Double(-decimals))
@@ -68,7 +46,7 @@ final class PhysicsFormatTests: XCTestCase {
         // is a redraw per increment, which is what quantising is for.
     }
 
-    /// …and a change AT the displayed precision must come through. A
+    /// …and a change at the displayed precision must come through. A
     /// formatter that never changed its output would pass the test above
     /// perfectly.
     func testAValueChangedAtItsPrecisionFormatsDifferently() {
@@ -127,27 +105,16 @@ final class PhysicsFormatTests: XCTestCase {
         XCTAssertEqual(PhysicsFormat.metric(1000, "V", decimals: 0), "1 kV")
     }
 
-    /// Negative values keep their sign and their prefix.
-    ///
-    /// The literal here was "-2.5 mA" with an ASCII hyphen until
-    /// 2026-08-08. That was this test recording what the code did rather
-    /// than what it should do — the claim in its own name is about the
-    /// SIGN surviving, not about which character draws it.
+    /// Negative values keep their sign and their prefix; the claim is about
+    /// the sign surviving, not which character draws it.
     func testANegativeValueKeepsItsSignAndPrefix() {
         XCTAssertEqual(PhysicsFormat.metric(-0.0025, "A", decimals: 1), "\u{2212}2.5 mA")
     }
 
     // MARK: One minus sign
 
-    /// EVERY NUMBER THIS APP SHOWS USES U+2212, because eight authored
-    /// labels already do and `printf` does not.
-    ///
-    /// The Time Capsule's scrub reads "−1.50 s" with a typographic minus
-    /// typed into the format string, in front of a number whose own sign
-    /// would have been a hyphen. So two glyphs for one idea, at two
-    /// widths, a few centimetres apart. A hyphen is a word-joiner drawn
-    /// short and high to sit between letters; a minus is drawn to the
-    /// width and height of the digits.
+    /// Every number this app shows uses U+2212: a hyphen is a word-joiner
+    /// drawn short and high, a minus is drawn to the digits' width.
     func testEveryNegativeReadingUsesTheTypographicMinus() {
         let readings = [
             PhysicsFormat.fixed(-1.5, decimals: 2),
@@ -172,12 +139,8 @@ final class PhysicsFormatTests: XCTestCase {
         XCTAssertFalse(PhysicsFormat.measurement(9.81, "m/s²").contains("\u{2212}"))
     }
 
-    /// ROUNDING MUST NOT PUSH THE MANTISSA OUT OF ITS BAND.
-    ///
-    /// The prefix is chosen from the unrounded magnitude and the mantissa
-    /// is then rounded, so a value just under a decade picked the smaller
-    /// prefix and printed a four-digit mantissa — the exact "1000.0 V"
-    /// the test above exists to forbid, arrived at from the other side.
+    /// Rounding must not push the mantissa out of its band: a value just
+    /// under a decade must not print a four-digit mantissa.
     func testRoundingUpAcrossADecadeStepsThePrefix() {
         XCTAssertEqual(PhysicsFormat.metric(999.97, "V", decimals: 1), "1.0 kV")
         XCTAssertEqual(PhysicsFormat.metric(999.4, "V", decimals: 1), "999.4 V")
@@ -188,25 +151,10 @@ final class PhysicsFormatTests: XCTestCase {
 
     // MARK: The canon is not optional
 
-    /// NO MODULE FORMATS A NUMBER BY HAND.
-    ///
-    /// `PhysicsFormat` existed and was bypassed at 57 call sites under
-    /// `Modules/`, which is how the same quantity came to be spelled two
-    /// ways in one module: `CircuitsModel` printed "0 mF" at the bottom
-    /// of the capacitor's own rail while the bench label beside it said
-    /// "100 µF", and four separate files hand-rolled SI prefixes with
-    /// four separate sets of bands.
-    ///
-    /// A BAN RATHER THAN A COUNT. "Fewer than N" is a ratchet somebody
-    /// loosens; zero is a rule. And it has to be enforced by a test
-    /// rather than by review, because a raw `String(format:)` is exactly
-    /// what a hurried call site reaches for — it is shorter than the
-    /// correct thing.
-    ///
-    /// WHAT THIS BUYS, concretely: quantisation (so a live readout does
-    /// not rebuild its text mesh every frame for a number that reads the
-    /// same), the typographic minus, and one answer to "how many
-    /// decimals does a length get".
+    /// No module formats a number by hand: `PhysicsFormat` was bypassed at
+    /// dozens of call sites, which is how one quantity came to be spelled
+    /// two ways in one module. A ban rather than a count, enforced by a
+    /// test because a raw `String(format:)` is shorter than the right thing.
     func testNoModuleFormatsANumberByHand() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -284,5 +232,23 @@ final class PhysicsFormatTests: XCTestCase {
     func testAnAngleIsWrittenOneWay() {
         XCTAssertEqual(PhysicsFormat.angle(37.44), "37.4°")
         XCTAssertEqual(PhysicsFormat.angle(-0.02), "0.0°")
+    }
+
+    /// The noun agrees with the number the wearer reads: Orbital Mechanics'
+    /// mass grip said "1 Earths" and "1.00 Suns" until 2026-10-14.
+    func testACountAgreesWithTheNumberShown() {
+        XCTAssertEqual(PhysicsFormat.count(1, singular: "Earth", plural: "Earths"), "1 Earth")
+        XCTAssertEqual(PhysicsFormat.count(1.3, singular: "Earth", plural: "Earths"), "1 Earth")
+        XCTAssertEqual(PhysicsFormat.count(2, singular: "Earth", plural: "Earths"), "2 Earths")
+        XCTAssertEqual(PhysicsFormat.count(0.5, singular: "Earth", plural: "Earths",
+                                           decimals: 2), "0.50 Earths")
+        XCTAssertEqual(PhysicsFormat.count(1.004, singular: "Sun", plural: "Suns",
+                                           decimals: 2), "1.00 Sun")
+    }
+
+    /// A reversed clock reads with the room's minus, not a hyphen.
+    func testAMultiplierUsesATrueMinus() {
+        XCTAssertEqual(PhysicsFormat.multiplier(20), "20×")
+        XCTAssertEqual(PhysicsFormat.multiplier(-20), "\u{2212}20×")
     }
 }

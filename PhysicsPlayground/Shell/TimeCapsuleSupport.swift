@@ -2,41 +2,26 @@
 //  TimeCapsuleSupport.swift
 //  Physics Playground — Shell
 //
-//  Adoption contract for the Time Capsule: a model that records itself
-//  into a `TimeCapsule` every physics step and can be scrubbed back to
-//  any recorded instant while paused.
-//
-//  The snapshot is the experiment, not the observer: dynamical state,
-//  entity sets and physics clocks go in; display layers, bank flags,
-//  selections and anything a hand is currently holding stay out. The one
-//  admitted exception is a flag that changes the physics itself (Electric
-//  Fields' capacitor and B-field) — a recorded motion scrubbed back into
-//  a room whose field is off would be a lie.
-//
-//  Scrubbing never fabricates state: a scrub restores an exactly-recorded
-//  frame. The only re-simulation anywhere in the feature is the forward
-//  run after resume, which is disclosed by the truncation itself — the
-//  rejected future is discarded and the room genuinely re-runs.
+//  Adoption contract for the Time Capsule: a model records itself into
+//  a `TimeCapsule` every physics step and can be scrubbed back to any
+//  recorded instant while paused. The snapshot is the experiment, not
+//  the observer: dynamical state and entity sets go in; display layers,
+//  selections and anything a hand is holding stay out (Electric Fields'
+//  field flags are the exception, because they change the physics). A
+//  scrub restores an exactly recorded frame; the only re-simulation is
+//  the forward run after resume, from a truncated recording.
 //
 
 import Foundation
 import PhysicsCore
 
-/// The one place that answers "is the Time Capsule switched on?".
-///
-/// A `@MainActor` global rather than a reference to `AppSettings`,
-/// because the six models are the things that have to ask and none of
-/// them knows the shell exists — a model reaching up to the app object
-/// to find out whether to record would invert the layering the whole
-/// project is built on. `AppSettings.timeCapsule` is the writer; this is
-/// the reader.
+/// The one place that answers "is the Time Capsule switched on?" — a
+/// global rather than a reference to `AppSettings`, because the models
+/// ask and none of them knows the shell exists.
 @MainActor
 enum TimeCapsuleSettings {
-    /// On by default since 2026-09-01 — see `AppSettings.timeCapsule`
-    /// for why. This static only matters before `AppSettings` exists
-    /// (`AppModel.init` overwrites it from the stored preference); the
-    /// two defaults must agree, or a model built before the settings
-    /// would record differently from one built after.
+    /// The default before `AppSettings` exists; `AppModel.init` overwrites
+    /// it from the stored preference, and the two defaults must agree.
     static var isEnabled = true
 }
 
@@ -44,23 +29,16 @@ enum TimeCapsuleSettings {
 protocol TimeCapsuleRecording: AnyObject {
     associatedtype CapsuleSnapshot: Equatable
 
-    /// Both are `@ObservationIgnored` in every adopter: they mutate once
-    /// per physics step, and observation-tracking them would invalidate
-    /// every observing view at frame rate.
+    /// `@ObservationIgnored` in every adopter: they mutate once per step.
     var capsule: TimeCapsule<CapsuleSnapshot> { get set }
     var capsuleClock: Double { get set }
 
-    /// nil = live. Non-nil = frozen at this recorded capsule time. This is
-    /// the one observed member — it changes only on user action and
-    /// drives the rail readout. (An optional Double rather than a
-    /// separate Bool, deliberately: `ResetCoverageTests` sweeps Bools,
-    /// and this carries the same information without widening that
-    /// surface.)
+    /// nil = live; non-nil = frozen at this recorded capsule time. The one
+    /// observed member; it changes only on user action.
     var scrubTime: Double? { get set }
 
     /// Bumped on every restore so renderers can reseed the presentation
-    /// caches (trail clocks, ghost counters) that a discontinuous state
-    /// jump invalidates — the `resetNonce` pattern, per model.
+    /// caches a discontinuous jump invalidates.
     var scrubNonce: Int { get set }
 
     var isPaused: Bool { get set }
@@ -73,15 +51,9 @@ extension TimeCapsuleRecording {
     /// Seconds of recording available to scrub over.
     var capsuleSpan: ClosedRange<Double>? { capsule.span }
 
-    /// Call at the end of every successful (unpaused) step with the same
-    /// dt the physics just advanced by.
-    ///
-    /// Switched off, this is the cheapest possible no-op: no snapshot is
-    /// taken, so a lab with the capsule off costs exactly what it cost
-    /// before the feature existed. The buffer is dropped on the way out
-    /// rather than left sitting on the model, because holding several
-    /// megabytes of a recording the user has switched off is the same
-    /// mistake in slower motion.
+    /// Call at the end of every unpaused step with the dt the physics just
+    /// advanced by. Switched off, no snapshot is taken and the buffer is
+    /// dropped.
     func recordCapsuleFrame(dt: Double) {
         guard TimeCapsuleSettings.isEnabled else {
             if !capsule.isEmpty { clearCapsule() }
@@ -98,11 +70,8 @@ extension TimeCapsuleRecording {
         isPaused = true
         let target = span.upperBound - max(0, seconds)
         guard let frame = capsule.frame(at: target) else { return }
-        // `scrubTime` is set BEFORE the restore, not after: a model that
-        // rebuilds derived state from the capsule — Gravity Lab's orbit
-        // trails, Electric Fields' probe trail — needs to know which
-        // instant it is being restored to WHILE restoring. Set after,
-        // those rebuilds read nil and quietly produce nothing.
+        // Set before the restore: a model that rebuilds derived state from the
+        // capsule needs to know which instant it is restoring.
         scrubTime = frame.time
         restoreCapsuleSnapshot(frame.snapshot)
         scrubNonce &+= 1
@@ -120,9 +89,8 @@ extension TimeCapsuleRecording {
         scrubNonce &+= 1
     }
 
-    /// Un-pause FROM the scrubbed instant: the rejected future is
-    /// truncated and the simulation runs forward from a state that
-    /// genuinely occurred.
+    /// Un-pause from the scrubbed instant: the rejected future is truncated
+    /// and the simulation runs forward from a state that occurred.
     func commitScrubAndResume() {
         if let time = scrubTime {
             capsule.truncate(after: time)
@@ -141,8 +109,7 @@ extension TimeCapsuleRecording {
         }
     }
 
-    /// A fresh bench must not carry the old bench's past — every
-    /// `reset()` calls this.
+    /// Every `reset()` calls this: a fresh bench carries no past.
     func clearCapsule() {
         capsule.removeAll()
         capsuleClock = 0
@@ -151,10 +118,8 @@ extension TimeCapsuleRecording {
 }
 
 extension TimeScrubControls {
-    /// One line per module: the descriptor's scrub contract, wired
-    /// straight to an adopting model. The model is retained by AppModel
-    /// for the app's life, so the strong captures here match every other
-    /// descriptor closure.
+    /// The descriptor's scrub contract, wired to an adopting model. The
+    /// model is retained by AppModel for the app's life.
     init<Model: TimeCapsuleRecording>(model: Model) {
         self.init(
             span: { model.capsuleSpan },

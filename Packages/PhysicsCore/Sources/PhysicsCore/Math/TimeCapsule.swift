@@ -1,8 +1,8 @@
 //
 //  TimeCapsule.swift
 //  PhysicsCore — Math: time-windowed ring buffer of simulation snapshots.
-//  Lookups land ON a recorded frame, never between two (an interpolated
-//  state never happened); memory bounded by `window` AND a hard `capacity`.
+//  Lookups land on a recorded frame, never between two (an interpolated
+//  state never happened); memory bounded by `window` and a hard `capacity`.
 //
 
 public struct TimeCapsule<Snapshot> {
@@ -94,7 +94,7 @@ public struct TimeCapsule<Snapshot> {
         return frame(atIndex: stepped)
     }
 
-    /// Every `stride`-th recorded frame in `range`, but ALWAYS keeping both ends.
+    /// Every `stride`-th recorded frame in `range`, but always keeping both ends.
     public func frames(in range: ClosedRange<Double>, stride: Int = 1) -> [Frame] {
         guard count > 0, stride > 0 else { return [] }
         var first: Int?

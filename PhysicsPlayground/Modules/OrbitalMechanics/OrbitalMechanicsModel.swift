@@ -1,5 +1,5 @@
 //
-//  GravityLabModel.swift
+//  OrbitalMechanicsModel.swift
 //  App state for the orbital mechanics lab. Simulation runs in real SI units;
 //  only the renderer maps sim into the room, so every number checks against an almanac.
 //
@@ -12,14 +12,17 @@ import simd
 
 @MainActor
 @Observable
-final class GravityLabModel {
+final class OrbitalMechanicsModel {
     // MARK: Scale mappings (the only two numbers between sim and room)
 
     /// Room meters per astronomical unit.
     nonisolated static let metersPerAU = 0.5
     /// Simulated days per real second at 1× speed.
     nonisolated static let daysPerSecond = 3.0
-    /// Sim m/s per display m/s when throwing: a relaxed ~0.35 m/s toss ≈ orbital speed (~30 km/s).
+    /// Sim m/s per display m/s of throw, laid on top of the circular orbit at
+    /// the release point: a still hand is a circular orbit, a 0.1 m/s toss
+    /// bends it into a visible ellipse, a 0.35 m/s prograde toss (~30 km/s)
+    /// reaches escape.
     nonisolated static let throwVelocityScale = 8.6e4
 
     /// Sim meters per display meter.
@@ -30,23 +33,28 @@ final class GravityLabModel {
 
     /// `reset()` alone seeds ten bodies; the budget must leave room to build a system.
     nonisolated static let bodyBudget = 16
-    /// Verlet substep never exceeds 6 simulated hours.
+    /// A substep never exceeds 6 simulated hours…
     nonisolated static let maxSubstep = 6.0 * 3600
+    /// …nor this fraction of the shortest two-body timescale √(r³/G(m₁+m₂))
+    /// present, so an orbit reshaped to a small periapsis is still resolved.
+    /// 0.018 × Mercury's 1.21e6 s is 6.05 h: the default system keeps the
+    /// 6 h step.
+    nonisolated static let phaseStep = 0.018
+    /// The frame budget: 96 × 4 force evaluations × 120 pairs is ~46 k pair
+    /// evaluations, well under a millisecond. When it binds (a body dragged
+    /// to 0.05 AU at 100× asks for 855) accuracy is traded for a bounded frame.
     nonisolated static let maxSubstepsPerFrame = 96
-    /// The clock, including reverse: velocity Verlet is time-symmetric, so a negative step runs the physics backwards (merges are the one irreversible exception).
+    /// The clock, including reverse: the integrator is time-symmetric, so a
+    /// negative step runs the physics backwards (merges excepted).
     nonisolated static let timeScales: [Double] = [-20, -1, 1, 5, 20, 100]
-
-    enum TrailLength: String, CaseIterable, Identifiable {
-        case short, medium, long
-        var id: String { rawValue }
-        var points: Int {
-            switch self {
-            case .short: 60
-            case .medium: 240
-            case .long: 720
-            }
-        }
-    }
+    /// Bodies merge when their drawn spheres overlap by this much; the same
+    /// distance is the pair's softening floor, so the force is exact
+    /// everywhere outside a merge and finite inside one.
+    nonisolated static let mergeFactor = 0.85
+    /// The trail's chord rule needs a radius; inside this (room metres) the
+    /// rule uses this instead — the reference body's own wobble, or a body
+    /// inside the star.
+    nonisolated static let trailFloorDisplayRadius = 0.02
 
     // MARK: Bodies
 
@@ -55,8 +63,9 @@ final class GravityLabModel {
         var body: CelestialBody
         /// Rendered sphere radius in room meters — exaggerated and labeled as such.
         var displayRadius: Double
-        var trail: [SIMD3<Double>] = []
-        var lastTrailPosition: SIMD3<Double>?
+        /// Where it has been over the trailing `OrbitTrail.fraction` of its own
+        /// orbit, sampled a degree apart about the heaviest body.
+        var trail = OrbitTrail()
     }
 
     // MARK: Predict, then run — the ghost marker
@@ -82,7 +91,7 @@ final class GravityLabModel {
     private(set) var prediction: Prediction?
     private(set) var predictionVerdict: PredictionVerdict?
 
-    /// Arms a prediction on the selected body: the ghost appears AT the body, one sweep window out.
+    /// Arms a prediction on the selected body: the ghost appears at the body, one sweep window out.
     func armPrediction() {
         guard let selected = selectedBody, selected.id != primaryBody?.id else { return }
         prediction = Prediction(
@@ -117,13 +126,14 @@ final class GravityLabModel {
 
     // MARK: Kepler sweep — the second law, recorded live
 
-    /// Paints the swept sector: equal windows, equal areas, wildly different shapes.
-    var keplerSweepOn = true
+    /// Paints the swept sector: equal windows, equal areas. Off until asked
+    /// for, behind the Show tab.
+    var keplerSweepOn = false
 
     @ObservationIgnored private var sweep = KeplerSweep(horizon: 60 * 86_400)
     @ObservationIgnored private var sweepWindowStart: Double?
     @ObservationIgnored private var sweepBodyID: UUID?
-    /// The last COMPLETED window's sector (relative to the primary, sim metres) and its area.
+    /// The last completed window's sector (relative to the primary, sim metres) and its area.
     private(set) var sweepHeldArc: [SIMD3<Double>] = []
     private(set) var sweepHeldArea = 0.0
     /// One sweep window, days: a twelfth of the selected orbit.
@@ -201,16 +211,12 @@ final class GravityLabModel {
 
     var timeScale = 1.0
     var isPaused = false
-    var trailLength: TrailLength = .medium
 
     var showVelocityVector = true
     var showAccelerationVector = false
     var showForceVector = true
-    /// Drifting particles that trace the local field direction.
-    var showFieldParticles = false
-    /// The rubber-sheet picture — conceptual, and labeled as such.
-    var showSpacetimeGrid = false
-    /// Kepler's third law as a chord: every bound body's pitch is set by its period.
+    /// Kepler's third law as a chord: every bound body's pitch is set by
+    /// its period.
     var playOrbitalChord = true
 
     /// The scene's natural length — 1 AU; visualizations normalize against it.
@@ -225,6 +231,8 @@ final class GravityLabModel {
     @ObservationIgnored var capsuleClock = 0.0
     var scrubTime: Double?
     var scrubNonce = 0
+    /// See `restoreCapsuleSnapshot`.
+    @ObservationIgnored private var liveTrailsAtScrubEntry: [UUID: OrbitTrail]?
 
     // MARK: Merge flash (renderer reads position when nonce changes)
 
@@ -254,32 +262,16 @@ final class GravityLabModel {
 
     // MARK: Spawning
 
+    /// The worlds the fan offers: real bodies on their real mean orbits about
+    /// the primary. No Moon — at 0.5 m/AU Earth's Hill sphere is 5 mm of room,
+    /// inside Earth's own drawn sphere, so a bound Moon cannot be shown here.
     enum Preset: String, CaseIterable, Identifiable {
-        case mercury, venus, earth, mars, jupiter, saturn, uranus, neptune, moon, asteroid
+        case mercury, venus, earth, mars, jupiter, saturn, uranus, neptune, asteroid
         var id: String { rawValue }
         var displayName: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
-    }
 
-    func spawn(_ preset: Preset) {
-        guard bodies.count < Self.bodyBudget else { return }
-        let sun = primaryBody?.body ?? .sun
-        let au = CelestialBody.astronomicalUnit
-
-        switch preset {
-        case .moon:
-            // Real lunar distance would be sub-millimeter here; spawns at 0.06 AU —
-            // distance exaggerated, masses and speeds real.
-            if let earth = bodies.first(where: { $0.body.name == "Earth" })?.body {
-                append(CelestialBody.moon.onCircularOrbit(
-                    of: earth, distance: 0.06 * au, gravitationalConstant: effectiveG),
-                    displayRadius: 0.008)
-            } else {
-                append(CelestialBody.moon.onCircularOrbit(
-                    of: sun, distance: au, gravitationalConstant: effectiveG),
-                    displayRadius: 0.008)
-            }
-        default:
-            let template: CelestialBody = switch preset {
+        var template: CelestialBody {
+            switch self {
             case .mercury: .mercury
             case .venus: .venus
             case .earth: .earth
@@ -289,13 +281,20 @@ final class GravityLabModel {
             case .uranus: .uranus
             case .neptune: .neptune
             case .asteroid: .asteroid
-            case .moon: .moon
             }
-            let distance = (CelestialBody.meanOrbitAU(of: template.name) ?? 1) * au
-            append(template.onCircularOrbit(
-                of: sun, distance: distance, gravitationalConstant: effectiveG),
-                displayRadius: Self.displayRadius(for: template))
         }
+    }
+
+    func spawn(_ preset: Preset) {
+        guard bodies.count < Self.bodyBudget else { return }
+        let sun = primaryBody?.body ?? .sun
+        let template = preset.template
+        let distance = (CelestialBody.meanOrbitAU(of: template.name) ?? 1)
+            * CelestialBody.astronomicalUnit
+        append(template.onCircularOrbit(
+            of: sun, distance: distance, gravitationalConstant: effectiveG),
+            displayRadius: Self.displayRadius(for: template))
+        settleMomentum()
     }
 
     private func append(_ body: CelestialBody, displayRadius: Double) {
@@ -303,6 +302,25 @@ final class GravityLabModel {
         bodies.append(orbiting)
         selectedID = orbiting.id
     }
+
+    // MARK: The frame
+
+    /// Removes the system's net momentum with one uniform boost. Every
+    /// relative quantity — readouts, rings, elements, Lagrange points — is
+    /// unchanged; only the drift of the whole system across the room goes.
+    /// Not while a body is held: the hand is an external force, and a boost
+    /// then would move the free bodies against the one in the hand. A
+    /// restored capsule frame never reaches this — its Sun already carries
+    /// the mass its multiplier says, so `applySunMass` returns before it.
+    func settleMomentum() {
+        guard heldID == nil, !bodies.isEmpty else { return }
+        let mass = bodies.reduce(0) { $0 + $1.body.mass }
+        guard mass > 0 else { return }
+        let drift = NBody.momentum(of: bodies.map(\.body)) / mass
+        guard simd_length_squared(drift) > 0 else { return }
+        for index in bodies.indices { bodies[index].body.velocity -= drift }
+    }
+
 
     /// Exaggerated display sizes — the disclosed cheat that keeps the system readable.
     /// The ordering (giants dwarf rockies, the Sun dwarfs everything) is preserved exactly.
@@ -328,7 +346,7 @@ final class GravityLabModel {
     nonisolated static let massRangeEarths = 0.02...400.0
 
     // MARK: The star's own mass
-    // Its own range and UNIT: the Sun is 333,000 Earth masses, so it is set in solar masses.
+    // Its own range and unit: the Sun is 333,000 Earth masses, so it is set in solar masses.
     nonisolated static let primaryMassRangeSuns = 0.2...4.0
 
     func massInSuns(id: UUID) -> Double {
@@ -345,6 +363,7 @@ final class GravityLabModel {
         if old > 0 {
             bodies[index].displayRadius *= pow(bodies[index].body.mass / old, 1.0 / 3.0)
         }
+        settleMomentum()
     }
 
     func massInEarths(id: UUID) -> Double {
@@ -363,6 +382,7 @@ final class GravityLabModel {
             bodies[index].displayRadius *= pow(bodies[index].body.mass / old, 1.0 / 3.0)
             bodies[index].displayRadius = min(max(bodies[index].displayRadius, 0.008), 0.22)
         }
+        settleMomentum()
     }
 
     func displayRadius(id: UUID) -> Double {
@@ -381,6 +401,8 @@ final class GravityLabModel {
         if orbitEdit?.bodyID == id { endOrbitEdit() }
         bodies.removeAll { $0.id == id }
         if selectedID == id { selectedID = bodies.first?.id }
+        // The rest were carrying its momentum's opposite.
+        settleMomentum()
     }
 
     /// Spawns a body at the hand's radius already on a circular prograde ecliptic orbit; the throw perturbs a working orbit.
@@ -390,34 +412,62 @@ final class GravityLabModel {
         guard bodies.count < Self.bodyBudget else { return nil }
         let primary = primaryBody?.body ?? .sun
         let simPosition = displayPoint * displayToSim
-        let offset = simPosition - primary.position
-        let distance = simd_length(offset)
+        worldsMade += 1
         var body = CelestialBody(
-            name: "New world", mass: earths * Self.earthMass,
+            name: "World \(worldsMade)", mass: earths * Self.earthMass,
             radius: 6.37e6,
             position: simPosition,
             velocity: primary.velocity)
-
-        if distance > 1e3 {
-            // M + m, matching `onCircularOrbit` and the ring's μ — born circular must read back circular.
-            let speed = NBody.circularOrbitSpeed(
-                centralMass: primary.mass + body.mass, distance: distance,
-                gravitationalConstant: effectiveG)
-            let up = SIMD3<Double>(0, 1, 0)
-            let radial = offset / distance
-            var heading = simd_cross(up, radial)
-            let headingLength = simd_length(heading)
-            // Over a pole there is no ecliptic tangent; fall back to any perpendicular, never zero.
-            heading = headingLength > 1e-6
-                ? heading / headingLength
-                : simd_normalize(simd_cross(radial, SIMD3(1, 0, 0)))
-            // Sign matches `CelestialBody.onCircularOrbit` (+x with velocity −z).
-            body.velocity = primary.velocity + speed * heading
-        }
+        body.velocity = Self.circularVelocity(at: simPosition, mass: body.mass,
+                                              about: primary, gravitationalConstant: effectiveG)
         let orbiting = OrbitingBody(id: UUID(), body: body, displayRadius: 0.03)
         bodies.append(orbiting)
         selectedID = orbiting.id
+        settleMomentum()
         return orbiting.id
+    }
+
+    /// How many worlds the well has made; each gets its own name and colour.
+    private(set) var worldsMade = 0
+
+    /// The circular prograde velocity at `position` about `primary` — in the
+    /// sense the planets share (+x with velocity −z), any perpendicular over
+    /// a pole. M + m, matching `onCircularOrbit` and the ring's μ, so a body
+    /// born circular reads back circular. Within a kilometre of the primary
+    /// there is no orbit: the primary's own velocity.
+    nonisolated static func circularVelocity(
+        at position: SIMD3<Double>, mass: Double, about primary: CelestialBody,
+        gravitationalConstant G: Double
+    ) -> SIMD3<Double> {
+        let offset = position - primary.position
+        let distance = simd_length(offset)
+        guard distance > 1e3 else { return primary.velocity }
+        let speed = NBody.circularOrbitSpeed(
+            centralMass: primary.mass + mass, distance: distance, gravitationalConstant: G)
+        let radial = offset / distance
+        var heading = simd_cross(SIMD3<Double>(0, 1, 0), radial)
+        let headingLength = simd_length(heading)
+        heading = headingLength > 1e-6
+            ? heading / headingLength
+            : simd_normalize(simd_cross(radial, SIMD3(1, 0, 0)))
+        return primary.velocity + speed * heading
+    }
+
+    /// What a body let go now gets: the circular prograde orbit at its
+    /// distance from the primary, with the hand's throw laid on top as a
+    /// perturbation. A still hand places a planet in orbit where it was
+    /// put; a toss bends that orbit; a hard toss escapes. A hand cannot
+    /// express 30 km/s to a few percent, so releasing at the hand's speed
+    /// alone dropped everything into the Sun. The primary itself is simply
+    /// thrown.
+    func insertionVelocity(for body: CelestialBody, handVelocity: SIMD3<Double>) -> SIMD3<Double> {
+        guard let primary = primaryBody, primary.body.name != body.name
+                || primary.body.position != body.position else {
+            return (primaryBody?.body.velocity ?? .zero) + handVelocity
+        }
+        return Self.circularVelocity(at: body.position, mass: body.mass,
+                                     about: primary.body, gravitationalConstant: effectiveG)
+            + handVelocity
     }
 
     /// True while the scene has the single classic Sun.
@@ -430,6 +480,7 @@ final class GravityLabModel {
         guard let index = bodies.firstIndex(where: { $0.body.name == "Sun" }),
               bodies.count < Self.bodyBudget else { return }
         let sun = bodies[index].body
+        let oldSunID = bodies[index].id
         let separation = 0.4 * CelestialBody.astronomicalUnit
         let half = sun.mass / 2
         // Mutual circular orbit: relative speed √(GM_total/d), split evenly.
@@ -445,7 +496,11 @@ final class GravityLabModel {
         bodies[index] = OrbitingBody(id: UUID(), body: sunA, displayRadius: 0.055)
         bodies.insert(OrbitingBody(id: UUID(), body: sunB, displayRadius: 0.055),
                       at: index + 1)
-        selectedID = bodies[index].id
+        // The selection stays where the wearer put it. It used to jump to
+        // Sun A, unasked, in a lab where a tap never selects a star and that
+        // arrives with nothing selected.
+        if selectedID == oldSunID { selectedID = nil }
+        settleMomentum()
         emitSound(.boom, at: sun.position, volume: 1)
     }
 
@@ -459,11 +514,13 @@ final class GravityLabModel {
     private func applySunMass() {
         guard let index = bodies.firstIndex(where: { $0.body.name == "Sun" }) else { return }
         let old = bodies[index].body.mass
+        guard old != CelestialBody.sun.mass * sunMassMultiplier else { return }
         bodies[index].body.mass = CelestialBody.sun.mass * sunMassMultiplier
         // Inflate here too, so the bead and the programmatic path agree.
         if old > 0 {
             bodies[index].displayRadius *= pow(bodies[index].body.mass / old, 1.0 / 3.0)
         }
+        settleMomentum()
     }
 
     // MARK: Hold / throw
@@ -500,10 +557,11 @@ final class GravityLabModel {
             throwSampler.reset()
         }
         guard heldID == id else { return }
-        bodies[index].body.velocity = currentHandVelocity(timestamp: timestamp)
-        bodies[index].trail.removeAll()
-        bodies[index].lastTrailPosition = nil
-        let speed = simd_length(bodies[index].body.velocity)
+        let thrown = currentHandVelocity(timestamp: timestamp)
+        bodies[index].body.velocity = insertionVelocity(for: bodies[index].body, handVelocity: thrown)
+        // The trail behind it described a path it is no longer on.
+        bodies[index].trail.clear()
+        let speed = simd_length(thrown)
         if speed > 1000 {
             emitSound(.whoosh, at: bodies[index].body.position, volume: min(speed / 45_000, 1))
         }
@@ -522,12 +580,16 @@ final class GravityLabModel {
             capturedPointName = nil
             capturedBodyID = nil
         }
+        // The throw put momentum into the system; the room does not drift for it.
+        heldID = nil
+        settleMomentum()
     }
 
     var heldBodyID: UUID? { heldID }
 
     // MARK: The orbit as an object
-    // Bead drags set the ellipse's shape and plane directly, in closed form (see `PhysicsCore.ApsisFrame.dragged`).
+    // Bead drags set the ellipse's shape and plane directly, in closed form
+    // (`PhysicsCore.ApsisFrame.dragged`).
 
     /// How dominant the primary must be before a two-body ring means anything:
     /// Sun/Jupiter is 1047 and passes; twin suns is 1.0 and correctly fails.
@@ -621,8 +683,8 @@ final class GravityLabModel {
         heldID = nil
         guard let index = bodies.firstIndex(where: { $0.id == edit.bodyID }) else { return }
         // The trail behind it described an orbit that no longer exists.
-        bodies[index].trail.removeAll()
-        bodies[index].lastTrailPosition = nil
+        bodies[index].trail.clear()
+        settleMomentum()
     }
 
     /// Inputs for the held-body orbit prediction, packaged so the n-body integration runs off the main thread.
@@ -633,17 +695,21 @@ final class GravityLabModel {
         var steps = 1200
         var pointStride = 6
         var gravitationalConstant: Double
+        /// The live system's softening, so the ghost obeys the same law.
+        var softening: [Double]
     }
 
     /// Snapshot for the release preview, hand velocity substituted; lookahead ~600 sim days.
     func heldPredictionInputs(timestamp: Double = CACurrentMediaTime()) -> PredictionInputs? {
         guard let heldID, let index = bodies.firstIndex(where: { $0.id == heldID }) else { return nil }
         var snapshot = bodies.map(\.body)
-        snapshot[index].velocity = currentHandVelocity(timestamp: timestamp)
+        snapshot[index].velocity = insertionVelocity(
+            for: snapshot[index], handVelocity: currentHandVelocity(timestamp: timestamp))
         return PredictionInputs(
             bodies: snapshot, index: index,
             dt: 12 * 3600,
-            gravitationalConstant: effectiveG
+            gravitationalConstant: effectiveG,
+            softening: softeningRadii
         )
     }
 
@@ -655,7 +721,7 @@ final class GravityLabModel {
     private(set) var capturedBodyID: UUID?
     private(set) var capturedPointName: String?
 
-    /// Whose points these are — the last planet TAPPED, not the live selection (spawning would re-point the layer mid-gesture). Only `select(id:)` moves the host.
+    /// Whose points these are — the last planet tapped, not the live selection (spawning would re-point the layer mid-gesture). Only `select(id:)` moves the host.
     private(set) var lagrangeSecondaryID: UUID?
 
     /// The pair whose Lagrange points are shown.
@@ -696,85 +762,174 @@ final class GravityLabModel {
 
     // MARK: Stepping
 
-    /// Advances one rendered frame of simulated time, in Verlet substeps stable at 100×.
+    /// Simulated seconds — the trails' clock.
+    var simulatedSeconds: Double { simulatedDays * 86_400 }
+
+    /// Each body's softening radius, sim metres: the pair floor s_i + s_j is
+    /// exactly the pair's merge distance, so the force is Newtonian everywhere
+    /// two bodies can coexist and finite inside a merge (only a held body ever is).
+    var softeningRadii: [Double] {
+        bodies.map { $0.displayRadius * Self.mergeFactor * displayToSim }
+    }
+
+    /// The shortest two-body timescale √(r³/G(m₁+m₂)) among the pairs, seconds.
+    nonisolated static func shortestTimescale(
+        bodies: [CelestialBody], gravitationalConstant G: Double
+    ) -> Double {
+        var shortest = Double.infinity
+        for i in 0..<max(bodies.count - 1, 0) {
+            for j in (i + 1)..<bodies.count {
+                let r = max(simd_distance(bodies[i].position, bodies[j].position), 1)
+                let timescale = (r * r * r / (G * (bodies[i].mass + bodies[j].mass))).squareRoot()
+                shortest = min(shortest, timescale)
+            }
+        }
+        return shortest
+    }
+
+    /// How many substeps a frame of `simDt` takes: none longer than
+    /// `maxSubstep` or `phaseStep` of the shortest timescale present, capped
+    /// at the frame budget. A function of the frame's start state alone, so a
+    /// reversed clock takes the same steps back.
+    nonisolated static func substepCount(
+        simDt: Double, bodies: [CelestialBody], gravitationalConstant G: Double
+    ) -> Int {
+        let longest = min(maxSubstep,
+                          phaseStep * shortestTimescale(bodies: bodies, gravitationalConstant: G))
+        guard longest > 0, longest.isFinite else { return 1 }
+        // Magnitude, not signed: reverse makes simDt negative, and ceil of a negative would pin this to one enormous substep.
+        return min(max(Int(ceil(abs(simDt) / longest)), 1), maxSubstepsPerFrame)
+    }
+
+    /// Advances one rendered frame of simulated time in substeps: the
+    /// integrator, the clock, trail samples and merges per substep; the
+    /// sweep, the prediction and the trail windows per frame.
     func step(dt: Double) {
         // Every frame, paused or not, and after the physics (the collision pass removes the captured body).
         defer { pruneCapture() }
         guard !isPaused else { return }
+        // Running unpaused, the scrub's spliced trails are history.
+        liveTrailsAtScrubEntry = nil
         // Recorded even when the body-count guard stops the physics (scrub needs both sides); wall-clock seconds, not sim days.
         defer { recordCapsuleFrame(dt: min(dt, 1.0 / 30.0)) }
         guard bodies.count > 1 else { return }
         let simDt = min(dt, 1.0 / 30.0) * timeScale * Self.daysPerSecond * 86_400
-        // Magnitude, not signed: reverse makes simDt negative, and ceil of a negative would pin this to one enormous substep.
-        let substeps = min(max(Int(ceil(abs(simDt) / Self.maxSubstep)), 1),
-                           Self.maxSubstepsPerFrame)
+        let substeps = Self.substepCount(simDt: simDt, bodies: bodies.map(\.body),
+                                         gravitationalConstant: effectiveG)
         let h = simDt / Double(substeps)
 
         var system = bodies.map(\.body)
-        let heldIndex = heldID.flatMap { id in bodies.firstIndex { $0.id == id } }
+        var trails = bodies.map(\.trail)
+        var frozen = bodies.map { $0.id == heldID }
+        var softening = softeningRadii
+        var reference = Self.heaviestIndex(in: system)
+        let floorRadius = Self.trailFloorDisplayRadius * displayToSim
+
         for _ in 0..<substeps {
-            NBody.step(bodies: &system, dt: h, gravitationalConstant: effectiveG)
-            if let heldIndex {
-                // A held body attracts others but does not move.
-                system[heldIndex] = bodies[heldIndex].body
+            NBody.step(bodies: &system, dt: h, gravitationalConstant: effectiveG,
+                       softening: softening, frozen: frozen)
+            simulatedDays += h / 86_400
+            if h > 0 {
+                // Forward, the path is drawn; backwards it is only unwound (below).
+                let now = simulatedSeconds
+                let centre = system[reference].position
+                for index in system.indices where !frozen[index] {
+                    trails[index].record(time: now, position: system[index].position,
+                                         reference: centre, floorRadius: floorRadius)
+                }
+            }
+            if let pair = Self.overlappingPair(system: system, softening: softening, frozen: frozen) {
+                // Commit this substep's state, merge on the real records, and carry on with the survivor.
+                for index in bodies.indices {
+                    bodies[index].body = system[index]
+                    bodies[index].trail = trails[index]
+                }
+                merge(pair.0, pair.1)
+                system = bodies.map(\.body)
+                trails = bodies.map(\.trail)
+                frozen = bodies.map { $0.id == heldID }
+                softening = softeningRadii
+                reference = Self.heaviestIndex(in: system)
             }
         }
         for index in bodies.indices {
             bodies[index].body = system[index]
+            bodies[index].trail = trails[index]
         }
-        simulatedDays += simDt / 86_400
         recordSweep()
         resolvePredictionIfDue()
-
-        appendTrailPoints()
-        resolveCollisions()
+        pruneTrails()
     }
 
-    /// Trail points are dropped by distance traveled (~8 mm of room space).
-    private func appendTrailPoints() {
-        let spacing = 0.008 * displayToSim
-        for index in bodies.indices where bodies[index].id != heldID {
-            let position = bodies[index].body.position
-            if let last = bodies[index].lastTrailPosition,
-               simd_distance(last, position) < spacing { continue }
-            bodies[index].trail.append(position)
-            bodies[index].lastTrailPosition = position
-            let cap = trailLength.points
-            if bodies[index].trail.count > cap {
-                bodies[index].trail.removeFirst(bodies[index].trail.count - cap)
-            }
-        }
+    nonisolated private static func heaviestIndex(in system: [CelestialBody]) -> Int {
+        system.indices.max { system[$0].mass < system[$1].mass } ?? 0
     }
 
-    /// Bodies merge when their RENDERED spheres overlap (real radii are invisibly small);
-    /// the merge itself conserves real mass and momentum exactly.
-    private func resolveCollisions() {
-        var index = 0
-        while index < bodies.count {
-            var collided = false
-            for other in (index + 1)..<bodies.count {
-                let a = bodies[index], b = bodies[other]
-                if a.id == heldID || b.id == heldID { continue }
-                let distance = simd_distance(a.body.position, b.body.position) * simToDisplay
-                if distance < 0.85 * (a.displayRadius + b.displayRadius) {
-                    let merged = NBody.merged(a.body, b.body)
-                    let survivor = OrbitingBody(
-                        id: UUID(), body: merged,
-                        displayRadius: cbrt(pow(a.displayRadius, 3) + pow(b.displayRadius, 3)),
-                        trail: [], lastTrailPosition: nil
-                    )
-                    lastMergePosition = merged.position
-                    mergeNonce += 1
-                    emitSound(.boom, at: merged.position, volume: 0.9)
-                    let selectionWasInvolved = selectedID == a.id || selectedID == b.id
-                    bodies.remove(at: other)
-                    bodies[index] = survivor
-                    if selectionWasInvolved { selectedID = survivor.id }
-                    collided = true
-                    break
+    /// The first pair of free bodies inside their merge distance, if any.
+    nonisolated private static func overlappingPair(
+        system: [CelestialBody], softening: [Double], frozen: [Bool]
+    ) -> (Int, Int)? {
+        for i in 0..<max(system.count - 1, 0) where !frozen[i] {
+            for j in (i + 1)..<system.count where !frozen[j] {
+                if simd_distance(system[i].position, system[j].position) < softening[i] + softening[j] {
+                    return (i, j)
                 }
             }
-            if !collided { index += 1 }
+        }
+        return nil
+    }
+
+    /// Bodies merge when their rendered spheres overlap (real radii are invisibly small);
+    /// the merge itself conserves real mass and momentum exactly.
+    private func merge(_ index: Int, _ other: Int) {
+        let a = bodies[index], b = bodies[other]
+        let merged = NBody.merged(a.body, b.body)
+        let survivor = OrbitingBody(
+            id: UUID(), body: merged,
+            displayRadius: cbrt(pow(a.displayRadius, 3) + pow(b.displayRadius, 3)))
+        lastMergePosition = merged.position
+        mergeNonce += 1
+        emitSound(.boom, at: merged.position, volume: 0.9)
+        let selectionWasInvolved = selectedID == a.id || selectedID == b.id
+        bodies.remove(at: other)
+        bodies[index] = survivor
+        if selectionWasInvolved { selectedID = survivor.id }
+    }
+
+    // MARK: Trails — the trailing fraction of each body's own orbit
+
+    /// How far back a body's path is drawn, sim seconds: `OrbitTrail.fraction`
+    /// of its own period. Without a period (unbound, a binary, a body just
+    /// thrown) the circular period at its distance from the heaviest body
+    /// stands in; for the heaviest body itself, its heaviest partner's — the
+    /// star's own trail is its wobble about the barycentre.
+    func trailWindow(for orbiting: OrbitingBody) -> Double {
+        guard let reference = primaryBody else { return 0 }
+        if reference.id == orbiting.id {
+            guard let partner = bodies.filter({ $0.id != reference.id })
+                .max(by: { $0.body.mass < $1.body.mass }) else { return 0 }
+            return OrbitTrail.fraction * localPeriod(of: partner, about: reference)
+        }
+        if let period = orbitElements(for: orbiting.id)?.period {
+            return OrbitTrail.fraction * period
+        }
+        return OrbitTrail.fraction * localPeriod(of: orbiting, about: reference)
+    }
+
+    /// The circular period at the body's current distance from `reference`.
+    private func localPeriod(of orbiting: OrbitingBody, about reference: OrbitingBody) -> Double {
+        let r = max(simd_distance(orbiting.body.position, reference.body.position), 1)
+        return NBody.orbitalPeriod(semiMajorAxis: r,
+                                   centralMass: reference.body.mass + orbiting.body.mass,
+                                   gravitationalConstant: effectiveG)
+    }
+
+    /// Once per frame: each trail keeps exactly its window. Forward the tail
+    /// falls away; backwards the head does, so a reversed clock unwinds the path.
+    private func pruneTrails() {
+        let now = simulatedSeconds
+        for index in bodies.indices {
+            bodies[index].trail.prune(now: now, window: trailWindow(for: bodies[index]))
         }
     }
 
@@ -817,7 +972,8 @@ final class GravityLabModel {
         let distance = simd_length(offset)
         let relativeSpeed = simd_length(body.velocity - primary.body.velocity)
         let kinetic = NBody.kineticEnergy(of: body)
-        let potential = NBody.potentialEnergy(of: index, in: all, gravitationalConstant: effectiveG)
+        let potential = NBody.potentialEnergy(of: index, in: all, gravitationalConstant: effectiveG,
+                                              softening: softeningRadii)
         // One μ for the whole readout — G(M+m) everywhere, or semi-major axis and period belong to slightly different orbits.
         let twoBodyMass = primary.body.mass + body.mass
         let semiMajor = NBody.semiMajorAxis(
@@ -859,7 +1015,7 @@ final class GravityLabModel {
         sweepWindowStart = nil
         sweepHeldArc = []
         // reset() must restore every plate-backed flag — ResetCoverageTests reflects over Bools.
-        keplerSweepOn = true
+        keplerSweepOn = false
         sweepHeldArea = 0
         sweepWindowDays = 30.0
         // A settled ghost or a verdict about a deleted planet must not survive into a new system.
@@ -875,17 +1031,15 @@ final class GravityLabModel {
         gMultiplier = 1.0
         timeScale = 1.0
         isPaused = false
-        trailLength = .medium
         showVelocityVector = true
         showAccelerationVector = false
         showForceVector = true
-        showFieldParticles = false
-        // Grid opens with the module; m^(1/4) depth compression stays disclosed in the UI footnote.
-        showSpacetimeGrid = true
         showLagrangePoints = false
         lagrangeSecondaryID = nil
         playOrbitalChord = true
         simulatedDays = 0
+        worldsMade = 0
+        liveTrailsAtScrubEntry = nil
 
         // Full solar system from the start: real masses, real AU distances at 1 AU = 0.5 m.
         append(.sun, displayRadius: Self.displayRadius(for: .sun))
@@ -906,12 +1060,13 @@ final class GravityLabModel {
             inclination: 162 * .pi / 180,
             gravitationalConstant: effectiveG),
             displayRadius: Self.displayRadius(for: .comet))
-        // NOTHING is selected on arrival (2026-08-29). Selection drives the
-        // orbit ring, the data card, the v/a/F arrows AND the Kepler sweep
-        // readout — with Earth pre-selected the module opened wearing all
-        // four at once, stacked on the inner system. The quiet sky is the
-        // opening image; tap a planet and the room answers, the same "this
-        // one" grammar every other module teaches.
+        // The system has no net momentum, so nothing drifts across the room; the
+        // Sun starts on the origin and wobbles a few millimetres about the
+        // barycentre from there.
+        settleMomentum()
+        // Nothing is selected on arrival: selection drives the ring, the card,
+        // the arrows and the sweep readout, and the quiet sky is the opening
+        // image.
         selectedID = nil
         clearCapsule()
     }
@@ -919,8 +1074,10 @@ final class GravityLabModel {
 
 // MARK: - Time Capsule
 
-extension GravityLabModel: TimeCapsuleRecording {
-    /// The sky in sim units plus its clock. Trails are NOT snapshotted — never snapshot an unbounded array; they are rebuilt from the capsule under the live 8 mm spacing rule. `timeScale` and display layers stay out.
+extension OrbitalMechanicsModel: TimeCapsuleRecording {
+    /// The sky in sim units plus its clock. Trails are not snapshotted
+    /// (never an unbounded array); they are rebuilt from the capsule under
+    /// the live spacing rule. `timeScale` and display layers stay out.
     struct CapsuleSnapshot: Equatable {
         struct Body: Equatable {
             var id: UUID
@@ -948,6 +1105,13 @@ extension GravityLabModel: TimeCapsuleRecording {
     }
 
     func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
+        // The live trails at the moment the scrub began: sampled per substep,
+        // so finer than the capsule's per-frame record at a high clock. Kept
+        // until the room runs again and spliced under every rebuild.
+        if liveTrailsAtScrubEntry == nil {
+            liveTrailsAtScrubEntry = Dictionary(
+                uniqueKeysWithValues: bodies.map { ($0.id, $0.trail) })
+        }
         bodies = snapshot.bodies.map { recorded in
             var restored = OrbitingBody(id: recorded.id, body: recorded.body,
                                         displayRadius: recorded.displayRadius)
@@ -956,8 +1120,6 @@ extension GravityLabModel: TimeCapsuleRecording {
                let live = bodies.first(where: { $0.id == recorded.id }) {
                 restored.body = live.body
             }
-            restored.trail = recordedTrail(for: recorded.id, upTo: scrubTime)
-            restored.lastTrailPosition = restored.trail.last
             return restored
         }
         simulatedDays = snapshot.simulatedDays
@@ -968,24 +1130,46 @@ extension GravityLabModel: TimeCapsuleRecording {
         if let selectedID, !bodies.contains(where: { $0.id == selectedID }) {
             self.selectedID = nil
         }
+        rebuildTrails(atScrub: scrubTime)
     }
 
-    /// One body's trail rebuilt from recorded frames up to `time`, under live spacing/length rules.
-    private func recordedTrail(for id: UUID, upTo time: Double?) -> [SIMD3<Double>] {
-        guard let time, let span = capsule.span else { return [] }
-        let spacing = 0.008 * displayToSim
-        var trail: [SIMD3<Double>] = []
-        for frame in capsule.frames(in: span.lowerBound...time) {
-            guard let body = frame.snapshot.bodies.first(where: { $0.id == id })
-            else { continue }
-            let position = body.body.position
-            if let last = trail.last, simd_distance(last, position) < spacing {
-                continue
-            }
-            trail.append(position)
+    /// Every trail rebuilt for the restored instant under the live window and
+    /// chord rules: capsule frames for the part the live trails no longer
+    /// cover, the stashed live samples for the rest, then the window. Where
+    /// the recording does not reach back a whole window, the trail is as
+    /// long as the recording.
+    private func rebuildTrails(atScrub time: Double?) {
+        guard let time, let span = capsule.span else {
+            for index in bodies.indices { bodies[index].trail.clear() }
+            return
         }
-        let cap = trailLength.points
-        if trail.count > cap { trail.removeFirst(trail.count - cap) }
-        return trail
+        let now = simulatedSeconds
+        let floorRadius = Self.trailFloorDisplayRadius * displayToSim
+        let frames = capsule.frames(in: span.lowerBound...time)
+        for index in bodies.indices {
+            let id = bodies[index].id
+            let window = trailWindow(for: bodies[index])
+            let stashed = liveTrailsAtScrubEntry?[id]
+            let stashStart = stashed?.oldest?.time ?? .infinity
+            var trail = OrbitTrail()
+            for frame in frames {
+                let recorded = frame.snapshot.bodies
+                guard let body = recorded.first(where: { $0.id == id }),
+                      let heaviest = recorded.max(by: { $0.body.mass < $1.body.mass })
+                else { continue }
+                let at = frame.snapshot.simulatedDays * 86_400
+                guard at >= now - window, at < stashStart else { continue }
+                trail.record(time: at, position: body.body.position,
+                             reference: heaviest.body.position, floorRadius: floorRadius)
+            }
+            if let stashed, let heaviest = primaryBody {
+                for sample in stashed.samples where sample.time <= now {
+                    trail.record(time: sample.time, position: sample.position,
+                                 reference: heaviest.body.position, floorRadius: floorRadius)
+                }
+            }
+            trail.prune(now: now, window: window)
+            bodies[index].trail = trail
+        }
     }
 }

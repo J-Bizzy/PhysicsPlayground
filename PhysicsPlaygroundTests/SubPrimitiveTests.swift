@@ -2,20 +2,10 @@
 //  SubPrimitiveTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The 2026-08-05 consolidation pass folded three hand-rolled copies of
-//  the selection halo and three of the +/− sign glyph into shared
-//  builders. These tests pin the two behaviours the fold could have
-//  silently changed, in the house style: build the REAL entities and
-//  read the scene graph, because the variable a builder was handed is
-//  not what a wearer sees.
-//
-//  · The sign glyph now always builds BOTH strokes and disables the
-//    vertical for a minus (so the probe's polarity can flip live
-//    without rebuilding mid-pinch). A minus that still SHOWS two
-//    strokes would be a physics label lying about a sign.
-//  · A halo is decoration, never a target: hidden until selected, and
-//    carrying no collider — the SpatialScaleHandle law. A halo with a
-//    collider steals the pinch aimed at the thing it decorates.
+//  The shared selection halo and sign glyph builders: a glyph builds
+//  both strokes and disables the vertical for a minus (so a polarity
+//  can flip live), and a halo is decoration — hidden until selected,
+//  carrying no collider.
 //
 
 import XCTest

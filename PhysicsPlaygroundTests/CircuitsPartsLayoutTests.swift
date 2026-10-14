@@ -2,17 +2,9 @@
 //  CircuitsPartsLayoutTests.swift
 //  Physics Playground — app tests
 //
-//  The parts palette's placement, which is the one thing about it a Mac
-//  can check. Whether it LOOKS right needs a headset; whether a wearer
-//  can reach it, and whether it stands clear of the bench and of the
-//  furniture row beneath it, is arithmetic.
-//
-//  This file exists because the tray it replaced had no test of any
-//  kind, and its two placement bugs were both found by eye — once by
-//  arithmetic in a code comment, once by a screenshot showing the motor
-//  standing on the words "AC Source". Circuit Workshop is the last module
-//  to get a layout it can be held to; `FieldInstrumentLayout` and its
-//  tests are the pattern.
+//  The parts shelf's placement, which is the one thing about it a Mac
+//  can check: whether a wearer can reach it, whether it stays inside the
+//  frame, and whether it stands clear of the bench.
 //
 
 import XCTest
@@ -20,25 +12,6 @@ import simd
 @testable import PhysicsPlayground
 
 final class CircuitsPartsLayoutTests: XCTestCase {
-
-    // THESE TESTS DESCRIBED TWO FLANKS UNTIL 2026-08-08, and the layout
-    // has changed twice since — first to a right-hand block, then to a
-    // single scrolling column of six with the multimeter as a twelfth
-    // slot. The mirror, third-column and per-flank-overflow checks went
-    // with the arrangement they described.
-    //
-    // THE TWO THAT SURVIVED ARE THE TWO THAT MATTERED, and letting them
-    // lapse cost exactly what they were written to prevent. The new
-    // column shipped at z −0.55, which is 55.5° off axis against this
-    // module's own 48° limit — the SAME trade the deleted comment
-    // warned about in these words: the first palette "passed the reach
-    // test above with 3 cm to spare and still put half its labels off
-    // the edge of the screen, because it bought that reach by pulling
-    // the columns forward in z — which spends angle to buy distance."
-    //
-    // A test that describes an arrangement dies with the arrangement. A
-    // test that describes a CONSTRAINT should have been carried across
-    // and was not.
 
     /// Only the six on screen are checked, and that is the point: the
     /// rack slides so the window always occupies the top six positions,
@@ -51,7 +24,7 @@ final class CircuitsPartsLayoutTests: XCTestCase {
 
     // MARK: Reachable, and visible
 
-    /// YOUR ARM GETS THERE.
+    /// Your arm gets there.
     func testEveryVisibleSlotIsWithinReach() {
         for (index, slot) in windowSlots() {
             XCTAssertLessThanOrEqual(
@@ -64,9 +37,8 @@ final class CircuitsPartsLayoutTests: XCTestCase {
         }
     }
 
-    /// AND YOUR EYES DO, which is the binding constraint here and the
-    /// one that was let lapse. Reach is bought by pulling the column
-    /// forward; forward is paid for in angle.
+    /// And your eyes do, which is the binding constraint: reach is bought
+    /// by pulling the column forward, and forward is paid for in angle.
     func testEveryVisibleSlotIsInsideTheFrame() {
         for (index, slot) in windowSlots() {
             let angle = CircuitsPartsLayout.offAxisAngle(to: slot)
@@ -81,11 +53,8 @@ final class CircuitsPartsLayoutTests: XCTestCase {
         }
     }
 
-    /// The two limits are satisfied with room to spare, not scraped.
-    ///
-    /// A layout sitting exactly on a limit is one that the next change
-    /// breaks, and both of these have been scraped before: the reach
-    /// check once passed by 3 cm while the labels were off screen.
+    /// The two limits are satisfied with room to spare, not scraped: a
+    /// layout sitting exactly on a limit is one the next change breaks.
     func testTheWindowClearsBothLimitsWithMargin() {
         let worstReach = windowSlots().map {
             CircuitsPartsLayout.reach(to: $0.1)
@@ -102,7 +71,7 @@ final class CircuitsPartsLayoutTests: XCTestCase {
 
     // MARK: Coverage and shape
 
-    /// EVERY component kind stands somewhere. The failure this guards is
+    /// Every component kind stands somewhere. The failure this guards is
     /// silent and total: a kind in no list has no source in the room, so
     /// it is a part the bench can hold and nobody can make.
     func testEveryComponentKindHasASlot() {
@@ -140,16 +109,9 @@ final class CircuitsPartsLayoutTests: XCTestCase {
 
     // MARK: The rack against the build volume
 
-    /// EVERY SLOT CLEARS THE BUILD VOLUME BY THE MARGIN.
-    ///
-    /// The audit (P1-28) said this file "checks reach, angle, mirroring
-    /// and pitch — never a slot against the clamp box", and it was right:
-    /// the rack sat 0.10 m from a volume that ends at 0.70, inside the
-    /// 0.12 m `stationMargin`, and nothing said so. The consequence it
-    /// noticed — parts jumping inward at birth — is a symptom, and the
-    /// symptom is legitimate (the rack is furniture, the volume is where
-    /// circuits live, and the rule keeps them apart). The violation was
-    /// the gap.
+    /// Every slot clears the build volume by the margin: the shelf is
+    /// furniture, the volume is where circuits live, and the rule keeps
+    /// them apart.
     func testEveryRackSlotClearsTheBuildVolume() {
         let clamp = Float(CircuitsModel.buildHalfExtents.x)
         let margin = Float(InstrumentClearance.stationMargin)
@@ -164,7 +126,7 @@ final class CircuitsPartsLayoutTests: XCTestCase {
         }
     }
 
-    /// …AND STILL WITHIN REACH AND ON AXIS. Pushing the rack out to clear
+    /// …and still within reach and on axis. Pushing the rack out to clear
     /// the volume is the obvious repair and it spends the other two
     /// budgets; this is the one that says how much is left.
     func testTheRackStaysReachableAndOnAxis() {
@@ -186,15 +148,8 @@ final class CircuitsPartsLayoutTests: XCTestCase {
         }
     }
 
-    /// The pair can fail. Without this they are two budgets that happen
-    /// to be satisfied by whatever numbers are in the file.
-    ///
-    /// THE WITNESS IS RELATIVE, NOT ABSOLUTE. This asserted `0.80 - clamp
-    /// < margin` — the column's position until 2026-08-09 against a bench
-    /// half-width of 0.70, i.e. `0.10 < 0.12`. When the bench narrowed to
-    /// 0.60 on 2026-08-26 it read `0.20 < 0.12` and failed: the test had
-    /// baked in a bench width to make a point about a margin. A column
-    /// just inside the margin is the claim, whatever the bench is doing.
+    /// The pair can fail, and the witness is relative: a column just inside
+    /// the margin is the claim, whatever the bench width is.
     func testTheClearanceRuleWouldCatchATooCloseColumn() {
         let clamp = Float(CircuitsModel.buildHalfExtents.x)
         let margin = Float(InstrumentClearance.stationMargin)
@@ -210,12 +165,8 @@ final class CircuitsPartsLayoutTests: XCTestCase {
             "the shipped rack is inside the margin it is meant to clear")
     }
 
-    /// SIX ROWS FIT, AND SIX IS THE CEILING.
-    ///
-    /// The window was five because at x 0.82 a sixth row reached 1.246 m
-    /// against a 1.25 limit. Narrowing the bench let the rack come in to
-    /// 0.74 and bought the row back. This asserts BOTH halves, so "six"
-    /// is a derivation rather than a number somebody liked.
+    /// Six rows fit and six is the ceiling, asserted from both sides so
+    /// "six" is a derivation rather than a number somebody liked.
     func testTheSixthRowFitsAndASeventhWouldNot() {
         let viewer = SIMD3<Float>(InstrumentClearance.viewer)
         let margin = 1.23  // the "with margin" line the window tests use

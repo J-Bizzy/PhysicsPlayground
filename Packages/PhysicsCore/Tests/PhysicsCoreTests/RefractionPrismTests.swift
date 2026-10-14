@@ -5,7 +5,7 @@
 //  Snell's law, TIR, and the prism pinned to the textbook: exact
 //  refraction angles, a razor-sharp critical angle, mirror-equal
 //  reflection, Cauchy dispersion ordering, and — the flagship — a
-//  symmetric prism passage producing EXACTLY the minimum deviation
+//  symmetric prism passage producing exactly the minimum deviation
 //  formula δ = 2·asin(n·sin(A/2)) − A out of the raw trace.
 //
 
@@ -61,7 +61,7 @@ final class RefractionPrismTests: XCTestCase {
 
     /// Symmetric passage through a 60° prism at n = 1.5: the traced
     /// deviation equals 2·asin(n·sin 30°) − 60°, to a nano-radian.
-    /// The formula is never used by the tracer — it EMERGES.
+    /// The formula is never used by the tracer — it emerges.
     func testSymmetricPassageHitsMinimumDeviation() {
         let apexAngle = Double.pi / 3
         let n = 1.5

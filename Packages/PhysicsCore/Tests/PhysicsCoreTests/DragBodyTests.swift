@@ -98,18 +98,10 @@ final class DragBodyTests: XCTestCase {
         }
     }
 
-    /// No obstacle sphere may reach past the body's own silhouette.
-    ///
-    /// The smoke wraps the obstacle spheres, not the model, so a sphere
-    /// proud of the bodywork reads as an invisible bulge in mid-air —
-    /// air parting around nothing. This is the invariant the tuned
-    /// layouts exist to satisfy, and it is not obvious by eye: the first
-    /// pass at a "ring of small spheres" for the disc reached 1.1× its
-    /// own rim, and the cube's core sphere poked straight through all
-    /// six faces, which is precisely the bug the retune was meant to
-    /// remove. The sphere and the plane sit exactly ON their silhouettes
-    /// — deliberately, since for them the obstacle IS the body — so this
-    /// compares with a tolerance rather than a strict inequality.
+        /// No obstacle sphere may reach past the body's own silhouette: the
+        /// smoke wraps the spheres, not the model, so a proud sphere reads as
+        /// air parting around nothing. The sphere and the plane sit exactly on
+        /// their silhouettes, so this compares with a tolerance.
     func testObstacleSpheresStayInsideTheSilhouette() {
         let halfWidth = 0.1
         for body in DragBody.allCases {
@@ -124,7 +116,7 @@ final class DragBodyTests: XCTestCase {
         }
     }
 
-    /// The two bodies whose obstacle spheres ARE their geometry reach
+    /// The two bodies whose obstacle spheres are their geometry reach
     /// their silhouette exactly — a profile that fell short would let
     /// the smoke pass through the bodywork instead of around it.
     func testSphereAndFuselageFillTheirSilhouettes() {

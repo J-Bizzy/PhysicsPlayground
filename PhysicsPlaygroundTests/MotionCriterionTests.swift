@@ -2,25 +2,9 @@
 //  MotionCriterionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  ONE EASE, SO REDUCE MOTION CANNOT BE FORGOTTEN AGAIN.
-//
-//  The setting reached two of eight animated primitives. `Fade` and
-//  `PickupPulse` honoured it; `Bloom`, `SpatialPicker`, both banks,
-//  `Well` and `FrozenVectors` did not — and the tell is in one file and
-//  one frame, where the hub's terrace hairlines freeze mid-shimmer while
-//  the door signs directly above them park correctly. Nobody decided
-//  that. Each primitive hand-rolled `value += (target - value) * dt *
-//  rate` on the day it was written, and whether the author happened to
-//  remember was the whole mechanism.
-//
-//  A test that LISTED the eight would be that same act of attention, so
-//  this one bans the shape instead: an exponential ease written by hand
-//  anywhere in the design system or RenderKit fails the build, and
-//  `Motion.ease` — which snaps when the setting is on — is the only way
-//  to write one. Add a primitive tomorrow and it is covered tomorrow.
-//
-//  In the family of `PanelControlCriterionTests` (no `Slider` in a
-//  module) and `MaterialCanonCriterionTests` (no hand-rolled glass).
+//  One ease, so Reduce Motion cannot be forgotten again: an exponential
+//  ease written by hand anywhere in the design system or RenderKit
+//  fails the build, and `Motion.ease` is the only way to write one.
 //
 
 import XCTest
@@ -28,7 +12,7 @@ import XCTest
 
 final class MotionCriterionTests: XCTestCase {
 
-    /// Files allowed to contain the raw ease, because they ARE it.
+    /// Files allowed to contain the raw ease, because they are it.
     private let exempt: Set<String> = ["Motion.swift", "Fade.swift"]
 
     /// Where an animated primitive can live.
@@ -48,9 +32,7 @@ final class MotionCriterionTests: XCTestCase {
         return walker.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
     }
 
-    /// `min(dt * <rate>, 1)` is the signature of a hand-rolled
-    /// frame-rate-independent ease. It is exactly what the six
-    /// non-conforming primitives each wrote for themselves.
+    /// `min(dt * <rate>, 1)` is the signature of a hand-rolled ease.
     func testNoPrimitiveRollsItsOwnEase() throws {
         var offenders: [String] = []
         for root in searchRoots {

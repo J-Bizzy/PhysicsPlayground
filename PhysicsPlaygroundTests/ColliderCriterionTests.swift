@@ -2,46 +2,15 @@
 //  ColliderCriterionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  THE COLLIDER RULE, ENFORCED BY A TEST INSTEAD OF BY ATTENTION.
-//
-//  `DESIGN_SYSTEM.md` calls it absolute: *"A collider must never be
-//  larger than the thing it represents… an app-wide input outage was
-//  traced to one region-sized sphere."* The rule was written in
-//  2026-07-29 after that outage, restated in DECISIONS.md, quoted in
-//  `Well.makeSource`'s own comment — and violated at a dozen sites in
-//  every module, including a 52 cm sphere on a 12 mm plate that made
-//  the entire interior of the capacitor unpinchable.
-//
-//  It was violated everywhere because it was enforced nowhere. Every
-//  site is a hand-typed radius next to a hand-typed mesh, in a different
-//  file, written on a different day. A test that LISTED the sites would
-//  be the same act of attention that mis-sized them, so this one
-//  reflects: it builds a scene from each module and every design-system
-//  primitive, walks every `CollisionComponent` in it, and measures each
-//  shape against the visual bounds of the entity carrying it. Add a
-//  grabbable tomorrow and it is covered tomorrow.
-//
-//  THE MARGIN, and why it is two numbers rather than one.
-//
-//      allowed = max(visual × 1.15, visual + 0.03 m)
-//
-//  15% is the proportional allowance: a target you reach for should
-//  forgive a near miss. But 15% of a 13 mm circuit terminal is 2 mm,
-//  which is not a forgiving target, it is a smaller one — and the rule
-//  exists to stop colliders SHIELDING their neighbours, which a target
-//  the size of a fingertip does not do. So there is also a flat 30 mm
-//  (15 mm of reach per side), which is what `Well.makeSource` had
-//  already chosen for itself by hand, and the site gets whichever is
-//  kinder. The failure the rule is about — a sphere that swallows the
-//  object next to it — is orders of magnitude outside both.
-//
-//  WHAT THIS TEST CANNOT SEE. It measures a collider against its OWN
-//  entity, not against its neighbours, because spacing is a layout
-//  property and layout is what `FanLayoutTests` and the placement tests
-//  cover. A collider inside this margin can still overlap a neighbour
-//  that is genuinely touching it — Newton's cradle balls touch, so their
-//  colliders must. What it rules out is the case that broke things: a
-//  collider that reaches PAST a neighbour's centre.
+//  The collider rule, enforced by a test instead of by attention: an
+//  input-targetable collider must never be larger than the thing it
+//  represents, because hit-testing uses colliders and an oversized one
+//  shields its neighbours. This reflects over every module and every
+//  primitive, walking every `CollisionComponent` and measuring it
+//  against the visual bounds of the entity that carries it, with
+//  allowed = max(visual × 1.15, visual + 0.03 m). It measures a collider
+//  against its own entity, not its neighbours; spacing is a layout
+//  property covered elsewhere.
 //
 
 import XCTest
@@ -68,8 +37,6 @@ final class ColliderCriterionTests: XCTestCase {
         let allowed: Float
     }
 
-    /// Walks `root` and measures every collider against the visual
-    /// bounds of the entity that carries it.
     /// Colliders skipped because their entity was folded away when the
     /// scene was measured. Reported, never silently dropped.
     private var unmeasured: [String] = []
@@ -80,35 +47,16 @@ final class ColliderCriterionTests: XCTestCase {
 
         func walk(_ entity: Entity, path: String) {
             if let collision = entity.components[CollisionComponent.self] {
-                // IN WORLD METRES, not in the entity's own frame.
-                //
-                // Shielding is a property of the room, and the two
-                // differ wherever an entity is scaled — which is exactly
-                // where the pooled objects live. Gravity Lab's bodies
-                // and Projectiles' balls carry ONE authored collider on
-                // a sphere whose scale is set per instance, from 0.26×
-                // for a comet to 2×+ for a star. Measured locally, a
-                // single factor looks identical at every size; measured
-                // in the room, the same factor is 2 mm of reach on the
-                // comet and 10 cm of shielding on the star. The flat
-                // 30 mm allowance only means anything in metres.
+                // In world metres, not the entity's frame: pooled objects carry one
+                // authored collider on a per-instance scale, and the flat 30 mm
+                // allowance only means anything in metres.
                 let worldScale = entity.scale(relativeTo: nil)
                 let visual = entity.visualBounds(relativeTo: entity)
                 let visualExtents = visual.extents * worldScale
 
-                // A FOLDED INSTRUMENT IS NOT MEASURABLE, AND SAYING SO
-                // OUT LOUD IS THE POINT.
-                //
-                // The flat 30 mm allowance is in metres, so at a world
-                // scale of 0.001 — which is exactly what
-                // `FanLayout.placement` and `Bloom.layoutPetals` write
-                // for a closed fan — it becomes a local allowance of
-                // 30 m and the check passes whatever the collider is.
-                // Every scene below is deliberately ticked open before
-                // it is measured, so nothing currently hides here; this
-                // records the hole rather than leaving a future caller
-                // to measure a folded scene and read the silence as a
-                // pass.
+                // A folded instrument is not measurable: at a world scale of 0.001 the
+                // flat allowance becomes 30 m locally. Every scene below is ticked open
+                // before it is measured; this records the hole rather than passing.
                 if simd_reduce_min(worldScale) < 0.05 {
                     unmeasured.append(path)
                     for child in entity.children {
@@ -117,10 +65,8 @@ final class ColliderCriterionTests: XCTestCase {
                     }
                     return
                 }
-                // An entity with no mesh anywhere beneath it has nothing
-                // to be measured against. That is its own smell, but it
-                // is not this test's smell — a pure trigger volume is a
-                // legitimate thing to build.
+                // An entity with no mesh beneath it has nothing to be measured
+                // against; a pure trigger volume is legitimate.
                 let hasVisual = visualExtents.x.isFinite && visualExtents.y.isFinite
                     && visualExtents.z.isFinite
                     && simd_length(visualExtents) > 1e-5
@@ -132,10 +78,8 @@ final class ColliderCriterionTests: XCTestCase {
                                              ("y", visualExtents.y, extents.y),
                                              ("z", visualExtents.z, extents.z)] {
                             let allowed = max(v * proportionalMargin, v + flatMargin)
-                            // A tenth of a millimetre of slop. A target
-                            // sized to exactly `visual + reach` — which
-                            // is what `matchingVisualBoundsOf:` builds —
-                            // must not fail on the last bit of a Float.
+                            // A tenth of a millimetre of slop, so a target sized to exactly
+                            // `visual + reach` does not fail on the last bit of a Float.
                             if c > allowed + 1e-4 {
                                 found.append(Violation(path: path, axis: axis,
                                                        visual: v, collider: c,
@@ -179,10 +123,8 @@ final class ColliderCriterionTests: XCTestCase {
                 + "in \(label):\n\(report)", file: file, line: line)
     }
 
-    /// The criterion must be able to fail. A scene built deliberately
-    /// wrong — the exact shape of the capacitor plate defect, a 0.26 m
-    /// sphere on a thin slab — has to be caught, or every green run
-    /// below means nothing.
+    /// The criterion must be able to fail: the exact shape of the capacitor
+    /// plate defect, a 0.26 m sphere on a thin slab, has to be caught.
     func testTheCriterionCatchesTheDefectItWasWrittenFor() {
         let plate = ModelEntity(mesh: .generateBox(size: [0.012, 0.5, 0.5]),
                                 materials: [UnlitMaterial(color: .white)])
@@ -248,11 +190,11 @@ final class ColliderCriterionTests: XCTestCase {
         assertCollidersFit(renderer.root, "ElectricFields")
     }
 
-    func testGravityLabCollidersFit() {
-        let model = GravityLabModel()
-        let renderer = GravityLabRenderer()
+    func testOrbitalMechanicsCollidersFit() {
+        let model = OrbitalMechanicsModel()
+        let renderer = OrbitalMechanicsRenderer()
         for _ in 0..<3 { renderer.tick(model) }
-        assertCollidersFit(renderer.root, "GravityLab")
+        assertCollidersFit(renderer.root, "OrbitalMechanics")
     }
 
     func testProjectilesCollidersFit() {
@@ -278,45 +220,24 @@ final class ColliderCriterionTests: XCTestCase {
 
     // MARK: The gallery and the shell
 
-    /// The first surface every user sees, and the one the audit found a
-    /// 0.38 m sphere on: exhibits stand 0.36 m apart, so each one's
-    /// target reached 2 cm into its neighbour's.
+    /// The first surface every user sees: exhibits stand 0.36 m apart, so
+    /// each one's target must not reach into its neighbour's.
     func testGalleryCollidersFit() {
         let scene = HubScene()
         scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
         assertCollidersFit(scene.root, "Gallery")
     }
 
-    /// THE QUESTION THE RULE IS ACTUALLY ABOUT: does this collider
-    /// shield the thing next to it?
-    ///
-    /// Everything above measures a collider against its OWN entity, and
-    /// that has a blind spot which is not theoretical — it shipped.
-    /// `Grabbable.configureTouchTarget(_:matchingVisualBoundsOf:)`
-    /// derives a box from an entity's visual bounds, so a test that
-    /// measures that box against those same bounds passes by
-    /// construction, whatever the bounds happen to contain. The gallery
-    /// exhibit measured `pulser`, which contains the focus glow — a
-    /// 0.40 m pool of light on the puck — and produced a 0.43 m target
-    /// against a 0.36 m pitch: WIDER than the 0.19 m sphere it replaced,
-    /// with every self-measuring assertion green.
-    ///
-    /// Six exhibits in a row, 0.36 m apart, is the one place in the app
-    /// where identical grabbables stand at a known pitch, so it is the
-    /// one place this can be asked directly. Overlap here means the
-    /// exhibit you get is decided by hit order rather than by aim.
+    /// Does this collider shield the thing next to it? A target derived
+    /// from an entity's visual bounds passes a self-measuring test by
+    /// construction, whatever those bounds contain; the gallery's six
+    /// exhibits at a known pitch are the one place the question can be
+    /// asked directly.
     func testGalleryExhibitTargetsDoNotOverlapEachOther() {
         let scene = HubScene()
         scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
 
         // Every per-exhibit target in the gallery, as a world-space box.
-        //
-        // SIX, not twelve. Each puck also carried an ENTER plaque until
-        // 2026-08-09 — a second grabbable at the same 0.36 m pitch, and
-        // so subject to exactly this question; three of the six failed it
-        // on the first run and had to be moved forward off the puck. The
-        // plaques are gone (a tap on the exhibit now sends it to the pad
-        // instead), which leaves the exhibits alone at that pitch.
         let moduleIDs = Set(ModuleCatalog.all(appModel: AppModel()).map(\.id))
         var targets: [(id: String, min: SIMD3<Float>, max: SIMD3<Float>)] = []
 
@@ -356,15 +277,9 @@ final class ColliderCriterionTests: XCTestCase {
         }
     }
 
-    /// THE PALETTE'S PETAL ROW, at every count it could plausibly reach.
-    ///
-    /// This is the clock-bank defect's other home. The row's width was a
-    /// literal 0.22 m carrying a comment that it had been "widened from
-    /// 0.17 when the fourth petal arrived" — hand-tuned for a count, in
-    /// a list that grows. At 0.22 m a fifth petal pitches at 0.055 m and
-    /// a sixth at 0.044 m, against a 0.068 m touch target: both
-    /// unaimable, both looking perfectly reasonable in a screenshot.
-    /// Two petals were added on 2026-08-07.
+    /// The palette's petal row at every count it could plausibly reach: a
+    /// span hand-tuned for one count leaves a fifth or sixth petal
+    /// unaimable while looking fine in a screenshot.
     func testThePetalRowFitsEveryCountItCouldReach() {
         for count in 2...10 {
             let span = Palette.petalRowSpan(count: count)

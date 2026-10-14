@@ -2,29 +2,11 @@
 //  AtmosphereRampTests.swift
 //  PhysicsPlaygroundTests
 //
-//  THE ROOM CHANGES BRIGHTNESS OVER TIME, NOT IN A FRAME.
-//
-//  `AtmosphereCriterionTests` settled what the six labs' brightness values
-//  are, and its header says why it matters: "In a demo cut between labs it
-//  is the loudest difference between two rooms that are supposed to feel
-//  like one place." It could not reach the STEP between two of those
-//  values, because there wasn't one — `adoptModuleAtmosphere` assigned the
-//  level and `RoomDimmerView` wrote it straight into an OpacityComponent.
-//  Twice per lab visit, the wearer's actual living room jumped.
-//
-//  These tests are on `RoomDimmerView.step`, which is a pure Double →
-//  Double so none of this needs a scene, a headset, or a simulator.
-//
-//  ONE OF THEM IS A STANDING BAN. `testTheRampNeverLeavesTheInterval`
-//  encodes a design that was proposed, built toward, and rejected: using
-//  the dimming shell as a dip-to-dark transition medium, slamming the level
-//  toward 1.0 during a scene swap and back down after. It cannot work — the
-//  ramp texture caps alpha at 235/255 under `.transparent(opacity: 0.9)`,
-//  so even at 1.0 the shell is a heavy smoke rather than a curtain, and
-//  Gravity Lab's Sun reads straight through it — and it would transiently
-//  violate `AtmosphereCriterionTests.testAModuleThatDimsHeavilyAlsoMovesItsShellOut`
-//  on entry to all six modules. A comment saying "don't do that" is a
-//  comment. A swept property is a test.
+//  The room changes brightness over time, not in a frame. Tests on
+//  `RoomDimmerView.step`, a pure Double → Double.
+//  `testTheRampNeverLeavesTheInterval` is a standing ban on using the
+//  shell as a dip-to-dark transition: the ramp texture caps alpha, so a
+//  slam to 1.0 is heavy smoke rather than a curtain.
 //
 
 import XCTest
@@ -38,9 +20,8 @@ final class AtmosphereRampTests: XCTestCase {
     private let frame = 1.0 / 90.0
 
     override func setUpWithError() throws {
-        // Every assertion below is about easing. Under Reduce Motion the
-        // house ease jumps by contract, which is correct behaviour and is
-        // asserted separately in `testReduceMotionArrivesAtOnce`.
+        // Every assertion below is about easing; Reduce Motion jumps by
+        // contract and is asserted separately.
         try XCTSkipIf(UIAccessibility.isReduceMotionEnabled,
                       "Reduce Motion is on; the ramp is a jump by contract.")
     }
@@ -53,7 +34,7 @@ final class AtmosphereRampTests: XCTestCase {
         XCTAssertLessThan(next, 0.35, "and should not land in one frame")
     }
 
-    /// Gravity Lab's 0.85 against the hub's 0 is the largest step the app
+    /// Orbital Mechanics' 0.85 against the hub's 0 is the largest step the app
     /// can make, and the one that used to slam hardest.
     func testTheLargestStepInTheAppStillTakesTime() {
         let next = RoomDimmerView.step(shown: 0, toward: 0.85, dt: frame)
@@ -67,9 +48,8 @@ final class AtmosphereRampTests: XCTestCase {
         for _ in 0..<120 {
             shown = RoomDimmerView.step(shown: shown, toward: 0.35, dt: frame)
         }
-        // EXACT equality, not an accuracy window. `Motion.ease` snaps inside
-        // 0.004 precisely so a shell never sits fractionally open, and a
-        // test with a tolerance would not notice if that snap were lost.
+        // Exact equality: `Motion.ease` snaps inside 0.004 so a shell never
+        // sits fractionally open.
         XCTAssertEqual(shown, 0.35)
     }
 
@@ -90,12 +70,9 @@ final class AtmosphereRampTests: XCTestCase {
 
     // MARK: The standing ban
 
-    /// THE REJECTED DESIGN, ENCODED. The ramp may never leave the interval
-    /// between where it is and where it is going — no overshoot, and above
-    /// all no excursion toward dark on the way to a lighter target. Swept
-    /// rather than sampled, because the interesting failures are at the
-    /// edges: dt far larger than a frame, targets at both ends, and a step
-    /// that starts above its target.
+    /// The ramp may never leave the interval between where it is and where
+    /// it is going: no overshoot, no excursion toward dark. Swept, because
+    /// the failures are at the edges.
     func testTheRampNeverLeavesTheInterval() {
         let levels = [0.0, 0.01, 0.02, 0.35, 0.5, 0.85, 0.99, 1.0]
         let steps = [1.0 / 120, frame, 1.0 / 30, 0.1, 0.5, 1.0]

@@ -18,7 +18,7 @@ final class EllipticalOrbitTests: XCTestCase {
     private let au = CelestialBody.astronomicalUnit
     private let G = NBody.gravitationalConstant
 
-    /// e = 0 must reduce EXACTLY to the circular-orbit builder — the
+    /// e = 0 must reduce exactly to the circular-orbit builder — the
     /// standard "does the general case contain the special one" check.
     func testZeroEccentricityReducesToACircularOrbit() {
         let circular = CelestialBody.earth.onCircularOrbit(of: sun, distance: au)

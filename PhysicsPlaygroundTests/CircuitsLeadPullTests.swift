@@ -2,26 +2,10 @@
 //  CircuitsLeadPullTests.swift
 //  PhysicsPlaygroundTests
 //
-//  ONE WAY TO MAKE A WIRE: pinch a lead, pull it to another lead, let
-//  go. There were three — tap-tap, drag-to-wire, and magnetic
-//  auto-connect on release — on three thresholds that disagreed, and
-//  two of them could fire from the same event.
-//
-//  The defect that made this urgent is pinned by
-//  `testAPressThatDoesNotTravelIsATapAndWiresNothing`. The view
-//  carries one `DragGesture(minimumDistance: 0)`, so every TAP also
-//  ran the drag's `onChanged` and `onEnded`. A tap on a terminal armed
-//  `pendingTerminal` through the tap gesture AND, if any other
-//  terminal happened to be within the drag's 9 cm of the hand,
-//  completed a wire through the drag — in an order nothing defined. A
-//  tap could silently make a wire you did not ask for.
-//
-//  Both halves are gone: tap-tap wiring is deleted, and a press only
-//  becomes a pull once the hand has travelled.
-//
-//  A REFUSAL IS A THING THE BENCH DOES. `endLeadPull` returns what
-//  happened, and the refusal is known on the frame BEFORE the release
-//  — so what you preview is what you get, including the "no".
+//  One way to make a wire: pinch a lead, pull it to another lead, let
+//  go. A press only becomes a pull once the hand has travelled, so a tap
+//  wires nothing; and a refusal is known on the frame before the
+//  release, so what you preview is what you get.
 //
 
 import XCTest
@@ -63,10 +47,9 @@ final class CircuitsLeadPullTests: XCTestCase {
         XCTAssertNil(model.leadPull, "the pull must clear on release")
     }
 
-    /// The target is found from the LEAD TIP — the hand — at the same
-    /// `leadReach` a release uses. The old drag measured
-    /// hand-to-terminal at 0.09 while the release used 0.13, so the
-    /// band could snap to something the release then ignored.
+    /// The target is found from the lead tip at the same `leadReach` a
+    /// release uses, so the preview cannot snap to something the release
+    /// ignores.
     func testTheTargetIsTheNearestLeadWithinReach() {
         let model = CircuitsModel()
         let (battery, bulb) = bench(model)
@@ -111,7 +94,7 @@ final class CircuitsLeadPullTests: XCTestCase {
     // MARK: The refusal
 
     /// Landing on a lead already at the same potential is refused —
-    /// and the refusal is known BEFORE the release, so the room can
+    /// and the refusal is known before the release, so the room can
     /// show it while the hand is still deciding.
     func testALeadReleasedOnASameNetTerminalRefuses() {
         let model = CircuitsModel()
@@ -180,17 +163,14 @@ final class CircuitsLeadPullTests: XCTestCase {
 
     // MARK: THE RACE, pinned
 
-    /// A PRESS THAT DOES NOT TRAVEL IS A TAP, AND TAPS DO NOT WIRE.
-    ///
-    /// This is the defect the whole gesture rebuild exists for. The
-    /// model half of it: nothing wires unless a pull was actually
-    /// begun, and a press below `PressLatch.tapTravel` never begins
-    /// one.
+    /// A press that does not travel is a tap, and taps do not wire: nothing
+    /// wires unless a pull was begun, and a press below
+    /// `PressLatch.tapTravel` never begins one.
     func testAPressThatDoesNotTravelIsATapAndWiresNothing() {
         let model = CircuitsModel()
         let (battery, bulb) = bench(model)
         // Put the two leads 5 cm apart — well inside `leadReach`, so
-        // an accidental pull WOULD have wired them.
+        // an accidental pull would have wired them.
         model.move(id: bulb, to: lead(model, battery, 1)
                     + SIMD3(0.05 + CircuitsModel.terminalOffset, 0, 0))
         XCTAssertLessThan(simd_distance(lead(model, battery, 1), lead(model, bulb, 0)),
@@ -212,7 +192,7 @@ final class CircuitsLeadPullTests: XCTestCase {
         XCTAssertTrue(model.wires.isEmpty, "A tap made a wire.")
     }
 
-    /// And a press that DOES travel becomes a pull.
+    /// And a press that does travel becomes a pull.
     func testAPressThatTravelsBecomesAPull() {
         let model = CircuitsModel()
         let (battery, _) = bench(model)
@@ -228,10 +208,8 @@ final class CircuitsLeadPullTests: XCTestCase {
 
     // MARK: The zombie wire
 
-    /// Deleting the part a pull is coming FROM cancels the pull. Its
-    /// ancestor, `pendingTerminal`, named a terminal on a part that
-    /// could be deleted underneath it, and the next tap built a wire
-    /// onto a component that no longer existed.
+    /// Deleting the part a pull is coming from cancels the pull; a stale
+    /// pull once built a wire onto a component that no longer existed.
     func testDeletingThePartUnderAPullCancelsIt() {
         let model = CircuitsModel()
         let (battery, bulb) = bench(model)
@@ -292,10 +270,8 @@ final class CircuitsLeadPullTests: XCTestCase {
         XCTAssertTrue(model.wires.isEmpty)
     }
 
-    /// THE DOOR IS THE ONLY WAY IN. The pinch path never reads
-    /// `voiceWireSource`, so the race it replaced cannot come back
-    /// through it: arming by VoiceOver and then pulling a lead by hand
-    /// are independent, and the pull does not consume the arming.
+    /// The pinch path never reads `voiceWireSource`: arming by VoiceOver and
+    /// pulling a lead by hand are independent.
     func testThePinchPathNeverConsumesTheVoiceOverArming() {
         let model = CircuitsModel()
         let (battery, bulb) = bench(model)

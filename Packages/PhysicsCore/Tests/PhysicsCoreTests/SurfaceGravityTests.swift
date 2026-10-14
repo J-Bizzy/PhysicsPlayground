@@ -33,14 +33,10 @@ final class SurfaceGravityTests: XCTestCase {
         XCTAssertEqual(SurfaceGravity.moon.gravity, derived, accuracy: 0.02)
     }
 
-    /// Jupiter's quoted 24.79 is GM/R² at its EQUATORIAL radius, not at
-    /// the volumetric mean radius `CelestialBody` stores. Jupiter is
-    /// oblate enough (71,492 km across the equator vs a 69,911 km mean)
-    /// that which radius you use moves the answer by 4.6%.
-    ///
-    /// This test replaced one asserting the gap was centrifugal. It
-    /// wasn't: the shortfall is 1.13 m/s² and ω²R is 2.16, so rotation
-    /// flattens the planet here rather than cancelling the gravity.
+        /// Jupiter's quoted 24.79 is GM/R² at its equatorial radius, not the
+        /// volumetric mean radius `CelestialBody` stores; the planet is
+        /// oblate enough that the choice moves the answer by 4.6%. The gap is
+        /// not centrifugal: the shortfall is 1.13 m/s² and ω²R is 2.16.
     func testJupiterMatchesNewtonianGravityAtItsEquatorialRadius() {
         let equatorialRadius = 7.1492e7
         let atEquator = NBody.gravitationalConstant * CelestialBody.jupiter.mass

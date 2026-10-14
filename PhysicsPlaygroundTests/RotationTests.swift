@@ -2,37 +2,10 @@
 //  RotationTests.swift
 //  PhysicsPlaygroundTests
 //
-//  WHAT THE AUDIT GOT WRONG, recorded here because the next person to
-//  read P0-1 will otherwise go looking for a NaN that is not there.
-//
-//  `AUDIT_2026-08-07.md` P0-1 says of the Bloom grip's leader rod that
-//  "either a NaN transform propagates into the leader subtree or the rod
-//  lands at an arbitrary orientation". Measured on this platform,
-//  neither happens:
-//
-//      simd_quatf(from: [0,1,0], to: [0,-1,0])  ->  π about [0,0,-1]
-//      simd_quatf(from: [1,0,0], to: [ 1,0,0])  ->  identity
-//
-//  Apple's implementation resolves both degenerate ends deterministically
-//  and correctly maps `a` to `b`. So there is no NaN anywhere in the
-//  app today, and for the rotationally symmetric geometry at most of the
-//  thirteen sites — a cylinder rod, an arrow shaft, a compass needle —
-//  the arbitrary roll it picks is invisible.
-//
-//  Two things are nonetheless true and are what these tests pin:
-//
-//  1. The behaviour is UNSPECIFIED. `simd_quatf(from:to:)` documents no
-//     answer for opposed vectors; the app is reading a value the library
-//     does not promise, at thirteen sites, in every lab.
-//  2. At one site the roll it picks is VISIBLE and wrong.
-//     `CircuitsRenderer` aims a part along its model axis from a rest
-//     axis of [1,0,0]. Drag a resistor end-for-end — axis [-1,0,0] — and
-//     the library's choice is π about +Z, which lands the part UPSIDE
-//     DOWN rather than turned around. `testAHorizontalFlipKeepsUpPointingUp`
-//     is that case, and it fails against the bare library call.
-//
-//  So this is a robustness fix with one real visible defect inside it,
-//  not the app-wide NaN the audit describes.
+//  `simd_quatf(from:to:)` documents no answer for opposed vectors, and
+//  at one site the roll it picks is visibly wrong: a circuit part dragged
+//  end-for-end landed upside down rather than turned around. `rotation`
+//  is defined everywhere and keeps world up pointing up.
 //
 
 import XCTest
@@ -46,10 +19,8 @@ final class RotationTests: XCTestCase {
 
     // MARK: The criterion
 
-    /// A sweep over the whole domain INCLUDING both degenerate poles,
-    /// rather than a list of the pairs somebody thought of. The property
-    /// is the definition: the returned rotation must take `a` to `b`,
-    /// and must be a unit quaternion made of real numbers.
+    /// A sweep over the whole domain including both degenerate poles: the
+    /// returned rotation must take `a` to `b` and be a real unit quaternion.
     func testRotationTakesAToBEverywhereOnTheSphere() {
         var directions: [SIMD3<Float>] = [
             [0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1],
@@ -81,11 +52,8 @@ final class RotationTests: XCTestCase {
         }
     }
 
-    /// The one degenerate case whose ARBITRARY answer is visible in the
-    /// app. A circuit part dragged end-for-end must turn around, not
-    /// roll onto its back. `simd_quatf(from: [1,0,0], to: [-1,0,0])`
-    /// returns π about +Z and fails this; `rotation` picks the axis that
-    /// leaves world up alone.
+    /// The one degenerate case whose arbitrary answer is visible: a part
+    /// dragged end-for-end must turn around, not roll onto its back.
     func testAHorizontalFlipKeepsUpPointingUp() {
         let flip = rotation(from: [1, 0, 0], to: [-1, 0, 0])
         XCTAssertEqual(simd_distance(flip.act([1, 0, 0]), [-1, 0, 0]), 0, accuracy: 1e-4,
@@ -95,7 +63,7 @@ final class RotationTests: XCTestCase {
                        + "part-axis aim, and it is what the bare library call does")
     }
 
-    /// Degenerate INPUT, as opposed to a degenerate pair: a caller that
+    /// Degenerate input, as opposed to a degenerate pair: a caller that
     /// forgets to guard a zero-length vector must get identity, not NaN.
     func testAZeroLengthVectorYieldsIdentityRatherThanNaN() {
         for q in [rotation(from: .zero, to: [0, 1, 0]),
@@ -141,10 +109,8 @@ final class RotationTests: XCTestCase {
         }
     }
 
-    /// Directly overhead carries no yaw. The old code silently kept the
-    /// orientation it had; `nil` says so out loud, so a caller cannot
-    /// snap an instrument to an arbitrary facing when the reader leans
-    /// over it.
+    /// Directly overhead carries no yaw; `nil` says so, so a caller cannot
+    /// snap an instrument to an arbitrary facing.
     func testAReaderDirectlyOverheadCarriesNoYaw() {
         XCTAssertNil(yaw(facing: [0, 2, 0], from: [0, 1, 0]))
         XCTAssertNotNil(yaw(facing: [0.001, 2, 0], from: [0, 1, 0]))
@@ -152,12 +118,8 @@ final class RotationTests: XCTestCase {
 
     // MARK: The grip leader, end to end
 
-    /// The site the audit named: every Bloom grip hangs its value
-    /// callout straight down, so `Callout.rebuildLeader` aims a cylinder
-    /// from [0,1,0] to exactly [0,-1,0].
-    ///
-    /// This passes today too — see the header — but it is the contract
-    /// the promotion exists to hold, and nothing asserted it before.
+    /// Every Bloom grip hangs its callout straight down, so `Callout` aims a
+    /// cylinder from [0,1,0] to exactly [0,−1,0].
     func testAGripLeaderHangingStraightDownIsFiniteAndPointsDown() {
         let callout = Callout(color: .white, textSize: 0.019,
                               offset: SIMD3(0, -0.046, 0))

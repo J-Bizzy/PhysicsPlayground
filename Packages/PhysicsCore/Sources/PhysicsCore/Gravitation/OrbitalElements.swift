@@ -1,12 +1,12 @@
 //  OrbitalElements.swift — the conic a body is on now, as readout and as handle.
 //
-//  Two types on purpose: `OrbitalElements` is the READOUT (textbook a, e, i, Ω, ω, ν —
+//  Two types on purpose: `OrbitalElements` is the readout (textbook a, e, i, Ω, ω, ν —
 //  singular for circular/equatorial orbits, hence `degeneracy`); `ApsisFrame` is the
-//  HANDLE (p̂, ĥ, r_p, r_a, ν — vectors and distances only, nothing singular). Closed
-//  form both ways; pure geometry, NO Kepler's equation anywhere.
+//  Handle (p̂, ĥ, r_p, r_a, ν — vectors and distances only, nothing singular). Closed
+//  form both ways; pure geometry, no Kepler's equation anywhere.
 //
-//  FRAME: +Y up, orbits in xz (see CelestialBody); ŷ substitutes for the textbook ẑ.
-//  PROGRADE MEANS h ALONG +ŷ AND i = 0 — get that backwards and every orbit builds
+//  Frame: +Y up, orbits in xz (see CelestialBody); ŷ substitutes for the textbook ẑ.
+//  Prograde means h along +ŷ and i = 0 — get that backwards and every orbit builds
 //  retrograde while looking correct in a still frame. In-plane angles use the signed
 //  quadrant-safe form ∠(a, b; n̂) = atan2((a × b)·n̂, a·b) — no clamping, no lost quadrant.
 
@@ -23,7 +23,7 @@ public enum Apsis: String, Sendable, CaseIterable {
 
 // MARK: - Where the classical elements stop being defined
 
-/// Which classical ANGLES this orbit leaves undetermined — conventions, not errors;
+/// Which classical angles this orbit leaves undetermined — conventions, not errors;
 /// deterministic, so the round trip stays exact. Shape is `ConicKind`, independently.
 public enum OrbitDegeneracy: String, Sendable, Equatable, CaseIterable {
     /// Everything is determined.
@@ -51,7 +51,7 @@ public enum ConicKind: String, Sendable, Equatable, CaseIterable {
 public struct OrbitalElements: Sendable, Equatable {
     /// a, metres. `nil` at exactly parabolic, where it is infinite.
     public var semiMajorAxis: Double?
-    /// p = h²/μ, metres. ALWAYS finite — prefer it to `a` where a formula allows: the one size parameter no conic degenerates.
+    /// p = h²/μ, metres. Always finite — prefer it to `a` where a formula allows: the one size parameter no conic degenerates.
     public var semiLatusRectum: Double
     public var eccentricity: Double
     /// i, radians, 0…π from +ŷ: i = 0 prograde in xz, i = π retrograde.
@@ -94,9 +94,9 @@ public struct OrbitalElements: Sendable, Equatable {
     /// r_p = p/(1+e). Always positive, always finite.
     public var periapsisRadius: Double { semiLatusRectum / (1 + eccentricity) }
 
-    /// r_a = p/(1−e): +∞ on a parabola, NEGATIVE on a hyperbola — load-bearing, so that
+    /// r_a = p/(1−e): +∞ on a parabola, negative on a hyperbola — load-bearing, so that
     /// e = (r_a−r_p)/(r_a+r_p) and p = 2·r_p·r_a/(r_p+r_a) hold branch-free for all three
-    /// conics. Anything that wants to DRAW a far end should ask `hasApoapsis`.
+    /// conics. Anything that wants to draw a far end should ask `hasApoapsis`.
     public var apoapsisRadius: Double {
         let denominator = 1 - eccentricity
         guard abs(denominator) > 1e-12 else { return .infinity }
@@ -114,7 +114,7 @@ public struct OrbitalElements: Sendable, Equatable {
 
     // MARK: State → elements
 
-    /// Osculating elements from state RELATIVE TO THE FOCUS. Nil only for a radial
+    /// Osculating elements from state relative to the focus. Nil only for a radial
     /// trajectory (r × v = 0), where no orbital plane exists.
     public static func from(position r: SIMD3<Double>,
                             velocity v: SIMD3<Double>,
@@ -176,7 +176,7 @@ public struct OrbitalElements: Sendable, Equatable {
 
     // MARK: Elements → state
 
-    /// The state vector these elements describe, RELATIVE TO THE FOCUS.
+    /// The state vector these elements describe, relative to the focus.
     public func state() -> (position: SIMD3<Double>, velocity: SIMD3<Double>) {
         frame.state()
     }
@@ -264,7 +264,7 @@ public struct ApsisFrame: Sendable, Equatable {
         let eccentricityVector = simd_cross(v, h) / mu - r / distance
         let e = simd_length(eccentricityVector)
 
-        // Circular fallback differs from `OrbitalElements` ON PURPOSE: the body's own
+        // Circular fallback differs from `OrbitalElements` on purpose: the body's own
         // direction, not the node — these vectors place the drag beads on the planet.
         let periapsisHat = e < OrbitalElements.degeneracyTolerance
             ? r / distance
@@ -351,12 +351,12 @@ public struct ApsisFrame: Sendable, Equatable {
     // Pure function of a hand position — lives here so `swift test` runs it without a simulator.
 
     /// This orbit reshaped by a hand at `handOffset` (from focus, m) holding one bead while
-    /// the other stays at `otherRadius`. Well-posed because: (1) beads are UNLABELLED — the
+    /// the other stays at `otherRadius`. Well-posed because: (1) beads are unlabelled — the
     /// nearer of ρ/otherRadius is periapsis, labels swap smoothly at the circular crossing;
-    /// (2) the plane is PARALLEL-TRANSPORTED, not set — ĥ projected ⊥ the new apse line
+    /// (2) the plane is parallel-transported, not set — ĥ projected ⊥ the new apse line
     /// (in-plane drags bit-exact, out-of-plane the minimum rotation; holonomy is accepted);
-    /// (3) the body keeps its BEARING, not its ν. Degenerate hands (at the focus, on the
-    /// pole) are NO-OPS, never snaps.
+    /// (3) the body keeps its bearing, not its ν. Degenerate hands (at the focus, on the
+    /// pole) are no-OPS, never snaps.
     public func dragged(handOffset: SIMD3<Double>,
                         otherRadius: Double,
                         bodyDirection: SIMD3<Double>) -> ApsisFrame {
@@ -387,7 +387,7 @@ public struct ApsisFrame: Sendable, Equatable {
         let axis = result.periapsisDirection
         let tilt = simd_dot(orbitNormal, axis)
         if abs(tilt) < 1e-14 {
-            // Already perpendicular: keep it BIT-EXACT. Projecting + renormalising costs
+            // Already perpendicular: keep it bit-exact. Projecting + renormalising costs
             // ~an ulp per frame — a random walk that measurably tilts the plane over a
             // minute of in-plane dragging.
             result.orbitNormal = orbitNormal
@@ -415,7 +415,7 @@ public struct ApsisFrame: Sendable, Equatable {
 
     // MARK: Drawing
 
-    /// The conic as a polyline relative to the focus. Sampled uniformly in ECCENTRIC
+    /// The conic as a polyline relative to the focus. Sampled uniformly in eccentric
     /// anomaly, not ν: equal-ν steps facet the periapsis nose; equal-E spaces points
     /// evenly along the arc at any eccentricity, so 256 points serve e = 0 and e = 0.97 alike.
     public func sampled(count: Int = 256) -> [SIMD3<Double>] {

@@ -2,7 +2,7 @@
 //  EntityPool.swift
 //  RenderKit
 //
-//  Pooling contract: a fixed budget of entities built ONCE; updates only
+//  Pooling contract: a fixed budget of entities built once; updates only
 //  toggle isEnabled and touch transforms — nothing created per frame.
 //  The budget is the degrade knob (extra data is simply not shown), and
 //  each slot's Payload holds handles so updates never search the hierarchy.

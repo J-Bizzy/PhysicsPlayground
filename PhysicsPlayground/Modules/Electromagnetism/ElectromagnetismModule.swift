@@ -11,7 +11,7 @@ import simd
 
 @MainActor
 enum ElectromagnetismModule {
-    // Keys this bench's dismissed-hint flag and its notebook history.
+    // Keys this bench's notebook history.
     static let id = "electrostatics"
 
     static func descriptor(appModel: AppModel) -> ModuleDescriptor {
@@ -19,10 +19,8 @@ enum ElectromagnetismModule {
             id: id,
             title: "Electric Fields",
             shortTitle: "Fields",
-            blurb: "Place charges, trace the field lines they make, and ride a test charge through Coulomb's law.",
             icon: "bolt.fill",
             accent: DesignTokens.Palette.electrostaticsAccent,
-            firstRunHint: "Pull a charge out of the wells on your right — it is in your hand the moment it exists. Drag it anywhere and the field follows; tap it and its controls unfold around it. The switches on your left decide what else is in the room. visionOS will ask to use your room so the lab can stand in it.",
             // Opens part-dimmed: field lines are thin glowing filaments —
             // they need something to glow against.
             preferredDimming: 0.35,
@@ -33,9 +31,38 @@ enum ElectromagnetismModule {
                 AnyView(FieldSpaceView().environment(appModel.electromagnetismModel))
             },
             captureReadings: { readings(appModel: appModel) },
+            physicsNote: {
+                // 50 kT is a stage light, not a measurement — about a thousand
+                // times the strongest steady field ever built, needed to bend a
+                // 0.5 g ball visibly. The circle r = mv/qB is exact regardless.
+                appModel.electromagnetismModel.magneticFieldOn
+                    ? "B is fictional at this strength; the circle r = mv/qB is exact."
+                    : nil
+            },
+            adjustables: adjustables(appModel: appModel),
             timeScrub: .init(model: appModel.electromagnetismModel),
             reset: { appModel.electromagnetismModel.reset() }
         )
+    }
+
+    /// The two numbers the Physics box can turn: the plates' voltage and
+    /// the uniform B. The test charge's q stays on the probe's own ring.
+    static func adjustables(appModel: AppModel) -> [PhysicsAdjustable] {
+        let model = appModel.electromagnetismModel
+        // The box works in kV, kT and nC; the model in V, T and C.
+        func scaled(_ range: ClosedRange<Double>, by factor: Double) -> ClosedRange<Double> {
+            (range.lowerBound * factor)...(range.upperBound * factor)
+        }
+        return [
+            .init(id: "plateVoltage", label: "Plate voltage ΔV", unit: "kV",
+                  range: scaled(FieldModel.plateVoltageRange, by: 1e-3), decimals: 1,
+                  read: { model.plateVoltage / 1000 },
+                  write: { model.setPlateVoltage($0 * 1000) }),
+            .init(id: "uniformB", label: "Uniform field B", unit: "kT",
+                  range: scaled(FieldModel.magneticFieldRange, by: 1e-3), decimals: 0,
+                  read: { model.magneticFieldTesla / 1000 },
+                  write: { model.magneticFieldTesla = $0 * 1000 }),
+        ]
     }
 
     /// The readings this bench writes into the lab notebook.
@@ -47,6 +74,22 @@ enum ElectromagnetismModule {
                   PhysicsFormat.scientific(
                     model.charges.reduce(0) { $0 + $1.charge }), "C"),
         ]
+        // The test charge's own physics, while one is in the room: the field
+        // at it, the potential, the two force terms, and its motion.
+        if let readout = model.probeReadout {
+            rows.append(.init("Test charge q",
+                              "\(model.probeIsPositive ? "+" : "−")"
+                              + PhysicsFormat.fixed(model.probeChargeMagnitude * 1e9, decimals: 0),
+                              "nC"))
+            rows.append(.init("E at charge", PhysicsFormat.scientific(readout.fieldMagnitude), "N/C"))
+            rows.append(.init("Potential", PhysicsFormat.scientific(readout.potential), "V"))
+            rows.append(.init("Force qE", PhysicsFormat.scientific(readout.electricForce), "N"))
+            if model.magneticFieldOn {
+                rows.append(.init("Force qv×B", PhysicsFormat.scientific(readout.magneticForce), "N"))
+            }
+            rows.append(.init("Acceleration", PhysicsFormat.fixed(readout.acceleration), "m/s²"))
+            rows.append(.init("Speed", PhysicsFormat.fixed(readout.speed), "m/s"))
+        }
         if let selected = model.selectedCharge {
             rows.append(.init("Selected charge",
                               PhysicsFormat.scientific(selected.charge), "C"))

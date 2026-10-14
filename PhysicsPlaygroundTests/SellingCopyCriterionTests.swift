@@ -2,24 +2,11 @@
 //  SellingCopyCriterionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  "Deleting a feature is not done until nothing in the repository
-//  still sells it" (DECISIONS.md, 2026-08-02 — learned when six places
-//  went on promising five-pendulum resonance the day after its function
-//  was deleted). The 2026-08-03 removals repeated the pattern: the
-//  README and the App Store copy sold the Foucault rig, the Gauss flux
-//  surface and the positron test particle for two days after all three
-//  left the app, including two screenshot slots staged with launch
-//  arguments that no longer exist.
-//
-//  So the rule becomes a test, in the house style: it closes the CLASS.
-//  Scope is exactly the two SELLING surfaces — README.md and
-//  docs/APP_STORE.md. DECISIONS.md, ON_DEVICE_TESTS.md and the git
-//  history legitimately record removed features by name and are
-//  deliberately NOT scanned; history is where those names belong.
-//
-//  If a banned name reappears here it is one of two things: the feature
-//  came back (delete its line below, in the same commit), or the copy
-//  rotted again (fix the copy). Either way the build says so.
+//  Deleting a feature is not done until nothing in the repository still
+//  sells it. Scoped to the two selling surfaces, README.md and
+//  docs/APP_STORE.md; DECISIONS.md and the device script legitimately
+//  record removed features by name. A banned name reappearing means the
+//  feature came back (delete its line) or the copy rotted (fix the copy).
 //
 
 import XCTest
@@ -39,24 +26,9 @@ final class SellingCopyCriterionTests: XCTestCase {
         "next step",    // the experiments system's affordance (2026-08-09)
     ]
 
-    // WHAT IS DELIBERATELY *NOT* ON THAT LIST, and why — because the
-    // obvious next entries are both wrong, and the next person to audit
-    // this file will reach for them (2026-08-09).
-    //
-    // "experiment" — the experiments SYSTEM was deleted, but the word is
-    // ordinary English and the copy uses it that way ("nothing in it is
-    // an experiment"). Matching is case-insensitive, so banning the
-    // feature's name also bans the noun. A criterion that fails on fair
-    // copy gets weakened by whoever hits it next, and a weakened
-    // criterion is worse than none.
-    //
-    // "streak" — NOT a removed feature. The projectile hoop streak is
-    // live (`KinematicsModel.streak`). Banning it would forbid selling
-    // something that ships. The experiments system had a streak too, and
-    // the collision of names is the whole trap.
-    //
-    // The rule this leaves: ban names that can only mean the dead
-    // feature. "next step" qualifies; a common noun never does.
+    // Deliberately not on that list: "experiment" is ordinary English the
+    // copy uses, and "streak" is a live feature (the hoop streak). Ban only
+    // names that can mean nothing but the dead feature.
 
     private func repositoryRoot() throws -> URL {
         let thisFile = URL(fileURLWithPath: #filePath)

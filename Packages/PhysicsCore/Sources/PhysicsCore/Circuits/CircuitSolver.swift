@@ -37,8 +37,8 @@ public struct CircuitElement: Sendable, Equatable {
 
 public enum CircuitSolver {
     public static let switchResistance = 1e-3
-    /// Tiny per-node conductance to ground so unwired islands stay solvable. PUBLIC because it is a
-    /// noise FLOOR: every open element leaks voltage × this, so any "is current flowing" threshold must derive from it.
+    /// Tiny per-node conductance to ground so unwired islands stay solvable. Public because it is a
+    /// noise floor: every open element leaks voltage × this, so any "is current flowing" threshold must derive from it.
     public static let leakConductance = 1e-9
 
     /// Smallest current that counts as "live" given the driving voltage — 10× the leak floor.
@@ -232,7 +232,7 @@ public enum CircuitSolver {
 
     // MARK: Resistor color code (the EE garnish)
 
-    /// Real 4-band resistor code: two digit indices 0–9 plus a SIGNED multiplier exponent
+    /// Real 4-band resistor code: two digit indices 0–9 plus a signed multiplier exponent
     /// (−1 = gold, ×0.1, needed for 1–9.9 Ω). nil out of range.
     public static func colorBands(ohms: Double) -> (digit1: Int, digit2: Int, multiplier: Int)? {
         guard ohms >= 1, ohms < 1e11 else { return nil }

@@ -4,11 +4,9 @@
 //
 //  The room-scale immersive scene. Drags route by entity name through a
 //  `RelativeDrag`: the launcher body (move it), the aim bead (point it),
-//  any ball (grab and THROW — release velocity comes from the hand's
+//  any ball (grab and throw — release velocity comes from the hand's
 //  motion), and any hoop (place it). The flight clock is
-//  SceneEvents.Update. ("Manipulation events" here named RenderKit's
-//  `ManipulationRouter`, which never had a caller and was deleted on
-//  2026-08-03.)
+//  SceneEvents.Update.
 //
 
 import PhysicsCore
@@ -25,22 +23,17 @@ struct KinematicsSpaceView: View {
     /// `onChanged`.
     @State private var pressedBall = PressLatch<BallPress>()
 
-    /// A press on a ball in flight — identity only. Where the ball IS
+    /// A press on a ball in flight — identity only. Where the ball is
     /// is read at promotion, not here; see `PressLatch`'s header.
     struct BallPress: Sendable {
         let id: UUID
         let name: String
     }
     @State private var bloom = Bloom()
-    /// Whether the launcher's ring is open. A SELECTION, not a model flag:
-    /// it stays out of `reset()`, out of the capsule snapshot and out of
-    /// the `ResetCoverageTests` sweep, the same reasoning as Circuits'
-    /// `highlightedNet`. The ring folded by tap from 2026-09-01; until
-    /// then `syncBloom` passed `revealTarget: 1` every frame and the
-    /// launcher was the one object in the app whose ring never closed —
-    /// against the design system's "unfolded by tap, never gaze". Only
-    /// the launch-speed grip lives behind the tap; the aim bead is the
-    /// renderer's own sibling entity and stays reachable folded.
+    /// Whether the launcher's ring is open. A selection, not a model flag:
+    /// out of `reset()`, the snapshot and the `ResetCoverageTests` sweep.
+    /// The ring folds by tap; only the launch-speed grip lives behind it,
+    /// and the aim bead stays reachable folded.
     @State private var ring = RingState()
     /// The one id this module's ring can hold for the launcher — there is
     /// one launcher; hoops use their own ids.
@@ -51,36 +44,36 @@ struct KinematicsSpaceView: View {
     static func massRailCenter(launcher: SIMD3<Double>) -> SIMD3<Float> {
         SIMD3<Float>(launcher) + SIMD3(0, -0.16, 0)
     }
-    /// Which ball you are throwing, chosen in the room instead of from a
-    /// menu on a card. A golf ball and a table-tennis ball are 17× apart
-    /// in mass and behave nothing alike in air, so this is the module's
-    /// most consequential choice — and it was the one hidden behind a
-    /// collapsed section.
+    /// Which ball you are throwing, chosen in the room. A golf ball and a
+    /// table-tennis ball are 17× apart in mass and behave nothing alike in
+    /// air.
     @State private var ballPicker = SpatialPicker(
         accessibilityNoun: "Ball",
-        // `.custom` was filtered out until 2026-09-01; its mass rail hangs
-        // under the launcher while it is the pick.
         choices: KinematicsModel.ProjectileKind.allCases
             .map {
                 PickerChoice(id: $0.rawValue, label: $0.displayName,
                              symbol: KinematicsSpaceView.symbol(for: $0))
-            })
+            },
+        layout: KinematicsSpaceView.ballFanLayout)
+
+    /// The ball fan opens above and to the right of the launcher, tighter
+    /// than the house default. At the default 150° straight above it, its
+    /// first disc stood 6° from the world row's Jupiter, nearer and in
+    /// front of it from a standing wearer, so a pinch for a table-tennis
+    /// ball could land on Jupiter (2026-10-14).
+    static let ballFanLayout = FanLayout(span: 120 * .pi / 180, reach: 0.22)
+    static let ballFanOffset = SIMD3<Float>(0.10, 0.24, 0)
     /// The two answers to "which arc reaches this hoop", as a fan opened
-    /// from the hoop's Aim petal (2026-09-01) — a momentary N-way choice
-    /// is a fan, never a cycle button, and the hoop's ring already holds
-    /// its three petals.
+    /// from the hoop's Aim petal.
     @State private var aimPicker = SpatialPicker(
         accessibilityNoun: "Arc",
         choices: [
             PickerChoice(id: "low", label: "Low arc", symbol: "arrow.down.right"),
             PickerChoice(id: "high", label: "High arc", symbol: "arrow.up.right"),
         ])
-    /// The world you are throwing on, as four discs.
-    ///
-    /// Zero-g is in this bank and NOT in Pendulums' — a pendulum in
-    /// zero-g does not swing, so there is no period to show, whereas a
-    /// projectile in zero-g flies dead straight and the straight line IS
-    /// the lesson. Same object, same grammar, one more choice.
+    /// The world you are throwing on, as four discs. Zero-g is here and not
+    /// in Pendulums': a projectile in zero-g flies dead straight, and the
+    /// straight line is the lesson.
     @State private var worldPicker = SpatialPicker(
         accessibilityNoun: "World",
         choices: KinematicsModel.gravityPresets.map {
@@ -92,17 +85,12 @@ struct KinematicsSpaceView: View {
     /// g between and beyond the worlds — including 0, which is why the
     /// range starts there rather than at the rail's usual floor.
     @State private var gravityTrack: SpatialTrackControl?
-    /// Wind. Only exists while the air does: `SpatialTrackControl` gained
-    /// an `isEnabled` check during the Electric Fields pass precisely so
-    /// a hidden rail stops writing, and this is its first user — a drag
-    /// already in flight when air resistance goes off must not keep
-    /// setting a wind speed nothing is applying.
+    /// Wind. Only exists while the air does: a drag already in flight when
+    /// air resistance goes off must not keep setting a wind nothing applies.
     @State private var windTrack: SpatialTrackControl?
-    /// The custom ball's mass, on a rail UNDER THE LAUNCHER — the thing
-    /// that fires it — present only while the fan says Custom, the way
-    /// the wind rail exists only while the air does (2026-09-01). A rail
-    /// rather than a ring grip: one grip per ring is the vocabulary's
-    /// ceiling and mass has no extent of its own.
+    /// The custom ball's mass, on a rail under the launcher, present only
+    /// while the fan says Custom. A rail rather than a ring grip: one grip
+    /// per ring is the ceiling.
     @State private var massTrack: SpatialTrackControl?
     /// Whether the room's walls are real, and whether the air is.
     @State private var layers: SpatialLayerBank?
@@ -111,45 +99,30 @@ struct KinematicsSpaceView: View {
     /// the launcher stops being the only way a ball enters the room.
     @State private var wells: Well?
 
-    // An instrument wall LEFT of the launcher's home, at its depth —
-    // never in the firing line (the launcher opens at x = −0.6 down −z).
-    // It does NOT ride the launcher: `SpatialTrackControl.adjust(hand:)`
-    // measures against `root.position`, so a carried rail would shift its
-    // own mapping mid-drag.
-    //
-    // ONE COLUMN, because three constraints meet and only two can hold
-    // for anything outboard of the rails: reach (≤ 1.25 m), off-axis
-    // (≤ 48°) and the firing line. Depth is set by the ANGLE, not reach:
-    // z −0.94 holds 43.8° and still brings every instrument inside 1.25 m.
-    // Order top down: ball, world, its g, its wind, then the room's
-    // material — the well leads because a small box's near face is far.
+    // An instrument wall left of the launcher's home, at its depth — never
+    // in the firing line, and not riding the launcher (a carried rail would
+    // shift its own mapping mid-drag). One column, because reach, off-axis
+    // and the firing line leave room for nothing outboard; z −0.94 holds
+    // 43.8° and every instrument inside 1.25 m.
     private static let wallX: Float = -0.90
     private static let wallZ: Float = -0.94
 
-    /// Internal since 2026-08-09 so the reach criterion can measure it.
-    ///
-    /// TWO MOUTHS ON THE WELL ROW since 2026-09-01 — the ball inboard,
-    /// the hoop outboard — at the pitch Electric Fields' four mouths
-    /// share (0.095), centred on the column's x. The row is the only
-    /// place a second mouth fits: sideways toward the launcher is the
-    /// firing line, further outboard fails reach (√(1.06² + 0.94²) is
-    /// 1.41 m before any height), and a sixth row would push the bank
-    /// below knee height. Measured, not reasoned: the hoop mouth's near
-    /// face is 1.20 m from a standing viewer against the 1.25 limit, and
-    /// the ball mouth's inboard edge stays 0.15 m clear of the launcher's
-    /// line — `InstrumentReachCriterionTests` holds both.
-    static let wellAnchor = SIMD3<Float>(wallX + 0.0475, 1.70, wallZ)
-    /// The hoop's mouth: a target you make, beside the ball you throw at
-    /// it. Hoops are MATERIALS, not instruments — pulled from a well like
-    /// a ball or a magnet, nothing standing at rest, which is the answer
-    /// to the 2026-07-29 clutter objection that put them in a mothball.
-    static let hoopWellAnchor = SIMD3<Float>(wallX - 0.0475, 1.70, wallZ)
+    /// The ball's mouth, inboard on the well row; the hoop's is outboard.
+    /// The row is the only place a second mouth fits: toward the launcher
+    /// is the firing line, further outboard fails reach, a sixth row falls
+    /// below the knee. The pitch is 0.13, wider than Electric Fields'
+    /// 0.095, because these previews are larger.
+    static let wellAnchor = SIMD3<Float>(wallX + 0.065, 1.70, wallZ)
+    /// The hoop's mouth, beside the ball you throw at it. Hoops are
+    /// materials, not instruments: pulled from a well, nothing standing at
+    /// rest.
+    static let hoopWellAnchor = SIMD3<Float>(wallX - 0.065, 1.70, wallZ)
     static let worldsAnchor = SIMD3<Float>(wallX, 1.50, wallZ)
     static let gravityCenter = SIMD3<Float>(wallX, 1.30, wallZ)
     static let windCenter = SIMD3<Float>(wallX, 1.10, wallZ)
     static let bankAnchor = SIMD3<Float>(wallX, 0.90, wallZ)
-    /// Unchanged: the wall's bearing from a standing viewer is 43.8°,
-    /// which is where it was, so the angle it is turned to should be too.
+    /// The wall's bearing from a standing viewer is 43.8°, so that is the
+    /// angle it is turned to.
     private static let instrumentNormal = SIMD3<Float>(0.42, 0, 0.91)
 
     @Environment(AppModel.self) private var appModel
@@ -159,20 +132,13 @@ struct KinematicsSpaceView: View {
             let renderer = KinematicsRenderer()
             renderer.onObjectTap = { handleObjectTap(on: $0) }
             content.add(renderer.root)
-            // ARRIVES, NEVER APPEARS. Disabled here and raised by
-            // `Fade.tick` below, so the apparatus resolves into the room
-            // instead of being there between one frame and the next.
+            // Disabled here and raised by `Fade.tick`, so the apparatus arrives
+            // rather than appears.
             renderer.root.isEnabled = false
 
-            // THE WELCOME SHOT REACHES THE SECOND VISIT. `reset()` ends with
-            // `fire()` and calls it "one shot already in the air", which is
-            // right — but the model is retained on `AppModel`, so it fired
-            // once per PROCESS and every later entry opened onto a dead
-            // range. This is the same shot at the moment it was always meant
-            // for, not a new behaviour.
-            //
-            // Guarded on an empty range rather than calling `reset()`, which
-            // would throw away whatever the wearer had set up.
+            // The welcome shot on every entry: the model is retained on `AppModel`,
+            // so `reset()`'s shot fires once per process. Guarded on an empty range
+            // rather than calling `reset()`, which would discard the wearer's setup.
             if model.flights.isEmpty { model.fire() }
 
             renderer.root.addChild(bloom.root)
@@ -202,11 +168,8 @@ struct KinematicsSpaceView: View {
             let bank = SpatialLayerBank(
                 accent: UIColor(DesignTokens.Palette.kinematicsAccent),
                 layers: [
-                    // Neither of these draws anything. Both change what
-                    // the room IS: whether its walls stop a ball, and
-                    // whether its air does. The bank carries them because
-                    // they are still labelled discrete choices, and the
-                    // labels say what they do rather than what is shown.
+                    // Neither draws anything; both change what the room is — whether its
+                    // walls stop a ball and whether its air does.
                     .init(id: "walls", label: "Walls bounce",
                           symbol: "square.dashed",
                           isOn: { model.respectRoomWalls },
@@ -256,14 +219,10 @@ struct KinematicsSpaceView: View {
             renderer.root.addChild(mass.root)
             massTrack = mass
 
-            // The ball well, on the instrument wall under the switch
-            // bank — out of the firing line with the rest of the
-            // furniture, and deliberately NOT riding the launcher. A
-            // ball pulled from it is born at the fingertips, staged and
-            // inert, and rides the same grab/hold/release path a caught
-            // ball does — so throwing it is the throw the module
-            // already knows (owner, 2026-08-04: the launcher used to be
-            // the only way to get a ball at all).
+            // The ball well, on the instrument wall, out of the firing line and not
+            // riding the launcher. A ball pulled from it is born at the fingertips,
+            // staged and inert, and rides the same grab/hold/release path a caught
+            // ball does.
             let sources = Well([
                 .init(name: "Ball",
                       tint: UIColor(DesignTokens.Palette.kinematicsAccent),
@@ -272,17 +231,13 @@ struct KinematicsSpaceView: View {
                       position: Self.wellAnchor,
                       spawn: { point in
                           let id = model.spawnBall(at: point)
-                          // Already in the hand: grabbing it here is
-                          // what arms the throw sampler, so letting go
-                          // with a moving hand throws and letting go
-                          // still just hangs it in the air.
+                          // Already in the hand: grabbing it here arms the throw sampler, so
+                          // letting go with a moving hand throws.
                           model.grabBall(id: id)
                           return id
                       }),
-                // The hoop (2026-09-01). Born at the hand and carried by
-                // the same gesture — `apply(drag:)` already routes a
-                // ring's id to `moveRing`. Nil at the budget of three
-                // fades the mouth in refusal.
+                // The hoop: born at the hand and carried by the same gesture; nil at
+                // the budget fades the mouth in refusal.
                 .init(name: "Hoop",
                       tint: DesignTokens.Palette.targetUI,
                       label: "Add hoop",
@@ -300,7 +255,7 @@ struct KinematicsSpaceView: View {
                 ballPicker.toggle()
             }
             // `-kinRing 1` opens the launcher's ring — folded by default
-            // since 2026-09-01, and the simulator cannot tap the launcher.
+            // and the simulator cannot tap the launcher.
             if UserDefaults.standard.bool(forKey: "kinRing") {
                 ring.openID = Self.launcherRingID
             }
@@ -343,7 +298,7 @@ struct KinematicsSpaceView: View {
             if UserDefaults.standard.bool(forKey: "kinAir") {
                 model.airResistance = true
             }
-            // `-kinGravity 1.62` moves the g rail's bead AND lights the
+            // `-kinGravity 1.62` moves the g rail's bead and lights the
             // Moon disc — a value, not a flag, because a bead parked at
             // its default proves nothing about the mapping behind it.
             let forcedGravity = UserDefaults.standard.object(forKey: "kinGravity")
@@ -370,47 +325,34 @@ struct KinematicsSpaceView: View {
             // the model applies the slow-motion scale and pause).
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
-                    // The lab's own arrival and departure, on the shell's
-                    // one flag. `Fade.tick` settles to a no-op — it drops its
-                    // clock and its OpacityComponent once landed — so this
-                    // costs one comparison for all the frames that are not a
-                    // transition.
+                    // The lab's arrival and departure, on the shell's one flag.
                     if let renderer {
                         Fade.tick(renderer.root, visible: !appModel.isDeparting,
                                   duration: AppModel.departure)
                     }
-                    // Detected walls (from the SHARED room session) flow
-                    // into the physics. Everything the room hands the model
-                    // is TRANSLATED INTO MODULE SPACE first: model
-                    // coordinates render under `renderer.root`, which
-                    // carries the lab-placement offset, so raw world walls
-                    // are wrong by exactly that offset once the lab moves.
+                    // Everything the room hands the model is translated into module space
+                    // first: model coordinates render under `renderer.root`, which carries
+                    // the lab-placement offset.
                     let placement = SIMD3<Double>(appModel.labPlacement.offset)
                     if appModel.room.hasScannedRoom {
-                        // Detected walls backed by the room's boundary
-                        // box, so a ball ALWAYS bounces at the room's
-                        // edge — including walls never looked at, and
-                        // the ceiling. The bounds also feed the
-                        // containment clamp: no escape, ever.
+                        // Detected walls backed by the room's boundary box, so a ball always
+                        // bounces at the room's edge, ceiling included. The bounds also feed
+                        // the containment clamp.
                         model.roomWalls = appModel.room.collisionWalls
                             .map { $0.translated(by: -placement) }
                         model.roomBounds = appModel.room.bounds
                             .translated(by: -placement)
                     }
-                    // Hands are things a ball bounces off (2026-09-02):
-                    // every tracked joint with the speed it is moving at,
-                    // in module space like the walls.
+                    // Hands are things a ball bounces off: every tracked joint with its
+                    // speed, in module space.
                     model.handStrikes = appModel.room.handStrikes.map { sphere in
                         var moved = sphere
                         moved.center -= placement
                         return moved
                     }
                     model.step(dt: event.deltaTime)
-                    // A ball reaching an open hand is caught. Device-only
-                    // (the simulator reports no fingertips); fingertips
-                    // cross into module space like the walls do. A hand
-                    // moving faster than `swatSpeed` is swinging, not
-                    // waiting — it swats (above) rather than catching.
+                    // A ball reaching an open hand is caught (device-only). A hand faster
+                    // than `swatSpeed` swats instead.
                     let tips = appModel.room.fingertips
                     let tipVelocities = appModel.room.fingertipVelocities
                     let waiting = tips.indices.filter { index in
@@ -423,10 +365,8 @@ struct KinematicsSpaceView: View {
                                   nearestHand: appModel.room.nearestFingertip(
                                     to: Self.bankAnchor))
                     syncBloom(dt: event.deltaTime)
-                    // Constant display offset — safe because grabs move a
-                    // body by hand displacement. Every bank, rail, well and
-                    // ring is a child of `renderer.root`, so the whole lab
-                    // travels together: a rail belongs to the thing it sets.
+                    // Constant display offset; every instrument is a child of
+                    // `renderer.root`, so the whole lab travels together.
                     renderer?.root.position = appModel.labPlacement.offset
                 }
             )
@@ -434,23 +374,19 @@ struct KinematicsSpaceView: View {
             renderer.tick(model)
             self.renderer = renderer
         }
-        // Leaving the lab must not leave anything running or held: an
-        // in-flight grab never gets its `onEnded` when the space closes,
-        // so it must be cleared here or it strands and re-targets every
-        // later drag.
+        // An in-flight grab never gets its `onEnded` when the space closes;
+        // clear it here.
         .onDisappear {
             renderer?.teardown()
-            // MUST clear: `Bloom` is a class, so a live grip outlives the
-            // view and would claim every subsequent drag in the module.
+            // `Bloom` is a class: a live grip would outlive the view.
             bloom.endGrip()
             // A rail mid-adjust swallows every `onChanged` until an
             // `onEnded` clears it, against an orphaned control.
             activeTrack = nil
             drag = nil
-            // A pending press now STICKS — `press` refuses to overwrite
-            // one — so an `onEnded` that never arrives would otherwise
-            // let the next gesture promote it on frame one, against a
-            // stale anchor, and grab the object you pressed last time.
+            // A pending press sticks (`press` refuses to overwrite), so an
+            // `onEnded` that never arrives would let the next gesture promote it
+            // against a stale anchor.
             pressedBall.cancel()
             // A selection, so it does not survive the lab: the next entry
             // opens on a folded ring like every other module.
@@ -499,12 +435,9 @@ struct KinematicsSpaceView: View {
                                                 target: hand, hand: hand)
                             return
                         }
-                        // A TAP ON A FLYING BALL MUST NOT CATCH IT: at
-                        // `minimumDistance: 0` a bare press would freeze the
-                        // ball, hold it, and release it with no hand motion,
-                        // leaving it dead in mid-air. Only the ball needs
-                        // this — the launcher, bead and hoops are positional,
-                        // so a press that doesn't move moves them by zero.
+                        // A tap on a flying ball must not catch it: a bare press would freeze
+                        // the ball and release it dead in mid-air. Only the ball needs this;
+                        // the other targets are positional.
                         if let press = flightPress(on: value.entity) {
                             pressedBall.press(press, at: hand)
                         } else {
@@ -512,11 +445,9 @@ struct KinematicsSpaceView: View {
                         }
                     }
 
-                    // The promotion, once the hand has actually carried
-                    // the ball. The drag pairs where the ball is NOW
-                    // with where the hand is now, so the catch does not
-                    // move the ball at all — the same behaviour Gravity
-                    // Lab gets from its `minimumDistance`.
+                    // The promotion, once the hand has carried the ball: the drag pairs
+                    // where the ball is now with where the hand is now, so the catch moves
+                    // nothing.
                     if drag == nil, pressedBall.isPending {
                         guard let caught = pressedBall.promote(hand: hand),
                               let flight = model.flights.first(where: {
@@ -554,27 +485,20 @@ struct KinematicsSpaceView: View {
         )
     }
 
-    /// Resolves a pinch: launcher body, aim bead, a flying/resting
-    /// ball, or a hoop.
+    /// Resolves a pinch: launcher body, aim bead, a ball, or a hoop.
 
-    /// The launcher's own control. Launch SPEED has no size of its own
-    /// — but its consequence does: the predicted arc, already drawn,
-    /// stretches across the room as you pull. You are aiming a throw by
-    /// changing the shape of where it lands.
+    /// The launcher's own control. Launch speed has no size of its own, but
+    /// its consequence does: the predicted arc stretches across the room as
+    /// you pull.
     private func syncBloom(dt: Double) {
         let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
-        // A HOOP'S RING (2026-09-01): the one Bloom retargets to whichever
-        // hoop is selected — Delete, and the aim solutions once they
-        // exist. Its anchor rides the hoop, so a hoop being carried
-        // carries its own ring.
+        // A hoop's ring: the one Bloom retargets to whichever hoop is selected,
+        // its anchor riding the hoop.
         if let id = ring.openID, id != Self.launcherRingID,
            let hoop = model.rings.first(where: { $0.id == id }) {
-            // Three petals — `Petal`'s own ceiling. Aim opens the fan of
-            // the two arcs and is dim while the hoop is out of range at
-            // the current speed (the solve is memoised, so asking every
-            // frame is cheap). "Drop when fired" is the monkey-and-hunter
-            // latch; its armed state is read off the hoop's own callout,
-            // not the petal, because a petal's name is fixed at retarget.
+            // Three petals, `Petal`'s ceiling. Aim opens the fan of the two arcs
+            // and is dim while the hoop is out of range; "Drop when fired" is the
+            // monkey-and-hunter latch, whose state the hoop's own callout reads out.
             bloom.retarget(
                 id,
                 petals: [
@@ -588,8 +512,9 @@ struct KinematicsSpaceView: View {
                         let armed = model.rings.first { $0.id == id }?.dropOnFire ?? false
                         model.setDropOnFire(id: id, !armed)
                     },
+                    // Red like every Delete petal in the house (`destructiveUI`).
                     .init(name: "Delete", symbol: "trash",
-                          tint: DesignTokens.Palette.neutralActionUI) { [ring, aimPicker] in
+                          tint: DesignTokens.Palette.destructiveUI) { [ring, aimPicker] in
                         model.removeRing(id: id)
                         ring.openID = nil
                         aimPicker.close()
@@ -620,14 +545,12 @@ struct KinematicsSpaceView: View {
                       tint: DesignTokens.Palette.neutralActionUI) { [ballPicker] in
                     ballPicker.toggle()
                 },
-                // Clear the volley — the third petal, `Petal`'s own ceiling.
-                // `isAvailable` MUST be a closure, not a Bool: `retarget`
-                // rebuilds only when the target id changes, and this bloom's
-                // id is the constant "launcher", so a value read at configure
-                // time would freeze on the first frame's state. `confirms`
-                // gives it the same two-tap arm the standing plates use.
+                // Clear the volley. `isAvailable` must be a closure: `retarget`
+                // rebuilds only when the id changes, and this ring's id is constant.
+                // It confirms like the standing plates, and wears the red every
+                // petal that removes something wears.
                 .init(name: "Clear", symbol: "trash.slash",
-                      tint: DesignTokens.Palette.neutralActionUI,
+                      tint: DesignTokens.Palette.destructiveUI,
                       isAvailable: { !model.flights.isEmpty },
                       confirms: true) {
                     model.clearFlights()
@@ -647,7 +570,7 @@ struct KinematicsSpaceView: View {
                      dt: dt)
         // Clear of the bloom's own petal arc, which reaches ~0.17 m up.
         let hand = appModel.room.nearestFingertip(to: anchor)
-        ballPicker.update(anchor: anchor + SIMD3(0, 0.20, 0),
+        ballPicker.update(anchor: anchor + Self.ballFanOffset,
                           viewer: viewer, dt: dt, nearestHand: hand)
 
         worldPicker.update(anchor: Self.worldsAnchor, viewer: viewer, dt: dt,
@@ -657,11 +580,9 @@ struct KinematicsSpaceView: View {
         // Nothing ticks a track by itself — the caller's duty, stated on
         // `SpatialTrackControl.refresh`.
         gravityTrack?.refresh()
-        // The wind rail exists only while the air does. `isEnabled` also
-        // kills a drag already in flight, which is the case that bites:
-        // the gesture keeps delivering `onChanged` after the plate goes
-        // dark, and without this the rail would go on writing a wind
-        // speed nothing is applying.
+        // The wind rail exists only while the air does; `isEnabled` also ends a
+        // drag already in flight, so the rail cannot go on writing a wind
+        // nothing applies.
         windTrack?.isEnabled = model.airResistance
         if model.airResistance { windTrack?.refresh() }
         // The mass rail exists exactly while the custom ball is the pick,
@@ -703,7 +624,7 @@ struct KinematicsSpaceView: View {
                     return RelativeDrag(name: candidate.name,
                                         target: ring.position, hand: hand)
                 }
-                // NO flight branch. A ball is claimed by `flightPress`
+                // No flight branch. A ball is claimed by `flightPress`
                 // and promoted only once the hand has moved — see the
                 // drag's `onChanged`.
                 current = candidate.parent
@@ -745,15 +666,8 @@ struct KinematicsSpaceView: View {
         }
     }
 
-    /// EXTRACTED FROM THE TAP CLOSURE, 2026-08-08, so VoiceOver reaches
-    /// the same routing a pinch does.
-    ///
-    /// `Grabbable` has taken an `activate` closure since the mechanism
-    /// moved into RenderKit, and every call site passed nothing — so the
-    /// objects a hand can carry could be reached no other way. It is not
-    /// a sweep: the helper configures entities it did not build and
-    /// cannot know what pressing one should mean. Only the module knows
-    /// that, so the routing had to come out of the gesture first.
+    /// The tap routing, out of the gesture closure so VoiceOver reaches it
+    /// too.
     private func handleObjectTap(on entity: Entity) {
         // The fan first: its discs sit above the launcher and
         // would otherwise be read as a tap on the launcher.
@@ -803,14 +717,8 @@ struct KinematicsSpaceView: View {
     }
 
     /// What a tap does to the launcher's ring, as a pure function of what
-    /// was tapped — a static over entity names, like Circuits'
-    /// `resolveGrab`, so the routing is testable without a headset.
-    ///
-    /// The launcher toggles it. The aim bead leaves it alone: aiming is
-    /// the launcher's own verb and a zero-travel aim must not fold the
-    /// ring the wearer just opened. Anything else — a ball, a hoop, empty
-    /// space — folds it, which is the same grammar every other module's
-    /// ring answers to.
+    /// was tapped. The launcher toggles it; the aim bead leaves it alone
+    /// (aiming is the launcher's own verb); anything else folds it.
     static func launcherRingOpen(afterTapOn entity: Entity, wasOpen: Bool) -> Bool {
         var current: Entity? = entity
         while let candidate = current {

@@ -5,8 +5,8 @@
 //  Opacity ramps for appearing decoration. `tick` ramps OpacityComponent
 //  (component dropped at full light so a settled entity is on the fast
 //  path); `approach` eases a painted colour and settles exactly. Both
-//  snap under the SYSTEM Reduce Motion switch — no in-app duplicate.
-//  `tick`'s clock lives in a component ON the entity, so pooled reuse starts clean.
+//  snap under the system Reduce Motion switch — no in-app duplicate.
+//  `tick`'s clock lives in a component on the entity, so pooled reuse starts clean.
 //
 
 import QuartzCore
@@ -54,7 +54,7 @@ public enum Fade {
             return
         }
 
-        // THE CLOCK SURVIVES AN UNFINISHED RAMP: the first call has dt 0,
+        // The clock survives an unfinished ramp: the first call has dt 0,
         // and deleting the clock at an endpoint means no fade ever starts.
         let now = CACurrentMediaTime()
         let dt = min(max(now - (entity.components[Clock.self]?.lastTick ?? now),
@@ -81,7 +81,7 @@ public enum Fade {
     }
 
     /// Eases a painted (r, g, b, opacity) toward `target`. Returns the
-    /// new paint; it EQUALS `target` (exactly) once settled, so a caller
+    /// new paint; it equals `target` (exactly) once settled, so a caller
     /// can compare and skip the repaint.
     public static func approach(_ paint: SIMD4<Float>,
                                 toward target: SIMD4<Float>,

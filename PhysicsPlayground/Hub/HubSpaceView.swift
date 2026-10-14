@@ -1,5 +1,5 @@
-//  HubSpaceView.swift — the GALLERY: two domain terraces of live miniatures under the wordmark.
-//  One door, reached two ways: TAP flies an exhibit to the pad, or CARRY it there; neither
+//  HubSpaceView.swift — the gallery: two domain terraces of live miniatures under the wordmark.
+//  One door, reached two ways: tap flies an exhibit to the pad, or carry it there; neither
 //  enters — the Load button over the pad is the only thing that opens a lab (VoiceOver goes
 //  straight in). Geometry lives in GalleryLayout; vignettes keyed by module id with a fallback.
 
@@ -16,11 +16,11 @@ struct HubSpaceView: View {
     var body: some View {
         RealityView { content, attachments in
             let modules = ModuleCatalog.all(appModel: appModel)
-            // Stillness FIRST: `build` ends by starting the intro — the decision
+            // Stillness first: `build` ends by starting the intro — the decision
             // must exist before the decider.
             scene.stillness = systemReduceMotion
             #if DEBUG
-            // `-hubIntro <seconds>` freezes the arrival for screenshots. Read BEFORE `build` —
+            // `-hubIntro <seconds>` freezes the arrival for screenshots. Read before `build` —
             // `beginIntro` decides the once-per-session skip and the chime off this value.
             // `double(forKey:)` coerces the argument domain's string.
             let frozenIntro = UserDefaults.standard.double(forKey: "hubIntro")
@@ -28,14 +28,20 @@ struct HubSpaceView: View {
                 scene.introFrozenAt = frozenIntro
             }
             #endif
-            // The ceremony plays once per session; later entries open on the finished room.
-            // Marked played when the intro FINISHES, not here — this closure can run for a
-            // view the system discards while presenting, and marking at build time let that
-            // invisible pass spend the session's one arrival.
+            // Once per session; marked played when the intro finishes, since this
+            // closure can run for a view the system discards while presenting.
             scene.arrivalAlreadyPlayed = appModel.hasPlayedArrival
             scene.onArrivalPlayed = { appModel.hasPlayedArrival = true }
             SoundPalette.warmUp()
+            #if DEBUG
+            let buildStarted = ContinuousClock.now
+            #endif
             scene.build(modules: modules)
+            #if DEBUG
+            LaunchTrace.mark("gallery built in "
+                             + String(format: "%.2f", (ContinuousClock.now - buildStarted) / .seconds(1))
+                             + " s")
+            #endif
             scene.placement = appModel.galleryPlacement
             content.add(scene.root)
 
@@ -58,17 +64,14 @@ struct HubSpaceView: View {
             }
             #endif
 
-            // `[weak scene]`: the subscription is stored ON the scene, so a strong capture
-            // makes scene → subscription → closure → scene — each hub return leaked an
-            // orphaned gallery animating forever.
+            // `[weak scene]`: the subscription is stored on the scene, and a strong
+            // capture is a cycle that leaks a gallery animating forever.
             scene.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak scene] event in
                 scene?.animate(dt: event.deltaTime, lookRay: appModel.room.lookRay)
             }
 
-            // VoiceOver opens a lab DIRECTLY — no pad ceremony (its payload is visual).
-            // Exhibits publish both a plain `.activate` and an "Enter" custom action; one
-            // mechanism only: `SpatialActions.activate` walks ancestors, exactly as in
-            // every lab — a second bespoke route is how the two drift apart.
+            // VoiceOver opens a lab directly — no pad ceremony.
+            // `SpatialActions.activate` walks ancestors, as in every lab.
             scene.onEnter = enter
             scene.accessibilitySubscriptions = [
                 content.subscribe(to: AccessibilityEvents.Activate.self) { event in
@@ -88,7 +91,12 @@ struct HubSpaceView: View {
                     openSettings: { openWindow(id: SettingsView.windowID) },
                     openAbout: { openWindow(id: AboutView.windowID) },
                     openNotebook: { openWindow(id: NotebookView.windowID) },
-                    openCatalog: { openWindow(id: MainWindowView.windowID) })
+                    // Never a second one — see `AppModel.mainWindowCount`.
+                    openCatalog: {
+                        if appModel.wantsMainWindow {
+                            openWindow(id: MainWindowView.windowID)
+                        }
+                    })
             }
             Attachment(id: "load") {
                 if let module = ModuleCatalog.all(appModel: appModel)
@@ -116,14 +124,14 @@ struct HubSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
-                    // A tap SENDS the lab to the pad — it moves an object, never enters;
+                    // A tap sends the lab to the pad — it moves an object, never enters;
                     // the door stays the Load button's second, deliberate pinch.
                     guard let id = scene.moduleID(for: value.entity) else { return }
                     scene.sendToPad(id: id)
                 }
         )
         // Carry a lab to the podium — or the whole gallery by its bar. The bar branch
-        // comes FIRST: a hand on the handle is moving the room, not shopping for a lab.
+        // comes first: a hand on the handle is moving the room, not shopping for a lab.
         .simultaneousGesture(
             DragGesture(minimumDistance: 0.015)
                 .targetedToAnyEntity()
@@ -166,7 +174,7 @@ struct HubSpaceView: View {
         }
         guard let barDrag else { return }
         let next = SIMD3<Float>(barDrag.position(forHand: hand))
-        // Against the DRAG'S OWN START (`RelativeDrag.travel`) — measuring against
+        // Against the drag's own start (`RelativeDrag.travel`) — measuring against
         // `placement.offset` (overwritten next line) read a real move as a tap.
         barTravelled = max(barTravelled, Float(barDrag.travel(forHand: hand)))
         placement.move(to: next)
@@ -188,21 +196,13 @@ struct HubSpaceView: View {
     /// not the same instance. One constant declares and recognises, so the two cannot drift.
     static let enterAction = LocalizedStringResource("Enter")
 
-    /// How long the exhibit swells before the module takes the stage.
-    ///
-    /// A NAMED CONSTANT because two things have to agree with it — the
-    /// swell's own duration and the gallery's fade — and a magic number
-    /// inside a `Task.sleep` is precisely the shape this project keeps
-    /// having to catch after the fact.
+    /// How long the exhibit swells before the module takes the stage; the
+    /// swell and the gallery's fade both agree with it.
     static let enterDelay: Double = 0.42
 
     /// One enter path for every caller: the exhibit swells and the module takes over at the peak.
     private func enter(_ id: String) {
-        // REDUCE MOTION SKIPPED THE INTRO AND NOT THIS. `beginIntro` has
-        // guarded on stillness since it was written, so the setting was
-        // half-honoured: no arrival ceremony, but the exhibit still swelled
-        // for 420 ms and the wearer still waited for it. A wearer who has
-        // asked for no motion should get the lab, now.
+        // Reduce Motion: the lab, now — no swell.
         guard !Motion.isReduced else {
             appModel.go(to: id)
             return
@@ -229,7 +229,7 @@ final class HubScene {
         let anchor: Entity      // ring position (bobbed every frame)
         let pulser: Entity      // scale pulse on selection
         let vignette: Entity    // slowly rotating miniature
-        let namePivot: Entity   // billboarded name plate
+        let label: Entity       // its name, lit on the bench's front edge
         let halo: Entity        // accent glow, focused only
         let basePosition: SIMD3<Float>
         /// The animation the miniature was built with — captured alongside its geometry so
@@ -241,16 +241,20 @@ final class HubScene {
         var animTime: Double = 0
         /// Set by updateFocus: near enough to the look direction to be worth animating.
         var inView: Bool = true
-        /// Focus value the opacity components were last WRITTEN at; -1 forces a rewrite.
-        /// The special states (carried, gliding, docked) park this at -1 so their first idle
-        /// frame always repaints — keeps the stale-invisible-label bug from returning.
+        /// Focus value the opacity components were last written at; -1 forces
+        /// a rewrite (the special states park it there so their first idle
+        /// frame repaints).
         var appliedFocus: Float = -1
+        /// The label's brightness, eased toward `labelTarget`, and the value
+        /// its opacity was last written at.
+        var labelLevel: Float = HubScene.labelRest
+        var appliedLabelLevel: Float = -1
     }
 
     /// True stills all idle motion. Set from Reduce Motion (system or in-app).
     var stillness = false
 
-    /// Which exhibit the user faces — published only on CHANGE, never at 60 Hz.
+    /// Which exhibit the user faces — published only on change, never at 60 Hz.
     private(set) var focusedModuleID: String?
     private var exhibits: [Exhibit] = []
     private var time = 0.0
@@ -267,11 +271,11 @@ final class HubScene {
     /// `-hubIntro <seconds>` pins the intro clock here — frozen it never finishes;
     /// that is the point of a photograph.
     var introFrozenAt: Double?
-    /// True when this SESSION has seen the ceremony — set from `AppModel` before `build`
+    /// True when this session has seen the ceremony — set from `AppModel` before `build`
     /// (the scene is remade on every hub entry). A frozen screenshot intro overrides it.
     var arrivalAlreadyPlayed = false
     /// Fired the frame the ceremony completes — the view marks `hasPlayedArrival` off this
-    /// and ONLY this, so a discarded pre-presentation build can never spend the arrival.
+    /// and only this, so a discarded pre-presentation build can never spend the arrival.
     var onArrivalPlayed: (() -> Void)?
 
     /// The intro's clock: frozen for screenshots, infinite (= finished) under stillness.
@@ -287,22 +291,22 @@ final class HubScene {
     private var arcRadius: Float = 2.0
     private var arcHeight: Float = 1.4
 
-    /// Every miniature is normalised to this WORLD size — constant apparent size would throw depth away.
+    /// Every miniature is normalised to this world size — constant apparent size would throw depth away.
     private static let exhibitSize: Float = 0.24
 
     /// The graphite the terraces and pucks are cut from.
     private static let slabTint = UIColor(white: 0.09, alpha: 1)
 
     // MARK: Focus
-    // Head direction, not eye gaze — visionOS never hands an app the eyes; same look
-    // ray as the field probes. The faced exhibit grows, lifts, and lights its halo.
+    // Head direction, not eye gaze — visionOS never hands an app the eyes.
+    // The faced exhibit grows, lifts and lights its halo.
 
     /// Max angle off the look direction that still takes focus, radians.
     private static let focusCone: Float = 26 * .pi / 180
     /// A challenger must be this fraction closer than the incumbent before focus jumps —
     /// hysteresis, so a scanning glance doesn't strobe the ring.
     private static let focusStickiness: Float = 0.72
-    /// Resting scale of an unfocused exhibit once ANY is focused, and the focused growth.
+    /// Resting scale of an unfocused exhibit once any is focused, and the focused growth.
     private static let unfocusedScale: Float = 0.90
     private static let focusedScale: Float = 1.22
     /// How far the focused exhibit lifts off its puck.
@@ -327,7 +331,7 @@ final class HubScene {
         arcRadius = distance
         arcHeight = Self.arcHeightDefault
 
-        // 0.66 clears the main window's top edge at the DEFAULT placement (the catalog
+        // 0.66 clears the main window's top edge at the default placement (the catalog
         // stays visible while the gallery is open); some overlap is inherent since the
         // wearer can move the window.
         titlePosition = SIMD3(0, arcHeight + 0.66, -(arcRadius + 0.45))
@@ -337,10 +341,11 @@ final class HubScene {
 
         // Each terrace carries its domain's 3-D signage (HubDomainTitle).
         let byID = Dictionary(uniqueKeysWithValues: modules.map { ($0.id, $0) })
+        benchLabels.removeAll()
         for terrace in GalleryLayout.terraces(moduleIDs: modules.map(\.id),
                                               distance: distance,
                                               height: arcHeight) {
-            buildTerrace(terrace)
+            buildTerrace(terrace, modules: byID)
             for (index, id) in terrace.moduleIDs.enumerated() {
                 guard let module = byID[id] else { continue }
                 buildExhibit(for: module,
@@ -348,10 +353,9 @@ final class HubScene {
             }
         }
 
-        // THE STAGE: furniture under one entity so the arrival raises it as a unit.
-        // Exhibits and door signs deliberately STAY top-level: they cascade on their own
-        // components, and the tap chain and `GalleryDoorTests` resolve exhibits as direct
-        // children of root. Reparenting after build touches no coordinates (stage at identity).
+        // Furniture under one entity so the arrival raises it as a unit.
+        // Exhibits and door signs stay top-level: they cascade on their own
+        // components, and the tap chain resolves exhibits as children of root.
         stageRoot.children.removeAll()
         let independents = Set(
             [ObjectIdentifier(titleAnchor), ObjectIdentifier(stageRoot)]
@@ -396,7 +400,7 @@ final class HubScene {
     /// quiet — the per-frame path stops touching what stopped changing.
     private func updateIntro() {
         guard introPhase == .running else { return }
-        // A FROZEN intro never finishes — without this exemption `-hubIntro` past the
+        // A frozen intro never finishes — without this exemption `-hubIntro` past the
         // landing shot the completed room. Stillness still wins, frozen or not.
         let t = introTime
         if introFrozenAt == nil || stillness,
@@ -413,7 +417,7 @@ final class HubScene {
             }
             // The bar sat out the flight; re-enable on landing.
             titleBar?.isEnabled = true
-            // The ceremony has been SEEN — only now does it count against the session.
+            // The ceremony has been seen — only now does it count against the session.
             onArrivalPlayed?()
             return
         }
@@ -422,9 +426,8 @@ final class HubScene {
         stageRoot.components.set(
             OpacityComponent(opacity: HubIntro.stageOpacity(at: t)))
         for (index, exhibit) in exhibits.enumerated() {
-            // A docked/carried lab belongs to that interaction — forcing arrival opacity
-            // landed it on the pad invisible. The scale write is the handover; nothing
-            // else restores it once this loop stops owning the exhibit.
+            // A docked or carried lab belongs to that interaction; forcing arrival
+            // opacity landed it on the pad invisible.
             if exhibit.moduleID == dockedModuleID
                 || exhibit.moduleID == draggingID {
                 exhibit.anchor.components.remove(OpacityComponent.self)
@@ -448,22 +451,40 @@ final class HubScene {
     private var terraceHairlines: [HubDomain: ModelEntity] = [:]
     /// Each terrace's signage, driven from the idle loop.
     private var domainTitles: [HubDomain: HubDomainTitle] = [:]
+    /// Every exhibit's name on its bench, by module id — built with the
+    /// terrace, handed to the exhibit when it is built.
+    private var benchLabels: [String: Entity] = [:]
+
+    // MARK: Bench labels
+
+    /// The label's brightness at rest, facing it, and while its lab stands on
+    /// the pad (an empty mount still says what belongs there).
+    nonisolated static let labelRest: Float = 0.78
+    nonisolated static let labelFocused: Float = 1.0
+    nonisolated static let labelAway: Float = 0.32
+    /// The type's point size — the house exhibit size. The face is 55 mm of
+    /// graphite and this is ~28 mm ascender to descender, so the words sit on
+    /// the stock with air above and below; at 33 mm "Orbital Mechanics" ran
+    /// to the ends of its bay.
+    nonisolated static let benchLabelSize: CGFloat = PlateStyle.exhibitLabelSize
+
     /// One domain's terrace: an optical bench tiled from modelled bays, a lit
-    /// domain-colour hairline in the channel along its front edge, a mount per module.
-    private func buildTerrace(_ terrace: GalleryLayout.Terrace) {
+    /// domain-colour hairline in the channel along its front edge, a mount per
+    /// module, and under each mount, on the bench's front edge, the lab's name.
+    private func buildTerrace(_ terrace: GalleryLayout.Terrace,
+                              modules: [String: ModuleDescriptor]) {
         let slab = Entity()
         slab.position = terrace.center
         slab.orientation = simd_quatf(angle: terrace.yaw, axis: [0, 1, 0])
         buildBenchTop(terrace, on: slab)
 
-        var lit = UnlitMaterial(color: UIColor(terrace.domain.color))
-        lit.blending = .transparent(opacity: 0.85)
+        let lit = Materials.unlit(UIColor(terrace.domain.color), opacity: 0.85)
         let hairline = ModelEntity(
-            mesh: .generateBox(width: max(terrace.width - 0.05, 0.1),
+            mesh: Primitives.box(width: max(terrace.width - 0.05, 0.1),
                                height: 0.004, depth: 0.004,
                                cornerRadius: 0.002),
             materials: [lit])
-        // IN the milled channel, not proud of the surface — a light in a trough reads
+        // In the milled channel, not proud of the surface — a light in a trough reads
         // as a light pipe.
         hairline.position = SIMD3(0, GalleryLayout.slabThickness / 2 - 0.002,
                                   GalleryLayout.slabDepth / 2 - 0.0095)
@@ -477,15 +498,31 @@ final class HubScene {
         title.root.position = SIMD3(0, 0.62, -0.02)
         slab.addChild(title.root)
         domainTitles[terrace.domain] = title
+
+        // The names live on the bench, not over the exhibits: lit type on the
+        // dark front edge holds against any wall (the bench is the backing a
+        // floating card was refused for), and it never moves, so a lifted or
+        // docked exhibit cannot carry its name into the door sign or away.
+        let unyaw = simd_quatf(angle: -terrace.yaw, axis: [0, 1, 0])
+        for (index, id) in terrace.moduleIDs.enumerated() {
+            guard let module = modules[id],
+                  index < terrace.puckTops.count else { continue }
+            let local = unyaw.act(terrace.puckTops[index] - terrace.center)
+            let label = Self.benchLabel(module.title, accent: UIColor(module.accent))
+            label.position = SIMD3(local.x, 0, Self.benchFace)
+            label.components.set(OpacityComponent(opacity: Self.labelRest))
+            slab.addChild(label)
+            benchLabels[id] = label
+        }
         root.addChild(slab)
 
         for top in terrace.puckTops {
-            // Placed AT the top face: modelled platforms hang below their own origin.
+            // Placed at the top face: modelled platforms hang below their own origin.
             let mount = Self.loadPlatform(
                 "GalleryMount",
                 fallback: {
                     let puck = ModelEntity(
-                        mesh: .generateCylinder(
+                        mesh: Primitives.cylinder(
                             height: GalleryLayout.puckHeight,
                             radius: GalleryLayout.puckRadius),
                         materials: [Materials.graphite(Self.slabTint)])
@@ -499,22 +536,21 @@ final class HubScene {
         }
     }
 
-    /// Tiles the terrace top: two end caps + one bay per module (`Tools/galleryplatforms.py`).
-    /// Tiles, not one stretched slab — terrace width comes from module count, and stretching
-    /// a drilled bench turns every hole into an ellipse. Bay scaled in X ONLY (×1.0 at shipped
-    /// geometry; the distance math is live and tested); depth and thickness never scale.
+    /// Tiles the terrace top: two end caps + one bay per module
+    /// (`Tools/galleryplatforms.py`). Tiles, not one stretched slab:
+    /// stretching a drilled bench turns every hole into an ellipse.
     private func buildBenchTop(_ terrace: GalleryLayout.Terrace,
                                on slab: Entity) {
         let capWidth = GalleryLayout.baseWidthMargin / 2
         let bays = max(terrace.moduleIDs.count, 1)
         let bayWidth = (terrace.width - capWidth * 2) / Float(bays)
 
-        // THE FALLBACK IS A REAL SHELF (cf. `TimeRail.buildReel`): a missing floor under
+        // The fallback is A real shelf (cf. `TimeRail.buildReel`): a missing floor under
         // six exhibits is six labs hanging in the air.
         guard let bay = PropCache.prototype(named: "GalleryBay"),
               let cap = PropCache.prototype(named: "GalleryCap") else {
             let box = ModelEntity(
-                mesh: .generateBox(width: terrace.width,
+                mesh: Primitives.box(width: terrace.width,
                                    height: GalleryLayout.slabThickness,
                                    depth: GalleryLayout.slabDepth,
                                    cornerRadius: 0.03),
@@ -551,9 +587,9 @@ final class HubScene {
 
     // MARK: The podium — where a lab is brought to be opened
 
-    /// Plate thickness is the terrace puck's, so a docked exhibit stands at exactly the
-    /// clearance it had on its own puck (`GalleryLayout.exhibitLift`). `podium` names the
-    /// docking spot, not a plinth; wearer-facing copy says "pad".
+    /// Plate thickness is the terrace puck's, so a docked exhibit stands at
+    /// the clearance it had on its puck. `podium` names the docking spot;
+    /// wearer-facing copy says "pad".
     private static let podiumPlateHeight: Float = 1.05
     private static let podiumPlateThickness: Float = GalleryLayout.puckHeight
     private static let podiumRadius: Float = 0.105
@@ -562,10 +598,9 @@ final class HubScene {
     /// Distance out from the user at the 2.0 m arc default; scales with it.
     private static let podiumReach: Float = 1.35
     /// Load button lift over a docked exhibit. The gap that matters is to the button's
-    /// BOTTOM EDGE, measured from the top of the header name riding 0.215 above the lab.
+    /// Bottom edge, measured from the top of the header name riding 0.215 above the lab.
     private static let podiumButtonLift: Float = 0.30
-    /// Dock-offer radius. Deliberately shares no constant with the button's lift —
-    /// they were coincidentally equal once, in five places.
+    /// Dock-offer radius.
     private static let podiumSnapRadius: Float = 0.34
 
     /// Hangs the Load button over whatever stands on the podium.
@@ -593,7 +628,7 @@ final class HubScene {
 
     /// A floating plate, front and centre: carry a lab here and it presents itself.
     private func buildPodium(distance: Float) {
-        // Reach scales with the arc; HEIGHT does not — pushing the gallery back changes
+        // Reach scales with the arc; height does not — pushing the gallery back changes
         // nothing about how high a wearer's chest is.
         let plateBottom = Self.podiumPlateHeight
         let plateTop = plateBottom + Self.podiumPlateThickness
@@ -610,7 +645,7 @@ final class HubScene {
             "GalleryCradle",
             fallback: {
                 let plate = ModelEntity(
-                    mesh: .generateCylinder(height: Self.podiumPlateThickness,
+                    mesh: Primitives.cylinder(height: Self.podiumPlateThickness,
                                             radius: Self.podiumRadius),
                     materials: [Materials.graphite(Self.slabTint)])
                 plate.position.y = -Self.podiumPlateThickness / 2
@@ -625,8 +660,7 @@ final class HubScene {
         // Champagne rim, hexagonal and inset: a circle through a hexagon's circumradius
         // saws through the body six times per lap — 6 segments follow the edge, and
         // 0.099 keeps the line on the top face rather than the chamfer.
-        var rim = UnlitMaterial(color: Self.titleRimColor)
-        rim.blending = .transparent(opacity: 0.7)
+        let rim = Materials.unlit(Self.titleRimColor, opacity: 0.7)
         if let ring = Self.rimTube(radius: 0.099, y: plateTop + 0.002,
                                    segments: 6) {
             ring.model?.materials = [rim]
@@ -636,20 +670,17 @@ final class HubScene {
         // Glow pool in the cradle's pocket + a smaller hover ring beneath the plate —
         // both brighten as an offer nears; the ring makes the plate read as suspended.
         let glow = Entity()
-        var glowMaterial = UnlitMaterial(color: Self.titleRimColor)
-        glowMaterial.blending = .transparent(opacity: 0.22)
+        let glowMaterial = Materials.unlit(Self.titleRimColor, opacity: 0.22)
         let pool = ModelEntity(
-            mesh: .generateCylinder(height: 0.001, radius: 0.068),
+            mesh: Primitives.cylinder(height: 0.001, radius: 0.068),
             materials: [glowMaterial])
-        // −0.0035 is measured against the ASSET, not the pocket's nominal −0.008 depth:
-        // a floor plate lies in the pocket with its top at −0.0045, and a pool below that
-        // would be sealed underneath it and draw nothing.
+        // −0.0035 is measured against the asset: a floor plate in the pocket
+        // has its top at −0.0045, and a pool below it draws nothing.
         pool.position.y = plateTop - 0.0035
         glow.addChild(pool)
         if let hover = Self.rimTube(radius: Self.podiumRadius - 0.032,
                                     y: plateBottom - Self.podiumHoverGap) {
-            var hoverMaterial = UnlitMaterial(color: Self.titleRimColor)
-            hoverMaterial.blending = .transparent(opacity: 0.55)
+            let hoverMaterial = Materials.unlit(Self.titleRimColor, opacity: 0.55)
             hover.model?.materials = [hoverMaterial]
             glow.addChild(hover)
         }
@@ -672,7 +703,7 @@ final class HubScene {
     private static let latchOpen: Float = 0.62
     private static let latchClosed: Float = -0.10
 
-    /// Rings the pad with latch fingers. Each is a SEAT (ring placement) + a PIVOT (hinge
+    /// Rings the pad with latch fingers. Each is a seat (ring placement) + a pivot (hinge
     /// angle only) — one transform per job, else yaw and hinge compose wrong mid-animation.
     /// The model reaches along −Z from its pivot: a finger at ring angle θ is yawed π/2 − θ.
     private func buildLatches(on podium: Entity, at plateTop: Float) {
@@ -697,9 +728,9 @@ final class HubScene {
         }
     }
 
-    /// Closes the latches over a docked lab, or opens them. Under Reduce Motion it JUMPS
-    /// to the pose rather than skipping it — the fingers are a readout of whether the pad
-    /// holds something, and a readout must update for everyone.
+    /// Closes the latches over a docked lab, or opens them. Under Reduce
+    /// Motion it jumps to the pose: the fingers are a readout of whether
+    /// the pad holds something.
     private func setLatches(closed: Bool, duration: Double) {
         let angle = closed ? Self.latchClosed : Self.latchOpen
         for pivot in latchPivots {
@@ -732,7 +763,7 @@ final class HubScene {
         glass.clearcoat = .init(floatLiteral: 1.0)
         glass.blending = .transparent(opacity: .init(floatLiteral: 0.55))
         let capsule = ModelEntity(
-            mesh: .generateBox(width: 0.24, height: 0.011, depth: 0.011,
+            mesh: Primitives.box(width: 0.24, height: 0.011, depth: 0.011,
                                cornerRadius: 0.0055),
             materials: [glass])
         bar.addChild(capsule)
@@ -829,9 +860,9 @@ final class HubScene {
     }
 
     /// Seats an exhibit on the pad: evicts the previous, flies this one in, raises the
-    /// Load button. ONE dock, three callers (carry, tap, debug) differing only in duration.
+    /// Load button. One dock, three callers (carry, tap, debug) differing only in duration.
     private func dock(_ exhibit: Exhibit, id: String, duration: Double) {
-        // EVICT FIRST: the replaced lab must be sent home before `dockedModuleID` forgets it.
+        // Evict first: the replaced lab must be sent home before `dockedModuleID` forgets it.
         if let previous = dockedModuleID, previous != id,
            let old = exhibits.first(where: { $0.moduleID == previous }) {
             returningIDs[previous] = time + 0.45
@@ -840,9 +871,8 @@ final class HubScene {
                             timingFunction: .easeInOut)
         }
         dockedModuleID = id
-        // NO `returningIDs` grace here: the docked branch never writes `anchor.position`,
-        // so the flight is unopposed — a grace entry would skip the branch and freeze
-        // the lab's physics for the whole way in.
+        // No `returningIDs` grace here: the docked branch never writes
+        // `anchor.position`, so the flight is unopposed.
         exhibit.anchor.move(to: Transform(translation: podiumTop),
                             relativeTo: root, duration: duration,
                             timingFunction: .easeOut)
@@ -851,7 +881,7 @@ final class HubScene {
         loadButton?.isEnabled = true
         podiumGlow?.components.set(OpacityComponent(opacity: 1.0))
 
-        // Latches close AS IT LANDS, not as it sets off — the cradle answers the arrival.
+        // Latches close as it lands, not as it sets off — the cradle answers the arrival.
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(duration * 0.75))
             guard let self, self.dockedModuleID == id else { return }
@@ -903,19 +933,18 @@ final class HubScene {
 
         let lines = ["Physics", "Playground"]
         // Build at a reference size, then scale to the common width. Extents come from
-        // what was BUILT (the milled asset's numbers, not the font's).
+        // what was built (the milled asset's numbers, not the font's).
         let reference: CGFloat = 0.17
         // Milled if the asset is there, generated if not; both return a centred
-        // (entity, extents) pair so the code below is indifferent. The generated builder
-        // is what the tests drive — it stays correct.
+        // (entity, extents) pair.
         let built = lines.map { text in
             HubTitleStyle.milled(text, size: reference, accent: nil)
                 ?? HubTitleStyle.generated(text, size: reference, accent: nil)
         }
         let scales = built.map { Self.titleWidth / max($0.extents.x, 1e-4) }
-        // Cap heights AFTER scaling — a wider scale makes taller letters.
+        // Cap heights after scaling — a wider scale makes taller letters.
         let heights = zip(built, scales).map { $0.0.extents.y * $0.1 }
-        // Leading off the TALLEST line, not the average — an average-derived gap lets
+        // Leading off the tallest line, not the average — an average-derived gap lets
         // the scaled-up short line collide with its neighbour.
         let gap = (heights.max() ?? 0) * HubTitleStyle.leadingFactor
         let blockHeight = heights.reduce(0, +) + gap * Float(heights.count - 1)
@@ -930,18 +959,16 @@ final class HubScene {
             titleAnchor.addChild(item.entity)
             cursor -= height + gap
         }
-        // Kept for the rake. The LINES turn, not the anchor: the utility bar is parented
-        // to `titleAnchor` (`seatTitleBar`), and swinging buttons makes them harder to hit.
+        // Kept for the rake. The lines turn, not the anchor: the utility bar is
+        // parented to `titleAnchor`.
         titleLines = built.map(\.entity)
 
-        // No backing plate or glyph shell: the milled chamfer (`Tools/hubtitles.py`) holds
-        // a bright rim against a wall of any brightness — that is where the contrast lives.
+        // A thin champagne rule under the lockup. No backing plate: the milled
+        // chamfer holds a bright rim against a wall of any brightness.
 
-        // A thin champagne rule under the lockup.
-        var ruleMaterial = UnlitMaterial(color: Self.titleRimColor)
-        ruleMaterial.blending = .transparent(opacity: 0.65)
+        let ruleMaterial = Materials.unlit(Self.titleRimColor, opacity: 0.65)
         let rule = ModelEntity(
-            mesh: .generateBox(width: 0.5, height: 0.004, depth: 0.004,
+            mesh: Primitives.box(width: 0.5, height: 0.004, depth: 0.004,
                                cornerRadius: 0.002),
             materials: [ruleMaterial])
         rule.position = SIMD3(0, -blockHeight / 2 - 0.09, 0)
@@ -985,21 +1012,31 @@ final class HubScene {
     /// Measured size of a run of the title face. Internal, not private:
     /// `HubDomainTitle` uses the same lockup math.
     static func textExtents(_ text: String, size: CGFloat) -> SIMD3<Float> {
-        MeshResource.generateText(
+        bubbleMesh(text, size: size).bounds.extents
+    }
+
+    /// Bubble-type meshes by content and size: measuring a label and
+    /// building it are the same mesh, and every nameplate did both.
+    /// Bounded, like `Callout`'s glyph cache.
+    private static var bubbleMeshes: [String: MeshResource] = [:]
+
+    private static func bubbleMesh(_ text: String, size: CGFloat) -> MeshResource {
+        let key = "\(size)|\(text)"
+        if let cached = bubbleMeshes[key] { return cached }
+        let mesh = MeshResource.generateText(
             text, extrusionDepth: Float(size) * 0.45,
-            font: roundedFont(size: size), alignment: .center
-        ).bounds.extents
+            font: roundedFont(size: size), alignment: .center)
+        if bubbleMeshes.count > 400 { bubbleMeshes.removeAll(keepingCapacity: true) }
+        bubbleMeshes[key] = mesh
+        return mesh
     }
 
     /// The app's signature 3-D bubble type: heavy rounded glyphs extruded and clear-coated,
-    /// centred on BOTH axes, returned as a group. `opacity` < 1 = smoky glass; `emissive` = glow.
+    /// centred on both axes, returned as a group. `opacity` < 1 = smoky glass; `emissive` = glow.
     static func bubbleText(_ text: String, size: CGFloat, color: UIColor,
                            opacity: Float = 1, emissive: Float = 0.28) -> Entity {
         let group = Entity()
-        let font = roundedFont(size: size)
-        let mesh = MeshResource.generateText(
-            text, extrusionDepth: Float(size) * 0.45,
-            font: font, alignment: .center)
+        let mesh = bubbleMesh(text, size: size)
         let bounds = mesh.bounds
         let centerX = -(bounds.min.x + bounds.max.x) / 2
         let centerY = -(bounds.min.y + bounds.max.y) / 2
@@ -1028,11 +1065,11 @@ final class HubScene {
         let anchor = Entity()
         anchor.name = module.id
         anchor.position = basePosition
-        // The gaze/pinch target is set at the BOTTOM of this function, measured from
+        // The gaze/pinch target is set at the bottom of this function, measured from
         // the miniature alone — see the note there.
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
-        // The label DESCRIBES; the action is what opens the lab.
+        // The label describes; the action is what opens the lab.
         accessibility.label = LocalizedStringResource(
             stringLiteral: "\(module.title). \(HubDomain.promise(for: module.id))")
         accessibility.customActions = [HubSpaceView.enterAction]
@@ -1056,7 +1093,7 @@ final class HubScene {
         // The living miniature, and the motion it was authored with.
         let built = HubVignettes.make(for: module.id)
         let vignette = built.entity
-        // MEASURED, then fitted to a common apparent size — six models authored at a
+        // Measured, then fitted to a common apparent size — six models authored at a
         // nominal size are not six models at the same size.
         let bounds = vignette.visualBounds(relativeTo: nil).extents
         let largest = max(bounds.x, max(bounds.y, 1e-4))
@@ -1064,53 +1101,37 @@ final class HubScene {
         vignette.position = .zero
         pulser.addChild(vignette)
 
-        // Unbacked header above the model, billboarded, in the module accent.
-        // THE Y IS SIGHTLINE ARITHMETIC, NOT BOX ARITHMETIC: a standing wearer looks DOWN,
-        // so a billboarded label projects onto the model from above — 0.215 buys the tallest
-        // model ~5 cm along that ray; the small z keeps text from shearing into a crown.
-        let name = Self.namePlate(module.title, accent: UIColor(module.accent),
-                                  size: PlateStyle.exhibitLabelSize,
-                                  backed: false)
-        let namePivot = Entity()
-        namePivot.position = [0, 0.215, 0.06]
-        namePivot.components.set(BillboardComponent())
-        namePivot.addChild(name)
-        pulser.addChild(namePivot)
+        // Its name is on the bench under the mount (`buildTerrace`); a module
+        // outside every terrace gets a detached one, so the type stays total.
+        let label = benchLabels[module.id] ?? Entity()
 
-        // Target measured from the MINIATURE alone — `pulser` includes the 0.40 m focus
-        // glow, and a target from it reaches past both neighbours (0.36 m puck pitch).
-        // `ColliderCriterionTests` cannot catch that by construction;
-        // `testGalleryExhibitTargetsDoNotOverlapEachOther` is the guard.
-        // THE NAME PLATE IS DELIBERATELY OUTSIDE THE TARGET — the title alone is wider
-        // than the puck pitch, so a target containing it must reach into neighbours.
-        // Set directly, not via `Grabbable`, which would add a grounding shadow.
+        // Target measured from the miniature alone: `pulser` includes the
+        // 0.40 m focus glow, which would reach past both neighbours at 0.36 m
+        // puck pitch. Set directly, not via `Grabbable`, which would add a
+        // grounding shadow.
         let reach = Grabbable.reach
         let exhibitBounds = vignette.visualBounds(relativeTo: anchor)
         anchor.components.set(InputTargetComponent())
         anchor.components.set(CollisionComponent(shapes: [
-            .generateBox(size: exhibitBounds.extents + SIMD3<Float>(repeating: 2 * reach))
-                .offsetBy(translation: exhibitBounds.center),
+            Primitives.collisionBox(size: exhibitBounds.extents + SIMD3<Float>(repeating: 2 * reach), offset: exhibitBounds.center),
         ]))
         anchor.components.set(HoverEffectComponent())
 
         exhibits.append(Exhibit(
             moduleID: module.id, anchor: anchor, pulser: pulser,
-            vignette: vignette, namePivot: namePivot, halo: glow,
+            vignette: vignette, label: label, halo: glow,
             basePosition: basePosition, animate: built.animate))
     }
 
-    /// How wide the pill `namePlate` will build for this text. Exposed
-    /// because a caller mounting a label BESIDE something must know how far
-    /// it reaches — the plate is centred on its own origin, so a fixed
-    /// offset only works while the text stays short. One formula, two
-    /// callers; a second copy of the padding arithmetic would drift.
+    /// How wide the pill `namePlate` will build for this text — the plate
+    /// is centred on its own origin, so a caller mounting a label beside
+    /// something needs its reach.
     static func namePlateWidth(_ text: String, size: CGFloat = 0.036) -> Float {
         textExtents(text, size: size).x + Float(size) * 0.72 * 2
     }
 
-    /// A nameplate, optionally WRAPPED — a sentence left unwrapped runs
-    /// straight through the neighbouring exhibits, since pucks are only
-    /// `GalleryLayout.basePuckPitch` apart.
+    /// A nameplate, optionally wrapped: an unwrapped sentence runs through
+    /// the neighbouring exhibits.
     static func namePlate(_ text: String, accent: UIColor,
                           size: CGFloat = 0.036,
                           wrapWidth: CGFloat = 0,
@@ -1120,29 +1141,23 @@ final class HubScene {
         let extents = wrapWidth > 0
             ? Callout.textMesh(text, size: size, wrapWidth: wrapWidth).bounds.extents
             : textExtents(text, size: size)
-        // Padding scales WITH the type: fixed values authored for the
-        // gallery's 36 mm plates made a 10 mm palette label wear a
-        // plate three text-heights wide — neighbouring labels collided
-        // into one smear of backing.
+        // Padding scales with the type, or a 10 mm label wears a plate sized
+        // for 36 mm.
         let padY = Float(size) * 0.44
         let width = wrapWidth > 0
             ? extents.x + Float(size) * 0.72 * 2
             : namePlateWidth(text, size: size)
         let height = extents.y + padY * 2
 
-        // `backed: false` is the exhibit titles' setting (owner,
-        // 2026-08-14: the card behind each gallery name read as a smear
-        // that blocked the room). The card stays right for the small
-        // apparatus labels, which sit ON instruments rather than
-        // floating in the space the eye looks through.
+        // `backed: false` is the exhibit titles' setting: a card behind each
+        // gallery name blocked the room. The card stays for small apparatus
+        // labels, which sit on instruments.
         if backed {
-            var backing = UnlitMaterial(color: UIColor(white: 0.02, alpha: 1))
-            backing.blending = .transparent(opacity: 0.58)
-            // Same lesson as `BackedLabel.backing`: `height / 2` is a pill
-            // for one line and a lozenge for several, and a lozenge's curved
-            // ends eat the first and last words of every line.
+            let backing = Materials.unlit(UIColor(white: 0.02, alpha: 1), opacity: 0.58)
+            // `height / 2` is a pill for one line and a lozenge for several, and a
+            // lozenge's ends eat the first and last words of every line.
             let card = ModelEntity(
-                mesh: .generatePlane(width: width, height: height,
+                mesh: Primitives.plane(width: width, height: height,
                                      cornerRadius: min(height / 2,
                                                        Float(size) * 1.2)),
                 materials: [backing])
@@ -1151,9 +1166,8 @@ final class HubScene {
         }
 
         if wrapWidth > 0 {
-            // Wrapped runs use a flat mesh: the bubble builder extrudes
-            // and clear-coats one line of display type, which is the
-            // wrong voice for a caption and unreadable stacked.
+            // Wrapped runs use a flat mesh: the bubble builder is one line of
+            // display type.
             let mesh = Callout.textMesh(text, size: size, wrapWidth: wrapWidth)
             var material = UnlitMaterial(color: accent)
             material.blending = .opaque
@@ -1169,23 +1183,53 @@ final class HubScene {
         return plate
     }
 
-    /// The focus pool's entity name — the pool of the module's colour on
-    /// the platform under whichever exhibit you face. Focus is expressed
-    /// without furniture: the exhibit grows, comes toward you, and lights
-    /// its own puck.
+    /// The bench's front face in the slab's frame, plus the inlay's lift off
+    /// it: proud enough never to fight the face for depth, too thin to read
+    /// as a raised sign.
+    private static let benchFace: Float = GalleryLayout.slabDepth / 2 + 0.0006
+
+    private static var labelMeshes: [String: MeshResource] = [:]
+
+    /// A lab's name as an inlay on the bench's front edge: the house's heavy
+    /// rounded label voice, lit in the lab's accent, a millimetre deep and
+    /// centred on its own origin. Unlit like the hairline above it — a light
+    /// in the stock, not a lamp in front of it.
+    static func benchLabel(_ text: String, accent: UIColor) -> Entity {
+        let key = text
+        let mesh: MeshResource
+        if let cached = labelMeshes[key] {
+            mesh = cached
+        } else {
+            mesh = MeshResource.generateText(
+                text, extrusionDepth: 0.001,
+                font: roundedFont(size: benchLabelSize), alignment: .center)
+            labelMeshes[key] = mesh
+        }
+        let bounds = mesh.bounds
+        let letters = ModelEntity(mesh: mesh, materials: [Materials.unlit(accent)])
+        letters.position = [-(bounds.min.x + bounds.max.x) / 2,
+                            -(bounds.min.y + bounds.max.y) / 2, 0]
+        let label = Entity()
+        label.name = "bench-label"
+        label.addChild(letters)
+        return label
+    }
+
+    /// How wide a bench label is — the type alone, since nothing backs it.
+    static func benchLabelWidth(_ text: String) -> Float {
+        textExtents(text, size: benchLabelSize).x
+    }
+
+    /// The focus pool's entity name — the pool of the module's colour under
+    /// whichever exhibit you face.
     static let focusPoolName = "focus-pool"
 
     private static func focusGlow(accent: UIColor) -> Entity {
-        // The discs MUST be a ladder, half a millimetre apart, widest at
-        // the bottom: coplanar faces make the depth buffer choose per
-        // pixel per frame, which is a visible flicker under a focused
-        // exhibit. Stacking also matches the falloff being described.
+        // A ladder of discs half a millimetre apart, widest at the bottom:
+        // coplanar faces flicker.
         let glow = Entity()
-        // Named so the stacking rule can be TESTED. Reaching for these
-        // discs by shape instead — flat, wide, translucent — also finds
-        // the Gravity Lab miniature's two orbit tracks, which are rings
-        // at different radii and never overlap, and the test fails on an
-        // exhibit that is drawn correctly.
+        // Named so the stacking rule can be tested without finding Gravity
+        // Lab's orbit tracks by shape.
         glow.name = Self.focusPoolName
         let layers: [(radius: Float, opacity: Float)] = [
             (0.200, 0.06), (0.135, 0.15), (0.085, 0.30),
@@ -1195,42 +1239,35 @@ final class HubScene {
             material.blending = .transparent(
                 opacity: .init(floatLiteral: layer.opacity))
             let disc = ModelEntity(
-                mesh: .generateCylinder(height: 0.001, radius: layer.radius),
+                mesh: Primitives.cylinder(height: 0.001, radius: layer.radius),
                 materials: [material])
             disc.position.y = Float(index) * 0.0005
             glow.addChild(disc)
         }
-        glow.position = SIMD3(0, -GalleryLayout.exhibitLift + 0.006, 0)
+        glow.position = SIMD3(0, poolRest, 0)
         return glow
     }
+
+    /// Where the focus pool lies relative to its exhibit at rest: on the
+    /// mount's top, 6 mm proud.
+    private static let poolRest: Float = -GalleryLayout.exhibitLift + 0.006
 
 
     // MARK: Idle animation & interaction
 
-    /// The exhibits hold their places on the ring; the life in them is
-    /// their own physics running, plus a gentle bob — and the ANSWER to
-    /// where you are looking.
-    /// The gallery's whole-room placement, applied to `root` every
-    /// frame. A transform, never a rebuild — see `GalleryPlacement`.
+    /// The gallery's whole-room placement, applied to `root` every frame —
+    /// a transform, never a rebuild.
     var placement: GalleryPlacement?
 
     func animate(dt: Double, lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?) {
-        // CLAMPED, because the first event after the space presents
-        // can carry everything the renderer swallowed while opening —
-        // seconds, in one delta. Unclamped, that single frame spent
-        // the arrival's entire centred beat before anyone saw a frame:
-        // the launch-day symptom was a room already cascading, title
-        // already at the wall, on the first visible frame. A ceiling
-        // of a thirtieth of a second means a stall shows up as slow
-        // motion for one frame instead of as time travel.
+        // Clamped: the first event after the space presents can carry seconds
+        // in one delta, which would spend the arrival's centred beat before
+        // anyone saw a frame.
         let dt = min(dt, 1.0 / 30.0)
         time += dt
         if let placement {
-            // ONCE PER LAUNCH, and only if the restored facing points away from
-            // the wearer. A saved yaw is relative to last launch's standing
-            // position, so relaunching from another chair can open the gallery
-            // behind them — see `GalleryPlacement.reFacedYaw`. The offset is
-            // left alone; a placement the user chose is not a bug.
+            // Once per launch, and only if the restored facing points away from the
+            // wearer — see `GalleryPlacement.reFacedYaw`. The offset is left alone.
             if !hasRefaced, let lookRay {
                 hasRefaced = true
                 placement.refaceIfBehind(
@@ -1248,10 +1285,21 @@ final class HubScene {
             let focus = exhibits[index].focus
             let exhibit = exhibits[index]
 
-            // An exhibit riding a hand, gliding home, or standing on
-            // the podium owns its own position — the idle life must
-            // not fight the carry, stomp the glide, or yank it off
-            // the pedestal.
+            // The bench label answers before any branch below claims the frame:
+            // brighter while faced, dim while its lab is away on the pad.
+            let labelTarget = exhibit.moduleID == dockedModuleID
+                ? Self.labelAway
+                : Self.labelRest + (Self.labelFocused - Self.labelRest) * focus
+            exhibits[index].labelLevel = Motion.ease(
+                exhibit.labelLevel, toward: labelTarget, dt: dt, rate: 8)
+            if abs(exhibits[index].labelLevel - exhibit.appliedLabelLevel) > 0.004 {
+                exhibits[index].appliedLabelLevel = exhibits[index].labelLevel
+                exhibit.label.components.set(
+                    OpacityComponent(opacity: exhibits[index].labelLevel))
+            }
+
+            // An exhibit riding a hand, gliding home or standing on the podium owns
+            // its own position.
             if exhibit.moduleID == draggingID {
                 exhibits[index].appliedFocus = -1
                 continue
@@ -1271,15 +1319,11 @@ final class HubScene {
                         angle: Float(time * 0.45), axis: [0, 1, 0])
                 }
                 exhibit.pulser.scale = SIMD3(repeating: 1.05)
-                // Standing centre stage, it says its own name — without
-                // this the label keeps whatever opacity it happened to
-                // have when it was carried off the arc, which for an
-                // unfocused exhibit is invisible. Written when focus
-                // moves (or on the first frame after a carry, which
-                // parks appliedFocus at -1), not on every frame.
+                // In the cradle the pool sits where it was built, in the pocket.
+                exhibit.halo.position.y = Self.poolRest
+                // Written when focus moves, not every frame.
                 if abs(focus - exhibits[index].appliedFocus) > 0.0005 {
                     exhibits[index].appliedFocus = focus
-                    exhibit.namePivot.components.set(OpacityComponent(opacity: 1))
                     exhibit.halo.components.set(OpacityComponent(opacity: focus))
                 }
                 exhibits[index].animTime += dt
@@ -1287,12 +1331,9 @@ final class HubScene {
                 continue
             }
 
-            // Reduce Motion: the gallery holds still. Focus scaling
-            // stays — it answers the user's own head, which is exactly
-            // the motion Reduce Motion is not about.
-            // Breathe, not bob: ±8 mm on a slow desynced period. The
-            // exhibits stand on pedestals now, and furniture that
-            // wanders off its pedestal reads as broken.
+            // Reduce Motion: the gallery holds still; focus scaling stays, since it
+            // answers the user's own head. Breathe, not bob: ±8 mm on a slow
+            // desynced period, so nothing wanders off its pedestal.
             let breathe = stillness ? 0
                 : 0.008 * Float(sin(time * 1.05 + Double(index) * 2.1))
             // The focused exhibit lifts off its puck as it grows.
@@ -1303,46 +1344,36 @@ final class HubScene {
             let resting = hasLookRay ? Self.unfocusedScale : 1
             let scale = resting + (Self.focusedScale - resting) * focus
             exhibit.pulser.scale = SIMD3(repeating: scale)
+            // The pool lights the mount, so it stays on the mount: the lift and
+            // the bob are taken back out of it, and what rises is the exhibit
+            // alone. Riding along, it hung as a smudge in the air.
+            exhibit.halo.position.y = (Self.poolRest - breathe - lift) / max(scale, 0.01)
 
-            // Opacity follows focus, but is WRITTEN only when focus has
-            // actually moved: once the ease settles, rewriting the same
-            // three components per exhibit per frame is pure churn —
-            // eighteen component sets a frame across the gallery,
-            // forever, carrying values that had stopped changing.
+            // Written only when focus has actually moved; once the ease settles,
+            // rewriting is churn.
             if abs(focus - exhibits[index].appliedFocus) > 0.0005 {
                 exhibits[index].appliedFocus = focus
                 exhibit.halo.components.set(OpacityComponent(opacity: focus))
-                // Every name stays legible ALL the time (owner,
-                // 2026-08-04, reversing the materialise-on-gaze fade): a
-                // gallery whose captions vanish until you stare at them
-                // cannot be read at a glance, and the focus answer is
-                // already carried by the lift, the growth and the halo.
-                exhibit.namePivot.components.set(OpacityComponent(opacity: 1))
             }
 
             if stillness { continue }
 
-            // A gentle SWAY rather than a full turn. Spinning a
-            // miniature all the way round shows it is a 3-D object, and
-            // also swings the flat ones — the drumhead, the lens —
-            // edge-on for half of every rotation, where they vanish.
-            // It eases to a stop on the exhibit being read.
+            // A gentle sway rather than a full turn, which swings the flat models
+            // edge-on for half of every rotation. It eases to a stop on the exhibit
+            // being read.
             let sway = 0.44 * Float(sin(time * 0.4 + Double(index) * 1.3))
             exhibit.vignette.orientation = simd_quatf(
                 angle: sway * (1 - focus * 0.75), axis: [0, 1, 0])
 
-            // Each exhibit runs on its own clock: paused outside the
-            // field of view (work nobody can see), and a touch fast
-            // while focused, so the one you turn to visibly comes alive.
+            // Each exhibit runs on its own clock: paused outside the field of view,
+            // a touch fast while focused.
             if exhibit.inView || focus > 0.01 || !hasLookRay {
                 exhibits[index].animTime += dt * Double(1 + 0.6 * focus)
                 exhibit.animate(exhibits[index].animTime)
             }
         }
-        // The title floats and breathes, like a balloon on a string —
-        // and during the arrival it rides `HubIntro`'s flight from its
-        // centred opening pose back to this anchor, a shade oversized
-        // so landing reads as settling into place.
+        // The title floats and breathes; during the arrival it rides
+        // `HubIntro`'s flight from its centred pose back to this anchor.
         let bob = stillness ? 0 : 0.02 * Float(sin(time * 0.6))
         let blend = introPhase == .running
             ? HubIntro.titleBlend(at: introTime) : 1
@@ -1352,10 +1383,8 @@ final class HubScene {
         let introSwell = 1 + (HubIntro.titlePoseScale - 1) * (1 - blend)
         titleAnchor.scale = SIMD3(repeating: titleBreathe * introSwell)
 
-        // Each line rakes on its own phase, so the wordmark reads as two
-        // milled plates catching the light rather than one board turning.
-        // Under stillness they PARK square to the reader, which is where
-        // the mark looks composed — not frozen mid-turn.
+        // Each line rakes on its own phase. Under stillness they park square to
+        // the reader.
         for (index, line) in titleLines.enumerated() {
             line.orientation = stillness ? simd_quatf(angle: 0, axis: [0, 1, 0])
                 : HubTitleStyle.rake(time: time, phase: Double(index) * 1.3)
@@ -1371,11 +1400,8 @@ final class HubScene {
             }
         }
 
-        // The signage performs its physics — the electron laps the E&M
-        // sign, the ball lobs over the Mechanics one — each door on its
-        // own phase so the room never moves in lockstep. Called under
-        // stillness too: that is how the signs PARK rather than freeze
-        // mid-flight.
+        // The signage performs its physics, each door on its own phase. Called
+        // under stillness too, so the signs park rather than freeze.
         for (index, domain) in HubDomain.allCases.enumerated() {
             domainTitles[domain]?.animate(time: time + Double(index) * 1.9,
                                           stillness: stillness)
@@ -1388,8 +1414,8 @@ final class HubScene {
     /// Where the gallery is heading: 1 on arrival, 0 once a lab has been chosen.
     private var presenceTarget: Float = 1
 
-    /// The gallery arrives rather than appears, and LEAVES rather than vanishing —
-    /// a rebuild is a hard cut in either direction. Deliberately on the ROOT, not
+    /// The gallery arrives rather than appears, and leaves rather than vanishing —
+    /// a rebuild is a hard cut in either direction. Deliberately on the root, not
     /// per-entity, so everything moves on one curve.
     private func fadePresence(dt: Double) {
         guard presence != presenceTarget else { return }
@@ -1403,10 +1429,8 @@ final class HubScene {
             // forces the whole gallery down a transparency path it does not need.
             root.components.remove(OpacityComponent.self)
         } else {
-            // NOTE THE ASYMMETRY: at 0 the component STAYS. Removing it would
-            // restore the gallery to full opacity for the frames between the
-            // fade finishing and the module scene taking over — which is the
-            // hard cut, arriving by the back door.
+            // At 0 the component stays: removing it would restore full opacity for
+            // the frames before the module scene takes over.
             root.components.set(OpacityComponent(opacity: presence))
         }
     }
@@ -1416,13 +1440,12 @@ final class HubScene {
 
     private var hasLookRay = false
 
-    /// Latches the once-per-launch facing rescue in `animate`. Nil `lookRay`
-    /// (the simulator, and device frames before ARKit settles) leaves it false,
-    /// so the rescue waits for a real look rather than firing on a guess.
+    /// Latches the once-per-launch facing rescue; a nil `lookRay` leaves it
+    /// false so the rescue waits for a real look.
     private var hasRefaced = false
 
     /// Where to aim at an exhibit for the gaze cone: its puck, the podium while docked,
-    /// the hand while carried. Deliberately NOT the live anchor otherwise — it carries
+    /// the hand while carried. Deliberately not the live anchor otherwise — it carries
     /// breathe and focus lift, so focus would feed back into its own aim.
     private func aimPosition(of exhibit: Exhibit) -> SIMD3<Float> {
         if exhibit.moduleID == dockedModuleID { return podiumTop }
@@ -1506,10 +1529,8 @@ final class HubScene {
     func beginEnterTransition(id: String) {
         guard let exhibit = exhibits.first(where: { $0.moduleID == id }) else { return }
         SoundPalette.play(.pop, on: exhibit.anchor, volume: 0.7)
-        // The gallery starts leaving now. The chosen exhibit is a CHILD of
-        // `root`, so it fades with everything else even as it swells — it
-        // grows as the room it stood in goes, which is the right reading of
-        // being taken somewhere.
+        // The gallery starts leaving now; the chosen exhibit is a child of
+        // `root`, so it fades as it swells.
         beginDeparture()
         // The exhibit swells and rises; its terrace's hairline flares with it.
         exhibit.pulser.move(
@@ -1528,10 +1549,9 @@ final class HubScene {
     }
 }
 
-/// The button over the pad while a lab stands on it — the gallery's only Load button.
-/// Load-bearing though cosmetic-looking: the explicit `.hoverEffect`. `.buttonStyle(.plain)`
-/// gives up the platform highlight, and the bare default was invisible over this glass on
-/// device — without it there is no gaze feedback at all.
+/// The button over the pad while a lab stands on it. The explicit
+/// `.hoverEffect` is load-bearing: `.buttonStyle(.plain)` gives up the
+/// platform highlight, and the bare default was invisible on device.
 private struct HubLoadButton: View {
     let module: ModuleDescriptor
     let enter: () -> Void
@@ -1549,7 +1569,8 @@ private struct HubLoadButton: View {
                 .frame(width: 46, height: 46)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("LOAD MODULE")
+                    // "Lab", the word the wearer reads everywhere else.
+                    Text("LOAD LAB")
                         .font(.caption2.weight(.semibold))
                         .tracking(1.7)
                         .foregroundStyle(.secondary)
@@ -1583,10 +1604,8 @@ private struct HubLoadButton: View {
     }
 }
 
-/// Utility bar under the wordmark: four verbs, all real — Lab list, Settings,
-/// Notebook, About (three until the catalog door of 2026-08-23; the header said
-/// three until 2026-09-01). No Exit button — visionOS offers no supported way
-/// for an app to quit itself.
+/// Utility bar under the wordmark: Lab list, Settings, Notebook, About.
+/// No Exit button — visionOS offers no supported way for an app to quit.
 private struct HubUtilityBar: View {
     let openSettings: () -> Void
     let openAbout: () -> Void
@@ -1595,24 +1614,14 @@ private struct HubUtilityBar: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            // THE FLAT CATALOG'S ONLY DOOR.
-            //
-            // `HubView` calls the catalog "the accessibility path" and the
-            // standing rule is that nothing may be reachable only in space —
-            // but `syncMainWindow` dismisses the main window whenever no
-            // module is active, and this bar opened only Settings, Notebook
-            // and About. So on the home screen there was no way to summon it
-            // back, and the one UI test guarding it passed only because it
-            // launches with `-uiTesting 1`, which retreats out of the space
-            // entirely. The guarantee was measured in a configuration no
-            // wearer runs.
-            //
-            // A fourth button in a bar that already exists, not a new
-            // surface.
+            // The flat catalog's only door: `syncMainWindow` dismisses the main
+            // window while the gallery is up, and nothing may be reachable only in
+            // space.
             Button(action: openCatalog) {
                 Image(systemName: "list.bullet.rectangle")
                     .font(.title3)
             }
+            .help("Lab list")
             .accessibilityLabel("Lab list")
             .accessibilityHint("Opens a flat list of every lab in a window")
 
@@ -1620,15 +1629,15 @@ private struct HubUtilityBar: View {
                 Image(systemName: "gearshape.fill")
                     .font(.title3)
             }
+            .help("Settings")
             .accessibilityLabel("Settings")
-            // "progress" until 2026-08-23: the progress/experiments system
-            // it named was cut on 2026-08-09.
-            .accessibilityHint("Sound, room tone and onboarding")
+            .accessibilityHint("Sound, room tone and the Time Capsule")
 
             Button(action: openNotebook) {
                 Image(systemName: "book.closed.fill")
                     .font(.title3)
             }
+            .help("Lab Notebook")
             .accessibilityLabel("Lab Notebook")
             .accessibilityHint("Your captured observations")
 
@@ -1636,6 +1645,7 @@ private struct HubUtilityBar: View {
                 Image(systemName: "info.circle")
                     .font(.title3)
             }
+            .help("About")
             .accessibilityLabel("About Physics Playground")
             .accessibilityHint("Credits and version")
         }

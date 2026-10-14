@@ -2,19 +2,9 @@
 //  CircuitsGrabResolutionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Which of six things claimed a pinch.
-//
-//  Nothing automated can touch a RealityKit entity, so until this was
-//  a pure static the answer lived inside a gesture closure and could
-//  only be checked by reading it. `FieldSpaceView.resolveCharge` made
-//  the same move for the same reason.
-//
-//  The one rule worth stating: THERE IS NO DISTANCE FALLBACK. Electric
-//  Fields has one — a pinch within 12 cm of a charge grabs that charge
-//  — and it is right there, where the things being grabbed are far
-//  apart and the room is mostly empty. On this bench one part's two
-//  leads are 17 cm apart and its neighbours are closer than that, so a
-//  fallback is not forgiveness, it is how you wire the wrong end.
+//  Which of six things claimed a pinch, as a pure static. There is no
+//  distance fallback: one part's two leads are 17 cm apart and its
+//  neighbours closer, so a fallback is how you wire the wrong end.
 //
 
 import XCTest
@@ -70,11 +60,8 @@ final class CircuitsGrabResolutionTests: XCTestCase {
             .lever(toggle.id))
     }
 
-    /// THE PRIORITY ORDER. A pinch lands on a child and the meaning
-    /// can live on a parent, so the chain is walked nearest-first —
-    /// and the nearest wins. A lead is a child of its holder, and the
-    /// holder's name is a bare UUID; if the holder won, no lead on the
-    /// bench could ever be pulled.
+    /// The chain is walked nearest-first: a lead is a child of its holder,
+    /// and if the holder won no lead could be pulled.
     func testTheNearestNameInTheChainWins() {
         let (model, battery, _, _) = bench()
         XCTAssertEqual(
@@ -94,7 +81,7 @@ final class CircuitsGrabResolutionTests: XCTestCase {
     }
 
     /// A name for something that is not on the bench resolves to
-    /// nothing — it does not resolve to the nearest thing that IS.
+    /// nothing — it does not resolve to the nearest thing that is.
     /// This is the no-fallback rule, stated as a test.
     func testAStaleNameResolvesNothingRatherThanTheNearestPart() {
         let (model, _, _, _) = bench()
@@ -119,10 +106,7 @@ final class CircuitsGrabResolutionTests: XCTestCase {
             .none)
     }
 
-    /// Malformed names do not trap or half-match. `"t0-"` with no
-    /// UUID after it was a real shape once: the old resolver did
-    /// `dropFirst(3)` and fed the remainder to `UUID(uuidString:)`
-    /// without checking the part existed.
+    /// Malformed names do not trap or half-match.
     func testMalformedNamesResolveNothing() {
         let (model, _, _, _) = bench()
         for name in ["t0-", "t1-not-a-uuid", "w-", "k-", "t2-\(UUID().uuidString)", "-"] {
@@ -131,7 +115,7 @@ final class CircuitsGrabResolutionTests: XCTestCase {
         }
     }
 
-    /// The resolver reads the CURRENT bench: a deleted part's name
+    /// The resolver reads the current bench: a deleted part's name
     /// stops resolving the moment it goes, which is what keeps a
     /// stale entity from acting on a component that is not there.
     func testADeletedPartsNameStopsResolving() {

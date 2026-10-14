@@ -2,13 +2,9 @@
 //  TrackLayoutTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The track replaced the dial, so its arithmetic inherits the dial's
-//  test burden — with one difference that is the whole point. A dial had
-//  to be tested for ACCUMULATION (does a sequence of twists add up, does
-//  the ±π seam behave). A track has nothing to accumulate: a hand position
-//  maps to a value directly, every frame, from scratch. Most of the ways
-//  the dial could go wrong cannot happen here, and the tests that remain
-//  are about the mapping being honest at the ends and in the middle.
+//  The track's arithmetic. A track has nothing to accumulate — a hand
+//  position maps to a value directly, every frame — so the tests that
+//  remain are about the mapping being honest at the ends and the middle.
 //
 
 import XCTest
@@ -46,7 +42,7 @@ final class TrackLayoutTests: XCTestCase {
         XCTAssertEqual(track.value(forFraction: 7, in: 0.2...1.0), 1.0)
     }
 
-    /// ONLY the along-rail component counts. A hand that drifts up or
+    /// Only the along-rail component counts. A hand that drifts up or
     /// forward mid-drag — which every real hand does — must not change the
     /// value it is level with.
     func testOffAxisDriftDoesNotChangeTheValue() {

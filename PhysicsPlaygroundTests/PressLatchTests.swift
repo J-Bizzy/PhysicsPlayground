@@ -2,32 +2,10 @@
 //  PressLatchTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Two taps that destroyed what they touched, and the shared piece that
-//  now stands between them and the model.
-//
-//  A tap on a swinging pendulum bob — the documented way to open its
-//  control ring — stopped the pendulum dead and wiped every trail in the
-//  room. A tap on a ball in flight froze it in mid-air, where it hung
-//  permanently, having lost its strobe trail and its flight record. Both
-//  because one `DragGesture(minimumDistance: 0)` carries every verb in
-//  those scenes and fires on a bare press.
-//
-//  The gesture wiring itself is headset-only — nothing automated can
-//  synthesise a pinch, so the two rooms are checked by hand against
-//  `docs/ON_DEVICE_TESTS.md`. What IS reachable is the decision the
-//  wiring now defers to, and that is where the substance lives:
-//
-//  · a press that never travels must never promote, at any number of
-//    frames — the failure mode is a tap that acts;
-//  · a press that travels must promote EXACTLY ONCE — promoting twice
-//    would re-grab a held object every frame;
-//  · a cancelled press must be unable to promote later, or the NEXT
-//    gesture's first frame grabs an object nobody is touching.
-//
-//  The latch deliberately reports identity and nothing else. The
-//  tempting extra — where the object was when the press landed — is
-//  wrong twice over, and the reasoning is in `PressLatch`'s header
-//  rather than duplicated here.
+//  A press that never travels must never promote; a press that travels
+//  must promote exactly once; a cancelled press must be unable to
+//  promote later. The gesture wiring itself is headset-only; this is
+//  the decision it defers to.
 //
 
 import XCTest
@@ -47,9 +25,7 @@ final class PressLatchTests: XCTestCase {
         latch.press("bob", at: start)
 
         for frame in 0..<90 {
-            // A few millimetres of tremor, wandering rather than
-            // travelling — the accumulation a naive per-frame sum would
-            // wrongly turn into a drag.
+            // A few millimetres of tremor, wandering rather than travelling.
             let jitter = SIMD3<Double>(sin(Double(frame) * 0.7) * 0.003,
                                        cos(Double(frame) * 0.9) * 0.003,
                                        sin(Double(frame) * 1.3) * 0.002)
@@ -89,20 +65,11 @@ final class PressLatchTests: XCTestCase {
         XCTAssertFalse(latch.isPending)
     }
 
-    /// THE SEQUENCE THE VIEWS ACTUALLY EXECUTE, which is not the one
-    /// above, and the difference shipped a total failure.
-    ///
-    /// A `targetedToAnyEntity` gesture reports the same entity every
-    /// frame, and the handler's press branch sits inside `if drag == nil`
-    /// — which stays true until a promotion assigns `drag`. So the real
-    /// order is press, promote, press, promote, … with the press FIRST
-    /// each time. The version above presses once and then only promotes,
-    /// which models what the author believed the handler did; it passed
-    /// against a latch that re-anchored on every press, and the bob and
-    /// the ball were both un-grabbable at any speed.
-    ///
-    /// This is the same lesson as everything else in this arc: a test
-    /// that models the intended call sequence tests the intention.
+    /// The sequence the views actually execute: press, promote, press,
+    /// promote, with the press first each frame, because a
+    /// `targetedToAnyEntity` gesture reports the same entity every frame.
+    /// A latch that re-anchored on every press made the bob and the ball
+    /// un-grabbable at any speed.
     func testPressingEveryFrameStillPromotes() {
         var latch = PressLatch<String>()
 
@@ -134,13 +101,8 @@ final class PressLatchTests: XCTestCase {
                        + "with the hand and the threshold recedes ahead of it")
     }
 
-    /// THE PICKUP MUST NOT MOVE THE OBJECT. The caller pairs the
-    /// object's position at the promotion instant with the hand at the
-    /// promotion instant, and the drag that comes out holds it exactly
-    /// still on that frame. This is the whole reason the latch reports
-    /// identity and not the object's old position: pairing the OLD
-    /// position with the OLD hand replays the 12 mm the hand has already
-    /// travelled, and the object catches up in one frame.
+    /// The pickup must not move the object: the caller pairs the object's
+    /// position at the promotion instant with the hand at that instant.
     func testTheDragBuiltAtPromotionDoesNotMoveTheObject() {
         var latch = PressLatch<String>()
         latch.press("ball", at: start)
@@ -158,7 +120,7 @@ final class PressLatchTests: XCTestCase {
                        0, accuracy: 1e-12,
                        "the object moved at the moment it was picked up")
 
-        // And the WRONG pairing, spelled out, so the difference is on
+        // And the wrong pairing, spelled out, so the difference is on
         // the record rather than in a comment.
         let backdated = RelativeDrag(name: caught, target: objectNow, hand: start)
         XCTAssertEqual(simd_distance(backdated.position(forHand: crossing), objectNow),
@@ -177,7 +139,7 @@ final class PressLatchTests: XCTestCase {
     // MARK: Cancellation
 
     /// `onEnded` cancels an unpromoted press. A latch that kept it would
-    /// promote on the NEXT gesture's first frame, grabbing an object the
+    /// promote on the next gesture's first frame, grabbing an object the
     /// user is no longer touching.
     func testACancelledPressCannotPromoteLater() {
         var latch = PressLatch<String>()
@@ -197,11 +159,8 @@ final class PressLatchTests: XCTestCase {
 
     // MARK: Settling — the tap that acts at gesture end
 
-    /// `settle` resolves a press that never became a drag. By
-    /// construction anything still pending at gesture end stayed
-    /// within `tapTravel` — a travelled press was consumed by
-    /// `promote` in `onChanged` — so what settles is a tap, and the
-    /// switch lever's toggle rides it.
+    /// `settle` resolves a press that never became a drag — what settles is
+    /// a tap, and the switch lever's toggle rides it.
     func testSettlingAnUnpromotedPressReturnsThePayload() {
         var latch = PressLatch<String>()
         latch.press("lever", at: start)
@@ -210,7 +169,7 @@ final class PressLatchTests: XCTestCase {
         XCTAssertNil(latch.settle(), "a settled press must not settle twice")
     }
 
-    /// A press that promoted was a drag, and a drag must not ALSO act
+    /// A press that promoted was a drag, and a drag must not also act
     /// as a tap at gesture end — that is the double-fire this method
     /// exists to prevent.
     func testSettlingAfterAPromotionReturnsNothing() {

@@ -47,8 +47,8 @@ public final class VectorFieldArrows {
         self.palette = palette
 
         // One shared mesh pair for every arrow keeps GPU memory flat.
-        let shaftMesh = MeshResource.generateCylinder(height: 0.035, radius: 0.0028)
-        let headMesh = MeshResource.generateCone(height: 0.015, radius: 0.007)
+        let shaftMesh = Primitives.cylinder(height: 0.035, radius: 0.0028)
+        let headMesh = Primitives.cone(height: 0.015, radius: 0.007)
 
         pool = EntityPool(budget: count) { container in
             let shaft = ModelEntity(mesh: shaftMesh, materials: [palette[0]])
@@ -103,12 +103,8 @@ public final class VectorFieldArrows {
         pool.hideAll()
     }
 
-    /// Rotation taking the arrow's rest axis (+Y) to `direction`.
-    ///
-    /// The antiparallel guard this used to carry alone now lives in
-    /// `RenderKit.rotation(from:to:)`, because twelve other sites needed
-    /// it and re-made the same mistake instead. Kept as a name for the
-    /// arrows' own rest axis.
+    /// Rotation taking the arrow's rest axis (+Y) to `direction`; the
+    /// antiparallel guard lives in `RenderKit.rotation(from:to:)`.
     public static func rotationFromYAxis(to direction: SIMD3<Float>) -> simd_quatf {
         rotation(from: [0, 1, 0], to: direction)
     }

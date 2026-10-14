@@ -86,10 +86,10 @@ public final class FrozenVectors {
             let container = Entity()
             // Unit-height parts scaled per frame: one mesh, transforms only.
             let shaft = ModelEntity(
-                mesh: .generateCylinder(height: 1, radius: 0.0035),
+                mesh: Primitives.cylinder(height: 1, radius: 0.0035),
                 materials: [UnlitMaterial(color: Kind.velocity.color)])
             let head = ModelEntity(
-                mesh: .generateCone(height: 0.022, radius: 0.009),
+                mesh: Primitives.cone(height: 0.022, radius: 0.009),
                 materials: [UnlitMaterial(color: Kind.velocity.color)])
             container.addChild(shaft)
             container.addChild(head)

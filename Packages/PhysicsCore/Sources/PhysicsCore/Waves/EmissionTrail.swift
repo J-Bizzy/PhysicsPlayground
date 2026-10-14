@@ -3,9 +3,9 @@
 //  PhysicsCore — Waves
 //
 //  Wavefronts remember where they were born. A moving source emits a
-//  crest every period; each crest then expands from its EMISSION
+//  crest every period; each crest then expands from its emission
 //  point at the medium's wave speed, indifferent to where the source
-//  went next. That single rule IS the Doppler effect: crests bunch to
+//  went next. That single rule is the Doppler effect: crests bunch to
 //  (c−v)/f ahead of a moving source and stretch to (c+v)/f behind —
 //  the tests pin both exactly.
 //

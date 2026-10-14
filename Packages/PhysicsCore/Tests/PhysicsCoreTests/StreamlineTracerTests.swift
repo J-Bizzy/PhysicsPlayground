@@ -2,16 +2,11 @@
 //  StreamlineTracerTests.swift
 //  PhysicsCoreTests
 //
-//  The seeding and splicing that the electric and magnetic tracers now
-//  share (2026-07-29). They each had their own copy; the point of one
-//  copy is that it is worth testing properly — and the risk of one copy
-//  is that a bug here draws BOTH field pictures wrong, so the contract is
-//  pinned directly rather than only through its two callers.
-//
-//  Fields here are analytic and trivial on purpose: a uniform field and
-//  an inverse-square monopole. What is under test is the seeding, the
-//  direction handling and the splice — not the RK4, which the domain
-//  tracers' own tests cover against Coulomb and dipole fields.
+//  The seeding and splicing the electric and magnetic tracers share. A
+//  bug here draws both field pictures wrong, so the contract is pinned
+//  directly. The fields are analytic and trivial on purpose (uniform and
+//  inverse-square monopole): under test is the seeding, the direction
+//  handling and the splice, not the RK4.
 //
 
 import XCTest
@@ -66,7 +61,7 @@ final class StreamlineTracerTests: XCTestCase {
 
     // MARK: Direction
 
-    /// A positive source's lines run WITH the field; a negative source's
+    /// A positive source's lines run with the field; a negative source's
     /// run against it. In the electric picture this is the whole reason
     /// lines leave positives and arrive at negatives.
     func testSignReversesTheDirectionOfTravel() {
@@ -83,7 +78,7 @@ final class StreamlineTracerTests: XCTestCase {
 
     // MARK: The splice — the magnetic case
 
-    /// A looped line is ONE continuous curve through its seed, not two
+    /// A looped line is one continuous curve through its seed, not two
     /// lines meeting at it. The seed must appear exactly once: splicing
     /// without dropping it leaves a duplicated point, which a tube mesh
     /// renders as a kink or a zero-length segment.
@@ -130,12 +125,12 @@ final class StreamlineTracerTests: XCTestCase {
     // MARK: Termination
 
     /// `stopCenters` end a line — for charges, this is what makes field
-    /// lines terminate ON the opposite charge instead of tunnelling past.
+    /// lines terminate on the opposite charge instead of tunnelling past.
     func testLinesStopAtAStopCentre() {
         var config = self.config(stepSize: 0.01, maxSteps: 500)
         config.stopRadius = 0.02
         let seedRadius = 0.05
-        // The stop has to sit ON the line's path, so it is placed above
+        // The stop has to sit on the line's path, so it is placed above
         // the actual seed rather than above the source.
         let seed = StreamlineTracer.fibonacciSphere(count: 1)[0] * seedRadius
         let stop = seed + SIMD3(0, 0.5, 0)

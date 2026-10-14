@@ -22,15 +22,13 @@ final class CircuitsRenderer {
     /// renderer deliberately holds no model.
     var onTap: ((Entity) -> Void)?
     /// The accessibility door, and the only one: tap-tap wiring for users who
-    /// cannot pull. It IS the terminal's activate; the pinch path never calls it.
+    /// cannot pull. It is the terminal's activate; the pinch path never calls it.
     var onTerminalAction: ((CircuitsModel.Terminal) -> Void)?
-    /// VoiceOver's switch toggle. Its own callback because the
-    /// physical tap path only SELECTS a lever (the toggle settles out
-    /// of the drag gesture) — see the lever's `SpatialActions.attach`.
+    /// VoiceOver's switch toggle, its own callback because the physical tap
+    /// path only selects a lever.
     var onLeverAction: ((UUID) -> Void)?
-    /// VoiceOver's wire removal. The pinch path deletes a wire by
-    /// pulling an end into open air — a gesture VoiceOver cannot make —
-    /// so its activate deletes directly, and physical taps never fire it.
+    /// VoiceOver's wire removal: the pinch path deletes a wire by pulling
+    /// it into open air, so its activate deletes directly.
     var onWireAction: ((UUID) -> Void)?
 
     /// Called from the SpaceView's `onDisappear` — an `EventSubscription`
@@ -86,12 +84,14 @@ final class CircuitsRenderer {
     /// Each tower's last-formatted reading, at the decimal it displays —
     /// NaN until first write. See the gate in `syncVoltageSkyline`.
     private var towerReadings: [Double] = []
+    /// Towers whose label the rate limit held back; offered again next frame.
+    private var towerLabelsPending: Set<Int> = []
     private var towerLabelPivots: [Entity] = []
     /// The colour step each tower wears — unchanged potential costs no material write.
     private var towerBuckets: [Int] = []
 
     /// The bench's own magnetic field. Deliberately modest budget: what teaches
-    /// is arrows CIRCLING a wire, not a room-filling fog.
+    /// is arrows circling a wire, not a room-filling fog.
     private let fieldArrows = VectorFieldArrows(count: 260)
     /// How many runs get rings, longest first.
     private static let fieldRunBudget = 10
@@ -99,7 +99,7 @@ final class CircuitsRenderer {
     private static let fieldStations = 3
     private static let fieldSpokes = 8
     /// Ring offset: far enough that the 1/d field is not a spike, close enough
-    /// that the circulation reads as belonging to THIS wire.
+    /// that the circulation reads as belonging to this wire.
     private static let fieldRingRadius: Double = 0.055
 
     private static let electronBudget = 200
@@ -115,15 +115,15 @@ final class CircuitsRenderer {
     private var lastSoundID = 0
     private var appliedResistorTextureVersion = -1
 
-    /// The wire core. STATIC so `makeBody` can be too: the palette's previews
+    /// The wire core. Static so `makeBody` can be too: the palette's previews
     /// are built before any renderer exists to own a copper.
     private static let copperMaterial = Materials.machined(
         DesignTokens.Palette.copperUI, roughness: 0.35)
     private var glowMaterials: [UnlitMaterial] = []
 
 
-    /// The bench's VIEW transform: `root` belongs to the lab placement,
-    /// `viewRoot` to the ZOOM — one transform each, so they cannot fight.
+    /// The bench's view transform: `root` belongs to the lab placement,
+    /// `viewRoot` to the zoom — one transform each, so they cannot fight.
     let viewRoot = Entity()
 
     init() {
@@ -140,10 +140,9 @@ final class CircuitsRenderer {
 
         // Electrons you can't miss: a white-hot core inside a cyan glow.
         let coreMaterial = UnlitMaterial(color: UIColor(red: 0.8, green: 1.0, blue: 1.0, alpha: 1))
-        var haloMaterial = UnlitMaterial(color: DesignTokens.Palette.electronUI)
-        haloMaterial.blending = .transparent(opacity: 0.35)
-        let coreMesh = MeshResource.generateSphere(radius: 0.0034)
-        let haloMesh = MeshResource.generateSphere(radius: 0.0075)
+        let haloMaterial = Materials.unlit(DesignTokens.Palette.electronUI, opacity: 0.35)
+        let coreMesh = Primitives.sphere(radius: 0.0034)
+        let haloMesh = Primitives.sphere(radius: 0.0075)
         electronPool = EntityPool(budget: Self.electronBudget) { container in
             let core = ModelEntity(mesh: coreMesh, materials: [coreMaterial])
             core.addChild(ModelEntity(mesh: haloMesh, materials: [haloMaterial]))
@@ -166,10 +165,9 @@ final class CircuitsRenderer {
 
     // MARK: The bench's magnetic field
 
-    /// Places arrows on RINGS around each current-carrying run — never a volume
-    /// grid (`VectorFieldArrows` takes the first points given, so a grid dumps
-    /// the whole budget into one slab). Each vector is still the TOTAL field
-    /// from every segment, so nearby wires visibly reinforce or cancel.
+    /// Places arrows on rings around each current-carrying run, never a
+    /// volume grid. Each vector is the total field from every segment, so
+    /// nearby wires visibly reinforce or cancel.
     private func syncMagneticField(_ model: CircuitsModel) {
         guard model.showMagneticField else {
             if fieldArrowsVisible {
@@ -182,9 +180,8 @@ final class CircuitsRenderer {
         }
         fieldArrowsVisible = true
 
-        // CHANGE-GATED: everything below is a pure function of the segments
-        // and the coils, so a static bench costs one array compare; a
-        // carried part still updates every frame because it changes them.
+        // Change-gated: a static bench costs one array compare; a carried part
+        // changes the segments every frame.
         let segments = model.currentSegments
         let coils = model.coilMagnets
         guard segments != lastFieldSegments || coils != lastCoils else { return }
@@ -209,7 +206,7 @@ final class CircuitsRenderer {
             let length = simd_length(along)
             guard length > 1e-4 else { continue }
             let axis = along / length
-            // The world axis the run is LEAST aligned with keeps the cross
+            // The world axis the run is least aligned with keeps the cross
             // product well conditioned.
             let reference: SIMD3<Double> = abs(axis.y) < 0.9
                 ? SIMD3(0, 1, 0) : SIMD3(1, 0, 0)
@@ -225,16 +222,14 @@ final class CircuitsRenderer {
                     let offset = (u * cos(angle) + v * sin(angle)) * Self.fieldRingRadius
                     let point = centre + offset
                     points.append(point)
-                    // The TOTAL field — every segment and every coil.
+                    // The total field — every segment and every coil.
                     vectors.append(model.magneticField(at: point))
                 }
             }
         }
 
-        // THE COIL IS A MAGNET (2026-09-02): rings around each carrying
-        // inductor's axis, out past its ends where a bar field closes,
-        // plus the axis itself where it is strongest. Same total field
-        // at every point, so a wire beside a coil shows the coil's pull.
+        // The coil is a magnet: rings around each carrying inductor's axis, out
+        // past its ends where a bar field closes, plus the axis itself.
         for coil in coils {
             let axis = simd_normalize(coil.moment)
             let reference: SIMD3<Double> = abs(axis.y) < 0.9 ? SIMD3(0, 1, 0) : SIMD3(1, 0, 0)
@@ -262,7 +257,7 @@ final class CircuitsRenderer {
     /// must stand clear of the part they describe.
     private static let coilRingRadius: Double = 0.07
 
-    /// Distance from a point to a SEGMENT — clamped to the ends, not the
+    /// Distance from a point to a segment — clamped to the ends, not the
     /// infinite line.
     private static func distance(from point: SIMD3<Double>,
                                  to segment: WireField.Segment) -> Double {
@@ -283,8 +278,8 @@ final class CircuitsRenderer {
     }
 
     // MARK: Render clock
-    // Ticked directly from SceneEvents.Update, not the observation render loop —
-    // a steady DC circuit gives withObservationTracking nothing to re-fire on.
+    // Ticked from SceneEvents.Update, not the observation loop: a steady
+    // DC circuit gives it nothing to re-fire on.
 
     /// Drives the armed-terminal pulse.
     private var pendingPulsePhase = 0.0
@@ -297,14 +292,13 @@ final class CircuitsRenderer {
     private(set) var previewTargets: Set<CircuitsModel.Terminal> = []
     private var previewWireEntities: [ModelEntity] = []
 
-    /// The lead in flight, in one of three states. FATTER THAN A WIRE'S 0.0062
-    /// jacket, load-bearing: a thinner lead lying along an existing wire is
-    /// swallowed by it — which is exactly the refusal case.
+    /// The lead in flight. Fatter than a wire's jacket, or a lead lying
+    /// along an existing wire is swallowed by it — the refusal case.
     private static let flyingLeadRadius: Float = 0.008
 
     private lazy var flyingLead: ModelEntity = {
         let lead = ModelEntity(
-            mesh: .generateCylinder(height: 1, radius: Self.flyingLeadRadius),
+            mesh: Primitives.cylinder(height: 1, radius: Self.flyingLeadRadius),
             materials: [Self.leadMaterial])
         lead.isEnabled = false
         viewRoot.addChild(lead)
@@ -322,11 +316,10 @@ final class CircuitsRenderer {
         material.blending = .transparent(opacity: 0.65)
         return material
     }()
-    /// Refusing: a release right now would be declined. NO TEXT — the refusal
+    /// Refusing: a release right now would be declined. No text — the refusal
     /// is the recoil, red and shortened.
     private static let refusalMaterial: UnlitMaterial = {
-        var material = UnlitMaterial(color: DesignTokens.Palette.destructiveUI)
-        material.blending = .transparent(opacity: 0.8)
+        let material = Materials.unlit(DesignTokens.Palette.destructiveUI, opacity: 0.8)
         return material
     }()
     /// How far back a refused lead pulls — unmistakable without vanishing.
@@ -383,10 +376,7 @@ final class CircuitsRenderer {
                     pairs.append((a, b, pair.to, false))
                 }
             }
-            // The joins a release would REFUSE, in the same red the lead
-            // pull recoils in — carried up to a terminal it is already
-            // netted with, the part previews the "no" instead of the old
-            // silent nothing.
+            // The joins a release would refuse, in the lead pull's red.
             for pair in model.refusedJoins(for: id) {
                 if let a = terminalWorld(pair.from, model),
                    let b = terminalWorld(pair.to, model) {
@@ -394,7 +384,7 @@ final class CircuitsRenderer {
                 }
             }
         }
-        // Only the joinable targets swell — never one that would REFUSE.
+        // Only the joinable targets swell — never one that would refuse.
         previewTargets = Set(pairs.filter { !$0.refused }.map(\.target))
         // A lead in flight swells its landing target on the same terms.
         if let pull = model.leadPull, pull.refusal == nil, let target = pull.target {
@@ -403,7 +393,7 @@ final class CircuitsRenderer {
 
         while previewWireEntities.count < pairs.count {
             let ghost = ModelEntity(
-                mesh: .generateCylinder(height: 1, radius: 0.0045),
+                mesh: Primitives.cylinder(height: 1, radius: 0.0045),
                 materials: [Self.previewMaterial])
             ghost.isEnabled = false
             viewRoot.addChild(ghost)
@@ -420,14 +410,13 @@ final class CircuitsRenderer {
         }
     }
 
-    /// The zoom, as ONE number: Electron View is a floor under the same
+    /// The zoom, as one number: Electron View is a floor under the same
     /// continuous two-hand zoom, not a competing 1×/4× flip.
     private var benchScale: Float = 1
     static let benchPivot = SIMD3<Float>(0, 1.25, -0.85)
 
-    /// A bench-space point in the room, through the zoom rig — for an
-    /// instrument that must hang under a part without scaling with the
-    /// bench (the AC source's frequency rail, 2026-09-02).
+    /// A bench-space point in the room, through the zoom rig, for an
+    /// instrument that hangs under a part without scaling with the bench.
     func worldPosition(ofBenchPoint point: SIMD3<Double>) -> SIMD3<Float> {
         viewRoot.position + SIMD3<Float>(point) * benchScale
     }
@@ -524,9 +513,8 @@ final class CircuitsRenderer {
 
     // MARK: Voltage skyline
 
-    /// Warm for high potential, cool for low — the same language the
-    /// gradient wires speak, saturated for the towers.
-    /// The skyline's warm↔cool ramp, over a normalised −1…1 axis.
+    /// The skyline's warm↔cool ramp over a normalised −1…1 axis, saturated
+    /// for the towers.
     private static func potentialTint(_ t: CGFloat) -> UIColor {
         if t >= 0 {
             return UIColor(red: 1.0, green: 0.6 - 0.35 * t, blue: 0.3 - 0.25 * t, alpha: 1)
@@ -571,9 +559,8 @@ final class CircuitsRenderer {
         skylineRoot.isEnabled = model.showVoltageHeights
         guard model.showVoltageHeights else { return }
 
-        // One tower per net, in node order — so a tower keeps its
-        // identity between frames instead of being whichever entry a
-        // dictionary happened to hand back.
+        // One tower per net, in node order, so a tower keeps its identity
+        // between frames.
         let nodes = model.nets
         let span = max(abs(model.voltageSpan.min), abs(model.voltageSpan.max), 1.0)
         while towers.count < nodes.count { growTower() }
@@ -627,29 +614,34 @@ final class CircuitsRenderer {
             pivot.position = base + SIMD3(0, height + (height >= 0 ? 0.05 : -0.06), 0)
             // Formatted only when the displayed decimal or tint bucket moves.
             let reading = (node.voltage * 10).rounded()
-            if towerReadings[index] != reading || colorMoved {
-                towerReadings[index] = reading
-                towerLabels[index].setText(
+            // `setText` compares colour too, so a held-back tint retries.
+            if towerReadings[index] != reading || colorMoved
+                || towerLabelsPending.contains(index) {
+                if towerLabels[index].setText(
                     PhysicsFormat.measurement(node.voltage, "V", decimals: 1),
-                    color: Self.skylineTint(bucket))
+                    color: Self.skylineTint(bucket)) {
+                    towerReadings[index] = reading
+                    towerLabelsPending.remove(index)
+                } else {
+                    towerLabelsPending.insert(index)
+                }
             }
         }
     }
 
     private func growTower() {
-        let column = ModelEntity(mesh: .generateBox(
+        let column = ModelEntity(mesh: Primitives.box(
             size: [0.012, 0.1, 0.012], cornerRadius: 0.003))
         skylineRoot.addChild(column)
         towers.append(column)
 
-        let cap = ModelEntity(mesh: .generateCylinder(height: 0.006, radius: 0.02))
+        let cap = ModelEntity(mesh: Primitives.cylinder(height: 0.006, radius: 0.02))
         skylineRoot.addChild(cap)
         towerCaps.append(cap)
 
-        var threadMaterial = UnlitMaterial(color: .white)
-        threadMaterial.blending = .transparent(opacity: 0.2)
+        let threadMaterial = Materials.unlit(.white, opacity: 0.2)
         let thread = ModelEntity(
-            mesh: .generateCylinder(height: 0.1, radius: 0.0009),
+            mesh: Primitives.cylinder(height: 0.1, radius: 0.0009),
             materials: [threadMaterial])
         skylineRoot.addChild(thread)
         towerThreads.append(thread)
@@ -728,16 +720,18 @@ final class CircuitsRenderer {
                 }
                 let isLit = highlightedTerminals.contains(key)
                 terminal.scale = SIMD3(repeating: isSource
-                    ? Float(1.6 + 0.35 * sin(pendingPulsePhase))
+                    // Breathes to say "wiring from here"; held at its mean
+                    // size under Reduce Motion.
+                    ? Float(1.6 + (Motion.isReduced ? 0 : 0.35 * sin(pendingPulsePhase)))
                     : (previewTargets.contains(key) ? 1.5
                         : ((isProbed || isLit) ? 1.35 : 1.0)))
             }
 
             // Live label. `BackedLabel` self-gates on unchanged text.
             let text = labelText(for: component)
-            if visual.labelText != text {
+            if visual.labelText != text,
+               visual.label.setText(text, color: UIColor(white: 0.95, alpha: 1)) {
                 visual.labelText = text
-                visual.label.setText(text, color: UIColor(white: 0.95, alpha: 1))
             }
 
             switch component.kind {
@@ -764,7 +758,7 @@ final class CircuitsRenderer {
                 visual.lever?.orientation = simd_quatf(
                     angle: component.isClosed ? 0 : 0.6, axis: [0, 0, 1])
             case .resistor:
-                // HEAT (2026-09-02): the body glows by I²R against its
+                // Heat: the body glows by I²R against its
                 // rating, in four steps, and goes black when it scorches.
                 let key = resistorKey(component.value)
                 let rating = CircuitsModel.powerRating(for: .resistor) ?? 1
@@ -811,7 +805,7 @@ final class CircuitsRenderer {
         return PhysicsFormat.measurement(rpm, "rpm", decimals: 0)
     }
 
-    /// The bench label. Value formatting goes through the ONE authority,
+    /// The bench label. Value formatting goes through the one authority,
     /// `CircuitsModel.formatValue`, so label and readout cannot disagree;
     /// only bench-specific wording stays here (motor rpm, switch
     /// open/closed, the AC tilde).
@@ -834,7 +828,7 @@ final class CircuitsRenderer {
     }
 
     private func makeVisual(for component: CircuitsModel.Component) -> ComponentVisual {
-        // The HOLDER is the manipulation target, so a carried part brings
+        // The holder is the manipulation target, so a carried part brings
         // its terminals, label and halo along.
         let holder = Entity()
         holder.name = component.id.uuidString
@@ -850,10 +844,10 @@ final class CircuitsRenderer {
         let body = Self.makeBody(for: component)
         holder.addChild(body)
 
-        // The carry target is the BODY, measured from `body` not `holder`
-        // (which collects a bulb's glow and a selection halo). Its x
-        // half-extent is clamped just inside the terminal target's inner
-        // edge (0.085 − 0.026 = 0.059) so a body pinch cannot swallow a lead.
+        // The carry target is the body, measured from `body` (the holder
+        // collects a bulb's glow and a halo), with its x half-extent clamped
+        // inside the terminal target's inner edge so a body pinch cannot
+        // swallow a lead.
         let bodyExtents = body.visualBounds(relativeTo: holder).extents
         let clearOfLead = Float(CircuitsModel.terminalOffset) - Self.terminalTargetRadius - 0.002
         let half = SIMD3<Float>(
@@ -869,7 +863,7 @@ final class CircuitsRenderer {
 
         // Terminals: copper spheres, tap targets for wiring.
         var terminals: [ModelEntity] = []
-        let terminalMesh = MeshResource.generateSphere(radius: 0.013)
+        let terminalMesh = Primitives.sphere(radius: 0.013)
         for end in 0...1 {
             let terminal = ModelEntity(mesh: terminalMesh, materials: [Self.copperMaterial])
             terminal.name = "t\(end)-\(component.id.uuidString)"
@@ -878,16 +872,14 @@ final class CircuitsRenderer {
             // The only target at this end; the far lead is 0.17 m away.
             terminal.components.set(InputTargetComponent())
             terminal.components.set(CollisionComponent(
-                shapes: [.generateSphere(radius: Self.terminalTargetRadius)]))
+                shapes: [Primitives.collisionSphere(radius: Self.terminalTargetRadius)]))
             terminal.components.set(HoverEffectComponent())
             let key = CircuitsModel.Terminal(componentID: component.id, end: end)
             SpatialActions.attach(
                 to: terminal, label: "Terminal. Activate to wire from here.",
                 activate: { [weak self] in self?.onTerminalAction?(key) })
-            // "Activate this, then another" is TRUE for VoiceOver — the
-            // deliberate surviving tap-tap path (`voiceOverWire`) — and
-            // matches the SpatialActions label above, which used to
-            // contradict this one on the same entity.
+            // "Activate this, then another" is true for VoiceOver's tap-tap path
+            // (`voiceOverWire`).
             var terminalAccessibility = AccessibilityComponent()
             terminalAccessibility.isAccessibilityElement = true
             terminalAccessibility.label = LocalizedStringResource(stringLiteral:
@@ -898,7 +890,7 @@ final class CircuitsRenderer {
 
             // A short lead from the body toward the terminal.
             let lead = ModelEntity(
-                mesh: .generateCylinder(height: 0.045, radius: 0.0028),
+                mesh: Primitives.cylinder(height: 0.045, radius: 0.0028),
                 materials: [Self.copperMaterial])
             lead.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             lead.position = SIMD3(Float(end == 0 ? -0.062 : 0.062), 0, 0)
@@ -906,14 +898,13 @@ final class CircuitsRenderer {
         }
 
         // The white center knob: the part's carry handle.
-        var knobMaterial = UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))
-        knobMaterial.blending = .transparent(opacity: 0.85)
+        let knobMaterial = Materials.unlit(UIColor(white: 0.95, alpha: 1), opacity: 0.85)
         let knob = ModelEntity(
-            mesh: .generateSphere(radius: 0.009), materials: [knobMaterial])
+            mesh: Primitives.sphere(radius: 0.009), materials: [knobMaterial])
         holder.addChild(knob)
 
         // Selection halo.
-        let halo = SelectionHalo.make(mesh: .generateSphere(radius: 0.085))
+        let halo = SelectionHalo.make(mesh: Primitives.sphere(radius: 0.085))
         holder.addChild(halo)
 
         // Value label beneath, billboarded over the dark backing.
@@ -932,20 +923,20 @@ final class CircuitsRenderer {
         switch component.kind {
         case .bulb:
             let filament = ModelEntity(
-                mesh: .generateBox(size: [0.016, 0.004, 0.004]),
+                mesh: Primitives.box(size: [0.016, 0.004, 0.004]),
                 materials: [UnlitMaterial(color: UIColor(white: 0.35, alpha: 1))])
             filament.position = [0, 0.012, 0]
             body.addChild(filament)
             visual.filament = filament
 
             let glow = ModelEntity(
-                mesh: .generateSphere(radius: 0.055), materials: [glowMaterials[0]])
+                mesh: Primitives.sphere(radius: 0.055), materials: [glowMaterials[0]])
             glow.position = [0, 0.012, 0]
             holder.addChild(glow)
             visual.glow = glow
         case .led:
             let glow = ModelEntity(
-                mesh: .generateSphere(radius: 0.03), materials: [glowMaterials[0]])
+                mesh: Primitives.sphere(radius: 0.03), materials: [glowMaterials[0]])
             glow.position = [0, 0.012, 0]
             holder.addChild(glow)
             visual.glow = glow
@@ -955,16 +946,14 @@ final class CircuitsRenderer {
             let rotor = Entity()
             rotor.position = [0.05, 0, 0]
             let hub = ModelEntity(
-                mesh: .generateSphere(radius: 0.008),
+                mesh: Primitives.sphere(radius: 0.008),
                 materials: [Materials.machined(UIColor(white: 0.6, alpha: 1), roughness: 0.3)])
             rotor.addChild(hub)
-            // The motor's own accent, from the tokens. This was a
-            // hand-typed teal that belonged to no palette entry — an
-            // unowned hue on a physics object.
+            // The motor's own accent, from the tokens.
             let accent = DesignTokens.Palette.motorAccentUI
             for axis: SIMD3<Float> in [[0, 1, 0], [0, 0, 1]] {
                 let blade = ModelEntity(
-                    mesh: .generateBox(size: [0.005, 0.05, 0.004], cornerRadius: 0.002),
+                    mesh: Primitives.box(size: [0.005, 0.05, 0.004], cornerRadius: 0.002),
                     materials: [UnlitMaterial(color: accent)])
                 blade.orientation = rotation(from: [0, 1, 0], to: axis)
                 rotor.addChild(blade)
@@ -982,31 +971,22 @@ final class CircuitsRenderer {
             leverAccessibility.label = "Switch lever. Pinch to open or close the circuit."
             pivot.components.set(leverAccessibility)
             let arm = ModelEntity(
-                mesh: .generateBox(size: [0.06, 0.008, 0.014], cornerRadius: 0.003),
+                mesh: Primitives.box(size: [0.06, 0.008, 0.014], cornerRadius: 0.003),
                 materials: [Materials.machined(UIColor(white: 0.75, alpha: 1), roughness: 0.3)])
             arm.position = [0.028, 0.006, 0]
             pivot.addChild(arm)
-            // THE ARM IS A BLADE. A 0.045 m sphere on a lever 8 mm
-            // thick bulged 4 cm below the switch body and took the
-            // pinches meant for the terminals underneath it. Measured
-            // after the arm exists, so the target is the lever — and
-            // set directly rather than through `Grabbable`, because
-            // this pivot is not a carried object and wants no
-            // grounding shadow of its own.
+            // The arm is a blade: the target is measured after the arm exists, so
+            // it does not bulge below the switch and take the pinches meant for
+            // the terminals. Set directly: the pivot is not a carried object.
             let leverBounds = pivot.visualBounds(relativeTo: pivot)
             pivot.components.set(InputTargetComponent())
             pivot.components.set(CollisionComponent(shapes: [
-                .generateBox(size: leverBounds.extents
-                             + SIMD3<Float>(repeating: 2 * Grabbable.reach))
-                    .offsetBy(translation: leverBounds.center),
+                Primitives.collisionBox(size: leverBounds.extents
+                             + SIMD3<Float>(repeating: 2 * Grabbable.reach), offset: leverBounds.center),
             ]))
             pivot.components.set(HoverEffectComponent())
-            // A dedicated callback, NOT `onTap`: the physical tap path
-            // only selects a lever now (the toggle settles out of the
-            // drag gesture, with tap-travel grace), so routing VO's
-            // activate through `onTap` would leave VoiceOver unable to
-            // flip the switch at all. Activations fire once; physical
-            // taps never fire this.
+            // A dedicated callback, not `onTap`: the physical tap path only selects
+            // a lever, so VoiceOver's activate needs its own route.
             SpatialActions.attach(
                 to: pivot, label: "Switch",
                 activate: { [weak self] in
@@ -1024,14 +1004,11 @@ final class CircuitsRenderer {
 
     // MARK: Modeled bodies (Blender-authored USDZ, procedural fallback)
 
-    /// Each part clones the shared `PropCache` prototype — all ten milled
-    /// by `Tools/circuitparts.py` since 2026-09-02, in the stocks the
-    /// gallery's platforms wear. The resistor's ceramic BODY stays
+    /// Each part clones the shared `PropCache` prototype, milled by
+    /// `Tools/circuitparts.py`. The resistor's ceramic body stays
     /// procedural: its colour bands are a live texture painted from the
-    /// value, and the UV layout of a RealityKit cylinder is the one that
-    /// texture knows; only its steel end caps are milled. The procedural
-    /// bodies below survive as the fallback, so a missing asset never
-    /// blanks a part.
+    /// value; only its steel caps are milled. The procedural bodies below
+    /// are the fallback.
     static let bodyAssetNames: [CircuitsModel.ComponentKind: String] = [
         .battery: "CircuitBattery", .acSource: "CircuitACSource",
         .capacitor: "CircuitCapacitor", .inductor: "CircuitInductor",
@@ -1055,19 +1032,19 @@ final class CircuitsRenderer {
         switch component.kind {
         case .battery:
             let body = ModelEntity(
-                mesh: .generateCylinder(height: 0.11, radius: 0.022),
+                mesh: Primitives.cylinder(height: 0.11, radius: 0.022),
                 materials: [Materials.machined(UIColor(red: 0.35, green: 0.45, blue: 0.35, alpha: 1), roughness: 0.3)])
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             // The + cap on terminal 0's side (nodeA convention).
             let cap = ModelEntity(
-                mesh: .generateCylinder(height: 0.008, radius: 0.009),
+                mesh: Primitives.cylinder(height: 0.008, radius: 0.009),
                 materials: [Self.copperMaterial])
             cap.position = [0, 0.059, 0]  // local +y = world −x after rotation
             body.addChild(cap)
             return body
         case .resistor:
             let body = ModelEntity(
-                mesh: .generateCylinder(height: 0.075, radius: 0.016),
+                mesh: Primitives.cylinder(height: 0.075, radius: 0.016),
                 materials: [Materials.machined(UIColor(red: 0.85, green: 0.72, blue: 0.55, alpha: 1),
                                                roughness: 0.6)])
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
@@ -1086,43 +1063,43 @@ final class CircuitsRenderer {
             glass.roughness = 0.1
             glass.blending = .transparent(opacity: .init(floatLiteral: 0.35))
             let body = ModelEntity(
-                mesh: .generateSphere(radius: 0.034), materials: [glass])
+                mesh: Primitives.sphere(radius: 0.034), materials: [glass])
             body.position = [0, 0.012, 0]
             return body
         case .capacitor:
             let body = ModelEntity(
-                mesh: .generateCylinder(height: 0.06, radius: 0.02),
+                mesh: Primitives.cylinder(height: 0.06, radius: 0.02),
                 materials: [Materials.machined(UIColor(red: 0.12, green: 0.2, blue: 0.45, alpha: 1),
                                                roughness: 0.4)])
             let stripe = ModelEntity(
-                mesh: .generateBox(size: [0.006, 0.06, 0.041]),
+                mesh: Primitives.box(size: [0.006, 0.06, 0.041]),
                 materials: [UnlitMaterial(color: UIColor(white: 0.9, alpha: 1))])
             stripe.position = [0.017, 0, 0]  // the − stripe, terminal-1 side
             body.addChild(stripe)
             return body
         case .switcher:
             return ModelEntity(
-                mesh: .generateBox(size: [0.075, 0.016, 0.032], cornerRadius: 0.004),
+                mesh: Primitives.box(size: [0.075, 0.016, 0.032], cornerRadius: 0.004),
                 materials: [Materials.graphite(UIColor(white: 0.25, alpha: 1))])
         case .acSource:
             let body = ModelEntity(
-                mesh: .generateCylinder(height: 0.02, radius: 0.032),
+                mesh: Primitives.cylinder(height: 0.02, radius: 0.032),
                 materials: [Materials.machined(UIColor(red: 0.1, green: 0.5, blue: 0.6, alpha: 1), roughness: 0.35)])
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             let band = ModelEntity(
-                mesh: .generateCylinder(height: 0.021, radius: 0.012),
+                mesh: Primitives.cylinder(height: 0.021, radius: 0.012),
                 materials: [UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))])
             body.addChild(band)
             return body
         case .inductor:
             let body = ModelEntity(
-                mesh: .generateCylinder(height: 0.07, radius: 0.014),
+                mesh: Primitives.cylinder(height: 0.07, radius: 0.014),
                 materials: [Materials.machined(UIColor(white: 0.35, alpha: 1),
                                                roughness: 0.6)])
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             for offset in stride(from: -0.024, through: 0.024, by: 0.012) {
                 let coil = ModelEntity(
-                    mesh: .generateCylinder(height: 0.006, radius: 0.019),
+                    mesh: Primitives.cylinder(height: 0.006, radius: 0.019),
                     materials: [Self.copperMaterial])
                 coil.position = [0, Float(offset), 0]
                 body.addChild(coil)
@@ -1130,13 +1107,13 @@ final class CircuitsRenderer {
             return body
         case .led:
             let base = ModelEntity(
-                mesh: .generateCylinder(height: 0.016, radius: 0.012),
+                mesh: Primitives.cylinder(height: 0.016, radius: 0.012),
                 materials: [Materials.machined(UIColor(white: 0.75, alpha: 1), roughness: 0.3)])
             var dome = PhysicallyBasedMaterial()
             dome.baseColor = .init(tint: UIColor(red: 0.9, green: 0.2, blue: 0.15, alpha: 1))
             dome.roughness = 0.15
             dome.blending = .transparent(opacity: .init(floatLiteral: 0.75))
-            let cap = ModelEntity(mesh: .generateSphere(radius: 0.013), materials: [dome])
+            let cap = ModelEntity(mesh: Primitives.sphere(radius: 0.013), materials: [dome])
             cap.position = [0, 0.012, 0]
             base.addChild(cap)
             return base
@@ -1144,11 +1121,11 @@ final class CircuitsRenderer {
             // A dark can with a bright faceplate; the rotor is added in
             // makeVisual so it can be spun.
             let housing = ModelEntity(
-                mesh: .generateCylinder(height: 0.07, radius: 0.022),
+                mesh: Primitives.cylinder(height: 0.07, radius: 0.022),
                 materials: [Materials.machined(UIColor(white: 0.2, alpha: 1), roughness: 0.4)])
             housing.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             let plate = ModelEntity(
-                mesh: .generateCylinder(height: 0.006, radius: 0.023),
+                mesh: Primitives.cylinder(height: 0.006, radius: 0.023),
                 materials: [Materials.machined(UIColor(red: 0.15, green: 0.5, blue: 0.55, alpha: 1), roughness: 0.35)])
             plate.position = [0, -0.038, 0]   // local −y = +x (shaft end)
             housing.addChild(plate)
@@ -1159,15 +1136,15 @@ final class CircuitsRenderer {
             glass.roughness = 0.1
             glass.blending = .transparent(opacity: .init(floatLiteral: 0.3))
             let body = ModelEntity(
-                mesh: .generateCylinder(height: 0.06, radius: 0.012), materials: [glass])
+                mesh: Primitives.cylinder(height: 0.06, radius: 0.012), materials: [glass])
             body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             let filament = ModelEntity(
-                mesh: .generateCylinder(height: 0.055, radius: 0.0018),
+                mesh: Primitives.cylinder(height: 0.055, radius: 0.0018),
                 materials: [Self.copperMaterial])
             body.addChild(filament)
             for sign: Float in [-1, 1] {
                 let cap = ModelEntity(
-                    mesh: .generateCylinder(height: 0.01, radius: 0.0125),
+                    mesh: Primitives.cylinder(height: 0.01, radius: 0.0125),
                     materials: [Materials.machined(UIColor(white: 0.8, alpha: 1), roughness: 0.25)])
                 cap.position = [0, sign * 0.03, 0]
                 body.addChild(cap)
@@ -1190,15 +1167,11 @@ final class CircuitsRenderer {
         return material
     }()
 
-    /// Eight-step warm↔cool palette for the live voltage gradient.
-    /// THE LIT NET. One material, the module's own accent — no new
-    /// hue, and no permanent tint on anything: a net's identity is
-    /// shown ON DEMAND, because the standing colour language on this
-    /// bench already means voltage (warm high, cool low) and a second
-    /// permanent colour would be arguing with it.
+    /// The lit net: one material in the module's accent, shown on demand,
+    /// because the standing colour language on this bench already means
+    /// voltage.
     private static let netHighlightMaterial: UnlitMaterial = {
-        var material = UnlitMaterial(color: UIColor(DesignTokens.Palette.circuitsAccent))
-        material.blending = .transparent(opacity: 0.95)
+        var material = Materials.unlit(UIColor(DesignTokens.Palette.circuitsAccent), opacity: 0.95)
         return material
     }()
 
@@ -1214,26 +1187,23 @@ final class CircuitsRenderer {
     }
     private var wireVoltBuckets: [UUID: Int] = [:]
 
-    /// The endpoints each wire's segment was last laid out for. A wire
-    /// is a pure function of its two endpoints, so the transform and
-    /// the collider are rebuilt only when an end actually moves — an
-    /// idle bench used to rewrite every segment transform every frame
-    /// for nothing.
+    /// The endpoints each wire's segment was last laid out for: a wire is a
+    /// pure function of its two endpoints, so the transform and collider
+    /// are rebuilt only when an end moves.
     private var wireLaidEndpoints: [UUID: (a: SIMD3<Float>, b: SIMD3<Float>)] = [:]
 
     /// Where each wire's collider was last shaped, so a wire that is
     /// not moving does not rebuild shapes it already has.
     private var wireColliderAnchors: [UUID: (SIMD3<Float>, SIMD3<Float>)] = [:]
 
-    /// How far an end must move before the grab volume is rebuilt.
-    /// Shapes are allocations, and a bench of stationary wires should
-    /// cost none — only the one or two on a carried part pay.
+    /// How far an end must move before the grab volume is rebuilt; shapes
+    /// are allocations.
     private static let colliderRebuildEpsilon: Float = 0.002
 
-    /// Give the wire a grab volume: one capsule along the wire, on
-    /// this unscaled parent — the visual segment carries its length as
-    /// a Y scale, and `ColliderCriterionTests` rightly refuses to
-    /// measure a collider under a world scale of 0.05.
+    /// One capsule along the wire, on this unscaled parent: the visual
+    /// segment carries its length as a Y scale, which
+    /// `ColliderCriterionTests` refuses to measure under a world scale of
+    /// 0.05.
     private func reshapeCollider(_ entity: ModelEntity, id: UUID,
                                  from a: SIMD3<Float>, to b: SIMD3<Float>) {
         if let previous = wireColliderAnchors[id],
@@ -1246,8 +1216,7 @@ final class CircuitsRenderer {
         let direction = b - a
         let length = simd_length(direction)
         guard length > 1e-4 else { return }
-        let capsule = ShapeResource
-            .generateCapsule(height: length, radius: 0.016)
+        let capsule = Primitives.collisionCapsule(height: length, radius: 0.016)
             .offsetBy(rotation: VectorFieldArrows.rotationFromYAxis(to: direction / length),
                       translation: (a + b) / 2)
         entity.components.set(CollisionComponent(shapes: [capsule]))
@@ -1255,29 +1224,22 @@ final class CircuitsRenderer {
         entity.components.set(HoverEffectComponent())
     }
 
-    /// Stretch a wire's one segment taut between its two endpoints.
-    ///
-    /// The segment is a copper core with a dark jacket child — the
-    /// jacket carries the silhouette, the core carries the live voltage
-    /// colour, and the electrons ride inside.
+    /// Stretches a wire's one segment taut between its endpoints: a copper
+    /// core with a dark jacket child; the electrons ride inside.
     private func layOut(segmentsOf entity: ModelEntity,
                         from a: SIMD3<Float>, to b: SIMD3<Float>) {
         if entity.children.isEmpty {
             let core = ModelEntity(
-                mesh: .generateCylinder(height: 1, radius: 0.0032),
+                mesh: Primitives.cylinder(height: 1, radius: 0.0032),
                 materials: [Self.copperMaterial])
             let jacket = ModelEntity(
-                mesh: .generateCylinder(height: 1, radius: 0.0062),
+                mesh: Primitives.cylinder(height: 1, radius: 0.0062),
                 materials: [Self.wireJacketMaterial])
             jacket.name = "jacket"
             core.addChild(jacket)
-            // THE SEGMENT IS PURE VISUAL — no collider, deliberately.
-            // It carries its own length as a Y scale, and a short wire
-            // therefore has a world scale under 0.05, which
-            // `ColliderCriterionTests` reads as a FOLDED instrument it
-            // cannot honestly measure, and says so rather than passing.
-            // It is right to. The grab volume lives on the parent
-            // instead, which is unscaled — see `reshapeCollider`.
+            // The segment is pure visual, no collider: it carries its length as a
+            // Y scale. The grab volume lives on the unscaled parent
+            // (`reshapeCollider`).
             entity.addChild(core)
         }
         guard let child = entity.children.first else { return }
@@ -1307,26 +1269,17 @@ final class CircuitsRenderer {
             if let existing = wireEntities[wire.id] {
                 entity = existing
             } else {
-                // A cable is a dark jacket carrying the silhouette with the
-                // conductor inside — the core carries the live voltage
-                // colour and the electrons ride in it.
-                //
-                // The cable is ONE unit-cylinder segment stretched by its
-                // transform, never a regenerated `TubeMesh`: the per-frame
-                // path touches transforms only, and a wire on a carried
-                // part moves every frame.
+                // A cable is one unit-cylinder segment stretched by its transform,
+                // never a regenerated `TubeMesh`: the per-frame path touches
+                // transforms only.
                 entity = ModelEntity()
                 entity.name = "w-\(wire.id.uuidString)"
                 var accessibility = AccessibilityComponent()
                 accessibility.isAccessibilityElement = true
                 accessibility.label = "Wire. Pinch an end and pull to move it."
                 entity.components.set(accessibility)
-                // The label was "Activate to remove it" while the
-                // activation only SELECTED — and the pinch path removes a
-                // wire by pulling it into open air, a gesture VoiceOver
-                // cannot make. The dedicated callback makes the label
-                // true: activations remove, and physical taps never fire
-                // this, so "a tap never deletes" stands for hands.
+                // The activation removes the wire (a gesture VoiceOver cannot make by
+                // pulling); physical taps never fire this.
                 let key = wire.id
                 SpatialActions.attach(
                     to: entity, label: "Wire. Activate to remove it.",
@@ -1349,20 +1302,14 @@ final class CircuitsRenderer {
             // them.
             guard length > 1e-4 else { entity.isEnabled = false; continue }
 
-            // Re-laid ONLY when an end moved. The segment transform and
-            // the collider are pure functions of the two endpoints; on
-            // an idle bench the endpoints are bit-identical frame to
-            // frame, and a carried part changes them every frame — so
-            // this gate costs the moving case nothing and saves the
-            // still case everything.
+            // Re-laid only when an end moved: on an idle bench the endpoints are
+            // bit-identical frame to frame.
             if wireLaidEndpoints[wire.id].map({ $0.a != a || $0.b != b }) ?? true {
                 wireLaidEndpoints[wire.id] = (a, b)
                 layOut(segmentsOf: entity, from: a, to: b)
                 reshapeCollider(entity, id: wire.id, from: a, to: b)
-                // A re-lay can mint the segment in bare copper. The
-                // repaint below only fires on a bucket change, and
-                // stretching a wire changes no voltage — forgetting the
-                // bucket forces the repaint to cover it on this pass.
+                // A re-lay can mint the segment in bare copper, and stretching changes
+                // no voltage; forget the bucket so the repaint covers it.
                 wireVoltBuckets[wire.id] = nil
             }
 
@@ -1373,9 +1320,8 @@ final class CircuitsRenderer {
             let vA = model.terminalVoltages[wire.from] ?? 0
             let vB = model.terminalVoltages[wire.to] ?? 0
             let t = ((vA + vB) / 2 - span.min) / width
-            // A lit net overrides the voltage ramp for as long as it
-            // is lit. `-1` is the "currently wearing the highlight"
-            // bucket, so dropping the highlight repaints exactly once.
+            // A lit net overrides the voltage ramp; `-1` is the highlight bucket,
+            // so dropping it repaints once.
             let lit = model.isHighlighted(wire: wire)
             let bucket = lit ? -1 : min(max(Int(t * 7.999), 0), 7)
             if wireVoltBuckets[wire.id] != bucket {
@@ -1393,33 +1339,22 @@ final class CircuitsRenderer {
     private func terminalWorld(_ terminal: CircuitsModel.Terminal, _ model: CircuitsModel) -> SIMD3<Float>? {
         guard let component = model.components.first(where: { $0.id == terminal.componentID })
         else { return nil }
-        // The model owns where a lead is, carried or not. (A branch
-        // here followed the live entity instead, for the case where
-        // the system held the transform — it had no writer and never
-        // ran.)
+        // The model owns where a lead is, carried or not.
         return SIMD3<Float>(component.terminalPosition(terminal.end))
     }
 
     // MARK: Electron flow (drift is − to +: opposite conventional current)
 
-    /// ONE factor, applied to both true-speed visuals, so the ratio the
-    /// eye sees is the ratio physics reports: display metres per second
-    /// per real metre per second. Set so the signal — 2×10⁸ m/s — shows
-    /// as 1 m/s, a front you can follow with your eyes. The electrons,
-    /// multiplied by the very same number, come out at 10⁻¹³ m/s and
-    /// stop dead. That is the lesson, not a bug.
+    /// One factor for both true-speed visuals, so the ratio the eye sees is
+    /// the ratio physics reports. The signal (2×10⁸ m/s) shows as 1 m/s;
+    /// the electrons come out at 10⁻¹³ m/s and stop dead, which is the
+    /// lesson.
     private static let trueSpeedGain = 1.0 / ChargeTransport.speedOfLight / 0.66
 
-    /// How fast to slide electron beads along a conductor, in display
-    /// metres per second, signed so they run AGAINST the conventional
-    /// current.
-    ///
-    /// TWO SPEEDS, and only one of them is true. The default is the
-    /// usual pretty lie every circuit animation tells: a rate picked to
-    /// look like flow. True-speed mode replaces it with the real drift
-    /// scaled by the SAME factor the field front is scaled by, so the
-    /// ratio you see is the ratio that exists — which means the
-    /// electrons stop dead. That is the lesson, not a bug.
+    /// How fast to slide electron beads along a conductor, signed against
+    /// the conventional current. The default is the usual pretty lie;
+    /// true-speed mode uses the real drift scaled by the same factor as the
+    /// field front.
     static func electronDisplaySpeed(current: Double, model: CircuitsModel) -> Double {
         if model.trueSpeedMode {
             return model.driftSpeed * trueSpeedGain * (current > 0 ? -1 : 1)
@@ -1428,16 +1363,15 @@ final class CircuitsRenderer {
     }
 
     private let fieldFront = ModelEntity(
-        mesh: .generateSphere(radius: 0.012),
+        mesh: Primitives.sphere(radius: 0.012),
         materials: [UnlitMaterial(color: UIColor(
             red: 1.0, green: 0.95, blue: 0.6, alpha: 1))])
     private var fieldFrontPhase = 0.0
     private var trueSpeedCallout: Callout?
 
-    /// The race, made watchable: a bright front sprinting the loop at
-    /// the signal's scaled speed while the electron dots hold still at
-    /// theirs, and a readout naming both real times. The bulb lights
-    /// because of the sprinter, not the crawlers.
+    /// A bright front sprinting the loop at the signal's scaled speed while
+    /// the electron dots hold still at theirs, and a readout naming both
+    /// real times.
     private func syncTrueSpeed(_ model: CircuitsModel, dt: Double) {
         guard model.trueSpeedMode, model.showElectronFlow,
               model.conductingPathLength > 1e-4, model.peakCurrent > 5e-4 else {
@@ -1486,13 +1420,9 @@ final class CircuitsRenderer {
             trueSpeedCallout = callout
         }
         trueSpeedCallout?.isEnabled = true
-        // Parked at the bench, NOT on the field front.
-        //
-        // It rode the front for a long time, which meant the most
-        // quotable text in the app was pinned to the fastest-moving
-        // object in it: unreadable while it swept the loop, and
-        // impossible to catch in a still frame. The number is a fact
-        // about the whole circuit, not about a position on it.
+        // Parked at the bench, not on the field front: the number is a fact
+        // about the whole circuit, and text pinned to the fastest-moving object
+        // is unreadable.
         trueSpeedCallout?.anchor(at: Self.benchPivot + SIMD3(0, 0.26, 0))
         trueSpeedCallout?.setText(
             "electron: \(Self.humanTime(model.driftLapTime)) per lap\n"
@@ -1538,10 +1468,8 @@ final class CircuitsRenderer {
         }
     }
 
-    /// Lays a run of drifting electron dots along a wire, advancing
-    /// their shared phase by the current's drift speed (− to +, opposite
-    /// the conventional arrow) over the real elapsed time. The wire is
-    /// taut, so a bead's position is a straight lerp between the ends.
+    /// Lays drifting electron dots along a taut wire, advancing their
+    /// shared phase by the drift speed (− to +) over real elapsed time.
     private func driftDots(
         key: UUID, from a: SIMD3<Float>, to b: SIMD3<Float>,
         current: Double, model: CircuitsModel, dt: Double, dotIndex: inout Int
@@ -1550,12 +1478,9 @@ final class CircuitsRenderer {
         let total = simd_distance(a, b)
         guard total > 1e-6 else { return }
         let length = Double(total)
-        // Bead count grows with zoom SUBLINEARLY. The beads scale with the
-        // wire they ride, so flat model-space spacing is already right; it
-        // is the CAP that starves Electron View. Dividing spacing by the
-        // full zoom packs them into a striped tube (they grew too), so the
-        // square root splits the difference. The pool budget still caps the
-        // loop below.
+        // Bead count grows with zoom sublinearly: the beads scale with the
+        // wire, so flat spacing is right and only the cap starves Electron
+        // View; the square root splits the difference.
         let zoom = Double(max(benchScale, 1))
         let spacing = 0.045 / zoom.squareRoot()
         let cap = Int((9 * zoom).rounded())

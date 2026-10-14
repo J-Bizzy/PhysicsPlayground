@@ -15,22 +15,33 @@ enum KinematicsModule {
             id: id,
             title: "Projectile Motion",
             shortTitle: "Projectiles",
-            blurb: "Throw real balls across your room — they ricochet off your actual walls, you can catch them out of the air, and gravity runs from zero-g to Jupiter.",
             icon: "paperplane.fill",
             accent: DesignTokens.Palette.kinematicsAccent,
-            // The room clause primes the ARKit prompt, which fires as the module
-            // opens (RoomSensingView.task) — exactly when this hint is on screen.
-            firstRunHint: "Grab any ball and throw it — physics takes over the instant you let go. For precise launches, drag the launcher anywhere and pinch its orange bead to aim. Balls bounce off your real walls and floor, so visionOS will ask to use your room.",
-            // The house dimming (Gravity Lab's 0.85 is the one exception).
+            // The house dimming (Orbital Mechanics' 0.85 is the one exception).
             preferredDimming: 0.35,
             legend: legend,
             isPaused: { appModel.kinematicsModel.isPaused },
-            // Through the capsule: un-pausing from a scrubbed instant resumes FROM it.
+            // Through the capsule: un-pausing from a scrubbed instant resumes from it.
             togglePause: { appModel.kinematicsModel.togglePauseRespectingScrub() },
             makeScene: {
                 AnyView(KinematicsSpaceView().environment(appModel.kinematicsModel))
             },
             captureReadings: { readings(appModel: appModel) },
+            adjustables: [
+                .init(id: "gravity", label: "Gravity g", unit: "m/s²",
+                      range: KinematicsModel.gravityRange, decimals: 2,
+                      read: { appModel.kinematicsModel.gravity },
+                      write: { appModel.kinematicsModel.gravity = $0 }),
+                // Wind needs air: setting a wind switches the air on, since
+                // wind through a vacuum would set a number nothing reads.
+                .init(id: "wind", label: "Wind", unit: "m/s",
+                      range: KinematicsModel.windSpeedRange, decimals: 1,
+                      read: { appModel.kinematicsModel.windSpeed },
+                      write: {
+                          appModel.kinematicsModel.windSpeed = $0
+                          if $0 > 0 { appModel.kinematicsModel.airResistance = true }
+                      }),
+            ],
             timeScrub: .init(model: appModel.kinematicsModel),
             reset: { appModel.kinematicsModel.reset() }
         )
@@ -40,11 +51,11 @@ enum KinematicsModule {
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
             let model = appModel.kinematicsModel
             var rows: [NotebookEntry.Reading] = [
-                .init("Projectile", model.kind.rawValue),
+                .init("Projectile", model.kind.displayName),
                 .init("Mass", PhysicsFormat.fixed(model.projectile.mass, decimals: 3), "kg"),
                 .init("Gravity", PhysicsFormat.fixed(model.gravity, decimals: 2), "m/s²"),
                 .init("Launch speed", PhysicsFormat.fixed(model.launchSpeed, decimals: 2), "m/s"),
-                .init("Elevation", PhysicsFormat.fixed(model.elevationDegrees, decimals: 1), "°"),
+                .init("Elevation", PhysicsFormat.angle(model.elevationDegrees, decimals: 1)),
                 .init("Air resistance", PhysicsFormat.state(model.airResistance)),
             ]
             if let last = model.lastFlight {
@@ -53,8 +64,7 @@ enum KinematicsModule {
                 rows.append(.init("Flight time", PhysicsFormat.fixed(last.flightTime, decimals: 3), "s"))
                 rows.append(.init("Launched by", last.wasThrown ? "hand" : "launcher"))
             }
-            // The hoops came out of their mothball on 2026-09-01, through
-            // a well; a bench with hoops on it writes its score.
+            // A bench with hoops on it writes its score.
             if !model.rings.isEmpty {
                 rows.append(.init("Hoops", "\(model.rings.count)"))
                 rows.append(.init("Score", "\(model.totalScore)"))

@@ -2,33 +2,11 @@
 //  SelectionHaloTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Selection halos, end to end through the renderers that own them.
-//
-//  `FadeTests` proves `Fade.tick` can now start and finish a ramp. This
-//  proves the thing the app actually wanted from it: select a part, and
-//  the veil around it appears; deselect, and it goes.
-//
-//  It is a separate file because it is a separate claim. `SelectionHalo`
-//  builds every halo disabled — "hidden until its object is selected",
-//  in its own words — and `Fade.tick` was the ONLY thing that ever
-//  enabled one. So for as long as `tick` could not leave a settled
-//  state, no halo in Circuits, Electric Fields or Magnetism had ever
-//  been drawn. Not "faded wrongly": never drawn.
-//
-//  ── WHY NOT A SCREENSHOT ──
-//
-//  Because neither module can be made to select anything from the
-//  command line, and finding that out is half the value of writing this
-//  down. `-circRing` and `-magRing` set `RingState.openID`, which is
-//  which ring is OPEN, not which object is SELECTED — the same trap
-//  `-penRing` sets for Pendulums' period tag. And Circuits' starter loop
-//  assigns `components` directly and never sets `selectedID`, so the
-//  module opens with nothing selected at all: a screenshot of a fresh
-//  bench shows no halo and is correct to show none.
-//
-//  Magnetism's `reset()` does select its one magnet, which is why that
-//  module gave a clean before/after photograph and this file exists to
-//  cover the other one.
+//  Selection halos, end to end through the renderers that own them:
+//  select a part and the veil appears; select another and it moves.
+//  Not a screenshot, because neither module can be made to select
+//  anything from the command line — `-circRing` and `-magRing` open a
+//  ring, which is not a selection.
 //
 
 import XCTest
@@ -61,9 +39,8 @@ final class SelectionHaloTests: XCTestCase {
         var found: [ModelEntity] = []
         if let model = entity as? ModelEntity, model.model != nil,
            model.name == SelectionHalo.entityName {
-            // The factory's other two guarantees, asserted where every
-            // halo in the app passes through rather than in a test of
-            // their own: decoration, never a target.
+            // The factory's other guarantees, asserted where every halo passes
+            // through: decoration, never a target.
             XCTAssertNil(model.components[CollisionComponent.self],
                          "a selection halo grew a collider — it is decoration")
             XCTAssertNil(model.components[InputTargetComponent.self],
@@ -75,10 +52,8 @@ final class SelectionHaloTests: XCTestCase {
     }
 
     /// Where the one lit halo is, in world space — nil if none is lit.
-    ///
     /// Position rather than identity, because the halos live inside
-    /// per-object visuals the renderers keep privately. Where the veil
-    /// IS happens to be the whole question anyway.
+    /// per-object visuals the renderers keep privately.
     private func litHaloPosition(under root: Entity) -> SIMD3<Float>? {
         let lit = halos(under: root).filter(\.isEnabled)
         guard lit.count == 1 else { return nil }
@@ -106,16 +81,9 @@ final class SelectionHaloTests: XCTestCase {
             """)
     }
 
-    /// THE VEIL MOVES, which is the hiding half stated in a way the
-    /// models actually support.
-    ///
-    /// Neither module has a public deselect — `selectedID` is
-    /// `private(set)` and only `reset`, `clearBench` and a capsule
-    /// restore ever nil it, and all three destroy the entities whose
-    /// halos we would be inspecting. Selecting a SECOND object asserts
-    /// the same two things in one gesture: the new one lights, and the
-    /// old one goes out. The old one going out is the Pendulums arrow
-    /// that would not switch off.
+    /// The veil moves: neither module has a public deselect, so selecting a
+    /// second object asserts both that the new one lights and the old one
+    /// goes out.
     func testTheMagnetismHaloMovesToTheNewlySelectedMagnet() {
         let model = MagnetismModel()
         model.reset()
@@ -187,7 +155,7 @@ final class SelectionHaloTests: XCTestCase {
             """)
     }
 
-    /// Exactly ONE thing wears the veil at a time.
+    /// Exactly one thing wears the veil at a time.
     func testOnlyTheSelectedPartWearsAHalo() {
         let model = CircuitsModel()
         guard model.components.count > 1, let part = model.components.first else {

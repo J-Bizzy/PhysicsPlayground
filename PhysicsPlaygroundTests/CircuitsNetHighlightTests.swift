@@ -2,29 +2,12 @@
 //  CircuitsNetHighlightTests.swift
 //  PhysicsPlaygroundTests
 //
-//  "What is this connected to?" — answered by the bench rather than by
-//  a sentence about the bench.
-//
-//  Tap a lead or a wire and every terminal at that same potential
-//  lights, along with every wire between them. It is the one question
-//  a circuit builder asks constantly and the room had no way to
-//  answer: a terminal wired through three hops looked exactly like a
-//  terminal wired to nothing.
-//
-//  SELECTION-DRIVEN, NOT HOVER, and that is a limit rather than a
-//  preference. `HoverEffectComponent` is drawn by the system with no
-//  callback, and there is no hover event without `SpatialEventGesture`
-//  — so "light what my gaze is on" is not reachable from where this
-//  module stands today.
-//
-//  WHAT IS STORED IS THE TAPPED TERMINAL, and the node is resolved on
-//  read. Node ids come from slot numbers, so deleting any part
-//  renumbers every net after it — held as an `Int`, the highlight
-//  silently re-pointed at a net it had never been asked for. Neither
-//  form is a `Bool`, which is also deliberate: `ResetCoverageTests`
-//  reflects over every `Bool` and demands a flip case for each, and
-//  this is a selection rather than a display layer, so the tests
-//  below cover reset, clear and the capsule by hand.
+//  "What is this connected to?": tap a lead or a wire and every
+//  terminal at that potential lights, with every wire between them.
+//  Selection-driven, not hover (there is no hover callback). What is
+//  stored is the tapped terminal and the node is resolved on read,
+//  because deleting any part renumbers every net. Not a `Bool`, so
+//  reset, clear and the capsule are covered here by hand.
 //
 
 import XCTest
@@ -97,7 +80,7 @@ final class CircuitsNetHighlightTests: XCTestCase {
         XCTAssertTrue([lit.from, lit.to].contains(.init(componentID: bulb, end: 0)))
     }
 
-    /// Tapping a wire lights its net too — a wire IS a statement that
+    /// Tapping a wire lights its net too — a wire is a statement that
     /// its two ends are one point, so either end answers.
     func testTappingAWireLightsItsNet() {
         let model = CircuitsModel()
@@ -126,7 +109,7 @@ final class CircuitsNetHighlightTests: XCTestCase {
         XCTAssertFalse(model.wires.contains { model.isHighlighted(wire: $0) })
     }
 
-    /// THE HIGHLIGHT FOLLOWS A REWIRE. Net ids are recomputed from the
+    /// The highlight follows A rewire. Net ids are recomputed from the
     /// bench, so a net that grows or splits under a lit highlight
     /// shows the new truth rather than a remembered one.
     func testTheHighlightFollowsARewire() {
@@ -176,7 +159,7 @@ final class CircuitsNetHighlightTests: XCTestCase {
         XCTAssertNil(model.highlightedNet)
     }
 
-    /// It is NEVER snapshotted. A highlight is the observer's state,
+    /// It is never snapshotted. A highlight is the observer's state,
     /// not the experiment's, and the Time Capsule's rule is that only
     /// the experiment goes in.
     func testHighlightingIsPurelyDisplayAndNeverSnapshotted() {
@@ -201,17 +184,9 @@ final class CircuitsNetHighlightTests: XCTestCase {
         XCTAssertEqual(model.readouts[bulb]?.amps ?? 0, before, accuracy: 1e-12)
     }
 
-    /// DELETING A PART MUST NOT RE-POINT THE HIGHLIGHT AT A
-    /// DIFFERENT NET.
-    ///
-    /// Node ids are assigned by lowest slot, and slots are
-    /// `2 * componentIndex + end` — so removing any part renumbers
-    /// every net after it. Held as an `Int`, the highlight silently
-    /// followed the NUMBER rather than the net: light the switch–bulb
-    /// net on the starter loop, delete the battery, and the bench went
-    /// on lighting "net 2", which by then was a terminal that had
-    /// never been in the net and was not connected to it. It holds the
-    /// tapped TERMINAL now and resolves the node on read.
+    /// Deleting a part must not re-point the highlight at a different net:
+    /// node ids are assigned by lowest slot, so removing a part renumbers
+    /// every net after it.
     func testDeletingAPartDoesNotRepointTheHighlight() {
         let model = CircuitsModel()
         let (battery, bulb, resistor) = loop(model)

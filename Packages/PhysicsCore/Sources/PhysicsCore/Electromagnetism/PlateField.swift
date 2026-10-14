@@ -2,7 +2,7 @@
 //  PlateField.swift
 //  Exact closed-form field of a uniformly charged rectangle (SI), and the finite-plate capacitor built on it.
 //  Derivation: corner-alternated arctangents (normal) + logs (tangential); verified against an independent point-charge patch sum in PlateFieldTests.
-//  `Capacitor.calibrated` solves for the densities that make the line integral of the REAL field equal the set ΔV — the textbook σ = ε₀V/d is wrong for finite plates.
+//  `Capacitor.calibrated` solves for the densities that make the line integral of the real field equal the set ΔV — the textbook σ = ε₀V/d is wrong for finite plates.
 //
 
 import Foundation
@@ -41,7 +41,7 @@ public enum PlateField {
     public static let planeEpsilon = 1e-4
 
     /// Exact field of one rectangle at `point` (N/C).
-    /// The corner term uses `atan`, NOT `atan2`: it is the principal value of ηζ/(ξR), and atan2 wraps to ±π when ξ goes negative — wrong by whole turns behind the plate.
+    /// The corner term uses `atan`, not `atan2`: it is the principal value of ηζ/(ξR), and atan2 wraps to ±π when ξ goes negative — wrong by whole turns behind the plate.
     public static func vector(at point: SIMD3<Double>,
                               dueTo plate: Rectangle) -> SIMD3<Double> {
         var xi = point.x - plate.x
@@ -74,7 +74,7 @@ public enum PlateField {
     // MARK: The capacitor
 
     /// Finite-plate capacitor, optionally part-covered by a gap-filling dielectric slab. Square
-    /// plates side `plateSize`, facing along x, POSITIVE plate on the −x side; the slab covers from the −z edge up to `dielectricCoverage` of the depth.
+    /// plates side `plateSize`, facing along x, positive plate on the −x side; the slab covers from the −z edge up to `dielectricCoverage` of the depth.
     public struct Capacitor: Sendable, Equatable {
         public var center: SIMD3<Double>
         public var separation: Double
@@ -104,7 +104,7 @@ public enum PlateField {
             0.5 * capacitance * voltage * voltage
         }
 
-        /// Field at `point` from the calibrated plates, 1/κ applied inside the slab. ONLY the normal
+        /// Field at `point` from the calibrated plates, 1/κ applied inside the slab. Only the normal
         /// (x) component is attenuated — continuity of D; tangential components pass through unchanged, or traced lines refract in y/z with a bend the physics does not have.
         public func field(at point: SIMD3<Double>) -> SIMD3<Double> {
             var field = PlateField.vector(at: point, dueTo: rectangles)
@@ -125,7 +125,7 @@ public enum PlateField {
                 && offset.z > -half && offset.z < coveredTop
         }
 
-        /// ONE midpoint quadrature for every line integral here: the calibration pins the set ΔV on
+        /// One midpoint quadrature for every line integral here: the calibration pins the set ΔV on
         /// this discretization, so any readout re-integrating on a different grid fails to read the ΔV back.
         static let quadratureSteps = 32
 
@@ -147,7 +147,7 @@ public enum PlateField {
         }
 
         /// Builds the calibrated capacitor: solves the densities that make the gap line integral of
-        /// the REAL field equal `voltage` (κ-scaled under the slab) — a 2×2 system when both regions exist, since each region's charge feeds the other's integral.
+        /// the real field equal `voltage` (κ-scaled under the slab) — a 2×2 system when both regions exist, since each region's charge feeds the other's integral.
         public static func calibrated(center: SIMD3<Double>,
                                       separation: Double,
                                       plateSize: Double,
@@ -181,7 +181,7 @@ public enum PlateField {
                            sigma: -1)]
             }
 
-            /// Gap drop along a band's centre line from unit density on `source`, in the VACUUM
+            /// Gap drop along a band's centre line from unit density on `source`, in the vacuum
             /// field — the κ scaling belongs to the condition, not the geometry.
             func unitDrop(from source: [Rectangle],
                           throughBandAt z: Double) -> Double {

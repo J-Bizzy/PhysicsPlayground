@@ -2,12 +2,8 @@
 //  HubDomainTitleTests.swift
 //  Physics Playground — app tests
 //
-//  The signage over the two doors. The kinetic bodies (an electron's
-//  lap, a bouncing ball) came out on 2026-08-04 at the owner's
-//  direction, so what is left to hold is the typography: the flush
-//  lockup, and the sign speaking its name to VoiceOver. The motion
-//  paths and their non-intersection proofs live in git history with
-//  the bodies they held.
+//  The signage over the two doors: the flush lockup, and the sign
+//  speaking its name to VoiceOver.
 //
 
 import XCTest

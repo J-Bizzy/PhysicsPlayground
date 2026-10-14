@@ -3,7 +3,7 @@
 //  PhysicsCoreTests
 //
 //  The wind-tunnel solver pinned to the physics it claims to solve:
-//  the projected field is divergence-free (that IS incompressibility),
+//  the projected field is divergence-free (that is incompressibility),
 //  nothing flows through a solid, an empty tunnel leaves a uniform
 //  stream uniform, mass in equals mass out, a blockage speeds the flow
 //  up around it by exactly as much as continuity demands, and a
@@ -114,7 +114,7 @@ final class FluidGridTests: XCTestCase {
     }
 
     /// Continuity in action: a blockage forces the same volume through a
-    /// smaller gap, so the air beside it must move FASTER than the free
+    /// smaller gap, so the air beside it must move faster than the free
     /// stream. This is the effect the visualization exists to show.
     func testFlowAcceleratesAroundABlockage() {
         var grid = makeGrid(nx: 22, ny: 12, nz: 12, speed: 1.0)

@@ -15,7 +15,7 @@ final class StationBoxTests: XCTestCase {
 
     // MARK: Disjointness
 
-    /// Clearance on ONE axis is enough — these are axis-aligned boxes,
+    /// Clearance on one axis is enough — these are axis-aligned boxes,
     /// so a single clear axis proves no overlap however much the other
     /// two interpenetrate. This is the property the whole arc relies on.
     func testSeparationOnASingleAxisIsEnough() {

@@ -2,17 +2,11 @@
 //  FieldSpatialControlTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Electric Fields' controls left the window panel on 2026-07-31. These
-//  are the behaviours that moved with them — the ones a migration can
-//  silently drop, because they were properties of the OLD control rather
-//  than of the model underneath.
-//
-//  The probe's launch push is the type specimen: `dropProbe` shoved the
-//  test charge sideways "so there's a velocity for B to bend", and that
-//  one line is the entire reason the cyclotron demo works. Replace the
-//  button with a well and the push disappears with it, and nothing fails —
-//  the probe just sits there while the field does nothing to it. That is a
-//  demonstration lost, not a control lost, and only a test notices.
+//  The behaviours that moved with the controls into the room — the ones
+//  a migration can silently drop because they were properties of the
+//  old control rather than the model. The probe's launch push is the
+//  type specimen: without it the cyclotron demo is a probe sitting
+//  still.
 //
 
 import XCTest
@@ -25,14 +19,9 @@ final class FieldSpatialControlTests: XCTestCase {
 
     // MARK: What the bank shows on arrival
 
-    /// The opening state, pinned. Arriving in the module you get the
-    /// dipole and its field lines and NOTHING else — no plates, no
-    /// uniform B, and the charges pinned where they are.
-    ///
-    /// Worth a test rather than a glance now that the bank makes the whole
-    /// set visible at once: four lit plates on arrival would read as four
-    /// things demanding attention, and the module's first picture should
-    /// be the dipole, which is the one everybody recognises.
+    /// The opening state, pinned: the dipole and its field lines and
+    /// nothing else, so the module's first picture is the one everybody
+    /// recognises.
     func testTheModuleOpensWithFieldLinesAndNothingElse() {
         let model = FieldModel()
 
@@ -54,7 +43,7 @@ final class FieldSpatialControlTests: XCTestCase {
 
     // MARK: The throw that replaced the Drop button
 
-    /// With B on, the probe must leave your hand MOVING, or F = qv×B is
+    /// With B on, the probe must leave your hand moving, or F = qv×B is
     /// zero and the field has nothing to bend.
     func testReleasingTheProbeIntoAMagneticFieldLaunchesIt() {
         let model = FieldModel()
@@ -86,7 +75,7 @@ final class FieldSpatialControlTests: XCTestCase {
                        accuracy: model.launchSpeed * 1e-9)
     }
 
-    /// With NO magnetic field, the probe starts from rest — the pure
+    /// With no magnetic field, the probe starts from rest — the pure
     /// F = qE demonstration, where a launch velocity would be a lie about
     /// what the electric field did.
     func testWithoutAMagneticFieldTheProbeStartsAtRest() {
@@ -111,10 +100,8 @@ final class FieldSpatialControlTests: XCTestCase {
 
     // MARK: What the wells make
 
-    /// A charge pulled from a well is born AT THE HAND — not at the next
-    /// slot on the golden-angle ring the old "Add +" button used. Creating
-    /// and placing are one gesture, which is the whole reason a well beats
-    /// a button.
+    /// A charge pulled from a well is born at the hand: creating and
+    /// placing are one gesture.
     func testAChargeIsBornWhereTheHandIs() {
         let model = FieldModel()
         model.removeAllCharges()
@@ -128,9 +115,8 @@ final class FieldSpatialControlTests: XCTestCase {
         XCTAssertTrue(charge?.isPositive ?? false)
     }
 
-    /// The probe's well has no UUID of its own to hand back, so the view
-    /// uses a fixed sentinel and remaps it. It must never collide with a
-    /// real charge — that would make a pulled probe move a charge instead.
+    /// The probe's well has no UUID to hand back, so the view uses a fixed
+    /// sentinel that must never collide with a real charge.
     func testThePulledProbeIsHeldAtTheHand() {
         let model = FieldModel()
         let hand = FieldModel.regionCenter + SIMD3(0, 0.2, 0)
@@ -147,8 +133,8 @@ final class FieldSpatialControlTests: XCTestCase {
 
     /// The two well mouths and the model flag are the same fact: the
     /// probe's charge must carry the sign of the mouth it came from.
-    /// (The four-disc particle bank and electron mode came out on
-    /// 2026-08-03; the wells are the whole choice now.)
+    /// (The four-disc particle bank and electron mode are gone; the
+    /// wells are the whole choice now.)
     func testTheProbesSignFollowsTheFlag() {
         let model = FieldModel()
         model.probeIsPositive = true
@@ -174,11 +160,9 @@ final class FieldSpatialControlTests: XCTestCase {
 
     // MARK: Container versus subject
 
-    /// The rule the hit-test encodes: a big collider is a CONTAINER, and
-    /// the thing inside it is the subject. A pinch that lands on nothing
-    /// nameable resolves to the nearest charge within reach — which is
-    /// how a charge hiding inside the capacitor's colliders stays
-    /// grabbable.
+    /// A big collider is a container and the thing inside it is the
+    /// subject: a pinch on nothing nameable resolves to the nearest charge
+    /// within reach.
     func testAChargeInsideAContainerIsGrabbableThroughIt() {
         let charge = (id: UUID(), position: FieldModel.regionCenter)
         let hand = charge.position + SIMD3(0.05, 0, 0)

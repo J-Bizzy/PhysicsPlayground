@@ -2,26 +2,12 @@
 //  ThrowSampler.swift
 //  PhysicsCore — Kinematics
 //
-//  Your arm as an initial condition.
-//
-//  Throwing is the app's signature verb — the one input a mouse cannot
-//  fake, because the release velocity IS the physics. It was implemented
-//  three separate times: Projectiles and Gravity Lab each kept a
-//  ring buffer in their model, and Pendulums kept a third in its space
-//  view. Same idea every time — remember where the hand has been, and on
-//  release divide displacement by elapsed time — but the constants had
-//  drifted (a 0.12 s window in two places, 0.14 s in the third) and two
-//  of the three pruned the buffer differently. Only one was reachable
-//  from a test.
-//
-//  So it lives here instead: no RealityKit, no SwiftUI, no clock of its
-//  own — callers pass timestamps in, which is what makes it testable at
-//  exact times rather than at whatever the frame rate happened to be.
-//
-//  Deliberately NOT a smoothed or fitted estimate. A throw is judged by
-//  where the hand started and where it ended over the last fraction of a
-//  second; least-squares fitting the whole path drags in the wind-up,
-//  which reads as a weaker throw than the one you made.
+//  Your arm as an initial condition: a short history of hand positions,
+//  and on release the displacement over the last fraction of a second
+//  divided by elapsed time. Shared by every module that throws; callers
+//  pass timestamps in, so it is testable at exact times. Deliberately an
+//  endpoint difference, not a fit: fitting the whole path drags in the
+//  wind-up and reads as a weaker throw than the one you made.
 //
 
 import Foundation

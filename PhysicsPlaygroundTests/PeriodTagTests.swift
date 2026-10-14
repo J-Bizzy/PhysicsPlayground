@@ -2,33 +2,10 @@
 //  PeriodTagTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Pendulums' period tag — "T = 1.42 s" over a pivot — moved onto
-//  `BackedLabel` on 2026-08-09, the last of the modules' live numerals
-//  to stop being naked unlit text. This pins what that move was FOR,
-//  because none of it is reachable from a screenshot.
-//
-//  It cannot be reached from one for a reason worth recording. The tag
-//  is hidden when pivots crowd — within 15 cm, only the SELECTED
-//  pendulum keeps its label, so a Newton's cradle shows at most one —
-//  and `-penRing 1`, the argument that looks like it would select a
-//  pendulum, sets `RingState.openID` and not `model.selectedID`. So the
-//  default scene photographs with every period tag suppressed, and a
-//  screenshot of it says nothing either way about the type behind it.
-//  That is exactly the case this project keeps saying tests are for.
-//
-//  The two claims are the backing and the baseline:
-//
-//  1. A PLATE EXISTS BEHIND THE GLYPHS. The whole point of
-//     `BackedLabel` is that bright type over passthrough has no floor
-//     under its contrast, and the tag hung 30 cm from a switch bank
-//     whose every plate already wore one.
-//
-//  2. THE RUN IS CENTRED ON BOTH AXES. The hand-rolled version did
-//     `position = [-(minX+maxX)/2, 0, 0]` — X only — so the glyphs sat
-//     with their baseline on the anchor and their mass floating above
-//     it. The hub fixed the identical bug in its own text and
-//     `BackedLabel` was built centred; the tag was the last caller
-//     still doing it by hand.
+//  Pendulums' period tag — "T = 1.42 s" over a pivot — on `BackedLabel`:
+//  a plate exists behind the glyphs, and the run is centred on both
+//  axes. Not reachable from a screenshot: the tag hides when pivots
+//  crowd, and `-penRing 1` opens a ring without selecting the pendulum.
 //
 
 import XCTest
@@ -71,14 +48,10 @@ final class PeriodTagTests: XCTestCase {
             """)
     }
 
-    /// A chaotic rig has no period, so it wears no tag — in the room, on
-    /// its card, or in the notebook. `Pendulum.period(gravity:)` is
-    /// 2π√(L/g) of the upper rod alone, which the double stamped over a
-    /// system whose whole point is that it never repeats (2026-09-01).
-    /// The double is the ONLY pendulum here and is selected by
-    /// `addDoublePendulum`, so neither the crowding rule nor the
-    /// selection rule can be the reason the tag is absent — the
-    /// symmetric case above shows a lone simple pendulum gets one.
+    /// A chaotic rig has no period, so the double wears no tag — in the
+    /// room, on its card, or in the notebook. It is the only pendulum here
+    /// and selected, so neither crowding nor selection can explain an
+    /// absent tag.
     func testTheDoublePendulumWearsNoPeriodTag() throws {
         let appModel = AppModel()
         let model = appModel.pendulumsModel

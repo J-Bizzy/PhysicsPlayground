@@ -25,13 +25,10 @@ final class FluidGridBench: XCTestCase {
         let ms = Date().timeIntervalSince(start) / Double(iterations) * 1000
         print("FLUIDGRID step: \(String(format: "%.2f", ms)) ms/step  (\(grid.nx)x\(grid.ny)x\(grid.nz))")
 
-        // A probe, not a budget guard. The number that matters is the
-        // RELEASE one — `swift test -c release --filter FluidGridBench`,
-        // currently ~11 ms/step, because that is what ships. An
-        // unoptimised debug build runs this two orders of magnitude
-        // slower, so asserting wall-clock here would only ever fail for
-        // the wrong reason. What IS asserted: the solver stayed finite
-        // and divergence-free while being driven this hard.
+                // A probe, not a budget guard: the number that matters is the
+                // release one (`swift test -c release --filter FluidGridBench`),
+                // and a debug build runs two orders of magnitude slower. What is
+                // asserted is that the solver stayed finite under this load.
         XCTAssertTrue(ms.isFinite && ms > 0)
         XCTAssertLessThan(grid.maxDivergence * grid.h / grid.inflowSpeed, 1e-3)
     }

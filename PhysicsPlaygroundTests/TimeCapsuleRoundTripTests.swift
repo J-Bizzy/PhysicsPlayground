@@ -2,17 +2,11 @@
 //  TimeCapsuleRoundTripTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The Time Capsule's adoption contract, proved per module.
-//
-//  THE REPLAY-DETERMINISM TEST IS THE ENUMERATING GUARD. A snapshot
-//  field somebody forgets is invisible until a scrub lies — the exact
-//  shape of the reset()-coverage defect this project has now shipped six
-//  times, transposed to a new surface. A test that LISTS the fields it
-//  knows about is the same act of attention that would miss one. So do
-//  not weaken these to listing tests: restore-to-mid-window and re-step
-//  with the identical dt sequence, and any dynamical field missing from
-//  the snapshot (a substep accumulator, a velocity map) makes the replay
-//  diverge measurably from the recording.
+//  The Time Capsule's adoption contract, per module. The replay test is
+//  the enumerating guard: restore to mid-window and re-step with the
+//  identical dt sequence, and any dynamical field missing from the
+//  snapshot makes the replay diverge. Do not weaken these to listing
+//  tests.
 //
 
 import XCTest
@@ -23,12 +17,8 @@ import simd
 @MainActor
 final class TimeCapsuleRoundTripTests: XCTestCase {
 
-    // The gate is set explicitly rather than trusted: the capsule ships ON
-    // (2026-09-01; it shipped OFF from 2026-08-07), and whichever way the
-    // default points, a test about recording must not depend on what the
-    // previous test left behind. `testNothingIsRecordedWhenTheFeatureIsOff`
-    // below asserts the other half, and `AppSettingsTests` pins the
-    // default itself, so a drift in either direction is caught by name.
+    // The gate is set explicitly rather than trusted: a test about
+    // recording must not depend on what the previous test left behind.
     override func setUp() {
         super.setUp()
         TimeCapsuleSettings.isEnabled = true
@@ -250,11 +240,8 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
     }
 
     // MARK: The other five benches
-    //
-    // Same two claims per module, and the replay test is the one that
-    // earns its keep: it is what would have caught Pendulums' substep
-    // `accumulator` or Magnetism's `bodies` velocity map being left out
-    // of a snapshot, neither of which any round-trip check would notice.
+    // Same two claims per module; the replay test is what would catch a
+    // substep accumulator or a velocity map left out of a snapshot.
 
     func testPendulumsRoundTripAndReplay() {
         let model = PendulumsModel()
@@ -282,8 +269,8 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
         }
     }
 
-    func testGravityLabRoundTripAndTrailRebuild() {
-        let model = GravityLabModel()
+    func testOrbitalMechanicsRoundTripAndTrailRebuild() {
+        let model = OrbitalMechanicsModel()
         model.clearCapsule()
         for _ in 0..<120 { model.step(dt: dt) }
 
@@ -329,7 +316,7 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
         XCTAssertEqual(model.captureCapsuleSnapshot(), snapshot)
     }
 
-    /// Circuits scrubs its transients AND its topology: a rewire inside
+    /// Circuits scrubs its transients and its topology: a rewire inside
     /// the window comes back with the bench that was there at the time.
     func testCircuitsRestoresTopologyAndTransients() {
         let model = CircuitsModel()
@@ -371,7 +358,7 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
         pendulums.reset()
         XCTAssertNil(pendulums.capsuleSpan)
 
-        let gravity = GravityLabModel()
+        let gravity = OrbitalMechanicsModel()
         for _ in 0..<30 { gravity.step(dt: dt) }
         gravity.reset()
         XCTAssertNil(gravity.capsuleSpan)
@@ -395,12 +382,7 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
     // MARK: The feature switched off
 
     /// Switched off, a lab costs exactly what it cost before the capsule
-    /// existed: no snapshot is taken, nothing accumulates, and there is
-    /// nothing to scrub. This is the half of the SETTING that a toggle
-    /// which only hid the reel would have got wrong — the several
-    /// megabytes and the per-frame copy would have gone on being spent.
-    /// (The heading said "ships off" until 2026-09-01; the default is on
-    /// now, and this is what declining it buys.)
+    /// existed: no snapshot is taken and there is nothing to scrub.
     func testNothingIsRecordedWhenTheFeatureIsOff() {
         TimeCapsuleSettings.isEnabled = false
         let model = bareModel()

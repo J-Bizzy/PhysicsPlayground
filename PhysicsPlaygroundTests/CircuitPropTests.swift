@@ -2,13 +2,10 @@
 //  CircuitPropTests.swift
 //  Physics Playground — app tests
 //
-//  The ten circuit parts milled by `Tools/circuitparts.py` (2026-09-02),
-//  and the contract the renderer has with them: every asset the bench
-//  asks for exists, lies along X, and stays inside the carry box's clamp
-//  at the leads' inner edge — because `CircuitsAlignmentTests` and
-//  `ColliderCriterionTests` measure the bench on the assumption that a
-//  body never reaches its own terminals. Same axis mapping as
-//  `VignettePropTests`: Blender (x, y, z) -> RealityKit (x, z, -y).
+//  The ten circuit parts milled by `Tools/circuitparts.py`: every asset
+//  the bench asks for exists, lies along X, and stays inside the carry
+//  box's clamp at the leads' inner edge. Blender (x, y, z) → RealityKit
+//  (x, z, −y).
 //
 
 import XCTest
@@ -44,7 +41,7 @@ final class CircuitPropTests: XCTestCase {
 
     /// A body never reaches its own leads: the whole model sits inside
     /// |x| < 0.059, and the ones that are longer than they are tall lie
-    /// ALONG X rather than standing on end.
+    /// Along X rather than standing on end.
     func testEveryBodyStaysInsideTheLeadClampAndLiesAlongX() throws {
         for name in CircuitsRenderer.bodyAssetNames.values.sorted()
             + [CircuitsRenderer.resistorCapsAssetName] {

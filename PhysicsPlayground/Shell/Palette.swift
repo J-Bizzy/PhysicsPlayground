@@ -4,12 +4,10 @@
 //
 //  Navigation, as one object: the app's only permanent piece of
 //  interface. Pinch the bead and it unfolds into a ring of the labs
-//  themselves — live miniatures, not icons — plus six petals: home,
-//  pause, capture, dim, settings, reset.
-//
-//  The cost of a petal is the width of the open row, which is DERIVED
-//  from the count (`petalRowSpan`), never hand-tuned, so a new one cannot
-//  quietly overlap its neighbours.
+//  themselves — live miniatures — plus six petals: home, pause, capture,
+//  dim, settings, reset. The open row's width derives from the petal
+//  count (`petalRowSpan`), so a new petal cannot overlap its neighbours.
+//  Reset arms before it fires, like every destructive plate in the room.
 //
 
 import RealityKit
@@ -21,16 +19,13 @@ import simd
 final class Palette {
     let root = Entity()
 
-    /// The per-frame subscription, held so it can be CANCELLED: this view
-    /// is remounted per module, and a subscription left running captures
-    /// the palette strongly, animating an orphaned bead for the life of
-    /// the process.
+    /// Held so it can be cancelled: the view is remounted per module, and a
+    /// running subscription would keep animating an orphaned bead.
     var subscription: EventSubscription?
 
     private let bead = ModelEntity()
-    /// The gyroscope inside the bead: its rotor is ticked every frame,
-    /// and it is told how far the ring has unfolded so the gimbals can
-    /// lay flat into it.
+    /// The gyroscope inside the bead; ticked every frame and told how far
+    /// the ring has unfolded so the gimbals lay flat into it.
     private var beadVignette: HubVignettes.Built?
     /// The "Labs" nameplate under the closed bead; fades as the ring
     /// opens and the slots' own labels take over.
@@ -41,10 +36,8 @@ final class Palette {
 
     /// 0 folded, 1 open. Everything else is derived from this.
     private(set) var openness: Float = 0
-    /// The bead label opacity last written. The label follows the fold,
-    /// but the fold is parked at 0 for most of a session — and this is
-    /// the one object present in every lab, so an ungated write here was
-    /// a component set per frame, forever, carrying a constant.
+    /// The bead label opacity last written, so a parked fold writes no
+    /// component per frame.
     private var appliedBeadLabelOpacity: Float = -1
     private var isOpen = false
     private var time: Double = 0
@@ -55,30 +48,14 @@ final class Palette {
     /// The system's Reduce Motion setting, pushed in by the host.
     var stillness = false
 
-    // Ring geometry, in metres. The labs sit on a circle you can sweep
-    // with one comfortable arm movement.
-    // The radius was sized when seven slots shared the 150 degrees: at
-    // 0.26 m the arc gave 11 cm between centres while the discs were
-    // 13 cm wide, so the ring overlapped itself into a smear. 0.40 m
-    // keeps the same clear air with the 20%-bigger slots the labels
-    // asked for — today's six labs ride it with room to spare — and at
-    // the old 0.06 m slot size the miniatures read as specks and their
-    // thin lines shimmered.
-    /// One petal's touch target, across. The DISC is 0.048 m; the target
-    /// is deliberately wider, and it is the wider number that decides
-    /// whether two petals can be aimed at separately.
+    // Ring geometry, in metres.
+    /// One petal's touch target, across — wider than the 0.048 m disc, and
+    /// the number that decides whether two petals can be aimed at separately.
     static let petalColliderSpan: Float = 0.068
 
-    /// How wide the petal row has to be to hold `count` of them.
-    ///
-    /// DERIVED, NOT TYPED, and the comment this replaces is the reason:
-    /// it said the span was "widened from 0.17 when the fourth petal
-    /// arrived, keeping clear air between neighbouring discs" — a number
-    /// hand-tuned for a specific count, which is exactly how Gravity
-    /// Lab's clock bank came to lay six discs out on geometry derived
-    /// for four. At 0.22 m a FIFTH petal would already have pitched at
-    /// 0.055 m against a 0.068 m target, and a sixth at 0.044 m: both
-    /// unaimable, both looking fine.
+    /// How wide the petal row must be to hold `count` petals. Derived, not
+    /// typed: a span tuned for one count is how a fifth petal ends up
+    /// unaimable.
     static func petalRowSpan(count: Int) -> Float {
         Float(max(count - 1, 1)) * petalColliderSpan * 1.1
     }
@@ -86,16 +63,61 @@ final class Palette {
     private static let ringRadius: Float = 0.40
     private static let slotSize: Float = 0.072
     private static let beadRadius: Float = 0.026
+    /// Where the bead stands in every lab, in the space's coordinates: to the
+    /// right, at eye height, 33° off axis — in reach, clear of the physics,
+    /// and the same in every lab. At y 1.50 it clears every Orbital Mechanics orbit
+    /// and Circuits' shelf by 25 cm.
+    static let defaultAnchor = SIMD3<Float>(0.62, 1.50, -0.95)
 
     var onSelect: ((String) -> Void)?
     var onPause: (() -> Void)?
     var onReset: (() -> Void)?
     var onSettings: (() -> Void)?
-    var onCapture: (() -> Void)?
-    /// Back to the gallery. See the petal list for why this exists.
+    /// Returns whether anything was written down; a refusal thuds.
+    var onCapture: (() -> Bool)?
+    /// Back to the gallery.
     var onHome: (() -> Void)?
     /// Steps the room dimmer off → half → full.
     var onDim: (() -> Void)?
+
+    // MARK: Reset arms first
+
+    /// Seconds the reset petal stays armed, nil when it is not. The title
+    /// bar's Reset asks first and so does every Clear plate; a petal one
+    /// pinch from wiping a bench that survives relaunch did not.
+    private(set) var resetArmed: Double?
+    private var resetPetal: ModelEntity?
+    /// The petal's lit face and its two names, swapped by `isEnabled` —
+    /// built once, never rebuilt on the per-frame path.
+    private var resetLamp: Entity?
+    private var resetRestLabel: Entity?
+    private var resetArmedLabel: Entity?
+
+    /// Read every frame so the pause petal says what it will do.
+    var isPaused: (() -> Bool)?
+    private var pausePetal: ModelEntity?
+    private var pauseRest: [Entity] = []
+    private var pauseResume: [Entity] = []
+    private var shownPaused = false
+
+    /// Arms the reset petal without a pinch and holds it there — for the
+    /// debug screenshot, which cannot pinch at all.
+    func armResetForDebug() {
+        resetArmed = .infinity
+        paintReset()
+    }
+
+    private func paintReset() {
+        let armed = resetArmed != nil
+        resetLamp?.isEnabled = armed
+        resetRestLabel?.isEnabled = !armed
+        resetArmedLabel?.isEnabled = armed
+        if let resetPetal {
+            SpatialActions.republish(
+                value: armed ? "armed — tap again to confirm" : "button",
+                on: resetPetal)
+        }
+    }
 
     /// One ring slot's identity: the module, its short label, its color.
     struct Slot {
@@ -110,22 +132,18 @@ final class Palette {
             let holder = Entity()
             holder.name = "palette-\(spec.id)"
 
-            // The lab's OWN miniature, running. The name beneath makes
-            // it a labelled button; the miniature makes it a promise.
+            // The lab's own miniature, running.
             let built = HubVignettes.make(for: spec.id)
             let bounds = built.entity.visualBounds(relativeTo: nil).extents
             let largest = max(bounds.x, max(bounds.y, 1e-4))
             built.entity.scale = SIMD3(repeating: Self.slotSize / largest)
             holder.addChild(built.entity)
 
-            // The slot's puck: an accent disc with a lit rim, so each
-            // lab reads as a designed button rather than a floating
-            // speck. (The old 0.11-opacity disc barely registered.)
-            var backing = UnlitMaterial(color: spec.accent)
-            backing.blending = .transparent(opacity: 0.18)
+            // The slot's puck: an accent disc with a lit rim, so each lab reads as
+            // a button.
             let disc = ModelEntity(
-                mesh: .generateCylinder(height: 0.002, radius: Self.slotSize * 0.78),
-                materials: [backing])
+                mesh: Primitives.cylinder(height: 0.002, radius: Self.slotSize * 0.78),
+                materials: [Materials.unlit(spec.accent, opacity: 0.18)])
             disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
             disc.position.z = -Self.slotSize * 0.55
             disc.components.set(GroundingShadowComponent(castsShadow: true))
@@ -136,24 +154,22 @@ final class Palette {
                 holder.addChild(rim)
             }
 
-            // The label: the house nameplate, small, in the lab's own
-            // accent — the same treatment the gallery exhibits wear.
+            // The house nameplate in the lab's accent, as the gallery exhibits wear.
             let label = HubScene.namePlate(spec.title, accent: spec.accent,
                                            size: PlateStyle.labelSize)
             label.position = [0, -Self.slotSize * 0.92, 0.01]
             holder.addChild(label)
 
             holder.components.set(InputTargetComponent())
-            // THE LABEL IS PART OF THE TARGET — the lab's name hangs
-            // below the miniature, outside the sphere, so the words on
-            // the one surface that opens a lab were unpinchable.
+            // The label is part of the target: the name hangs below the miniature,
+            // outside the sphere.
             let slotLabelSpan = min(
                 HubScene.namePlateWidth(spec.title, size: PlateStyle.labelSize),
                 Self.slotSize * 1.6)
             holder.components.set(CollisionComponent(shapes: [
-                .generateSphere(radius: Self.slotSize * 0.8),
-                .generateBox(size: [slotLabelSpan, 0.024, 0.020])
-                    .offsetBy(translation: [0, -Self.slotSize * 0.92, 0.01]),
+                Primitives.collisionSphere(radius: Self.slotSize * 0.8),
+                Primitives.collisionBox(size: [slotLabelSpan, 0.024, 0.020],
+                                        offset: [0, -Self.slotSize * 0.92, 0.01]),
             ]))
             holder.components.set(HoverEffectComponent())
             SpatialActions.attach(
@@ -167,10 +183,8 @@ final class Palette {
             slots.append((spec.id, holder, built.animate))
         }
 
-        // Pause and reset keep the outer spots hands have learned; capture
-        // and settings sit between them. Home and dim are here because the
-        // ring costs nothing at rest — folded petals are zero standing
-        // objects, which a plate on a bank would not be.
+        // Pause and reset keep the outer spots hands have learned; home and dim
+        // ride the ring because folded petals cost nothing at rest.
         petals = [
             Self.makePetal(name: "home", symbol: "square.grid.2x2.fill"),
             Self.makePetal(name: "pause", symbol: "pause.fill"),
@@ -179,11 +193,16 @@ final class Palette {
             Self.makePetal(name: "settings", symbol: "gearshape.fill"),
             Self.makePetal(name: "reset", symbol: "arrow.counterclockwise"),
         ]
+        if let reset = petals.last {
+            resetPetal = reset
+            decorateReset(reset)
+        }
+        if let pause = petals.first(where: { $0.name == "palette-pause" }) {
+            decoratePause(pause)
+        }
         petals.forEach { petal in
             root.addChild(petal)
-            // Through `handleTap`, which is where the ring's own rules
-            // live: pause and reset fold the ring, capture and dim keep
-            // it open. Routing at the callbacks would lose that.
+            // Through `handleTap`, where the ring's own fold rules live.
             SpatialActions.attach(
                 to: petal, label: petal.name.replacingOccurrences(
                     of: "palette-", with: "").capitalized,
@@ -194,8 +213,8 @@ final class Palette {
         }
     }
 
-    /// Where the bead lives, in the host's coordinates. A saved spot —
-    /// the user carried it somewhere — wins over the default.
+    /// Where the bead lives, in the host's coordinates. A saved spot wins
+    /// over the default.
     func place(at position: SIMD3<Float>) {
         if let saved = UserDefaults.standard.array(forKey: "palette.position")
             as? [Double], saved.count == 3 {
@@ -226,8 +245,7 @@ final class Palette {
     func endDrag() {
         guard carryOffset != nil else { return }
         carryOffset = nil
-        // The new spot is where hands will now learn it: keep it,
-        // across labs and across launches.
+        // Kept across labs and launches.
         UserDefaults.standard.set(
             [Double(root.position.x), Double(root.position.y), Double(root.position.z)],
             forKey: "palette.position")
@@ -237,32 +255,36 @@ final class Palette {
         time += dt
         self.viewer = viewer
 
+        showPaused(isPaused?() ?? false)
+
+        // Armed only while it can be seen: folding the ring or letting the
+        // window run out disarms.
+        if let remaining = resetArmed {
+            let next = remaining - dt
+            if !isOpen || next <= 0 {
+                resetArmed = nil
+                paintReset()
+            } else {
+                resetArmed = next
+            }
+        }
+
         let target: Float = isOpen ? 1 : 0
         let rate = Float(min(dt * 8, 1))
         openness += (target - openness) * rate
         if abs(openness - target) < 0.004 { openness = target }
 
-        // The bead breathes when closed and recedes when open — it has
-        // handed its job to the ring, and its nameplate goes with it.
-        //
-        // STILL UNDER REDUCE MOTION. `DESIGN_SYSTEM.md` describes
-        // stillness as if it were app-wide; until 2026-08-03 it was read
-        // in exactly one place, `HubSpaceView`, so the bead went on
-        // breathing in every lab — on the one object that is never off
-        // screen. Unfolding is not suppressed: that is a response to a
-        // pinch, and a control that does not answer reads as broken.
-        // What stops is the idle life nobody asked for.
+        // The bead breathes when closed and recedes when open. Still under
+        // Reduce Motion; unfolding answers a pinch and is never suppressed.
         let breath = stillness ? 1 : 1 + 0.05 * Float(sin(time * 1.6))
         bead.scale = SIMD3(repeating: breath * (1 - 0.45 * openness))
-        // Written only while the fold is actually moving — see the note
-        // on `appliedBeadLabelOpacity`.
+        // Written only while the fold is moving.
         if abs((1 - openness) - appliedBeadLabelOpacity) > 0.0005 {
             appliedBeadLabelOpacity = 1 - openness
             beadLabel?.components.set(OpacityComponent(opacity: 1 - openness))
         }
 
-        // The rotor spins whatever else is paused, and the gimbals need
-        // to know how far the ring has come to lay flat into it.
+        // The rotor spins whatever else is paused.
         beadVignette?.animate(time)
         beadVignette?.setOpenness?(openness)
 
@@ -273,16 +295,13 @@ final class Palette {
         layoutRing(dt: dt)
     }
 
-    /// Whether the folded (openness == 0) layout has been applied, so a
-    /// closed, settled palette writes no transforms at all per frame.
+    /// Whether the folded layout has been applied, so a closed, settled
+    /// palette writes no transforms per frame.
     private var appliedFoldedLayout = false
 
     private func layoutRing(dt: Double) {
-        // Early out when folded and settled — this used to write
-        // positions, scales and isEnabled for every slot and petal,
-        // ninety times a second, to hold a closed fan closed. The zero
-        // state must still be applied ONCE, or a palette that opens in
-        // frame one shows a fan nobody laid out.
+        // Early out when folded and settled; the zero state must still be
+        // applied once.
         if openness == 0 {
             if appliedFoldedLayout { return }
             appliedFoldedLayout = true
@@ -290,10 +309,8 @@ final class Palette {
             appliedFoldedLayout = false
         }
         let count = max(slots.count, 1)
-        // A fan opening UPWARD from the bead — 150 degrees, so even the
-        // outermost slots stay above it. Two hundred degrees swept the
-        // ends back down below the bead, where they fall off the bottom
-        // of a seated user's view.
+        // A fan opening upward from the bead, 150°, so the outermost slots stay
+        // above it.
         let span: Float = 150 * .pi / 180
         for (index, slot) in slots.enumerated() {
             let delay = Float(index) * 0.07
@@ -312,9 +329,7 @@ final class Palette {
         for (index, petal) in petals.enumerated() {
             let delay = 0.5 + Float(index) * 0.08
             let own = max(0, min((openness - delay) / max(1 - delay, 0.01), 1))
-            // Petals fan across a constant 0.22 m span below the bead —
-            // widened from 0.17 when the fourth petal arrived, keeping
-            // clear air between neighbouring discs.
+            // Petals fan across `petalRowSpan` below the bead.
             let x = (Float(index) / Float(max(petals.count - 1, 1)) - 0.5)
                 * Self.petalRowSpan(count: petals.count)
             petal.position = SIMD3(x * own, -0.135 * own, 0)
@@ -335,24 +350,36 @@ final class Palette {
         guard isOpen else { return false }
         if name == "palette-pause" { onPause?(); isOpen = false; return true }
         if name == "palette-capture" {
-            // Capture stays OPEN: writing down a run of moments is one
-            // errand, and refolding after each note would make three
-            // captures cost three unfoldings.
-            onCapture?()
-            SoundPalette.play(.chime, on: bead, volume: 0.5)
+            // Capture stays open: a run of captures is one errand. A lab with
+            // nothing to say gets the house "no", not a chime for a page that
+            // was never written.
+            let wrote = onCapture?() ?? false
+            SoundPalette.play(wrote ? .chime : .thud, on: bead,
+                              volume: wrote ? 0.5 : 0.35)
             return true
         }
         if name == "palette-home" { onHome?(); isOpen = false; return true }
         if name == "palette-dim" {
-            // Stays OPEN, like capture: dimming is a thing you tune by
-            // looking at the result, and off → half → full is three
-            // taps. Refolding after each would cost three unfoldings.
+            // Stays open, like capture: dimming is tuned by looking at the result.
             onDim?()
             SoundPalette.play(.pop, on: bead, volume: 0.35)
             return true
         }
         if name == "palette-settings" { onSettings?(); isOpen = false; return true }
-        if name == "palette-reset" { onReset?(); isOpen = false; return true }
+        if name == "palette-reset" {
+            // First pinch arms; the second, inside the window, fires.
+            guard resetArmed != nil else {
+                resetArmed = SpatialActionBank.armWindow
+                paintReset()
+                SoundPalette.play(.pop, on: bead, volume: 0.25)
+                return true
+            }
+            resetArmed = nil
+            paintReset()
+            onReset?()
+            isOpen = false
+            return true
+        }
         if let slot = slots.first(where: { $0.holder.name == name }) {
             SoundPalette.play(.chime, on: slot.holder, volume: 0.6)
             isOpen = false
@@ -377,22 +404,14 @@ final class Palette {
     private func buildBead() {
         bead.name = "palette-bead"
         bead.components.set(InputTargetComponent())
-        // THE LABEL IS PART OF THE TARGET, and this one is a SIBLING of
-        // the bead rather than a child — added to `root` so it does not
-        // inherit the bead's spin. That makes it invisible to the
-        // parent-walking criterion, which is exactly why it survived
-        // while the picker's and the petals' were being found: nothing
-        // could attribute it to the control it names. The offset below
-        // mirrors the label's placement in `buildBead`; keep them
-        // together.
+        // The label is part of the target. It is a sibling of the bead (added to
+        // `root` so it does not inherit the spin), so this offset mirrors
+        // `buildBead`; keep them together.
         bead.components.set(CollisionComponent(shapes: [
-            .generateSphere(radius: Self.beadRadius * 1.8),
-            .generateBox(size: [0.052, 0.024, 0.020])
-                .offsetBy(translation: [0, -(Self.beadRadius + 0.026), 0]),
+            Primitives.collisionSphere(radius: Self.beadRadius * 1.8),
+            Primitives.collisionBox(size: [0.052, 0.024, 0.020], offset: [0, -(Self.beadRadius + 0.026), 0]),
         ]))
         bead.components.set(HoverEffectComponent())
-        // The one permanent object in every lab missed the 2026-08-05
-        // grounding-shadow pass; presence, not decoration.
         bead.components.set(GroundingShadowComponent(castsShadow: true))
         SpatialActions.attach(
             to: bead, label: "Labs", value: isOpen ? "open" : "closed",
@@ -401,9 +420,8 @@ final class Palette {
                 _ = self.handleTap(self.bead)
             })
 
-        // The bead is a gyroscope from the same system that builds every
-        // lab's miniature — an instrument, not iOS chrome. Fitted like the
-        // ring slots: normalised to the common square, scaled to the bead.
+        // The bead is a gyroscope from the same system that builds every lab's
+        // miniature, fitted like the ring slots.
         let built = HubVignettes.make(for: "labs")
         built.entity.scale = SIMD3(
             repeating: Self.beadRadius * 2 / (HubVignettes.frameHalf * 2))
@@ -419,8 +437,7 @@ final class Palette {
         root.addChild(bead)
     }
 
-    /// A thin lit circle marking a slot's edge — the rim that turns a
-    /// faint disc into a button.
+    /// A thin lit circle marking a slot's edge.
     private static func rimRing(radius: Float, color: UIColor) -> ModelEntity? {
         let points = (0...48).map { step -> SIMD3<Float> in
             let angle = Float(step) / 48 * 2 * .pi
@@ -428,9 +445,88 @@ final class Palette {
         }
         guard let mesh = TubeMesh.tube(lines: [points], radius: 0.0012, sides: 4)
         else { return nil }
-        var material = UnlitMaterial(color: color)
-        material.blending = .transparent(opacity: 0.55)
-        return ModelEntity(mesh: mesh, materials: [material])
+        return ModelEntity(mesh: mesh, materials: [Materials.unlit(color, opacity: 0.55)])
+    }
+
+    private static let petalLabelName = "petal-label"
+    private static let petalLabelPosition = SIMD3<Float>(0, 0.005, 0.047)
+    private static let petalLabelOrientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
+
+    /// The reset petal's armed state: a face in the destructive red over the
+    /// casing (red is the one tinted petal colour — `destructiveUI`), and
+    /// "Tap again" in place of its name, as an armed Clear plate reads.
+    private func decorateReset(_ petal: ModelEntity) {
+        let lamp = ModelEntity(
+            mesh: Primitives.cylinder(height: 0.0055, radius: 0.0242),
+            materials: [Materials.unlit(DesignTokens.Palette.destructiveUI, opacity: 0.9)])
+        lamp.isEnabled = false
+        petal.addChild(lamp)
+        resetLamp = lamp
+
+        resetRestLabel = petal.children.first { $0.name == Self.petalLabelName }
+        let armed = HubScene.namePlate(SpatialActionBank.armedLabel,
+                                       accent: UIColor(white: 0.95, alpha: 1),
+                                       size: PlateStyle.labelSize)
+        armed.name = Self.petalLabelName + "-armed"
+        armed.position = Self.petalLabelPosition
+        armed.orientation = Self.petalLabelOrientation
+        armed.isEnabled = false
+        petal.addChild(armed)
+        resetArmedLabel = armed
+    }
+
+    private static let petalIconName = "petal-icon"
+
+    /// A petal's glyph, lying on its face.
+    private static func makePetalIcon(_ symbol: String) -> ModelEntity? {
+        guard let texture = Bloom.symbolTexture(symbol) else { return nil }
+        var iconMaterial = UnlitMaterial()
+        iconMaterial.color = .init(tint: .white, texture: .init(texture))
+        iconMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
+        let icon = ModelEntity(
+            mesh: Primitives.plane(width: 0.026, height: 0.026),
+            materials: [iconMaterial])
+        icon.name = petalIconName
+        icon.position = [0, 0.004, 0]
+        icon.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
+        return icon
+    }
+
+    /// The pause petal's other face: a play glyph and "Resume", shown while
+    /// the lab is paused. It said "Pause" either way until 2026-10-14, so
+    /// the petal that resumes a paused room offered to pause it.
+    private func decoratePause(_ petal: ModelEntity) {
+        pauseRest = petal.children.filter {
+            $0.name == Self.petalIconName || $0.name == Self.petalLabelName
+        }
+        var resume: [Entity] = []
+        if let icon = Self.makePetalIcon("play.fill") {
+            icon.isEnabled = false
+            petal.addChild(icon)
+            resume.append(icon)
+        }
+        let plate = HubScene.namePlate("Resume", accent: UIColor(white: 0.95, alpha: 1),
+                                       size: PlateStyle.labelSize)
+        plate.position = Self.petalLabelPosition
+        plate.orientation = Self.petalLabelOrientation
+        plate.isEnabled = false
+        petal.addChild(plate)
+        resume.append(plate)
+        pauseResume = resume
+        pausePetal = petal
+    }
+
+    private func showPaused(_ paused: Bool) {
+        guard paused != shownPaused else { return }
+        shownPaused = paused
+        pauseRest.forEach { $0.isEnabled = !paused }
+        pauseResume.forEach { $0.isEnabled = paused }
+        if let pausePetal,
+           var accessibility = pausePetal.components[AccessibilityComponent.self] {
+            accessibility.label = LocalizedStringResource(
+                stringLiteral: paused ? "Resume" : "Pause")
+            pausePetal.components.set(accessibility)
+        }
     }
 
     private static func makePetal(name: String, symbol: String) -> ModelEntity {
@@ -440,49 +536,36 @@ final class Palette {
         casing.clearcoat = .init(floatLiteral: 1.0)
         casing.blending = .transparent(opacity: .init(floatLiteral: 0.92))
         let disc = ModelEntity(
-            mesh: .generateCylinder(height: 0.005, radius: 0.024),
+            mesh: Primitives.cylinder(height: 0.005, radius: 0.024),
             materials: [casing])
         disc.name = "palette-\(name)"
         disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
         disc.components.set(GroundingShadowComponent(castsShadow: true))
-        if let texture = Bloom.symbolTexture(symbol) {
-            var iconMaterial = UnlitMaterial()
-            iconMaterial.color = .init(tint: .white, texture: .init(texture))
-            iconMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
-            let icon = ModelEntity(
-                mesh: .generatePlane(width: 0.026, height: 0.026),
-                materials: [iconMaterial])
-            icon.position = [0, 0.004, 0]
-            icon.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
+        if let icon = makePetalIcon(symbol) {
             disc.addChild(icon)
         }
-        // The petal's name, in the small house nameplate beneath it —
-        // four icon-only discs asked to be memorised; labels don't.
-        // (The disc is rotated π/2 about X, so "below, facing the
-        // viewer" is local +Z with the icon's counter-rotation.)
+        // The petal's name beneath it. The disc is rotated π/2 about X, so
+        // "below, facing the viewer" is local +Z with the icon's counter-rotation.
         let plate = HubScene.namePlate(name.capitalized,
                                        accent: UIColor(white: 0.95, alpha: 1),
                                        size: PlateStyle.labelSize)
-        plate.position = [0, 0.005, 0.047]
-        plate.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
+        plate.name = petalLabelName
+        plate.position = petalLabelPosition
+        plate.orientation = petalLabelOrientation
         disc.addChild(plate)
 
         disc.components.set(InputTargetComponent())
-        // THE LABEL IS PART OF THE TARGET. Clamped to the petal pitch for
-        // the reason the picker's is — `petalRowSpan` spaces the ring by
-        // `petalColliderSpan`, and a wider target would overlap the petal
-        // beside it.
+        // The label is part of the target, clamped to the petal pitch so it
+        // never overlaps the petal beside it.
         let petalLabelSpan = min(
             HubScene.namePlateWidth(name.capitalized, size: PlateStyle.labelSize),
             Self.petalColliderSpan)
         disc.components.set(CollisionComponent(shapes: [
-            .generateSphere(radius: 0.034),
-            .generateBox(size: [petalLabelSpan, 0.020, 0.024])
-                .offsetBy(translation: [0, 0.005, 0.047]),
+            Primitives.collisionSphere(radius: 0.034),
+            Primitives.collisionBox(size: [petalLabelSpan, 0.020, 0.024], offset: [0, 0.005, 0.047]),
         ]))
         disc.components.set(HoverEffectComponent())
-        // Label only — the ACTION is attached in `init`, where there is
-        // a `self` to route the tap through.
+        // Label only; the action is attached in `init`, where there is a `self`.
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = LocalizedStringResource(stringLiteral: name)
@@ -497,8 +580,7 @@ struct PaletteView: View {
     let module: ModuleDescriptor
     @Environment(AppModel.self) private var appModel
     @Environment(\.openWindow) private var openWindow
-    /// The SYSTEM setting, not an in-app duplicate — the in-app one was
-    /// deleted on 2026-07-31 and must not come back.
+    /// The system setting; there is no in-app duplicate.
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @State private var palette: Palette?
 
@@ -508,35 +590,29 @@ struct PaletteView: View {
                 .init(id: $0.id, title: $0.shortTitle ?? $0.title,
                       accent: UIColor($0.accent))
             })
-            // Low and to the RIGHT, at about fifteen degrees below the
-            // eye line: in reach, clear of where every lab puts its
-            // physics (which is centred), and in the same place in every
-            // lab so it is somewhere your hands learn. Directly under
-            // the chin — the first choice — is comfortable to reach and
-            // never noticed, the same mistake the wells made.
-            made.place(at: [0.72, 1.32, -0.95])
-            // THE LAB→LAB SWITCH, and the one the transition work nearly
-            // missed: it is not reached from the gallery at all, so it
-            // used to be the one cut with no ceremony in front of it.
+            made.place(at: Palette.defaultAnchor)
+            // The lab→lab switch, through the one door so it gets the transition.
             made.onSelect = { id in appModel.go(to: id) }
             made.onPause = { module.togglePause() }
+            made.isPaused = { module.isPaused() }
             made.onReset = { appModel.resetActiveModule(module) }
             made.onSettings = { openWindow(id: SettingsView.windowID) }
             made.onCapture = { appModel.captureNotebookEntry() }
-            // Home clears the active module, which swaps the module
-            // scene for `HubSpaceView` inside the SAME immersive space —
-            // the gallery is not a separate space, so this is a
-            // one-line answer to "let me out of this lab".
+            // Home clears the active module, which swaps the module scene for
+            // `HubSpaceView` inside the same immersive space.
             made.onHome = { appModel.go(to: nil) }
             made.onDim = { appModel.cycleDimming() }
             content.add(made.root)
             palette = made
             #if DEBUG
-            // `-paletteOpen 1` unfolds it at launch: the simulator has
-            // no hand to pinch the bead with.
-            if UserDefaults.standard.double(forKey: "paletteOpen") > 0 {
+            // `-paletteOpen 1` unfolds it at launch.
+            let armReset = UserDefaults.standard.double(forKey: "paletteReset") > 0
+            if UserDefaults.standard.double(forKey: "paletteOpen") > 0 || armReset {
                 _ = made.handleTap(made.beadEntity)
             }
+            // `-paletteReset 1` opens the ring with the reset petal ARMED and
+            // held there — photographed armed, never fired, like `-circClear`.
+            if armReset { made.armResetForDebug() }
             #endif
 
             made.stillness = systemReduceMotion
@@ -558,9 +634,8 @@ struct PaletteView: View {
                 .targetedToAnyEntity()
                 .onEnded { value in _ = palette?.handleTap(value.entity) }
         )
-        // Carry the bead: a real drag (not a pinch-tap) on the bead
-        // moves the whole palette, and the spot sticks. The minimum
-        // distance keeps taps and carries from fighting.
+        // Carry the bead: a real drag on it moves the whole palette, and the
+        // spot sticks. The minimum distance keeps taps and carries apart.
         .simultaneousGesture(
             DragGesture(minimumDistance: 0.02)
                 .targetedToAnyEntity()

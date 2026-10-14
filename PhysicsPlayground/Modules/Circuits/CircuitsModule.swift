@@ -17,16 +17,9 @@ enum CircuitsModule {
             id: id,
             title: "Circuit Workshop",
             shortTitle: "Circuits",
-            blurb: "A live electronics workbench: build anything from a flashlight to an RLC network, and watch voltage, current, and charge become visible.",
             icon: "powerplug.fill",
             accent: DesignTokens.Palette.circuitsAccent,
-            // WHAT THIS SENTENCE SAYS HAS TO BE WHAT THE HANDS DO. It
-            // described two gestures that were retired on 2026-08-11: an
-            // "orange end grip" (the grips were deleted — a lead is the only
-            // thing at an end now) and "pinch two copper terminals to wire"
-            // (tap-tap wiring is gone; a tap selects and never wires).
-            firstRunHint: "The loop in front of you is live — pinch the switch lever to break it. Pull parts out of the racks on either side of you and drop them so copper ends nearly touch: they connect themselves. To wire across a distance, pull a lead out of one copper end and let go on another. Tap a lead to light everything it is connected to; pull a wire's end off to move it somewhere else. The trash button removes a selected part. visionOS will ask to use your room so the bench can stand in it.",
-            // The house dimming — see `PendulumsModule`. Gravity Lab is the exception.
+            // The house dimming — see `PendulumsModule`. Orbital Mechanics is the exception.
             preferredDimming: 0.35,
             legend: legend,
             isPaused: { appModel.circuitsModel.isPaused },
@@ -38,11 +31,34 @@ enum CircuitsModule {
                 )
             },
             captureReadings: { readings(appModel: appModel) },
+            physicsRows: { boxRows(appModel: appModel) },
             timeScrub: .init(model: appModel.circuitsModel),
-            reset: { appModel.circuitsModel.reset() }
+            reset: {
+                appModel.circuitsModel.reset()
+                appModel.circuitsModel.commitBench()
+            }
         )
     }
     /// The readings this bench writes into the lab notebook.
+    /// The Physics box's list: the bench in two numbers, then the selected
+    /// part's — the notebook records every part, a card cannot.
+    static func boxRows(appModel: AppModel) -> [NotebookEntry.Reading] {
+        let model = appModel.circuitsModel
+        var rows: [NotebookEntry.Reading] = [
+            .init("Components", "\(model.components.count)"),
+            .init("Wires", "\(model.wires.count)"),
+        ]
+        let shown = model.selectedComponent.map { [$0] } ?? Array(model.components.prefix(2))
+        for component in shown {
+            guard let readout = model.readouts[component.id] else { continue }
+            let name = component.kind.displayName
+            rows.append(.init("\(name) current", PhysicsFormat.metric(readout.amps, "A", decimals: 2)))
+            rows.append(.init("\(name) voltage", PhysicsFormat.fixed(readout.volts, decimals: 2), "V"))
+            rows.append(.init("\(name) power", PhysicsFormat.metric(readout.watts, "W", decimals: 2)))
+        }
+        return rows
+    }
+
     static func readings(appModel: AppModel) -> [NotebookEntry.Reading] {
         let model = appModel.circuitsModel
         var rows: [NotebookEntry.Reading] = [

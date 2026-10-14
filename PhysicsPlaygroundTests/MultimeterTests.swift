@@ -2,28 +2,9 @@
 //  MultimeterTests.swift
 //  Physics Playground — app tests
 //
-//  The bench meter, which spent a while being an instrument you could
-//  neither move nor visibly operate.
-//
-//  Both failures were invisible from the code that appeared to implement
-//  them, which is why they lasted:
-//
-//    • MOVE. The case carried a `GroundingShadowComponent` and nothing
-//      else — no name, no collider, no input target — so there was
-//      nothing for a drag to land on. And even with one, `update` wrote
-//      `root.position` from a `private static let` every frame, so any
-//      drag would have been erased before it drew.
-//    • MODE. Tapping the dial really did advance `meterMode`, and always
-//      had. But the pointer that shows which mode you are in sat four
-//      millimetres INSIDE the mesh's knob, while the mesh carried a
-//      second, static pointer moulded into the case. So the reading
-//      changed, the dial did not appear to, and the control read as
-//      broken.
-//
-//  Nothing automated can pinch a RealityKit entity, so these call the
-//  handlers directly — the `StationTapTests` pattern. What they cannot
-//  check is that a hand can reach the thing; what they CAN check is that
-//  every precondition for a hand reaching it is in place.
+//  The bench meter. Nothing automated can pinch a RealityKit entity, so
+//  these call the handlers directly: what they can check is that every
+//  precondition for a hand reaching the instrument is in place.
 //
 
 import XCTest
@@ -66,10 +47,8 @@ final class MultimeterTests: XCTestCase {
                         + "it can be picked up")
     }
 
-    /// The collider is the CASE and not a comfortable box around it.
-    /// This instrument stands among terminals a centimetre apart, and an
-    /// oversized grab volume would shield the very things the probes are
-    /// for.
+    /// The collider is the case and not a box around it: this instrument
+    /// stands among terminals a centimetre apart.
     func testTheCaseColliderIsTheCase() throws {
         let body = try XCTUnwrap(find(Multimeter.bodyName, under: meter().root))
         let collision = try XCTUnwrap(body.components[CollisionComponent.self])
@@ -81,10 +60,9 @@ final class MultimeterTests: XCTestCase {
         XCTAssertEqual(extents.z, 0.032, accuracy: 0.004)
     }
 
-    /// The case answers to `isBody`; the dial and the probes do not.
-    /// The drag handler asks this question first, so a yes from the dial
-    /// would mean the meter slid away instead of changing mode, and a
-    /// yes from a probe would mean carrying a probe carried the meter.
+    /// The case answers to `isBody`; the dial and the probes do not, or a
+    /// drag on the dial would slide the meter and carrying a probe would
+    /// carry the meter.
     func testOnlyTheCaseIsTheHandle() throws {
         let meter = meter()
         let body = try XCTUnwrap(find(Multimeter.bodyName, under: meter.root))
@@ -99,17 +77,8 @@ final class MultimeterTests: XCTestCase {
         }
     }
 
-    /// A placed meter STAYS placed across a frame.
-    ///
-    /// This is the whole of the move bug. `update` used to take the
-    /// anchor as a parameter and write it unconditionally, from a
-    /// constant the view owned — so the position was reset sixty times a
-    /// second and a drag could never accumulate.
-    ///
-    /// It reads the CASE's world position, not `root.position`. `root`
-    /// stopped moving on 2026-08-03 — it holds the case and the probes
-    /// side by side and stays at the renderer's identity — so asserting
-    /// on it would now pass whether or not a drag did anything.
+    /// A placed meter stays placed across a frame. It reads the case's
+    /// world position, not `root.position`: `root` stays at identity.
     func testAPlacedMeterSurvivesTheRenderLoop() throws {
         let meter = meter()
         let model = CircuitsModel()
@@ -130,19 +99,9 @@ final class MultimeterTests: XCTestCase {
 
     // MARK: Reset
 
-    /// RESET PUTS THE METER BACK IN THE RACK.
-    ///
-    /// The module's `reset` closure only ever called `model.reset()`, and
-    /// the meter is a VIEW object: it kept `root.isEnabled`, it kept the
-    /// anchor a hand had carried it to, and `carried` — the set that stops
-    /// `update` re-parking a probe — was only ever inserted into. So a
-    /// Reset left the instrument standing in mid-air with both probes
-    /// where you dropped them, on a bench that had just claimed to be
-    /// restored. Commit 73253af's rule is that reset restores the
-    /// apparatus, and a multimeter is apparatus.
-    ///
-    /// `ResetCoverageTests` cannot see this: it reflects over `Bool`s on
-    /// MODELS, and this is a `Set` on a view object.
+    /// Reset puts the meter back on the shelf: the meter is a view object,
+    /// so a model reset alone cannot reach it, and `ResetCoverageTests`
+    /// cannot see a `Set` on a view object.
     func testAResetPutsTheMeterBackInTheRack() throws {
         let meter = meter()
         let model = CircuitsModel()
@@ -189,7 +148,7 @@ final class MultimeterTests: XCTestCase {
     }
 
     /// A reset the meter has already seen does not stow it again — so
-    /// pulling the meter out AFTER a reset leaves it out.
+    /// pulling the meter out after a reset leaves it out.
     func testTheSameNonceStowsOnlyOnce() {
         let meter = meter()
         let model = CircuitsModel()
@@ -209,12 +168,7 @@ final class MultimeterTests: XCTestCase {
                       + "cannot be picked up again")
     }
 
-    /// MOVING THE METER DOES NOT MOVE A PLACED PROBE.
-    ///
-    /// The second half of "these are separate objects". Turning the case
-    /// was fixed first; dragging it dragged the measurement along for
-    /// another round, because the probes still hung off the entity the
-    /// anchor was written to.
+    /// Moving the meter does not move a placed probe.
     func testMovingTheMeterLeavesAPlacedProbeAlone() throws {
         let meter = meter()
         let model = CircuitsModel()
@@ -234,10 +188,8 @@ final class MultimeterTests: XCTestCase {
                        "carrying the meter dragged a placed probe with it")
     }
 
-    /// …and the lead still reaches, which is the thing that makes the
-    /// separation legible rather than looking like a broken parent link.
-    /// The lead is drawn jack-to-tip and scaled to span the gap, so its
-    /// length is the assertion: move the case away and it must grow.
+    /// And the lead still reaches: it is drawn jack-to-tip and scaled to
+    /// span the gap, so its length is the assertion.
     func testTheLeadStretchesWhenTheMeterMovesAway() throws {
         let meter = meter()
         let model = CircuitsModel()
@@ -258,24 +210,10 @@ final class MultimeterTests: XCTestCase {
 
     // MARK: The probes hold still
 
-    /// A PLACED PROBE DOES NOT MOVE WHEN THE VIEWER DOES.
-    ///
-    /// The meter turns to face whoever is looking at it. The probes used
-    /// to be children of the entity that turn was applied to, so walking
-    /// round the bench swung a probe you had set on a terminal through
-    /// the same arc as the case — while the reading, latched by terminal
-    /// id rather than by position, went on claiming to measure there.
-    ///
-    /// A headset is the only thing that can walk round a bench, so this
-    /// stands in for it the only way a test can: it walks the viewer a
-    /// full circle and asks whether the probe stayed where it was put.
-    ///
-    /// IT ASKS THE ENTITY, NOT `probeTip`. The first draft of this test
-    /// asserted on the stored tip and passed against the bug it was
-    /// written to catch, because the stored tip is a coordinate in a
-    /// frame that was itself being rotated — it never changed, and the
-    /// probe moved anyway. What a wearer sees is the entity's place in
-    /// the world, so that is what a test about a wearer must read.
+    /// A placed probe does not move when the viewer does: the meter turns
+    /// to face whoever is looking, and the probes were once children of the
+    /// entity that turn applied to. Asked of the entity, not `probeTip` —
+    /// the stored tip is a coordinate in a frame that was itself rotating.
     func testAPlacedProbeIgnoresTheViewer() throws {
         let meter = meter()
         let model = CircuitsModel()
@@ -299,13 +237,8 @@ final class MultimeterTests: XCTestCase {
         }
     }
 
-    /// An UNTOUCHED probe still hangs off the instrument.
-    ///
-    /// The other half of the same decision: a probe nobody has picked up
-    /// is in its holster, and a holster is part of the case. If this
-    /// failed, turning the meter would leave two probes hanging in the
-    /// air beside it, attached to their leads at one end and to nothing
-    /// at the other.
+    /// An untouched probe still hangs off the instrument: a holster is part
+    /// of the case.
     func testAParkedProbeFollowsTheCase() {
         let meter = meter()
         let model = CircuitsModel()
@@ -318,11 +251,8 @@ final class MultimeterTests: XCTestCase {
         XCTAssertGreaterThan(
             simd_distance(front, side), 0.01,
             "a probe still in its holster did not turn with the meter")
-        // Turning is not translating: it is still hanging off the case at
-        // the same distance, on the other side. Measured FROM THE ANCHOR
-        // — `probeTip` is in the renderer's frame, so its bare length is
-        // a distance from the scene origin and would change under a
-        // rotation that left the probe correctly holstered.
+        // Turning is not translating: measured from the anchor, since
+        // `probeTip` is in the renderer's frame.
         XCTAssertEqual(simd_distance(front, meter.anchor),
                        simd_distance(side, meter.anchor), accuracy: 1e-4,
                        "the holstered probe changed its distance from the case")
@@ -361,10 +291,8 @@ final class MultimeterTests: XCTestCase {
         XCTAssertEqual(model.meterMode, .voltsDC, "the mode changed anyway")
     }
 
-    /// Every mode points the dial somewhere DIFFERENT.
-    ///
-    /// The regression guard for "the dial does nothing": the mode can
-    /// advance perfectly while the only thing that shows it never moves.
+    /// Every mode points the dial somewhere different — the guard for "the
+    /// dial does nothing".
     func testEveryModePointsTheDialSomewhereDifferent() throws {
         let meter = meter()
         let model = CircuitsModel()
@@ -386,13 +314,8 @@ final class MultimeterTests: XCTestCase {
         }
     }
 
-    /// And the pointer stands PROUD of the knob it rides on.
-    ///
-    /// The mesh's moulded knob occupies z ∈ [0.0155, 0.0235] in the
-    /// meter's frame and the dial pivot sits at z = 0.0185, so a pointer
-    /// authored at the pivot is swallowed whole. It has to clear 0.0235
-    /// in world terms — 0.005 in the dial's own frame — or turning the
-    /// dial is a silent operation.
+    /// The pointer stands proud of the moulded knob (z up to 0.0235 in the
+    /// meter's frame), or turning the dial is a silent operation.
     func testThePointerClearsTheKnob() throws {
         let meter = meter()
         let dial = try XCTUnwrap(find("meter-dial", under: meter.root))

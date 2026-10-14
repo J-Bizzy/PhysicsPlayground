@@ -16,11 +16,9 @@ struct CircuitsSpaceView: View {
     @Environment(CircuitsModel.self) private var model
     @State private var renderer: CircuitsRenderer?
     @State private var bloom = Bloom()
-    /// The AC source's frequency, on a rail hung under the selected
-    /// source (2026-09-02) — present exactly while an AC source is the
-    /// selection, the capacitor ΔV rail's precedent. Parented to the
-    /// renderer's `root`, not the zoomed bench, so it never grows out of
-    /// reach; its position is the part's, through the zoom rig.
+    /// The AC source's frequency rail, present exactly while an AC source
+    /// is selected. Parented to the renderer's `root`, not the zoomed
+    /// bench, so it never grows out of reach.
     @State private var frequencyTrack: SpatialTrackControl?
     /// A rail mid-adjust swallows every `onChanged` until its `onEnded`,
     /// so a drag that starts on the rail cannot wander onto a part.
@@ -28,29 +26,29 @@ struct CircuitsSpaceView: View {
     /// Which component's ring is open — shared by the tap gesture and
     /// the render loop (see RingState's header).
     @State private var ring = RingState()
-    /// Press-before-drag: the view's single `DragGesture(minimumDistance: 0)`
-    /// means every tap also runs the drag, so a latch only promotes to a
-    /// pull past `PressLatch.tapTravel` — a zero-travel press wires nothing.
+    /// The view's single `DragGesture(minimumDistance: 0)` runs on every
+    /// tap, so a latch promotes to a pull only past `PressLatch.tapTravel`.
     @State private var leadPress = PressLatch<CircuitsModel.Terminal>()
     @State private var partPress = PressLatch<UUID>()
     /// A wire end being lifted off its terminal. The payload is the
     /// wire and which of its two ends the hand was nearer to.
     @State private var wirePress = PressLatch<CircuitsModel.WireEnd>()
-    /// A switch lever under a finger. This latch never promotes to a
-    /// drag — it exists so a lever press SURVIVES the 12 mm of drift a
-    /// real hand has, like every other target on the bench, and
-    /// toggles on `settle()` at gesture end. The physical TapGesture
-    /// no longer toggles (it would double-fire: both gestures complete
-    /// on a clean tap); it only selects.
+    /// A switch lever under a finger. Never promotes to a drag: it survives
+    /// 12 mm of drift and toggles on `settle()` at gesture end. The
+    /// TapGesture only selects, or a clean tap would toggle twice.
     @State private var leverPress = PressLatch<UUID>()
+    /// A press on a shelf slot: it becomes a pull once the hand travels, so a
+    /// tap on the shelf never spawns a part.
+    @State private var sourcePress = PressLatch<Int>()
     @State private var partDrag: RelativeDrag?
-    /// The part a pull off the palette just made, so the drag that made
-    /// it can go on moving it. It outlives the `RelativeDrag`'s name,
-    /// which for a new part is the well's, not a UUID.
+    /// The part a pull off the shelf just made, so the drag that made it
+    /// keeps moving it.
     @State private var spawnedPartID: UUID?
-    /// The parts palette: blocks of sources on the flanks, one per
-    /// component kind. Geometry in `CircuitsPartsLayout`.
+    /// The parts shelf; geometry in `CircuitsPartsLayout`.
     @State private var palette: Well?
+    /// Whether the shelf has coasted into place — once, on the lab's
+    /// first frame on screen.
+    @State private var shelfArrived = false
 
     /// Which probe a hand is carrying, if either.
     @State private var probeDrag: CircuitsModel.ProbeSlot?
@@ -62,8 +60,14 @@ struct CircuitsSpaceView: View {
     /// number's floor rather than being a competing 1x/4x flip.
     @State private var scaleRig = SpatialScaleRig(
         pivot: CircuitsRenderer.benchPivot, range: 0.6...8.0, allowsTurn: false)
-    /// The layers bank: which views of the current are switched on;
-    /// also the door to Electron View (`model.electronView`).
+    /// The five views of the current — electron flow, true speed, the
+    /// wire's own field, the voltage skyline, Electron View — behind one
+    /// tab that reads out which are on.
+    @State private var viewsHandle = SummonHandle(
+        title: "Views", symbol: "eye",
+        accent: UIColor(DesignTokens.Palette.circuitsAccent))
+    /// The column the Views tab unfolds; also the door to Electron View
+    /// (`model.electronView`).
     @State private var layers: SpatialLayerBank?
     /// The bench's meter — a tool, not a layer. See `Multimeter`.
     @State private var meter: Multimeter?
@@ -90,21 +94,21 @@ struct CircuitsSpaceView: View {
     private static let clearAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-1.02, -0.02, 0.10)
 
-    /// The layers bank, on the bench's left flank. A named static so
-    /// `InstrumentReachCriterionTests` can measure it.
+    /// The Views tab, on the bench's left flank: outside the build volume,
+    /// 39.6° off axis, clear of the Clear plate. A named static so the
+    /// placement tests can measure it.
     static let bankAnchor = CircuitsRenderer.benchPivot
-        + SIMD3<Float>(-0.62, -0.06, 0.16)
+        + SIMD3<Float>(-0.76, -0.06, -0.07)
+    /// The column the tab unfolds, above it like the presets: five plates
+    /// at 0.066 pitch centred 0.25 up, stopping at 1.60.
+    static let viewsColumnAnchor = bankAnchor + SIMD3<Float>(0, 0.25, 0)
 
-    /// Beside the Clear plate, unfolding UPWARD: presets and layers are
-    /// both five-plate columns and can't stack inside the 0.70…1.80 band,
-    /// so they share the far-left flank. Clearance checked by
-    /// `CircuitsInstrumentClearanceTests`.
+    /// Beside the Clear plate, unfolding upward: two five-plate columns
+    /// cannot stack inside the 0.70…1.80 band.
     private static let presetsAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-1.02, 0.15, 0.10)
-    /// The column hangs below the tab, centred on this point — a bank
-    /// centres its plates on its anchor rather than stacking down from
-    /// it, which is how the first attempt put the tab inside its own
-    /// column.
+    /// The column hangs above the tab, centred on this point: a bank
+    /// centres its plates on its anchor.
     private static let presetsBankAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(-1.02, 0.39, 0.10)
 
@@ -116,15 +120,11 @@ struct CircuitsSpaceView: View {
             renderer.onLeverAction = { model.toggleSwitch(id: $0) }
             renderer.onWireAction = { model.deleteWire(id: $0) }
             content.add(renderer.root)
-            // ARRIVES, NEVER APPEARS. Disabled here and raised by
-            // `Fade.tick` below, so the apparatus resolves into the room
-            // instead of being there between one frame and the next.
+            // Disabled here and raised by `Fade.tick`, so the apparatus arrives
+            // rather than appears.
             renderer.root.isEnabled = false
 
-            // What the selected part is doing, on the part. The anchor
-            // has been repositioned above it every frame since the
-            // renderer was written and carried nothing; the card was in
-            // the window panel's "Selected part" dropdown.
+            // What the selected part is doing, on the part.
             if let card = attachments.entity(for: Self.readoutCardID) {
                 stripInput(from: card)
                 renderer.selectedAnchor.addChild(card)
@@ -140,10 +140,7 @@ struct CircuitsSpaceView: View {
                     .init(id: "truespeed", label: "True speed", symbol: "tortoise",
                           isOn: { model.trueSpeedMode },
                           toggle: { model.trueSpeedMode.toggle() }),
-                    // The bench's own field. It replaces the
-                    // electromagnet annex, and it makes the smaller,
-                    // truer claim: EVERY wire here has a field around
-                    // it, not just one wound into a coil.
+                    // The bench's own field: every wire here has one, not just a coil.
                     .init(id: "bfield", label: "Magnetic field",
                           symbol: "circle.hexagongrid",
                           isOn: { model.showMagneticField },
@@ -155,17 +152,25 @@ struct CircuitsSpaceView: View {
                           isOn: { model.electronView },
                           toggle: { model.electronView.toggle() }),
                 ])
-            // Under `root`, NOT `viewRoot`: the zoom reaches 8x, and a
-            // control that grew with the bench would be a metre wide —
-            // and Electron View's own switch would swell out of reach the
-            // moment you used it.
+            // Under `root`, not `viewRoot`: the zoom reaches 8×, and a control
+            // that grew with the bench would swell out of reach.
             renderer.root.addChild(bank.root)
             self.layers = bank
+            // The tab reads out what its column hides — "flow", "flow,
+            // field", "off" — so folding costs no information.
+            viewsHandle.summary = {
+                let on = [model.showElectronFlow ? "flow" : nil,
+                          model.trueSpeedMode ? "true speed" : nil,
+                          model.showMagneticField ? "field" : nil,
+                          model.showVoltageHeights ? "skyline" : nil,
+                          model.electronView ? "electron view" : nil]
+                    .compactMap { $0 }
+                return on.isEmpty ? "off" : on.joined(separator: ", ")
+            }
+            renderer.root.addChild(viewsHandle.root)
 
-            // Both under `root` for the same reason the layers bank is:
-            // the zoom reaches 8×, and an instrument that grew with the
-            // bench would put itself out of reach exactly when you had
-            // zoomed in to use it.
+            // Under `root` for the same reason: an instrument that grew with the
+            // bench would leave reach exactly when you zoomed in to use it.
             let multimeter = Multimeter(
                 accent: UIColor(DesignTokens.Palette.circuitsAccent),
                 anchor: Self.meterAnchor)
@@ -175,9 +180,7 @@ struct CircuitsSpaceView: View {
             }
             self.meter = multimeter
 
-            // Clearing the bench, off the window panel. Same parenting
-            // rule as everything above: under `root`, so an 8× zoom
-            // cannot carry it away.
+            // Under `root`, like everything above.
             let benchVerbs = SpatialActionBank(
                 accent: UIColor(DesignTokens.Palette.circuitsAccent),
                 actions: [
@@ -185,14 +188,16 @@ struct CircuitsSpaceView: View {
                           symbol: "trash.slash",
                           isAvailable: { !model.components.isEmpty },
                           confirms: true,
-                          fire: { model.clearBench() }),
+                          fire: {
+                              model.clearBench()
+                              model.commitBench()
+                          }),
                 ])
             renderer.root.addChild(benchVerbs.root)
             self.verbs = benchVerbs
 
-            // Every preset confirms: `loadPreset` opens with `clearBench()`
-            // and the bench persists across launches, so one tap would
-            // destroy a previous session's work.
+            // Every preset confirms: `loadPreset` starts with `clearBench()` on a
+            // bench that persists across launches.
             let presetBank = SpatialActionBank(
                 accent: UIColor(DesignTokens.Palette.circuitsAccent),
                 actions: CircuitsModel.Preset.allCases.map { preset in
@@ -213,10 +218,8 @@ struct CircuitsSpaceView: View {
             presetsHandle.summary = { lastPreset?.displayName ?? "your bench" }
             renderer.root.addChild(presetsHandle.root)
 
-            // The parts, in one block on the right. `CircuitsPartsLayout`
-            // says which parts and in what order (sources, passives, then
-            // active parts) via `rightSlot`; the two `kinds(on:)` lists
-            // are concatenated, not merged, to keep that grouping.
+            // The parts in one column: `CircuitsPartsLayout` says which and in
+            // what order (sources and interrupters, then loads).
             let partSpecs: [Well.Spec] = CircuitsPartsLayout.Flank.allCases
                 .flatMap { CircuitsPartsLayout.kinds(on: $0) }
                 .enumerated()
@@ -229,9 +232,8 @@ struct CircuitsSpaceView: View {
                         position: CircuitsPartsLayout.rightSlot(index: index),
                         spawn: { model.add(kind, at: $0) })
                 }
-            // The meter is the last slot, parked in the rack. `handOver`
-            // not `spawn`: there is exactly one multimeter, not a fresh one
-            // per pull.
+            // The meter is the last slot. `handOver`, not `spawn`: there is
+            // exactly one multimeter.
             let meterSlot = Well.Spec(
                 name: "multimeter",
                 tint: UIColor(DesignTokens.Palette.circuitsAccent),
@@ -239,53 +241,51 @@ struct CircuitsSpaceView: View {
                 preview: { Multimeter.miniature() },
                 position: CircuitsPartsLayout.rightSlot(index: partSpecs.count),
                 spawn: { _ in nil },
-                // Captures the instrument, not the view (a SwiftUI View is
-                // a struct, no `self` to hold weakly).
+                // Captures the instrument, not the view (a View is a struct).
                 handOver: { [weak multimeter] hand in
                     // Out of the rack, into the hand, and made visible.
                     multimeter?.place(at: SIMD3<Float>(hand))
                     multimeter?.root.isEnabled = true
                 })
 
-            // Hidden until pulled: the slot shows a miniature, so leaving
-            // the real instrument out too would put two meters in the room.
+            // Hidden until pulled: the slot shows a miniature, and two meters in
+            // the room would be one too many.
             multimeter.root.isEnabled = false
 
             let parts = Well(partSpecs + [meterSlot])
-            // A window, not a wall: six of the twelve visible, the rest a
-            // drag away.
+            // A shelf, not a wall: six slots in the window, the rest a
+            // drag away. Faced at a standing viewer so the pane and the
+            // parts on it read square from where you stand.
+            parts.facing = CircuitsPartsLayout.viewer
+            parts.windowTitle = "Parts"
             parts.visibleCount = CircuitsPartsLayout.rightVisibleRows
             renderer.root.addChild(parts.root)
             self.palette = parts
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
-                    // The lab's own arrival and departure, on the shell's
-                    // one flag. `Fade.tick` settles to a no-op — it drops its
-                    // clock and its OpacityComponent once landed — so this
-                    // costs one comparison for all the frames that are not a
-                    // transition.
+                    // The lab's arrival and departure, on the shell's one flag.
+                    // `Fade.tick` settles to a no-op once landed.
                     if let renderer {
                         Fade.tick(renderer.root, visible: !appModel.isDeparting,
                                   duration: AppModel.departure)
                     }
-                    // The lab's placement in the user's room — a pure
-                    // Constant display offset — safe because grabs move a
-                    // body by hand displacement. The bank, meter and verb
-                    // plate are children of `renderer.root`, so they ride it.
+                    // The lab's placement in the room: a constant display offset, safe
+                    // because grabs move a body by hand displacement. Every instrument is
+                    // a child of `renderer.root`, so it rides along.
                     renderer?.root.position = appModel.labPlacement.offset
                     model.step(dt: event.deltaTime)
                     let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
-                    layers?.update(
-                        // bankAnchor x −0.62 still overlaps the build
-                        // volume, by 0.13 m since it narrowed to ±0.60 on
-                        // 2026-08-26. The move DECISIONS.md floated (x 0.87,
-                        // z −0.79) is 47.8° off axis against a 48° limit —
-                        // the margin this project's own tests refuse for the
-                        // rack. Declined, and recorded there.
-                        anchor: Self.bankAnchor,
-                        viewer: viewer,
-                        dt: event.deltaTime)
+                    viewsHandle.update(
+                        anchor: Self.bankAnchor, viewer: viewer,
+                        dt: event.deltaTime,
+                        nearestHand: appModel.room.nearestFingertip(
+                            to: Self.bankAnchor))
+                    layers?.root.isEnabled = viewsHandle.isOpen
+                    if viewsHandle.isOpen {
+                        layers?.update(anchor: Self.viewsColumnAnchor,
+                                       viewer: viewer, dt: event.deltaTime)
+                    }
                     meter?.update(viewer: viewer, model: model,
                                   resetNonce: appModel.resetNonce)
                     // Idle breath, recoil on giving up a part, and a
@@ -294,6 +294,12 @@ struct CircuitsSpaceView: View {
                         dt: event.deltaTime,
                         nearestHand: appModel.room.nearestFingertip(
                             to: CircuitsPartsLayout.rightSlot(index: 0)))
+                    // The column arrives coasting, the crown rolling with it,
+                    // once the lab is on screen to be seen doing it.
+                    if !shelfArrived, renderer?.root.isEnabled == true {
+                        shelfArrived = true
+                        palette?.arrive()
+                    }
                     verbs?.update(anchor: Self.clearAnchor, viewer: viewer,
                                   dt: event.deltaTime,
                                   resetNonce: appModel.resetNonce,
@@ -312,9 +318,8 @@ struct CircuitsSpaceView: View {
                                         nearestHand: appModel.room.nearestFingertip(
                                             to: Self.presetsBankAnchor))
                     }
-                    // Ticked every frame, NOT via the observation loop: a
-                    // steady DC circuit mutates nothing observation re-fires
-                    // on, but its electrons must keep drifting.
+                    // Ticked every frame, not via observation: a steady DC circuit mutates
+                    // nothing, but its electrons must keep drifting.
                     renderer?.handZoom = scaleRig.liveScale
                     renderer?.tick(dt: event.deltaTime, model: model)
                     if let renderer {
@@ -367,18 +372,16 @@ struct CircuitsSpaceView: View {
                     model.beginLeadPull(from: source, hand: target)
                 }
             }
-            // `-circAlign 1` drops two parts a few centimetres apart
-            // and fires the release on the second, so the SNAPPED
-            // chain is what the screenshot holds. The ghost preview is
-            // a carry state and needs a hand; this is the landing.
+            // `-circAlign 1` drops two parts a few centimetres apart and fires the
+            // release on the second, so the snapped chain is what the screenshot
+            // holds.
             if UserDefaults.standard.bool(forKey: "circAlign") {
                 model.clearBench()
                 let anchor = CircuitsModel.buildCenter
                 model.add(.battery, at: anchor)
                 if let battery = model.components.first {
-                    // Offset is the near lead's and must stay inside
-                    // `leadReach` (0.06): 3 cm along + 2 cm up = 3.6 cm,
-                    // crooked enough to exercise the rotation.
+                    // Inside `leadReach` (0.06): 3 cm along + 2 cm up, crooked enough to
+                    // exercise the rotation.
                     let landing = battery.terminalPosition(1)
                         + SIMD3(0.03 + CircuitsModel.terminalOffset, 0.02, 0)
                     if let bulb = model.add(.bulb, at: landing) {
@@ -394,11 +397,9 @@ struct CircuitsSpaceView: View {
                 lastPreset = preset
             }
 
-            // The index-naming args below MUST run after the bench-shaping
-            // args: `-circPreset` starts with `clearBench`, so run earlier
-            // they would name parts a preset then deleted.
-            // `-circLead <componentIndex>,<end>` pulls a lead out toward
-            // open air (a gesture state the simulator can only be handed).
+            // The index-naming arguments below must run after the bench-shaping
+            // ones: `-circPreset` starts with `clearBench`.
+            // `-circLead <componentIndex>,<end>` pulls a lead out toward open air.
             if let spec = UserDefaults.standard.string(forKey: "circLead") {
                 let parts = spec.split(separator: ",")
                 if let index = parts.first.flatMap({ Int($0) }),
@@ -443,6 +444,10 @@ struct CircuitsSpaceView: View {
             if UserDefaults.standard.bool(forKey: "circPresetsOpen") {
                 presetsHandle.setOpen(true)
             }
+            // `-circViewsOpen 1` unfolds the Views tab's five plates.
+            if UserDefaults.standard.bool(forKey: "circViewsOpen") {
+                viewsHandle.setOpen(true)
+            }
             // `-circScroll <n>` scrolls the parts rack n slots.
             let scroll = UserDefaults.standard.integer(forKey: "circScroll")
             if scroll != 0 { parts.scroll(by: scroll) }
@@ -451,7 +456,7 @@ struct CircuitsSpaceView: View {
             if UserDefaults.standard.bool(forKey: "circField") {
                 model.showMagneticField = true
             }
-            // `-circClear 1` ARMS the Clear plate without firing — firing
+            // `-circClear 1` arms the Clear plate without firing — firing
             // photographs an empty bench, indistinguishable from an unused one.
             if UserDefaults.standard.bool(forKey: "circClear") {
                 benchVerbs.arm("clear", holds: true)
@@ -461,21 +466,17 @@ struct CircuitsSpaceView: View {
         } attachments: {
             Attachment(id: Self.readoutCardID) {
                 CircuitsSelectedReadout()
-                    // Never intercept a pinch: this floats 14 cm above a
-                    // part whose body, terminals and end grips are all
-                    // grab targets.
+                    // Never intercept a pinch: this floats above a part whose body and
+                    // terminals are grab targets.
                     .allowsHitTesting(false)
                     .environment(model)
             }
         }
-        // Leaving the lab must not leave anything running or held: an
-        // in-flight grab never gets its `onEnded` when the space closes,
-        // so it must be cleared here or it strands and re-targets every
-        // later drag.
+        // An in-flight grab never gets its `onEnded` when the space closes;
+        // clear it here or it re-targets every later drag.
         .onDisappear {
             renderer?.teardown()
-            // MUST clear: `Bloom` is a class, so a live grip outlives the
-            // view and would claim every subsequent drag in the module.
+            // `Bloom` is a class: a live grip would outlive the view.
             bloom.endGrip()
             activeTrack = nil
         }
@@ -483,19 +484,18 @@ struct CircuitsSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
-                    // Ring petals first; then the bench's own tap
-                    // grammar (terminals wire, wires delete, levers
-                    // flip, bodies toggle their control ring).
-                    if layers?.handleTap(value.entity) == true { return }
-                    // Meter before `handleTap(on:)` (which reads a terminal):
-                    // it stands among the terminals, so its dial must not
-                    // count as probing what's behind it.
+                    // Instruments first, then the bench's own tap grammar.
+                    if viewsHandle.handleTap(value.entity) { return }
+                    if viewsHandle.isOpen,
+                       layers?.handleTap(value.entity) == true { return }
+                    // Meter before `handleTap(on:)`: its dial stands among the terminals
+                    // and must not count as probing what is behind it.
                     if meter?.handleTap(value.entity, model: model) == true { return }
                     if bloom.handleTap(value.entity) { return }
-                    // Verb plates before the bench, by the same rule: a plate
-                    // is never also a reach for the bench behind it.
+                    // A plate is never also a reach for the bench behind it.
                     if verbs?.handleTap(value.entity) == true { return }
-                    // The rack's carets, before the flank behind them.
+                    // The shelf's crown swallows a tap, so a miss at a part
+                    // does not fold the ring behind it.
                     if palette?.handleTap(value.entity) == true { return }
                     if presetsHandle.handleTap(value.entity) { return }
                     if presetsHandle.isOpen,
@@ -503,28 +503,30 @@ struct CircuitsSpaceView: View {
                     handleTap(on: value.entity)
                 }
         )
-        // One drag gesture, four grabs, all relative: a terminal pulls a
-        // wire; a lead aims its part; a palette source hands you a new
-        // part; a body carries the part.
+        // One drag gesture, four grabs, all relative: a terminal pulls a wire,
+        // a lead aims its part, a shelf slot hands you a new part, a body
+        // carries the part.
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
                 .onChanged { value in
                     guard let renderer else { return }
-                    // Into the bench's frame, not the room's: converting
-                    // through viewRoot inverts zoom and lab placement, so a
-                    // part tracks the hand 1:1 on screen at any zoom.
+                    // Into the bench's frame: converting through viewRoot inverts zoom and
+                    // placement, so a part tracks the hand 1:1 at any zoom.
                     let handF = renderer.viewRoot.convert(
                         position: SIMD3<Float>(value.convert(
                             value.location3D, from: .local, to: .scene)),
                         from: nil)
                     let hand = SIMD3<Double>(handF)
 
-                    // The frequency rail, in ROOM coordinates: it hangs off
-                    // `root`, not the bench, and a gesture already in it may
-                    // not be re-claimed by anything under it.
+                    // The frequency rail is in room coordinates (it hangs off `root`), and
+                    // a gesture already in it is not re-claimed by anything under it.
                     let world = SIMD3<Double>(SIMD3<Float>(value.convert(
                         value.location3D, from: .local, to: .scene)))
+                    // The shelf hangs off `root` too, outside the zoom: its crown
+                    // must ride the hand at any magnification.
+                    let roomHand = renderer.root.convert(
+                        position: SIMD3<Float>(world), from: nil)
                     if let track = activeTrack {
                         guard track.isEnabled else {
                             activeTrack = nil
@@ -556,8 +558,7 @@ struct CircuitsSpaceView: View {
                         return
                     }
 
-                    // Meter next, in the RENDERER's frame not the bench's:
-                    // it hangs off `root` (not `viewRoot`) so Electron View
+                    // Meter next, in the renderer's frame: it hangs off `root`, so the
                     // zoom cannot carry it out of reach.
                     if let meter {
                         let world = SIMD3<Float>(value.convert(
@@ -575,11 +576,13 @@ struct CircuitsSpaceView: View {
                     if bloom.updateGrip(hand: handF) { return }
                     if model.leadPull == nil, partDrag == nil,
                        !leadPress.isPending, !partPress.isPending,
-                       !wirePress.isPending, !leverPress.isPending {
+                       !wirePress.isPending, !leverPress.isPending,
+                       !sourcePress.isPending {
                         if bloom.beginGrip(value.entity, hand: handF) { return }
-                        beginCircuitDrag(entity: value.entity, hand: hand, renderer: renderer)
+                        beginCircuitDrag(entity: value.entity, hand: hand,
+                                         roomHand: roomHand, renderer: renderer)
                     }
-                    // A pressed lead becomes a PULL only once the hand
+                    // A pressed lead becomes a pull only once the hand
                     // has moved; until then it is still a tap.
                     if let source = leadPress.promote(hand: hand) {
                         model.beginLeadPull(from: source, hand: hand)
@@ -591,10 +594,18 @@ struct CircuitsSpaceView: View {
                         model.beginRewire(wire: grabbed.wire,
                                           grabbing: grabbed.end, hand: hand)
                     }
-                    // A lever press that TRAVELS is a drag to nowhere:
-                    // consume and discard it, so only a press that stays
-                    // put settles into a toggle at gesture end.
+                    // A lever press that travels is a drag to nowhere: consume and discard
+                    // it.
                     _ = leverPress.promote(hand: hand)
+                    // A slot press that travels is the pull: the part is born at the
+                    // hand and carried from this frame.
+                    if let index = sourcePress.promote(hand: hand),
+                       let palette, let source = palette.source(at: index),
+                       let id = palette.pull(source, at: hand) {
+                        spawnedPartID = id
+                        partDrag = RelativeDrag(name: id.uuidString, target: hand, hand: hand)
+                        renderer.previewComponentID = id
+                    }
                     switch Self.carryDispatch(
                         leadPullActive: model.leadPull != nil,
                         partDragActive: partDrag != nil,
@@ -603,28 +614,13 @@ struct CircuitsSpaceView: View {
                     case .leadPull:
                         model.updateLeadPull(hand: hand)
                     case .carry:
-                        // A live carry OUTRANKS the rack: the rack's
-                        // gesture stays "dragging" after its one-shot
-                        // pull is spent, and a part it spawned must
-                        // follow the hand from its first frame, not
-                        // sit at the rack until release.
+                        // A live carry outranks the shelf: its gesture stays "dragging" after
+                        // the one-shot pull, and the part it spawned must follow the hand from
+                        // its first frame.
                         if let partDrag { applyCircuitDrag(partDrag, hand: hand) }
                     case .rack:
-                        // Browsing, or the frame a pull commits on. The
-                        // slot comes back exactly once — returning it
-                        // every frame would put one part on the bench
-                        // per frame.
-                        if let palette,
-                           let slot = palette.updateDrag(hand: handF),
-                           let source = palette.source(at: slot) {
-                            if let id = palette.pull(source, at: hand) {
-                                spawnedPartID = id
-                                partDrag = RelativeDrag(name: id.uuidString,
-                                                        target: hand, hand: hand)
-                                renderer.previewComponentID = id
-                                model.beginCarry(id: id)
-                            }
-                        }
+                        // The crown rides the hand; nothing spawns from it.
+                        palette?.updateDrag(hand: roomHand)
                     case .idle:
                         break
                     }
@@ -639,10 +635,9 @@ struct CircuitsSpaceView: View {
                     meterDrag = nil
                     palette?.endDrag()
                     bloom.endGrip()
-                    // A lever press that never travelled was a flick with
-                    // up to 12 mm of drift — the same grace every other
-                    // target gets. The TapGesture only selects, so this
-                    // is the one physical path that toggles.
+                    // A lever press that never travelled was a flick with up to 12 mm of
+                    // drift. The TapGesture only selects, so this is the one physical path
+                    // that toggles.
                     if let id = leverPress.settle() {
                         model.toggleSwitch(id: id)
                     }
@@ -652,14 +647,12 @@ struct CircuitsSpaceView: View {
                         partPress.cancel()
                         wirePress.cancel()
                         leverPress.cancel()
+                        sourcePress.cancel()
                         partDrag = nil
                         spawnedPartID = nil
-                        model.endCarry()
                     }
                     guard let renderer else { return }
-                    // Into the bench's frame, not the room's: converting
-                    // through viewRoot inverts zoom and lab placement, so a
-                    // part tracks the hand 1:1 on screen at any zoom.
+                    // Into the bench's frame, as in `onChanged`.
                     let handF = renderer.viewRoot.convert(
                         position: SIMD3<Float>(value.convert(
                             value.location3D, from: .local, to: .scene)),
@@ -683,12 +676,9 @@ struct CircuitsSpaceView: View {
         .spatialScale(scaleRig)
     }
 
-    /// A part's own controls: a value grip (a bulb dims, a battery's
-    /// drift quickens as you pull) and petals for the discrete actions.
     /// The frequency rail exists exactly while an AC source is selected,
-    /// hung 0.14 m under it wherever the part is — through the zoom rig,
-    /// without scaling with it. Built on first need so it can be a
-    /// child of the renderer's root.
+    /// hung 0.14 m under it through the zoom rig without scaling with it.
+    /// Built on first need as a child of the renderer's root.
     private func syncFrequencyRail(renderer: CircuitsRenderer) {
         let source = model.selectedComponent.flatMap { $0.kind == .acSource ? $0 : nil }
         if frequencyTrack == nil, source != nil {
@@ -773,10 +763,10 @@ struct CircuitsSpaceView: View {
                      viewer: viewer, revealTarget: 1, dt: dt)
     }
 
-    /// What a pinch landed on. A pure static over entity NAMES (the
-    /// entity's own then its ancestors', nearest first) so the six-way
-    /// priority is testable without a headset. NO distance fallback: a
-    /// part's two leads are 17 cm apart, so a fallback wires the wrong end.
+    /// What a pinch landed on: a pure static over entity names (the
+    /// entity's own, then its ancestors', nearest first), so the priority
+    /// is testable without a headset. No distance fallback: a part's two
+    /// leads are 17 cm apart.
     enum Grab: Equatable {
         case lead(CircuitsModel.Terminal)
         case body(UUID)
@@ -808,14 +798,10 @@ struct CircuitsSpaceView: View {
         return .none
     }
 
-    /// Which branch owns this frame of the one drag gesture. A pure
-    /// static, like `resolveGrab`, so the order is testable without a
-    /// headset. THE ORDER IS THE FIX for a real defect: the rack's
-    /// `isDragging` stays true for the whole gesture even after its
-    /// one-shot pull is spent, so a rack that outranks a live carry
-    /// leaves the part it just spawned frozen at the rack until
-    /// release. A live carry outranks the rack; the rack still gets
-    /// the spawn frame, because on that frame no carry exists yet.
+    /// Which branch owns this frame of the one drag gesture, as a pure
+    /// static. A live carry outranks the shelf, whose `isDragging` stays
+    /// true after its one-shot pull; the shelf still gets the spawn frame,
+    /// when no carry exists yet.
     enum CarryPhase: Equatable {
         case leadPull, carry, rack, idle
     }
@@ -840,41 +826,47 @@ struct CircuitsSpaceView: View {
         return names
     }
 
+    /// `hand` is in the bench's frame, for the parts; `roomHand` in the
+    /// renderer's root frame, for the shelf that stands outside the zoom.
     private func beginCircuitDrag(
-        entity: Entity, hand: SIMD3<Double>, renderer: CircuitsRenderer
+        entity: Entity, hand: SIMD3<Double>, roomHand: SIMD3<Float>,
+        renderer: CircuitsRenderer
     ) {
         switch Self.resolveGrab(names: Self.nameChain(from: entity), on: model) {
         case .lead(let terminal):
-            // PRESSED, not pulled. It becomes a lead pull only once
-            // the hand travels; a press that never moves is a tap.
+            // Pressed, not pulled: it becomes a lead pull only once the hand
+            // travels.
             leadPress.press(terminal, at: hand)
             return
         case .body(let id):
             partPress.press(id, at: hand)
             return
         case .wire(let id):
-            // Grab the CABLE to move a wire, the copper to make one.
-            // The bead (r 0.026) is fatter than the cable (r 0.016)
-            // and sits at its endpoint, so a pinch at the joint takes
-            // the lead and a pinch along the run takes the wire.
+            // Grab the cable to move a wire, the copper to make one: the bead is
+            // fatter than the cable and sits at its endpoint.
             if let end = model.nearerEnd(of: id, to: hand) {
                 wirePress.press(.init(wire: id, end: end), at: hand)
             }
             return
         case .lever(let id):
-            // PRESSED, and never promoted: a lever is a toggle, not a
-            // handle. The press settles into the flip at gesture end
-            // if the hand stayed within `tapTravel`.
+            // Pressed and never promoted: a lever is a toggle, and the press
+            // settles into the flip at gesture end.
             leverPress.press(id, at: hand)
             return
         case .none:
             break
         }
-        // The rack claims the drag before knowing if it's a scroll or a
-        // take — that resolves in `onChanged` once the hand has travelled.
+        // The shelf: its crown scrolls, and a slot is pressed — it pulls once
+        // the hand travels. A crown already held keeps its grab: this runs
+        // every frame of the gesture, and a second press would re-anchor it.
+        guard palette?.isDragging != true else { return }
         var current: Entity? = entity
         while let candidate = current {
-            if palette?.beginDrag(candidate, hand: SIMD3<Float>(hand)) == true { return }
+            if palette?.beginDrag(candidate, hand: roomHand) == true { return }
+            if let index = palette?.sourceIndex(of: candidate) {
+                sourcePress.press(index, at: hand)
+                return
+            }
             current = candidate.parent
         }
     }
@@ -885,29 +877,22 @@ struct CircuitsSpaceView: View {
         partDrag = RelativeDrag(name: id.uuidString, target: component.position, hand: hand)
         renderer.previewComponentID = id
         model.select(id: id)
-        model.beginCarry(id: id)
         renderer.flashPickup(id: id)
     }
 
     private func applyCircuitDrag(_ drag: RelativeDrag, hand: SIMD3<Double>) {
-        // The grab offset survives (`position(forHand:)`), and the model
-        // composes the rest: swing when one lead is wired, rigid move
-        // otherwise, pop what overstretches. The composition lives in
-        // `CircuitsModel.drag` so a test can drive the real sequence.
+        // The grab offset survives; the model composes the rest (swing or rigid
+        // move) in `CircuitsModel.drag`, so a test can drive the real sequence.
         let position = drag.position(forHand: hand)
         guard let id = spawnedPartID ?? UUID(uuidString: drag.name) else { return }
         model.drag(id: id, toward: position)
     }
 
-    /// A tap only SELECTS — it never wires and never deletes (wiring is a
-    /// pull, a wire comes off by being pulled off). It says "this one" and
-    /// the room answers with the readout and the ring.
+    /// A tap only selects — it never wires and never deletes.
     private func handleTap(on entity: Entity) {
         switch Self.resolveGrab(names: Self.nameChain(from: entity), on: model) {
         case .lead(let terminal):
-            // The probes are the one thing that still consumes a
-            // terminal tap, because an armed meter is a question you
-            // are asking and the terminal is the answer.
+            // An armed meter is a question and the terminal is the answer.
             if model.multimeterArmed {
                 model.probeTap(terminal)
             } else {
@@ -920,11 +905,9 @@ struct CircuitsSpaceView: View {
             model.selectWire(id: id)
             return
         case .lever(let id):
-            // SELECT ONLY. The toggle lives on the drag path's settled
-            // press — both gestures complete on a clean tap, so if this
-            // also toggled, every clean tap would flip the switch twice
-            // and read as a no-op. VoiceOver toggles through its own
-            // `onLeverAction` callback, which physical taps never fire.
+            // Select only: the toggle lives on the drag path's settled press, since
+            // both gestures complete on a clean tap. VoiceOver toggles through
+            // `onLeverAction`.
             model.select(id: id)
             return
         case .body(let id):
@@ -933,6 +916,8 @@ struct CircuitsSpaceView: View {
                 ring.openID = nil
                 SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
             } else {
+                // The ring, the halo and the readout name one part.
+                model.select(id: id)
                 ring.openID = id
                 SoundPalette.play(.pop, on: entity, volume: 0.35)
             }
@@ -949,9 +934,5 @@ struct CircuitsSpaceView: View {
     }
 
 
-    /// Component bodies (named by UUID) are carried directly; a palette
-    /// source makes a part at the hand and hands it to the same drag. The
-    /// palette resolves by ENTITY through `Well.pull`, not by name-parsing
-    /// (a renamed entity would fail silently).
 }
 

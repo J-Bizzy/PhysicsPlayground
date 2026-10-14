@@ -40,8 +40,8 @@ struct CircuitsSelectedReadout: View {
                         .foregroundStyle(DesignTokens.Palette.circuitsAccent)
                 }
 
-                // The coil the inductance implies (2026-09-02): the field
-                // layer draws this coil's field, so the card names it.
+                // The coil the inductance implies; the field layer draws its field, so
+                // the card names it.
                 if component.kind == .inductor {
                     let turns = CircuitsModel.inductorTurns(henries: component.value)
                     Text("≈\(turns.formatted()) turns · air core")
@@ -49,8 +49,7 @@ struct CircuitsSelectedReadout: View {
                         .foregroundStyle(.secondary)
                 }
 
-                // A rated part says how hard it is working, or that it is
-                // done (2026-09-02).
+                // A rated part says how hard it is working, or that it is done.
                 if let rating = CircuitsModel.powerRating(for: component.kind) {
                     if component.failed {
                         Label("scorched — replace it", systemImage: "flame.fill")

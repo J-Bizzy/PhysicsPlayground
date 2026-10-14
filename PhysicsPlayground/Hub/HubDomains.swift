@@ -1,5 +1,5 @@
 //  HubDomains.swift — the app's two doors: six experiences grouped into two domains.
-//  Wayfinding only: the domain colour appears in exactly TWO places (terrace hairline,
+//  Wayfinding only: the domain colour appears in exactly two places (terrace hairline,
 //  door sign); experiences keep their own accents everywhere else.
 
 import SwiftUI
@@ -19,7 +19,7 @@ enum HubDomain: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Door hues live in `DesignTokens.Palette` — a domain and its flagship module wear the SAME colour.
+    /// Door hues live in `DesignTokens.Palette` — a domain and its flagship module wear the same colour.
     var color: Color {
         switch self {
         case .electricity: DesignTokens.Palette.circuitsAccent
@@ -42,12 +42,12 @@ enum HubDomain: String, CaseIterable, Identifiable {
     /// The hub's left-to-right order: every experience, grouped by domain.
     static var arcOrder: [String] { allCases.flatMap(\.moduleIDs) }
 
-    /// One line per experience — what you DO in it; the line the panel leads with.
+    /// One line per experience — what you do in it; the line the panel leads with.
     static func promise(for moduleID: String) -> String {
         switch moduleID {
         case "electrostatics": "Place charges and walk through the field they make"
         case "circuits": "Build a live circuit and watch charge become current and light"
-        case "magnetism": "Carry bar magnets and feel their field reorganise the room"
+        case "magnetism": "Carry bar magnets and feel their field reorganize the room"
         case "kinematics": "Fire projectiles and bend their arcs with gravity and drag"
         case "pendulums": "Throw a pendulum into a true 3-D orbit above your floor"
         case "gravitylab": "Grow a solar system and hear its orbits as a chord"

@@ -2,9 +2,9 @@
 //  SpatialLayerBank.swift
 //  Physics Playground — Design System
 //
-//  One bank of layer switches per module. Deliberately BOTH control and
+//  One bank of layer switches per module. Deliberately both control and
 //  readout, so it never folds: a lit plate is on, a dark one is off.
-//  State lives in the MODEL — each switch reads a closure every frame, so
+//  State lives in the model — each switch reads a closure every frame, so
 //  a reset or an experiment flipping a layer moves the plate too.
 //
 
@@ -86,11 +86,11 @@ final class SpatialLayerBank {
             plates[index].entity.scale = SIMD3(repeating: Float(placement.scale))
             plates[index].entity.isEnabled = placement.isVisible
 
-            // The lamp EASES yet repaints only while moving — `approach`
+            // The lamp eases yet repaints only while moving — `approach`
             // returns the target once settled, so a resting lamp rebuilds
             // nothing.
             let on = plates[index].layer.isOn()
-            // The spoken value FOLLOWS the lamp — republished on change,
+            // The spoken value follows the lamp — republished on change,
             // or VoiceOver reads the launch state forever.
             if plates[index].spokenOn != on {
                 plates[index].spokenOn = on
@@ -108,7 +108,7 @@ final class SpatialLayerBank {
             }
         }
 
-        // Anchor in WORLD space: `anchor` is in the parent's (possibly
+        // Anchor in world space: `anchor` is in the parent's (possibly
         // scaled) frame while the hand is world space — `position(relativeTo: nil)`
         // puts both in the same frame.
         Recession.apply(to: root, anchor: root.position(relativeTo: nil),
@@ -132,8 +132,7 @@ final class SpatialLayerBank {
     }
 
     private func material(on: Bool) -> UnlitMaterial {
-        var material = UnlitMaterial(color: on ? accent : UIColor(white: 0.30, alpha: 1))
-        material.blending = .transparent(opacity: on ? 0.95 : 0.42)
+        let material = Materials.unlit(on ? accent : UIColor(white: 0.30, alpha: 1), opacity: on ? 0.95 : 0.42)
         return material
     }
 
@@ -158,7 +157,7 @@ final class SpatialLayerBank {
         let labelSpan = HubScene.namePlateWidth(layer.label, size: Self.labelSize)
         // Frosted glass, dark enough to hold its shape against a lit wall.
         let plate = ModelEntity(
-            mesh: .generateBox(size: [Self.plateWidth, Self.plateHeight,
+            mesh: Primitives.box(size: [Self.plateWidth, Self.plateHeight,
                                       PlateStyle.depth],
                                cornerRadius: Self.plateCorner),
             materials: [Materials.frostedGlass()])
@@ -166,11 +165,11 @@ final class SpatialLayerBank {
         plate.components.set(GroundingShadowComponent(castsShadow: true))
 
         // The edge hairline: a slightly larger pane behind this one. Its
-        // radius takes the SAME inset the box does, or the two outlines
+        // radius takes the same inset the box does, or the two outlines
         // stop being concentric and the border pinches at the corners.
         let edge = Materials.glassEdgeInset
         let border = ModelEntity(
-            mesh: .generateBox(
+            mesh: Primitives.box(
                 size: [Self.plateWidth + edge * 2,
                        Self.plateHeight + edge * 2, PlateStyle.edgeDepth],
                 cornerRadius: Self.plateCorner + edge),
@@ -180,7 +179,7 @@ final class SpatialLayerBank {
 
         // The lamp: the strip that lights when the layer is on.
         let face = ModelEntity(
-            mesh: .generateBox(size: [0.011, 0.034, 0.002], cornerRadius: 0.004),
+            mesh: Primitives.box(size: [0.011, 0.034, 0.002], cornerRadius: 0.004),
             materials: [material(on: layer.isOn())])
         face.position = [-0.032, 0, PlateStyle.faceLift]
         plate.addChild(face)
@@ -190,13 +189,13 @@ final class SpatialLayerBank {
             iconMaterial.color = .init(tint: .white, texture: .init(texture))
             iconMaterial.blending = .transparent(opacity: .init(floatLiteral: 0.9))
             let icon = ModelEntity(
-                mesh: .generatePlane(width: 0.024, height: 0.024),
+                mesh: Primitives.plane(width: 0.024, height: 0.024),
                 materials: [iconMaterial])
             icon.position = [-0.002, 0, PlateStyle.faceLift]
             plate.addChild(icon)
         }
 
-        // The label sits BESIDE the switch, placed by its own left edge —
+        // The label sits beside the switch, placed by its own left edge —
         // `namePlate` returns a pill centred on its origin, so a fixed
         // offset put half of every pill back on top of the switch.
         let labelWidth = HubScene.namePlateWidth(layer.label, size: Self.labelSize)
@@ -211,12 +210,11 @@ final class SpatialLayerBank {
         // an oversized one would shield the apparatus the bank hangs beside.
         plate.components.set(CollisionComponent(
             shapes: [
-                .generateBox(size: [0.092, 0.056, 0.016]),
-                // The label is a pinch-through HOLE without its own box —
+                Primitives.collisionBox(size: [0.092, 0.056, 0.016]),
+                // The label is a pinch-through hole without its own box —
                 // the pill sits `labelGap` past the plate's edge.
-                .generateBox(size: [labelSpan + 0.010,
-                                    Self.plateHeight * 0.8, 0.016])
-                    .offsetBy(translation: [
+                Primitives.collisionBox(size: [labelSpan + 0.010,
+                                    Self.plateHeight * 0.8, 0.016], offset: [
                         Self.plateWidth / 2 + Self.labelGap + labelSpan / 2, 0, 0,
                     ]),
             ]))

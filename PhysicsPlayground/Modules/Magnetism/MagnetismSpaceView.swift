@@ -34,31 +34,15 @@ struct MagnetismSpaceView: View {
     /// side-on. A pure view transform — the tesla stay honest.
     @State private var scaleRig = SpatialScaleRig(
         pivot: SIMD3<Float>(MagnetismModel.regionCenter), range: 0.5...4.0)
-    /// What is drawn, and whether the magnets are free.
-    ///
-    /// FOUR plates — field lines, hand compass, Earth's field, and the
-    /// dynamics switch. (The compass-grid plate came off with the grid
-    /// on 2026-08-03; `-magLayers 0` reaches three of these four —
-    /// `earthFieldOn` has no argument.)
-    /// The top one is not a display layer: `dynamicsOn` decides whether
-    /// the magnets glide together and swing into alignment at all, which
-    /// is the difference between a field diagram and a physics lab. It
-    /// takes the top plate and a label that says what it does, because a
-    /// bank whose plates all mean "draw this" plus one that means "run
-    /// the simulation" has to admit the difference somewhere.
+    /// What is drawn, and whether the magnets are free. Four plates: field
+    /// lines, hand compass, Earth's field, and the dynamics switch — the
+    /// last is not a display layer, so its label says what it does.
     @State private var layers: SpatialLayerBank?
 
-    /// Beside the magnets, at the region's own depth — on the LEFT,
-    /// like every other module's switch bank (owner, 2026-08-04: the
-    /// side buttons live on the left everywhere; this was the one bank
-    /// off the right shoulder).
-    ///
-    /// NOT under `viewRoot`: the scale rig reaches 4×, and a switch bank
-    /// that grew fourfold with the field would push its own plates out of
-    /// reach exactly when you had zoomed in to look at something. The
-    /// well and the blooms belong to the field and DO scale with it; an
-    /// instrument belongs to the room.
-    /// Internal since 2026-08-09 so the reach criterion can measure it.
+    /// Beside the magnets, at the region's own depth, on the left like
+    /// every module's bank. Not under `viewRoot`: the scale rig reaches 4×,
+    /// and a bank that grew with the field would push its plates out of
+    /// reach. Internal so the reach criterion can measure it.
     static let bankAnchor = SIMD3<Float>(MagnetismModel.regionCenter)
         + SIMD3(-0.80, 0.10, 0.08)
 
@@ -67,9 +51,8 @@ struct MagnetismSpaceView: View {
             let renderer = MagnetismRenderer()
             renderer.onObjectTap = { handleTap(on: $0) }
             content.add(renderer.root)
-            // ARRIVES, NEVER APPEARS. Disabled here and raised by
-            // `Fade.tick` below, so the apparatus resolves into the room
-            // instead of being there between one frame and the next.
+            // Disabled here and raised by `Fade.tick`, so the apparatus arrives
+            // rather than appears.
             renderer.root.isEnabled = false
             sceneContent = content
 
@@ -100,13 +83,8 @@ struct MagnetismSpaceView: View {
                           symbol: "location.north.circle",
                           isOn: { model.compassOn },
                           toggle: { model.compassOn.toggle() }),
-                    // The fourth (it was the fifth until the compass
-                    // grid's plate came off on 2026-08-03; the comment
-                    // kept counting to five until 2026-09-01): whether
-                    // the room is standing on a
-                    // planet. Switching it off is the comparison — the
-                    // compasses stop knowing which way is north and go
-                    // back to reading only the bench.
+                    // Whether the room is standing on a planet. Switching it off is the
+                    // comparison: the compass stops knowing north and reads only the bench.
                     .init(id: "earth", label: "Earth's field",
                           symbol: "globe",
                           isOn: { model.earthFieldOn },
@@ -117,20 +95,14 @@ struct MagnetismSpaceView: View {
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
-                    // The lab's own arrival and departure, on the shell's
-                    // one flag. `Fade.tick` settles to a no-op — it drops its
-                    // clock and its OpacityComponent once landed — so this
-                    // costs one comparison for all the frames that are not a
-                    // transition.
+                    // The lab's arrival and departure, on the shell's one flag.
                     if let renderer {
                         Fade.tick(renderer.root, visible: !appModel.isDeparting,
                                   duration: AppModel.departure)
                     }
-                    // PER FRAME, not per event, and that distinction is
-                    // the whole point: a hand that leaves the tracking
-                    // volume mid-carry stops SENDING events, so an
-                    // expiry driven by `handleGrabEvents` would never
-                    // run for exactly the pinch it exists to forget.
+                    // Per frame, not per event: a hand that leaves the tracking volume
+                    // mid-carry stops sending events, so an event-driven expiry never runs
+                    // for the pinch it exists to forget.
                     expireStaleGrabs(now: CACurrentMediaTime())
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
                     let hand = appModel.room.nearestFingertip(to: Self.bankAnchor)
@@ -146,34 +118,16 @@ struct MagnetismSpaceView: View {
                     renderer?.tick(model, viewer: appModel.room.headPosition.map {
                         renderer?.displayPoint(fromWorld: SIMD3<Float>($0)) ?? $0
                     })
-                    // The lab's placement in the user's room — a pure
-                    // display offset, safe because every grab in this app
-                    // moves a body by hand DISPLACEMENT, which a constant
-                    // translation leaves untouched.
+                    // The lab's placement: a pure display offset, safe because every grab
+                    // moves a body by hand displacement.
                     renderer?.root.position = appModel.labPlacement.offset
-                    // …AND THE INSTRUMENTS GO WITH IT. Every bank, rail,
-                    // well and ring in this module is a child of
-                    // `renderer.root`, so they ride the same offset the
-                    // apparatus does.
-                    //
-                    // This comment said the opposite until 2026-08-03 —
-                    // "the control pods do NOT go with it: the user
-                    // parked them where they wanted them" — in all four
-                    // modules that carry it, and it was false in all
-                    // four. There are no pods; the instruments were
-                    // reparented onto the apparatus when the panels died,
-                    // and travelling with it is the RIGHT behaviour: a
-                    // rail belongs to the thing it sets. Left standing,
-                    // the sentence would eventually persuade somebody to
-                    // "fix" a counter-translation back in.
+                    // Every instrument is a child of `renderer.root`, so it rides the same
+                    // offset: a rail belongs to the thing it sets.
                 }
             )
             #if DEBUG
-            // `-viewScale 2.5` bakes a committed scale in at launch, so
-            // the scaled view can be screenshot-verified from the CLI —
-            // the simulator has no second hand to pinch with.
-            // double(forKey:) coerces the string the launch-argument
-            // domain actually stores; `object as? Double` does not.
+            // `-viewScale 2.5` bakes a committed scale in at launch;
+            // `double(forKey:)` coerces the stored string.
             let forced = UserDefaults.standard.double(forKey: "viewScale")
             if forced > 0 {
                 scaleRig.updateMagnification(Float(forced))
@@ -187,11 +141,8 @@ struct MagnetismSpaceView: View {
                let first = model.magnets.first {
                 ring.openID = first.id
             }
-            // `-magLayers 0` darkens every plate on the bank, so one shot
-            // shows the lamps OFF against the labels — the only way to
-            // check the dark state, since the scene opens with several
-            // already lit and the simulator has no finger to flick them
-            // with. (`earthFieldOn` still has no argument.)
+            // `-magLayers 0` darkens every plate, the only way to photograph the
+            // dark state (`earthFieldOn` has no argument).
             if UserDefaults.standard.object(forKey: "magLayers") != nil,
                !UserDefaults.standard.bool(forKey: "magLayers") {
                 model.showFieldLines = false
@@ -202,29 +153,17 @@ struct MagnetismSpaceView: View {
             renderer.tick(model, viewer: appModel.room.headPosition)
             self.renderer = renderer
         }
-        // Leaving the lab must not leave anything running or held.
-        //
-        // `teardown` cancels the renderer's event subscriptions and any
-        // geometry job in flight (see `GeometryPipeline.cancel`), and the
-        // drag state is cleared because NOTHING ELSE CAN CLEAR IT: an
-        // in-flight grab that never receives its `onEnded` — the space
-        // closing under it is the ordinary way that happens — otherwise
-        // strands the object wherever the hand left it and re-targets
-        // every later drag at the same one, with no exit but leaving.
+        // Leaving the lab must not leave anything running or held: `teardown`
+        // cancels subscriptions and geometry jobs, and an in-flight grab that
+        // never gets its `onEnded` would re-target every later drag.
         .onDisappear {
             renderer?.teardown()
-            // A GRIP SURVIVES THE SPACE CLOSING, and that is worse than
-            // it sounds. `Bloom` is a class, so `gripDrag` outlives this
-            // view; left set, `updateGrip` claims EVERY subsequent drag
-            // in the module and nothing at all can be grabbed. That
-            // exact failure is documented in PendulumsSpaceView's
-            // `onEnded` — it cost this module every one of its verbs
-            // once already.
+            // `Bloom` is a class: a grip left set would claim every subsequent
+            // drag.
             bloom.endGrip()
             drag = nil
-            // Released, not merely forgotten: a magnet left `held` is
-            // frozen out of the dynamics, and the model outlives this
-            // view — it would still be frozen on the way back in.
+            // Released, not merely forgotten: a magnet left `held` stays frozen out
+            // of the dynamics, and the model outlives this view.
             for session in grabs.values {
                 if case .magnet(let id) = session.target { model.release(id: id) }
             }
@@ -265,7 +204,7 @@ struct MagnetismSpaceView: View {
                                                 target: hand, hand: hand)
                             return
                         }
-                        // Magnets and the compass are NOT claimed here —
+                        // Magnets and the compass are not claimed here —
                         // `handleGrabEvents` owns them, one session per
                         // hand, which is what makes a magnet in each
                         // hand possible at all.
@@ -278,7 +217,7 @@ struct MagnetismSpaceView: View {
                 .onEnded { _ in
                     bloom.endGrip()
                     // Only the well-pull's own magnet: `model.release()`
-                    // here used to drop EVERYTHING, including whatever
+                    // here used to drop everything, including whatever
                     // the other hand was holding.
                     if let drag, let id = UUID(uuidString: drag.name) {
                         model.release(id: id)
@@ -289,17 +228,11 @@ struct MagnetismSpaceView: View {
     }
 
     // MARK: The multi-hand grab
-    //
-    // `DragGesture` is a single recogniser: SwiftUI runs ONE instance
-    // per attached gesture, so the second hand's pinch is never
-    // delivered to it — which is why "grab a magnet in each hand" was
-    // impossible no matter what the model allowed (owner report,
-    // 2026-08-04, correctly suspecting it was fixable). Raw
-    // `SpatialEventGesture` events have no such limit: every pinch
-    // arrives with its own stable id and the entity it targeted, so
-    // each hand gets its own grab session. The same-object rule keeps
-    // its shape for free: a second pinch on an ALREADY-HELD object
-    // starts no session and falls through to the two-hand scale.
+    // `DragGesture` is a single recogniser, so the second hand's pinch is
+    // never delivered to it; raw `SpatialEventGesture` events carry their
+    // own ids, so each hand gets its own grab session. A second pinch on an
+    // already-held object starts no session and falls through to the
+    // two-hand scale.
 
     /// One hand's live hold: what it grabbed, and the relative drag
     /// anchored where it grabbed it.
@@ -309,23 +242,34 @@ struct MagnetismSpaceView: View {
         var drag: RelativeDrag
         /// When this pinch was last heard from. See `expireStaleGrabs`.
         var lastSeen: Double
+        /// What the hand took hold of: it flashed and ticked on the grab,
+        /// and ticks again where it is let go.
+        var entity: Entity
+    }
+
+    /// The house acknowledgement of a grab and of letting go — the flash
+    /// and tick every other lab's objects answer a hand with. Magnetism
+    /// had neither until 2026-10-14.
+    private static func acknowledgeGrab(_ entity: Entity) {
+        PickupPulse.flash(on: entity)
+        SoundPalette.play(.grabTick, on: entity, volume: 0.2)
+    }
+
+    private static func acknowledgeRelease(_ session: GrabSession) {
+        SoundPalette.play(.releaseTick, on: session.entity, volume: 0.18)
     }
 
     /// How long a grab survives without being mentioned by an event.
     /// The same number, for the same reason, as `PinchLedger.staleAfter`.
     private static let grabStaleAfter: Double = 0.5
 
-    /// Releases grabs whose pinch stopped reporting.
-    ///
-    /// `grabs` is keyed by spatial-event id and was only ever emptied by
-    /// an event NAMING that id. A hand that leaves the tracking volume
-    /// mid-carry — walked out of frame, dropped to the side, occluded by
-    /// the bench — sends no such event, so its magnet stayed held
-    /// forever: frozen out of the dynamics, following nothing, and
-    /// re-grabbed by every later pinch that resolved to the same id.
+    /// Releases grabs whose pinch stopped reporting: a hand that leaves the
+    /// tracking volume mid-carry sends no ending event, and its magnet
+    /// would stay held forever.
     private func expireStaleGrabs(now: Double) {
         for (id, session) in grabs where now - session.lastSeen >= Self.grabStaleAfter {
             grabs.removeValue(forKey: id)
+            Self.acknowledgeRelease(session)
             if case .magnet(let magnetID) = session.target { model.release(id: magnetID) }
         }
     }
@@ -336,16 +280,16 @@ struct MagnetismSpaceView: View {
     private func handleGrabEvents(_ events: SpatialEventCollection) {
         guard let renderer, let content = sceneContent else { return }
         let now = CACurrentMediaTime()
-        // Also here, so a pinch that ends while others continue is
-        // forgotten this frame rather than next. The per-frame call in
-        // the update subscription is the one that covers a hand which
-        // stops reporting altogether.
+        // Also here, so a pinch that ends while others continue is forgotten
+        // this frame.
         defer { expireStaleGrabs(now: now) }
         for event in events {
             guard event.phase == .active else {
-                if let ended = grabs.removeValue(forKey: event.id),
-                   case .magnet(let id) = ended.target {
-                    model.release(id: id)
+                if let ended = grabs.removeValue(forKey: event.id) {
+                    Self.acknowledgeRelease(ended)
+                    if case .magnet(let id) = ended.target {
+                        model.release(id: id)
+                    }
                 }
                 continue
             }
@@ -383,11 +327,13 @@ struct MagnetismSpaceView: View {
                     return false
                 }
                 guard !compassHeld else { return nil }
+                Self.acknowledgeGrab(candidate)
                 return GrabSession(
                     target: .compass,
                     drag: RelativeDrag(name: candidate.name,
                                        target: model.compassPosition, hand: hand),
-                    lastSeen: now)
+                    lastSeen: now,
+                    entity: candidate)
             }
             if let id = UUID(uuidString: candidate.name),
                let magnet = model.magnets.first(where: { $0.id == id }) {
@@ -395,11 +341,13 @@ struct MagnetismSpaceView: View {
                 // not a second grab.
                 guard !model.heldIDs.contains(id) else { return nil }
                 model.grab(id: id)
+                Self.acknowledgeGrab(candidate)
                 return GrabSession(
                     target: .magnet(id),
                     drag: RelativeDrag(name: candidate.name,
                                        target: magnet.position, hand: hand),
-                    lastSeen: now)
+                    lastSeen: now,
+                    entity: candidate)
             }
             current = candidate.parent
         }
@@ -450,20 +398,11 @@ struct MagnetismSpaceView: View {
     }
 
 
-    /// EXTRACTED FROM THE TAP CLOSURE, 2026-08-08, so that VoiceOver can
-    /// reach it too.
-    ///
-    /// `Grabbable` takes an `activate` closure but every call site
-    /// passed nothing, so magnets and the compass could be moved by hand
-    /// and reached no other way. The fix is not a sweep: the helper
-    /// configures an entity it did not build and cannot know what
-    /// pressing it should mean, and in this module it means opening the
-    /// magnet's control ring. Only the module knows that — so the
-    /// routing had to come out of the gesture closure first.
+    /// The tap routing, out of the gesture closure so VoiceOver reaches it
+    /// too.
     private func handleTap(on entity: Entity) {
-        // The bank gets first refusal, ahead of the fall-through that
-        // folds the ring away — otherwise flicking a switch would also
-        // close whichever magnet's ring was open.
+        // The bank gets first refusal, or flicking a switch would also fold the
+        // open ring.
         if layers?.handleTap(entity) == true { return }
         if bloom.handleTap(entity) { return }
         // A tap on a magnet toggles its control ring; a tap on anything
@@ -476,6 +415,8 @@ struct MagnetismSpaceView: View {
                     ring.openID = nil
                     SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
                 } else {
+                    // The ring and the halo name one magnet: opening selects.
+                    model.select(id: id)
                     ring.openID = id
                     SoundPalette.play(.pop, on: entity, volume: 0.35)
                 }

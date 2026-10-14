@@ -2,12 +2,9 @@
 //  PinchLedgerTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The same-object rule (owner, 2026-08-03): two hands pinching the
-//  SAME object mean resize; one object in each hand means two grabs,
-//  and the scale rig must stay out of it. `PinchLedger` is the half of
-//  that rule a test can reach — the counting of distinct owners. The
-//  gesture interplay itself is headset-only and lives on the on-device
-//  script.
+//  The same-object rule: two hands pinching the same object mean
+//  resize, one object in each hand means two grabs. `PinchLedger` is
+//  the half a test can reach — the counting of distinct owners.
 //
 
 import XCTest

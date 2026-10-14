@@ -2,36 +2,14 @@
 //  ExcludingOverloadTests.swift
 //  PhysicsCoreTests
 //
-//  `ElectricField.vector(at:dueTo:excluding:)`,
-//  `MagneticField.vector(at:dueTo:excluding:)` and
-//  `MagneticField.netForce(on:at:)` exist for one reason: the callers
-//  were spelling "every one but this one" as
-//  `xs.enumerated().filter { $0.offset != i }.map(\.element)`, which
-//  allocates two arrays per call — inside a substep loop, inside a
-//  per-frame `step`. The overloads sum in place instead.
-//
-//  A PERFORMANCE REWRITE OF A PHYSICS KERNEL IS STILL A PHYSICS CHANGE
-//  until something says the numbers did not move. So each test computes
-//  the answer BOTH ways — the materialising form the modules used to
-//  use, and the overload they use now — and compares.
-//
-//  RELATIVE, NOT BIT-EQUAL, and the first draft of this file got that
-//  wrong. Demanding bit-equality looks like the stricter test and is
-//  really a misunderstanding: floating-point addition is not
-//  associative, `reduce` sums in array order, and an index loop that
-//  skips one element sums in a different order. The residual it found
-//  was 1.2e-10 on a field of 2e5 N/C — six parts in ten quadrillion,
-//  which is double precision working correctly, not a bug.
-//
-//  So the bar is relative agreement at 1e-12, roughly ten thousand
-//  times tighter than anything the physics is measured to and far
-//  looser than reordering noise. A skip that omits the wrong element
-//  misses by whole percent; nothing here can pass by luck.
-//
-//  The interesting cases are the boundaries, and they are the ones a
-//  hand-rolled index loop gets wrong: excluding the first element,
-//  excluding the last, and a single-element array where the answer is
-//  zero rather than "the one element".
+//  The `excluding:` overloads sum in place instead of materialising a
+//  filtered array per call inside a substep loop. A performance rewrite
+//  of a physics kernel is still a physics change, so each test computes
+//  the answer both ways and compares. Relative at 1e-12, not bit-equal:
+//  floating-point addition is not associative, and a loop that skips one
+//  element sums in a different order than `reduce` does. The boundaries
+//  are the interesting cases: first element, last element, and a single
+//  element whose answer is zero.
 //
 
 import XCTest
@@ -62,7 +40,7 @@ final class ExcludingOverloadTests: XCTestCase {
         items.enumerated().filter { $0.offset != index }.map(\.element)
     }
 
-    /// Agreement as a FRACTION of the quantity being compared, so one
+    /// Agreement as a fraction of the quantity being compared, so one
     /// bar holds for a 2e5 N/C field and a 1e-9 N force alike.
     private func assertAgree(_ lhs: SIMD3<Double>, _ rhs: SIMD3<Double>,
                              _ message: String,
@@ -88,7 +66,7 @@ final class ExcludingOverloadTests: XCTestCase {
     }
 
     func testExcludingActuallyOmitsThatCharge() {
-        // The whole point: the answer must NOT equal the all-charges sum.
+        // The whole point: the answer must not equal the all-charges sum.
         // A skip that silently skips nothing passes every test above.
         let point = SIMD3<Double>(0.02, 1.33, -0.88)
         let all = ElectricField.vector(at: point, dueTo: charges)

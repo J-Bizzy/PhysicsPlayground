@@ -2,16 +2,12 @@
 //  RoomModel.swift
 //  Physics Playground — Shell
 //
-//  ONE shared understanding of the user's room: a single ARKitSession,
+//  One shared understanding of the user's room: a single ARKitSession,
 //  reference-counted so any number of modules can share it, publishing
-//
-//    • `bounds`     — a RoomBox every renderer clips its lines against,
-//    • `walls`      — finite rectangles the projectiles bounce off,
-//    • `obstacles`  — hands, forearms and furniture as spheres.
-//
-//  All providers are device-only and permission-gated; in the simulator
-//  they are unsupported, so `bounds` stays at `RoomBox.unscanned` — the
-//  fallback is a generous room, never an empty one.
+//  `bounds` (a RoomBox every renderer clips against), `walls` (finite
+//  rectangles projectiles bounce off) and `obstacles` (hands, forearms
+//  and furniture as spheres). All providers are device-only and
+//  permission-gated; in the simulator `bounds` stays `RoomBox.unscanned`.
 //
 
 import ARKit
@@ -42,42 +38,21 @@ final class RoomModel {
     /// it to decide whether to promise room-aware behaviour in the UI.
     private(set) var hasScannedRoom = false
 
-    /// Why the room is not being sensed, when it is not.
-    ///
-    /// Every failure path in `retain()` used to be a bare `return`. That
-    /// is correct behaviour — the app runs fine without walls, it just
-    /// runs a lesser version of itself — but it was also SILENT. Deny the
-    /// permission and Projectiles quietly stops bouncing off anything,
-    /// occlusion never appears, and Recenter is disabled with a caption
-    /// blaming the simulator. A grep for permission copy across the whole
-    /// app found comments and nothing else: not one user-facing string.
-    ///
-    /// The cases are kept distinct because they call for different
-    /// sentences, and collapsing them would produce the worst kind of
-    /// message — one that tells a simulator user to open Settings.
+    /// Why the room is not being sensed, when it is not. The cases stay
+    /// distinct because each calls for a different sentence.
     enum Sensing: Equatable {
         /// Running, or not asked for yet. Nothing to say.
         case fine
-        /// No provider on this device supports what we need. The
-        /// simulator, mostly. Not the user's fault and not fixable by
-        /// them, so this is FYI rather than a call to action.
+        /// No provider on this device supports what we need (the simulator,
+        /// mostly). Not fixable by the user.
         case unsupported
         /// The user said no. This one has a remedy.
         case denied
         /// Authorized, but `session.run` threw anyway.
         case failed
 
-        /// The one-line version, for a title bar or a card.
-        ///
-        /// THE COPY LIVES ON THE CASE, not on a view. It was two private
-        /// static functions on `ModuleHostView`, which meant the only
-        /// place in the app that could explain a lesser room was a
-        /// warning triangle in a MODULE's title bar — reachable only
-        /// after the user has already chosen a lab, and only if they
-        /// look at a window they may have left behind them. The ask
-        /// itself happens on the gallery, about a second after launch,
-        /// so the hub is where an explanation actually belongs; that
-        /// needed one authority for the sentences rather than two.
+        /// The one-line version, for a title bar or a card. The copy lives on
+        /// the case so the hub and the title bar say the same thing.
         var headline: String {
             switch self {
             case .fine: ""
@@ -94,11 +69,11 @@ final class RoomModel {
             case .fine:
                 ""
             case .unsupported:
-                "Experiments run in open space instead. The physics is "
+                "The labs run in open space instead. The physics is "
                 + "identical — only the parts that use your real walls and "
                 + "furniture are missing."
             case .denied:
-                "Experiments won't bounce off your real walls or floor, and "
+                "Balls won't bounce off your real walls or floor, and "
                 + "apparatus won't be hidden behind your furniture. To turn "
                 + "it back on, open Settings › Privacy & Security › World "
                 + "Sensing and allow Physics Playground."
@@ -108,10 +83,8 @@ final class RoomModel {
             }
         }
 
-        /// Said BEFORE the system asks, so the permission sheet is not
-        /// the first the user hears of it. One line: the sheet itself is
-        /// where the detail belongs, and a wall of text in front of a
-        /// dialog is how people learn to dismiss both.
+        /// Said before the system asks, so the permission sheet is not the
+        /// first the user hears of it.
         static let preExplanation =
             "visionOS will ask to use your room, so labs can stand on your "
             + "floor and balls can bounce off your real walls."
@@ -121,16 +94,9 @@ final class RoomModel {
     private(set) var sensing: Sensing = .fine
 
     #if DEBUG
-    /// `-roomSensing denied|unsupported|failed` forces the flag, so the
-    /// warning and its copy can be screenshot from the CLI.
-    ///
-    /// This is not optional polish. The three sentences behind this flag
-    /// are user-facing text that ships, and on a headset that granted the
-    /// permission — and in the simulator, which grants it too — there is
-    /// no way to see any of them. Untestable shipping copy is how this
-    /// project ended up with an ARKit prompt advertising a module that
-    /// had been deleted. Applied AFTER `retain()`, so it overrides the
-    /// real result rather than racing it.
+    /// `-roomSensing denied|unsupported|failed` forces the flag so the copy
+    /// can be photographed; applied after `retain()` so it overrides the
+    /// real result.
     func forceSensingForDebug() {
         switch UserDefaults.standard.string(forKey: "roomSensing") {
         case "denied": sensing = .denied
@@ -138,11 +104,9 @@ final class RoomModel {
         case "failed": sensing = .failed
         default: break
         }
-        // `-roomTable 0.75` stands a 0.9 × 0.7 m table top at that height
-        // in the launcher's line, since the simulator has no furniture
-        // to classify. It enters through the same wall table the real
-        // planes use, and marks the room scanned so the module takes
-        // the walls the way it would on device.
+        // `-roomTable <y>` stands a 0.9 × 0.7 m table top at that height in the
+        // launcher's line and marks the room scanned; the simulator has no
+        // furniture to classify.
         let tableHeight = UserDefaults.standard.double(forKey: "roomTable")
         if tableHeight > 0 {
             wallsByAnchor[Self.debugTableID] = RoomWalls.Wall(
@@ -156,44 +120,24 @@ final class RoomModel {
     private static let debugTableID = UUID()
     #endif
 
-    // (An `occluder` entity mirrored the scene-reconstruction mesh here
-    // until 2026-08-03, wearing an occlusion material so real furniture
-    // hid virtual content. On device it read as black shadows moulded to
-    // the room that cut off anything behind them, and the owner asked
-    // for it to go. The sensing session below is untouched — lookRay,
-    // hands, planes and the obstacle field all still need it.)
-
     // MARK: Session
 
-    // ALL of these are rebuilt on every start, and that is the whole
-    // point — see `retain()`. A stopped ARKit data provider is DEAD; it
-    // can never run again.
+    // Rebuilt on every start: a stopped ARKit data provider can never run
+    // again.
     private var session = ARKitSession()
     private var planes = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
     private var hands = HandTrackingProvider()
     private var sceneMesh = SceneReconstructionProvider()
     private var worldTracking = WorldTrackingProvider()
 
-    /// Where the user's head is, right now, in immersive-space
-    /// coordinates — the one piece of state that lets a module respond
-    /// to the user MOVING rather than to the user's hands. Waves reads
-    /// it to sound the field at the listener's own ears.
-    ///
-    /// nil until world tracking is running (always, in the simulator),
-    /// so every caller has to have a sensible answer without it.
+    /// The user's head, in immersive-space coordinates; nil until world
+    /// tracking runs (always, in the simulator).
     var headPosition: SIMD3<Double>? {
         lookRay?.origin
     }
 
-    /// Where the user is LOOKING, as a ray from between their eyes.
-    ///
-    /// visionOS deliberately does not hand an app raw eye gaze — the
-    /// system uses it for highlighting and never reports it, which is
-    /// the right privacy call. What IS available is the device pose, so
-    /// this is head direction: turn your head toward something and it
-    /// points at it. It is not eye tracking, and nothing in the app
-    /// claims it is; it is enough to let you MEASURE by looking, which
-    /// is the interaction that was missing.
+    /// Where the user is looking, as a ray from between the eyes. Head
+    /// direction, not eye gaze: visionOS never reports gaze to an app.
     var lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)? {
         guard worldTracking.state == .running,
               let anchor = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime())
@@ -210,71 +154,42 @@ final class RoomModel {
     }
 
     private var clients = 0
-    /// Readable so `RoomSessionTests` can assert the relationship
-    /// between running and reporting.
-    ///
-    /// The invariant is one-directional, and saying so precisely matters
-    /// because an earlier comment here claimed an "iff" that the code
-    /// does not hold: anything OTHER than `.fine` implies we are not
-    /// running, but `.fine` does not imply we are. `.fine` means
-    /// "nothing to tell the user", and a session that is down because
-    /// nobody asked for it — either teardown path — is not a fault to
-    /// report.
+    /// Anything other than `.fine` implies not running; `.fine` does not
+    /// imply running — it means "nothing to tell the user".
     private(set) var isRunning = false
-    /// Set BEFORE the first await in `retain()`, not after. See below.
+    /// Set before the first await in `retain()`, not after. See below.
     private var isStarting = false
     private var tasks: [Task<Void, Never>] = []
     private var shutdown: Task<Void, Never>?
 
-    /// How long the session stays up after the last client leaves.
-    ///
-    /// Switching modules tears the old scene down and builds the new one,
-    /// and SwiftUI does not promise which happens first. Without a grace
-    /// period, every single module switch stopped the session and started
-    /// a fresh one a frame later — sensor churn, a re-scan of the room,
-    /// and the plane/mesh anchors the user had already accumulated thrown
-    /// away each time. Two seconds spans any switch and still releases the
-    /// sensors promptly when you actually go back to the hub and stay.
+    /// How long the session stays up after the last client leaves: a module
+    /// switch tears one scene down and builds the next in no promised
+    /// order, and two seconds spans it without a sensor restart.
     private static let lingerSeconds: Double = 2
 
-    /// Test seam: the linger window, and whether anything still holds
-    /// the room. RoomSessionTests drives the retain/release sequence
-    /// that used to abort the process.
+    /// Test seam for `RoomSessionTests`.
     static var testLingerSeconds: Double { lingerSeconds }
     var hasClients: Bool { clients > 0 }
     var clientCount: Int { clients }
 
-    /// Reference-counted start: the first module in brings the session
-    /// up, the last one out takes it down. Modules call `retain()` in
-    /// their scene's task and `release()` on disappear.
+    /// Reference-counted start: the first module in brings the session up,
+    /// the last one out takes it down.
     func retain() async {
         clients += 1
-        // Cancel a pending shutdown — this is the module-switch case, and
-        // the session that is already running is exactly the one we want.
+        // A pending shutdown is the module-switch case: keep the running session.
         shutdown?.cancel()
         shutdown = nil
 
-        // `isRunning` is only true AFTER the await below returns, so
-        // checking it alone let two overlapping retains both reach
-        // `session.run`. Several views retain at once (the module scene,
-        // the occlusion view, the lab anchor), so overlapping is the
-        // normal case, not a rare race — and a double run is one of the
-        // ways ARKit aborts the process.
+        // `isRunning` only becomes true after the await below, so overlapping
+        // retains (several views retain at once) need the second flag; a double
+        // `run` aborts the process.
         guard !isRunning, !isStarting else { return }
         isStarting = true
         defer { isStarting = false }
 
-        // A STOPPED PROVIDER CANNOT BE RE-RUN.
-        //
-        // This crashed the app, and it crashed it in the exact shape the
-        // bug report described: the first module you open is fine, and
-        // opening another one kills the process. `session.stop()` retires
-        // its providers permanently; handing those same objects back to
-        // `run` makes ARKit raise an Objective-C exception. Which is why
-        // the `catch` below never helped — an NSException is not a Swift
-        // error, it unwinds straight past `catch` into abort(). The only
-        // fix is to never re-run a used provider: build a fresh session
-        // and fresh providers for every start.
+        // A stopped provider cannot be re-run: `session.stop()` retires its
+        // providers, and handing them back to `run` raises an NSException that
+        // unwinds past `catch`. Fresh session, fresh providers, every start.
         session = ARKitSession()
         planes = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
         hands = HandTrackingProvider()
@@ -294,19 +209,14 @@ final class RoomModel {
             return   // simulator: nothing to run
         }
 
-        // Authorization is asked for explicitly rather than implicitly by
-        // running: a denied provider is another way `run` throws, and
-        // asking first turns that into an ordinary early return.
+        // Asked for explicitly: a denied provider is another way `run` throws.
         let authorization = await session.requestAuthorization(
             for: providers.flatMap { type(of: $0).requiredAuthorizations })
-        // THE AWAIT ABOVE IS SECONDS LONG on first launch — it is the
-        // system permission sheet — and the user can leave the lab while
-        // it is up. If everybody has gone, start nothing.
+        // The await above can be seconds long (the permission sheet) and the
+        // user can leave meanwhile.
         guard clients > 0 else { return }
-        // Run with whatever was GRANTED. This used to be all-or-nothing:
-        // one denied permission killed the entire sensing layer — no
-        // walls, no look ray, no hands — silently, which read as every
-        // device feature being broken at once.
+        // Run with whatever was granted; one denied permission must not kill
+        // the whole sensing layer.
         let denied = Set(authorization.filter { $0.value != .allowed }.map(\.key))
         providers = providers.filter { provider in
             type(of: provider).requiredAuthorizations.allSatisfy {
@@ -314,9 +224,8 @@ final class RoomModel {
             }
         }
         guard !providers.isEmpty else {
-            // Everything we asked for was refused. (A PARTIAL denial
-            // does not land here — the filter above keeps whatever was
-            // granted, so losing hands still leaves you walls.)
+            // Everything asked for was refused; a partial denial keeps what was
+            // granted.
             sensing = .denied
             return
         }
@@ -329,24 +238,11 @@ final class RoomModel {
         }
         sensing = .fine
         isRunning = true
-        // …and again after `run`. This is the window the leak lived in:
-        // `release()` used to be guarded on `isRunning`, which is still
-        // false all the way down to this line, so leaving during the
-        // start did nothing at all — and then the three consumer tasks
-        // below spawned with `clients == 0`. Plane detection, hand
-        // tracking and scene reconstruction then ran for the lifetime of
-        // the process, with the sensing indicator lit and nobody reading
-        // any of it. Trivial to hit: it is the first launch, where the
-        // permission sheet holds the start open for seconds.
+        // …and again after `run`: the start can outlive every client, and the
+        // consumer tasks below must not spawn for nobody.
         guard clients > 0 else {
-            // `sensing` is already `.fine` from two lines up, and that
-            // is the right answer rather than an oversight: `.fine`
-            // means "nothing to tell the user", and a session taken
-            // down because nobody wants it is not a fault to report.
-            // The same is true of the ordinary linger teardown. (An
-            // earlier version of this branch re-assigned `.fine` here
-            // with a comment claiming it was fixing something; it was
-            // writing the value that was already there.)
+            // `sensing` stays `.fine`: a session taken down because nobody wants it
+            // is not a fault to report.
             stopNow()
             return
         }
@@ -366,13 +262,9 @@ final class RoomModel {
 
     func release() {
         clients = max(0, clients - 1)
-        // NOT guarded on `isRunning`, and that was the bug. A release
-        // that arrives while `retain` is still awaiting authorization
-        // sees `isRunning == false` and used to return, leaving nothing
-        // to take the session down. The linger task is the right answer
-        // either way: two seconds later the start has resolved one way
-        // or the other, and `stopNow` stops a session that ran and
-        // no-ops on one that never did.
+        // Not guarded on `isRunning`: a release during the authorization await
+        // must still schedule the teardown. `stopNow` no-ops on a session that
+        // never ran.
         guard clients == 0 else { return }
         shutdown?.cancel()
         shutdown = Task { [weak self] in
@@ -408,15 +300,9 @@ final class RoomModel {
                 if anchor.alignment == .vertical {
                     wallsByAnchor[anchor.id] = Self.wall(from: anchor)
                 } else if anchor.classification == .table || anchor.classification == .seat {
-                    // A TABLE IS A SURFACE YOU CAN LAND ON (2026-09-02).
-                    // Horizontal planes used to feed only the room's
-                    // bounds; a table or a seat is now a finite two-sided
-                    // wall like any other, so a ball bounces off its top,
-                    // comes to rest on it, and rolls off its edge —
-                    // Projectiles' "1:1 with your room" made literal.
-                    // Only CLASSIFIED planes: an `.unknown` horizontal
-                    // plane would be an invisible shelf in mid-air, and
-                    // the floor is the model's own contact law.
+                    // A classified table or seat is a finite two-sided wall like any other,
+                    // so a ball lands on it and rolls off. Unclassified horizontal planes
+                    // would be invisible shelves; the floor is the model's own contact law.
                     wallsByAnchor[anchor.id] = Self.wall(from: anchor)
                 }
                 planeCorners[anchor.id] = Self.corners(of: anchor)
@@ -427,13 +313,9 @@ final class RoomModel {
         }
     }
 
-    /// Detected walls PLUS a synthesized boundary box — four vertical
-    /// rects and a ceiling from the scanned bounds. Plane detection
-    /// only yields walls the user has looked at, so on its own the
-    /// bounce feature let balls sail through half the room; the box
-    /// guarantees every ball meets the room's edge. The bounds sit
-    /// 5 cm beyond the detected planes, so where a real wall exists it
-    /// always strikes first.
+    /// Detected walls plus a synthesized boundary box from the scanned
+    /// bounds, 5 cm beyond the detected planes so a real wall always strikes
+    /// first. Plane detection only yields walls the user has looked at.
     private(set) var collisionWalls: [RoomWalls.Wall] = []
 
     private func recomputeCollisionWalls() {
@@ -488,8 +370,8 @@ final class RoomModel {
 
     // MARK: Hands & furniture → obstacle spheres
 
-    /// The joints that sketch a hand + forearm. Fingertips are small,
-    /// the palm and forearm larger.
+    /// The joints that sketch a hand and forearm; fingertips small, palm
+    /// and forearm larger.
     private static let trackedJoints: [(HandSkeleton.JointName, Double)] = [
         (.wrist, 0.045), (.middleFingerKnuckle, 0.04),
         (.thumbTip, 0.02), (.indexFingerTip, 0.02), (.middleFingerTip, 0.02),
@@ -506,19 +388,8 @@ final class RoomModel {
     private(set) var fingertips: [SIMD3<Double>] = []
 
     /// The tracked fingertip nearest `point`, or nil when no hand is
-    /// tracked at all.
-    ///
-    /// This is what drives `Recession`: instruments stand back until a
-    /// hand comes near them. Fingertips rather than the whole obstacle
-    /// field, because the field also contains furniture and the scene
-    /// mesh, and a bookshelf is not a reach.
-    ///
-    /// NIL IS MEANINGFUL and callers must not treat it as "far away":
-    /// in the simulator, and in any device frame where the hands are out
-    /// of view, there is no hand to be near anything. `Recession` reads
-    /// nil as full brightness for exactly that reason — an instrument
-    /// that dims because the system briefly lost your hands is an
-    /// instrument that flickers.
+    /// tracked. Drives `Recession`; nil means "no hand", not "far away", so
+    /// callers must not dim on it.
     func nearestFingertip(to point: SIMD3<Float>) -> SIMD3<Float>? {
         let target = SIMD3<Double>(point)
         return fingertips
@@ -526,12 +397,9 @@ final class RoomModel {
             .map { SIMD3<Float>($0) }
     }
 
-    /// The hands as things a ball can bounce off (2026-09-02): the same
-    /// joints as the obstacle field, each carrying the velocity it moved
-    /// at since its last update, so a swat adds the hand's motion to the
-    /// ball. Velocities are finite differences over the anchor stream's
-    /// own timing; a hand that reappears after a gap starts at rest
-    /// rather than at a spurious teleport speed.
+    /// The hands as things a ball can bounce off: the obstacle joints with
+    /// the velocity each moved at since its last update. A hand that
+    /// reappears after a gap starts at rest.
     private(set) var handStrikes: [SphereStrike.Sphere] = []
     /// One velocity per entry of `fingertips`, same order — so a module
     /// can tell a hand held out to catch from a hand swung to swat.
@@ -555,9 +423,7 @@ final class RoomModel {
                 centers.append(point)
                 if joint == .indexFingerTip { tips.append(point) }
             }
-            // Velocities from the previous sample of the same hand; a
-            // gap longer than a quarter second is a reappearance, not a
-            // sprint, so it starts at rest.
+            // A gap longer than a quarter second is a reappearance, not a sprint.
             let now = CACurrentMediaTime()
             var velocities = Array(repeating: SIMD3<Double>.zero, count: centers.count)
             if let previous = previousHandSamples[anchor.chirality],
@@ -635,12 +501,8 @@ final class RoomModel {
 
 }
 
-/// Keeps the shared ARKit room-sensing session alive for as long as a
-/// module is on screen. One line in the module branch of
-/// `PlaygroundSpaceView`. (Named `RoomOcclusionView` until 2026-08-03,
-/// when it also mounted the room-shaped occlusion mesh; the mesh is
-/// gone, the retain/release lifecycle is the part that was always
-/// load-bearing.)
+/// Keeps the shared ARKit room-sensing session alive while a module is
+/// on screen; one line in `PlaygroundSpaceView`'s module branch.
 struct RoomSensingView: View {
     @Environment(AppModel.self) private var appModel
 

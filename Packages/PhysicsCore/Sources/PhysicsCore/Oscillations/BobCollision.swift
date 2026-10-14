@@ -2,48 +2,21 @@
 //  BobCollision.swift
 //  PhysicsCore
 //
-//  Elastic collisions between pendulum bobs — the physics behind
-//  Newton's cradle, and behind two swinging bobs that meet.
-//
-//  ONE DIMENSION, ALONG THE LINE OF CENTRES. Two bobs hanging from
-//  neighbouring pivots meet moving almost exactly along the line joining
-//  them, so the collision is the 1-D elastic problem every textbook
-//  solves, applied to the velocity component along that line. The
-//  perpendicular components pass through untouched, which is what a
-//  frictionless contact does.
-//
-//  SEQUENTIAL, PAIRWISE, AND THAT IS THE WHOLE TRICK OF THE CRADLE.
-//
-//  A five-ball cradle sends exactly one ball out the far side, and the
-//  reason is not "momentum and energy are conserved" — a simultaneous
-//  five-body solve conserving both admits other answers, including two
-//  balls leaving at reduced speed, which is not what real cradles do.
-//  What picks the right answer is that the balls are not truly touching:
-//  the impulse crosses the line as a compression wave, one contact at a
-//  time. Resolving pairs in order along the line reproduces that, and it
-//  is why `resolve` sweeps rather than solving a system.
-//
-//  So the "one ball out" behaviour here is a CONSEQUENCE of the model
-//  rather than a special case in it. Nothing anywhere counts balls.
+//  Elastic collisions between pendulum bobs, in one dimension along the
+//  line of centres; the perpendicular components pass through untouched.
+//  Resolved sequentially and pairwise, which is the whole trick of
+//  Newton's cradle: the impulse crosses the line one contact at a time,
+//  so "one ball out" is a consequence of the model, not a special case.
 //
 
 import Foundation
 
 public enum BobCollision {
 
-    /// How much slop counts as "touching", metres.
-    ///
-    /// Balls laid out at exactly one diameter apart are NOT reliably one
-    /// diameter apart in floating point: five balls at `index * 0.04`
-    /// puts the fourth gap at 0.04000000000000002, and an exact
-    /// `gap <= radius + radius` silently declares that last pair out of
-    /// contact. Not a test artifact — it is what a cradle at rest looks
-    /// like in Double, and without this the impulse crossed four balls
-    /// and stopped one short of the end.
-    ///
-    /// A nanometre is twelve orders of magnitude below anything this
-    /// model resolves, so it cannot make two genuinely separated balls
-    /// collide; it only stops arithmetic noise pulling a contact apart.
+    /// How much slop counts as "touching", metres. Balls laid out at
+    /// exactly one diameter apart are not reliably so in floating point;
+    /// a nanometre is far below anything the model resolves and only stops
+    /// arithmetic noise pulling a contact apart.
     public static let contactSlop = 1e-9
 
     /// One bob, as a collision cares about it.
@@ -116,8 +89,8 @@ public enum BobCollision {
                 let b = bobs[i + 1]
                 let gap = b.position - a.position
                 let contact = a.radius + b.radius + contactSlop
-                // Overlapping AND closing. The second half matters: a
-                // pair still overlapping on the frame AFTER an exchange
+                // Overlapping and closing. The second half matters: a
+                // pair still overlapping on the frame after an exchange
                 // is now separating, and resolving it again would reverse
                 // a collision that already happened — the classic way to
                 // make a cradle jitter and gain energy.

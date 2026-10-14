@@ -2,21 +2,9 @@
 //  AppModelDoorTests.swift
 //  PhysicsPlaygroundTests
 //
-//  ONE DOOR BETWEEN LABS, and the ordering inside it.
-//
-//  There were three ways to change the active module and all three were a
-//  bare assignment, so the scene swapped in a single frame: the gallery's
-//  Load button, the window's back chevron, and — the one that went
-//  unnoticed longest — the palette's slot ring, which switches lab to lab
-//  without touching the gallery at all. `go(to:)` is the one door they now
-//  share, and `isDeparting` is what a module's scene root rides down.
-//
-//  THE ASSERTION THAT MATTERS is `testTheFlagClearsBeforeTheSwap`. If
-//  `isDeparting` were still true when `activeModuleID` changed, the
-//  incoming scene would mount already invisible with nothing left to raise
-//  it — and an invisible lab is indistinguishable from a crash. That is a
-//  one-line ordering bug with a catastrophic symptom, which is exactly the
-//  kind a test should hold rather than a comment.
+//  One door between labs (`go(to:)`), and the ordering inside it:
+//  `isDeparting` must clear before `activeModuleID` changes, or the
+//  incoming scene mounts invisible.
 //
 
 import XCTest
@@ -29,9 +17,7 @@ final class AppModelDoorTests: XCTestCase {
     /// space has to look open for the interesting cases.
     private func departingModel(from id: String) -> AppModel {
         let appModel = AppModel()
-        // The space is still closed here, so the door goes straight
-        // through — the cheapest way to land on a starting module now
-        // that `activeModuleID` is `private(set)`.
+        // The space is still closed here, so the door goes straight through.
         appModel.go(to: id)
         appModel.isImmersiveSpaceOpen = true
         return appModel
@@ -76,9 +62,8 @@ final class AppModelDoorTests: XCTestCase {
         XCTAssertTrue(appModel.isDeparting)
     }
 
-    /// THE ORDERING. Both facts are asserted at the same instant: the swap
-    /// has happened AND the flag is already down. Asserting them in two
-    /// separate waits would let exactly the broken ordering pass.
+    /// Both facts asserted at the same instant: the swap has happened and
+    /// the flag is already down.
     func testTheFlagClearsBeforeTheSwap() async throws {
         let appModel = departingModel(from: "circuits")
         appModel.go(to: "magnetism")
@@ -110,18 +95,8 @@ final class AppModelDoorTests: XCTestCase {
 
     // MARK: The door is the only door
 
-    /// THE DOOR WAS ONE OF FIVE.
-    ///
-    /// `go(to:)` documents itself as THE ONE DOOR between labs, and the
-    /// point of routing every caller through it is that all of them run
-    /// the same curve. But `activeModuleID` stayed settable, and four
-    /// callers went on assigning it directly — the hub's two enter paths
-    /// and the flat catalog's row — so entering a lab from the gallery
-    /// skipped the departure fade entirely.
-    ///
-    /// The real enforcement is `private(set)` and the compiler; this test
-    /// is the runtime half, and it is the ONE case a direct assignment
-    /// would still get wrong now that they are gone.
+    /// Entering a lab from another one runs the fade — the one case a
+    /// direct assignment to `activeModuleID` would get wrong.
     func testEnteringALabFromAnotherOneRunsTheFade() {
         let appModel = departingModel(from: "circuits")
 
@@ -135,7 +110,7 @@ final class AppModelDoorTests: XCTestCase {
                        + "faded")
     }
 
-    /// Closing the gallery is the one caller that must NOT wait: the
+    /// Closing the gallery is the one caller that must not wait: the
     /// space is being torn down in the same breath, so a deferred clear
     /// would land after there was anything left to clear.
     func testClosingForDismissalIsImmediateEvenMidLab() {

@@ -2,18 +2,10 @@
 //  MotionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  `Motion.ease` is the app's ONE ease, inherited wholesale from
-//  `FanLayout.ease` along with these tests. The arithmetic is unchanged
-//  and so are its guarantees — converge and snap, never overshoot,
-//  frame-rate independent — which is the point of moving them rather
-//  than writing new ones: the replacement has to be the same function,
-//  plus the Reduce Motion behaviour the original lacked.
-//
-//  The setting itself is a system switch these tests cannot flip, so
-//  what is asserted here is the un-reduced path. `MotionCriterionTests`
-//  covers the other half by banning hand-rolled eases outright, which is
-//  the part that actually went wrong: six of eight primitives never
-//  called any shared helper at all.
+//  `Motion.ease`, the app's one ease: converge and snap, never
+//  overshoot, frame-rate independent. Reduce Motion is a system switch
+//  these tests cannot flip, so only the un-reduced path is asserted;
+//  `MotionCriterionTests` covers the other half.
 //
 
 import XCTest

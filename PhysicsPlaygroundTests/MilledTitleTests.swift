@@ -2,22 +2,11 @@
 //  MilledTitleTests.swift
 //  Physics Playground — app tests
 //
-//  The home's three display texts are milled in Blender now
-//  (`Tools/hubtitles.py`) and loaded as assets. `HubTitleStyle.milled`
-//  falls back to the generated line whenever anything is wrong, which
-//  is the right behaviour in the room and a menace in a test suite:
-//  EVERY EXISTING TEST IN `HubTitleStyleTests` DRIVES THE FALLBACK.
-//  Delete all six assets and that file still passes, the app still
-//  builds, the home still shows a wordmark, and the only symptom is
-//  that the letters quietly have square edges again — which since the
-//  casing was removed on 2026-08-11 is also the only thing holding
-//  them against a bright wall.
-//
-//  So this file exists to assert the thing a green suite otherwise
-//  cannot: that the assets are IN THE BUNDLE, that they LOAD, and that
-//  the milled path is the one actually answering. It is the same lesson
-//  the screenshot loop taught — a passing test proves the fallback
-//  works, never that the feature does.
+//  The home's display texts are milled in Blender and loaded as assets;
+//  `HubTitleStyle.milled` falls back to the generated line whenever
+//  anything is wrong, so every test in `HubTitleStyleTests` drives the
+//  fallback. This file asserts that the assets are in the bundle, that
+//  they load, and that the milled path is the one answering.
 //
 
 import XCTest
@@ -33,7 +22,7 @@ final class MilledTitleTests: XCTestCase {
                                 "Electricity", "& Magnetism",
                                 "Mechanics", "& Energy"]
 
-    /// THE LOAD-BEARING TEST. Every one of the six resolves to an
+    /// The load-bearing test. Every one of the six resolves to an
     /// asset, so nothing in the home is falling back.
     @MainActor
     func testEveryLineIsActuallyMilled() {
@@ -49,11 +38,9 @@ final class MilledTitleTests: XCTestCase {
         }
     }
 
-    /// The diamond cut survived the USD round-trip: the chamfer band is
-    /// genuinely a SECOND part, because the whole legibility argument —
-    /// dark anodised face, bright alloy rim — rests on the two being
-    /// paintable separately. One combined mesh would anodise the rim
-    /// dark along with the face and the silhouette would go with it.
+    /// The chamfer band survived the round-trip as a second part: the
+    /// legibility argument rests on the face and the rim being paintable
+    /// separately.
     @MainActor
     func testTheChamferRimIsItsOwnPart() {
         for text in Self.lines {
@@ -74,11 +61,8 @@ final class MilledTitleTests: XCTestCase {
         }
     }
 
-    /// Real, positive extents — the flush-width lockup divides by the
-    /// width, so a zero scales a line to infinity and hangs the sign
-    /// across the room. The generated builder is held to this in
-    /// `HubTitleStyleTests`; the milled one has to earn it separately,
-    /// because it gets its numbers from a file rather than from a font.
+    /// Real, positive extents: the milled line gets its numbers from a
+    /// file rather than a font and has to earn this separately.
     @MainActor
     func testTheMilledLineMeasuresRealExtents() {
         for text in Self.lines {
@@ -92,10 +76,8 @@ final class MilledTitleTests: XCTestCase {
         }
     }
 
-    /// Centred on its own origin — the contract `line` also offers,
-    /// and the one the two-line lockups above depend on.
-    /// An asset centred on its baseline instead would stack correctly
-    /// in the maths and hang wrong in the room.
+    /// Centred on its own origin, the contract `line` also offers and the
+    /// lockups depend on.
     @MainActor
     func testTheMilledLineIsCentredOnItsOwnOrigin() {
         guard let built = HubTitleStyle.milled("Playground", size: 0.17,
@@ -107,10 +89,8 @@ final class MilledTitleTests: XCTestCase {
         XCTAssertEqual(centre.y, 0, accuracy: 1e-3, "not centred on Y")
     }
 
-    /// `size` IS the scale, because the asset is built at a nominal
-    /// point size of 1 — which is what makes `milled` a drop-in for
-    /// the generated line, whose extents the lockup divides into a
-    /// common width. If this stopped being linear the two lines of a lockup
+    /// `size` is the scale, because the asset is built at a nominal point
+    /// size of 1; if this stopped being linear the two lines of a lockup
     /// would be set at different weights.
     @MainActor
     func testSizeScalesTheMilledLine() {
@@ -125,24 +105,11 @@ final class MilledTitleTests: XCTestCase {
                        "doubling the size should double the width")
     }
 
-    /// THE BUG THIS FILE EXISTS FOR, SECOND EDITION.
-    ///
-    /// Both lockups finish by ASSIGNING the entity's scale:
-    ///
-    ///     item.entity.scale = SIMD3(repeating: scale)
-    ///
-    /// The generated line survives that because its size lives in its
-    /// geometry.
-    /// The first milled build put `size` on the returned entity itself,
-    /// so the assignment threw it away, the asset reverted to its
-    /// nominal point size of one METRE, and the wordmark came up six
-    /// times too big and filled the room.
-    ///
-    /// Every test still passed. They checked what `milled` returned,
-    /// and what it returned was right — the defect only appeared once a
-    /// caller composed with it. So this pins the composition: a line
-    /// must survive having its scale assigned, which it can only do if
-    /// it kept its own transform free.
+    /// A line must survive having its scale assigned, which both lockups
+    /// do: the first milled build put `size` on the returned entity, the
+    /// assignment threw it away, and the wordmark came up at its nominal
+    /// one metre and filled the room — with every test green, since they
+    /// checked what `milled` returned rather than what a caller composed.
     @MainActor
     func testAssigningScaleDoesNotResizeTheLine() {
         guard let built = HubTitleStyle.milled("Physics", size: 0.17,
@@ -162,7 +129,7 @@ final class MilledTitleTests: XCTestCase {
                        + "wide — got \(set) m")
     }
 
-    /// The words the home does NOT say get generated type, not a crash
+    /// The words the home does not say get generated type, not a crash
     /// and not a wrong sign. This is the fallback working on purpose.
     @MainActor
     func testAnUnbakedLineFallsBack() {
@@ -184,10 +151,8 @@ final class MilledTitleTests: XCTestCase {
         XCTAssertTrue(sawADifference, "the rake never turned the line")
     }
 
-    /// SMALL. The point is that the highlight moves, not that the sign
-    /// does — a reader who catches the sign turning is watching the
-    /// animation instead of reading the words. Two degrees is the
-    /// ceiling.
+    /// Small: the point is that the highlight moves, not that the sign
+    /// does. Two degrees is the ceiling.
     func testTheRakeStaysSubtle() {
         for step in 0...200 {
             let turn = HubTitleStyle.rake(time: Double(step) * 0.31, phase: 0.7)
@@ -197,11 +162,8 @@ final class MilledTitleTests: XCTestCase {
         }
     }
 
-    /// THE DEPTH CUE IS THE WHOLE REASON THESE ARE ASSETS. A milled
-    /// line is a deep solid — flatten it and the chamfer has no side to
-    /// run along, which is the difference between a machined plaque and
-    /// a sticker. Held as a fraction of point size, the same way
-    /// `extrusionFactor` is.
+    /// The depth cue is the whole reason these are assets: flatten a milled
+    /// line and the chamfer has no side to run along.
     @MainActor
     func testTheMilledLineIsDeeplyExtruded() {
         guard let built = HubTitleStyle.milled("Electricity", size: 0.12,

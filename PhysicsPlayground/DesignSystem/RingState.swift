@@ -2,7 +2,7 @@
 //  RingState.swift
 //  Physics Playground — Design System
 //
-//  Which object's control ring is open. A reference type ON PURPOSE: a
+//  Which object's control ring is open. A reference type on purpose: a
 //  @State value read from a RealityKit update closure comes back stale —
 //  tap gesture and per-frame sync must share one live object.
 //

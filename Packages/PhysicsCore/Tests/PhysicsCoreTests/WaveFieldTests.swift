@@ -19,7 +19,7 @@ final class WaveFieldTests: XCTestCase {
     private var wavelength: Double { speed / frequency }
 
     /// The phasor decomposition u = c·cos(ωt) − s·sin(ωt) reproduces the
-    /// live field EXACTLY at arbitrary points and times — the identity
+    /// live field exactly at arbitrary points and times — the identity
     /// the renderer leans on to animate without per-frame trig.
     func testPhasorCoefficientsReproduceTheLiveField() {
         let sources = [
@@ -43,7 +43,7 @@ final class WaveFieldTests: XCTestCase {
         }
     }
 
-    /// √(c² + s²) IS the steady-state envelope — same phasor, same math.
+    /// √(c² + s²) is the steady-state envelope — same phasor, same math.
     func testPhasorMagnitudeIsTheEnvelope() {
         let sources = [
             WaveSource(position: SIMD3(-0.15, 0, 0)),
@@ -180,7 +180,7 @@ final class WaveFieldTests: XCTestCase {
     // MARK: Doppler — a moving source
 
     /// With the source at rest the retarded distance is just the straight
-    /// line, so the moving-source field reduces EXACTLY to the static one
+    /// line, so the moving-source field reduces exactly to the static one
     /// (every test above still holds).
     func testRetardedDistanceReducesToGeometryAtRest() {
         let source = WaveSource(position: SIMD3(0.1, -0.2, 0.05))

@@ -2,39 +2,11 @@
 //  FadeTests.swift
 //  PhysicsPlaygroundTests
 //
-//  `Fade.tick` never faded anything, and shipped that way.
-//
-//  Reported from the device 2026-08-09: turn on a vector arrow in
-//  Pendulums and it appears; turn it off and it stays on screen, frozen
-//  at the instant it was switched off. Both halves of that are the same
-//  bug, and the "on" half is the one that explains why nobody caught it.
-//
-//  ── THE DEFECT ──
-//
-//  `tick` measures its own frame spacing from a `Clock` component it
-//  keeps on the entity. It WRITES that clock every call — and then
-//  removes it again whenever the ramp lands on 0 or 1. The first call
-//  has no clock, so `dt` is 0, so the ramp does not move, so it lands on
-//  the endpoint it started from, so the clock is removed. The next call
-//  is a first call again. A settled entity can never begin a transition.
-//
-//  ── WHY IT LOOKED LIKE IT WORKED ──
-//
-//  Because `PendulumsRenderer.Arrow.update` sets `holder.isEnabled =
-//  true` itself, and the renderer calls it whenever the layer is on. So
-//  switching a vector ON enables the arrow directly and Fade's failure
-//  is invisible. Switching it OFF stops calling `update`, and the only
-//  thing left to hide the arrow is the mechanism that has never worked.
-//
-//  The blast radius is bigger than the bug report: thirteen call sites,
-//  including every selection halo in the app (Circuits, Electric Fields,
-//  Magnetism) and Gravity Lab's vector arrows.
-//
-//  ── WHAT THESE ASSERT ──
-//
-//  Not "the ramp is smooth" — that is a judgement for the device. Just
-//  that a transition STARTS and that it FINISHES, which is the whole of
-//  what a caller is promised and neither of which held.
+//  `Fade.tick` measures its own frame spacing from a clock component it
+//  keeps on the entity, and it once removed that clock whenever the ramp
+//  landed — so a settled entity could never begin a transition. These
+//  assert that a transition starts and that it finishes, which is the
+//  whole of what a caller is promised.
 //
 
 import XCTest
@@ -63,12 +35,9 @@ final class FadeTests: XCTestCase {
                       "Reduce Motion snaps instead of ramping; these test the ramp")
     }
 
-    /// One tick toward hidden has to CHANGE something.
-    ///
-    /// It need not have arrived — 0.15 s is several frames — but after
-    /// being told to hide, an entity that is still enabled with no
-    /// opacity component is in exactly the state it started in, and the
-    /// next call will be identical. That is the deadlock.
+    /// One tick toward hidden has to change something: an entity still
+    /// enabled with no opacity component is in the state it started in, and
+    /// the next call would be identical.
     func testHidingASettledEntityStartsTheRamp() {
         let entity = settledVisibleEntity()
         Fade.tick(entity, visible: false)
@@ -97,11 +66,8 @@ final class FadeTests: XCTestCase {
             """)
     }
 
-    /// The other direction, which the Pendulums arrows were hiding.
-    ///
-    /// `Arrow.update` enables its own holder, so showing appeared to
-    /// work in that module no matter what `Fade` did. A selection halo
-    /// has no such helper: if this fails, halos never appear at all.
+    /// The other direction. A selection halo has no helper enabling it, so
+    /// if this fails halos never appear at all.
     func testShowingAHiddenEntityStartsTheRamp() {
         let entity = Entity()
         entity.isEnabled = false

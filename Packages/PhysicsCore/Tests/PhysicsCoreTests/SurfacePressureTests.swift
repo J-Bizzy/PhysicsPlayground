@@ -2,7 +2,7 @@
 //  SurfacePressureTests.swift
 //  PhysicsCoreTests
 //
-//  The pressure skin has to be read off the SOLVED flow, not invented,
+//  The pressure skin has to be read off the solved flow, not invented,
 //  so these run the real fluid solver and check the coefficient against
 //  what Bernoulli requires: zero in an undisturbed stream, one at a
 //  stagnation point, negative where the flow speeds up.
@@ -62,7 +62,7 @@ final class SurfacePressureTests: XCTestCase {
     }
 
     /// Beside the blockage the flow has to speed up to get past, so the
-    /// pressure there DROPS below free stream — the same effect that
+    /// pressure there drops below free stream — the same effect that
     /// lifts a wing.
     func testShoulderOfABlockageReadsLowPressure() {
         let (field, speed) = solvedTunnel(withBlock: true)
@@ -74,7 +74,7 @@ final class SurfacePressureTests: XCTestCase {
         XCTAssertLessThan(cp!, 0, "accelerated flow means suction")
     }
 
-    /// The reason `boundaryShells` exists: read the FIRST fluid cell off
+    /// The reason `boundaryShells` exists: read the first fluid cell off
     /// a voxelised wall and everything looks like a stagnation point,
     /// because the solver has zeroed the flux through the faces touching
     /// the mask. The shoulder flips sign purely on where you sample.
@@ -87,7 +87,7 @@ final class SurfacePressureTests: XCTestCase {
         let corrected = SurfacePressure.coefficient(
             at: shoulder, normal: SIMD3(0, 1, 0), in: field,
             freestream: speed, boundaryShells: 2)!
-        // The sign FLIPS on where you sample — which is the whole
+        // The sign flips on where you sample — which is the whole
         // reason the parameter exists. Naively you would paint this
         // shoulder red (pressure) when it is really blue (suction).
         XCTAssertGreaterThan(naive, 0.2, "the wall drags the first cells to a crawl")
@@ -108,7 +108,7 @@ final class SurfacePressureTests: XCTestCase {
         XCTAssertGreaterThan(nose, shoulder + 0.2)
     }
 
-    /// Cp is DIMENSIONLESS: it must not care how fast the tunnel is
+    /// Cp is dimensionless: it must not care how fast the tunnel is
     /// running, only about the shape. Scaling the whole velocity field
     /// and the free stream together leaves it unchanged.
     func testCoefficientIsIndependentOfTunnelSpeed() {

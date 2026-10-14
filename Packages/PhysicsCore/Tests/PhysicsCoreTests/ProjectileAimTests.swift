@@ -2,12 +2,11 @@
 //  ProjectileAimTests.swift
 //  PhysicsCoreTests
 //
-//  The projectile problem solved backwards — which angles reach a given
-//  point — is the physics under Projectiles' "Aim here" (2026-09-01).
-//  The vacuum roots are checked against the simulation, not against
-//  themselves: each angle is fired and the arc must pass through the
-//  target. The drag roots are found numerically and held to a looser
-//  tolerance the readout discloses.
+//  The projectile problem solved backwards: which angles reach a given
+//  point. The vacuum roots are checked against the simulation, not
+//  against themselves: each angle is fired and the arc must pass through
+//  the target. The drag roots are found numerically and held to the
+//  looser tolerance the readout discloses.
 //
 
 import XCTest
@@ -18,7 +17,7 @@ final class ProjectileAimTests: XCTestCase {
 
     private let g = 9.81
 
-    /// Height reached at horizontal distance `x`, RELATIVE to the launch
+    /// Height reached at horizontal distance `x`, relative to the launch
     /// point. Launched from a kilometre up so `simulate`'s floor cannot
     /// end an arc bound for a target below the muzzle.
     private func heightAt(x: Double, angle: Double, speed: Double,
@@ -68,7 +67,7 @@ final class ProjectileAimTests: XCTestCase {
     }
 
     /// Below the muzzle a low target is always reachable, and the low
-    /// root points DOWN.
+    /// root points down.
     func testATargetBelowTheMuzzleIsReachedByADownwardLowRoot() throws {
         let angles = try XCTUnwrap(ProjectileMotion.launchAngles(
             toReachHorizontal: 2, vertical: -1.5, speed: 4, gravity: g))

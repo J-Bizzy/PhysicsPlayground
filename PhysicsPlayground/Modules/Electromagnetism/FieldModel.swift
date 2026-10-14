@@ -21,8 +21,8 @@ private extension Double {
 @Observable
 final class FieldModel {
     // MARK: Sampling region
-    // Immersive-space coordinates: origin is on the floor where the user
-    // launched the space, +Y is up, -Z is straight ahead.
+    // Immersive-space coordinates: origin on the floor where the user
+    // launched the space, +Y up, −Z ahead.
 
     /// Where the field visualization lives when there are no charges, and
     /// where the first charge spawns: chest height, just ahead. The
@@ -36,19 +36,17 @@ final class FieldModel {
     /// Sample points never go below this height (no arrows in the floor).
     nonisolated static let regionFloor = 0.05
 
-    /// The station's NOMINAL volume — where reset lays the dipole out and
+    /// The station's nominal volume: where reset lays the dipole out and
     /// where the instruments take their clearance bearings
-    /// (`FieldInstrumentLayout` keeps every collider `stationMargin` clear of
-    /// this box, making pinch contention geometrically impossible). NOT a
-    /// wall: a hand meets only the floor. The room-scale SAFETY bound on the
-    /// free simulation is separate (`safetyHalfExtents`).
+    /// (`FieldInstrumentLayout` keeps every collider `stationMargin` clear
+    /// of it). Not a wall; the free simulation's safety bound is separate.
     nonisolated static let regionHalfExtents = SIMD3<Double>(0.76, 1.20, 0.62)
 
     /// The free simulation's safety bounds — room-scale, never applied
     /// to a hand.
     nonisolated static let safetyHalfExtents = SIMD3<Double>(2.6, 1.6, 2.6)
 
-    /// Clamps a FREE-drifting point into the room-scale safety box.
+    /// Clamps a free-drifting point into the room-scale safety box.
     nonisolated static func clampToRoomSafety(
         _ point: SIMD3<Double>
     ) -> SIMD3<Double> {
@@ -113,11 +111,9 @@ final class FieldModel {
     // MARK: Parallel-plate capacitor
 
     /// Two square plates bracketing the region: left (−x) positive, right
-    /// (+x) negative — REAL finite plates (`PlateField.Capacitor`), not a
-    /// uniform box. The field genuinely fringes, the traced lines pass through
-    /// the gap, and the plate charge is CALIBRATED so the line integral across
-    /// the gap equals the set ΔV (up to ~2× the textbook σ = ε₀V/d, since the
-    /// field leaks out the sides).
+    /// (+x) negative — real finite plates (`PlateField.Capacitor`), so the
+    /// field fringes, and the plate charge is calibrated so the line
+    /// integral across the gap equals the set ΔV.
     var capacitorOn = false
     /// Plate voltage difference, V. kV-scale, like a real demo bench.
     var plateVoltage = 20_000.0
@@ -125,10 +121,9 @@ final class FieldModel {
     var capacitorCenter = SIMD3<Double>(0, 1.3, -1.0)
     /// Gap width, m — grab a plate and pull; the calibration follows.
     var plateSeparation = 0.44
-    /// How far the dielectric slab is slid in, 0 (parked clear of the
-    /// −z edge) … 1 (covering the plate). The slab fills the gap, so
-    /// sliding it in raises C toward κ·C₀ and visibly CROWDS the plate
-    /// charge under itself — the covered band's σ beats the open one's.
+    /// How far the dielectric slab is slid in, 0 (parked clear of the −z
+    /// edge) … 1 (covering the plate): C rises toward κ·C₀ and the plate
+    /// charge visibly crowds under the slab.
     var dielectricCoverage = 0.0
     nonisolated static let plateSize = 0.5
     nonisolated static let plateVoltageRange = 2_000.0...40_000.0
@@ -136,10 +131,9 @@ final class FieldModel {
     /// Soda-lime glass, the slab a demo bench actually has.
     nonisolated static let dielectricConstant = 4.7
 
-    /// The calibrated plates for the current bench, rebuilt only when an input
-    /// moves (calibration is a few hundred closed-form evaluations).
+    /// The calibrated plates, rebuilt only when an input moves.
     /// `@ObservationIgnored`: a cache written during a tracked read would
-    /// re-arm the renderer's observation loop forever.
+    /// re-arm the observation loop forever.
     @ObservationIgnored private var cachedCapacitor: PlateField.Capacitor?
     var capacitor: PlateField.Capacitor? {
         guard capacitorOn else { return nil }
@@ -159,9 +153,9 @@ final class FieldModel {
         return built
     }
 
-    /// The measured field at the gap's centre in kV/m, quantised to the tenth
-    /// — ONE arithmetic for the ΔV rail's E line and the readout card, so the
-    /// two can never disagree. The REAL centre field, honestly below V/d.
+    /// The measured centre field in kV/m, quantised to the tenth — one
+    /// arithmetic for the ΔV rail's E line and the readout card. Honestly
+    /// below V/d.
     var plateFieldkVPerM: Double {
         let field = capacitor.map { $0.field(at: capacitorCenter).x }
             ?? plateVoltage / plateSeparation
@@ -178,11 +172,10 @@ final class FieldModel {
 
     // MARK: Magnetic field
 
-    /// A uniform B pointing straight UP fills the region; the probe
-    /// then feels the full Lorentz force F = q(E + v×B) and curves.
-    /// The tesla numbers are colossal because the probe is a 0.5 g,
-    /// 10 nC ball — an electron (q/m ~10¹¹ larger) curves this hard in
-    /// microtesla. The geometry is exact either way: r = mv/qB.
+    /// A uniform B pointing straight up fills the region; the probe feels
+    /// the full Lorentz force and curves. The tesla numbers are colossal
+    /// because the probe is a 0.5 g, 10 nC ball; the geometry is exact
+    /// either way: r = mv/qB.
     var magneticFieldOn = false
     var magneticFieldTesla = 5e4
     nonisolated static let magneticFieldRange = 1e4...2e5
@@ -211,7 +204,7 @@ final class FieldModel {
         capacitorCenter.x + (index == 0 ? -plateSeparation : plateSeparation) / 2
     }
 
-    /// Grabbing a plate: its own x changes the GAP (the other plate
+    /// Grabbing a plate: its own x changes the gap (the other plate
     /// stays put), while its y/z carry the whole assembly.
     func movePlate(_ index: Int, toWorld world: SIMD3<Double>) {
         let fixedX = plateX(index == 0 ? 1 : 0)
@@ -228,7 +221,7 @@ final class FieldModel {
         capacitorCenter = center
     }
 
-    /// The plates' field ANYWHERE — between them, in the fringe past
+    /// The plates' field anywhere — between them, in the fringe past
     /// their edges, behind them. The κ scaling inside the slab is the
     /// capacitor's own.
     func capacitorField(at point: SIMD3<Double>) -> SIMD3<Double> {
@@ -278,10 +271,9 @@ final class FieldModel {
     var isPaused = false
 
     // MARK: Free charges
-    //
-    // Stationary by default. Flip this on and the source charges respond to
-    // the net Coulomb force (plus the plates' field) by the same overdamped
-    // force→velocity law the magnetism bench uses: direction exact, speed capped.
+    // Stationary by default. On, the source charges respond to the net
+    // Coulomb force (plus the plates') by the same overdamped
+    // force→velocity law the magnetism bench uses.
     var chargesRespond = false
     /// The charge pinned under the user's hand — it follows the drag,
     /// never the drift, while everything else reacts to it live.
@@ -403,7 +395,7 @@ final class FieldModel {
         #endif
     }
 
-    /// Returns the module to its freshly-entered state: a DIPOLE — the
+    /// Returns the module to its freshly-entered state: a dipole — the
     /// recognisable field that curves, closes and fills the volume.
     func reset() {
         let separation = 0.26
@@ -561,7 +553,7 @@ final class FieldModel {
         selectedChargeID = nil
     }
 
-    /// What the Clear plate promises: an EMPTY room. Everything the wearer
+    /// What the Clear plate promises: an empty room. Everything the wearer
     /// placed goes (including the probe); the toggles stay, because a layer
     /// switch is a setting, not a placed object.
     func clearEverything() {
@@ -605,12 +597,11 @@ final class FieldModel {
 
     // MARK: The trail — the shape of the path, kept
 
-    /// Where the test charge has been — a trajectory is a SHAPE, and the
-    /// cyclotron circle (r = mv/qB, closing on itself) cannot be read without
-    /// it. Settable from the capsule extension, which rebuilds it on a scrub;
-    /// otherwise the model alone appends.
+    /// Where the test charge has been — the cyclotron circle cannot be read
+    /// without it. Settable from the capsule extension, which rebuilds it
+    /// on a scrub.
     private(set) var probeTrail: [SIMD3<Double>] = []
-    /// A point every this far along the path — the trail samples DISTANCE,
+    /// A point every this far along the path — the trail samples distance,
     /// not frames, so a fast probe draws no sparser than a slow one.
     nonisolated static let probeTrailSpacing = 0.011
     /// Points the trail remembers — ~2 m of path, more than one cyclotron
@@ -628,12 +619,9 @@ final class FieldModel {
         probeTrail = []
     }
 
-    /// Called when the user releases the probe.
-    ///
-    /// - Parameter flick: the hand's velocity at release, m/s in model space.
-    ///   Only its DIRECTION is used; the speed is the physics' own launch
-    ///   speed. With B on, a probe released at rest has nothing for B to bend
-    ///   (F = qv×B is zero when v is), so the throw carries the aim.
+    /// Called when the user releases the probe. `flick` is the hand's
+    /// velocity at release; only its direction is used, since with B on a
+    /// probe released at rest has nothing for B to bend.
     func releaseProbe(flick: SIMD3<Double> = .zero) {
         guard probe != nil else { return }
         if magneticFieldOn {
@@ -647,9 +635,8 @@ final class FieldModel {
     }
 
     /// One frame of this bench: the probe, then the free charges, then the
-    /// recording. The two steppers guard their own conditions and are called
-    /// directly by tests; this is the only place that records — the capsule
-    /// must get one frame per rendered frame whether or not a stepper worked.
+    /// recording — the only place that records, one frame per rendered
+    /// frame.
     func step(dt: Double) {
         guard !isPaused else { return }
         defer { recordCapsuleFrame(dt: min(dt, 1.0 / 30.0)) }
@@ -710,17 +697,16 @@ final class FieldModel {
         var forceMagnitude: Double   // N
         /// |qE| on its own.
         var electricForce: Double    // N
-        /// |q v×B| on its own — zero unless the probe is MOVING across
+        /// |q v×B| on its own — zero unless the probe is moving across
         /// a field, which is the whole of what makes it magnetic.
         var magneticForce: Double    // N
         var acceleration: Double     // m/s²
         var speed: Double            // m/s
     }
 
-    /// What the card says about the probe. Reports BOTH force terms
-    /// separately, because the split is the lesson: qE does not depend on
-    /// motion and points along the field, q v×B vanishes when the probe stops
-    /// and is always perpendicular to its path.
+    /// What the card says about the probe: both force terms separately,
+    /// because the split is the lesson (qE is motion-independent and along
+    /// the field; q v×B vanishes at rest and is perpendicular to the path).
     var probeReadout: ProbeReadout? {
         guard let probe else { return nil }
         let electric = fieldVector(at: probe.position)
@@ -766,11 +752,9 @@ final class FieldModel {
 // MARK: - Time Capsule
 
 extension FieldModel: TimeCapsuleRecording {
-    /// The charges, the probe, and — the exception to the standing rule —
-    /// the apparatus flags that CHANGE THE PHYSICS. `capacitorOn`,
-    /// `magneticFieldOn` and `chargesRespond` decide the field the recorded
-    /// motion happened in, so they ride along; `showLines` (drawn, not felt)
-    /// stays out. `probeTrail` stays out and is rebuilt from the capsule.
+    /// The charges, the probe, and the apparatus flags that change the
+    /// physics (`capacitorOn`, `magneticFieldOn`, `chargesRespond`);
+    /// `showLines` stays out, and `probeTrail` is rebuilt from the capsule.
     struct CapsuleSnapshot: Equatable {
         var charges: [PointCharge]
         var probe: TestChargeDynamics.ProbeState?
@@ -832,7 +816,7 @@ extension FieldModel: TimeCapsuleRecording {
     }
 
     /// The probe's recorded path, rebuilt under the live spacing and
-    /// length rules — the trail a scrubbed room shows IS the recording.
+    /// length rules — the trail a scrubbed room shows is the recording.
     private func recordedProbeTrail(upTo time: Double?) -> [SIMD3<Double>] {
         guard let time, let span = capsule.span else { return [] }
         var trail: [SIMD3<Double>] = []

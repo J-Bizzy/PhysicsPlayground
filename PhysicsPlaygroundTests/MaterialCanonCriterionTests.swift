@@ -2,50 +2,20 @@
 //  MaterialCanonCriterionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The material canon, as an assertion rather than a promise.
-//
-//  `RenderKit.Materials` exists because every module that needed a
-//  machined part used to fall back to `SimpleMaterial` with a hand-typed
-//  grey — the "matte primitive" its own header names. The canon landed
-//  on 2026-07-30, and the fallback pattern still survived it twice: the
-//  Kinematics ball was caught on 2026-08-03 (DECISIONS.md names the
-//  call-site tell), and six Circuits part bodies plus two texture-missing
-//  fallbacks were caught on 2026-08-05. A recipe nobody is required to
-//  use is a recipe the next part quietly skips, so the requirement is a
-//  test now.
-//
-//  Reads the SOURCE, like `PanelControlCriterionTests`, and for the same
-//  reason: a material inside a built entity tree is not reachable by
-//  reflection in any way that would fail loudly. Reading the file is
-//  crude, but it fails for the right reason and names the line.
-//
-//  The rule: nothing under Modules, Hub, DesignSystem or Shell
-//  constructs a
-//  `SimpleMaterial`. A part is `energized` (lit energy), `machined` or
-//  `graphite` (built things), `glossy` (display type), `frostedGlass` /
-//  `glassEdge` (instruments), `contrastLine` / `luminous` (lines and
-//  self-lit surfaces) — or, where those genuinely do not fit, a
-//  hand-built `PhysicallyBasedMaterial` / `UnlitMaterial` whose values
-//  are the decision. What it may not be is the matte primitive the canon
-//  was written to retire.
+//  The material canon as an assertion: nothing under Modules, Hub,
+//  DesignSystem or Shell constructs a `SimpleMaterial`. Reads the
+//  source, because a material inside a built entity tree is not
+//  reachable by reflection in any way that fails loudly.
 //
 
 import XCTest
 
 final class MaterialCanonCriterionTests: XCTestCase {
 
-    /// Walks up from this file to the repository, then down to the
-    /// modules — `#filePath` is the only anchor available. FAILS rather
-    /// than skipping when the tree is unreachable: every check below is
-    /// a negative one, and a negative assertion over a missing directory
-    /// passes vacuously.
-    /// EVERY SHIPPING SURFACE, not just the modules.
-    ///
-    /// This scanned `Modules/` alone, which left the two directories
-    /// that DEFINE the canon outside the only test enforcing it — and
-    /// the gallery, the first surface every user sees, was in neither.
-    /// `Hub/HubSpaceView` hand-rolled the exact pale-glass recipe the
-    /// rule exists to ban.
+    /// Every shipping surface, not just the modules: the two directories
+    /// that define the canon and the gallery were once outside the only
+    /// test enforcing it. Fails rather than skipping when the tree is
+    /// unreachable, since every check below is a negative one.
     private func scanRoots() throws -> [URL] {
         let thisFile = URL(fileURLWithPath: #filePath)
         // …/PhysicsPlayground/PhysicsPlaygroundTests/ThisFile.swift
@@ -72,7 +42,7 @@ final class MaterialCanonCriterionTests: XCTestCase {
     }
 
     /// Every Swift file under `PhysicsPlayground/Modules`. Deliberately
-    /// NOT `Archive/` — cut modules keep their physics outside the build
+    /// Not `Archive/` — cut modules keep their physics outside the build
     /// and are not shipping surfaces.
     private func moduleSources() throws -> [URL] {
         try scanRoots().flatMap { root in
@@ -80,18 +50,15 @@ final class MaterialCanonCriterionTests: XCTestCase {
                 at: root, includingPropertiesForKeys: nil)?
                 .compactMap { $0 as? URL }
                 .filter { $0.pathExtension == "swift" }
-                // `Materials` IS the canon, so it necessarily contains
-                // every recipe the rest of the app is forbidden to
-                // hand-roll. Same for the two tests' own fixtures.
+                // `Materials` is the canon, so it necessarily contains every recipe
+                // the rest of the app is forbidden to hand-roll.
                 .filter { $0.lastPathComponent != "Materials.swift" } ?? []
         }
         .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
-    /// The anchor. A suite of negative checks needs a positive one
-    /// underneath it: the walk must actually reach the renderers, and
-    /// the canon must actually be in use — otherwise an empty directory
-    /// (or a canon nobody imports) would satisfy everything below.
+    /// The anchor: a suite of negative checks needs a positive one
+    /// underneath it.
     func testTheSourceTreeIsActuallyBeingRead() throws {
         let sources = try moduleSources()
         let renderers = sources.filter { $0.lastPathComponent.hasSuffix("Renderer.swift") }

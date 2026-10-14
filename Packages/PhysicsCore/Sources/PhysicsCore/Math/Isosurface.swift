@@ -37,7 +37,7 @@ public enum Isosurface {
             values[(i * (n + 1) + j) * (n + 1) + k]
         }
 
-        // 6-tetrahedron decomposition; every tet MUST share the 0→6 main diagonal.
+        // 6-tetrahedron decomposition; every tet must share the 0→6 main diagonal.
         let cornerOffsets: [SIMD3<Int>] = [
             [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
             [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1],

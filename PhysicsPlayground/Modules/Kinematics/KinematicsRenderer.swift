@@ -2,25 +2,13 @@
 //  KinematicsRenderer.swift
 //  Physics Playground — Kinematics module
 //
-//  Renders room-scale projectile motion at 1:1 — physics space IS the
-//  room. The free-floating launcher (grab its body to move it, pinch the
-//  bead to aim), the predicted arc, pooled balls with strobe-dot trails
-//  and floor shadows (the depth cue that makes mid-air height readable),
-//  and scoreable hoops with floating counters.
-//
-//  Frame-rate contract: pools are built once (EntityPool); per-frame work
-//  is transform writes only. The predicted-arc tube rebuilds only when an
-//  aim input actually changes — and its vertex math runs on a
-//  GeometryPipeline worker, so aiming never costs the main thread more
-//  than a mesh upload. Hoop score text rebuilds only when a score lands;
-//  hoop materials are written only when the flash state flips. Ticked
-//  per frame from SceneEvents.Update (observation loops starve during
-//  grabs — house rule since the EM module's device findings).
-//
-//  Grabbable entities are pooled, so each slot's NAME is reassigned to
-//  the flight/ring it currently shows — manipulation events map back to
-//  model objects by that name. While the hand owns an entity, the render
-//  loop must not write its transform (the isManipulating* fields below).
+//  Renders room-scale projectile motion at 1:1 — physics space is the
+//  room: the free-floating launcher, the predicted arc, pooled balls
+//  with strobe-dot trails and floor shadows, and scoreable hoops. Pools
+//  are built once and the per-frame work is transform writes; the arc
+//  tube rebuilds only when an aim input changes, on a GeometryPipeline
+//  worker. Pooled slots are renamed to the flight or ring they show;
+//  while a hand owns an entity the render loop leaves its transform.
 //
 
 import Foundation
@@ -33,21 +21,9 @@ import simd
 
 @MainActor
 final class KinematicsRenderer {
-    /// The SpaceView's tap router, so a carried object can be operated
-    /// without hands — `Grabbable` takes the closure and this supplies
-    /// it. The helper configures entities it did not build and cannot
-    /// invent a meaning for pressing one; only the module knows that a
-    /// tap here opens a control ring.
-    ///
-    /// BEHIND A BOX, unlike every other renderer's copy of this, and the
-    /// reason is Swift's initialisation rules rather than taste. This
-    /// renderer builds its launcher, its aim bead and both entity pools
-    /// inside `init`, before the last stored property is set — so a
-    /// closure written there cannot capture `self` at all, weakly or
-    /// otherwise. Capturing a LOCAL that happens to be a reference type
-    /// sidesteps that: `init` makes the box, hands it to the closures,
-    /// and stores it. Setting `onObjectTap` later writes through the same
-    /// box the closures are already holding.
+    /// The SpaceView's tap router, behind a box: the pools are built in
+    /// `init` before the last stored property is set, so closures capture
+    /// the box rather than `self`.
     private final class TapRouter { var route: ((Entity) -> Void)? }
     private let tapRouter: TapRouter
     var onObjectTap: ((Entity) -> Void)? {
@@ -63,16 +39,8 @@ final class KinematicsRenderer {
     private var lookCallout: Callout?
     var subscriptions: [EventSubscription] = []
 
-    /// Called from the SpaceView's `onDisappear`, and the reason it has
-    /// to be called explicitly is that neither of the things it releases
-    /// is tied to this object's lifetime.
-    ///
-    /// An `EventSubscription` outlives the view that made it — cancelled
-    /// nowhere, it keeps calling into a renderer for a scene that is no
-    /// longer on screen and holds the whole entity graph alive behind
-    /// it. And a `GeometryPipeline` job in flight ran to completion and
-    /// then uploaded a mesh and enabled an entity in a scene being torn
-    /// down (see `GeometryPipeline.cancel`).
+    /// Called from the SpaceView's `onDisappear`: subscriptions and
+    /// geometry jobs outlive this object and must be cancelled explicitly.
     func teardown() {
         subscriptions.forEach { $0.cancel() }
         subscriptions = []
@@ -82,21 +50,15 @@ final class KinematicsRenderer {
     }
 
     static let launcherName = "launcher"
+    /// An arc label the rate limit held back, to be offered again.
+    private var annotationsPending = false
     static let aimBeadName = "aimBead"
 
-    // Manipulation ownership — set by the space view's router callbacks.
-    var isManipulatingLauncher = false
-    var isManipulatingBead = false
-    var manipulatingBallID: UUID?
-    var manipulatingRingID: UUID?
     /// The ball already acknowledged with a pickup pulse — one flash per
     /// grab, not one per frame.
     private var pulsedGrabID: UUID?
-    /// Where the release tick plays from when the grab ends. In this
-    /// module it coexists with the model's throw-whoosh: the whoosh
-    /// fires only on a THROWN release, the tick covers setting a ball
-    /// down — the device check judges whether they stack acceptably on
-    /// a throw.
+    /// Where the release tick plays from when the grab ends; the model's
+    /// throw-whoosh fires only on a thrown release.
     private weak var pulsedGrabEntity: Entity?
 
     private static let barrelLength = Float(KinematicsModel.barrelLength)
@@ -110,21 +72,17 @@ final class KinematicsRenderer {
     private let arcEntity = ModelEntity()
     private let arcMaterial: UnlitMaterial
     /// The arc's near-black casing, swept fatter and drawn beneath the
-    /// core. The predicted arc is a pale line in the one module that
-    /// shares the real room 1:1 — over a cream wall it had almost no
-    /// luminance contrast. Same two-pass treatment as the field modules.
+    /// core: a pale line over a cream wall has no contrast.
     private let arcCasingEntity = ModelEntity()
     private let arcCasingMaterial =
         Materials.contrastLine(DesignTokens.Palette.predictedArcUI).casing
-    /// Ghost arcs (2026-09-01): "would be" lines in the arc's own colour
-    /// at a fraction of its opacity, cased like it — the two aim
-    /// solutions for the hoop being aimed at, and the vacuum arc while
-    /// the air is on. One mesh, rebuilt only when their inputs change.
+    /// Ghost arcs in the arc's own colour at a fraction of its opacity: the
+    /// two aim solutions for the hoop being aimed at, and the vacuum arc
+    /// while the air is on. One mesh, rebuilt only when their inputs change.
     private let ghostEntity = ModelEntity()
     private let ghostCasingEntity = ModelEntity()
     private let ghostMaterial: UnlitMaterial = {
-        var material = UnlitMaterial(color: DesignTokens.Palette.predictedArcUI)
-        material.blending = .transparent(opacity: 0.22)
+        let material = Materials.unlit(DesignTokens.Palette.predictedArcUI, opacity: 0.22)
         return material
     }()
     private var ghostPipeline: GeometryPipeline<[[SIMD3<Float>]], ArcTube>?
@@ -135,10 +93,8 @@ final class KinematicsRenderer {
 
     private let ballPool: EntityPool<ModelEntity>
     private var ballMaterialKeys: [String] = []
-    /// Which flight each pooled ball is currently named for — the same
-    /// trade as Gravity Lab's `bodySlotIDs`: the entity `.name` must be
-    /// the uuidString so manipulation routes correctly, but asking
-    /// whether it already is one allocated a String per ball per frame.
+    /// Which flight each pooled ball is named for; compare UUIDs, not
+    /// strings.
     private var ballSlotIDs: [UUID?] = []
     /// The scale each pooled ball's touch target was last sized for.
     private var ballColliderScales: [Int: Float] = [:]
@@ -153,7 +109,7 @@ final class KinematicsRenderer {
         /// The score over the hoop, on the house dark plate.
         let scoreLabel: BackedLabel
         /// The aim callout under it — "low 23° · high 67°", or why not —
-        /// shown only on the hoop being aimed at (2026-09-01).
+        /// shown only on the hoop being aimed at.
         let aimLabel: BackedLabel
         var appliedID: UUID?
         var appliedScore = -1
@@ -168,11 +124,9 @@ final class KinematicsRenderer {
 
     private var arcPipeline: GeometryPipeline<[SIMD3<Float>], ArcTube>?
 
-    // The Time Capsule's recorded paths: every flight's actual arc across
-    // the recorded window, drawn as a walkable tube while the room is
-    // scrubbed. In the balls' own orange — this is a trajectory that
-    // HAPPENED, where the white arc is one that is predicted — and hidden
-    // the moment the room runs again.
+    // The Time Capsule's recorded paths, drawn as a walkable tube while the
+    // room is scrubbed, in the balls' own orange: a trajectory that
+    // happened, where the white arc is one predicted.
     private let pathEntity = ModelEntity()
     private let pathCasingEntity = ModelEntity()
     private let pathMaterial: UnlitMaterial
@@ -184,12 +138,9 @@ final class KinematicsRenderer {
     /// paused, so the recorded window only changes when a restore does.
     private var lastPathNonce: Int?
 
-    // Spatial flight numbers: the pod's headline stats living IN the
-    // room — peak height floats at the arc's apex (with a drop line
-    // showing what the number measures), range + flight time sit on the
-    // predicted landing ring, and a protractor at the launcher shows
-    // the elevation where the aiming happens. All change-gated with the
-    // arc; text meshes cached per rendered string.
+    // Spatial flight numbers: peak height at the apex with a drop line,
+    // range and flight time on the landing ring, a protractor at the
+    // launcher. Change-gated with the arc.
     private let apexMarker = Entity()
     private var apexLabel: BackedLabel!
     private var apexDropLine: ModelEntity!
@@ -223,9 +174,8 @@ final class KinematicsRenderer {
     private var lastGhostInputs: GhostInputs?
 
     init() {
-        // FIRST, and as a local: everything below is built before the
-        // last stored property is set, so the closures must capture this
-        // rather than `self`.
+        // First, and as a local: everything below is built before the last
+        // stored property is set.
         let router = TapRouter()
         tapRouter = router
 
@@ -234,10 +184,8 @@ final class KinematicsRenderer {
         // room coordinates so manipulation never fights a parent transform.
         let launcherMaterial = Materials.machined(DesignTokens.Palette.launcherUI)
         launcherBase = ModelEntity(
-            mesh: .generateSphere(radius: 0.05), materials: [launcherMaterial])
+            mesh: Primitives.sphere(radius: 0.05), materials: [launcherMaterial])
         launcherBase.name = Self.launcherName
-        // 0.09 until 2026-08-07, on a 0.05 m ball. The launcher stands
-        // among the things you throw.
         Grabbable.configureTouchTarget(
             launcherBase, collisionRadius: 0.062,
             activate: { [weak launcherBase] in
@@ -248,7 +196,7 @@ final class KinematicsRenderer {
         root.addChild(launcherBase)
 
         barrel = ModelEntity(
-            mesh: .generateCylinder(height: Self.barrelLength, radius: 0.02),
+            mesh: Primitives.cylinder(height: Self.barrelLength, radius: 0.02),
             materials: [launcherMaterial]
         )
         if let loaded = PropCache.instance(named: "LauncherBarrel") {
@@ -263,7 +211,7 @@ final class KinematicsRenderer {
         root.addChild(barrel)
 
         bead = ModelEntity(
-            mesh: .generateSphere(radius: 0.035),
+            mesh: Primitives.sphere(radius: 0.035),
             materials: [Materials.energized(DesignTokens.Palette.projectileUI, glow: 0.4)]
         )
         bead.name = Self.aimBeadName
@@ -277,8 +225,7 @@ final class KinematicsRenderer {
         root.addChild(bead)
 
         // Predicted arc. Casing first, core second: darkness under light.
-        var arcMaterial = UnlitMaterial(color: DesignTokens.Palette.predictedArcUI)
-        arcMaterial.blending = .transparent(opacity: 0.5)
+        let arcMaterial = Materials.unlit(DesignTokens.Palette.predictedArcUI, opacity: 0.5)
         self.arcMaterial = arcMaterial
         root.addChild(arcCasingEntity)
         root.addChild(arcEntity)
@@ -288,8 +235,7 @@ final class KinematicsRenderer {
         root.addChild(ghostEntity)
 
         // The recorded paths, same casing recipe, disabled until a scrub.
-        var recorded = UnlitMaterial(color: DesignTokens.Palette.projectileUI)
-        recorded.blending = .transparent(opacity: 0.6)
+        let recorded = Materials.unlit(DesignTokens.Palette.projectileUI, opacity: 0.6)
         pathMaterial = recorded
         pathEntity.isEnabled = false
         pathCasingEntity.isEnabled = false
@@ -297,16 +243,15 @@ final class KinematicsRenderer {
         root.addChild(pathEntity)
 
         // Balls: unit sphere scaled per projectile, grabbable for throwing.
-        let ballMesh = MeshResource.generateSphere(radius: Self.baseBallRadius)
+        let ballMesh = Primitives.sphere(radius: Self.baseBallRadius)
         ballPool = EntityPool(budget: KinematicsModel.flightBudget) { container in
             let sphere = ModelEntity(
                 mesh: ballMesh,
                 materials: [Materials.energized(DesignTokens.Palette.projectileUI,
                                                 glow: 0)]
             )
-            // The factor survives the per-ball scale, so 1.6× on a
-            // basketball was a 0.19 m target hanging in the flight path
-            // of every other ball in the room.
+            // The factor survives the per-ball scale, so a basketball's target
+            // stays out of the other balls' flight paths.
             Grabbable.configureTouchTarget(
                 sphere, collisionRadius: Self.baseBallRadius * 1.15,
                 activate: { [weak sphere] in
@@ -322,20 +267,13 @@ final class KinematicsRenderer {
         root.addChild(ballPool.root)
         root.addChild(frozenVectors.root)
 
-        // Strobe dots — the module's best idea, finally at a size that
-        // shows it.
-        //
-        // Dots dropped at EQUAL TIME intervals are the whole of
-        // projectile motion in one picture: their horizontal spacing is
-        // constant (nothing accelerates sideways) while their vertical
-        // spacing shrinks to nothing at the apex and grows again on the
-        // way down. That decomposition is legible only if you can see
-        // the dots — at 8 mm and 70% opacity they were a faint dotted
-        // line. Bright, opaque, and half again as large, they read as
-        // the strobe photograph they are imitating.
+        // Strobe dots: equal time intervals are the whole of projectile motion
+        // in one picture — constant horizontal spacing, vertical spacing
+        // shrinking to nothing at the apex. Bright and opaque, so they read as
+        // the strobe photograph they imitate.
         let dotMaterial = Materials.energized(
             DesignTokens.Palette.projectileUI, roughness: 0.3, glow: 0.7)
-        let dotMesh = MeshResource.generateSphere(radius: 0.013)
+        let dotMesh = Primitives.sphere(radius: 0.013)
         dotPool = EntityPool(
             budget: KinematicsModel.flightBudget * KinematicsModel.dotsPerFlight
         ) { container in
@@ -345,9 +283,8 @@ final class KinematicsRenderer {
 
         // Floor shadows: flat discs under airborne balls — the depth cue
         // that makes height over the real floor readable.
-        var shadowMaterial = UnlitMaterial(color: .black)
-        shadowMaterial.blending = .transparent(opacity: 0.22)
-        let shadowMesh = MeshResource.generateCylinder(height: 0.002, radius: Self.baseShadowRadius)
+        let shadowMaterial = Materials.unlit(.black, opacity: 0.22)
+        let shadowMesh = Primitives.cylinder(height: 0.002, radius: Self.baseShadowRadius)
         shadowPool = EntityPool(budget: KinematicsModel.flightBudget) { container in
             container.addChild(ModelEntity(mesh: shadowMesh, materials: [shadowMaterial]))
         }
@@ -369,7 +306,7 @@ final class KinematicsRenderer {
         let capturedRingMaterial = ringMaterial
         ringPool = EntityPool(budget: KinematicsModel.ringBudget) { container in
             let tube = ModelEntity(
-                mesh: ringMesh ?? MeshResource.generateSphere(radius: 0.05),
+                mesh: ringMesh ?? Primitives.sphere(radius: 0.05),
                 materials: [capturedRingMaterial]
             )
             Grabbable.configureTouchTarget(
@@ -378,32 +315,15 @@ final class KinematicsRenderer {
                     guard let tube else { return }
                     router.route?(tube)
                 })
-            // A ring is grabbed by its RIM. One fat sphere in the
-            // middle swallowed every pinch through the opening — the
-            // banned bigger-than-the-visual collider. Small colliders
-            // hug the torus instead.
-            //
-            // TWENTY-EIGHT of them, not eight, and the count is
-            // derived rather than guessed — twice, because the first
-            // derivation was wrong in an instructive way.
-            //
-            // The collider rule caps a sphere on a tube 0.04 m across
-            // at r = 0.034 m. Treating the hoop as a 1-D circle of
-            // radius R = 0.23 says a sphere covers 4·asin(r/2R) = 17.0°
-            // of arc, so 22 would do. THAT IGNORES THE TUBE'S OWN
-            // 0.02 m RADIUS: a centreline sphere has to reach points
-            // 0.02 m off the centreline, and at 24 spheres the nearest
-            // torus-surface point in the worst gap is 0.0350 m away —
-            // outside the sphere. Twenty-eight brings it to 0.0317 m
-            // and is the first count that genuinely covers the surface.
-            // Eight (the original) left 11 cm of every 17.6 cm of rim
-            // with no collider at all. Dragging the hoop is the only
-            // way to place it.
+            // A ring is grabbed by its rim: small colliders hug the torus rather
+            // than one fat sphere swallowing every pinch through the opening.
+            // Twenty-eight is the first count whose spheres (capped at r 0.034 by
+            // the collider rule) cover the tube's own 0.02 m radius in the worst
+            // gap.
             let rimCount = 28
             let rim = (0..<rimCount).map { index -> ShapeResource in
                 let angle = Float(index) / Float(rimCount) * 2 * .pi
-                return ShapeResource.generateSphere(radius: 0.034)
-                    .offsetBy(translation: [
+                return Primitives.collisionSphere(radius: 0.034, offset: [
                         cos(angle) * Float(KinematicsModel.ringRadius),
                         0,
                         sin(angle) * Float(KinematicsModel.ringRadius),
@@ -474,7 +394,7 @@ final class KinematicsRenderer {
         // Apex: a dot on the arc's crest, the height beside it, and a
         // faint plumb line to the floor — the number drawn as geometry.
         let apexDot = ModelEntity(
-            mesh: .generateSphere(radius: 0.009),
+            mesh: Primitives.sphere(radius: 0.009),
             materials: [UnlitMaterial(color: DesignTokens.Palette.predictedArcUI)])
         apexMarker.addChild(apexDot)
         let apexPivot = Entity()
@@ -486,10 +406,9 @@ final class KinematicsRenderer {
         apexMarker.isEnabled = false
         root.addChild(apexMarker)
 
-        var plumbMaterial = UnlitMaterial(color: .white)
-        plumbMaterial.blending = .transparent(opacity: 0.16)
+        let plumbMaterial = Materials.unlit(.white, opacity: 0.16)
         apexDropLine = ModelEntity(
-            mesh: .generateCylinder(height: 1, radius: 0.0012),
+            mesh: Primitives.cylinder(height: 1, radius: 0.0012),
             materials: [plumbMaterial])
         apexDropLine.isEnabled = false
         root.addChild(apexDropLine)
@@ -500,8 +419,7 @@ final class KinematicsRenderer {
             let angle = 2 * Float.pi * Float(index) / 28
             return SIMD3(cos(angle), 0, sin(angle)) * 0.07
         }
-        var ringMaterial = UnlitMaterial(color: DesignTokens.Palette.predictedArcUI)
-        ringMaterial.blending = .transparent(opacity: 0.55)
+        let ringMaterial = Materials.unlit(DesignTokens.Palette.predictedArcUI, opacity: 0.55)
         if let ringMesh = TubeMesh.tube(lines: [circle], radius: 0.0035, sides: 4) {
             landingMarker.addChild(ModelEntity(mesh: ringMesh, materials: [ringMaterial]))
         }
@@ -517,9 +435,8 @@ final class KinematicsRenderer {
         // Protractor: ticks every 15 degrees in the aim's vertical
         // plane, an orange needle at the live elevation, the degree
         // count at its tip. Reads like a real instrument at the muzzle.
-        var tickMaterial = UnlitMaterial(color: .white)
-        tickMaterial.blending = .transparent(opacity: 0.38)
-        let tickMesh = MeshResource.generateBox(size: [0.016, 0.003, 0.003], cornerRadius: 0.001)
+        let tickMaterial = Materials.unlit(.white, opacity: 0.38)
+        let tickMesh = Primitives.box(size: [0.016, 0.003, 0.003], cornerRadius: 0.001)
         for degrees in stride(from: -75, through: 75, by: 15) {
             let holder = Entity()
             holder.orientation = simd_quatf(
@@ -531,7 +448,7 @@ final class KinematicsRenderer {
         }
         protractorNeedleHolder = Entity()
         let needle = ModelEntity(
-            mesh: .generateBox(size: [0.055, 0.0045, 0.0045], cornerRadius: 0.002),
+            mesh: Primitives.box(size: [0.055, 0.0045, 0.0045], cornerRadius: 0.002),
             materials: [UnlitMaterial(color: DesignTokens.Palette.projectileUI)])
         needle.position = [0.155, 0, 0]
         protractorNeedleHolder.addChild(needle)
@@ -544,16 +461,21 @@ final class KinematicsRenderer {
         root.addChild(protractorRoot)
     }
 
+    /// Returns whether every label took its text; false means the rate limit
+    /// held one back, and the caller offers the annotations again next frame.
+    @discardableResult
     private func updateFlightAnnotations(
         _ model: KinematicsModel, trajectory: ProjectileMotion.Trajectory,
         vacuum: ProjectileMotion.Trajectory? = nil
-    ) {
+    ) -> Bool {
+        var shown = true
         // Peak height, where the peak actually is.
         if let apex = trajectory.points.max(by: { $0.y < $1.y }), apex.y > 0.3 {
             apexMarker.isEnabled = true
             apexMarker.position = SIMD3<Float>(apex)
-            apexLabel.setText(PhysicsFormat.measurement(trajectory.apexHeight, "m", decimals: 1),
-                              color: Self.annotationWhite)
+            shown = apexLabel.setText(
+                PhysicsFormat.measurement(trajectory.apexHeight, "m", decimals: 1),
+                color: Self.annotationWhite) && shown
             apexDropLine.isEnabled = true
             apexDropLine.position = SIMD3(Float(apex.x), Float(apex.y) / 2, Float(apex.z))
             apexDropLine.scale = SIMD3(1, Float(apex.y), 1)
@@ -567,13 +489,13 @@ final class KinematicsRenderer {
             landingMarker.isEnabled = true
             landingMarker.position = SIMD3(Float(landing.x), 0.004, Float(landing.z))
             // With the air on, the vacuum range stands beside the real
-            // one: the gap between the two numbers is drag (2026-09-01).
+            // one: the gap between the two numbers is drag.
             var text = PhysicsFormat.measurement(trajectory.range, "m", decimals: 1) + " · "
                 + PhysicsFormat.measurement(trajectory.flightTime, "s", decimals: 1)
             if let vacuum, vacuum.landed {
                 text += " · vacuum " + PhysicsFormat.measurement(vacuum.range, "m", decimals: 1)
             }
-            landingLabel.setText(text, color: Self.annotationWhite)
+            shown = landingLabel.setText(text, color: Self.annotationWhite) && shown
         } else {
             landingMarker.isEnabled = false
         }
@@ -588,8 +510,10 @@ final class KinematicsRenderer {
             angle: Float(elevation), axis: [0, 0, 1])
         protractorTextPivot.position = [
             Float(cos(elevation)) * 0.235, Float(sin(elevation)) * 0.235, 0]
-        protractorLabel.setText("\(Int((elevation * 180 / .pi).rounded()))°",
-                                color: Self.annotationWhite)
+        shown = protractorLabel.setText(
+            PhysicsFormat.angle(elevation * 180 / .pi, decimals: 0),
+            color: Self.annotationWhite) && shown
+        return shown
     }
 
     /// Both passes of the arc, built off-thread together so the casing
@@ -643,7 +567,7 @@ final class KinematicsRenderer {
 
     /// The recorded-path tube exists exactly while the room is scrubbed.
     /// Rebuilt only when the restore nonce moves — nothing records while
-    /// paused, so a scrub drag changes which instant the BALLS show, not
+    /// paused, so a scrub drag changes which instant the balls show, not
     /// the window the tube draws.
     private func syncRecordedPaths(_ model: KinematicsModel) {
         guard model.scrubTime != nil else {
@@ -678,13 +602,18 @@ final class KinematicsRenderer {
             catchCallout = callout
             root.addChild(callout.root)
         }
+        // A catch counts as shown once the callout has taken its text.
         if let caught = model.lastCatch, caught.id != lastCatchID {
-            lastCatchID = caught.id
-            catchShownAt = CACurrentMediaTime()
             catchCallout?.anchor(at: SIMD3<Float>(caught.position))
-            catchCallout?.setText(String(
-                format: "Caught\n%.2f m/s   %.2f m\n%.2f s   %.3f J",
-                caught.speed, caught.height, caught.flightTime, caught.kineticEnergy))
+            let text = "Caught\n"
+                + PhysicsFormat.measurement(caught.speed, "m/s", decimals: 2) + "   "
+                + PhysicsFormat.measurement(caught.height, "m", decimals: 2) + "\n"
+                + PhysicsFormat.measurement(caught.flightTime, "s", decimals: 2) + "   "
+                + PhysicsFormat.measurement(caught.kineticEnergy, "J", decimals: 3)
+            if catchCallout?.setText(text) == true {
+                lastCatchID = caught.id
+                catchShownAt = CACurrentMediaTime()
+            }
         }
         // The readout lingers a few seconds, then bows out.
         catchCallout?.isEnabled = CACurrentMediaTime() - catchShownAt < 4.5
@@ -742,14 +671,10 @@ final class KinematicsRenderer {
         let aim = SIMD3<Float>(model.aimDirection)
         let launcher = SIMD3<Float>(model.launcherPosition)
 
-        if !isManipulatingLauncher {
-            launcherBase.position = launcher
-        }
+        launcherBase.position = launcher
         barrel.orientation = VectorFieldArrows.rotationFromYAxis(to: aim)
         barrel.position = launcher + (Self.barrelLength / 2) * aim
-        if !isManipulatingBead {
-            bead.position = launcher + Self.beadDistance * aim
-        }
+        bead.position = launcher + Self.beadDistance * aim
 
         // Predicted arc — rebuild only when an input actually changed.
         let arcInputs = ArcInputs(
@@ -764,8 +689,13 @@ final class KinematicsRenderer {
             // vertex math is what moves to the worker.
             let trajectory = model.prediction
             arcPipeline?.submit(trajectory.points.map { SIMD3<Float>($0) })
-            updateFlightAnnotations(model, trajectory: trajectory,
-                                    vacuum: model.vacuumPrediction)
+            annotationsPending = !updateFlightAnnotations(
+                model, trajectory: trajectory, vacuum: model.vacuumPrediction)
+        } else if annotationsPending {
+            // The aim stopped inside the labels' rate limit: the last
+            // numbers land now rather than when the aim next moves.
+            annotationsPending = !updateFlightAnnotations(
+                model, trajectory: model.prediction, vacuum: model.vacuumPrediction)
         }
 
         // Ghost arcs: the aim solutions for the hoop being aimed at, and
@@ -802,7 +732,7 @@ final class KinematicsRenderer {
 
     // MARK: Balls, dots, shadows
 
-    /// The live readout rides the NEWEST ball still in flight — every
+    /// The live readout rides the newest ball still in flight — every
     /// throw gets its own speed and height following it, no gaze
     /// required. (This replaced a gaze-revealed callout, which the
     /// simulator could never show and a device user never found.)
@@ -841,17 +771,24 @@ final class KinematicsRenderer {
         // deduped downstream, the string was not.
         let key = ((Double(simd_length(flight.state.velocity)) * 10).rounded(),
                    (Double(max(flight.state.position.y, 0)) * 10).rounded())
-        if key != flightCalloutKey {
+        if key != flightCalloutKey,
+           lookCallout?.setText(
+               PhysicsFormat.measurement(Double(simd_length(flight.state.velocity)),
+                                         "m/s", decimals: 1)
+               + " · "
+               + PhysicsFormat.measurement(Double(max(flight.state.position.y, 0)),
+                                           "m", decimals: 1)
+               + " up") == true {
             flightCalloutKey = key
-            lookCallout?.setText(String(
-                format: "%.1f m/s · %.1f m up",
-                simd_length(flight.state.velocity),
-                max(flight.state.position.y, 0)))
         }
     }
 
     private func syncFlights(_ flights: [KinematicsModel.Flight]) {
-        if manipulatingBallID == nil {
+        // The ball in a hand, read off the model. Until 2026-10-14 this keyed
+        // on a manipulation flag nothing set, so a grab here never flashed or
+        // ticked while Pendulums' and Circuits' did.
+        let heldID = flights.first { $0.status == .held }?.id
+        if heldID == nil {
             if pulsedGrabID != nil, let entity = pulsedGrabEntity {
                 SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
             }
@@ -877,49 +814,41 @@ final class KinematicsRenderer {
             let radius = max(Float(flight.projectile.diameter / 2), 0.008)
             let ballScale = radius / Self.baseBallRadius
             slot.entity.scale = SIMD3<Float>(repeating: ballScale)
-            // Re-sized with the ball, so a table-tennis ball keeps the
-            // same reach as a basketball instead of 3 mm of it — see
-            // `Grabbable.sphereTargetRadius`. Change-gated: this
-            // allocates, and a slot's projectile changes only when a
-            // new ball is fired into it.
-            // On `slot.payload` — the sphere that carries the input
-            // target and the ball's UUID — not on the bare container
-            // `slot.entity`. See the twin of this comment in
-            // `GravityLabRenderer`.
+            // Re-sized with the ball so a table-tennis ball keeps the same reach as
+            // a basketball; change-gated because it allocates. On `slot.payload`,
+            // the sphere carrying the input target.
             if abs((ballColliderScales[index] ?? -1) - ballScale) > 1e-4 {
                 ballColliderScales[index] = ballScale
                 slot.payload.components.set(CollisionComponent(shapes: [
-                    .generateSphere(radius: Grabbable.sphereTargetRadius(
+                    Primitives.collisionSphere(radius: Grabbable.sphereTargetRadius(
                         baseRadius: Self.baseBallRadius, scale: ballScale)),
                 ]))
             }
 
-            if flight.id == manipulatingBallID {
-                // Hand owns the sphere; leave both transforms alone.
-                if pulsedGrabID != flight.id {
-                    pulsedGrabID = flight.id
-                    pulsedGrabEntity = slot.entity
-                    PickupPulse.flash(on: slot.entity)
-                    SoundPalette.play(.grabTick, on: slot.entity, volume: 0.2)
-                }
-            } else {
-                slot.entity.position = SIMD3<Float>(flight.state.position)
-                // Undo any offset the manipulation system left on the child.
-                slot.payload.position = .zero
+            if flight.id == heldID, pulsedGrabID != flight.id {
+                // Acknowledged once per grab. The model carries the held ball
+                // (`holdBall`), so its transform is written like any other.
+                pulsedGrabID = flight.id
+                pulsedGrabEntity = slot.entity
+                PickupPulse.flash(on: slot.entity)
+                SoundPalette.play(.grabTick, on: slot.entity, volume: 0.2)
+            }
+            slot.entity.position = SIMD3<Float>(flight.state.position)
+            // Undo any offset the manipulation system left on the child.
+            slot.payload.position = .zero
 
-                // Cosmetic tumble in flight / roll on the ground: rotate
-                // about the horizontal axis perpendicular to the motion.
-                let velocity = flight.state.velocity
-                let speed = simd_length(velocity)
-                if (flight.status == .flying || flight.status == .rolling), speed > 0.05 {
-                    let axis: SIMD3<Double> = simd_normalize(SIMD3(velocity.z, 0, -velocity.x))
-                    let cappedSpeed: Double = min(speed, 8)
-                    let effectiveRadius: Double = max(Double(radius), 0.02)
-                    let angle: Double = cappedSpeed / effectiveRadius * (0.6 / 90.0)
-                    slot.payload.orientation =
-                        simd_quatf(angle: Float(angle), axis: SIMD3<Float>(axis))
-                        * slot.payload.orientation
-                }
+            // Cosmetic tumble in flight / roll on the ground: rotate
+            // about the horizontal axis perpendicular to the motion.
+            let velocity = flight.state.velocity
+            let speed = simd_length(velocity)
+            if (flight.status == .flying || flight.status == .rolling), speed > 0.05 {
+                let axis: SIMD3<Double> = simd_normalize(SIMD3(velocity.z, 0, -velocity.x))
+                let cappedSpeed: Double = min(speed, 8)
+                let effectiveRadius: Double = max(Double(radius), 0.02)
+                let angle: Double = cappedSpeed / effectiveRadius * (0.6 / 90.0)
+                slot.payload.orientation =
+                    simd_quatf(angle: Float(angle), axis: SIMD3<Float>(axis))
+                    * slot.payload.orientation
             }
 
             // Shadow directly below, hidden once the ball rests on the floor.
@@ -957,20 +886,17 @@ final class KinematicsRenderer {
         slot.payload.model?.materials = [ballMaterial(for: projectile)]
     }
 
-    /// The ball as the WELL shows it — the basketball, the module's
-    /// default hand-thrown ball. Static and model-free so `Well` can
-    /// build the preview before any flight exists.
-    /// The hoop's miniature for its well mouth (2026-09-01): the same
-    /// torus recipe as the hoops themselves at about a quarter size, so
-    /// the preview and the thing you pull out are recognisably one
-    /// object — the Well's own rule for a good miniature.
+    /// The hoop's miniature for its well mouth: the same torus recipe at
+    /// about a quarter size — a token, since the real rim is 46 cm and the
+    /// well row's pitch is 13 cm; sized with `ballPreview` so the pair
+    /// clears with the wells' breath allowed for.
     static func hoopPreview() -> Entity {
         let circle: [SIMD3<Float>] = (0...32).map { index in
             let angle = 2 * Float.pi * Float(index) / 32
-            return SIMD3(cos(angle), 0, sin(angle)) * 0.06
+            return SIMD3(cos(angle), 0, sin(angle)) * 0.035
         }
-        let mesh = TubeMesh.tube(lines: [circle], radius: 0.007, sides: 8)
-            ?? MeshResource.generateSphere(radius: 0.03)
+        let mesh = TubeMesh.tube(lines: [circle], radius: 0.005, sides: 8)
+            ?? Primitives.sphere(radius: 0.02)
         return ModelEntity(
             mesh: mesh,
             materials: [Materials.energized(DesignTokens.Palette.targetUI,
@@ -985,7 +911,9 @@ final class KinematicsRenderer {
             material.baseColor = .init(tint: DesignTokens.Palette.projectileUI)
         }
         material.roughness = .init(floatLiteral: 0.6)
-        return ModelEntity(mesh: .generateSphere(radius: baseBallRadius),
+        // A 3.5 cm token wearing the basketball's skin: beside the hoop's mouth
+        // 13 cm away, a full-size ball ran into it.
+        return ModelEntity(mesh: Primitives.sphere(radius: 0.035),
                            materials: [material])
     }
 
@@ -1051,24 +979,22 @@ final class KinematicsRenderer {
                 ringSlots[index].tube.name = ring.id.uuidString
             }
             let aimText = Self.aimText(for: ring, in: model)
-            if ringSlots[index].appliedAimText != aimText {
+            if ringSlots[index].appliedAimText != aimText,
+               ringSlots[index].aimLabel.setText(aimText, color: DesignTokens.Palette.targetUI) {
                 ringSlots[index].appliedAimText = aimText
-                ringSlots[index].aimLabel.setText(aimText, color: DesignTokens.Palette.targetUI)
             }
-            if ring.id != manipulatingRingID {
-                poolSlot.entity.position = SIMD3<Float>(ring.position)
-                ringSlots[index].tube.position = .zero
-            }
+            poolSlot.entity.position = SIMD3<Float>(ring.position)
+            ringSlots[index].tube.position = .zero
 
             // Score text + a brief green flash when it changes.
-            if ringSlots[index].appliedScore != ring.score {
+            if ringSlots[index].appliedScore != ring.score,
+               ringSlots[index].scoreLabel.setText(
+                   ring.score > 0 ? "\(ring.score)" : "",
+                   color: DesignTokens.Palette.targetUI) {
                 if ringSlots[index].appliedScore >= 0 {
                     ringSlots[index].flashUntil = now + 0.45
                 }
                 ringSlots[index].appliedScore = ring.score
-                ringSlots[index].scoreLabel.setText(
-                    ring.score > 0 ? "\(ring.score)" : "",
-                    color: DesignTokens.Palette.targetUI)
             }
             let flashing = now < ringSlots[index].flashUntil
             if ringSlots[index].appliedFlashing != flashing {

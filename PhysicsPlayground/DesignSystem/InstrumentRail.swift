@@ -13,7 +13,7 @@ import RealityKit
 import simd
 
 /// Something that stands in the room beside the physics.
-/// `footprint` is HALF-EXTENTS and must include the labels — measuring only
+/// `footprint` is half-extents and must include the labels — measuring only
 /// the switch makes every clearance wrong in the dangerous direction.
 @MainActor
 protocol Instrument: AnyObject {
@@ -26,7 +26,7 @@ struct InstrumentRail {
     /// One entry: what it is called, and how big it is.
     struct Item {
         let name: String
-        /// Half-extents INCLUDING labels — see `Instrument.footprint`.
+        /// Half-extents including labels — see `Instrument.footprint`.
         let halfExtents: SIMD3<Double>
 
         /// A nudge in x and z only — never y, which the rail computes.
@@ -42,7 +42,7 @@ struct InstrumentRail {
         }
     }
 
-    /// The centre of the FIRST item. Hung from the top so the first
+    /// The centre of the first item. Hung from the top so the first
     /// instrument stays at eye level however many items are added.
     let head: SIMD3<Double>
 
@@ -90,7 +90,7 @@ struct InstrumentRail {
         }
     }
 
-    /// The whole column as one box — what a NEIGHBOURING rail has to keep
+    /// The whole column as one box — what a neighbouring rail has to keep
     /// clear of.
     var bounds: StationBox? {
         let all = boxes.map(\.box)
@@ -107,9 +107,8 @@ struct InstrumentRail {
 /// The rules an instrument's position has to satisfy, wherever it stands.
 enum InstrumentClearance {
 
-    /// Clearance from the physics. A DEFAULT, not a constant: pass the
-    /// module's own proximity-fallback radius (0.12 is Electric Fields'),
-    /// or 0 if it has none — overlap is still checked.
+    /// Clearance from the physics. A default: pass the module's own
+    /// proximity radius, or 0 if it has none — overlap is still checked.
     static let stationMargin = 0.12
 
     /// Where a standing user's head is taken to be.
@@ -140,7 +139,7 @@ enum InstrumentClearance {
                           + "real object", name, box.separation(from: station),
                     margin))
             }
-            // NEAREST point, not the far corner — you can reach an
+            // Nearest point, not the far corner — you can reach an
             // instrument if any of it is within reach.
             let reach = box.distanceRange(from: viewer).nearest
             if reach > maximumReach {

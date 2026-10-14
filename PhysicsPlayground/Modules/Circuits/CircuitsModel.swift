@@ -18,30 +18,14 @@ final class CircuitsModel {
 
     nonisolated static let buildCenter = SIMD3<Double>(0, 1.25, -0.9)
 
-    /// The bench's NOMINAL volume — where a reset lays the starter loop out
+    /// The bench's nominal volume: where a reset lays the starter loop out
     /// and where the flanking instruments take their clearance bearings.
-    /// **NOT a wall: a hand meets only the floor.**
-    ///
-    /// It was a hand clamp until 2026-08-26, and that was the last survivor
-    /// of the merged-worlds-era drag clamps. `ARCHITECTURE.md` has said
-    /// since 2026-08-03 that model bounds are split by WHO they bind —
-    /// Electric Fields and Magnetism both got `regionHalfExtents` (layout)
-    /// and `safetyHalfExtents` (the free simulation, never a hand), and it
-    /// names THIS constant as a layout reference in the same sentence.
-    /// Circuits was simply skipped. The visible cost was a part pulled from
-    /// a rack at x 0.82 being born at 0.70 — a 12 cm jump out of your hand,
-    /// audit P1-28 — and a jump the rack could not be moved to fix, since
-    /// the clearance rule keeps the rack `stationMargin` OUTSIDE this box
-    /// by construction.
-    ///
-    /// Narrowed 0.70 → 0.60 the same day, once it had stopped being a wall
-    /// and could be sized for the job it actually does. See
-    /// `CircuitsPartsLayout`.
+    /// Not a wall — a hand meets only the floor; `clampToRoomSafety` is
+    /// the only clamp.
     nonisolated static let buildHalfExtents = SIMD3<Double>(0.60, 0.48, 0.33)
 
-    /// The free simulation's safety bounds — room-scale, never applied to a
-    /// hand. A released part stays in the room; it does not stay on the
-    /// bench. Same shape and same reason as `FieldModel.safetyHalfExtents`.
+    /// The free simulation's safety bounds, room-scale and never applied
+    /// to a hand.
     nonisolated static let safetyHalfExtents = SIMD3<Double>(2.6, 1.6, 2.6)
 
     nonisolated static let floorMargin = 0.2
@@ -57,7 +41,7 @@ final class CircuitsModel {
 
     enum ComponentKind: String, CaseIterable, Identifiable, Codable {
         // Grouped for the reader: power, passives, outputs, control.
-        // The RACK's order is `CircuitsPartsLayout.kinds(on:)`, not this.
+        // The rack's order is `CircuitsPartsLayout.kinds(on:)`, not this.
         case battery, acSource, resistor, capacitor, inductor
         case bulb, led, motor, fuse, switcher
 
@@ -66,7 +50,7 @@ final class CircuitsModel {
         var displayName: String {
             switch self {
             case .battery: "Battery"
-            case .acSource: "AC Source"
+            case .acSource: "AC source"
             case .resistor: "Resistor"
             case .capacitor: "Capacitor"
             case .inductor: "Inductor"
@@ -75,6 +59,16 @@ final class CircuitsModel {
             case .motor: "Motor"
             case .fuse: "Fuse"
             case .switcher: "Switch"
+            }
+        }
+
+        /// The name mid-sentence, as the meter's notes use it: "across the
+        /// battery", "the AC source is live". Acronyms keep their capitals.
+        var inSentence: String {
+            switch self {
+            case .acSource: "AC source"
+            case .led: "LED"
+            default: displayName.lowercased()
             }
         }
 
@@ -98,18 +92,14 @@ final class CircuitsModel {
     nonisolated static let ledForwardDrop = 2.0
     nonisolated static let ledOnResistance = 12.0
     nonisolated static let ledMaxAmps = 0.03
-    /// The AC source's fixed frequency — slow enough to watch.
-    /// The AC source's frequency when a part does not say otherwise; each
-    /// source carries its own since 2026-09-02 (`Component.acFrequency`,
-    /// the rail under a selected source).
+    /// The AC frequency when a part does not say otherwise; each source
+    /// carries its own (`Component.acFrequency`).
     nonisolated static let acFrequency = 0.5
     nonisolated static let acFrequencyRange = 0.1...5.0        // Hz
 
-    /// THE INDUCTOR AS A COIL (2026-09-02). The drawn part is 0.07 m long
-    /// with 0.019 m windings, and for an air core its inductance implies
-    /// a turn count — L = μ₀N²A/ℓ, so the default 0.5 H is about 4,960
-    /// turns. Derived, not invented: the field the layer draws is the
-    /// field of the coil the inductance claims, and the card says so.
+    /// The inductor as a coil: 0.07 m long with 0.019 m windings, so for
+    /// an air core L = μ₀N²A/ℓ gives the turn count the field layer draws
+    /// with (0.5 H is about 4,960 turns).
     nonisolated static let inductorCoilLength = 0.07
     nonisolated static let inductorCoilRadius = 0.019
     nonisolated static func inductorTurns(henries: Double) -> Int {
@@ -118,12 +108,10 @@ final class CircuitsModel {
         return Int((henries * inductorCoilLength / (CurrentLoop.mu0 * area)).squareRoot().rounded())
     }
 
-    /// HEAT (2026-09-02). A resistor is rated; past its rating it stores
-    /// the excess as heat, under it it cools, and a sustained overload
-    /// scorches it — a slow fuse, with a glow on the way. Only resistors
-    /// carry a rating: the bulb's whole job is to run hot, the fuse and
-    /// the LED already fail their own way, and a wire is an ideal net to
-    /// the solver.
+    /// A resistor is rated: past its rating it stores the excess as heat,
+    /// under it it cools, and a sustained overload scorches it. Only
+    /// resistors carry a rating; the bulb runs hot by design, the fuse and
+    /// LED fail their own way.
     nonisolated static func powerRating(for kind: ComponentKind) -> Double? {
         kind == .resistor ? 2.0 : nil
     }
@@ -137,14 +125,12 @@ final class CircuitsModel {
     nonisolated static let motorFriction = 0.0008
     nonisolated static let motorInertia = 0.0009
 
-    /// How near two leads must come to be one point — ONE distance for both a
-    /// pull and a release. 0.06: one part's two leads are 0.17 m apart, so this
-    /// cannot reach past the end it belongs to.
+    /// How near two leads must come to be one point, for both a pull and a
+    /// release. One part's two leads are 0.17 m apart, so this cannot reach
+    /// past the end it belongs to.
     nonisolated static let leadReach = 0.06
 
     /// Carry a part until a snapped connection stretches past this and it pops off.
-    /// Much larger than `leadReach`: joining needs precision, leaving needs intent.
-    nonisolated static let breakDistance = 0.3
 
     struct Terminal: Equatable, Hashable, Codable {
         var componentID: UUID
@@ -182,9 +168,8 @@ final class CircuitsModel {
             case id, kind, position, value, axis, isClosed, capacitorVoltage, acFrequency
         }
 
-        /// Tolerant of every field but the four that define a part, so a
-        /// bench written before a field existed still decodes — the same
-        /// guarantee `StoredComponent` gives the launch-time restore.
+        /// Tolerant of every field but the four that define a part, so an
+        /// older bench still decodes.
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = try container.decode(UUID.self, forKey: .id)
@@ -201,9 +186,8 @@ final class CircuitsModel {
                 ?? CircuitsModel.acFrequency
         }
 
-        /// The memberwise initialiser, spelled out because the tolerant
-        /// `init(from:)` above suppresses the synthesised one: every
-        /// stored property in declaration order, the transients defaulted.
+        /// Spelled out because the tolerant `init(from:)` suppresses the
+        /// synthesised one.
         init(id: UUID, kind: ComponentKind, position: SIMD3<Double>, value: Double,
              axis: SIMD3<Double> = SIMD3(1, 0, 0), isClosed: Bool = true,
              capacitorVoltage: Double = 0, failed: Bool = false,
@@ -252,7 +236,7 @@ final class CircuitsModel {
 
     // MARK: True speed — the thirteen orders of magnitude
 
-    /// Shows the drift at its REAL relative rate: electrons frozen, the field
+    /// Shows the drift at its real relative rate: electrons frozen, the field
     /// front racing.
     var trueSpeedMode = false
 
@@ -271,10 +255,8 @@ final class CircuitsModel {
         ChargeTransport.driftSpeed(current: peakCurrent, wireRadius: Self.wireRadius)
     }
 
-    /// The loop an electron walks, metres — summed length of every carrying wire.
-    /// A wire is drawn taut between its terminals, so the electron's path is the
-    /// chord sum — the same distances the field front walks, so the true-speed
-    /// readout and the front agree by construction.
+    /// The loop an electron walks, metres: the chord sum of every carrying
+    /// wire, the same distances the field front walks.
     var conductingPathLength: Double {
         var total = 0.0
         for wire in wires where abs(wireFlows[wire.id] ?? 0) > 5e-4 {
@@ -381,7 +363,7 @@ final class CircuitsModel {
 
     // MARK: Snap-align — parts land nose to tail
 
-    /// The move a release would make. PURE — no mutation — so the renderer can
+    /// The move a release would make. Pure — no mutation — so the renderer can
     /// ghost the landing while the part is still in the hand.
     struct Alignment: Equatable {
         let componentID: UUID
@@ -392,10 +374,9 @@ final class CircuitsModel {
         let axis: SIMD3<Double>
     }
 
-    /// Where a release would put this part, if anywhere.
-    /// The released part moves; the target never does (which stops cascades).
-    /// One end wins (the closer; the other still gets its wire), and the part
-    /// rotates about the landing lead, not the centre.
+    /// Where a release would put this part, if anywhere. The released part
+    /// moves and rotates about the landing lead; the target never moves,
+    /// which stops cascades.
     func alignment(for id: UUID) -> Alignment? {
         guard let component = components.first(where: { $0.id == id }) else { return nil }
         var best: (end: Int, target: Terminal, position: SIMD3<Double>, distance: Double)?
@@ -408,7 +389,7 @@ final class CircuitsModel {
         }
         guard let best else { return nil }
 
-        // Swing the FAR end away from the joint; landing lead exactly on target.
+        // Swing the far end away from the joint; landing lead exactly on target.
         let far = component.terminalPosition(1 - best.end)
         var direction = far - best.position
         let reach = simd_length(direction)
@@ -420,33 +401,29 @@ final class CircuitsModel {
         let axis = best.end == 0 ? direction : -direction
         let position = best.position + direction * Self.terminalOffset
 
-        // CLAMP VETO: if the clamp would move the aligned part, the leads end up
-        // visibly apart — abandon the geometry and let the wire span the gap.
-        // Against the SAFETY box since 2026-08-26, because that is the only
-        // clamp left; the bench stopped being a wall the same day, so vetoing
-        // against it would refuse alignments nothing would then move.
+        // Clamp veto: if the safety clamp would move the aligned part, the
+        // leads would end up visibly apart — abandon the geometry and let the
+        // wire span the gap.
         guard simd_distance(Self.clampToRoomSafety(position), position) < 1e-9 else { return nil }
         return Alignment(componentID: id, end: best.end, target: best.target,
                          position: position, axis: axis)
     }
 
-    /// What a release did. The lead pull dramatises its refusal (red,
-    /// recoil, thud); the release path used to say nothing at all —
-    /// parking a part against a terminal it is already netted with was
-    /// the silent no-op the lead-pull rewrite was written to abolish.
+    /// What a release did. A refusal is shown (the thud), never a silent
+    /// no-op.
     enum ReleaseOutcome: Equatable {
         case joined
-        /// Something WAS in reach, and joining it was refused — the
+        /// Something was in reach, and joining it was refused — the
         /// same net through another path, or the wire budget is full.
         case refused
         /// Open air. Honestly silent: no join was on offer.
         case nothingNear
     }
 
-    /// The ONE place a carried part lands. Order matters: align first, then wire
-    /// from the pairs the ALIGNED part sees — a release cannot wire one pair and
-    /// snap to another. `breakOverstretchedWires` deliberately does NOT run here:
-    /// after the alignment's translation it could yank a NEIGHBOUR's contact off.
+    /// The one place a carried part lands: align first, then wire from the
+    /// pairs the aligned part sees. `breakOverstretchedWires` does not run
+    /// here: after the alignment's translation it could yank a neighbour's
+    /// contact off.
     @discardableResult
     func release(id: UUID) -> ReleaseOutcome {
         guard scrubTime == nil else { return .nothingNear }
@@ -461,10 +438,8 @@ final class CircuitsModel {
             return .nothingNear
         }
         guard !pairs.isEmpty else {
-            // Nothing joinable — but a terminal in reach that was
-            // excluded only for being the same net gets the same "no"
-            // the lead pull gives: the thud, so the non-join reads as
-            // a refusal instead of a miss.
+            // Nothing joinable, but a same-net terminal in reach gets the same
+            // "no" the lead pull gives.
             guard refusedJoins(for: id).isEmpty else {
                 emitSound(.thud, at: component.position, volume: 0.5)
                 return .refused
@@ -476,8 +451,7 @@ final class CircuitsModel {
             if case .connected = connectTerminals(pair.from, pair.to) { joined = true }
         }
         guard joined else {
-            // Pairs were on offer and every join was refused — the
-            // budget, since `pendingJoins` already filtered same-net.
+            // Pairs were on offer and every join was refused: the budget.
             emitSound(.thud, at: component.position, volume: 0.5)
             return .refused
         }
@@ -486,14 +460,11 @@ final class CircuitsModel {
         return .joined
     }
 
-    /// The joins a release would REFUSE: for each end, the nearest
-    /// foreign terminal within `leadReach` that is already the same
-    /// electrical point THROUGH ANOTHER PATH. A pair these two ends
-    /// already share a wire over is excluded — that connection exists,
-    /// and a part set back down in its own chain has nothing refused
-    /// about it. The renderer tints these the refusal red while the
-    /// part is carried, so the "no" is previewed exactly like the lead
-    /// pull's.
+    /// The joins a release would refuse: for each end, the nearest foreign
+    /// terminal within `leadReach` that is already the same electrical
+    /// point through another path. A pair these ends already share a wire
+    /// over is excluded. The renderer tints these red while the part is
+    /// carried.
     func refusedJoins(for id: UUID) -> [(from: Terminal, to: Terminal)] {
         guard let component = components.first(where: { $0.id == id }) else { return [] }
         let net = topology()
@@ -524,30 +495,22 @@ final class CircuitsModel {
         return pairs
     }
 
-    /// The ONE verb a carried part is driven by, each frame: a part hanging
+    /// The one verb a carried part is driven by, each frame: a part hanging
     /// by exactly one wired lead swings about its joint, anything else moves
-    /// rigidly — and either way a snapped contact stretched past
-    /// `breakDistance` pops. The composition lives HERE, not in the view,
-    /// because the view once composed it wrongly (`swing` fed the part's own
-    /// just-moved centre, which is exactly the identity) and nothing headless
-    /// could see it.
+    /// rigidly. A wire never lets go because of distance — it stretches as
+    /// far as the hand takes the part, and comes off only when pulled off
+    /// its terminal. Composed here so a test can drive the real sequence.
     func drag(id: UUID, toward target: SIMD3<Double>) {
         if !swing(id: id, hand: target) {
             move(id: id, to: target)
         }
-        breakOverstretchedWires(id: id)
     }
 
-    /// A carried part with exactly ONE wired lead swings about its JOINT —
-    /// the far terminal of that wire, the genuinely fixed point. (The part's
-    /// OWN terminal moves with the part; pivoting on it after a move is the
-    /// identity.) Within the body's own reach the lead sits exactly on the
-    /// joint, a pure swing; past it the body tracks the hand while aiming its
-    /// lead back at the joint, so the wire stretches honestly and
-    /// `breakDistance` alone decides when the contact pops (via `drag`). One
-    /// continuous formula, no second threshold. Both ends wired or neither,
-    /// no swing — the chain decides the aim. Aim is a consequence of
-    /// connection. Returns whether it owned the carry.
+    /// A carried part with exactly one wired lead swings about its joint —
+    /// the far terminal of that wire, the genuinely fixed point. Within the
+    /// body's reach the lead sits on the joint; past it the body tracks the
+    /// hand while aiming its lead back, so the wire stretches with it.
+    /// Returns whether it owned the carry.
     @discardableResult
     func swing(id: UUID, hand: SIMD3<Double>) -> Bool {
         guard scrubTime == nil else { return false }
@@ -572,20 +535,15 @@ final class CircuitsModel {
         guard reach > 1e-4 else { return false }
         direction /= reach
         let position = pivot + direction * max(reach, Self.terminalOffset)
-        // Same clamp veto as `alignment(for:)`: where the clamp would shift
-        // the body, the pinned lead would leave its aim — refuse and let
-        // `drag` fall back to the rigid move, which clamps honestly.
+        // Same clamp veto as `alignment(for:)`: refuse and let `drag` fall
+        // back to the rigid move.
         guard simd_distance(Self.clampToRoomSafety(position), position) < 1e-9 else { return false }
         components[index].axis = pinned == 0 ? direction : -direction
         components[index].position = position
         return true
     }
 
-    // MARK: Pull-apart detach (the magnet, in reverse)
-
-    /// Wires short enough at grab time to count as snapped contacts — only these
-    /// pop when stretched, so a deliberately long span is never yanked off.
-    private var poppableWires: Set<UUID> = []
+    // MARK: Detaching
 
     private func terminalWorldPosition(_ terminal: Terminal) -> SIMD3<Double>? {
         components.first { $0.id == terminal.componentID }?
@@ -598,36 +556,6 @@ final class CircuitsModel {
               let b = terminalWorldPosition(wire.to) else { return 0 }
         return simd_distance(a, b)
     }
-
-    /// Call when a part starts being carried: remember which of its connections
-    /// are short contacts (poppable).
-    func beginCarry(id: UUID) {
-        guard scrubTime == nil else { return }
-        poppableWires = Set(wires.filter { wire in
-            (wire.from.componentID == id || wire.to.componentID == id)
-                && wireLength(wire) < Self.breakDistance
-        }.map(\.id))
-    }
-
-    /// Call while carrying: any poppable contact stretched past the break
-    /// distance snaps off. Bring the part back and it re-snaps on release.
-    func breakOverstretchedWires(id: UUID) {
-        guard !poppableWires.isEmpty else { return }
-        let snapped = wires.filter {
-            poppableWires.contains($0.id) && wireLength($0) > Self.breakDistance
-        }
-        guard !snapped.isEmpty else { return }
-        for wire in snapped {
-            wires.removeAll { $0.id == wire.id }
-            poppableWires.remove(wire.id)
-        }
-        if let component = components.first(where: { $0.id == id }) {
-            emitSound(.thud, at: component.position, volume: 0.5)
-        }
-        persistSoon()
-    }
-
-    func endCarry() { poppableWires.removeAll() }
 
     /// Detach a whole component at once — every wire touching it drops.
     func detachComponent(id: UUID) {
@@ -655,9 +583,8 @@ final class CircuitsModel {
         case missing
     }
 
-    /// Terminal-to-terminal wiring — where every wiring gesture lands. No
-    /// self-wires, and no wire between ends ALREADY one point: the same-net rule
-    /// is strictly stronger than a duplicate-pair check (it catches a second PATH).
+    /// Terminal-to-terminal wiring. No self-wires, and no wire between ends
+    /// already one point: the same-net rule catches a second path.
     @discardableResult
     func connectTerminals(_ a: Terminal, _ b: Terminal) -> ConnectOutcome {
         guard a != b else { return .sameTerminal }
@@ -700,10 +627,8 @@ final class CircuitsModel {
         components[index].position = clamp(point)
     }
 
-    /// Folds a point into the NOMINAL bench box. No longer applied to a
-    /// hand — this is the layout question ("would this sit on the bench?")
-    /// that `reset`'s seeding and the layout tests ask. `clampToRoomSafety`
-    /// is what actually binds a released part.
+    /// Folds a point into the nominal bench box — the layout question
+    /// `reset`'s seeding and the layout tests ask, never applied to a hand.
     nonisolated static func clampToBench(
         _ point: SIMD3<Double>
     ) -> SIMD3<Double> {
@@ -714,9 +639,8 @@ final class CircuitsModel {
         return clamped
     }
 
-    /// Clamps a part into the room-scale safety box — the only clamp a
-    /// hand meets, and it is there so a part cannot be carried into next
-    /// door, not to keep it on the bench.
+    /// Clamps a part into the room-scale safety box, the only clamp a hand
+    /// meets.
     nonisolated static func clampToRoomSafety(
         _ point: SIMD3<Double>
     ) -> SIMD3<Double> {
@@ -733,12 +657,12 @@ final class CircuitsModel {
 
     // MARK: Wiring — pull a lead
 
-    /// A half-made wire, in flight. Lives in the MODEL, not the gesture, so
+    /// A half-made wire, in flight. Lives in the model, not the gesture, so
     /// `removeComponent` can cancel it — where the zombie-wire defect died.
     struct LeadPull: Equatable {
         /// The lead the wire is coming from.
         var source: Terminal
-        /// Set when this pull lifted an EXISTING wire off a terminal (a rewire).
+        /// Set when this pull lifted an existing wire off a terminal (a rewire).
         /// The wire is already out of `wires` by then.
         var detached: UUID?
         /// Where the hand is, in bench coordinates.
@@ -746,7 +670,7 @@ final class CircuitsModel {
         /// What a release right now would land on.
         var target: Terminal?
         /// Why a release right now would refuse — nil when it would connect.
-        /// Computed every frame, BEFORE the release, so preview equals outcome.
+        /// Computed every frame, before the release, so preview equals outcome.
         var refusal: ConnectOutcome?
     }
 
@@ -779,14 +703,13 @@ final class CircuitsModel {
         updateLeadPull(hand: hand)
     }
 
-    /// Take an existing wire's END off its terminal into the same lead pull,
-    /// drawn from the end that stayed. The wire leaves `wires` IMMEDIATELY —
-    /// the circuit going dark in your hand is the teach.
+    /// Lifts an existing wire's end off its terminal into the same lead
+    /// pull, drawn from the end that stayed. The wire leaves `wires`
+    /// immediately: the circuit going dark in your hand is the teach.
     func beginRewire(wire id: UUID, grabbing end: Int, hand: SIMD3<Double>) {
         guard scrubTime == nil else { return }
         guard wires.contains(where: { $0.id == id }) else { return }
-        // One pull at a time: a second `begin` would overwrite a rewire in flight
-        // and its wire — already out of `wires` — would cease to exist.
+        // One pull at a time: a second `begin` would lose a lifted wire.
         cancelLeadPull()
         guard let index = wires.firstIndex(where: { $0.id == id }) else { return }
         let wire = wires[index]
@@ -815,8 +738,8 @@ final class CircuitsModel {
     func updateLeadPull(hand: SIMD3<Double>) {
         guard var pull = leadPull else { return }
         pull.hand = hand
-        // Target found from the LEAD TIP (the hand) at the same `leadReach` a
-        // release uses, so the preview cannot snap to something the release ignores.
+        // Target found from the lead tip at the same `leadReach` a release
+        // uses, so the preview cannot snap to something the release ignores.
         var best: (terminal: Terminal, distance: Double)?
         for component in components {
             for end in 0...1 {
@@ -872,8 +795,8 @@ final class CircuitsModel {
         }
     }
 
-    /// Abandon a pull without landing it — the part went away, the bench was
-    /// cleared, the lab was reset. This is where the zombie wire died.
+    /// Abandons a pull without landing it — the part went away, the bench
+    /// was cleared, the lab was reset.
     func cancelLeadPull() {
         guard let pull = leadPull else { return }
         leadPull = nil
@@ -882,9 +805,8 @@ final class CircuitsModel {
         persistSoon()
     }
 
-    /// Put a lifted wire back exactly as it was. THE WHOLE WIRE IS KEPT, not just
-    /// the anchor: rebuilding `Wire(from: anchor, to: source)` makes a zero-length
-    /// self-wire, because `source` IS the anchor — the zombie wire, rebuilt.
+    /// Puts a lifted wire back exactly as it was. The whole wire is kept:
+    /// rebuilding it from the anchor makes a zero-length self-wire.
     private func restore(wireID: UUID) {
         guard let wire = detachedWires[wireID] else { return }
         detachedWires[wireID] = nil
@@ -901,11 +823,10 @@ final class CircuitsModel {
 
     // MARK: Net highlighting — what is this connected to?
 
-    /// The tapped terminal whose net is lit, if any. A selection like `selectedID`,
-    /// not a display layer (`ResetCoverageTests` reflects over `Bool`s), and
-    /// selection-driven, not hover — `HoverEffectComponent` has no callback.
-    /// Stores WHICH TERMINAL WAS TAPPED, not the resolved node: deleting any part
-    /// RENUMBERS nodes, so the node is resolved on READ.
+    /// The tapped terminal whose net is lit. A selection, not a display
+    /// layer, and selection-driven rather than hover
+    /// (`HoverEffectComponent` has no callback). Stores the terminal, not
+    /// the node: deleting a part renumbers nodes.
     private(set) var highlightedSource: Terminal?
 
     /// The lit node, resolved now — nil when nothing is lit or the tapped
@@ -940,9 +861,8 @@ final class CircuitsModel {
         return net.node(of: wire.from) == lit
     }
 
-    /// The lead VoiceOver is wiring from — tap-tap wiring, reintroduced ONLY
-    /// through the accessibility door. The pinch path never reads it (the old
-    /// shared `pendingTerminal` let one event arm and wire at once).
+    /// The lead VoiceOver is wiring from — tap-tap wiring, through the
+    /// accessibility door only; the pinch path never reads it.
     private(set) var voiceWireSource: Terminal?
 
     /// The VoiceOver action on a terminal: arm, or land.
@@ -973,10 +893,9 @@ final class CircuitsModel {
         }
     }
 
-    /// VoiceOver's wire removal — the pinch path deletes a wire by
-    /// pulling an end into open air, a gesture VoiceOver cannot make,
-    /// so the wire's `activate` routes here (`onWireAction`). Physical
-    /// taps never call this: a tap selects, never deletes.
+    /// VoiceOver's wire removal: the pinch path deletes a wire by pulling
+    /// an end into open air, a gesture VoiceOver cannot make. Physical taps
+    /// never call this.
     func deleteWire(id: UUID) {
         guard scrubTime == nil else { return }
         guard let wire = wires.first(where: { $0.id == id }) else { return }
@@ -1052,9 +971,8 @@ final class CircuitsModel {
         components.removeAll { $0.id == id }
         wires.removeAll { $0.from.componentID == id || $0.to.componentID == id }
         if selectedID == id { selectedID = components.last?.id }
-        // A half-drawn wire cannot survive its own part: this path (the Bloom's
-        // Delete) must clear pull/voice/highlight state, or the next tap builds a
-        // persisted, un-pinchable wire onto a component that no longer exists.
+        // A half-drawn wire cannot survive its own part: clear pull, voice and
+        // highlight state.
         if leadPull?.source.componentID == id { cancelLeadPull() }
         if voiceWireSource?.componentID == id { voiceWireSource = nil }
         if highlightedSource?.componentID == id { highlightedSource = nil }
@@ -1074,9 +992,9 @@ final class CircuitsModel {
 
     // MARK: The solve (every frame)
 
-    /// Solve, then record. The solve runs every frame even while paused (a frozen
-    /// bench shows honest readouts) but only unpaused frames are recorded; priming
-    /// solves call `solve` directly and are deliberately not recorded.
+    /// Solve, then record. The solve runs every frame even while paused (a
+    /// frozen bench shows honest readouts); only unpaused frames are
+    /// recorded.
     func step(dt: Double) {
         let isRecordingFrame = !isPaused
         solve(dt: dt)
@@ -1089,12 +1007,12 @@ final class CircuitsModel {
 
     /// The bench's connectivity, resolved — the solve, wiring, meter and skyline all read it.
     struct NetTopology {
-        /// `slot = 2 * componentIndex + end` — LOAD-BEARING: keeps the stamping
-        /// loop index-parallel with `components` without a lookup table.
+        /// Load-bearing: keeps the stamping loop index-parallel with
+        /// `components`.
         static func slot(componentIndex: Int, end: Int) -> Int { 2 * componentIndex + end }
 
-        /// What the cache was built from — comparing these against the live bench
-        /// IS the invalidation mechanism. See `topology()`.
+        /// What the cache was built from; comparing against the live bench is
+        /// the invalidation.
         let componentIDs: [UUID]
         let wires: [Wire]
 
@@ -1158,15 +1076,14 @@ final class CircuitsModel {
 
     @ObservationIgnored private var netCache: NetTopology?
     #if DEBUG
-    /// Rebuild count, so a test can assert that MOVING a part does not rebuild —
+    /// Rebuild count, so a test can assert that moving a part does not rebuild —
     /// geometry is not topology.
     @ObservationIgnored private(set) var netRebuildCount = 0
     #endif
 
-    /// Connectivity, rebuilt only when TOPOLOGY changed — not moves, values, or
-    /// switch state (a switch is an element between nets, never a break in one).
-    /// NO INVALIDATION CALL, deliberately: the cache compares its ids/wires
-    /// against the bench, so a mutator invalidates it without knowing it exists.
+    /// Connectivity, rebuilt only when topology changed — not moves, values
+    /// or switch state. No invalidation call: the cache compares its ids
+    /// and wires against the bench.
     private func topology() -> NetTopology {
         if let netCache, netCache.componentIDs.count == components.count,
            netCache.wires.count == wires.count {
@@ -1215,8 +1132,8 @@ final class CircuitsModel {
 
         // 3. Stamp one element per component and solve.
         if !isPaused { simTime += timeStep }
-        // `elements[i]` is `components[i]` — the index parity every readout reads
-        // back through; `CircuitsNetTests` asserts it.
+        // `elements[i]` is `components[i]`: the index parity every readout
+        // reads back through.
         let elements = components.enumerated().map { (index, component) -> CircuitElement in
             let a = node(index, 0)
             let b = node(index, 1)
@@ -1257,9 +1174,8 @@ final class CircuitsModel {
             }
             return CircuitElement(nodeA: a, nodeB: b, kind: kind)
         }
-        // 3b. The meter is a REAL element: stamped only in A⎓ and only across two
-        // DIFFERENT nodes — in V⎓ its shunt would short the measurand; across one
-        // node it would be a loop of itself.
+        // The meter is a real element, stamped only in A⎓ and only across two
+        // different nodes: in V⎓ its shunt would short the measurand.
         var meterElementIndex: Int?
         var stamped = elements
         if multimeterArmed, meterMode == .ampsDC,
@@ -1350,9 +1266,8 @@ final class CircuitsModel {
         }
         readouts = newReadouts
         totalSourcePower = sourcePower
-        // 5. Wire currents for the electron flow: each terminal's element current
-        // fans out evenly over its wires (a visualization choice). Lookup tables
-        // built once — per-wire scans were O(W²) inside a per-frame solve.
+        // Wire currents for the electron flow: each terminal's element current
+        // fans out evenly over its wires. Lookup tables built once.
         var componentIndex: [UUID: Int] = [:]
         componentIndex.reserveCapacity(components.count)
         for (index, component) in components.enumerated() {
@@ -1381,19 +1296,13 @@ final class CircuitsModel {
 
     // MARK: Instruments
 
-    // NO OSCILLOSCOPE. `scopeSamples` accumulated a 300-frame window of
-    // the selected part's volts and amps every frame and NOTHING READ IT
-    // — no scope face was ever built, and the readout that ships is the
-    // multimeter. Deleted 2026-08-26.
-
     /// Multimeter: arm it, then tap any two terminals. Red probe first.
     var multimeterArmed = false {
         didSet { if !multimeterArmed { probeA = nil; probeB = nil } }
     }
-    /// The ammeter's shunt, stamped into the network so current flows THROUGH it.
-    /// NOT `.conductor`: a perfect short's current is split arbitrarily across
-    /// parallel paths — a resistance makes the answer unique. 1 mΩ disturbs the
-    /// loop current well under a percent.
+    /// The ammeter's shunt, stamped so current flows through it. Not
+    /// `.conductor`: a perfect short's current splits arbitrarily across
+    /// parallel paths; 1 mΩ disturbs the loop under a percent.
     static let ammeterShuntOhms = 0.001
 
 
@@ -1495,10 +1404,10 @@ final class CircuitsModel {
         var fault: Bool = false
     }
 
-    /// Everything the meter can say, by mode. A⎓ reports current only when the
-    /// probes bracket a component whose circuit is otherwise BROKEN — the meter
-    /// completing the loop is the meter in series; across a live component it
-    /// refuses rather than teach the classic shorted-ammeter mistake.
+    /// Everything the meter can say, by mode. A⎓ reports current only when
+    /// the probes bracket a component whose circuit is otherwise broken;
+    /// across a live component it refuses rather than teach the
+    /// shorted-ammeter mistake.
     var multimeterReading: MultimeterReading? {
         guard let probeA, let probeB else { return nil }
         guard let vA = terminalVoltages[probeA],
@@ -1515,22 +1424,20 @@ final class CircuitsModel {
             return MultimeterReading(
                 display: Self.autoRange(vA - vB, unit: "V"),
                 note: bracketsOneComponent && component != nil
-                    ? "across the \(component!.kind.displayName)"
+                    ? "across the \(component!.kind.inSentence)"
                     : "between the probes")
 
         case .ampsDC:
-            // Read the METER's own stamped current, never the bracketed
-            // component's amps. THE GUARD COMES FIRST AND DOES NOT USE THE STAMP:
-            // the stamp only exists after a solve, so a stamp-dependent guard
-            // answers wrongly for callers that read without stepping
-            // (testAmpsModeRefusesToBePutAcrossALiveComponent).
+            // Read the meter's own stamped current, never the bracketed
+            // component's. The guard comes first and does not use the stamp, which
+            // only exists after a solve.
             let bracketed = bracketsOneComponent
                 ? readouts[probeA.componentID]?.amps : nil
             if bracketsOneComponent, let component, let bracketed,
                abs(bracketed) > CircuitSolver.liveCurrentThreshold(volts: vA - vB) {
                 return MultimeterReading(
                     display: "FUSE",
-                    note: "the \(component.kind.displayName) is live — probes "
+                    note: "the \(component.kind.inSentence) is live — probes "
                         + "across it would short it. Break the loop first.",
                     fault: true)
             }
@@ -1546,7 +1453,7 @@ final class CircuitsModel {
             return MultimeterReading(
                 display: Self.autoRange(amps, unit: "A"),
                 note: bracketsOneComponent && component != nil
-                    ? "in series with the \(component!.kind.displayName)"
+                    ? "in series with the \(component!.kind.inSentence)"
                     : "in series, between the probes")
 
         case .ohms:
@@ -1567,11 +1474,11 @@ final class CircuitsModel {
                 return MultimeterReading(
                     display: "OL",
                     note: "no resistive path across the "
-                        + "\(component.kind.displayName)")
+                        + "\(component.kind.inSentence)")
             }
             return MultimeterReading(
                 display: Self.autoRange(ohms, unit: "Ω"),
-                note: "across the \(component.kind.displayName)")
+                note: "across the \(component.kind.inSentence)")
 
         case .continuity:
             // A real meter beeps below a few tens of ohms; same node through copper is zero.
@@ -1588,9 +1495,8 @@ final class CircuitsModel {
     /// A meter beeps below this. Real ones sit between 20 and 50 Ω.
     nonisolated static let continuityThreshold = 50.0
 
-    /// The resistance a component presents, ohms — nil where the idea does not
-    /// apply. A capacitor is nil, not infinite: its opposition is a
-    /// frequency-dependent reactance, not a resistance.
+    /// The resistance a component presents, ohms; nil where the idea does
+    /// not apply (a capacitor's opposition is a reactance).
     nonisolated static func resistance(of component: Component) -> Double? {
         switch component.kind {
         case .resistor: component.failed ? nil : component.value   // scorched: open
@@ -1605,7 +1511,7 @@ final class CircuitsModel {
     /// Auto-ranging, the way a real display does it: milli, then unit,
     /// then kilo, always three significant figures.
     nonisolated static func autoRange(_ value: Double, unit: String) -> String {
-        // "0.000 A" and no reading are different claims — this says the reading IS zero.
+        // "0.000 A" and no reading are different claims — this says the reading is zero.
         guard abs(value) > 1e-9 else { return "0.000 " + unit }
         // Three decimals in every band, like a real auto-ranging DMM.
         return PhysicsFormat.metric(value, unit, decimals: 3)
@@ -1620,19 +1526,18 @@ final class CircuitsModel {
 
     @ObservationIgnored var capsule = TimeCapsule<CapsuleSnapshot>()
     @ObservationIgnored var capsuleClock = 0.0
-    /// Non-nil while scrubbed into the past — and then THE BENCH IS READ-ONLY:
-    /// `restoreCapsuleSnapshot` overwrites `components`/`wires` on every scrub
-    /// change, so every bench-mutating entry point guards on this. Selection,
-    /// probing and the net highlight stay live.
+    /// Non-nil while scrubbed into the past, and then the bench is
+    /// read-only: every bench-mutating entry point guards on this.
+    /// Selection, probing and the net highlight stay live.
     var scrubTime: Double?
     var scrubNonce = 0
     /// Live node voltages by terminal, for the voltage-gradient wires.
     private(set) var terminalVoltages: [Terminal: Double] = [:]
     private(set) var voltageSpan: (min: Double, max: Double) = (0, 0)
 
-    /// One electrical point: its terminals, their centroid (where the skyline
-    /// stands its tower), and its potential. Voltage is a solve result, so `nets`
-    /// is rebuilt every frame on top of a topology that is not.
+    /// One electrical point: its terminals, their centroid (where the
+    /// skyline stands its tower) and its potential. Rebuilt every frame on
+    /// a topology that is not.
     struct Net: Identifiable, Equatable {
         /// The compact node number the solver used. 0 is ground.
         let id: Int
@@ -1659,7 +1564,7 @@ final class CircuitsModel {
         emitSound(.chime, at: components[index].position, volume: 0.5)
     }
 
-    /// The frequency rail under a selected AC source (2026-09-02).
+    /// The frequency rail under a selected AC source.
     func setACFrequency(id: UUID, _ hertz: Double) {
         guard let index = components.firstIndex(where: { $0.id == id }),
               components[index].kind == .acSource else { return }
@@ -1674,7 +1579,7 @@ final class CircuitsModel {
 
     // MARK: Persistence (the bench survives relaunch)
 
-    /// A bench as it is WRITTEN. Not private: `migrated` returns one and the
+    /// A bench as it is written. Not private: `migrated` returns one and the
     /// migration tests read it.
     struct SavedBench: Codable {
         var components: [Component]
@@ -1683,12 +1588,10 @@ final class CircuitsModel {
 
     // MARK: The on-disk row, and why it is not `Component`
 
-    /// A saved component as it comes OFF the disk, `kind` as a raw String.
-    /// Decoding straight into `[Component]` throws for the WHOLE array on one
-    /// unrecognised kind, and both restore paths swallow that with `try?` — so a
-    /// retired kind must be DATA to migrate, not a decode failure. Fields past
-    /// `value` are optional because older files predate those keys. Read path
-    /// only: the JSON matches what `SavedBench` encodes.
+    /// A saved component as it comes off the disk, `kind` as a raw String:
+    /// decoding straight into `[Component]` throws for the whole array on
+    /// one retired kind, and both restore paths swallow that. Fields past
+    /// `value` are optional for older files.
     struct StoredComponent: Codable {
         var id: UUID
         var kind: String
@@ -1697,7 +1600,7 @@ final class CircuitsModel {
         var axis: SIMD3<Double>?
         var isClosed: Bool?
         var capacitorVoltage: Double?
-        /// Absent in every bench written before 2026-09-02 → 0.5 Hz.
+        /// Absent in a bench written before the rail existed → 0.5 Hz.
         var acFrequency: Double?
     }
 
@@ -1706,12 +1609,10 @@ final class CircuitsModel {
         var wires: [Wire]
     }
 
-    /// Brings a bench forward across retired kinds. A retired part is SPLICED,
-    /// not dropped — everything joined through it stays joined. The splice
-    /// partitions ALL stored terminals, then emits a star over each net's
-    /// SURVIVING terminals (minimal wire set; T − N edges cannot exceed
-    /// `wireBudget`). Unknown/corrupt kinds take the same path: drop the row,
-    /// keep the bench.
+    /// Brings a bench forward across retired kinds. A retired part is
+    /// spliced, not dropped: all stored terminals are partitioned, then a
+    /// star is emitted over each net's surviving terminals. Unknown kinds
+    /// take the same path.
     static func migrated(_ stored: StoredBench) -> SavedBench {
         // Duplicate ids would splice the wrong things together — harden against
         // files the app did not write.
@@ -1731,9 +1632,7 @@ final class CircuitsModel {
             guard let a = slotOf[wire.from], let b = slotOf[wire.to] else { continue }
             partition.union(a, b)
         }
-        // THE SPLICE: a retired part is a conductor between its own two ends —
-        // without this a battery → jumper → bulb loop comes back as two dangling
-        // halves. Unknown kinds too: over-connecting is the safer wrong answer.
+        // The splice: a retired part is a conductor between its own two ends.
         for index in stored.components.indices
         where ComponentKind(rawValue: stored.components[index].kind) == nil {
             partition.union(NetTopology.slot(componentIndex: index, end: 0),
@@ -1761,9 +1660,8 @@ final class CircuitsModel {
             }
         }
 
-        // NOTHING RETIRED, NOTHING REROUTED: re-deriving an already-current bench
-        // moves cables the user placed (A–B, B–C would come back A–B, A–C).
-        // If every row survived, return the file verbatim.
+        // Nothing retired, nothing rerouted: re-deriving an already-current
+        // bench would move cables the user placed.
         if components.count == stored.components.count {
             return SavedBench(components: components, wires: stored.wires)
         }
@@ -1793,6 +1691,14 @@ final class CircuitsModel {
     private var persistTask: Task<Void, Never>?
 
     /// Debounced save: edits within a second collapse into one write.
+    /// Saves a whole-bench change the wearer made — Clear bench, Reset.
+    /// Not inside `reset()` or `clearBench()` themselves: `init` runs
+    /// `reset()` before it restores, and a save queued there would write
+    /// the starter loop over a bench that failed to restore. Until
+    /// 2026-10-14 neither path saved, so a relaunch brought back the bench
+    /// the wearer had just cleared.
+    func commitBench() { persistSoon() }
+
     private func persistSoon() {
         persistTask?.cancel()
         persistTask = Task { @MainActor [weak self] in
@@ -1804,11 +1710,10 @@ final class CircuitsModel {
 
     /// Immediate save (internal so tests can force it).
     func persistNow() {
-        // Never save a scrubbed bench: components/wires hold a RECORDED topology.
+        // Never save a scrubbed bench: components/wires hold a recorded topology.
         guard scrubTime == nil else { return }
-        // Never save mid-pull: beginRewire parks the lifted wire in detachedWires,
-        // so a mid-pull save omits a connection a cancel would restore. Every
-        // pull-resolving path schedules its own save.
+        // Never save mid-pull: a lifted wire is parked in `detachedWires` and
+        // a cancel would restore it.
         guard leadPull == nil else { return }
         let bench = SavedBench(components: components, wires: wires)
         if let data = try? JSONEncoder().encode(bench) {
@@ -1979,14 +1884,16 @@ final class CircuitsModel {
         }
         selectedID = components.first?.id
         solve(dt: 1.0 / 90.0)
+        // A preset replaces the whole bench; never reached from `init`.
+        persistSoon()
     }
 
     // MARK: The bench's own magnetic field
 
-    /// Every current-carrying straight run, for `WireField`: each COMPONENT
-    /// (terminal 0 → 1, its solved current) and each WIRE (carrying its `from`
-    /// component's branch current — a wire is a short, not a solved element).
-    /// SIGNED: without the signs a loop's two sides would reinforce instead of opposing.
+    /// Every current-carrying straight run for `WireField`: each component
+    /// (terminal 0 → 1, its solved current) and each wire (its `from`
+    /// component's branch current). Signed, or a loop's two sides would
+    /// reinforce.
     var currentSegments: [WireField.Segment] {
         var segments: [WireField.Segment] = []
         segments.reserveCapacity(components.count + wires.count)
@@ -2012,11 +1919,9 @@ final class CircuitsModel {
         return segments
     }
 
-    /// B at a point, tesla — the bench's field only; Earth's field is Magnetism's business.
     /// Every inductor carrying current, as the magnet its coil is:
-    /// m = N·I·A along its axis, N from the inductance (2026-09-02). A
-    /// negative current reverses the moment, exactly as reversing the
-    /// battery does to a real electromagnet.
+    /// m = N·I·A along its axis, N from the inductance. A negative current
+    /// reverses the moment.
     var coilMagnets: [BarMagnet] {
         components.compactMap { component in
             guard component.kind == .inductor,
@@ -2124,11 +2029,9 @@ final class CircuitsModel {
     }
 
     #if DEBUG
-    /// `-circLegacyBench 1` writes a PRE-MIGRATION bench into the save slot
-    /// before this model reads it — nothing else can stage a migration: the app
-    /// cannot mint a retired kind, and by first view the bench is already
-    /// restored. Staged: battery → jumper → bulb plus a kind that never existed;
-    /// what must come back is a two-part loop that LIGHTS.
+    /// `-circLegacyBench 1` writes a pre-migration bench into the save slot
+    /// before this model reads it; nothing else can stage a migration.
+    /// Staged: battery → jumper → bulb plus a kind that never existed.
     private static func seedLegacyBenchIfAsked() {
         guard UserDefaults.standard.bool(forKey: "circLegacyBench") else { return }
         let battery = UUID(), jumper = UUID(), bulb = UUID(), ghost = UUID()
@@ -2163,10 +2066,10 @@ final class CircuitsModel {
 // MARK: - Time Capsule
 
 extension CircuitsModel: TimeCapsuleRecording {
-    /// The bench and its transients: `Component` already carries every integrated
-    /// quantity, and snapshotting the WIRES restores mid-window rewirings; the
-    /// per-frame solve re-derives readouts, so nothing here stores a result.
-    /// Out: the half-made wire and the meter's arming (observer state).
+    /// The bench and its transients: `Component` carries every integrated
+    /// quantity, and the wires restore mid-window rewirings; the per-frame
+    /// solve re-derives readouts. Out: the half-made wire and the meter's
+    /// arming.
     struct CapsuleSnapshot: Equatable {
         var components: [Component]
         var wires: [Wire]
@@ -2181,9 +2084,8 @@ extension CircuitsModel: TimeCapsuleRecording {
         components = snapshot.components
         wires = snapshot.wires
         simTime = snapshot.simTime
-        // The scope strip chart is monotone in simTime — scrubbing back cuts off the future.
-        // A restore replaces the WHOLE bench, so all in-flight observer state
-        // clears unconditionally — never gated on something being selected.
+        // A restore replaces the whole bench, so all in-flight observer state
+        // clears unconditionally.
         cancelLeadPull()
         voiceWireSource = nil
         highlightedSource = nil

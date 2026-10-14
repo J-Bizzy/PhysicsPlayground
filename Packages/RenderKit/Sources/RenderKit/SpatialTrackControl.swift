@@ -6,7 +6,7 @@
 //  ticks — a mounting view must call `refresh()` in its own update loop or
 //  the bead shows a stale value after a reset.
 //
-//  `adjust(hand:)` takes the hand in the track's PARENT space with no
+//  `adjust(hand:)` takes the hand in the track's parent space with no
 //  scale term. A scale on an ancestor cancels, but scaling the root itself
 //  stretches the rail without stretching the range it maps. Do not scale a
 //  track.
@@ -27,7 +27,7 @@ public final class SpatialTrackControl {
     private let write: (Double) -> Void
     private let format: (Double) -> String
     /// A second, quieter line under the rail — for a rail whose value
-    /// DERIVES something (the ΔV rail's E = V/d). Re-evaluated every
+    /// Derives something (the ΔV rail's E = V/d). Re-evaluated every
     /// refresh, since the derived quantity can move without the value
     /// moving. Most rails pass nothing.
     private let subtitle: ((Double) -> String)?
@@ -58,7 +58,8 @@ public final class SpatialTrackControl {
                 read: @escaping () -> Double,
                 write: @escaping (Double) -> Void,
                 format: @escaping (Double) -> String,
-                subtitle: ((Double) -> String)? = nil) {
+                subtitle: ((Double) -> String)? = nil,
+                spokenName: String? = nil) {
         self.name = name
         self.layout = layout
         self.range = range
@@ -77,31 +78,29 @@ public final class SpatialTrackControl {
         // The rail: a dark frosted-glass casing so the lit fill reads
         // against it (casings beat glows indoors).
         let rail = ModelEntity(
-            mesh: .generateBox(size: [length, 0.010, 0.010], cornerRadius: 0.005),
+            mesh: Primitives.box(size: [length, 0.010, 0.010], cornerRadius: 0.005),
             materials: [Materials.frostedGlass(opacity: 0.64)])
         root.addChild(rail)
 
         // The travelled part, lit: how far along the range you are.
-        var lit = UnlitMaterial(color: accent)
-        lit.blending = .transparent(opacity: 0.85)
+        let lit = Materials.unlit(accent, opacity: 0.85)
         filled.model = ModelComponent(
-            mesh: .generateBox(size: [1, 0.011, 0.011], cornerRadius: 0.005),
+            mesh: Primitives.box(size: [1, 0.011, 0.011], cornerRadius: 0.005),
             materials: [lit])
         root.addChild(filled)
 
         // End ticks.
-        var tickMaterial = UnlitMaterial(color: .white)
-        tickMaterial.blending = .transparent(opacity: 0.45)
+        let tickMaterial = Materials.unlit(.white, opacity: 0.45)
         for side in [-1, 1] as [Float] {
             let tick = ModelEntity(
-                mesh: .generateBox(size: [0.003, 0.022, 0.003]),
+                mesh: Primitives.box(size: [0.003, 0.022, 0.003]),
                 materials: [tickMaterial])
             tick.position = [side * length / 2, 0, 0]
             root.addChild(tick)
         }
 
         // The bead: the value as an object.
-        bead.model = ModelComponent(mesh: .generateSphere(radius: 0.016),
+        bead.model = ModelComponent(mesh: Primitives.sphere(radius: 0.016),
                                     materials: [Materials.grip(accent,
                                                                roughness: 0.18)])
         root.addChild(bead)
@@ -112,7 +111,7 @@ public final class SpatialTrackControl {
         textPivot.addChild(valueText)
         root.addChild(textPivot)
 
-        // The derived line hangs UNDER the rail — the one direction clear
+        // The derived line hangs under the rail — the one direction clear
         // of both the rail and the apparatus above it.
         if subtitle != nil {
             let pivot = Entity()
@@ -125,14 +124,14 @@ public final class SpatialTrackControl {
         }
 
         // Whole-track target so grabbing anywhere on the rail sets a value.
-        // A BOX, not a sphere: a sphere covering a 26 cm rail is a 29 cm
+        // A box, not a sphere: a sphere covering a 26 cm rail is a 29 cm
         // ball that (hit-testing uses colliders, not visible geometry)
         // shields the apparatus behind it. An input-targetable collider
         // must be no larger than the thing it represents — generous along
         // the rail, never across it.
         root.components.set(InputTargetComponent())
         root.components.set(CollisionComponent(shapes: [
-            .generateBox(size: [length + 0.03, 0.05, 0.05])
+            Primitives.collisionBox(size: [length + 0.03, 0.05, 0.05])
         ]))
         root.components.set(HoverEffectComponent())
         root.components.set(GroundingShadowComponent(castsShadow: true))
@@ -141,15 +140,17 @@ public final class SpatialTrackControl {
         // through `write` — the same function the drag calls — so a hand
         // and a keystroke cannot disagree about the ends.
         SpatialActions.attach(
-            to: root, label: "\(name). Drag the bead along the rail to set it.",
+            // `spokenName` when the entity name is an identifier: the Physics
+            // box's rails were read aloud as "physics-gravity" until 2026-10-14.
+            to: root, label: "\(spokenName ?? name). Drag the bead along the rail to set it.",
             value: format(read()),
             adjust: { [weak self] steps in self?.nudge(by: steps) })
 
         refresh()
     }
 
-    /// Whether the track is present and live. Guards a drag already IN
-    /// FLIGHT when the apparatus is switched off: the gesture keeps
+    /// Whether the track is present and live. Guards a drag already in
+    /// Flight when the apparatus is switched off: the gesture keeps
     /// delivering `onChanged`, so without this the track writes to a model
     /// nobody is looking at.
     public var isEnabled: Bool {
@@ -173,10 +174,10 @@ public final class SpatialTrackControl {
     public var isAdjusting: Bool { isDragging }
 
     /// Where the bead currently sits, in the track's own frame. The bead's
-    /// place IS the value.
+    /// place is the value.
     public var beadOffset: SIMD3<Float> { bead.position }
 
-    /// Sets the value from a hand position in the track's PARENT space.
+    /// Sets the value from a hand position in the track's parent space.
     /// Absolute: wherever along the rail the hand is, that is the value —
     /// no start offset, so a drag beginning mid-rail does not shift the map.
     @discardableResult
@@ -222,7 +223,7 @@ public final class SpatialTrackControl {
         }
         if spoken != lastSpokenValue {
             lastSpokenValue = spoken
-            // REPUBLISH, never rebuild: a fresh `AccessibilityComponent`
+            // Republish, never rebuild: a fresh `AccessibilityComponent`
             // carries empty `systemActions` and would strip the increment.
             SpatialActions.republish(value: spoken, on: root)
         }

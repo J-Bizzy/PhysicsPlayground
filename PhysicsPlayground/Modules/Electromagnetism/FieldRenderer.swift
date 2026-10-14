@@ -2,16 +2,11 @@
 //  FieldRenderer.swift
 //  Physics Playground — Electromagnetism module
 //
-//  Translates electrostatics state into RealityKit entities, built on
-//  RenderKit: VectorFieldArrows (pooled arrow grid), GeometryPipeline
-//  (background line/shell rebuilds with coalescing), TubeMesh (field
-//  lines), Grabbable (manipulation). Ticked per frame from
-//  SceneEvents.Update.
-//
-//  Frame-rate contract (shared by all simulations): the per-frame path is
-//  tiny — entity transforms only. The arrow grid recomputes just when
-//  charges change, and streamline tracing + isosurface marching never run
-//  on the main thread.
+//  Translates electrostatics state into RealityKit entities on
+//  RenderKit: VectorFieldArrows, GeometryPipeline (background line
+//  rebuilds), TubeMesh, Grabbable. Ticked per frame from
+//  SceneEvents.Update; the per-frame path is transforms only, and
+//  tracing never runs on the main thread.
 //
 
 import Foundation
@@ -24,10 +19,7 @@ import simd
 @MainActor
 final class FieldRenderer {
     /// The SpaceView's tap router, so a carried object can be operated
-    /// without hands — `Grabbable` takes the closure and this supplies
-    /// it. The helper configures entities it did not build and cannot
-    /// invent a meaning for pressing one; only the module knows that a
-    /// tap here opens a control ring.
+    /// without hands; only the module knows a tap opens a ring.
     var onObjectTap: ((Entity) -> Void)?
 
     /// Root of everything we render; added to RealityView content at identity,
@@ -40,31 +32,27 @@ final class FieldRenderer {
     /// Event subscriptions, owned here so they live as long as the scene.
     var subscriptions: [EventSubscription] = []
 
-    /// Called from the SpaceView's `onDisappear`, and the reason it has
-    /// to be called explicitly is that neither of the things it releases
-    /// is tied to this object's lifetime.
-    ///
-    /// An `EventSubscription` outlives the view that made it — cancelled
-    /// nowhere, it keeps calling into a renderer for a scene that is no
-    /// longer on screen and holds the whole entity graph alive behind
-    /// it. And a `GeometryPipeline` job in flight ran to completion and
-    /// then uploaded a mesh and enabled an entity in a scene being torn
-    /// down (see `GeometryPipeline.cancel`).
+    /// Called from the SpaceView's `onDisappear`: an `EventSubscription`
+    /// outlives the view and holds the entity graph alive, and a
+    /// `GeometryPipeline` job in flight would upload into a scene being
+    /// torn down.
     func teardown() {
         subscriptions.forEach { $0.cancel() }
         subscriptions = []
         geometryPipeline?.cancel()
     }
 
-    /// While the system is driving an entity mid-drag, we must not write its
-    /// position from the model, or the two would fight and jitter.
-    var manipulatingChargeID: UUID?
+    /// The charge in a hand, copied from the model every tick, so a grab is
+    /// acknowledged with a flash and a tick like every other lab's. Until
+    /// 2026-10-14 nothing set it (it was named for a manipulation system the
+    /// lab no longer uses), so no charge ever answered a grab. The model moves
+    /// a held charge, so its transform is written like any other.
+    var heldChargeID: UUID?
     /// The charge already acknowledged with a pickup pulse — one flash
     /// per grab, not one per frame.
     private var pulsedGrabID: UUID?
     /// Where the release tick plays from when the grab ends.
     private weak var pulsedGrabEntity: Entity?
-    var isManipulatingProbe = false
 
     /// Entity name for the probe (charges use their UUID string).
     static let probeEntityName = "probe"
@@ -116,8 +104,7 @@ final class FieldRenderer {
     private let lineCasingMaterial =
         Materials.contrastLine(FieldRenderer.lineColor).casing
     private let lineGlowMaterial: UnlitMaterial = {
-        var material = UnlitMaterial(color: FieldRenderer.lineColor)
-        material.blending = .transparent(opacity: 0.2)
+        let material = Materials.unlit(FieldRenderer.lineColor, opacity: 0.2)
         return material
     }()
     // Change detection: the expensive paths only run when these differ.
@@ -136,7 +123,7 @@ final class FieldRenderer {
     private var appliedCharges: [PointCharge] = []
 
     init() {
-        let headMesh = MeshResource.generateCone(height: 0.022, radius: 0.0085)
+        let headMesh = Primitives.cone(height: 0.022, radius: 0.0085)
         let headMaterial = UnlitMaterial(color: FieldRenderer.lineColor)
         arrowHeads = EntityPool(budget: 400) { container in
             let head = ModelEntity(mesh: headMesh, materials: [headMaterial])
@@ -170,10 +157,6 @@ final class FieldRenderer {
 
     // MARK: Render loop
 
-    /// Per-frame sync, called from SceneEvents.Update — the observation
-    /// loop starves during system manipulation, so EM ticks directly
-    /// like every continuously-animating module. All expensive paths
-    /// inside render() are change-gated, so the per-frame cost is tiny.
     /// World → model coordinates, through the scaled view.
     func displayPoint(fromWorld world: SIMD3<Float>) -> SIMD3<Double> {
         SIMD3<Double>(viewRoot.convert(position: world, from: nil))
@@ -181,6 +164,7 @@ final class FieldRenderer {
 
     func tick(_ model: FieldModel, room: RoomBox = .unscanned) {
         self.model = model
+        heldChargeID = model.heldChargeID
         syncProbeTrail(model)
         render(
                 charges: model.charges,
@@ -216,7 +200,7 @@ final class FieldRenderer {
         room: RoomBox = .unscanned
     ) {
         // Cheap path — runs every render.
-        if let id = manipulatingChargeID {
+        if let id = heldChargeID {
             if pulsedGrabID != id, let entity = chargeEntities[id] {
                 pulsedGrabID = id
                 pulsedGrabEntity = entity
@@ -279,11 +263,8 @@ final class FieldRenderer {
         var charges: [PointCharge]
         var region: FieldModel.SamplingRegion
         var wantLines: Bool
-        /// The user's real room. Lines are clipped to it, so the field
-        /// stops at the wall instead of leaving the building — which is
-        /// not a cheat: a wall is a conductor's boundary as far as this
-        /// picture is concerned, and an infinite straight ray shooting
-        /// through the ceiling is the least field-like thing there is.
+        /// The user's real room. Lines are clipped to it: a wall is a
+        /// conductor's boundary as far as this picture is concerned.
         var room: RoomBox
         /// The calibrated plates, joining the same trace as the charges.
         var capacitor: PlateField.Capacitor?
@@ -326,9 +307,8 @@ final class FieldRenderer {
     }
 
     // MARK: Uniform B field — the same visual language as the E lines:
-    // continuous vertical lines with arrowheads riding them, pointing the
-    // way B points (up). Violet, like the magnet pod. The field is
-    // uniform, so the geometry is static — built once, then toggled.
+    // Uniform B: continuous vertical lines with arrowheads riding them,
+    // pointing up. Static geometry, built once and toggled.
 
     private let bFieldRoot = Entity()
     private var bFieldBuilt = false
@@ -353,7 +333,7 @@ final class FieldRenderer {
                 bFieldRoot.addChild(ModelEntity(mesh: mesh, materials: [material]))
             }
             // Arrowheads chained up each line (cones point +y already).
-            let coneMesh = MeshResource.generateCone(height: 0.02, radius: 0.008)
+            let coneMesh = Primitives.cone(height: 0.02, radius: 0.008)
             for x in lattice {
                 for z in lattice {
                     var y = yBottom + 0.12
@@ -374,9 +354,9 @@ final class FieldRenderer {
 
     private var plateEntities: [ModelEntity] = []
     /// The surface-charge dots on the plates' inner faces — density per
-    /// band follows σ·A, so raising ΔV, closing the gap, or sliding the
-    /// slab in visibly packs more charge. Rebuilt only when the
-    /// calibrated capacitor changes.
+    /// band follows σ·A, so raising ΔV, closing the gap or sliding the slab
+    /// in visibly packs more charge. Rebuilt only when the calibrated
+    /// capacitor changes.
     private var chargeDots: [ModelEntity] = []
     private var dielectricSlab: ModelEntity?
     private var slabHandle: Entity?
@@ -385,18 +365,16 @@ final class FieldRenderer {
     private var chargeDotSigns: [Bool] = []
     /// C, Q, U and the measured E, floating over the + plate.
     private var capacitorCallout: Callout?
-    /// The plate a hand is dragging (system-owned; don't reposition it).
-    var manipulatingPlateIndex: Int?
+    /// Set when the capacitor changes, cleared once its callout shows it.
+    private var capacitorTextPending = false
 
     private func syncPlates(on: Bool, center: SIMD3<Double>, separation: Double) {
         if plateEntities.isEmpty {
-            // The machined plate from `Tools/fieldprops.py` — chamfered
-            // square, corner bosses, corona-ball terminal on its back —
-            // painted in anodised accent metal here so the palette stays
-            // the one authority on what +/− look like. The translucent
-            // box survives as the fallback.
+            // The machined plate from `Tools/fieldprops.py`, painted in anodised
+            // accent metal here so the palette stays the authority on +/−. The
+            // translucent box is the fallback.
             let prototype = PropCache.prototype(named: "CapacitorPlate")
-            let mesh = MeshResource.generateBox(
+            let mesh = Primitives.box(
                 size: [0.012, Float(FieldModel.plateSize), Float(FieldModel.plateSize)],
                 cornerRadius: 0.004)
             for isPositive in [true, false] {
@@ -438,15 +416,9 @@ final class FieldRenderer {
                                                radius: 0, barLength: 0.05)
                 signPivot.position = [0, Float(FieldModel.plateSize) * 0.28, 0]
                 plate.addChild(signPivot)
-                // THE PLATE IS A SLAB, NOT A BALL. This was a 0.26 m
-                // sphere — 0.52 m across on an object 12 mm thick — so
-                // the two plates' colliders overlapped through the
-                // entire interior of the capacitor and every charge, the
-                // probe and the test particle inside the field volume
-                // became unpinchable. `resolveCharge` papered over it
-                // for DRAGS; the tap chain had no fallback at all, so a
-                // charge between the plates could not be deleted or
-                // re-valued.
+                // The plate is a slab, not a ball: a sphere collider overlapped through
+                // the whole interior of the capacitor and made every charge inside it
+                // unpinchable.
                 Grabbable.configureTouchTarget(
                     plate, matchingVisualBoundsOf: plate,
                     activate: { [weak self, weak plate] in
@@ -464,34 +436,28 @@ final class FieldRenderer {
         }
         let mid = SIMD3<Float>(center)
         let half = Float(separation / 2)
-        if manipulatingPlateIndex != 0 {
-            plateEntities[0].position = mid + SIMD3(-half, 0, 0)  // + plate
-        }
-        if manipulatingPlateIndex != 1 {
-            plateEntities[1].position = mid + SIMD3(half, 0, 0)   // − plate
-        }
+        plateEntities[0].position = mid + SIMD3(-half, 0, 0)  // + plate
+        plateEntities[1].position = mid + SIMD3(half, 0, 0)   // − plate
         for plate in plateEntities { plate.isEnabled = on }
     }
 
     /// Everything the real capacitor wears beyond the plates: the
-    /// dielectric slab, the surface-charge dots, and the instrument
-    /// callout. Transforms are written every frame (the slab rides a
-    /// hand); everything with a cost — dot layout, callout text — is
-    /// gated on the calibrated capacitor actually changing.
+    /// dielectric slab, the surface-charge dots and the callout. Transforms
+    /// every frame; dot layout and callout text gated on the calibrated
+    /// capacitor changing.
     private func syncCapacitorDressing(_ capacitor: PlateField.Capacitor?,
                                        slabCenter: SIMD3<Double>,
                                        changed: Bool) {
         if dielectricSlab == nil {
-            // Frosted glass, procedural until the Blender asset lands —
-            // built as a UNIT cube so the per-frame path is transforms
-            // only while the gap stretches around it.
+            // Frosted glass built as a unit cube, so the per-frame path is
+            // transforms only while the gap stretches around it.
             var glass = PhysicallyBasedMaterial()
             glass.baseColor = .init(tint: UIColor(red: 0.72, green: 0.84,
                                                   blue: 0.88, alpha: 1))
             glass.roughness = .init(floatLiteral: 0.65)
             glass.blending = .transparent(opacity: .init(floatLiteral: 0.3))
             let slab = ModelEntity(
-                mesh: .generateBox(size: [1, 1, 1], cornerRadius: 0.015),
+                mesh: Primitives.box(size: [1, 1, 1], cornerRadius: 0.015),
                 materials: [glass])
             slab.name = "dielectric-slab"
             Grabbable.configureTouchTarget(slab, box: [1, 1, 1])
@@ -504,11 +470,9 @@ final class FieldRenderer {
             viewRoot.addChild(slab)
             dielectricSlab = slab
 
-            // The brass T-handle the slab is slid by (`fieldprops.py`) —
-            // fixed size, so it is a SIBLING the dressing positions
-            // rather than a child the slab's non-uniform stretch would
-            // distort. It shares the slab's name so a pinch on either
-            // routes to the same drag.
+            // The brass T-handle the slab is slid by (`fieldprops.py`): fixed size,
+            // so a sibling rather than a child the slab's stretch would distort. It
+            // shares the slab's name so a pinch on either routes to the same drag.
             if let handle = PropCache.instance(named: "SlabHandle") {
                 let holder = Entity()
                 holder.name = "dielectric-slab"
@@ -553,25 +517,28 @@ final class FieldRenderer {
             capacitor.center + SIMD3(-capacitor.separation / 2,
                                      capacitor.plateSize / 2 + 0.06, 0)))
         if changed {
-            // Real units, measured off the calibrated model: honest C
-            // (above the textbook ε₀A/d — the plates are open), the
-            // charge that honesty costs, the energy it stores, and the
-            // same centre field the ΔV rail's E line shows.
-            let text = String(
-                format: "C %.1f pF · Q %.2f µC\nU %.2f mJ · E %.1f kV/m",
-                capacitor.capacitance * 1e12,
-                capacitor.chargeOnPositivePlate * 1e6,
-                capacitor.storedEnergy * 1e3,
-                capacitor.field(at: capacitor.center).x / 1000)
-            capacitorCallout?.setText(text)
             syncChargeDots(capacitor)
+            capacitorTextPending = true
+        }
+        // Offered until the callout takes it: a change the rate limit held
+        // back used to leave the last value up until the plates moved again.
+        if capacitorTextPending {
+            // Real units off the calibrated model: honest C (above ε₀A/d — the
+            // plates are open), the charge, the energy, and the same centre field
+            // the ΔV rail shows.
+            let text = "C " + PhysicsFormat.measurement(capacitor.capacitance * 1e12, "pF", decimals: 1)
+                + " · Q " + PhysicsFormat.measurement(capacitor.chargeOnPositivePlate * 1e6, "µC", decimals: 2)
+                + "\nU " + PhysicsFormat.measurement(capacitor.storedEnergy * 1e3, "mJ", decimals: 2)
+                + " · E " + PhysicsFormat.measurement(capacitor.field(at: capacitor.center).x / 1000,
+                                                      "kV/m", decimals: 1)
+            if capacitorCallout?.setText(text) == true {
+                capacitorTextPending = false
+            }
         }
     }
 
-    /// Surface charge, drawn: dots on each plate's inner face, budgeted
-    /// per band by σ·A exactly as the tracer seeds are — so the same
-    /// crowding that bends the line density packs the dots under the
-    /// slab. Gauss's law twice over, once in lines and once in charge.
+    /// Surface charge, drawn: dots on each plate's inner face, budgeted per
+    /// band by σ·A exactly as the tracer seeds are — Gauss's law twice over.
     private func syncChargeDots(_ capacitor: PlateField.Capacitor) {
         let budgetPerPlate = 30
         var wanted: [(position: SIMD3<Float>, positive: Bool)] = []
@@ -608,7 +575,7 @@ final class FieldRenderer {
 
         while chargeDots.count < wanted.count && chargeDots.count < 96 {
             let dot = ModelEntity(
-                mesh: .generateSphere(radius: 0.007),
+                mesh: Primitives.sphere(radius: 0.007),
                 materials: [Materials.energized(
                     DesignTokens.Palette.positiveUI, glow: 0.5)])
             dot.scale = [0.4, 1, 1]   // a bead flattened against the face
@@ -625,7 +592,7 @@ final class FieldRenderer {
             guard index < wanted.count else { dot.isEnabled = false; continue }
             dot.isEnabled = true
             dot.position = wanted[index].position
-            // One material write per dot per REBUILD, not per frame —
+            // One material write per dot per rebuild, not per frame —
             // and only for the dots whose sign actually flipped.
             if chargeDotSigns[index] != wanted[index].positive {
                 chargeDotSigns[index] = wanted[index].positive
@@ -640,17 +607,15 @@ final class FieldRenderer {
     private nonisolated struct GeometryResult: Sendable {
         var sourceCharges: [PointCharge] = []
         var tube = TubeBuffers()
-        /// A near-black tube swept slightly fatter than the core, drawn
-        /// underneath it. Passthrough is a BRIGHT medium — a pale cyan
-        /// filament over a cream wall has almost no luminance contrast
-        /// and simply disappears. The casing gives every line its own
-        /// darkness to sit against, whatever is behind it.
+        /// A near-black tube swept fatter than the core, drawn underneath it:
+        /// passthrough is a bright medium and a pale filament over a cream wall
+        /// disappears.
         var tubeCasing = TubeBuffers()
         /// A fatter, fainter tube along the same lines — the soft glow
         /// halo that makes the field read as light, not wire.
         var tubeGlow = TubeBuffers()
         /// Sample points along the lines where arrowheads ride, with the
-        /// true field vector there (direction AND strength for the pool's
+        /// true field vector there (direction and strength for the pool's
         /// log-brightness ramp).
         var arrowPoints: [SIMD3<Double>] = []
         var arrowVectors: [SIMD3<Double>] = []
@@ -744,10 +709,7 @@ final class FieldRenderer {
         for charge in charges {
             seen.insert(charge.id)
             let entity = chargeEntities[charge.id] ?? makeChargeEntity(for: charge)
-            // Hands off while the manipulation system is dragging this one.
-            if charge.id != manipulatingChargeID {
-                entity.position = SIMD3<Float>(charge.position)
-            }
+            entity.position = SIMD3<Float>(charge.position)
             if appliedPolarity[charge.id] != charge.isPositive {
                 entity.model?.materials = [Self.chargeMaterial(isPositive: charge.isPositive)]
                 appliedPolarity[charge.id] = charge.isPositive
@@ -767,16 +729,9 @@ final class FieldRenderer {
         }
     }
 
-    /// A charge as the WELL shows it, before you have one — the same
-    /// sphere, the same radius and the same red/blue material the real
-    /// one wears, so pulling it out is recognisably getting this object.
-    /// No touch target and no selection halo: a preview is not
-    /// selectable, and the well owns the collider.
-    /// The + or − glyph a charge wears: two white strokes on a
-    /// billboarded pivot, the vertical one hidden to make a minus. Shared
-    /// with the WELL MOUTHS, so the sign is legible before you pull one
-    /// out — colour alone (red positive, blue negative) is a convention
-    /// that has to be learned.
+    /// The + or − glyph a charge wears: two white strokes on a billboarded
+    /// pivot, the vertical one hidden to make a minus. Shared with the well
+    /// mouths, so the sign is legible before you pull one out.
     static func signGlyph(isPositive: Bool, radius: Float,
                           barLength: Float? = nil) -> Entity {
         let (pivot, vertical) = signGlyphParts(radius: radius, barLength: barLength)
@@ -785,12 +740,8 @@ final class FieldRenderer {
     }
 
     /// The same glyph with the vertical stroke handed back, for a sign
-    /// whose polarity changes LIVE (the probe): hide the vertical to
-    /// make a minus. Both strokes always exist — a glyph that rebuilt
-    /// itself on every flip would be a new entity mid-pinch.
-    /// - `barLength`: overrides the radius-derived stroke length for a
-    ///   glyph that sits on something whose size is not a sphere's (the
-    ///   capacitor plates).
+    /// whose polarity changes live (the probe). `barLength` overrides the
+    /// radius-derived stroke for a glyph on a plate.
     static func signGlyphParts(radius: Float, barLength: Float? = nil)
     -> (pivot: Entity, vertical: ModelEntity) {
         let pivot = Entity()
@@ -799,27 +750,25 @@ final class FieldRenderer {
         let bar = barLength ?? min(radius * 0.9, 0.015)
         let thickness = max(bar * 0.27, 0.0025)
         let horizontal = ModelEntity(
-            mesh: .generateBox(size: [bar, thickness, 0.002], cornerRadius: 0.001),
+            mesh: Primitives.box(size: [bar, thickness, 0.002], cornerRadius: 0.001),
             materials: [stroke])
         horizontal.position = [0, 0, radius * 1.2]
         pivot.addChild(horizontal)
         let vertical = ModelEntity(
-            mesh: .generateBox(size: [thickness, bar, 0.002], cornerRadius: 0.001),
+            mesh: Primitives.box(size: [thickness, bar, 0.002], cornerRadius: 0.001),
             materials: [stroke])
         vertical.position = [0, 0, radius * 1.2]
         pivot.addChild(vertical)
         return (pivot, vertical)
     }
 
-    /// A mouth's preview radius, deliberately NOT `chargeRadius`: a `Well`
-    /// hangs its nameplate 0.034 below the preview, so at the 0.095 m
-    /// column pitch the fit is `2r + 0.044 < pitch` (r < 0.0255) or every
-    /// label lands on the sphere beneath it. The charge you pull is full
-    /// size — a mouth is a sign, not a promise about scale.
+    /// A mouth's preview radius, deliberately not `chargeRadius`: a `Well`
+    /// hangs its nameplate 0.034 below the preview, so at the 0.095 m pitch
+    /// r must stay under 0.0255 or every label lands on the sphere beneath.
     static let wellPreviewRadius: Float = 0.024
 
     static func chargePreview(isPositive: Bool) -> Entity {
-        let sphere = ModelEntity(mesh: .generateSphere(radius: wellPreviewRadius),
+        let sphere = ModelEntity(mesh: Primitives.sphere(radius: wellPreviewRadius),
                                  materials: [chargeMaterial(isPositive: isPositive)])
         sphere.addChild(signGlyph(isPositive: isPositive, radius: wellPreviewRadius))
         return sphere
@@ -830,7 +779,7 @@ final class FieldRenderer {
     static func probePreview(isPositive: Bool) -> Entity {
         let radius = wellPreviewRadius * 0.8
         let sphere = ModelEntity(
-            mesh: .generateSphere(radius: radius),
+            mesh: Primitives.sphere(radius: radius),
             materials: [Materials.energized(
                 isPositive ? DesignTokens.Palette.probePositiveUI
                            : DesignTokens.Palette.probeNegativeUI, glow: 0.4)])
@@ -840,7 +789,7 @@ final class FieldRenderer {
 
     private func makeChargeEntity(for charge: PointCharge) -> ModelEntity {
         let sphere = ModelEntity(
-            mesh: .generateSphere(radius: Self.chargeRadius),
+            mesh: Primitives.sphere(radius: Self.chargeRadius),
             materials: [Self.chargeMaterial(isPositive: charge.isPositive)]
         )
         // Name carries the charge's identity so manipulation event handlers
@@ -856,7 +805,7 @@ final class FieldRenderer {
 
         // Translucent halo shown on the selected charge.
         let halo = SelectionHalo.make(
-            mesh: .generateSphere(radius: Self.chargeRadius * 1.35))
+            mesh: Primitives.sphere(radius: Self.chargeRadius * 1.35))
         sphere.addChild(halo)
 
         // The sign glyph: a billboarded + (or −, with the vertical stroke
@@ -868,11 +817,11 @@ final class FieldRenderer {
         let strokeMaterial = Materials.energized(
             UIColor(white: 0.97, alpha: 1), roughness: 0.22, glow: 0.2)
         let horizontal = ModelEntity(
-            mesh: .generateBox(size: [0.024, 0.0062, 0.005], cornerRadius: 0.0022),
+            mesh: Primitives.box(size: [0.024, 0.0062, 0.005], cornerRadius: 0.0022),
             materials: [strokeMaterial])
         horizontal.position = [0, 0, Self.chargeRadius * 1.15]
         let vertical = ModelEntity(
-            mesh: .generateBox(size: [0.0062, 0.024, 0.005], cornerRadius: 0.0022),
+            mesh: Primitives.box(size: [0.0062, 0.024, 0.005], cornerRadius: 0.0022),
             materials: [strokeMaterial])
         vertical.position = [0, 0, Self.chargeRadius * 1.15]
         vertical.isEnabled = charge.isPositive
@@ -905,14 +854,6 @@ final class FieldRenderer {
 
     // MARK: Probe
 
-    // `syncProbeNow` was deleted 2026-08-09. Its doc claimed a
-    // same-frame sync "called from the per-frame simulation tick", and
-    // it had no callers — which reads like a broken guarantee and is
-    // not one: `render` calls `syncProbeEntity` directly and `tick`
-    // calls `render`, so the probe has been syncing in-frame the whole
-    // time. This was a wrapper that named a promise the code below
-    // already keeps.
-
     private func syncProbeEntity(_ probe: TestChargeDynamics.ProbeState?, isPositive: Bool) {
         guard let probe else {
             probeEntity?.removeFromParent()
@@ -936,20 +877,16 @@ final class FieldRenderer {
             )
             entity.components.set(accessibility)
         }
-        if !isManipulatingProbe {
-            entity.position = SIMD3<Float>(probe.position)
-        }
+        entity.position = SIMD3<Float>(probe.position)
     }
 
     // MARK: The probe's trail
 
-    /// The probe's path, as pooled beads fading toward the tail. BEADS,
-    /// not a swept tube: a tube regenerates a `MeshResource` on the main
-    /// thread every time a point is laid down, while pooled beads are
-    /// transform writes on entities built once. At 11 mm they read as a
-    /// curve. Under `viewRoot`, so the path scales with the field.
+    /// The probe's path as pooled beads fading toward the tail — transform
+    /// writes on entities built once, where a swept tube would regenerate a
+    /// mesh per point. Under `viewRoot`, so the path scales with the field.
     private lazy var probeTrailPool: EntityPool<ModelEntity> = {
-        let mesh = MeshResource.generateSphere(radius: 0.0042)
+        let mesh = Primitives.sphere(radius: 0.0042)
         let pool = EntityPool<ModelEntity>(budget: FieldModel.probeTrailLength) { container in
             let bead = ModelEntity(mesh: mesh,
                                    materials: [UnlitMaterial(color: Self.probePositiveColor)])
@@ -960,17 +897,9 @@ final class FieldRenderer {
         return pool
     }()
     private var appliedTrailPolarity: Bool?
-    /// How many trail beads the taper was last computed for.
-    ///
-    /// Each bead's fade and scale are functions of its INDEX and the
-    /// length of the trail — not of where the probe is — so once the
-    /// trail reaches its 190-point budget they are the same numbers
-    /// every frame forever. Writing them anyway meant 190
-    /// `OpacityComponent` sets and 190 scale writes per frame, about
-    /// 17 000 component writes a second, to store values already there.
-    /// The trail grows only while the probe is running and stops the
-    /// moment it is full, so this is stale for a second or two and
-    /// correct for the rest of the flight.
+    /// How many trail beads the taper was last computed for: fade and scale
+    /// are functions of index and trail length, so once the trail is full
+    /// they are the same numbers every frame.
     private var appliedTrailCount: Int?
 
     private func syncProbeTrail(_ model: FieldModel) {
@@ -985,8 +914,7 @@ final class FieldRenderer {
         let positive = model.probeIsPositive
         if appliedTrailPolarity != positive {
             let color = positive ? Self.probePositiveColor : Self.probeNegativeColor
-            var material = UnlitMaterial(color: color)
-            material.blending = .transparent(opacity: 0.9)
+            let material = Materials.unlit(color, opacity: 0.9)
             for slot in probeTrailPool.slots {
                 slot.payload.model?.materials = [material]
             }
@@ -1003,10 +931,8 @@ final class FieldRenderer {
             let slot = probeTrailPool.slots[index]
             slot.entity.isEnabled = true
             slot.entity.position = SIMD3<Float>(point)
-            // Fade and taper toward the tail, so the curve reads with a
-            // direction rather than as a static loop of beads. Index-
-            // derived, so it only needs rewriting when the trail's
-            // LENGTH changes — see `appliedTrailCount`.
+            // Fade and taper toward the tail, so the curve reads with a direction.
+            // Index-derived, rewritten only when the trail's length changes.
             guard taperChanged else { continue }
             let age = Float(index) / Float(max(count - 1, 1))
             slot.entity.scale = SIMD3(repeating: 0.35 + 0.65 * age)
@@ -1020,7 +946,7 @@ final class FieldRenderer {
 
     private func makeProbeEntity() -> ModelEntity {
         let sphere = ModelEntity(
-            mesh: .generateSphere(radius: Self.probeRadius),
+            mesh: Primitives.sphere(radius: Self.probeRadius),
             materials: [Materials.energized(Self.probePositiveColor)]
         )
         sphere.name = Self.probeEntityName

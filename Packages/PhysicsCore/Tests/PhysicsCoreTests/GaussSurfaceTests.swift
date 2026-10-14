@@ -34,13 +34,13 @@ final class GaussSurfaceTests: XCTestCase {
         }
     }
 
-    /// The part that actually surprises people: a charge OUTSIDE the
+    /// The part that actually surprises people: a charge outside the
     /// surface contributes exactly nothing, however close it is.
     func testChargeOutsideTheSurfaceContributesNoNetFlux() {
         let outside = [charge(5e-6, at: SIMD3(0.9, 0, 0))]
         let flux = GaussSurface.flux(throughSphereAt: .zero, radius: 0.4,
                                      charges: outside, samples: 6000)
-        // Scale the tolerance to the flux that charge WOULD produce if it
+        // Scale the tolerance to the flux that charge would produce if it
         // were enclosed — otherwise "small" means nothing at 1e-12 F/m.
         let scale = 5e-6 / GaussSurface.epsilonZero
         XCTAssertEqual(flux / scale, 0, accuracy: 2e-3)

@@ -3,21 +3,10 @@
 //  RenderKit
 //
 //  The grab acknowledgement: a brief soft glow around a body the hand
-//  has just taken, gone in a quarter second.
-//
-//  Light, not geometry — a scale pop was considered and rejected in the
-//  same decision (2026-08-05): the app's standing rule is that emphasis
-//  is opacity, light and sound, and a body that changes size in the
-//  hand is a body lying about its size. The glow is an aura entity
-//  rather than a material edit because the grabbables wear every
-//  material in the canon (textured planets, machined bobs, energized
-//  charges) and a pulse that needed to understand each recipe would be
-//  adopted by half of them — the VectorFieldArrows/contrastLine lesson.
-//
-//  Self-driving and self-removing: the fade rides RealityKit's own
-//  animation system, and the aura removes itself when done, so a
-//  renderer fires it and forgets it. Suppressed entirely under the
-//  system Reduce Motion switch.
+//  has just taken. Light, not geometry — a body that changes size in the
+//  hand is a body lying about its size — and an aura entity rather than
+//  a material edit, because the grabbables wear every material in the
+//  canon. Self-driving and self-removing; suppressed under Reduce Motion.
 //
 
 import RealityKit
@@ -34,9 +23,8 @@ public enum PickupPulse {
             * 0.72 + 0.008
         guard radius.isFinite, radius > 0.008 else { return }
 
-        var material = UnlitMaterial(color: tint)
-        material.blending = .transparent(opacity: 0.32)
-        let aura = ModelEntity(mesh: .generateSphere(radius: radius),
+        let material = Materials.unlit(tint, opacity: 0.32)
+        let aura = ModelEntity(mesh: Primitives.sphere(radius: radius),
                                materials: [material])
         aura.position = bounds.center
         // Decoration, never a target — no collider is ever added, and

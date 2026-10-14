@@ -51,18 +51,10 @@ final class GalleryPlacement {
     /// quarter-turn is a placement, not a mistake.
     static let refaceTolerance: Float = 70 * .pi / 180
 
-    /// The rescue, as arithmetic so it can be tested without a headset.
-    ///
-    /// The saved offset and yaw are relative to where the scene BUILDS, which
-    /// is wherever the wearer happened to be standing last launch. Relaunch
-    /// from another chair — or another room — and the same numbers put the
-    /// gallery behind them, before the app has shown them anything. So the
-    /// placement is still restored (the grab bar's promise, `testThePlacementSurvivesRelaunch`),
-    /// and only a facing that has gone badly wrong is overridden.
-    ///
-    /// Signed shortest angle, not `abs(a - b)`: the two facings straddle ±π
-    /// as often as not, and the naive difference reads 350° apart for two
-    /// directions 10° apart.
+    /// The rescue as arithmetic. The saved yaw is relative to where the
+    /// scene built last launch; relaunched from another chair it can put
+    /// the gallery behind the wearer. Signed shortest angle, not
+    /// `abs(a - b)`, because the two facings straddle ±π.
     static func reFacedYaw(saved: Float, lookYaw: Float,
                            tolerance: Float = GalleryPlacement.refaceTolerance) -> Float {
         var delta = (lookYaw - saved).truncatingRemainder(dividingBy: 2 * .pi)
@@ -71,10 +63,9 @@ final class GalleryPlacement {
         return abs(delta) <= tolerance ? saved : lookYaw
     }
 
-    /// Called once per launch, on the first frame the room knows which way the
-    /// wearer is looking. Turns the gallery to face them ONLY if the restored
-    /// facing would have put it behind them; the offset is never touched, so a
-    /// placement the user chose survives.
+    /// Called once per launch, on the first frame the room knows which way
+    /// the wearer is looking. Turns the gallery only if the restored facing
+    /// would put it behind them; the offset is never touched.
     func refaceIfBehind(lookYaw: Float) {
         let next = Self.reFacedYaw(saved: yaw, lookYaw: lookYaw)
         guard next != yaw else { return }

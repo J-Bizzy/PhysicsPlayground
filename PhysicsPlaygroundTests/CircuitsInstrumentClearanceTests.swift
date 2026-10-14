@@ -2,28 +2,10 @@
 //  CircuitsInstrumentClearanceTests.swift
 //  PhysicsPlaygroundTests
 //
-//  THE SECOND MODULE TO GET THE CLEARANCE CHECKS, which is the whole
-//  point of having moved them out of Electric Fields.
-//
-//  `InstrumentClearance` was `FieldInstrumentLayout`'s private
-//  arithmetic until 2026-08-08 — four rules that are true of any
-//  instrument in any lab, available to exactly one of six modules. This
-//  is the first new furniture placed anywhere else since, and it is
-//  placed against the rules rather than against a screenshot.
-//
-//  WHY THAT MATTERS HERE SPECIFICALLY. Circuits' own comments record two
-//  placements that a screenshot had to kill: the Clear plate went beside
-//  the tray first and landed INSIDE a slab 0.93 m wide, with the slab's
-//  own glass between the plate and the reader, and then half out of the
-//  bottom of the frame. Both are arithmetic errors that arithmetic can
-//  catch. The presets tab is the first thing in this module that did not
-//  need a screenshot to find its spot.
-//
-//  Coordinates here are the module's own — Float offsets from
-//  `CircuitsRenderer.benchPivot` — converted to the Double boxes the
-//  shared checker speaks. The conversion is the test's job because the
-//  module's placement predates the checker by a year and rewriting it
-//  is not what this commit is for.
+//  The bench's furniture against the shared clearance rules
+//  (`InstrumentClearance`), placed by arithmetic rather than by
+//  screenshot. Coordinates are the module's own Float offsets from
+//  `CircuitsRenderer.benchPivot`, converted to the checker's boxes.
 //
 
 import XCTest
@@ -42,59 +24,66 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
                           halfExtents: halfExtents)
     }
 
-    /// The bench furniture, by name, at the sizes each primitive
-    /// actually occupies including labels.
-    ///
-    /// The METER IS ABSENT and that is deliberate: it is a carried
-    /// instrument, so it has no fixed place to be spaced against — the
-    /// moment a hand moves it, any clearance computed here is fiction.
-    /// The ΔV rail in Electric Fields is left out of that module's list
-    /// for the same reason and says so.
+    /// The bench furniture, by name, at the sizes each primitive occupies
+    /// including labels. The meter is absent: it is carried, so any
+    /// clearance computed for it is fiction the moment a hand moves it.
     private var standingFurniture: [(name: String, box: StationBox)] {
-        // Five plates at 0.066 pitch is 0.264 of column plus a plate's own
-        // 0.05 — a 0.157 half-extent. Guessing 0.10 here is what made the
-        // first placement look like it fitted.
+        // Five plates at 0.066 pitch plus a plate's own height — a 0.157
+        // half-extent.
         let fiveHigh = SIMD3<Double>(0.15, 0.157, 0.05)
         return [
-            ("layers bank", box([-0.62, -0.06, 0.16], fiveHigh)),
-            // Sized on the ARMED label — "Tap again" — because a
+            // The Views tab and the column it unfolds above itself, both from the
+            // view's own constants, so a move there is a move here.
+            ("views tab", StationBox(
+                center: SIMD3<Double>(CircuitsSpaceView.bankAnchor),
+                halfExtents: SIMD3(0.09, 0.05, 0.05))),
+            ("views column", StationBox(
+                center: SIMD3<Double>(CircuitsSpaceView.viewsColumnAnchor),
+                halfExtents: fiveHigh)),
+            // Sized on the armed label — "Tap again" — because a
             // confirming plate grows when armed.
             ("clear plate", box([-1.02, -0.02, 0.10], SIMD3(0.13, 0.06, 0.08))),
             // The presets tab folded: one plate plus the summary line
             // hanging under it.
             ("presets tab", box([-1.02, 0.15, 0.10], SIMD3(0.09, 0.05, 0.05))),
             ("presets column", box([-1.02, 0.39, 0.10], fiveHigh)),
-            // THE PARTS BLOCK. World coordinates, not bench-relative —
-            // `CircuitsPartsLayout.rightSlot` places these absolutely, so
-            // the box is built from the real slots rather than from an
-            // offset that would drift if the bench moved.
+            // The parts block, in world coordinates: `CircuitsPartsLayout.rightSlot`
+            // places the slots absolutely.
             ("parts block", partsBlock),
         ]
     }
 
     /// Every well mouth as one box, measured from the layout itself.
     private var partsBlock: StationBox {
-        // THE WINDOW, NOT THE WHOLE RACK. Only `rightVisibleRows` slots
-        // are on screen at once and the rack slides so the window stays
-        // put, so the occupied volume is that many rows however many
-        // parts exist. Measuring all eleven (ten kinds plus the meter)
-        // would reserve half a metre of room nothing stands in — and
-        // would fail the working-band check for furniture that is never
-        // visible there.
+        // The window, not the whole shelf: only `rightVisibleRows` slots are on
+        // screen and the strip slides so the window stays put.
         let slots = (0..<CircuitsPartsLayout.rightVisibleRows)
             .map { CircuitsPartsLayout.rightSlot(index: $0) }
         var lo = SIMD3<Double>(Double(slots[0].x), Double(slots[0].y),
                                Double(slots[0].z))
         var hi = lo
-        for slot in slots {
-            let p = SIMD3<Double>(Double(slot.x), Double(slot.y), Double(slot.z))
-            lo = simd_min(lo, p)
-            hi = simd_max(hi, p)
-        }
         // Each mouth's own half-extents, as `Well` measures them.
         let mouth = SIMD3<Double>(0.06, 0.055, 0.06)
-        return StationBox(center: (lo + hi) / 2,
-                          halfExtents: (hi - lo) / 2 + mouth)
+        for slot in slots {
+            let p = SIMD3<Double>(Double(slot.x), Double(slot.y), Double(slot.z))
+            lo = simd_min(lo, p - mouth)
+            hi = simd_max(hi, p + mouth)
+        }
+        // And the spine beside the column with the crown on it, faced at
+        // the viewer as `CircuitsSpaceView` faces it.
+        let track = Well.Rack.track(head: slots[0],
+                                    pitch: CircuitsPartsLayout.rightRowPitch,
+                                    visible: CircuitsPartsLayout.rightVisibleRows,
+                                    facing: CircuitsPartsLayout.viewer)
+        lo = simd_min(lo, SIMD3<Double>(track.center - track.halfExtents))
+        hi = simd_max(hi, SIMD3<Double>(track.center + track.halfExtents))
+        let crown = Well.Rack.crown(head: slots[0],
+                                    pitch: CircuitsPartsLayout.rightRowPitch,
+                                    visible: CircuitsPartsLayout.rightVisibleRows,
+                                    facing: CircuitsPartsLayout.viewer)
+        lo = simd_min(lo, SIMD3<Double>(crown.center - crown.halfExtents))
+        hi = simd_max(hi, SIMD3<Double>(crown.center + crown.halfExtents))
+        return StationBox(center: (lo + hi) / 2, halfExtents: (hi - lo) / 2)
     }
 
     /// The bench's build volume — where a part can legally be dragged to,
@@ -104,56 +93,30 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
                    halfExtents: CircuitsModel.buildHalfExtents)
     }
 
-    /// The four shared rules, over the bench's own furniture.
-    ///
-    /// MARGIN 0 RATHER THAN 0.12, and the reason is the interesting part.
-    /// `stationMargin`'s default is Electric Fields'
-    /// `resolveCharge(fallbackRadius:)`: there, a pinch on empty air
-    /// within 12 cm of a charge grabs that charge, so an instrument any
-    /// closer could be pinched at a point that is also a grab. Circuit
-    /// Workshop has no such fallback — `nearestTerminal` only runs during
-    /// a wire drag already in progress — so the number does not transfer
-    /// even though the rule does. What remains true here is the weaker
-    /// and still worth checking claim: furniture must not stand INSIDE
-    /// the volume parts can be dragged into.
-    ///
-    /// The presets tab and its column are both listed even though the
-    /// column only exists while the tab is open. A folded instrument that
-    /// would overlap something when unfolded is still a bug; it just
-    /// waits for a pinch. Same reasoning as sizing the Clear plate on its
-    /// armed label.
+    /// The four shared rules over the bench's own furniture. Margin 0 rather
+    /// than 0.12: Circuit Workshop has no proximity-fallback grab, so what
+    /// remains is the weaker claim that furniture must not stand inside the
+    /// volume parts can be dragged into. Folded columns are listed too: a
+    /// folded instrument that would overlap something when unfolded is
+    /// still a bug.
     func testTheFurniturePlacedWithTheCheckerObeysIt() {
         let violations = InstrumentClearance.violations(
             instruments: standingFurniture, station: buildVolume, margin: 0)
-        // The furniture ADDED with the checker in hand answers for
-        // itself; the layers bank predates it — see
-        // `testTheOlderBenchFurnitureStandsInsideTheBuildVolume`.
-        //
+        // The furniture placed with the checker answers for itself; the Clear
+        // plate predates it and stands 53.7° off axis by the owner's layout.
         let mine = violations.filter {
-            ($0.contains("presets") || $0.contains("parts block"))
-
+            $0.contains("presets") || $0.contains("parts block")
+                || $0.contains("views")
         }
         XCTAssertTrue(mine.isEmpty, """
-            The presets furniture breaks \(mine.count) of the shared rules:
+            The bench furniture breaks \(mine.count) of the shared rules:
             \(mine.joined(separator: "\n"))
             """)
     }
 
-    /// The specific thing that was got wrong three times.
-    ///
-    /// First the tab sat INSIDE its own column, because a bank centres
-    /// its plates on its anchor rather than stacking down from it. Then,
-    /// moved above the layers bank, five plates over five plates pushed
-    /// the tab past the 1.80 ceiling. Then the column was flipped to
-    /// unfold UPWARD — grouping the tab with the Clear plate, after a
-    /// screenshot showed the old height reading "on its own" — and this
-    /// test failed, because it asserted the tab was ABOVE its column.
-    ///
-    /// DIRECTION IS NOT THE CLAIM. What must be true is that the tab and
-    /// the column do not occupy each other, and that neither leaves the
-    /// working band; which way the column opens is a layout decision the
-    /// test has no business pinning. It said "above" only because that
-    /// is how the first version happened to work.
+    /// The tab and its column must not occupy each other, and neither may
+    /// leave the working band. Direction is not the claim: which way the
+    /// column opens is a layout decision the test has no business pinning.
     func testThePresetsTabAndItsColumnDoNotOccupyEachOther() throws {
         let all = standingFurniture
         let tab = try XCTUnwrap(all.first { $0.name == "presets tab" }).box
@@ -181,43 +144,29 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
                                     InstrumentClearance.separation)
     }
 
-    /// A FINDING, NOT A REGRESSION — recorded as a passing assertion of
-    /// what is currently TRUE, so the number is on the record and moving
-    /// the furniture will be a deliberate act rather than a surprise.
-    ///
-    /// The very first run of the shared checker against this module said
-    /// the layers bank stands inside the bench's build volume, and it is
-    /// right: the bank spans −0.77…−0.47 and the volume reaches −0.60,
-    /// so they overlap by 0.13 m. A part laid out at the bench's left
-    /// edge is behind the bank's plates, and the plates carry colliders —
-    /// the shielding failure this whole family of rules exists to
-    /// prevent, sitting in the module all along.
-    ///
-    /// TWO THINGS CHANGED UNDER THIS ON 2026-08-26 and neither resolves
-    /// it. The overlap shrank from 0.23 to 0.13 when `buildHalfExtents.x`
-    /// went 0.70 → 0.60; and the box stopped being a WALL, so the
-    /// sentence "a part can be dragged to x = −0.70" is no longer how it
-    /// happens — a hand can now carry a part anywhere, past the bank or
-    /// behind it. The volume is where a reset LAYS PARTS OUT, and laying
-    /// one out behind a collider is the same problem arrived at a
-    /// different way.
-    ///
-    /// Still not fixed here. `DECISIONS.md` records the declined move:
-    /// the bank's proposed home at x 0.87 / z −0.79 is 47.8° off axis
-    /// against a 48° limit, and this project's own tests refuse that
-    /// margin for the rack. It is a visual change wanting a screenshot.
-    func testTheOlderBenchFurnitureStandsInsideTheBuildVolume() throws {
-        let bank = try XCTUnwrap(
-            standingFurniture.first { $0.name == "layers bank" }).box
-        XCTAssertLessThan(bank.separation(from: buildVolume), 0, """
-            The layers bank no longer overlaps the build volume. If that was \
-            deliberate, delete this test — it exists only to keep a known \
-            overlap on the record.
-            """)
-        // The presets column, placed with the checker, does NOT.
+    /// The Views tab and its column stand clear of the build volume — the
+    /// finding the old five-plate bank recorded as an overlap of 0.13 m,
+    /// closed by folding the bank behind a tab.
+    func testTheViewsFurnitureStandsClearOfTheBuildVolume() throws {
+        let tab = try XCTUnwrap(
+            standingFurniture.first { $0.name == "views tab" }).box
         let column = try XCTUnwrap(
-            standingFurniture.first { $0.name == "presets column" }).box
+            standingFurniture.first { $0.name == "views column" }).box
+        XCTAssertGreaterThan(tab.separation(from: buildVolume), 0,
+                             "the Views tab stands inside the build volume")
         XCTAssertGreaterThan(column.separation(from: buildVolume), 0,
+                             "the unfolded Views column reaches into the build volume")
+        XCTAssertGreaterThanOrEqual(
+            tab.separation(from: column), InstrumentClearance.separation,
+            "the Views tab is inside the column it opens")
+        // Inside the frame, unlike the fore column: the rack's own rule.
+        let degrees = atan2(abs(tab.center.x), -tab.center.z) * 180 / .pi
+        XCTAssertLessThanOrEqual(degrees, Double(CircuitsPartsLayout.maximumOffAxisAngle),
+                                 "the Views tab stands past the off-axis limit")
+        // The presets column, placed with the checker, does not either.
+        let presets = try XCTUnwrap(
+            standingFurniture.first { $0.name == "presets column" }).box
+        XCTAssertGreaterThan(presets.separation(from: buildVolume), 0,
                              "the new furniture repeated the old mistake")
     }
 }

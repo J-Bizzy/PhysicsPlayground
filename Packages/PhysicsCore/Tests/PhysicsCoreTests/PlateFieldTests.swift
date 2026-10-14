@@ -2,7 +2,7 @@
 //  PlateFieldTests.swift
 //  PhysicsCore tests
 //
-//  The charged rectangle's closed form, held against an INDEPENDENT
+//  The charged rectangle's closed form, held against an independent
 //  derivation: a brute-force grid of point-charge patches. The two
 //  agree only if every corner sign, every branch cut and the constant
 //  out front are right — the `atan2` version of the normal component
@@ -79,7 +79,7 @@ final class PlateFieldTests: XCTestCase {
             dielectricConstant: kappa, dielectricCoverage: coverage)
     }
 
-    /// The whole point of calibration: the REAL field's line integral
+    /// The whole point of calibration: the real field's line integral
     /// across the gap equals the set voltage — not the textbook σ that
     /// pretends the field stays between the plates.
     func testTheGapDropIsTheSetVoltage() {
@@ -97,7 +97,7 @@ final class PlateFieldTests: XCTestCase {
                        accuracy: capacitor.voltage * 0.01)
     }
 
-    /// Finite plates leak: holding the set ΔV takes MORE charge than
+    /// Finite plates leak: holding the set ΔV takes more charge than
     /// ε₀A/d says, so the honest capacitance exceeds the textbook one —
     /// at this bench's open geometry, by a lot. If these ever come out
     /// equal the model has quietly become the ideal one again.
@@ -147,7 +147,7 @@ final class PlateFieldTests: XCTestCase {
     }
 
     /// Half in, the classic demo: capacitance between the bare and
-    /// fully-covered values, and the charge CROWDS under the slab —
+    /// fully-covered values, and the charge crowds under the slab —
     /// the covered band's density beats the open band's.
     func testPartialInsertionCrowdsChargeUnderTheSlab() {
         let bare = bench()
@@ -174,7 +174,7 @@ final class PlateFieldTests: XCTestCase {
         XCTAssertLessThan(half.field(at: inSlab).x, half.field(at: inAir).x)
     }
 
-    /// Only the NORMAL component drops inside the slab. Continuity of
+    /// Only the normal component drops inside the slab. Continuity of
     /// D reduces E along the plate normal by κ; the tangential
     /// components are continuous across the interface, so a hair to
     /// either side of the slab's face they must match — the version
@@ -203,7 +203,7 @@ final class PlateFieldTests: XCTestCase {
         XCTAssertGreaterThan(abs(airField.z), scale * 1e-3)
     }
 
-    /// The readout and the calibration walk the SAME quadrature, so
+    /// The readout and the calibration walk the same quadrature, so
     /// the potential the model reports at a plate face is the half-gap
     /// drop — ±V/2 — for the bare bench and the fully slabbed one
     /// alike. With mismatched step counts these disagree by the

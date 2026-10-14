@@ -4,9 +4,9 @@
 //
 //  Touch targets + RelativeDrag (move by the hand's displacement, never
 //  lurch toward the hand). The system ManipulationComponent path is a
-//  deliberate grave: here the MODEL owns motion, and a component that
+//  deliberate grave: here the model owns motion, and a component that
 //  writes the transform is a second author of the same number
-//  (DECISIONS.md 2026-07-30/08-03).
+//  (see DECISIONS.md).
 //
 
 import Foundation
@@ -22,11 +22,11 @@ public enum Grabbable {
     /// shields everything near it from every pinch.
     public static let reach: Float = 0.015
 
-    /// Gesture target WITHOUT the system ManipulationComponent — no
+    /// Gesture target without the system ManipulationComponent — no
     /// system-owned motion. Pair with a DragGesture and RelativeDrag.
     public static func configureTouchTarget(_ entity: Entity, collisionRadius: Float,
                                             activate: (() -> Void)? = nil) {
-        apply(.generateSphere(radius: collisionRadius), to: entity, activate: activate)
+        apply(Primitives.collisionSphere(radius: collisionRadius), to: entity, activate: activate)
     }
 
     /// A box target, for the things that are not balls — plates, bars,
@@ -35,7 +35,7 @@ public enum Grabbable {
                                             box size: SIMD3<Float>,
                                             offset: SIMD3<Float> = .zero,
                                             activate: (() -> Void)? = nil) {
-        apply(.generateBox(size: size).offsetBy(translation: offset), to: entity,
+        apply(Primitives.collisionBox(size: size, offset: offset), to: entity,
               activate: activate)
     }
 
@@ -59,8 +59,8 @@ public enum Grabbable {
                              offset: bounds.center, activate: activate)
     }
 
-    /// The LOCAL radius giving a per-instance-scaled sphere target the
-    /// same reach in the ROOM: 15% of the object or 15 mm, whichever is
+    /// The local radius giving a per-instance-scaled sphere target the
+    /// same reach in the room: 15% of the object or 15 mm, whichever is
     /// kinder, divided by the scale (the entity multiplies it back).
     public static func sphereTargetRadius(baseRadius: Float, scale: Float) -> Float {
         guard scale > 1e-4 else { return baseRadius }
@@ -104,7 +104,7 @@ public struct RelativeDrag: Sendable {
         startTarget + (hand - startHand)
     }
 
-    /// Carry distance from where THIS DRAG picked it up — measured
+    /// Carry distance from where this drag picked it up — measured
     /// against `startTarget`, which nothing overwrites; a per-frame
     /// reference makes the 12 mm tap threshold speed-dependent.
     public func travel(forHand hand: SIMD3<Double>) -> Double {

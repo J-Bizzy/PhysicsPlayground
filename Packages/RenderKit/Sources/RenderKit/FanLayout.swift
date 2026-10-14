@@ -3,7 +3,7 @@
 //  RenderKit
 //
 //  Pure arithmetic for where an unfolding picker fan's petals sit — the
-//  app's only picker shape (DECISIONS.md 2026-07-29), split out to be testable.
+//  app's only picker shape, split out to be testable.
 //
 
 import Foundation
@@ -79,7 +79,7 @@ public struct FanLayout: Sendable {
                          isVisible: progress > 0.02)
     }
 
-    /// Closest ADJACENT centre-to-centre spacing at full openness — the
+    /// Closest adjacent centre-to-centre spacing at full openness — the
     /// fan is convex, so no farther-apart pair is closer in space.
     public func minimumAdjacentSpacing(count: Int) -> Double {
         guard count > 1 else { return .infinity }
@@ -92,7 +92,7 @@ public struct FanLayout: Sendable {
     }
 
     /// The narrowest fan keeping `count` items of `itemSpan` metres from
-    /// overlapping — derived FROM the count so a grown bank cannot silently
+    /// overlapping — derived from the count so a grown bank cannot silently
     /// overlap. Widens the arc first (keeps the fan the same distance from
     /// the hand), then grows `reach` when even `maxSpan` cannot fit.
     public static func spread(count: Int,
@@ -131,8 +131,5 @@ public struct FanLayout: Sendable {
         }
         return layout(span: high, reach: reach)
     }
-
-    // `FanLayout.ease` moved to `Motion.ease` (Reduce Motion);
-    // `MotionCriterionTests` bans hand-rolled eases.
 
 }

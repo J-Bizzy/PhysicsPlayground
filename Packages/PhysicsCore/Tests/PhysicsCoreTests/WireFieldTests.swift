@@ -130,7 +130,7 @@ final class WireFieldTests: XCTestCase {
 
     // MARK: The guards
 
-    /// On the axis the exact solution diverges, and a renderer WILL sample
+    /// On the axis the exact solution diverges, and a renderer will sample
     /// there. Zero is the deliberate answer; a NaN would ride a transform
     /// into the scene graph and freeze it.
     func testAPointOnTheWireReturnsZeroRatherThanNaN() {

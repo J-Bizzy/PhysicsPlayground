@@ -52,7 +52,7 @@ final class DipoleDynamicsTests: XCTestCase {
 
     // MARK: Overshoot
 
-    /// A released needle must swing PAST alignment — impossible without
+    /// A released needle must swing past alignment — impossible without
     /// inertia, which is why the type exists.
     func testAReleasedNeedleSwingsPastAlignmentAndComesBack() {
         let samples = swing(startAngle: 0.35, field: SIMD3(5e-5, 0, 0),
@@ -110,7 +110,7 @@ final class DipoleDynamicsTests: XCTestCase {
 
     // MARK: Energy
 
-    /// Undamped energy (½Iω² − m·B) must stay BOUNDED — semi-implicit Euler
+    /// Undamped energy (½Iω² − m·B) must stay bounded — semi-implicit Euler
     /// does not conserve exactly, but must not grow.
     func testAnUndampedSwingKeepsItsEnergy() {
         let field = SIMD3(5e-5, 0.0, 0.0)

@@ -2,28 +2,11 @@
 //  LagrangeCaptureTests.swift
 //  PhysicsPlaygroundTests
 //
-//  FIVE PARAGRAPHS, ZERO READERS, BESIDE A SILENT OVERWRITE.
-//
-//  `GravityLabModel.lagrangeExplanations` holds one paragraph per point
-//  on why L1–L3 shed their occupants and L4/L5 hold. Nothing read them.
-//  Next to them sat `capturedPointName`, written in four places and read
-//  in none.
-//
-//  The silence was not cosmetic, which is what makes this worth a test
-//  rather than a tidy-up. `release()` snaps a body dropped near a
-//  Lagrange point onto the point and OVERWRITES the velocity the user
-//  just threw with `Lagrange.corotatingVelocity`. That is correct — a
-//  body parked at L4 must move with the rotating frame or it is not
-//  parked — and, unexplained, it looks exactly like the throw was
-//  thrown away. The app had the sentence that answers that and no
-//  surface to say it on.
-//
-//  WHAT THESE TESTS PIN. Not the wording — that is the author's. They
-//  pin the two things that would silently rot: that a capture still
-//  RECORDS which point and which body (so a callout can find them), and
-//  that every point the model can capture at has a paragraph. A sixth
-//  point added without prose, or a renamed key, would otherwise show an
-//  empty callout on a body whose velocity had just been rewritten.
+//  A release near a Lagrange point parks the body there and rewrites
+//  the thrown velocity with the co-rotating one — correct, and
+//  unexplained it looks like the throw was thrown away. These pin that a
+//  capture records which point and which body, and that every point the
+//  model can capture at has a paragraph.
 //
 
 import XCTest
@@ -36,17 +19,14 @@ import RenderKit
 @MainActor
 final class LagrangeCaptureTests: XCTestCase {
 
-    /// Every point the model can park a body at can explain itself.
-    ///
-    /// A CRITERION OVER THE POINTS, not a list of five: `Lagrange.Points`
-    /// decides what exists, so adding L6 tomorrow fails here rather than
-    /// showing a blank paragraph in the room.
+    /// Every point the model can park a body at can explain itself — a
+    /// criterion over `Lagrange.Points`, not a list of five.
     func testEveryLagrangePointHasSomethingToSay() {
         let (earth, moon) = Lagrange.earthMoonSystem()
         let points = Lagrange.points(primary: earth, secondary: moon)
         XCTAssertFalse(points.all.isEmpty)
         for point in points.all {
-            let text = GravityLabModel.lagrangeExplanations[point.name]
+            let text = OrbitalMechanicsModel.lagrangeExplanations[point.name]
             XCTAssertNotNil(text, """
                 \(point.name) can be captured and has no paragraph — a body \
                 parked there would have its thrown velocity overwritten with \
@@ -62,20 +42,18 @@ final class LagrangeCaptureTests: XCTestCase {
     /// the whole lesson is that three are saddles and two are stable.
     func testThePointsDoNotShareAParagraph() {
         var seen: Set<String> = []
-        for (name, text) in GravityLabModel.lagrangeExplanations {
+        for (name, text) in OrbitalMechanicsModel.lagrangeExplanations {
             XCTAssertTrue(seen.insert(text).inserted,
                           "\(name) repeats another point's paragraph")
         }
     }
 
-    /// …and the two STABLE points say so, while the saddles admit they
-    /// are not. This is the one content claim worth asserting, because
-    /// getting it backwards would teach the opposite of the physics that
-    /// `LagrangeTests` pins in PhysicsCore.
+    /// The two stable points say so, while the saddles admit they are not:
+    /// the one content claim worth asserting.
     func testTheParagraphsAgreeWithTheStability() throws {
         let saddles = ["L1", "L2", "L3"]
         for name in saddles {
-            let text = try XCTUnwrap(GravityLabModel.lagrangeExplanations[name])
+            let text = try XCTUnwrap(OrbitalMechanicsModel.lagrangeExplanations[name])
                 .lowercased()
             XCTAssertTrue(text.contains("unstable") || text.contains("saddle")
                             || text.contains("slide off"),
@@ -83,7 +61,7 @@ final class LagrangeCaptureTests: XCTestCase {
                           + "not say so")
         }
         for name in ["L4", "L5"] {
-            let text = try XCTUnwrap(GravityLabModel.lagrangeExplanations[name])
+            let text = try XCTUnwrap(OrbitalMechanicsModel.lagrangeExplanations[name])
                 .lowercased()
             XCTAssertTrue(text.contains("stable") || text.contains("trojan"),
                           "\(name) is stable and its paragraph does not say so")
@@ -92,11 +70,11 @@ final class LagrangeCaptureTests: XCTestCase {
 
     // MARK: The capture records enough to be explained
 
-    /// A CAPTURE MUST NAME THE POINT AND THE BODY, because the callout
+    /// A capture must name the point and the body, because the callout
     /// rides the body — L1's occupant slides off over the following days
     /// with the sentence predicting it travelling alongside.
     func testACaptureRecordsThePointAndTheBody() throws {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         model.showLagrangePoints = true
 
         // A body to host the points, and one to park.
@@ -119,23 +97,20 @@ final class LagrangeCaptureTests: XCTestCase {
             anchor the explanation to the thing that was captured.
             """)
         XCTAssertNotNil(
-            GravityLabModel.lagrangeExplanations[model.capturedPointName ?? ""])
+            OrbitalMechanicsModel.lagrangeExplanations[model.capturedPointName ?? ""])
     }
 
     /// Grabbing the body again clears it — the paragraph belongs to a
     /// capture, not to the session.
     func testPickingTheBodyUpAgainClearsTheCapture() throws {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         model.showLagrangePoints = true
         let host = try XCTUnwrap(model.bodies.dropFirst().first)
         model.select(id: host.id)
         let points = model.lagrangePoints
         try XCTSkipIf(points.isEmpty, "no Lagrange pair in the opening system")
-        // L4 EXPLICITLY. `points.first` is L1, which sits inside the
-        // host planet's Hill sphere — parking a second planet there is
-        // not a capture experiment, it is a collision, and the two merge
-        // on the first frame. L4 is 60 degrees away and stable, which is
-        // the case the paragraph is about.
+        // L4 explicitly: L1 sits inside the host planet's Hill sphere, and a
+        // second planet parked there merges on the first frame.
         let target = try XCTUnwrap(points.first { $0.name == "L4" } ?? points.first)
         let mover = try XCTUnwrap(model.bodies.first { $0.id != host.id
                                     && $0.id != model.primaryBody?.id })
@@ -153,35 +128,17 @@ final class LagrangeCaptureTests: XCTestCase {
 
     // MARK: Where the paragraph stands
 
-    /// THE PARAGRAPH IS NOT INSIDE THE STAR.
-    ///
-    /// The first photograph ever taken of this callout (2026-08-08,
-    /// `-openModule gravitylab -gravLagrange 1`) showed its last three
-    /// lines cut off mid-word — "displaced bodies orbi", "Jupiter's L4
-    /// hol". Nothing was wrong with the strings, the wrap width or the
-    /// backing plate; the text was simply standing INSIDE the sun's halo,
-    /// with some glyphs in front of the sphere's surface and some behind.
-    ///
-    /// Inner planets are where this bites: Mercury's L-points are 0.387
-    /// AU out, and at display scale the halo is a good fraction of that.
-    /// Every test above passed while it happened, because all of them ask
-    /// what the callout SAYS and none asked where it is.
-    ///
-    /// Measured through the renderer's real `tick`, not by calling the
-    /// placement helper — the helper being right is not the claim; the
-    /// callout arriving somewhere legible is.
+    /// The paragraph is not inside the star: inner planets' L-points are
+    /// close in, and the callout once stood inside the sun's halo with its
+    /// last lines cut off. Measured through the renderer's real `tick`.
     func testTheCapturedParagraphStandsClearOfTheStar() throws {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         model.showLagrangePoints = true
         let host = try XCTUnwrap(model.bodies.dropFirst().first)
         model.select(id: host.id)
         let points = model.lagrangePoints
         try XCTSkipIf(points.isEmpty, "no Lagrange pair in the opening system")
-        // L4 EXPLICITLY. `points.first` is L1, which sits inside the
-        // host planet's Hill sphere — parking a second planet there is
-        // not a capture experiment, it is a collision, and the two merge
-        // on the first frame. L4 is 60 degrees away and stable, which is
-        // the case the paragraph is about.
+        // L4 explicitly, as above.
         let target = try XCTUnwrap(points.first { $0.name == "L4" } ?? points.first)
         let mover = try XCTUnwrap(model.bodies.first { $0.id != host.id
                                     && $0.id != model.primaryBody?.id })
@@ -191,7 +148,7 @@ final class LagrangeCaptureTests: XCTestCase {
         model.release(id: mover.id, timestamp: 0.2)
         try XCTSkipIf(model.capturedPointName == nil, "the throw did not capture")
 
-        let renderer = GravityLabRenderer()
+        let renderer = OrbitalMechanicsRenderer()
         // A viewer in front of the system, which is what the space view
         // writes every frame; without one there is no ray to stand off
         // along and the callout stays on the body.
@@ -205,8 +162,8 @@ final class LagrangeCaptureTests: XCTestCase {
         let star = try XCTUnwrap(model.primaryBody)
         let starAt = SIMD3<Float>(star.body.position) * Float(model.simToDisplay)
         let halo = Float(star.displayRadius)
-            * Float(GravityLabRenderer.glowBaseRadius
-                    / GravityLabRenderer.glowReferenceRadius)
+            * Float(OrbitalMechanicsRenderer.glowBaseRadius
+                    / OrbitalMechanicsRenderer.glowReferenceRadius)
         let at = callout.root.position(relativeTo: nil)
 
         XCTAssertGreaterThan(distance(at, starAt), halo, """
@@ -217,13 +174,10 @@ final class LagrangeCaptureTests: XCTestCase {
             """)
     }
 
-    /// …and it still FOLLOWS THE BODY, which is the whole argument for
-    /// putting it there. Standing off toward the reader must not turn it
-    /// into a fixed sign: L1, L2 and L3 are saddles, the captured body
-    /// slides off them over the next few days, and the sentence saying so
-    /// has to travel with it.
+    /// And it still follows the body: the saddles' occupants slide off over
+    /// the following days, and the sentence saying so travels with them.
     func testTheParagraphStillTravelsWithTheBody() throws {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         model.showLagrangePoints = true
         let host = try XCTUnwrap(model.bodies.dropFirst().first)
         model.select(id: host.id)
@@ -238,7 +192,7 @@ final class LagrangeCaptureTests: XCTestCase {
         model.release(id: mover.id, timestamp: 0.2)
         try XCTSkipIf(model.capturedPointName == nil, "the throw did not capture")
 
-        let renderer = GravityLabRenderer()
+        let renderer = OrbitalMechanicsRenderer()
         renderer.viewerInSystem = SIMD3<Float>(0, 0, 1.4)
         renderer.tick(model)
         let first = try XCTUnwrap(renderer.lagrangeCallout).root
@@ -246,23 +200,10 @@ final class LagrangeCaptureTests: XCTestCase {
 
         let seatedAt = SIMD3<Float>(mover.body.position)
 
-        // Run until the body has visibly moved — in chunks, because the
-        // capture is allowed to LAPSE (that is the physics: L4 holds, the
-        // saddles do not) and a lapse is a skip rather than a pass. The
-        // first version of this test ran 25 days in one go, the capture
-        // ended somewhere inside it, and the callout froze exactly where
-        // it had been — which is what a disabled callout does, and is not
-        // evidence about tracking either way.
-        //
-        // `step` takes WALL-CLOCK seconds and clamps to 1/30 — the first
-        // version passed `dt: 600` thinking it was ten minutes of sim
-        // time, and got a single frame. Three sim days per wall second,
-        // so this is a couple of months of sky.
-        // ONE FRAME AT A TIME. The body is parked at L4 with no orbital
-        // velocity, so it is falling into the star from the moment it is
-        // let go and has a couple of sim months to live; stepping in
-        // chunks of ten overshot its whole lifetime and reported "never
-        // moved" about a body that had already merged.
+        // Run one frame at a time until the body has visibly moved: the
+        // capture may lapse (that is the physics) and the parked body is
+        // falling into the star, so a coarse step overshoots its whole
+        // lifetime. `step` takes wall-clock seconds, clamped to 1/30.
         var moved = false
         for _ in 0..<400 {
             model.step(dt: 1.0 / 30)
@@ -286,41 +227,14 @@ final class LagrangeCaptureTests: XCTestCase {
             """)
     }
 
-    /// A CAPTURE DOES NOT OUTLIVE THE BODY IT IS ABOUT.
-    ///
-    /// This is the defect the placement test tripped over on 2026-08-08
-    /// while trying to measure something else. A planet parked at an
-    /// inner world's L4 has no orbital velocity, falls into the star, and
-    /// merges — and `capturedPointName` / `capturedBodyID` went on naming
-    /// it. Nothing rendered wrong, because `syncLagrangeCapture` guards
-    /// its lookup and quietly disables the callout; the model was simply
-    /// holding a verdict about an object that no longer existed, which is
-    /// the failure `reset()` already apologises for in this same file.
-    ///
-    /// Asserted through `step` rather than by calling the sweep, and
-    /// against the CONDITION (the id resolves) rather than against the
-    /// two removal sites that exist today.
-    /// A CAPTURE DOES NOT OUTLIVE THE BODY IT IS ABOUT.
-    ///
-    /// Found on 2026-08-08 by the placement test above, which was trying
-    /// to measure something else entirely. `capturedPointName` and
-    /// `capturedBodyID` were cleared on grab and on `reset()` and nowhere
-    /// else, so a captured body that merged or was deleted left the model
-    /// holding a verdict about an object that no longer existed — the
-    /// failure `reset()` already apologises for in this same file.
-    ///
-    /// Nothing rendered wrong, which is why it lasted: `syncLagrangeCapture`
-    /// guards its lookup and quietly disables the callout. Silent wrong
-    /// state, and the only reader happening to be defensive.
-    ///
-    /// BOTH REMOVAL PATHS, and they do not look alike — one deletes a
-    /// body, the other replaces two with a heavier one carrying a new id.
-    /// Asserted through `step` rather than by calling the sweep.
+    /// A capture does not outlive the body it names: a captured body that
+    /// merged or was deleted once left the model holding a verdict about an
+    /// object that no longer existed, invisibly, because the renderer's
+    /// lookup was defensive. Both removal paths, through `step`.
     func testACaptureDoesNotSurviveTheBodyItNames() throws {
-        // 1. THE MERGE. L1 sits inside the host planet's Hill sphere, so
-        //    a second planet parked there falls together with it within
-        //    a few frames — a deterministic removal, no waiting.
-        let model = GravityLabModel()
+        // The merge: a second planet parked at L1 falls together with the host
+        // within a few frames.
+        let model = OrbitalMechanicsModel()
         model.showLagrangePoints = true
         let host = try XCTUnwrap(model.bodies.dropFirst().first)
         model.select(id: host.id)
@@ -350,9 +264,9 @@ final class LagrangeCaptureTests: XCTestCase {
             """)
         XCTAssertNil(model.capturedPointName)
 
-        // 2. THE DELETE, at a point that holds, so nothing else can be
+        // 2. The delete, at a point that holds, so nothing else can be
         //    what cleared it.
-        let second = GravityLabModel()
+        let second = OrbitalMechanicsModel()
         second.showLagrangePoints = true
         let h = try XCTUnwrap(second.bodies.dropFirst().first)
         second.select(id: h.id)
@@ -374,10 +288,10 @@ final class LagrangeCaptureTests: XCTestCase {
                      "the paragraph still names a body that was deleted")
     }
 
-    /// …AND A LIVE CAPTURE IS NOT SWEPT AWAY. Without this the sweep
+    /// …and A live capture is not swept away. Without this the sweep
     /// could clear unconditionally and every test above would still pass.
     func testASurvivingCaptureIsLeftAlone() throws {
-        let model = GravityLabModel()
+        let model = OrbitalMechanicsModel()
         model.showLagrangePoints = true
         let host = try XCTUnwrap(model.bodies.dropFirst().first)
         model.select(id: host.id)

@@ -1,7 +1,7 @@
 //  GeomagneticField.swift — Earth's field, so a distant compass points north. Real numbers,
 //  nothing tuned: a 6 A·m² bar beats Earth's 25–65 µT inside ~30 cm, Earth wins beyond.
-//  The field is NOT horizontal — it dips ~65° into the ground at mid-northern latitudes.
-//  Only north's direction in the room is a CONVENTION (visionOS exposes no true heading).
+//  The field is not horizontal — it dips ~65° into the ground at mid-northern latitudes.
+//  Only north's direction in the room is a convention (visionOS exposes no true heading).
 
 import Foundation
 import simd
@@ -20,7 +20,7 @@ public enum GeomagneticField: Sendable {
     public static let north = SIMD3<Double>(0, 0, -1)
     public static let up = SIMD3<Double>(0, 1, 0)
 
-    /// The field vector, T — north and DOWN by the dip angle.
+    /// The field vector, T — north and down by the dip angle.
     public static func vector(magnitude: Double = referenceMagnitude,
                               dipDegrees: Double = referenceDipDegrees)
     -> SIMD3<Double> {

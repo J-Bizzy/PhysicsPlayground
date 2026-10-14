@@ -3,7 +3,7 @@
 //  PhysicsCore — Math: the physical constants, SI, in one audited place.
 //
 //  c and e are exact by the 2019 SI definitions; ε₀ = 1/(μ₀c²) and
-//  k = 1/(4πε₀) are DERIVED so the three can never disagree
+//  k = 1/(4πε₀) are derived so the three can never disagree
 //  (ConstantsTests recovers μ₀ε₀c² = 1 to the last bits of a Double).
 //
 

@@ -2,11 +2,10 @@
 //  TableWallTests.swift
 //  PhysicsCoreTests
 //
-//  A table is a finite horizontal wall (Projectiles, 2026-09-02): the
-//  strike law was written for vertical rectangles and the ceiling, and
-//  these pin that it is genuinely normal-agnostic — a drop onto a table
-//  top bounces, a drop beside it falls past, and the underside is a
-//  surface too.
+//  A table is a finite horizontal wall. The strike law was written for
+//  vertical rectangles and the ceiling; these pin that it is genuinely
+//  normal-agnostic: a drop onto a table top bounces, a drop beside it
+//  falls past, and the underside is a surface too.
 //
 
 import XCTest

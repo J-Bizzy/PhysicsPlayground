@@ -2,7 +2,7 @@
 //  SpatialScale.swift
 //  RenderKit — two-handed scale and turn of a module's display root.
 //
-//  A pure PRESENTATION transform: it scales and turns a display root and
+//  A pure presentation transform: it scales and turns a display root and
 //  never touches the model. The physics keeps running in true SI units at
 //  its own scale — the user changes their viewpoint, not the universe.
 
@@ -68,7 +68,7 @@ public final class SpatialScaleRig {
         liveTurn = gestureStartTurn + radians
     }
 
-    /// COMMITS the in-flight gesture: whatever the hands did becomes the
+    /// Commits the in-flight gesture: whatever the hands did becomes the
     /// new view. Call this when a gesture genuinely finishes.
     public func endGesture() {
         guard isGesturing else { return }
@@ -77,8 +77,8 @@ public final class SpatialScaleRig {
         turn = liveTurn
     }
 
-    /// ABANDONS the in-flight gesture, restoring the view to where it
-    /// stood when the hands closed. NOT interchangeable with endGesture:
+    /// Abandons the in-flight gesture, restoring the view to where it
+    /// stood when the hands closed. Not interchangeable with endGesture:
     /// the same-object rule must cancel (not commit) a suppressed pinch,
     /// or grabbing two objects leaves the bench permanently scaled.
     public func cancelGesture() {
@@ -122,7 +122,7 @@ public final class SpatialScaleRig {
 }
 
 /// Tracks which entities are currently being pinched, so a two-hand
-/// gesture can tell "both hands on ONE object" (resize) from "one object
+/// gesture can tell "both hands on one object" (resize) from "one object
 /// in each hand" (two grabs — rig stays out). Fed from a passive
 /// `SpatialEventGesture` that carries each pinch's targeted entity.
 @MainActor
@@ -169,7 +169,7 @@ public final class PinchLedger {
     public var allowsScale: Bool { allowsScale() }
 
     /// A pinch lands on whatever collider was hit — a glyph, a halo, a
-    /// terminal — so it is walked up to the nearest NAMED ancestor,
+    /// terminal — so it is walked up to the nearest named ancestor,
     /// which is how every object in the app identifies itself.
     public static func owner(of entity: Entity) -> Entity {
         entity.nearestAncestor { !$0.name.isEmpty } ?? entity
@@ -194,7 +194,7 @@ public final class PinchLedger {
 public extension View {
     /// Attaches two-handed scale (and optional turn) to a module scene,
     /// firing on any two grabbable objects the hands pinch. Deliberately
-    /// NO region-covering input plate: hit-testing uses colliders, so a
+    /// No region-covering input plate: hit-testing uses colliders, so a
     /// plate would shield every object inside it from every pinch. The
     /// same-object rule (via `PinchLedger`) suppresses the rig while two
     /// pinches rest on two different objects — that is two grabs.
@@ -202,9 +202,9 @@ public extension View {
         modifier(SpatialScaleModifier(rig: rig))
     }
 
-    /// The same gesture for a scene holding MORE THAN ONE apparatus:
+    /// The same gesture for a scene holding more than one apparatus:
     /// `route` walks the pinched entity up to the station that owns it and
-    /// only that rig moves. A gesture end is applied to ALL `rigs` (a
+    /// only that rig moves. A gesture end is applied to all `rigs` (a
     /// no-op on any not gesturing), so a hand drifting off its start
     /// entity can't leave the original rig stuck mid-gesture.
     func spatialScale(
@@ -257,7 +257,7 @@ public struct SpatialScaleModifier: ViewModifier {
                 MagnifyGesture()
                     .targetedToAnyEntity()
                     .onChanged { value in
-                        // CANCEL, not end — `endGesture` would commit the
+                        // Cancel, not end — `endGesture` would commit the
                         // partial swell this guard exists to reject.
                         guard ledger.allowsScale else {
                             rig.cancelGesture()

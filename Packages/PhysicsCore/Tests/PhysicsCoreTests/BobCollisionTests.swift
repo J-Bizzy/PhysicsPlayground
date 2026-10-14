@@ -17,7 +17,7 @@ final class BobCollisionTests: XCTestCase {
 
     // MARK: The headline
 
-    /// One ball in, ONE out at the same speed: sequential pairwise contacts pick the
+    /// One ball in, one out at the same speed: sequential pairwise contacts pick the
     /// physical answer a simultaneous conserving 5-body solve underdetermines.
     func testOneBallInSendsExactlyOneBallOut() {
         var bobs = cradle(firstVelocity: 1.0)
@@ -31,7 +31,7 @@ final class BobCollisionTests: XCTestCase {
         }
     }
 
-    /// TWO balls in, two balls out. The same sweep, no extra rule.
+    /// Two balls in, two balls out. The same sweep, no extra rule.
     func testTwoBallsInSendTwoBallsOut() {
         var bobs = cradle()
         bobs[0].velocity = 1.0

@@ -84,7 +84,7 @@ public struct CylinderFlow: Equatable, Sendable {
     }
 
     /// Net pressure force per unit span from integrating Bernoulli around the surface — the tests
-    /// use it to VERIFY Kutta–Joukowski and d'Alembert rather than assume them.
+    /// use it to verify Kutta–Joukowski and d'Alembert rather than assume them.
     public func integratedPressureForce(airDensity: Double = 1.225, samples: Int = 3600) -> SIMD2<Double> {
         var force = SIMD2<Double>.zero
         let dTheta = 2 * .pi / Double(samples)

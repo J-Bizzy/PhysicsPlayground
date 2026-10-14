@@ -2,17 +2,11 @@
 //  CircuitsScrubLockTests.swift
 //  PhysicsPlaygroundTests
 //
-//  While the room is parked in its own past, the bench is read-only.
-//
-//  `restoreCapsuleSnapshot` overwrites `components` and `wires` on
-//  every scrub change, so before this lock an edit made while scrubbed
-//  would hold for a moment and then silently vanish under the next
-//  restore — the gesture succeeded and its result was then stolen.
-//  A refusal at the gesture is honest; a theft after it is not.
-//
-//  Looking around the past stays legal: selection, the net highlight
-//  and the probes are observations, and observing is what a scrub is
-//  for.
+//  While the room is parked in its own past, the bench is read-only:
+//  `restoreCapsuleSnapshot` overwrites the bench on every scrub change,
+//  so an edit made while scrubbed would silently vanish. Looking around
+//  the past stays legal: selection, the net highlight and the probes are
+//  observations.
 //
 
 import XCTest
@@ -44,7 +38,6 @@ final class CircuitsScrubLockTests: XCTestCase {
         model.setComponentValue(id: anyPart.id, 42)
         model.move(id: anyPart.id, to: anyPart.position + SIMD3(0.3, 0, 0))
         model.setAxis(id: anyPart.id, axis: SIMD3(0, 1, 0))
-        model.beginCarry(id: anyPart.id)
         model.release(id: anyPart.id)
         model.swing(id: anyPart.id, hand: anyPart.position + SIMD3(0, 0.2, 0))
         model.replaceFailed(id: anyPart.id)
@@ -61,7 +54,7 @@ final class CircuitsScrubLockTests: XCTestCase {
         XCTAssertEqual(model.wires, wires)
     }
 
-    /// Observation stays live: a scrub is FOR looking around.
+    /// Observation stays live: a scrub is for looking around.
     func testSelectionAndHighlightStayLiveWhileScrubbed() {
         let model = CircuitsModel()
         model.step(dt: 1.0 / 90.0)

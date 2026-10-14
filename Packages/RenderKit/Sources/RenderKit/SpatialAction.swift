@@ -2,47 +2,12 @@
 //  SpatialAction.swift
 //  RenderKit
 //
-//  MOVED DOWN A LAYER on 2026-08-08, from the app target's DesignSystem.
-//  It lived up there because that is where the primitives that needed it
-//  first happened to live — and the consequence was that the two files
-//  in RenderKit which stand input targets could not reach it.
-//  `SpatialTrackControl` — the app's one continuous control, and the
-//  file whose own header wrote the complaint this mechanism answers —
-//  was announced, adjustable-looking and inoperable for that reason
-//  alone. A shared RealityKit primitive belongs in the shared RealityKit
-//  layer.
-//
-//  HOW A CONTROL IN THE ROOM GETS OPERATED WITHOUT HANDS.
-//
-//  `grep -rn "systemActions\|AccessibilityEvents"` returned ZERO matches
-//  across this whole project. Twenty files set `isAccessibilityElement`
-//  and populate `label` and `value`, so every plate, petal, disc, rail,
-//  well and grip is announced and readable — and not one of them could
-//  be operated. Since the window panels were deleted there is no
-//  fallback surface either, so for a VoiceOver user this app was six
-//  rooms of readouts with no controls at all. The file that should know
-//  best says so itself:
-//
-//      // SpatialTrackControl.swift — a track replaces a `Slider`, and a
-//      // slider is already an adjustable element that speaks its value.
-//      // Migrating without this trades a control someone could operate
-//      // blind for one they cannot.
-//
-//  The `value` was added. The adjustability was not.
-//
-//  WHY A COMPONENT AND NOT A REGISTRY. The obvious shape is a table
-//  mapping entity to closure, and it is wrong twice: it needs weak
-//  references and pruning to avoid holding pooled entities alive, and it
-//  needs every primitive to remember to deregister. A component is
-//  carried BY the entity, so it is found by walking up from whatever
-//  VoiceOver activated — the same walk every `handleTap` in this app
-//  already does — and it dies with the entity it belongs to. Nothing to
-//  leak and nothing to remember.
-//
-//  Setting it is HALF the job. `AccessibilityComponent.systemActions`
-//  is what makes VoiceOver offer the action at all, and this is what
-//  happens when it is taken; a primitive needs both, which is why
-//  `attach` writes both and nobody should be writing either by hand.
+//  How a control in the room gets operated without hands. A component
+//  rather than a registry: it is carried by the entity, found by walking
+//  up from whatever VoiceOver activated (the same walk every
+//  `handleTap` does), and dies with the entity. `attach` writes both the
+//  advertised `systemActions` and the action itself, so the two cannot
+//  drift.
 //
 
 import RealityKit
@@ -92,16 +57,9 @@ public enum SpatialActions {
                                                      adjust: adjust))
     }
 
-    /// Re-publishes just the spoken value.
-    ///
-    /// SEPARATE FROM `attach` BECAUSE IT IS CALLED FROM A DIFFERENT
-    /// PLACE — on every state change, not at construction — and that is
-    /// exactly the distinction `SpatialLayerBank` got wrong. It sets its
-    /// accessibility component once when the plate is built and never
-    /// again, so VoiceOver reads the LAUNCH state of thirty-five display
-    /// toggles for the rest of the session; toggle "Field lines" and it
-    /// still says "hidden". `SpatialActionBank` does this correctly and
-    /// has a test for it.
+    /// Re-publishes just the spoken value. Separate from `attach` because
+    /// it is called on every state change, not at construction — a plate
+    /// that publishes once reads its launch state forever.
     public static func republish(value: String, on entity: Entity) {
         guard var accessibility = entity.components[AccessibilityComponent.self]
         else { return }

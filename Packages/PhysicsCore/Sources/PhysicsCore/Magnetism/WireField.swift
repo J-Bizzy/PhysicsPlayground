@@ -2,40 +2,16 @@
 //  WireField.swift
 //  PhysicsCore
 //
-//  The magnetic field of a FINITE straight current-carrying segment,
-//  in closed form.
+//  The magnetic field of a finite straight current-carrying segment, in
+//  closed form — a bench of wires is a chain of segments, and
+//  superposition does the rest. For a segment a→b carrying I along L̂,
+//  with r₁ = p − a, r₂ = p − b and d the perpendicular distance:
 //
-//  This is what a circuit's own field is made of: a bench of wires is a
-//  chain of straight segments, and superposition does the rest. It is
-//  deliberately not a numerical Biot–Savart integral — the integral has
-//  an elementary antiderivative for a straight segment, so integrating it
-//  numerically would be choosing to be approximately right about
-//  something we can be exactly right about.
+//      B = (μ₀I/4πd)(cos θ₁ − cos θ₂) φ̂,   cos θᵢ = (rᵢ·L̂)/|rᵢ|,
+//      φ̂ = normalize(L̂ × r₁)
 //
-//  THE DERIVATION, because the sign conventions are where this goes
-//  wrong and a reader should be able to check it rather than trust it.
-//  For a segment from `a` to `b` carrying current I along L̂ = (b−a)/|b−a|,
-//  and a field point p, write r₁ = p − a and r₂ = p − b. Parameterise the
-//  wire by s ∈ [0, |L|]:
-//
-//      dl × r = L̂ ds × (r₁ − s L̂) = (L̂ × r₁) ds
-//
-//  because L̂ × L̂ = 0 — so the DIRECTION is constant along the segment
-//  and comes straight out of the integral. With d the perpendicular
-//  distance from p to the segment's line, |L̂ × r₁| = d, and writing
-//  u = s − (r₁·L̂):
-//
-//      B = (μ₀I/4π)(L̂ × r₁) ∫ du / (d² + u²)^{3/2}
-//        = (μ₀I/4πd) φ̂ [ u/√(d²+u²) ]
-//        = (μ₀I/4πd) (cos θ₁ − cos θ₂) φ̂
-//
-//  with cos θᵢ = (rᵢ·L̂)/|rᵢ| and φ̂ = normalize(L̂ × r₁). The endpoints
-//  fall out because √(d² + u²) at each limit is just |r₁| and |r₂|.
-//
-//  Two limits worth knowing, both pinned by tests: a very long segment
-//  recovers the infinite-wire law μ₀I/2πd, and the field on the axis of a
-//  polygon approximates a circular loop's μ₀I/2R as the polygon's side
-//  count rises.
+//  Tests pin the long-segment limit (μ₀I/2πd) and the polygon-as-loop
+//  limit (μ₀I/2R on the axis).
 //
 
 import Foundation
@@ -51,7 +27,7 @@ public enum WireField {
     /// amps, in tesla.
     ///
     /// Returns zero for a degenerate segment, and — deliberately — for a
-    /// point ON the wire's axis, where the exact solution diverges. That
+    /// point on the wire's axis, where the exact solution diverges. That
     /// is not a fudge: 1/d has no finite value at d = 0, a real wire has
     /// a radius that this idealisation does not, and a renderer sampling
     /// a grid will land exactly on a wire eventually. Returning zero
@@ -73,7 +49,7 @@ public enum WireField {
         guard n1 > 1e-12, n2 > 1e-12 else { return .zero }
 
         // The azimuthal direction, and the perpendicular distance, from
-        // the same cross product — |L̂ × r₁| IS d.
+        // the same cross product — |L̂ × r₁| is d.
         let cross = simd_cross(unit, r1)
         let d = simd_length(cross)
         guard d > 1e-9 else { return .zero }   // on the axis: see above

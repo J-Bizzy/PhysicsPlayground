@@ -2,26 +2,11 @@
 //  StudioEnvironment.swift
 //  Physics Playground — Shell
 //
-//  Studio Mode's stage: a fully immersive dark gallery that replaces the
-//  passthrough room. A star-dusted night sky wraps the user, a matte
-//  charcoal floor grounds them, and two faint glowing rings mark the
-//  stage the exhibits stand on — a planetarium for physics, where the
-//  glowing charges, beams, and smoke read at full contrast instead of
-//  fighting a sunlit living room.
-//
-//  Everything is procedural (no assets): the sky is a generated gradient
-//  + starfield texture on an inside-out sphere.
-//
-//  The 2026-08-05 pass made the night worth looking at, in the same
-//  visit that made the room tone worth listening to. The sky gained a
-//  galactic band arcing overhead (seamless where the texture wraps —
-//  its path is whole sine cycles across the width), three faint nebula
-//  pools, stars in two colour temperatures instead of one, and a
-//  handful of bright ones with real halos. The floor gained a lit
-//  centre pool in the house champagne so the stage has somewhere to
-//  stand, and the rings speak the app's own palette — champagne within,
-//  cool blue far out — each over a soft glow pass, casings-beat-glows
-//  inverted for a place that is finally dark enough to glow in.
+//  Studio Mode's stage: a fully immersive dark gallery in place of the
+//  passthrough room — a star-dusted night sky with a galactic band and
+//  nebula pools, a matte charcoal floor with a lit centre pool, and two
+//  faint glowing rings marking the stage. Everything is procedural: the
+//  sky is a generated gradient and starfield on an inside-out sphere.
 //
 
 import RealityKit
@@ -44,7 +29,7 @@ struct StudioEnvironmentView: View {
         if let texture = skyTexture() {
             sky.color = .init(tint: .white, texture: .init(texture))
         }
-        let dome = ModelEntity(mesh: .generateSphere(radius: 45), materials: [sky])
+        let dome = ModelEntity(mesh: Primitives.sphere(radius: 45), materials: [sky])
         dome.scale = SIMD3(-1, 1, 1)   // view it from the inside
         dome.position = [0, 1.4, 0]
         root.addChild(dome)
@@ -56,30 +41,26 @@ struct StudioEnvironmentView: View {
         floorMaterial.roughness = 0.95
         floorMaterial.metallic = 0.0
         let floor = ModelEntity(
-            mesh: .generateCylinder(height: 0.02, radius: 8),
+            mesh: Primitives.cylinder(height: 0.02, radius: 8),
             materials: [floorMaterial])
         floor.position = [0, -0.01, 0]
         root.addChild(floor)
 
-        // The stage pool: a soft champagne-lit centre fading to the
-        // charcoal rim, riding just above the slab. Without it the floor
-        // is one flat value and the exhibits stand on nothing in
-        // particular; with it the middle of the room reads as the lit
-        // part of a gallery. Unlit, because it IS the light.
+        // The stage pool: a soft champagne-lit centre fading to the charcoal
+        // rim. Unlit, because it is the light.
         if let poolTexture = floorPoolTexture() {
             var pool = UnlitMaterial()
             pool.color = .init(tint: .white, texture: .init(poolTexture))
             pool.blending = .transparent(opacity: 0.55)
             let sheen = ModelEntity(
-                mesh: .generatePlane(width: 15.6, depth: 15.6, cornerRadius: 7.8),
+                mesh: Primitives.plane(width: 15.6, depth: 15.6, cornerRadius: 7.8),
                 materials: [pool])
             sheen.position = [0, 0.004, 0]
             root.addChild(sheen)
         }
 
-        // Two glowing rings mark the stage — gallery lighting, in the
-        // app's own palette: champagne close in, cool blue far out. Each
-        // ring is a crisp core over a fatter, fainter glow pass.
+        // Two glowing rings mark the stage: champagne close in, cool blue far
+        // out, each a crisp core over a fainter glow pass.
         addRing(to: root, radius: 2.6, y: 0.012,
                 color: UIColor(red: 1.0, green: 0.88, blue: 0.70, alpha: 1),
                 opacity: 0.5)
@@ -99,21 +80,17 @@ struct StudioEnvironmentView: View {
         }
         // The glow first (fatter, fainter), the core over it.
         if let glowMesh = TubeMesh.tube(lines: [points], radius: 0.030, sides: 8) {
-            var glow = UnlitMaterial(color: color)
-            glow.blending = .transparent(opacity: .init(floatLiteral: opacity * 0.22))
+            let glow = Materials.unlit(color, opacity: opacity * 0.22)
             root.addChild(ModelEntity(mesh: glowMesh, materials: [glow]))
         }
         guard let mesh = TubeMesh.tube(lines: [points], radius: 0.008, sides: 8) else { return }
-        var material = UnlitMaterial(color: color)
-        material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+        let material = Materials.unlit(color, opacity: opacity)
         root.addChild(ModelEntity(mesh: mesh, materials: [material]))
     }
 
-    /// A deep-night gradient under a seeded sky: a galactic band arcing
-    /// overhead, three faint nebula pools, several hundred stars in two
-    /// colour temperatures, and a dozen bright ones with halos. The
-    /// band's path completes whole sine cycles across the width, so the
-    /// texture is seamless where the dome wraps.
+    /// A deep-night gradient under a seeded sky. The galactic band completes
+    /// whole sine cycles across the width, so the texture is seamless where
+    /// the dome wraps.
     private static func skyTexture() -> TextureResource? {
         let width = 2048, height = 1024
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
@@ -165,17 +142,13 @@ struct StudioEnvironmentView: View {
                 }
             }
 
-            // The galactic band: a river of faint bloom and dense dust
-            // stars arcing across the upper sky. Its centreline runs two
-            // whole sine cycles across the width, so the left and right
-            // edges of the texture meet at the same height and slope.
+            // The galactic band's centreline: two whole sine cycles across the
+            // width, so the texture's edges meet.
             func bandCenter(_ x: Double) -> Double {
                 Double(height) * (0.20 + 0.075 * sin(x / Double(width) * 2 * .pi * 2))
             }
-            // Many, large, and very faint — individually invisible, so
-            // the band reads as one continuous river of light rather
-            // than a scatter of bokeh circles (the first draw used 450
-            // smaller dots at triple the alpha and each one showed).
+            // Many, large and very faint, so the band reads as one river of light
+            // rather than a scatter of dots.
             for _ in 0..<1400 {
                 let x = random() * Double(width)
                 let spread = pow(random(), 1.7) * Double(height) * 0.085
@@ -215,8 +188,7 @@ struct StudioEnvironmentView: View {
                                           width: radius * 2, height: radius * 2))
             }
 
-            // A dozen bright stars with halos — the ones the eye finds
-            // and holds onto.
+            // A dozen bright stars with halos.
             for _ in 0..<12 {
                 let x = random() * Double(width)
                 let y = pow(random(), 1.4) * Double(height) * 0.5
@@ -245,9 +217,8 @@ struct StudioEnvironmentView: View {
         return try? TextureResource.generate(from: cgImage, options: .init(semantic: .color))
     }
 
-    /// The floor's lit centre: a champagne pool fading through charcoal
-    /// to nothing at the rim, so the slab has depth instead of one flat
-    /// value. Drawn as alpha over the charcoal disc beneath it.
+    /// The floor's lit centre: a champagne pool fading through charcoal to
+    /// nothing at the rim, drawn as alpha over the disc beneath.
     private static func floorPoolTexture() -> TextureResource? {
         let size = 1024
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))

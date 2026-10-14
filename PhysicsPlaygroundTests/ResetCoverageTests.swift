@@ -2,52 +2,14 @@
 //  ResetCoverageTests.swift
 //  PhysicsPlaygroundTests
 //
-//  THE SEVENTH INSTANCE CANNOT HIDE.
-//
-//  Six modules have now shipped the same defect: a `Bool` on the model
-//  that `reset()` forgot. Pendulums' `frictionOn`, Magnetism's
-//  `dynamicsOn`, Kinematics' `respectRoomWalls`, three of Circuits' four
-//  at once (2026-07-31), and then — found by this pass on 2026-08-03,
-//  after CLAUDE.md had already been updated to warn about exactly this —
-//  Gravity Lab's `keplerSweepOn` and Electric Fields' `chargesRespond`.
-//
-//  Every previous fix was a test that LISTED the flags it knew about.
-//  That is the same act of attention that missed them in the first
-//  place, so it caught nothing new: the fifth and sixth sat behind lit
-//  switch plates for two days with per-module reset tests passing over
-//  them.
-//
-//  This one enumerates instead. It reflects over the model, finds every
-//  `Bool` it has, and asserts that a model which has been mutated and
-//  then reset is indistinguishable from a fresh one. Nothing here names
-//  a property, so a flag added tomorrow is covered tomorrow.
-//
-//  WHY BOOLS SPECIFICALLY. A flag is what a switch plate shows, and a
-//  lit lamp makes a claim every frame — that is what makes this class of
-//  bug visible the moment it gets a control and invisible before. The
-//  same sweep over Doubles would drag in accumulators, clocks and
-//  personal bests that are deliberately NOT reset (`bestStreak`,
-//  `simTime` — and `bestPredictionMissAU` until it was deleted with the
-//  experiments on 2026-08-09), and a test with a growing exception list
-//  is the listing test again.
-//
-//  `@Observable` stores each tracked property in an underscored backing
-//  field, so that is what `Mirror` reports and what this reads.
-//
-//  WHAT THIS STILL CANNOT SEE, stated so the next one is not found the
-//  same way. The sweep is `Bool`s ON MODELS, and both halves are limits:
-//
-//  · A model's non-`Bool` state. Deliberate, argued above.
-//  · Anything owned by a VIEW. The seventh instance (2026-08-26) was the
-//    multimeter — `root.isEnabled` and a `Set` of carried probes, held by
-//    `Multimeter`, which no reflection over models can reach. A module's
-//    `reset` closure calls `model.reset()` and nothing else, so any
-//    apparatus a SpaceView owns is outside this net by construction.
-//    `MultimeterTests.testAResetPutsTheMeterBackInTheRack` covers that
-//    one by hand, and `SpatialActionBank.seenResetNonce` is the general
-//    pattern: a view object watches `AppModel.resetNonce` and restores
-//    itself. If you add an instrument a hand can move or reveal, it needs
-//    that pattern and a test of its own — this file will not tell you.
+//  Six modules have shipped the same defect: a `Bool` on the model that
+//  `reset()` forgot, behind a lit switch plate. This enumerates instead
+//  of listing: it reflects over each model, finds every `Bool`, and
+//  asserts a mutated-then-reset model matches a fresh one. Bools only —
+//  a sweep over Doubles would drag in clocks and accumulators that are
+//  deliberately not reset. What it cannot see is state owned by a view
+//  (the multimeter); that needs the `resetNonce` pattern and a test of
+//  its own.
 //
 
 import XCTest
@@ -68,12 +30,9 @@ final class ResetCoverageTests: XCTestCase {
         return found
     }
 
-    /// Flip every flag away from where it started, then reset, then
-    /// compare against a model that was never touched.
-    ///
-    /// `flip` is handed the model and must invert its flags; it is per
-    /// module because the properties are concrete, but it does not get
-    /// to choose WHICH flags — it is handed the names by reflection.
+    /// Flip every flag away from where it started, then reset, then compare
+    /// against a model that was never touched. `flip` is handed the names
+    /// by reflection.
     private func assertResetRestoresEveryFlag<M>(
         fresh: () -> M,
         flip: (M, String) -> Void,
@@ -119,12 +78,12 @@ final class ResetCoverageTests: XCTestCase {
 
     // MARK: The six
 
-    /// The two found on 2026-08-03 are first, because they are the ones
+    /// The two found behind lit plates are first, because they are the ones
     /// this mechanism exists to have caught.
 
-    func testGravityLabResetRestoresEveryFlag() {
+    func testOrbitalMechanicsResetRestoresEveryFlag() {
         assertResetRestoresEveryFlag(
-            fresh: { GravityLabModel() },
+            fresh: { OrbitalMechanicsModel() },
             flip: { model, name in
                 switch name {
                 case "keplerSweepOn": model.keplerSweepOn.toggle()
@@ -132,12 +91,10 @@ final class ResetCoverageTests: XCTestCase {
                 case "showVelocityVector": model.showVelocityVector.toggle()
                 case "showAccelerationVector": model.showAccelerationVector.toggle()
                 case "showForceVector": model.showForceVector.toggle()
-                case "showFieldParticles": model.showFieldParticles.toggle()
-                case "showSpacetimeGrid": model.showSpacetimeGrid.toggle()
                 case "showLagrangePoints": model.showLagrangePoints.toggle()
                 case "playOrbitalChord": model.playOrbitalChord.toggle()
                 default:
-                    XCTFail("GravityLabModel gained a flag this test cannot "
+                    XCTFail("OrbitalMechanicsModel gained a flag this test cannot "
                             + "flip: `\(name)`. Add a case — do not delete "
                             + "the assertion.")
                 }
@@ -194,12 +151,8 @@ final class ResetCoverageTests: XCTestCase {
                 case "compassOn": model.compassOn.toggle()
                 case "earthFieldOn": model.earthFieldOn.toggle()
                 case "inertiaOn": model.inertiaOn.toggle()
-                // A `let` recording what `-magInertia` asked for at
-                // launch. Reflection cannot tell a `let` from a `var`,
-                // so it surfaces here and is named rather than skipped —
-                // an unexplained hole in this switch is how the next
-                // real flag would slip through. It is immutable, so
-                // there is nothing to flip and nothing to restore.
+                // A `let` recording what `-magInertia` asked for at launch; reflection
+                // cannot tell a `let` from a `var`, so it is named rather than skipped.
                 case "inertiaAtLaunch": break
                 case "isPaused": model.isPaused.toggle()
                 default:

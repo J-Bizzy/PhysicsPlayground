@@ -18,8 +18,8 @@ final class MagnetismModel {
     // MARK: Region (immersive-space coordinates)
 
     nonisolated static let regionCenter = SIMD3<Double>(0, 1.35, -0.7)
-    /// The physics SAFETY bounds — room-scale, not a wall a hand meets.
-    /// Binds only the FREE simulation, so a flicked magnet settles in the
+    /// The physics safety bounds — room-scale, not a wall a hand meets.
+    /// Binds only the free simulation, so a flicked magnet settles in the
     /// room rather than sailing off.
     nonisolated static let safetyHalfExtents = SIMD3<Double>(2.6, 1.6, 2.6)
     nonisolated static let regionFloor = 0.35
@@ -45,7 +45,7 @@ final class MagnetismModel {
 
     private(set) var magnets: [BarMagnet] = []
     private(set) var selectedID: UUID?
-    /// Every magnet a hand is currently holding — a SET, because two
+    /// Every magnet a hand is currently holding — a set, because two
     /// hands can each carry one.
     private(set) var heldIDs: Set<UUID> = []
 
@@ -67,7 +67,7 @@ final class MagnetismModel {
 
     // MARK: Earth's own field
 
-    /// Whether the room is standing on a planet. COMPASSES ONLY: Earth's
+    /// Whether the room is standing on a planet. Compasses only: Earth's
     /// field is deliberately not applied to the bar magnets or the field
     /// lines, only to the compasses.
     var earthFieldOn = true
@@ -77,7 +77,7 @@ final class MagnetismModel {
         earthFieldOn ? GeomagneticField.vector() : .zero
     }
 
-    /// What a COMPASS feels anywhere in the room: every magnet, plus the
+    /// What a compass feels anywhere in the room: every magnet, plus the
     /// planet. Distinct from the field the magnets feel from each other.
     func compassField(at point: SIMD3<Double>) -> SIMD3<Double> {
         MagneticField.vector(at: point, dueTo: magnets) + earthField
@@ -85,11 +85,6 @@ final class MagnetismModel {
 
     /// The field where the hand compass is — what its needle points along.
     var compassField: SIMD3<Double> { compassField(at: compassPosition) }
-
-    // NO `compassIsReadingEarth`. It answered "is the planet the bigger
-    // part of what this needle feels?" and no renderer ever asked — the
-    // compass shows |B| and a direction, and the wearer reads the answer
-    // off the dial by walking away from the magnets. Deleted 2026-08-26.
 
     /// |B| at the compass in microtesla, for its dial label.
     var compassMicroTesla: Double { simd_length(compassField) * 1e6 }
@@ -107,11 +102,9 @@ final class MagnetismModel {
 
     // MARK: Inertia — the alternative bench, behind a launch argument
 
-    /// Whether the magnets have MASS AND ROTATIONAL INERTIA. Off by
-    /// default (the glide), on with `-magInertia 1`; both ship (a needle
-    /// released at an angle overshoots and rings). See DECISIONS.md.
-    /// DEBUG-only: a release build cannot set the flag, and the mode
-    /// carries a known defect (a touching pair never settles).
+    /// Whether the magnets have mass and rotational inertia. Off by default
+    /// (the glide), on with `-magInertia 1`; both ship. DEBUG-only, and the
+    /// mode carries a known defect (a touching pair never settles).
     #if DEBUG
     var inertiaOn = UserDefaults.standard.bool(forKey: "magInertia")
     #else
@@ -169,13 +162,10 @@ final class MagnetismModel {
                 }
                 guard magnets.count > 1 else { continue }
 
-                // STILL THE POINT DIPOLE, AND IT IS THE WRONG MODEL HERE,
-                // measured 50% low at contact — but the pole-pair remedy
-                // (`netBarForce`) is worse: pathological at/inside contact
-                // (repulsion at r/L = 1.0). Both models are unusable where
-                // the magnets meet; the dipole keeps the sign right.
-                // `testTheBarForceIsUnusableWhereThePolesMeet` pins it. Do
-                // not "fix" without reading.
+                // Still the point dipole, measured 50% low at contact — but the
+                // pole-pair remedy is worse: pathological at and inside contact.
+                // `testTheBarForceIsUnusableWhereThePolesMeet` pins it; do not "fix"
+                // without reading.
                 let force = MagneticField.netForce(on: magnets, at: i)
                 let field = MagneticField.vector(
                     at: magnets[i].position, dueTo: magnets, excluding: i)
@@ -209,7 +199,7 @@ final class MagnetismModel {
         bodies = bodies.filter { live.contains($0.key) }
     }
 
-    /// Takes the APPROACHING component out of two touching magnets'
+    /// Takes the approaching component out of two touching magnets'
     /// velocities — an inelastic contact, so a snapped-together pair does
     /// not sit buzzing. Only the component along the line of centres, and
     /// only while closing; sliding is untouched.
@@ -256,7 +246,7 @@ final class MagnetismModel {
                 }
             }
             // Turn the moment toward the local field (τ = m × B), and
-            // NEVER PAST IT: clamp the step to the angle remaining so an
+            // Never past it: clamp the step to the angle remaining so an
             // aligned pair lands on alignment and stops dead, instead of
             // overshooting into a frame-rate limit cycle.
             let field = MagneticField.vector(
@@ -280,7 +270,7 @@ final class MagnetismModel {
         magnets = separated(next)
     }
 
-    /// Takes the INWARD component out of a magnet's glide as it closes on
+    /// Takes the inward component out of a magnet's glide as it closes on
     /// one it is already touching, so a snapped pair stops instead of
     /// buzzing. Only the closing component, in proportion to the gap
     /// left; a magnet can still slide along or be pulled away.
@@ -332,7 +322,7 @@ final class MagnetismModel {
         return result
     }
 
-    /// The FREE simulation's safety bound — never applied to a hand.
+    /// The free simulation's safety bound — never applied to a hand.
     /// Room-scale, so it only ever fires on a magnet that has drifted
     /// or been flicked far across the room.
     private func clamp(_ p: SIMD3<Double>) -> SIMD3<Double> {
@@ -343,7 +333,7 @@ final class MagnetismModel {
         return c
     }
 
-    /// A hand meets no walls (owner, 2026-08-03) — only the floor.
+    /// A hand meets no walls, only the floor.
     private func floored(_ p: SIMD3<Double>) -> SIMD3<Double> {
         var c = p
         c.y = max(c.y, Self.regionFloor)
@@ -433,7 +423,7 @@ final class MagnetismModel {
 
     // MARK: Reset
 
-    /// What `-magInertia` asked for at launch — `reset()` returns to THIS
+    /// What `-magInertia` asked for at launch — `reset()` returns to this
     /// rather than `false`, so Reset keeps the staged bench.
     #if DEBUG
     private let inertiaAtLaunch = UserDefaults.standard.bool(forKey: "magInertia")
@@ -446,25 +436,10 @@ final class MagnetismModel {
         // a line here.
         inertiaOn = inertiaAtLaunch
         bodies.removeAll()
-        // TWO magnets, and the second one is the module.
-        //
-        // It was one, centred, on the reasoning that "its looping dipole
-        // field IS the opening scene". The field was drawn and it was
-        // correct and NOTHING MOVED — one magnet has nothing to attract, so
-        // the lab opened as a diagram of itself and stayed that way until
-        // the wearer thought to do something.
-        //
-        // The second sits off-axis with its moment turned well away from
-        // the first, so with `dynamicsOn` (below) the pair visibly swings
-        // into alignment over a few seconds as the wearer arrives. That is
-        // the module's own `firstRunHint` — "Bring two close and watch —
-        // they pull together head-to-tail" — happening without being asked
-        // for, which is what the home screen's "every exhibit is a
-        // perpetual live demo" means applied to a lab.
-        //
-        // Far enough apart to read as two objects and to take a moment
-        // settling; the overdamped glide is what keeps that legible rather
-        // than a snap.
+        // Two magnets, and the second is the module: one magnet has nothing to
+        // attract, so the lab opened as a diagram of itself. The second sits
+        // off-axis with its moment turned away, so the pair visibly swings into
+        // alignment as the wearer arrives.
         magnets = [
             BarMagnet(position: Self.regionCenter - SIMD3(0.34, 0, 0),
                       moment: SIMD3(Self.defaultStrength, 0, 0)),
@@ -477,9 +452,8 @@ final class MagnetismModel {
         isPaused = false
         showFieldLines = true
         compassOn = true
-        // A flag with no visible control can drift out of reset unnoticed;
-        // restore it here. (`-magFrozen` reopens frozen — `init()` applies
-        // it after this runs.)
+        // A flag with no visible control drifts out of reset unnoticed;
+        // `-magFrozen` reopens frozen after this runs.
         dynamicsOn = true
         earthFieldOn = true
         compassPosition = Self.regionCenter + SIMD3(0.0, -0.42, 0.55)

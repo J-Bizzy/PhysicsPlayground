@@ -1,5 +1,5 @@
 //  SurfaceGravity.swift — quoted surface gravities (m/s²), one shared place.
-//  Values: IAU/NASA fact sheets, EQUATORIAL surface gravity. They agree with GM/R² from
+//  Values: IAU/NASA fact sheets, equatorial surface gravity. They agree with GM/R² from
 //  CelestialBody only via the equatorial R — Jupiter's stored radius is the 2%-smaller
 //  volumetric mean (oblate) — and nothing is rotation-corrected (tests disprove
 //  centrifugal cancellation).

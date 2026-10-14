@@ -12,7 +12,7 @@ import XCTest
 final class ConstantsTests: XCTestCase {
 
     /// μ₀ε₀c² = 1, exact in SI — pins three constants at once. Asserted to
-    /// 1e-15 because ε₀ is DERIVED from the other two.
+    /// 1e-15 because ε₀ is derived from the other two.
     func testPermeabilityTimesPermittivityTimesCSquaredIsOne() {
         let product = Constants.vacuumPermeability
             * Constants.vacuumPermittivity

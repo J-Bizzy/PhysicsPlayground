@@ -2,35 +2,13 @@
 //  PlacementDragTests.swift
 //  PhysicsPlaygroundTests
 //
-//  THE TWO HEADLINE VERBS OF THE SHELL, NEITHER OF WHICH HAD A TEST.
-//
-//  "Put the lab where you actually have room" and "move the whole
-//  gallery" are the same interaction twice: a `RelativeDrag` on a
-//  placement offset, with a press that never moves folded into the same
-//  recogniser as a tap that recentres. Folding the two together is
-//  deliberate and well argued (a second `TapGesture` here contended with
-//  every module's own recogniser and killed every switch plate in the
-//  app), and it puts the entire correctness of both verbs on ONE number:
-//  how far the press has travelled.
-//
-//  That number was wrong in both files, in the same way, from the day
-//  each was written:
-//
-//      travelled = max(travelled, distance(next, placement.offset))
-//      placement.move(to: next)              // offset := next
-//
-//  The reference is overwritten by the very next line, so what was
-//  compared against the 12 mm tap threshold was one FRAME's hand
-//  displacement, not the drag's. At 90 Hz that needs about 1.08 m/s to
-//  clear. A deliberate, careful placement — the kind anybody makes when
-//  positioning apparatus in their living room — runs at maybe 0.3 m/s
-//  and never clears it, so `onEnded` took the TAP branch and recentred:
-//  you carried the lab to the far side of the sofa and it snapped home
-//  the instant you let go, every time, with no way to tell why.
-//
-//  These tests replay the real frame loop — the same `RelativeDrag`, the
-//  same `move(to:)`, the same accumulator — at speeds a hand actually
-//  moves at.
+//  The lab anchor and the gallery bar are the same interaction twice: a
+//  `RelativeDrag` on a placement offset, with a press that never moves
+//  folded into the same recogniser as a tap that recentres. Both once
+//  measured travel against a reference the next line overwrote, so only
+//  one frame's displacement was compared to the tap threshold and a
+//  careful placement snapped home on release. These replay the real
+//  frame loop at speeds a hand actually moves at.
 //
 
 import XCTest
@@ -66,11 +44,8 @@ final class PlacementDragTests: XCTestCase {
 
     // MARK: The defect
 
-    /// 0.3 m/s for two seconds — 60 cm, a deliberate two-handed-looking
-    /// placement across a room. It must not read as a tap.
-    ///
-    /// Against the old arithmetic this returns 0.0033 m: one frame at
-    /// 0.3 m/s. That is a quarter of the threshold, so the lab recentred.
+    /// 0.3 m/s for two seconds must not read as a tap; the old arithmetic
+    /// returned one frame's travel, a quarter of the threshold.
     func testANormalSpeedPlacementIsNotReadAsATap() {
         let placement = LabPlacement()
         placement.adopt(moduleID: "test-normal-speed")
@@ -90,7 +65,7 @@ final class PlacementDragTests: XCTestCase {
     }
 
     /// Slower still. There is no lower speed at which a real drag may be
-    /// mistaken for a press, because a press is defined by DISTANCE.
+    /// mistaken for a press, because a press is defined by distance.
     func testEvenAVerySlowDragSurvives() {
         let placement = LabPlacement()
         placement.adopt(moduleID: "test-slow")
@@ -118,7 +93,7 @@ final class PlacementDragTests: XCTestCase {
                           + "unreachable")
     }
 
-    /// A press that wanders out and comes back is a DRAG, not a tap: the
+    /// A press that wanders out and comes back is a drag, not a tap: the
     /// user moved the thing and put it back, and recentring on top of
     /// that would throw away a deliberate act. This is why the
     /// accumulator is a running `max` rather than a final distance.
@@ -138,7 +113,7 @@ final class PlacementDragTests: XCTestCase {
 
     // MARK: The primitive
 
-    /// `travel` is measured from where the drag PICKED THE OBJECT UP,
+    /// `travel` is measured from where the drag picked the object up,
     /// which is the one reference in the loop that nothing rewrites.
     func testTravelIsMeasuredFromWhereTheDragStarted() {
         let drag = RelativeDrag(name: "x",
@@ -155,12 +130,8 @@ final class PlacementDragTests: XCTestCase {
         UserDefaults.standard.array(forKey: "labOffset.\(moduleID)") as? [Double]
     }
 
-    /// A DRAG IS ONE WRITE, NOT NINETY A SECOND.
-    ///
-    /// `move(to:)` is called once per frame for the whole length of a
-    /// placement drag, and it wrote `UserDefaults` unconditionally every
-    /// time (audit P3). Only the last value matters, so the write is
-    /// debounced and the drag's end flushes it.
+    /// A drag is one write, not ninety a second: `move(to:)` runs once per
+    /// frame, so the write is debounced and the drag's end flushes it.
     func testAWholeDragCollapsesIntoOneWriteAtTheEnd() {
         let id = "test-debounce"
         UserDefaults.standard.removeObject(forKey: "labOffset.\(id)")
@@ -197,13 +168,9 @@ final class PlacementDragTests: XCTestCase {
         XCTAssertEqual(saved(id) ?? [], [0, 0, 0])
     }
 
-    /// SWITCHING LABS FLUSHES THE OLD ONE FIRST.
-    ///
-    /// The hazard the debounce introduces: `persistNow` reads `moduleID`
-    /// when it RUNS, so a pending write carried across a module switch
-    /// would file the old lab's offset under the new lab's key — losing
-    /// one placement and inventing another. `adopt` flushes before it
-    /// changes the id.
+    /// Switching labs flushes the old one first: `persistNow` reads
+    /// `moduleID` when it runs, so a pending write carried across a switch
+    /// would file the old lab's offset under the new lab's key.
     func testSwitchingModulesFlushesThePreviousLabsPlacement() {
         let first = "test-switch-a", second = "test-switch-b"
         for id in [first, second] {

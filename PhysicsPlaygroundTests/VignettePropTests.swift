@@ -2,25 +2,11 @@
 //  VignettePropTests.swift
 //  Physics Playground — app tests
 //
-//  The props the hub miniatures load — `Tools/moduleprops.py` for the
-//  six modules' apparatus, `Tools/vignetteprops.py` for the labs emblem
-//  — and the one thing about them that cannot be checked by looking at
-//  either side on its own: which way round they come out.
-//
-//  Blender is Z-up and RealityKit is Y-up, and the exporter is told to
-//  convert with forward −Z and up +Y, which lands on
-//
-//      Blender (x, y, z)  ->  RealityKit (x, z, -y)
-//
-//  Every prop below is authored against that mapping and then placed by
-//  Swift code that assumes the result. Nothing catches a mistake in
-//  between: a ring authored in the wrong plane still loads, still
-//  renders, and simply faces the wall. The multimeter has a comment
-//  about exactly this — its first version stood its dial and both jacks
-//  on edge, "one render, immediately obvious; unreadable from the source
-//  alone."
-//
-//  These tests are that render, in a form that runs on every build.
+//  The props the hub miniatures load, and the one thing about them that
+//  cannot be checked by looking at either side alone: which way round
+//  they come out. The exporter maps Blender (x, y, z) → RealityKit
+//  (x, z, −y); a prop authored in the wrong plane still loads and simply
+//  faces the wall.
 //
 
 import XCTest
@@ -104,7 +90,7 @@ final class VignettePropTests: XCTestCase {
 
     /// The needle lies along X — north at +X, the handedness
     /// `magnetism()` steers by — and is symmetric about its pivot, which
-    /// is the property that lets the importer's box-centring BE the
+    /// is the property that lets the importer's box-centring be the
     /// pivot.
     func testTheNeedleLiesAlongX() throws {
         let box = try extents(of: "CompassNeedle")
@@ -123,7 +109,7 @@ final class VignettePropTests: XCTestCase {
                              "the pointer is fatter than it is long in Z")
     }
 
-    /// The target's ring is HORIZONTAL — the ball falls through it — so
+    /// The target's ring is horizontal — the ball falls through it — so
     /// the stand's width (mast plus ring reach) beats its height, and
     /// its height beats its depth.
     func testTheTargetRingIsHorizontal() throws {
@@ -134,7 +120,7 @@ final class VignettePropTests: XCTestCase {
                              "the stand has fallen over")
     }
 
-    /// The comet is bilobed ALONG X: two overlapping lobes, so X is the
+    /// The comet is bilobed along X: two overlapping lobes, so X is the
     /// long axis and neither of the others comes close. A sphere here
     /// would mean the displacement or the second lobe went missing.
     func testTheCometIsBilobedAlongX() throws {
@@ -145,11 +131,9 @@ final class VignettePropTests: XCTestCase {
                              "the nucleus is round — the second lobe is missing")
     }
 
-    /// Each charge is a round conductor whose moulded sign stands proud
-    /// on +Z, the reader's side. The sign is sub-millimetre proud, but
-    /// it is the only thing that breaks the sphere's symmetry — so Z
-    /// strictly beats both other axes, and equality here means the sign
-    /// is buried or facing the wall.
+    /// Each charge's moulded sign stands sub-millimetre proud on +Z, the
+    /// reader's side; it is the only thing that breaks the sphere's
+    /// symmetry, so Z strictly beats both other axes.
     func testTheChargeSignsFaceTheReader() throws {
         for name in ["ChargePlus", "ChargeMinus"] {
             let box = try extents(of: name)
@@ -164,22 +148,16 @@ final class VignettePropTests: XCTestCase {
         }
     }
 
-    /// Both gimbal rings and the rotor FACE the reader: their axis is Z,
-    /// so Z is the thin one. This is the assertion that catches the
-    /// Blender-Y trick going wrong, and it is the whole reason the
-    /// emblem is authored with a 90° rotation it would not otherwise
-    /// need.
+    /// Both gimbal rings and the rotor face the reader: their axis is Z, so
+    /// Z is the thin one — the assertion that catches the Blender-Y trick
+    /// going wrong.
     func testTheGyroscopePartsFaceTheReader() throws {
         for name in ["GyroGimbalOuter", "GyroGimbalInner"] {
             let box = try extents(of: name)
             XCTAssertLessThan(box.z, min(box.x, box.y) * 0.5,
                               "\(name) is edge-on — its axis is not Z")
-            // Near-round, not exactly round: each ring carries two pivot
-            // bosses, and they stand proud on the axis that ring turns
-            // about — which is 90° apart between the two of them, and is
-            // the entire difference between a gimbal and a pair of
-            // hoops. A ring that measured perfectly round here would
-            // mean the bearings had gone missing.
+            // Near-round, not exactly round: each ring carries two pivot bosses,
+            // which is the difference between a gimbal and a pair of hoops.
             XCTAssertEqual(box.x, box.y, accuracy: min(box.x, box.y) * 0.15,
                            "\(name) is not round in the XY plane")
             XCTAssertNotEqual(box.x, box.y, accuracy: min(box.x, box.y) * 0.02,
@@ -187,11 +165,9 @@ final class VignettePropTests: XCTestCase {
         }
     }
 
-    /// The rotor's longest dimension is its AXLE, along the spin axis.
-    /// `HubVignettes` normalises on the longest dimension, so this ratio
-    /// is what actually decides how big the disc looks inside the rings
-    /// — changing the axle length in the script silently resizes the
-    /// wheel in the app.
+    /// The rotor's longest dimension is its axle: `HubVignettes` normalises
+    /// on the longest dimension, so this ratio decides how big the disc
+    /// looks inside the rings.
     func testTheRotorIsAxleDominant() throws {
         let box = try extents(of: "GyroRotor")
         XCTAssertGreaterThan(box.z, box.x,

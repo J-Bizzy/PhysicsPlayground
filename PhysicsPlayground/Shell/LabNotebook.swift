@@ -2,18 +2,10 @@
 //  LabNotebook.swift
 //  Physics Playground — Shell
 //
-//  The thing that turns a toy into an instrument: a record you keep.
-//
-//  A student who nails a three-body resonance, or finds the exact angle
-//  where the beam goes into total internal reflection, previously had
-//  no way to keep it or show anyone. Every measurement in the app was
-//  live-only and gone the moment they moved their hand.
-//
-//  A notebook entry is a timestamped row: which module, a one-line
-//  title, and the parameters and measured values that were true at that
-//  instant — captured from the module's own live readout, so what gets
-//  written down is exactly what the physics said. Entries persist
-//  across launches and export as CSV and as Markdown.
+//  The record you keep: a notebook entry is a timestamped row — which
+//  module, a one-line title, and the parameters and measured values true
+//  at that instant, captured from the module's own live readout. Entries
+//  persist across launches and export as CSV and Markdown.
 //
 
 import Foundation
@@ -55,11 +47,6 @@ final class LabNotebook {
     nonisolated static let capacity = 200
 
     private(set) var entries: [NotebookEntry] = []
-
-    // NO CAPTURE NONCE. It was bumped on every capture "so a renderer can
-    // flash a confirmation without diffing the array" — no renderer ever
-    // did, and `entries` is `@Observable` anyway, so a confirmation would
-    // read the array it already tracks. Deleted 2026-08-26.
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.key),
@@ -105,7 +92,8 @@ final class LabNotebook {
     /// One row per reading, so the file drops straight into a
     /// spreadsheet or a plotting script.
     var csv: String {
-        var lines = ["timestamp,module,observation,quantity,value,unit"]
+        // "lab", the word the wearer reads everywhere else.
+        var lines = ["timestamp,lab,observation,quantity,value,unit"]
         let formatter = ISO8601DateFormatter()
         for entry in entries.reversed() {
             let stamp = formatter.string(from: entry.date)

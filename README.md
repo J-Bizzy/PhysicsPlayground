@@ -22,7 +22,7 @@ solver is written from scratch in Swift and tested.
 | **Magnetism** | Bar magnets that attract, repel and align. Field lines that close on themselves, and a compass you carry. |
 | **Projectile Motion** | Throw anything. Real drag, real restitution, and bounces off *your* walls, floor, ceiling and table. Stand a hoop in the room and the launcher solves for it — both arcs, exactly — or arm it to drop as you fire, and the ball meets it in the air on every world. |
 | **Pendulums** | Full nonlinear swings, a Newton's cradle to break apart, a chaotic double pendulum, and a true 3-D orbit you throw a bob into above your own floor. |
-| **Gravity Lab** | An orrery you can walk into. Tap a planet and its orbit becomes a ring with beads at each end — pull one and the orbit reshapes under your hand. |
+| **Orbital Mechanics** | An orrery you can walk into. Tap a planet and its orbit becomes a ring with beads at each end — pull one and the orbit reshapes under your hand. |
 
 ## What is unusual about it
 

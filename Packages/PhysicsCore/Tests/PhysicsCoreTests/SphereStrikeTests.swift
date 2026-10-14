@@ -2,9 +2,9 @@
 //  SphereStrikeTests.swift
 //  PhysicsCoreTests
 //
-//  The swat (Projectiles, 2026-09-02): a ball against a moving sphere.
-//  Pinned by the numbers a swat has to produce, not by matching the
-//  implementation to itself.
+//  The swat: a ball against a moving sphere, pinned by the numbers a
+//  swat has to produce rather than by matching the implementation to
+//  itself.
 //
 
 import XCTest
@@ -31,15 +31,14 @@ final class SphereStrikeTests: XCTestCase {
                        "pushed to the surface, its radius out along the normal")
     }
 
-    /// The sweep. A hand swung at 12 m/s crosses 13 cm in a 90 Hz frame
-    /// — more than twice a golf ball's reach — so it can END the frame
-    /// on the far side of a ball it never overlapped at a boundary.
-    /// Without the sphere's own motion that is a miss (the hand
-    /// tunnelled through); with it, the relative path crosses the ball
-    /// and the strike lands at the moment it happened.
+        /// A hand swung at 12 m/s crosses 13 cm in a 90 Hz frame, more than
+        /// twice a golf ball's reach, so it can end the frame past a ball it
+        /// never overlapped at a boundary. With the sphere's own motion the
+        /// relative path crosses the ball and the strike lands when it
+        /// happened.
     func testAFastHandSweepingThroughABallStrikesIt() throws {
         let ball = SIMD3<Double>(0, 1, 0)
-        // Ends 2 mm clear of the ball on the FAR side …
+        // Ends 2 mm clear of the ball on the far side …
         let hand = SphereStrike.Sphere(center: SIMD3(0.053, 1, 0), radius: 0.03,
                                        velocity: SIMD3(12, 0, 0))
         // … so as a static sphere it is not touching:
@@ -55,7 +54,7 @@ final class SphereStrikeTests: XCTestCase {
         XCTAssertLessThan(hit.t, 1)
     }
 
-    /// And when the two DO overlap at the boundary, the sweep still
+    /// And when the two do overlap at the boundary, the sweep still
     /// places the contact where and when it happened rather than
     /// teleporting the ball out of the hand at t = 0.
     func testTheSweepPlacesTheContactWhereItHappened() throws {

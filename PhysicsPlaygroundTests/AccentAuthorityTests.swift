@@ -2,17 +2,9 @@
 //  AccentAuthorityTests.swift
 //  PhysicsPlaygroundTests
 //
-//  One authority for the accent hues, as an assertion (2026-08-06).
-//
-//  The app shipped for weeks with two greens (#30D158 on the E&M door,
-//  stock `Color.green` on Circuits) and two oranges (#FF9F0A / stock
-//  `.orange`) defined in different files — near enough to read as the
-//  same colour badly printed, far enough to be two colours. The fix is
-//  structural: module accents own the values in `DesignTokens.Palette`,
-//  and `HubDomain.color` READS them. These tests keep both halves true,
-//  in the house source-reading style, scoped to the two authority
-//  files — a `.orange` warning triangle in a banner is a semantic
-//  system colour and none of this test's business.
+//  One authority for the accent hues: module accents own their values
+//  in `DesignTokens.Palette`, and `HubDomain.color` reads them.
+//  Source-reading, scoped to the two authority files.
 //
 
 import XCTest
@@ -33,27 +25,17 @@ final class AccentAuthorityTests: XCTestCase {
         return text.split(separator: "\n", omittingEmptySubsequences: false)
     }
 
-    /// Every stock colour SwiftUI and UIKit hand out by name.
-    ///
-    /// THE LIST IS THE POINT. This test used to check three spellings —
-    /// `Color.yellow`, `Color.green`, `Color.orange` — because those
-    /// were the three that were wrong on the day it was written. It
-    /// therefore passed for months over `gravityAccent = Color.indigo`
-    /// and `pendulumsAccent = Color.purple`, which are the same defect
-    /// in a hue the author had not thought of. A criterion that lists
-    /// the instances somebody already found is the same act of
-    /// attention that missed the others; this one closes the class.
+    /// Every stock colour SwiftUI and UIKit hand out by name. The list
+    /// closes the class rather than the three instances that were wrong on
+    /// the day the test was written.
     private static let stockColorNames = [
         "black", "blue", "brown", "clear", "cyan", "gray", "grey", "green",
         "indigo", "mint", "orange", "pink", "purple", "red", "teal",
         "white", "yellow",
     ]
 
-    /// The palette defines accents as owned values, never as stock
-    /// SwiftUI colours — a stock colour is an unowned hue that happens
-    /// to be near a door. It is also not a fixed hue: `Color.indigo`
-    /// resolves differently on visionOS than the iOS value its name
-    /// suggests, so "stock" does not even mean "the same colour".
+    /// The palette defines accents as owned values, never stock colours — a
+    /// stock colour is not even a fixed hue across platforms.
     func testThePaletteOwnsItsAccentHues() throws {
         let lines = try source("PhysicsPlayground/DesignSystem/DesignTokens.swift")
         XCTAssertFalse(lines.isEmpty, "DesignTokens.swift unreadable — scanning nothing")
@@ -62,7 +44,7 @@ final class AccentAuthorityTests: XCTestCase {
         for (number, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("///") else { continue }
-            // Only the hue DEFINITIONS. A `Color(uiColor:)` twin or a
+            // Only the hue definitions. A `Color(uiColor:)` twin or a
             // `UIColor(someAccent)` derivation is not a stock colour.
             guard trimmed.contains("Accent"), trimmed.contains("=") else { continue }
             accentLinesScanned += 1
@@ -97,9 +79,7 @@ final class AccentAuthorityTests: XCTestCase {
 
     // MARK: Distance, not just ownership
 
-    /// CIE76 ΔE in Lab. Crude next to ΔE2000 and entirely sufficient
-    /// here: the question is "are these two obviously different", not
-    /// "how different, to two decimals".
+    /// CIE76 ΔE in Lab; enough to ask "are these obviously different".
     private func deltaE(_ a: UIColor, _ b: UIColor) -> Double {
         func lab(_ colour: UIColor) -> (Double, Double, Double) {
             var r: CGFloat = 0, g: CGFloat = 0, bl: CGFloat = 0, alpha: CGFloat = 0
@@ -123,33 +103,13 @@ final class AccentAuthorityTests: XCTestCase {
                 + (b1 - b2) * (b1 - b2)).squareRoot()
     }
 
-    /// How far apart two colours that appear in the same view have to be.
-    ///
-    /// 20 is a judgement and this is the argument for it: 2.3 is the
-    /// textbook just-noticeable difference for two swatches touching
-    /// under lab conditions, which is nowhere near enough for two arrows
-    /// on opposite sides of a room, seen through passthrough, at
-    /// whatever the wall behind them is doing. 20 is "different colour",
-    /// not "different shade".
+    /// How far apart two colours in the same view must be: 20 is
+    /// "different colour", not "different shade", for two arrows seen
+    /// through passthrough.
     private let minimumSeparation = 20.0
 
-    /// `testNoModuleAccentCollidesWithCompletionGold` STOOD HERE and was
-    /// deleted on 2026-08-09 with the experiments system.
-    ///
-    /// It was a real catch in its day: `electrostaticsAccent` was #FFD60A
-    /// against gold's #FFD640 — same red, same green, ΔE 11.6 — and every
-    /// plate, well and label in Electric Fields wore it, so the lab read
-    /// as an award. The accent was moved and stayed moved.
-    ///
-    /// There is nothing left to collide with. Gold was the colour of a
-    /// completed experiment and nothing draws it now, so the assertion
-    /// would be reserving a hue against a claim the app no longer makes.
-    /// The `VectorPalette` test below is the live half of the same rule.
-
-    /// …and nor may an accent collide with a VECTOR colour, which is the
-    /// same failure one layer down: the arrows and the furniture are in
-    /// the same view, and an arrow the colour of the bank behind it is
-    /// an arrow you cannot follow.
+    /// An accent may not collide with a vector colour: an arrow the colour
+    /// of the bank behind it cannot be followed.
     func testNoModuleAccentCollidesWithAVectorColour() {
         let vectors: [(String, UIColor)] = [
             ("velocity", VectorPalette.velocity),
@@ -172,45 +132,12 @@ final class AccentAuthorityTests: XCTestCase {
         }
     }
 
-    /// ONE COLLISION THAT PREDATES THIS TEST, recorded rather than
-    /// excused, and asserted at its CURRENT distance so it cannot
-    /// quietly get worse.
-    ///
-    /// `kinematicsAccent` #FF9F0A is the Mechanics door and sits ΔE 13.5
-    /// from the acceleration arrow — under the bar, and both appear in
-    /// Projectiles at once. Fixing it means changing a domain's identity
-    /// hue or a vector colour used in all six labs, which is a decision
-    /// about what the app looks like rather than a defect to sweep. This
-    /// file's job is to make the number visible, not to make it.
-    ///
-    /// MEASURED IN SWIFT, NOT ESTIMATED. I first recorded this pair at
-    /// 5.1 and a `gravityAccent`/velocity pair at 19.5, both from
-    /// hand-typed approximations of `.systemOrange`, `.systemBlue` and
-    /// `.indigo`. The real figures are 13.5 and 23.8 — so the second
-    /// pair is not a collision at all and was about to be written into
-    /// this file as one. UIKit's system colours are not the RGB triples
-    /// they look like.
-    ///
-    /// THE SEARCH WAS RUN, AND THERE IS NO WINNER (2026-08-26). Brute
-    /// force over the RGB cube in this file's own ΔE, scored by the worst
-    /// separation from all four `VectorPalette` entries and all five other
-    /// module accents, keeping only bright saturated candidates (L 62–92,
-    /// chroma > 60 — without a chroma floor the search "wins" by going
-    /// grey, which is far from everything and reads as nothing):
-    ///
-    /// · Warm band (r ≥ g ≥ b, still amber/gold): the best is #A3991E at
-    ///   worst-ΔE 42.6 — but it is a dark olive. Every bright warm colour
-    ///   near orange IS orange; that is what 13.5 is measuring.
-    /// · Unconstrained: the winners are all bright greens (#A3FF00,
-    ///   worst-ΔE 44.5). Numerically fine, conceptually wrong — green is
-    ///   the E&M door, and Mechanics cannot wear it.
-    /// · Yellow is `electrostaticsAccent` #FFEA05 already.
-    ///
-    /// So the choice is: a muddy door, a door that duplicates another
-    /// domain, or moving `acceleration` — a vector colour used in all six
-    /// labs — to fix one lab's furniture. The owner's call was to keep
-    /// #FF9F0A and keep the number visible. Recorded here so the next
-    /// person does not run the search again.
+    /// One collision that predates this test, asserted at its current
+    /// distance so it cannot quietly worsen: `kinematicsAccent` sits ΔE
+    /// 13.5 from the acceleration arrow. The search for a replacement was
+    /// run and there is no winner (every bright warm colour near orange is
+    /// orange; the unconstrained winners are greens, the E&M door), so the
+    /// owner kept #FF9F0A.
     func testTheKnownAccentCollisionHasNotWorsened() {
         let distance = deltaE(UIColor(DesignTokens.Palette.kinematicsAccent),
                               VectorPalette.acceleration)
@@ -228,10 +155,8 @@ final class AccentAuthorityTests: XCTestCase {
         (accent: "kinematicsAccent", vector: "acceleration"),
     ]
 
-    /// THE VECTOR COLOURS MUST DIFFER FROM EACH OTHER, which is where
-    /// Pendulums went wrong: it drew gravity and the NET force in the
-    /// identical red while its legend promised "purple gravity". A
-    /// component of a sum has to be distinguishable from the sum.
+    /// The vector colours must differ from each other: a component of a sum
+    /// has to be distinguishable from the sum.
     func testTheVectorColoursAreDistinguishableFromEachOther() {
         let vectors: [(String, UIColor)] = [
             ("velocity", VectorPalette.velocity),
@@ -251,17 +176,8 @@ final class AccentAuthorityTests: XCTestCase {
         }
     }
 
-    /// A LAB'S FIELD LINES ARE ITS ACCENT.
-    ///
-    /// The two modules that draw a field filling the room both derive the
-    /// line colour from the module accent, so the furniture and the
-    /// centrepiece move together and a lab is one colour.
-    ///
-    /// Electric Fields did this from the start; Magnetism carried a
-    /// hardcoded lavender until 2026-08-26 — ΔE 46 from the pink accent
-    /// on every plate around it. Deriving is not a tidiness preference
-    /// here: the lavender was also the closest thing in the room to the
-    /// S pole's blue, so the exception cost pole legibility too.
+    /// A lab's field lines are its accent, derived from it, so the
+    /// furniture and the centrepiece are one colour.
     func testAFieldLineIsItsModulesAccent() {
         let pairs: [(String, UIColor, UIColor)] = [
             ("Electric Fields",
@@ -305,10 +221,7 @@ final class AccentAuthorityTests: XCTestCase {
         }
     }
 
-    /// Every module accent, by name. A LIST, and the only one in this
-    /// file — the palette is a fixed set of six doors, so there is
-    /// nothing to reflect over and nothing that grows without somebody
-    /// editing `DesignTokens` in the same breath.
+    /// Every module accent, by name — a fixed set of six doors.
     private static let moduleAccents: [(String, UIColor)] = [
         ("electrostaticsAccent", UIColor(DesignTokens.Palette.electrostaticsAccent)),
         ("magnetismAccent", UIColor(DesignTokens.Palette.magnetismAccent)),
@@ -336,5 +249,43 @@ final class AccentAuthorityTests: XCTestCase {
         XCTAssertTrue(readsTokens,
                       "HubDomain no longer reads DesignTokens.Palette — the "
                       + "one-authority rule has come unwired")
+    }
+
+    // MARK: The bodies' colours
+
+    private static let namedBodies = ["Mercury", "Venus", "Earth", "Moon", "Mars", "Jupiter",
+                                      "Saturn", "Uranus", "Neptune", "Asteroid", "Comet"]
+
+    /// Every body wears its own colour on its sphere and its path: no two
+    /// named bodies share one (four of ten used to be the same teal), and
+    /// none can be mistaken for the ring's accent or a vector arrow.
+    func testCelestialColoursAreDistinctAndClearTheAccentAndVectors() {
+        let colours = Self.namedBodies.map { ($0, DesignTokens.Palette.celestialUI($0)) }
+        for (i, a) in colours.enumerated() {
+            for b in colours.dropFirst(i + 1) {
+                let distance = deltaE(a.1, b.1)
+                XCTAssertGreaterThanOrEqual(distance, 12,
+                                            "\(a.0) and \(b.0) are ΔE \(distance) apart")
+            }
+            for (name, other) in [("the ring's accent", UIColor(DesignTokens.Palette.gravityAccent)),
+                                  ("the velocity arrow", VectorPalette.velocity),
+                                  ("the acceleration arrow", VectorPalette.acceleration),
+                                  ("the force arrow", VectorPalette.force)] {
+                let distance = deltaE(a.1, other)
+                XCTAssertGreaterThanOrEqual(distance, 12,
+                                            "\(a.0) is ΔE \(distance) from \(name)")
+            }
+        }
+    }
+
+    /// Worlds from the well take hues from the golden angle: ten in a row are all different.
+    func testSpawnedWorldsGetDistinctColours() {
+        let worlds = (1...10).map { DesignTokens.Palette.celestialUI("World \($0)") }
+        for (i, a) in worlds.enumerated() {
+            for (j, b) in worlds.enumerated() where j > i {
+                XCTAssertGreaterThanOrEqual(deltaE(a, b), 10,
+                                            "World \(i + 1) and World \(j + 1) look alike")
+            }
+        }
     }
 }

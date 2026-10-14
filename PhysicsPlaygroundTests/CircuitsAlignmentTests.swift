@@ -3,26 +3,9 @@
 //  PhysicsPlaygroundTests
 //
 //  Snap-align: a part released with a lead near another part's lead
-//  moves AND turns so the two leads become one point. Parts chain nose
-//  to tail, the way components clipped together do, and a bench built
-//  by dropping things near each other reads as a circuit rather than a
-//  pile.
-//
-//  The promise is geometric and exact, so the assertions are exact:
-//  the landing lead ends up on its target to 1e-12, not "close". A
-//  snap that leaves a visible gap is worse than no snap, because it
-//  claims a connection the eye cannot confirm.
-//
-//  Two rules do most of the work and each has its own test:
-//
-//  THE RELEASED PART MOVES; THE TARGET NEVER DOES. That is also the
-//  cascade guard — a part nobody touched is never displaced, so an
-//  alignment cannot propagate past one hop.
-//
-//  THE CLAMP VETOES. If the bench wall would move the part after the
-//  alignment placed it, there is no alignment: a clamped snap leaves
-//  the leads visibly apart while claiming they met, and it does that
-//  right where a beginner works.
+//  moves and turns so the two leads become one point, exactly. The
+//  released part moves and the target never does (the cascade guard),
+//  and the clamp vetoes an alignment it would then undo.
 //
 
 import XCTest
@@ -48,7 +31,7 @@ final class CircuitsAlignmentTests: XCTestCase {
 
     // MARK: The promise
 
-    /// The landing lead ends up EXACTLY on its target.
+    /// The landing lead ends up exactly on its target.
     func testTheAligningLeadLandsExactlyOnItsTarget() {
         let model = CircuitsModel()
         model.clearBench()
@@ -94,7 +77,7 @@ final class CircuitsAlignmentTests: XCTestCase {
             1e-6, "The released part did not move.")
     }
 
-    /// It rotates about the JOINT, so the far end swings and the
+    /// It rotates about the joint, so the far end swings and the
     /// landing lead stays put. Rotating about the centre would swing
     /// the joint through the part it is joining.
     func testTheFarEndSwingsAndTheJointStaysPut() {
@@ -114,7 +97,7 @@ final class CircuitsAlignmentTests: XCTestCase {
                        2 * CircuitsModel.terminalOffset, accuracy: 1e-12)
     }
 
-    /// The aimed part points AWAY from the joint — its far lead is
+    /// The aimed part points away from the joint — its far lead is
     /// further from the target than its near one, which is what makes
     /// a chain a chain rather than a part folded back on itself.
     func testTheAlignedPartPointsAwayFromTheJoint() {
@@ -130,7 +113,7 @@ final class CircuitsAlignmentTests: XCTestCase {
 
     // MARK: The choices
 
-    /// With a candidate on each end, the CLOSER one becomes the
+    /// With a candidate on each end, the closer one becomes the
     /// anchor. Satisfying both would need the targets exactly a part's
     /// length apart, and forcing it would stretch a part that no
     /// longer stretches.
@@ -150,7 +133,7 @@ final class CircuitsAlignmentTests: XCTestCase {
                        "The 1 cm candidate should have won the geometry.")
     }
 
-    /// The end that did NOT win still gets its wire — the alignment
+    /// The end that did not win still gets its wire — the alignment
     /// picks one joint, the wiring takes every pair it can.
     func testBothEndsGetWiredButOnlyOneAligns() {
         let model = CircuitsModel()
@@ -224,27 +207,10 @@ final class CircuitsAlignmentTests: XCTestCase {
 
     // MARK: The vetoes
 
-    /// THE CLAMP VETO, swept.
-    ///
-    /// A snap the bench wall would then undo does not happen: a
-    /// clamped alignment leaves the leads visibly apart while claiming
-    /// they met, and it does that right where a beginner works, up
-    /// against the edge of the volume.
-    ///
-    /// This is a deterministic sweep rather than one hand-built case,
-    /// for a reason worth recording. The first version of this test
-    /// was a hand-built battery against the +x wall, and it FAILED —
-    /// not because the veto was broken but because `add` clamps, so
-    /// the scenario it thought it was building could not exist. The
-    /// algebra that followed "proved" the veto unreachable, and the
-    /// proof was wrong too: it only held for parts aimed along the
-    /// same line. Sweeping arbitrary aims reaches the veto in about a
-    /// quarter of all wall-adjacent releases.
-    ///
-    /// So the test asserts BOTH halves: that the veto fires (it is not
-    /// dead code) and that nothing it lets through lands outside (it
-    /// is sufficient). Either one alone would have passed on a version
-    /// of this code that was wrong.
+    /// The clamp veto, swept over arbitrary aims: it fires (not dead code)
+    /// and nothing it lets through lands outside (sufficient). A hand-built
+    /// case could not reach it, and the algebra "proving" it unreachable
+    /// only held for parts aimed along one line.
     func testTheClampVetoFiresAndNothingEscapesTheBench() {
         var vetoes = 0, alignments = 0
         // A fixed seed: this is a sweep, not a random test. It runs
@@ -258,15 +224,11 @@ final class CircuitsAlignmentTests: XCTestCase {
             SIMD3(random() * 2 - 1, random() * 2 - 1, random() * 2 - 1)
         }
         let model = CircuitsModel()
-        // THE SAFETY BOX, NOT THE BENCH (2026-08-26). The bench stopped
-        // being a wall, so `add` no longer parks anything against it and
-        // the veto can no longer fire there. The room-scale safety box is
-        // the one clamp left, so that is where the scenario now lives —
-        // same test, one box out.
+        // The safety box, not the bench: it is the one clamp left.
         let half = CircuitsModel.safetyHalfExtents
         for _ in 0..<4000 {
             model.clearBench()
-            // Deliberately biased OUTSIDE the volume, so `add`'s clamp
+            // Deliberately biased outside the volume, so `add`'s clamp
             // parks most of these hard against a wall — which is the
             // only place the veto can matter.
             let spot = CircuitsModel.buildCenter
@@ -328,7 +290,7 @@ final class CircuitsAlignmentTests: XCTestCase {
         }
     }
 
-    /// THE CASCADE GUARD. A part nobody touched is never displaced, so
+    /// The cascade guard. A part nobody touched is never displaced, so
     /// a snap cannot ripple down a chain.
     func testAlignmentNeverMovesAThirdPart() {
         let model = CircuitsModel()
@@ -398,8 +360,8 @@ final class CircuitsAlignmentTests: XCTestCase {
         XCTAssertEqual(model.release(id: loose), .nothingNear)
     }
 
-    /// Parked against a terminal it is already netted with THROUGH
-    /// ANOTHER PATH, the release refuses out loud — the same "no" the
+    /// Parked against a terminal it is already netted with through
+    /// Another path, the release refuses out loud — the same "no" the
     /// lead pull dramatises, instead of the old silent nothing.
     func testAReleaseOntoItsOwnNetIsRefused() {
         let model = CircuitsModel()
@@ -413,7 +375,7 @@ final class CircuitsAlignmentTests: XCTestCase {
                                .init(componentID: resistor, end: 0))
         model.connectTerminals(.init(componentID: resistor, end: 0),
                                .init(componentID: bulb, end: 0))
-        // Park the bulb so ITS netted lead sits within reach of the
+        // Park the bulb so its netted lead sits within reach of the
         // battery's — same point through the resistor, no direct wire.
         let target = lead(model, battery, 1)
         model.move(id: bulb, to: target + SIMD3(0.085, 0.03, 0))
@@ -424,7 +386,7 @@ final class CircuitsAlignmentTests: XCTestCase {
                        "a refused release must not wire anything")
     }
 
-    /// And the refusal is PREVIEWED: `refusedJoins` names exactly the
+    /// And the refusal is previewed: `refusedJoins` names exactly the
     /// same-net pair in reach, so the renderer can tint it red while
     /// the part is still in the hand.
     func testRefusedJoinsNamesTheSameNetPairInReach() {
@@ -454,7 +416,7 @@ final class CircuitsAlignmentTests: XCTestCase {
     }
 
     /// A part snapped into its own chain has nothing refused about it:
-    /// the pair it sits coincident with already carries a DIRECT wire,
+    /// the pair it sits coincident with already carries a direct wire,
     /// and a standing red ghost on every chained part — or a thud on
     /// putting one back down — would be the refusal crying wolf.
     func testAChainedPartHasNoRefusedJoins() {
@@ -471,12 +433,9 @@ final class CircuitsAlignmentTests: XCTestCase {
 
     // MARK: swing — where "aim the part" went
 
-    /// A part hanging by ONE lead swings about its JOINT: within the
-    /// body's own reach the wired end sits exactly on the anchor and
-    /// the free end follows the hand. The pivot is the ANCHOR — the
-    /// far terminal of the wire — because the part's own terminal
-    /// moves with the part, and pivoting on it after a move is the
-    /// identity (the shipped defect this section now pins).
+    /// A part hanging by one lead swings about its joint — the anchor
+    /// terminal at the far end of the wire, not the part's own lead, which
+    /// moves with the part.
     func testSwingPinsTheWiredEnd() {
         let model = CircuitsModel()
         model.clearBench()
@@ -485,7 +444,7 @@ final class CircuitsAlignmentTests: XCTestCase {
         model.release(id: bulb)
         let joint = lead(model, battery, 1)
 
-        // Hand INSIDE the body's own reach: a pure swing about the joint.
+        // Hand inside the body's own reach: a pure swing about the joint.
         model.swing(id: bulb, hand: joint + SIMD3(0.0, 0.05, 0.0))
         XCTAssertEqual(simd_distance(lead(model, bulb, 0), joint), 0, accuracy: 1e-12,
                        "The wired lead must sit exactly on the joint.")
@@ -493,13 +452,9 @@ final class CircuitsAlignmentTests: XCTestCase {
                        "The part should point at the hand.")
     }
 
-    /// THE COMPOSED SEQUENCE, driven through the one verb the view
-    /// calls. A one-wired part dragged past its own reach tracks the
-    /// hand while aiming its lead back at the joint — the wire
-    /// stretches honestly, and does not break short of `breakDistance`.
-    /// This is the regression pin for the defect where the view fed
-    /// `swing` the part's own just-moved centre and the affordance
-    /// never happened at all.
+    /// The composed sequence through the one verb the view calls: a
+    /// one-wired part dragged past its reach tracks the hand while aiming
+    /// its lead back, the wire stretching with it.
     func testACarriedOneWiredPartAimsAtItsJoint() {
         let model = CircuitsModel()
         model.clearBench()
@@ -508,7 +463,6 @@ final class CircuitsAlignmentTests: XCTestCase {
         model.release(id: bulb)
         let joint = lead(model, battery, 1)
 
-        model.beginCarry(id: bulb)
         let target = joint + SIMD3(0.0, 0.2, 0.0)
         model.drag(id: bulb, toward: target)
 
@@ -517,17 +471,16 @@ final class CircuitsAlignmentTests: XCTestCase {
                        "Past its own reach the body tracks the hand.")
         XCTAssertEqual(part.axis.y, 1, accuracy: 1e-9,
                        "…while aiming its wired lead back at the joint.")
-        XCTAssertEqual(model.wires.count, 1,
-                       "A stretch short of breakDistance must not pop the wire.")
+        XCTAssertEqual(model.wires.count, 1, "A stretch must not pop the wire.")
         let stretched = simd_distance(lead(model, bulb, 0), joint)
         XCTAssertEqual(stretched, 0.2 - CircuitsModel.terminalOffset, accuracy: 1e-9,
                        "The wire spans exactly the gap the leash leaves.")
-        model.endCarry()
     }
 
-    /// And past `breakDistance` the snapped contact pops — through the
-    /// same composed verb, with no second threshold anywhere.
-    func testDraggingPastBreakDistancePopsTheSnappedContact() {
+    /// However far the hand goes, the contact holds: distance never
+    /// disconnects a part. Half a metre out, the wire is simply half a
+    /// metre long, and the part still aims its lead back at the joint.
+    func testDraggingFarStretchesTheWireAndNeverPopsIt() {
         let model = CircuitsModel()
         model.clearBench()
         let battery = model.add(.battery, at: CircuitsModel.buildCenter)!
@@ -536,14 +489,15 @@ final class CircuitsAlignmentTests: XCTestCase {
         let joint = lead(model, battery, 1)
         XCTAssertEqual(model.wires.count, 1)
 
-        model.beginCarry(id: bulb)
         model.drag(id: bulb, toward: joint + SIMD3(0.0, 0.5, 0.0))
-        XCTAssertEqual(model.wires.count, 0,
-                       "A contact stretched past breakDistance must pop.")
-        model.endCarry()
+        XCTAssertEqual(model.wires.count, 1, "A far drag must keep the contact.")
+        XCTAssertEqual(model.wireLength(model.wires[0]), 0.5 - CircuitsModel.terminalOffset,
+                       accuracy: 1e-9, "The wire is exactly as long as the hand made it.")
+        XCTAssertEqual(model.components.first { $0.id == bulb }!.axis.y, 1, accuracy: 1e-9,
+                       "…and the part still aims its lead at the joint.")
     }
 
-    /// A part wired at BOTH ends does not swing — the chain decides
+    /// A part wired at both ends does not swing — the chain decides
     /// the aim. A part wired at neither has nothing to hang from.
     /// Either way `drag` moves it rigidly: the hand is obeyed, the
     /// axis untouched.

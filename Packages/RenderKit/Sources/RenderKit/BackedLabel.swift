@@ -3,7 +3,7 @@
 //  RenderKit
 //
 //  A dark rounded plate behind a live in-room numeral; padding and depth
-//  scale with the type. The backing is DECORATION: no collider, no input
+//  scale with the type. The backing is decoration: no collider, no input
 //  target, ever.
 //
 
@@ -20,7 +20,7 @@ public final class BackedLabel {
     public let root = Entity()
 
     private let size: CGFloat
-    /// Last text/colour kept SEPARATELY, not as an interpolated key —
+    /// Last text/colour kept separately, not as an interpolated key —
     /// the unchanged path runs every frame and must be genuinely free.
     private var lastText: String?
     private var lastColor: UIColor?
@@ -32,14 +32,17 @@ public final class BackedLabel {
 
     /// Rebuilds glyphs and backing. Free when unchanged; rate-limited
     /// (Callout.minimumLabelInterval) — a skipped value is not dropped,
-    /// it lands on the first frame past the interval.
-    public func setText(_ text: String, color: UIColor) {
-        guard text != lastText || color != lastColor else { return }
-        // CLEARING IS NEVER RATE-LIMITED: empty means the subject is
+    /// it lands on the first frame past the interval — provided the caller
+    /// asks again, which is what the return value is for: false means held
+    /// back, so a caller caching "what I last showed" must not record it.
+    @discardableResult
+    public func setText(_ text: String, color: UIColor) -> Bool {
+        guard text != lastText || color != lastColor else { return true }
+        // Clearing is never rate-limited: empty means the subject is
         // gone, and a stale reading over nothing is worse than the cost.
         if !text.isEmpty {
             let now = CACurrentMediaTime()
-            guard now - lastTextTime >= Callout.minimumLabelInterval else { return }
+            guard now - lastTextTime >= Callout.minimumLabelInterval else { return false }
             lastTextTime = now
         }
         lastText = text
@@ -47,7 +50,7 @@ public final class BackedLabel {
         // Snapshot first: `children` is live; removing while iterating
         // skips every other element.
         for child in Array(root.children) { child.removeFromParent() }
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty else { return true }
 
         let mesh = Callout.textMesh(text, size: size)
         var material = UnlitMaterial(color: color)
@@ -59,6 +62,7 @@ public final class BackedLabel {
 
         root.addChild(Self.backing(behind: bounds, size: size))
         root.addChild(glyphs)
+        return true
     }
 
     /// The plate alone, for callers composing their own glyphs — one
@@ -69,8 +73,7 @@ public final class BackedLabel {
         let padY = Float(size) * 0.44
         let width = (bounds.max.x - bounds.min.x) + padX * 2
         let height = (bounds.max.y - bounds.min.y) + padY * 2
-        var material = UnlitMaterial(color: UIColor(white: 0.02, alpha: 1))
-        material.blending = .transparent(opacity: 0.58)
+        let material = Materials.unlit(UIColor(white: 0.02, alpha: 1), opacity: 0.58)
         // Pill for a one-line badge; radius capped so a wrapped
         // paragraph gets an honest corner, not a lozenge eating end words.
         let radius = min(height / 2, Float(size) * 1.2)
@@ -98,7 +101,7 @@ public final class BackedLabel {
                               cornerRadius: Float) -> MeshResource {
         let key = PlateKey(width, height, cornerRadius)
         if let cached = plates[key] { return cached }
-        let mesh = MeshResource.generatePlane(
+        let mesh = Primitives.plane(
             width: width, height: height, cornerRadius: cornerRadius)
         if plates.count > 400 { plates.removeAll() }
         plates[key] = mesh

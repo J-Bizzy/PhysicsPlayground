@@ -2,9 +2,9 @@
 //  SpatialActionBank.swift
 //  Physics Playground — Design System
 //
-//  The standing one-shot VERB plate. It must not look like a layer bank —
-//  a layer plate LATCHES, an action plate is MOMENTARY — so it is machined
-//  stock, not glass, and FLASHES its accent on fire rather than staying
+//  The standing one-shot verb plate. It must not look like a layer bank —
+//  a layer plate latches, an action plate is momentary — so it is machined
+//  stock, not glass, and flashes its accent on fire rather than staying
 //  lit. Destructive actions take `confirms: true`: first tap arms ("Tap
 //  again"), a timer disarms, second tap fires. `disarm()` exists so a
 //  reset can clear an armed plate.
@@ -118,12 +118,9 @@ final class SpatialActionBank {
     private var seenResetNonce: Int?
 
     /// Per frame: hang beside `anchor`, face the viewer, run the arm timer
-    /// and the fire flash, repaint only what changed.
-    /// - Parameter resetNonce: `AppModel.resetNonce`; on change the bank
-    ///   disarms itself — armed state lives HERE, not in the model, so a
-    ///   model reset alone cannot clear it. Taken here so the rule cannot
-    ///   be adopted by only some modules.
-    /// `nearestHand` drives recession — see `Recession`.
+    /// and the fire flash, repaint only what changed. On a `resetNonce`
+    /// change the bank disarms itself — armed state lives here, not in the
+    /// model. `nearestHand` drives recession.
     func update(anchor: SIMD3<Float>, viewer: SIMD3<Float>?, dt: Double,
                 resetNonce: Int = 0, nearestHand: SIMD3<Float>? = nil) {
         if let seen = seenResetNonce, seen != resetNonce { disarm() }
@@ -185,7 +182,7 @@ final class SpatialActionBank {
             plates[index].armedLabel.isEnabled = isArmedNow
         }
 
-        // Anchor in WORLD space: `anchor` is in the parent's (possibly
+        // Anchor in world space: `anchor` is in the parent's (possibly
         // scaled) frame while the hand is world space — `position(relativeTo: nil)`
         // puts both in the same frame.
         Recession.apply(to: root, anchor: root.position(relativeTo: nil),
@@ -193,7 +190,7 @@ final class SpatialActionBank {
     }
 
     /// True when the tap hit one of these plates — armed it, or fired it.
-    /// A tap on a plate's CHILD resolves to the plate (the walk-up contract).
+    /// A tap on a plate's child resolves to the plate (the walk-up contract).
     @discardableResult
     func handleTap(_ entity: Entity) -> Bool {
         guard root.isEnabled else { return false }
@@ -208,7 +205,7 @@ final class SpatialActionBank {
         return false
     }
 
-    /// True when the tap was CONSUMED (including arming). An unavailable
+    /// True when the tap was consumed (including arming). An unavailable
     /// plate consumes nothing — the tap falls through to what is behind it.
     private func press(index: Int, on entity: Entity) -> Bool {
         let action = plates[index].action
@@ -241,7 +238,7 @@ final class SpatialActionBank {
         var component = AccessibilityComponent()
         component.isAccessibilityElement = true
         component.label = LocalizedStringResource(stringLiteral: action.label)
-        // The value carries the ARMED state — one tap from firing must not
+        // The value carries the armed state — one tap from firing must not
         // read the same as two to someone who cannot see the lamp.
         let state = !available ? "unavailable"
             : (armed ? "armed — tap again to confirm" : "button")
@@ -276,7 +273,7 @@ final class SpatialActionBank {
         // Machined stock, not glass — a verb and a state must not be the
         // same object in two colours.
         let plate = ModelEntity(
-            mesh: .generateBox(size: [Self.plateWidth, Self.plateHeight,
+            mesh: Primitives.box(size: [Self.plateWidth, Self.plateHeight,
                                       PlateStyle.depth],
                                cornerRadius: Self.plateCorner),
             materials: [Materials.machined(UIColor(white: 0.24, alpha: 1))])
@@ -284,11 +281,11 @@ final class SpatialActionBank {
         plate.components.set(GroundingShadowComponent(castsShadow: true))
 
         // The edge hairline — without it machined stock has no silhouette
-        // against a bright wall. Its radius takes the SAME inset the box
+        // against a bright wall. Its radius takes the same inset the box
         // does, or the two outlines stop being concentric.
         let edge = Materials.glassEdgeInset
         let border = ModelEntity(
-            mesh: .generateBox(
+            mesh: Primitives.box(
                 size: [Self.plateWidth + edge * 2,
                        Self.plateHeight + edge * 2, PlateStyle.edgeDepth],
                 cornerRadius: Self.plateCorner + edge),
@@ -298,7 +295,7 @@ final class SpatialActionBank {
 
         // The lamp, in the same place the layer bank puts its own.
         let face = ModelEntity(
-            mesh: .generateBox(size: [0.011, 0.034, 0.002], cornerRadius: 0.004),
+            mesh: Primitives.box(size: [0.011, 0.034, 0.002], cornerRadius: 0.004),
             materials: [material(lit: false, available: action.isAvailable())])
         face.position = [-0.032, 0, PlateStyle.faceLift]
         plate.addChild(face)
@@ -308,13 +305,13 @@ final class SpatialActionBank {
             iconMaterial.color = .init(tint: .white, texture: .init(texture))
             iconMaterial.blending = .transparent(opacity: .init(floatLiteral: 0.9))
             let icon = ModelEntity(
-                mesh: .generatePlane(width: 0.024, height: 0.024),
+                mesh: Primitives.plane(width: 0.024, height: 0.024),
                 materials: [iconMaterial])
             icon.position = [-0.002, 0, PlateStyle.faceLift]
             plate.addChild(icon)
         }
 
-        // Both nameplates built ONCE and swapped by isEnabled — a text
+        // Both nameplates built once and swapped by isEnabled — a text
         // mesh rebuild on the interaction path is banned.
         let label = Self.namePlate(action.label, white: 0.94)
         plate.addChild(label)
@@ -327,20 +324,21 @@ final class SpatialActionBank {
         // oversized one would shield the apparatus the bank hangs beside.
         let labelSpan = HubScene.namePlateWidth(action.label, size: Self.labelSize)
         plate.components.set(CollisionComponent(shapes: [
-            .generateBox(size: [0.092, 0.056, 0.018]),
+            Primitives.collisionBox(size: [0.092, 0.056, 0.018]),
             // The label is part of the target — twin of `SpatialLayerBank`'s.
-            .generateBox(size: [labelSpan + 0.010, Self.plateHeight * 0.8, 0.018])
-                .offsetBy(translation: [
+            Primitives.collisionBox(size: [labelSpan + 0.010, Self.plateHeight * 0.8, 0.018], offset: [
                     Self.plateWidth / 2 + Self.labelGap + labelSpan / 2, 0, 0,
                 ]),
         ]))
         plate.components.set(HoverEffectComponent())
         plate.components.set(accessibility(for: action, armed: false,
                                            available: action.isAvailable()))
-        // VoiceOver's press goes through the SAME arm-then-fire path a
+        // VoiceOver's press goes through the same arm-then-fire path a
         // pinch does, so a destructive verb still confirms.
-        plate.components.set(SpatialActionComponent(activate: { [weak plate] in
-            guard let plate,
+        // `self` weak too: the closure lives on a plate under `root`, so a
+        // strong bank kept itself and every plate alive after its lab closed.
+        plate.components.set(SpatialActionComponent(activate: { [weak self, weak plate] in
+            guard let self, let plate,
                   let index = self.plates.firstIndex(where: { $0.entity === plate })
             else { return }
             _ = self.press(index: index, on: plate)
@@ -351,7 +349,7 @@ final class SpatialActionBank {
                      label: label, armedLabel: armedLabel)
     }
 
-    /// A label placed by its own LEFT edge, so a long word starts where
+    /// A label placed by its own left edge, so a long word starts where
     /// the plate ends instead of straddling the icon it names.
     private static func namePlate(_ text: String, white: CGFloat) -> Entity {
         let width = HubScene.namePlateWidth(text, size: labelSize)

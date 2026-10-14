@@ -6,7 +6,7 @@
 //  control: real entities, `handleTap`/`handleDrag` invoked directly
 //  (no automation can synthesise a pinch — docs/ON_DEVICE_TESTS.md).
 //
-//  These tests go through the REAL descriptor from `ModuleCatalog`, so
+//  These tests go through the real descriptor from `ModuleCatalog`, so
 //  they also prove the wiring: a rail built for the kinematics module
 //  scrubs the kinematics model, not a stand-in.
 //
@@ -26,17 +26,15 @@ final class TimeRailTests: XCTestCase {
     /// The real kinematics descriptor, with its model paused on ~2 s of
     /// recording — the state the rail exists for.
     override func tearDown() {
-        // The shipped default (ON since 2026-09-01), for whatever runs next.
+        // The shipped default (on), for whatever runs next.
         TimeCapsuleSettings.isEnabled = true
         super.tearDown()
     }
 
     private func makeRecordedModule() -> (ModuleDescriptor, KinematicsModel, AppModel) {
         let appModel = AppModel()
-        // AFTER `AppModel()`, never before: constructing it builds
-        // `AppSettings`, which pushes the STORED answer into the recording
-        // gate — whatever a previous simulator session left there.
-        // Enabling first would be silently undone.
+        // After `AppModel()`, never before: constructing it pushes the stored
+        // answer into the recording gate.
         TimeCapsuleSettings.isEnabled = true
         let module = ModuleCatalog.all(appModel: appModel)
             .first { $0.id == KinematicsModule.id }!
@@ -161,7 +159,7 @@ final class TimeRailTests: XCTestCase {
         let rail = TimeRail(module: module)
         settleOpen(rail)
         // The drag lands on the track itself, as a pinch would — `owns`
-        // resolves an entity to the rail it belongs to by walking UP.
+        // resolves an entity to the rail it belongs to by walking up.
         let trackEntity = try XCTUnwrap(rail.root.findEntity(named: "Time"))
 
         let center = SIMD3<Double>(SIMD3<Float>(rail.root.position))
@@ -197,10 +195,8 @@ final class TimeRailTests: XCTestCase {
 
     // MARK: The reel — the instrument is closed until it is asked for
 
-    /// A pause puts the REEL on screen, not the rail. This is the whole
-    /// point of the object: the always-on rail was a feature permanently
-    /// occupying the room, and the fix was to give the capability a thing
-    /// that stays wound until pinched.
+    /// A pause puts the reel on screen, not the rail: the capability stays
+    /// wound until pinched.
     func testPauseShowsTheReelAndNotTheRail() throws {
         let (module, _, _) = makeRecordedModule()
         let rail = TimeRail(module: module)
@@ -319,7 +315,7 @@ final class TimeRailTests: XCTestCase {
                        "The reel never stopped coasting")
     }
 
-    /// Reduce Motion suppresses the coast, which is decoration. The DRAW
+    /// Reduce Motion suppresses the coast, which is decoration. The draw
     /// is not suppressed — it answers a pinch, and a control that does
     /// not answer reads as broken.
     func testReduceMotionStillsTheCoastButNotTheDraw() throws {
@@ -340,10 +336,8 @@ final class TimeRailTests: XCTestCase {
         XCTAssertTrue(rail.isDrawnOut, "Reduce Motion swallowed the draw")
     }
 
-    /// Drawing the tape out TURNS the reel, by arc ÷ radius — a third of
-    /// a metre off a 38 mm spool is very nearly a turn and a half. A reel
-    /// that stayed still while its tape ran out would be the one part of
-    /// this instrument that lied.
+    /// Drawing the tape out turns the reel by arc ÷ radius; a reel that
+    /// stayed still while its tape ran out would be lying.
     func testDrawingTheTapeTurnsTheReel() throws {
         let (module, _, _) = makeRecordedModule()
         let rail = TimeRail(module: module)
@@ -354,11 +348,8 @@ final class TimeRailTests: XCTestCase {
 
         rail.setOpen(true)
         settle(rail)
-        // Compared as a QUATERNION, not as `.angle`. A third of a metre
-        // over a 38 mm spool is 8.95 rad — more than a full turn — and
-        // `simd_quatf.angle` wraps into [0, π], so it reads that back as
-        // 3.62 and a naive assertion fails a reel that is turning
-        // exactly right. (It did.)
+        // Compared as a quaternion, not as `.angle`: 8.95 rad is more than a
+        // full turn, and `simd_quatf.angle` wraps into [0, π].
         assertTurned(spindle, by: -TimeRail.railLength / TimeRail.tapeRadius,
                      "The reel did not turn by the tape it gave up")
 
@@ -381,13 +372,13 @@ final class TimeRailTests: XCTestCase {
                        file: file, line: line)
     }
 
-    /// The closed reel is a READOUT, not just a lid: it turns with the
+    /// The closed reel is a readout, not just a lid: it turns with the
     /// scrub, so how far back you are is legible from the object itself.
     func testTheReelTurnsWithTheScrub() throws {
         let (module, _, _) = makeRecordedModule()
         let rail = TimeRail(module: module)
         settleOpen(rail)
-        // The SPINDLE turns; the mount it hangs on does not, or the
+        // The spindle turns; the mount it hangs on does not, or the
         // nameplate would roll onto its side with it (it did, once).
         let mount = try reel(rail)
         let spindle = try XCTUnwrap(mount.children.first)
@@ -407,7 +398,7 @@ final class TimeRailTests: XCTestCase {
             "The nameplate turned with the reel")
     }
 
-    /// ALL SIX modules answer the scrub contract — the rail is shell
+    /// All six modules answer the scrub contract — the rail is shell
     /// chrome, and a lab where pause did nothing but freeze would be the
     /// one place the feature was missing. A fresh model has recorded
     /// nothing, so every span starts nil and the rail stays folded.
@@ -428,19 +419,19 @@ final class TimeRailTests: XCTestCase {
         }
     }
 
-    /// The rail's unit is seconds of the WEARER's life, on every bench.
-    /// Gravity Lab is the one that could get this wrong — its own clock
+    /// The rail's unit is seconds of the wearer's life, on every bench.
+    /// Orbital Mechanics is the one that could get this wrong — its own clock
     /// runs in days at up to 100× — so a second of recording there must
     /// still be a second.
     func testCapsuleClockIsWallClockSecondsEverywhere() {
         let appModel = AppModel()
         TimeCapsuleSettings.isEnabled = true      // after AppModel, per above
-        let gravity = appModel.gravityLabModel
+        let gravity = appModel.orbitalMechanicsModel
         gravity.clearCapsule()
         gravity.timeScale = 100
         for _ in 0..<90 { gravity.step(dt: dt) }
         let span = try! XCTUnwrap(gravity.capsuleSpan)
         XCTAssertEqual(span.upperBound - span.lowerBound, 89 * dt, accuracy: 1e-9,
-                       "Gravity Lab's capsule clock is not wall-clock seconds")
+                       "Orbital Mechanics' capsule clock is not wall-clock seconds")
     }
 }

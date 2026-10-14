@@ -69,7 +69,7 @@ public struct CelestialBody: Equatable, Sendable {
     }
 
     /// Circular prograde orbit of `central` at `distance`, xz plane (+x offset, −z motion).
-    /// Speed is √(G(M+m)/r), NOT √(GM/r): this is the relative two-body orbit; GM alone leaves it slightly elliptical (1.2% for the Moon).
+    /// Speed is √(G(M+m)/r), not √(GM/r): this is the relative two-body orbit; GM alone leaves it slightly elliptical (1.2% for the Moon).
     public func onCircularOrbit(
         of central: CelestialBody,
         distance: Double,
@@ -84,7 +84,7 @@ public struct CelestialBody: Equatable, Sendable {
         return body
     }
 
-    /// This body at PERIHELION of an inclined elliptical orbit. Exact vis-viva: v_p = √(G(M+m)(1+e)/(a(1−e))),
+    /// This body at perihelion of an inclined elliptical orbit. Exact vis-viva: v_p = √(G(M+m)(1+e)/(a(1−e))),
     /// M+m so it agrees with `onCircularOrbit` at e = 0. Plane = ecliptic tilted by `inclination` about +x.
     /// - Parameters: semiMajorAxis a (m); eccentricity e, 0..<1; inclination (rad).
     public func onEllipticalOrbit(

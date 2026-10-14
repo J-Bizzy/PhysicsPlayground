@@ -2,19 +2,12 @@
 //  FieldSpaceView.swift
 //  Physics Playground — Electromagnetism module
 //
-//  The electrostatics immersive scene — the module's ONLY surface (its
-//  window is a title bar). Everything stands off the left shoulder, split
-//  by depth: deep at the station's own plane, a layers bank (field lines,
-//  free charges, capacitor, uniform B) with a B-strength rail under it;
-//  fore of it, four wells that hand you a charge already in your grip
-//  with the Clear plate at their base; and a ΔV rail bolted over the
-//  capacitor. On the objects: tap for a ring, grab a plate to set d.
-//
-//  THE ORDER OF THE GESTURE CHAINS BELOW IS LOAD-BEARING. An
-//  input-targetable collider is never larger than the thing it represents,
-//  and nothing sits between the pinch ray and the object it decorates;
-//  `FieldInstrumentLayout` keeps the furniture 12 cm clear of the physics
-//  so contention is impossible by geometry rather than by care.
+//  The electrostatics immersive scene — the module's only surface.
+//  Everything stands off the left shoulder, split by depth: deep at the
+//  station's plane, a layers bank with a B-strength rail under it; fore
+//  of it, four wells with the Clear plate at their base; and a ΔV rail
+//  over the capacitor. The gesture chains' order is load-bearing, and
+//  `FieldInstrumentLayout` keeps the furniture 12 cm clear of the physics.
 //
 
 import PhysicsCore
@@ -22,13 +15,9 @@ import SwiftUI
 import RealityKit
 import RenderKit
 
-/// Which object's ring is open.
-///
-/// A module-local reference type, for two reasons. `RingState.openID` is a
-/// `UUID?` shared by four modules and the probe is not a UUID, so widening
-/// it would be a change to all of them for one module's benefit. And it
-/// must be a CLASS for the same reason `RingState` is: a `@State` struct
-/// read from inside a RealityKit closure comes back stale.
+/// Which object's ring is open. A module-local class: `RingState.openID`
+/// is a `UUID?` and the probe has none, and a `@State` struct read from
+/// a RealityKit closure comes back stale.
 @MainActor
 final class FieldRingState {
     enum Target: Hashable {
@@ -66,70 +55,33 @@ struct FieldSpaceView: View {
     /// The hand's recent travel, for the throw that launches the probe.
     @State private var flick = ThrowSampler(window: 0.12)
 
-    /// Identifies the test-charge well mouth. `Well.pull` hands back only
-    /// the id its `spawn` closure returned, so the probe — which has no
-    /// UUID of its own — needs a stable one to be recognised by.
+    /// Identifies the test-charge well mouth: the probe has no UUID of its
+    /// own, so `Well.pull` needs a stable id to hand back.
     private static let probeWellID = UUID()
 
     @State private var scaleRig = SpatialScaleRig(
         pivot: SIMD3<Float>(FieldModel.regionCenter), range: 0.5...4.0)
 
-    /// Identifies the standing readout card. See `FieldReadoutCard`.
-    private static let readoutCardID = "field-readout"
-    /// Above the layers bank on the left flank. NOT in
-    /// `FieldInstrumentLayout` — those invariants govern colliders and
-    /// this carries none. Field lines cross it unavoidably (uniform B
-    /// fills the region), so the fix is the MATERIAL, not the position.
-    private static let readoutCardAnchor = SIMD3<Double>(-1.08, 1.68, -0.86)
-
     var body: some View {
-        RealityView { content, attachments in
+        RealityView { content in
             let renderer = FieldRenderer()
             renderer.onObjectTap = { handleObjectTap(on: $0) }
             content.add(renderer.root)
-            // ARRIVES, NEVER APPEARS. Disabled here and raised by
-            // `Fade.tick` below, so the apparatus resolves into the room
-            // instead of being there between one frame and the next.
+            // Disabled here and raised by `Fade.tick`, so the apparatus arrives
+            // rather than appears.
             renderer.root.isEnabled = false
 
-            // A LAB WITH NOTHING MOVING IN IT IS A DIAGRAM. `reset()` seeds
-            // a dipole with `chargesRespond` off and no probe, so the field
-            // portrait was correct, beautiful and completely still until the
-            // wearer thought to do something. The probe rides the dipole on
-            // arrival instead.
-            //
-            // HERE AND NOT IN `reset()`, for two reasons. The shell gives
-            // each module fresh view identity, so `make` runs on EVERY entry
-            // while the model persists on `AppModel` — which is the only hook
-            // that reaches a second visit. And `FieldModelTests` asserts
-            // `probe == nil` after a reset; that contract is right and stays.
-            //
-            // Not `chargesRespond = true` instead: the two dipole charges
-            // would accelerate into each other and destroy the recognisable
-            // picture inside a second, and its plate would be lit over a
-            // claim that is false at rest.
-            if model.probeStatus != .running { model.dropProbe() }
+            // No probe on arrival (owner's call, 2026-09-05): the dipole stands
+            // alone, and a test charge comes out of its well when you want one.
 
-            // Everything this module measures, on one billboarded card.
-            // Parented to `root`, NOT `viewRoot`: the rig reaches 4×, and a
-            // readout that grew with the field would leave the frame.
-            if let card = attachments.entity(for: Self.readoutCardID) {
-                card.components.set(BillboardComponent())
-                card.position = SIMD3<Float>(Self.readoutCardAnchor)
-                stripInput(from: card)
-                renderer.root.addChild(card)
-            }
             renderer.viewRoot.addChild(bloom.root)
 
             install(into: renderer)
 
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
-                    // The lab's own arrival and departure, on the shell's
-                    // one flag. `Fade.tick` settles to a no-op — it drops its
-                    // clock and its OpacityComponent once landed — so this
-                    // costs one comparison for all the frames that are not a
-                    // transition.
+                    // The lab's arrival and departure, on the shell's one flag; `Fade.tick`
+                    // settles to a no-op once landed.
                     if let renderer {
                         Fade.tick(renderer.root, visible: !appModel.isDeparting,
                                   duration: AppModel.departure)
@@ -141,44 +93,21 @@ struct FieldSpaceView: View {
                         syncBloom(renderer: renderer, dt: event.deltaTime)
                     }
                     renderer?.tick(model, room: appModel.room.bounds)
-                    // The lab's placement in the user's room — a pure
-                    // display offset, safe because every grab moves a
-                    // body by hand DISPLACEMENT, which a constant
-                    // translation leaves untouched.
+                    // The lab's placement: a pure display offset, safe because every grab
+                    // moves a body by hand displacement.
                     renderer?.root.position = appModel.labPlacement.offset
                 }
             )
             applyDebugArguments()
             self.renderer = renderer
-        } attachments: {
-            Attachment(id: Self.readoutCardID) {
-                FieldReadoutCard()
-                    // A readout, not an instrument: no hit testing, so it
-                    // can never contend for a pinch with the charges it
-                    // reports on. This is the distinction that keeps it
-                    // out of `FieldInstrumentLayout`'s clearance rules.
-                    .allowsHitTesting(false)
-                    .environment(model)
-            }
         }
-        // Leaving the lab must not leave anything running or held.
-        //
-        // `teardown` cancels the renderer's event subscriptions and any
-        // geometry job in flight (see `GeometryPipeline.cancel`), and the
-        // drag state is cleared because NOTHING ELSE CAN CLEAR IT: an
-        // in-flight grab that never receives its `onEnded` — the space
-        // closing under it is the ordinary way that happens — otherwise
-        // strands the object wherever the hand left it and re-targets
-        // every later drag at the same one, with no exit but leaving.
+        // Leaving the lab must not leave anything running or held: `teardown`
+        // cancels subscriptions and geometry jobs, and an in-flight grab that
+        // never gets its `onEnded` would re-target every later drag.
         .onDisappear {
             renderer?.teardown()
-            // A GRIP SURVIVES THE SPACE CLOSING, and that is worse than
-            // it sounds. `Bloom` is a class, so `gripDrag` outlives this
-            // view; left set, `updateGrip` claims EVERY subsequent drag
-            // in the module and nothing at all can be grabbed. That
-            // exact failure is documented in PendulumsSpaceView's
-            // `onEnded` — it cost this module every one of its verbs
-            // once already.
+            // `Bloom` is a class: a grip left set would claim every subsequent drag
+            // in the module.
             bloom.endGrip()
             drag = nil
         }
@@ -191,16 +120,11 @@ struct FieldSpaceView: View {
     /// The pinches currently down, for `secondHandTap`.
     @State private var activePinchIDs: Set<SpatialEventCollection.Event.ID> = []
 
-    /// The two-handed tap the recognisers cannot see.
-    ///
-    /// "Switch the Capacitor plate OFF while dragging its ΔV bead" was
-    /// unactionable on device (owner, 2026-08-03): while one hand holds
+    /// The two-handed tap the recognisers cannot see: while one hand holds
     /// a drag, SwiftUI never delivers the other hand's pinch to the
-    /// `TapGesture` — one recogniser, one gesture. So a passive
-    /// `SpatialEventGesture` watches the raw pinches, and a NEW pinch
-    /// that lands on the layers bank while another pinch is already
-    /// down is handed to the bank directly. Only the second-hand case:
-    /// a lone pinch stays the TapGesture's, so nothing fires twice.
+    /// `TapGesture`. A passive `SpatialEventGesture` hands a second pinch on
+    /// the layers bank to the bank directly; a lone pinch stays the
+    /// TapGesture's.
     private var secondHandTap: some Gesture {
         SpatialEventGesture()
             .onChanged { events in
@@ -225,14 +149,9 @@ struct FieldSpaceView: View {
     }
 
     // MARK: Installing the instruments
-    //
-    // THE PARENTING RULE, which is not obvious and bites silently:
-    // tap-only furniture goes under `root`, which the two-hand rig does
-    // NOT scale — a bank that grew to 4× along with the field would put
-    // its own switches out of reach the moment you used them. Anything a
-    // hand drags or spawns from goes under `viewRoot`, so its coordinates
-    // and the hand's (which arrive via `displayPoint(fromWorld:)`) are the
-    // same space. Gravity Lab is parented exactly this way.
+    // The parenting rule: tap-only furniture goes under `root`, which the
+    // two-hand rig does not scale; anything a hand drags or spawns from goes
+    // under `viewRoot`, so its coordinates and the hand's agree.
 
     private func install(into renderer: FieldRenderer) {
         let bank = SpatialLayerBank(
@@ -244,15 +163,9 @@ struct FieldSpaceView: View {
                 .init(id: "free", label: "Free charges", symbol: "arrow.left.and.right",
                       isOn: { model.chargesRespond },
                       toggle: { model.chargesRespond.toggle() }),
-                // "Capacitor", not "Parallel plates". An on-device pass
-                // could not find this switch at all — and the copy is
-                // why: the panel and the module blurb both say "the
-                // plates on your left decide what exists", where THE
-                // PLATES means these five bank switches, while the thing
-                // this one summons is also a pair of plates. Two objects
-                // in one room called the same word, on opposite walls.
-                // The apparatus keeps the name it is; the switch takes
-                // the name of what it makes.
+                // "Capacitor", not "Parallel plates": the bank's own switches are also
+                // plates, and two things in one room called the same word was
+                // unfindable on device.
                 .init(id: "plates", label: "Capacitor", symbol: "square.split.2x1",
                       isOn: { model.capacitorOn },
                       toggle: { model.capacitorOn.toggle() }),
@@ -263,25 +176,21 @@ struct FieldSpaceView: View {
         renderer.root.addChild(bank.root)
         self.bank = bank
 
-        // "Clear the field", at the head of the well column that made every
-        // charge. It CONFIRMS: a plate standing beside the thing it empties
-        // is otherwise one stray pinch from wiping the whole arrangement.
+        // Clear, at the head of the well column that made every charge. It
+        // confirms: a plate beside the thing it empties is otherwise one stray
+        // pinch from wiping the room.
         let verbs = SpatialActionBank(
             accent: DesignTokens.Palette.negativeUI,
             actions: [
                 .init(id: "clear", label: "Clear all", symbol: "trash.slash",
-                      // `isAvailable` is read every frame, so it tracks its
-                      // condition. Available while ANYTHING placed is in
-                      // the room — the probe counts.
+                      // Read every frame; available while anything placed is in the room,
+                      // the probe included.
                       isAvailable: { !model.charges.isEmpty || model.probe != nil },
                       confirms: true,
                       fire: { model.clearEverything() }),
-                // The CRT demo: fire the test charge crosswise through
-                // the gap and watch the parabola. Lives with the verbs
-                // because it PLACES the probe — it is a launch, not a
-                // display layer — but it does not confirm: re-firing is
-                // the point, and nothing is destroyed but the previous
-                // flight.
+                // The CRT demo: fire the test charge crosswise through the gap. With
+                // the verbs because it places the probe, but it does not confirm:
+                // re-firing is the point.
                 .init(id: "deflect", label: "Deflect shot",
                       symbol: "arrow.turn.down.right",
                       isAvailable: { model.capacitorOn },
@@ -290,9 +199,8 @@ struct FieldSpaceView: View {
         renderer.root.addChild(verbs.root)
         self.verbs = verbs
 
-        // Wells hang off `viewRoot`: a charge is born at the fingertips
-        // and handed straight to a drag, so the mouth and the hand have to
-        // agree about where they are.
+        // Wells hang off `viewRoot`: a charge is born at the fingertips and
+        // handed to a drag, so mouth and hand must agree about where they are.
         let wells = Well([
             .init(name: "Positive", tint: DesignTokens.Palette.positiveUI,
                   label: "Add +",
@@ -304,12 +212,8 @@ struct FieldSpaceView: View {
                   preview: { FieldRenderer.chargePreview(isPositive: false) },
                   position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 1)),
                   spawn: { model.addCharge(positive: false, at: $0) }),
-            // TWO test-charge mouths, one per polarity. The probe's sign
-            // used to be set on a particle bank AFTER it existed, so
-            // what came out of the well was whatever the bank happened to
-            // be on — the one object whose sign you could not choose
-            // while making it. The bank is gone (2026-08-03); the choice
-            // lives entirely in which mouth you pull from.
+            // Two test-charge mouths, one per polarity: the probe's sign is chosen
+            // by which mouth you pull from.
             .init(name: "Test +", tint: DesignTokens.Palette.probePositiveUI,
                   label: "Test +",
                   preview: { FieldRenderer.probePreview(isPositive: true) },
@@ -343,9 +247,8 @@ struct FieldSpaceView: View {
             // Snapped to 500 V so the bead lands on honest values.
             write: { model.setPlateVoltage($0) },
             format: { PhysicsFormat.measurement($0 / 1000, "kV", decimals: 0) },
-            // E = V/d, live under the rail — the physics this apparatus
-            // teaches, previously visible only on the card across the
-            // room. Follows a plate drag (d) as well as the bead (V).
+            // E = V/d, live under the rail; follows a plate drag (d) as well as the
+            // bead (V).
             subtitle: { _ in
                 "E = " + PhysicsFormat.measurement(model.plateFieldkVPerM, "kV/m", decimals: 1)
             })
@@ -371,15 +274,12 @@ struct FieldSpaceView: View {
         let head = appModel.room.headPosition.map { SIMD3<Float>($0) }
 
         // The bank and the picker live under `root`, which carries the
-        // lab-placement offset — so the viewer has to be converted into
-        // that frame or they would yaw toward a head that appears to be
-        // somewhere it is not.
+        // lab-placement offset, so the viewer is converted into that frame.
         let headInRoot = head.map {
             renderer.root.convert(position: $0, from: nil)
         }
-        // WORLD SPACE, unlike `headInRoot` above: recession compares the
-        // hand against each instrument's own world position, so the hand
-        // must not be converted into the renderer's frame.
+        // World space, unlike `headInRoot`: recession compares the hand against
+        // each instrument's own world position.
         let hand = appModel.room.nearestFingertip(
             to: renderer.root.convert(
                 position: SIMD3<Float>(FieldInstrumentLayout.bankAnchor), to: nil))
@@ -400,9 +300,8 @@ struct FieldSpaceView: View {
                     capacitorCenter: model.capacitorCenter))
             voltage.refresh()
         }
-        // `refresh()` is the caller's job — the control ticks nothing of
-        // its own. Without these the beads would show the last value a
-        // hand dragged them to and ignore a reset or a launch argument.
+        // `refresh()` is the caller's job: a rail ticks nothing of its own, and
+        // would show a stale value after a reset.
         if fieldTrack?.isEnabled == true { fieldTrack?.refresh() }
     }
 
@@ -474,10 +373,7 @@ struct FieldSpaceView: View {
     }
 
     // MARK: Tap
-    //
-    // Folded-out chrome before the physics under it: the bank, the picker
-    // and the ring's petals all sit visually on top of the field, so a tap
-    // that lands on one is theirs.
+    // Folded-out chrome before the physics under it.
 
     private var tap: some Gesture {
         TapGesture()
@@ -496,10 +392,8 @@ struct FieldSpaceView: View {
     }
 
     // MARK: Drag
-    //
-    // Relative dragging, no system manipulation: an object moves by exactly
-    // the hand's displacement — it never lurches toward the hand, and the
-    // per-frame tick moves its field with it in the same frame.
+    // Relative dragging: an object moves by exactly the hand's displacement
+    // and its field moves with it in the same frame.
 
     private var drags: some Gesture {
         DragGesture(minimumDistance: 0)
@@ -510,18 +404,13 @@ struct FieldSpaceView: View {
                     value.location3D, from: .local, to: .scene)))
                 flick.record(hand, at: CACurrentMediaTime())
 
-                // A — gestures already in flight. Nothing may re-claim a
-                // hand that is already holding something, or a drag that
-                // starts on a rail and wanders over a charge would begin
-                // dragging the charge halfway through.
+                // Gestures already in flight first: a hand holding something is never
+                // re-claimed.
                 if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
                 if let track = activeTrack {
-                    // A rail can go away underneath a live drag — switch
-                    // the capacitor off while pulling its ΔV bead and the
-                    // ΔV rail is disabled the same frame. `adjust` then
-                    // no-ops correctly but the hand stays captured by a
-                    // dead instrument for the rest of the gesture, and
-                    // nothing else can claim it.
+                    // A rail can go away under a live drag (switch the capacitor off while
+                    // pulling its ΔV bead); the hand must not stay captured by a dead
+                    // instrument.
                     guard track.isEnabled else {
                         activeTrack = nil
                         return
@@ -541,10 +430,8 @@ struct FieldSpaceView: View {
                         }
                     }
                     if let id = wells?.pull(value.entity, at: hand) {
-                        // Born at the fingertips, and dragged by the same
-                        // gesture that made it. The probe has no UUID of
-                        // its own, so its well's id maps to the drag name
-                        // the rest of this file already understands.
+                        // Born at the fingertips and dragged by the gesture that made it; the
+                        // probe has no UUID, so its well's id names the drag.
                         drag = RelativeDrag(
                             name: id == Self.probeWellID
                                 ? FieldRenderer.probeEntityName : id.uuidString,
@@ -563,9 +450,8 @@ struct FieldSpaceView: View {
                 if let drag {
                     apply(drag: drag, hand: hand)
                     if drag.name == FieldRenderer.probeEntityName {
-                        // The throw carries the aim: with B on, a probe
-                        // released at rest has nothing for the field to
-                        // bend (F = qv×B is zero when v is).
+                        // The throw carries the aim: with B on, a probe released at rest has
+                        // nothing for the field to bend.
                         model.releaseProbe(
                             flick: flick.velocity(at: CACurrentMediaTime()) ?? .zero)
                     }
@@ -628,13 +514,9 @@ struct FieldSpaceView: View {
     }
 
     // MARK: Debug entry points
-    //
-    // Every instrument above is an object in the room, and the simulator
-    // has no hand to press one with — `simctl` has no tap verb. So each
-    // apparatus and each continuous quantity needs a launch argument, or
-    // this migration cannot be screenshot at all. A rail whose bead is
-    // always at its default proves nothing about the mapping, which is why
-    // the value args matter as much as the on/off ones.
+    // Every instrument is an object in the room and the simulator has no
+    // hand, so each apparatus and each continuous quantity needs a launch
+    // argument. The value arguments matter as much as the on/off ones.
 
     private func applyDebugArguments() {
         #if DEBUG
@@ -651,44 +533,29 @@ struct FieldSpaceView: View {
             ring.target = .charge(id)
         }
 
-        // `-emClear 1` ARMS the Clear plate rather than firing it.
-        //
-        // Firing would be the useless argument: the plate's resting look
-        // is already in every launch screenshot, and an empty room
-        // photographs as an empty room whether a control emptied it or
-        // nothing ever filled it. The armed state is the half that
-        // cannot otherwise be seen — the lit lamp, the nameplate swapped
-        // to "Tap again" — and it is the half that carries the whole
-        // safety argument for putting a destructive verb in the room.
+        // `-emClear 1` arms the Clear plate rather than firing it: an emptied
+        // room photographs like an unused one, and the armed state is the half
+        // that cannot otherwise be seen.
         if defaults.bool(forKey: "emClear") {
             verbs?.arm("clear", holds: true)
         }
 
-        // `-emDielectric 0.5` slides the slab half in — the value arg
-        // matters more than an on/off: a slab parked at zero coverage
-        // photographs identically to no slab feature at all, and the
-        // charge crowding it causes only exists at partial insertion.
-        // `double(forKey:)` coerces the STRING the launch-argument
-        // domain stores, exactly as `-viewScale` below already
-        // documents — an `object as? NSNumber` cast fails silently, and
-        // did, with C reading the bare 11.2 pF in the first screenshot.
-        // Zero-if-absent is the parked default, so no presence check.
+        // `-emDielectric 0.5` slides the slab half in; the crowding only exists
+        // at partial insertion. `double(forKey:)` coerces the string the
+        // argument domain stores; zero-if-absent is the parked default.
         let coverage = defaults.double(forKey: "emDielectric")
         if coverage > 0 {
             model.dielectricCoverage = min(coverage, 1)
         }
         // `-emLaunch 1` fires the deflection shot at launch, because a
-        // parabola is a MOTION and the simulator cannot pinch the verb;
+        // parabola is a motion and the simulator cannot pinch the verb;
         // with `-startPaused` and `-pauseAfter` it freezes mid-bend.
         if defaults.bool(forKey: "emLaunch") {
             model.launchProbeThroughGap()
         }
 
-        // `-viewScale 2.5` bakes a committed scale in at launch so the
-        // scaled field can be screenshot-verified from the CLI — the
-        // simulator has no second hand to pinch with. `double(forKey:)`
-        // coerces the string the launch-argument domain stores;
-        // `object as? Double` does not.
+        // `-viewScale 2.5` bakes a committed scale in at launch.
+        // `double(forKey:)` coerces the stored string.
         let forced = defaults.double(forKey: "viewScale")
         if forced > 0 {
             scaleRig.updateMagnification(Float(forced))
@@ -708,17 +575,10 @@ struct FieldSpaceView: View {
         return names
     }
 
-    /// Resolves a pinch to a charge. An ancestor named with a charge's
-    /// UUID wins outright; failing that, the nearest charge within
-    /// `fallbackRadius` of the hand — so a near-miss pinch on a charge
-    /// still grabs it instead of silently doing nothing.
-    ///
-    /// This fallback is load-bearing rather than decorative: the capacitor
-    /// plates carry 26 cm collision spheres that overlap in the middle of
-    /// the gap, and the flux meter carries one of its full radius. Without
-    /// it, a charge sitting inside either apparatus could not be grabbed at
-    /// all. `FieldInstrumentLayout` keeps every instrument further than
-    /// `fallbackRadius` from the physics for exactly this reason.
+    /// Resolves a pinch to a charge: an ancestor named with a charge's UUID
+    /// wins; failing that, the nearest charge within `fallbackRadius` of the
+    /// hand. `FieldInstrumentLayout` keeps every instrument further than
+    /// that from the physics.
     static func resolveCharge(names: [String], hand: SIMD3<Double>,
                               charges: [(id: UUID, position: SIMD3<Double>)],
                               fallbackRadius: Double = 0.12) -> UUID? {
@@ -735,15 +595,8 @@ struct FieldSpaceView: View {
             .0
     }
 
-    /// EXTRACTED FROM THE TAP CLOSURE, 2026-08-08, so VoiceOver reaches
-    /// the same routing a pinch does.
-    ///
-    /// `Grabbable` has taken an `activate` closure since the mechanism
-    /// moved into RenderKit, and every call site passed nothing — so the
-    /// objects a hand can carry could be reached no other way. It is not
-    /// a sweep: the helper configures entities it did not build and
-    /// cannot know what pressing one should mean. Only the module knows
-    /// that, so the routing had to come out of the gesture first.
+    /// The tap routing, out of the gesture closure so VoiceOver reaches it
+    /// too; only the module knows that pressing an object opens its ring.
     private func handleObjectTap(on entity: Entity) {
         if bloom.handleTap(entity) { return }
         if bank?.handleTap(entity) == true { return }
@@ -761,8 +614,11 @@ struct FieldSpaceView: View {
                 return
             }
         }
+        // Folding by tapping elsewhere answers, as in every other lab.
+        if ring.target != nil {
+            SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
+        }
         ring.target = nil
-    
     }
 
 }

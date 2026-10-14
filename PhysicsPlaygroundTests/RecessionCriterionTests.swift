@@ -2,36 +2,13 @@
 //  RecessionCriterionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  THE INSTRUMENTS THAT STAND IN THE ROOM MUST GET OUT OF THE WAY.
-//
-//  `Recession` shipped on 2026-08-07 with two call sites — `SummonHandle`
-//  and Gravity Lab's layer bank — and the task was marked done. Five
-//  primitives that stand permanently in every lab (`SpatialLayerBank`,
-//  `SpatialActionBank`, `SpatialPicker`, `Well`, `TimeRail`) never faded
-//  at all, which is the whole feature missing from five of seven places
-//  it was for.
-//
-//  WHY THESE ARE BEHAVIOURAL AND NOT A SOURCE SCAN. The companion
-//  criterion in `SpatialActionCriterionTests` greps the tree, because
-//  operability is a UNIVERSAL rule — anything pinchable must be
-//  operable, no exceptions, so a file either complies or does not.
-//  Recession is not universal, and a grep would be actively wrong:
-//
-//  · `Bloom` must NOT recede. It is already gaze-gated — it unfolds when
-//    you look at its object and folds when you look away — so a second
-//    distance fade would dim a ring you just opened by looking at it.
-//  · The palette bead must NOT recede. It is the one object present in
-//    every lab at all times and the way back out; a way out that fades
-//    when your hands are down is a way out you cannot find.
-//  · The time rail's PLATES must not, though its reel does. They only
-//    exist while the tape is drawn out, and a scrub control that dims
-//    mid-scrub fights the hand using it.
-//
-//  So the rule is per-primitive judgement, and the test has to be too.
-//  What it can enforce without listing is the SHAPE: for every primitive
-//  that claims to recede, a far hand dims it and a near hand does not,
-//  measured through the real `update` rather than by calling `Recession`
-//  directly — which is exactly the step that was missing.
+//  The instruments that stand in the room must get out of the way.
+//  Behavioural rather than a source scan, because recession is a
+//  per-primitive judgement: `Bloom` is gaze-gated, the palette bead is
+//  the way out, and the time rail's plates only exist while the tape is
+//  out. What the test enforces is the shape: for every primitive that
+//  claims to recede, a far hand dims it and a near hand does not,
+//  measured through the real `update`.
 //
 
 import XCTest
@@ -72,10 +49,8 @@ final class RecessionCriterionTests: XCTestCase {
             comes back, which is worse than never receding.
             """, file: file, line: line)
 
-        // AND NO HAND AT ALL IS FULL BRIGHTNESS, not resting. The
-        // simulator never tracks hands, and so does any device frame
-        // where they are out of view; an instrument that fades because
-        // the system briefly lost your hands is one that flickers.
+        // No hand at all is full brightness, not resting: an instrument that
+        // fades because tracking dropped is one that flickers.
         update(nil)
         XCTAssertEqual(opacity(of: root), 1, accuracy: 1e-4, """
             \(name) receded with NO hand tracked. Untracked is not far.
@@ -131,7 +106,7 @@ final class RecessionCriterionTests: XCTestCase {
         }
     }
 
-    /// PER SOURCE, not per root — a bench of wells spread half a metre
+    /// Per source, not per root — a bench of wells spread half a metre
     /// apart must not all light up because one of them is near your hand.
     func testEachWellRecedesOnItsOwnDistance() throws {
         let well = Well([
@@ -144,10 +119,8 @@ final class RecessionCriterionTests: XCTestCase {
         ])
         for _ in 0..<10 { well.update(dt: 1 / 90, nearestHand: .zero) }
 
-        // ASKED OF THE WELL, not walked out of `root`: the sources hang
-        // off a sliding rack inside it since the scroll landed, and a
-        // test that knows the hierarchy breaks when the hierarchy is
-        // rearranged for a reason it does not care about. (It did.)
+        // Asked of the well, not walked out of `root`: the sources hang off a
+        // sliding strip inside it.
         XCTAssertEqual(well.slotCount, 2)
         let nearWell = try XCTUnwrap(well.source(at: 0))
         let farWell = try XCTUnwrap(well.source(at: 1))

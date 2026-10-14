@@ -24,7 +24,7 @@ final class Bloom {
 
         /// Read every frame; a false condition dims the petal and refuses
         /// the tap rather than removing it (removal shifts neighbours under
-        /// the finger). A CLOSURE, NOT A BOOL: a Bool would be evaluated
+        /// the finger). A closure, not A BOOL: a Bool would be evaluated
         /// once at configure time and never re-checked.
         var isAvailable: () -> Bool = { true }
 
@@ -91,7 +91,7 @@ final class Bloom {
     /// rewritten when the number actually changes.
     private var lastGripSpoken: String?
 
-    /// Where the bloom is anchored, world space (set while open, HELD
+    /// Where the bloom is anchored, world space (set while open, held
     /// while it folds — see `update`).
     private var anchor: SIMD3<Float> = .zero
     /// The viewer's last known position, held for the same reason.
@@ -102,20 +102,20 @@ final class Bloom {
 
     // MARK: Geometry
     //
-    // Sizes are in metres AT ONE METRE, then scaled by distance so the
+    // Sizes are in metres at one metre, then scaled by distance so the
     // bloom holds constant angular size at any range. Sized and placed to
-    // CLEAR the physics, not sit beside it.
+    // Clear the physics, not sit beside it.
     private static let petalRadius: Float = 0.030
     /// The glyph plane's entity name, so the armed checkmark can find it.
     private static let iconName = "bloom-petal-icon"
     private static let ringRadius: Float = 0.235
-    /// The visible rail the bead travels; the bead's position IS the value
+    /// The visible rail the bead travels; the bead's position is the value
     /// — min at the object, max at the far tick.
     private static let gripTrackLength: Float = 0.14
-    /// How far BELOW the object's surface the rail hangs, so it never
+    /// How far below the object's surface the rail hangs, so it never
     /// shares space with whatever is bolted to the object's sides. See `layoutGrip`.
     private static let gripTrackDrop: Float = 0.048
-    /// Nearly a horizontal row: petals sit ABOVE the object, spread just
+    /// Nearly a horizontal row: petals sit above the object, spread just
     /// enough to separate.
     private static let ringArc: Float = 34 * .pi / 180
 
@@ -123,7 +123,7 @@ final class Bloom {
         root.isEnabled = false
     }
 
-    /// What this bloom is currently pointed at. Tracked INSIDE the class:
+    /// What this bloom is currently pointed at. Tracked inside the class:
     /// a SwiftUI @State read from a RealityKit update closure comes back
     /// stale. State a render loop reads must live where the render loop lives.
     private(set) var targetID: AnyHashable?
@@ -144,7 +144,7 @@ final class Bloom {
         // so the arm cannot survive it.
         armedPetal = nil
         // Nor can the grip drag: it holds (startHand, startValue) captured
-        // against the OLD grip, so a selection changing mid-drag would write
+        // against the old grip, so a selection changing mid-drag would write
         // the old start value into the new object's range.
         gripDrag = nil
         self.petals = petals
@@ -157,7 +157,7 @@ final class Bloom {
             let entity = Self.makePetal(petal)
             root.addChild(entity)
             petalEntities.append(entity)
-            // Through `handleTap`, NOT straight at `petal.action`: the tap
+            // Through `handleTap`, not straight at `petal.action`: the tap
             // path checks availability and arms a `confirms` petal instead
             // of firing.
             SpatialActions.attach(
@@ -190,14 +190,17 @@ final class Bloom {
         }
 
         if label == nil {
-            // BELOW the bead: the rail hangs under the object, so a label
+            // Below the bead: the rail hangs under the object, so a label
             // above the bead would land in the gap that must stay clear.
             let callout = Callout(color: UIColor(white: 0.97, alpha: 1),
                                   textSize: 0.019, offset: SIMD3(0, -0.046, 0))
-            callout.setAccessibilityName(grip?.name ?? "Value")
             root.addChild(callout.root)
             label = callout
         }
+        // Named on every retarget, not only when built: one ring serves every
+        // object in a lab, and Electric Fields' probe "Charge" was announced
+        // as the charge's "Strength" because that grip came first.
+        label?.setAccessibilityName(grip?.name ?? "Value")
     }
 
     /// Per frame. `revealTarget` is 1 while the object is being looked
@@ -211,7 +214,7 @@ final class Bloom {
         // keep looking at something while you are pulling on it.
         let target = gripDrag != nil ? 1 : revealTarget
 
-        // WHERE IT FOLDS is where it was, not where the caller says. A
+        // Where it folds is where it was, not where the caller says. A
         // closing bloom keeps its last pose; only an open/opening one
         // adopts a new one — modules close by passing anchor .zero, and
         // folding there would teleport the ring to the scene origin.
@@ -273,7 +276,7 @@ final class Bloom {
             let count = max(petalEntities.count, 1)
             let spread = Self.ringArc * Float(count - 1)
             let angle = -spread / 2 + Self.ringArc * Float(index)
-            // Petals arc ABOVE the object, never in front of it.
+            // Petals arc above the object, never in front of it.
             let lift = Self.ringRadius * r
             entity.position = SIMD3(sin(angle) * lift,
                                     cos(angle) * lift,
@@ -283,7 +286,7 @@ final class Bloom {
             entity.scale = SIMD3(repeating: max(r, 0.001) * pop)
             entity.isEnabled = r > 0.02
 
-            // Dim, never absent: the layout derives from the COUNT, so
+            // Dim, never absent: the layout derives from the count, so
             // removing a petal would shift the rest under the finger.
             let available = index < petals.count ? petals[index].isAvailable() : true
             entity.components.set(OpacityComponent(opacity: available ? 1 : 0.35))
@@ -292,8 +295,8 @@ final class Bloom {
 
     private func layoutGrip(scale: Float) {
         guard let grip, let gripEntity else { return }
-        // The rail hangs UNDER the object, centred and level. Under is the
-        // free direction: petals arc ABOVE (`layoutPetals`), giving a clean
+        // The rail hangs under the object, centred and level. Under is the
+        // free direction: petals arc above (`layoutPetals`), giving a clean
         // stack — actions overhead, the object, its rail, its number.
         let surface = grip.radius() / max(scale, 0.001)
         let drop = -(surface + Self.gripTrackDrop)
@@ -302,10 +305,10 @@ final class Bloom {
         let t = Float(min(max((grip.read() - grip.range.lowerBound)
                               / max(span, .leastNonzeroMagnitude), 0), 1))
 
-        // The bead sits ON the rail at the value's position.
+        // The bead sits on the rail at the value's position.
         gripEntity.position = SIMD3(start + Self.gripTrackLength * t, drop, 0)
         gripEntity.scale = SIMD3(repeating: max(reveal, 0.001))
-        // Visible for the whole fold, but only a HIT TARGET once nearly
+        // Visible for the whole fold, but only a hit target once nearly
         // fully open — a half-revealed grabbable bead steals grabs meant
         // for the object it decorates.
         gripEntity.isEnabled = reveal > 0.02
@@ -353,17 +356,20 @@ final class Bloom {
         guard let index = petalEntities.firstIndex(where: { $0.name == name }) else {
             return false
         }
-        // An unavailable petal neither fires NOR consumes — the tap must
+        // An unavailable petal neither fires nor consumes — the tap must
         // fall through to whatever is behind it.
         guard petals[index].isAvailable() else { return false }
 
-        // Acknowledge in place: a quick swell, then the action.
+        // Acknowledge in place: a quick swell, then the action. Under Reduce
+        // Motion the sound and the lamp acknowledge it; nothing swells.
         let petal = petalEntities[index]
-        petal.move(to: Self.swellTarget(for: petal),
-                   relativeTo: root, duration: 0.09, timingFunction: .easeOut)
+        if !Motion.isReduced {
+            petal.move(to: Self.swellTarget(for: petal),
+                       relativeTo: root, duration: 0.09, timingFunction: .easeOut)
+        }
 
         if petals[index].confirms, armedPetal?.index != index {
-            // First tap: arm and wait. Arming CONSUMES the tap.
+            // First tap: arm and wait. Arming consumes the tap.
             armedPetal = (index, 0)
             applyArmedLook(index: index, armed: true)
             SoundPalette.play(.pop, on: petal, volume: 0.25)
@@ -371,11 +377,14 @@ final class Bloom {
         }
 
         disarmPetal()
+        // Heard as well as seen, as a fired action plate is: a petal used to
+        // fire in silence, so Delete made no sound at all.
+        SoundPalette.play(.pop, on: petal, volume: 0.35)
         petals[index].action()
         return true
     }
 
-    /// The acknowledge-swell's target transform. The rotation MUST carry
+    /// The acknowledge-swell's target transform. The rotation must carry
     /// the petal's own orientation (built face-on at π/2 about X): an
     /// omitted rotation defaults to identity and tumbles the petal 90°.
     static func swellTarget(for petal: Entity) -> Transform {
@@ -406,7 +415,7 @@ final class Bloom {
             material.blending = .transparent(opacity: .init(floatLiteral: 1))
             icon.model?.materials = [material]
         }
-        // REPUBLISH, DO NOT REBUILD: a fresh AccessibilityComponent would
+        // Republish, do not rebuild: a fresh AccessibilityComponent would
         // carry empty systemActions and strip Activate, stranding a
         // VoiceOver user mid-confirmation.
         SpatialActions.republish(
@@ -420,7 +429,7 @@ final class Bloom {
         return true
     }
 
-    /// Pull ALONG the rail: the hand's travel is projected onto the
+    /// Pull along the rail: the hand's travel is projected onto the
     /// track's direction, so drift up/down/toward-you doesn't move the
     /// number. A radial mapping would run half the track backwards now
     /// that the rail hangs under the object rather than out from it.
@@ -436,7 +445,7 @@ final class Bloom {
     }
 
     /// One VoiceOver increment/decrement — a twentieth of the range per
-    /// step, through the SAME clamp `updateGrip` uses.
+    /// step, through the same clamp `updateGrip` uses.
     func nudgeGrip(by steps: Double) {
         guard let grip else { return }
         let span = grip.range.upperBound - grip.range.lowerBound
@@ -464,20 +473,19 @@ final class Bloom {
     // MARK: Building
 
     private static func makePetal(_ petal: Petal) -> ModelEntity {
-        // A DARK casing with a white glyph: legible over a bright room and
+        // A dark casing with a white glyph: legible over a bright room and
         // a coloured field, where tinted glass reads as a smudge.
         let disc = ModelEntity(
-            mesh: .generateCylinder(height: 0.005, radius: petalRadius),
+            mesh: Primitives.cylinder(height: 0.005, radius: petalRadius),
             materials: [casing()])
         disc.name = "bloom-\(petal.name)"
         disc.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
         disc.components.set(GroundingShadowComponent(castsShadow: true))
 
         // A thin accent rim carries the meaning (red = destructive).
-        var rimMaterial = UnlitMaterial(color: petal.tint)
-        rimMaterial.blending = .transparent(opacity: 0.95)
+        let rimMaterial = Materials.unlit(petal.tint, opacity: 0.95)
         let rim = ModelEntity(
-            mesh: .generateCylinder(height: 0.0032, radius: petalRadius * 1.16),
+            mesh: Primitives.cylinder(height: 0.0032, radius: petalRadius * 1.16),
             materials: [rimMaterial])
         rim.position = [0, -0.0012, 0]
         disc.addChild(rim)
@@ -487,7 +495,7 @@ final class Bloom {
             iconMaterial.color = .init(tint: .white, texture: .init(texture))
             iconMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
             let icon = ModelEntity(
-                mesh: .generatePlane(width: petalRadius * 1.15,
+                mesh: Primitives.plane(width: petalRadius * 1.15,
                                      height: petalRadius * 1.15),
                 materials: [iconMaterial])
             // Named so `applyArmedLook` can find it to swap in the checkmark.
@@ -499,7 +507,7 @@ final class Bloom {
 
         disc.components.set(InputTargetComponent())
         disc.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: petalRadius * 1.4)]))
+            shapes: [Primitives.collisionSphere(radius: petalRadius * 1.4)]))
         disc.components.set(HoverEffectComponent())
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
@@ -518,28 +526,25 @@ final class Bloom {
         let rig = Entity()
         let alongX = simd_quatf(angle: -.pi / 2, axis: [0, 0, 1])
 
-        var trackMaterial = UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))
-        trackMaterial.blending = .transparent(opacity: 0.28)
+        let trackMaterial = Materials.unlit(UIColor(white: 0.95, alpha: 1), opacity: 0.28)
         let track = ModelEntity(
-            mesh: .generateCylinder(height: gripTrackLength, radius: 0.0012),
+            mesh: Primitives.cylinder(height: gripTrackLength, radius: 0.0012),
             materials: [trackMaterial])
         track.orientation = alongX
         track.position = SIMD3(gripTrackLength / 2, 0, 0)
         rig.addChild(track)
 
-        var fillMaterial = UnlitMaterial(color: UIColor(white: 1.0, alpha: 1))
-        fillMaterial.blending = .transparent(opacity: 0.85)
+        let fillMaterial = Materials.unlit(UIColor(white: 1.0, alpha: 1), opacity: 0.85)
         let fill = ModelEntity(
-            mesh: .generateCylinder(height: 1, radius: 0.0022),
+            mesh: Primitives.cylinder(height: 1, radius: 0.0022),
             materials: [fillMaterial])
         fill.orientation = alongX
         rig.addChild(fill)
 
-        var tickMaterial = UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))
-        tickMaterial.blending = .transparent(opacity: 0.55)
+        let tickMaterial = Materials.unlit(UIColor(white: 0.95, alpha: 1), opacity: 0.55)
         for x in [Float(0), gripTrackLength] {
             let tick = ModelEntity(
-                mesh: .generateBox(width: 0.002, height: 0.014, depth: 0.002,
+                mesh: Primitives.box(width: 0.002, height: 0.014, depth: 0.002,
                                    cornerRadius: 0.001),
                 materials: [tickMaterial])
             tick.position = SIMD3(x, 0, 0)
@@ -553,7 +558,7 @@ final class Bloom {
                                         texture: .init(texture))
             glyphMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
             let glyph = ModelEntity(
-                mesh: .generatePlane(width: 0.013, height: 0.013),
+                mesh: Primitives.plane(width: 0.013, height: 0.013),
                 materials: [glyphMaterial])
             glyph.position = SIMD3(x, -0.021, 0)
             rig.addChild(glyph)
@@ -563,10 +568,10 @@ final class Bloom {
     }
 
     private static func makeGrip() -> ModelEntity {
-        // The bead stays BRIGHT AND SOLID — the handle your fingers hunt
-        // for; the glass language is for surfaces a control sits ON.
+        // The bead stays bright and solid — the handle your fingers hunt
+        // for; the glass language is for surfaces a control sits on.
         let bead = ModelEntity(
-            mesh: .generateSphere(radius: 0.014),
+            mesh: Primitives.sphere(radius: 0.014),
             materials: [Materials.grip(roughness: 0.15,
                                        emissive: UIColor(white: 1, alpha: 1),
                                        glow: 0.35)])
@@ -575,7 +580,7 @@ final class Bloom {
         // Barely larger than the bead: a generous collider steals grabs
         // meant for the object the bloom decorates.
         bead.components.set(CollisionComponent(
-            shapes: [.generateSphere(radius: 0.016)]))
+            shapes: [Primitives.collisionSphere(radius: 0.016)]))
         bead.components.set(HoverEffectComponent())
         bead.components.set(GroundingShadowComponent(castsShadow: true))
         var accessibility = AccessibilityComponent()

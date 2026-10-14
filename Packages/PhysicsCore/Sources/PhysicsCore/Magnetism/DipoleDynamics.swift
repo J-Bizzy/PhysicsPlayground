@@ -1,10 +1,10 @@
 //  DipoleDynamics.swift — a bar magnet with mass and rotational inertia, so a released
 //  needle overshoots north and rings back (a mobility law cannot overshoot).
 //
-//  The mass is DERIVED, not tuned: m = M_s·V (NdFeB M_s ≈ 1e6 A/m) fixes volume from
+//  The mass is derived, not tuned: m = M_s·V (NdFeB M_s ≈ 1e6 A/m) fixes volume from
 //  moment, hence radius, mass, and I = m(3r²+L²)/12 — a stronger magnet is genuinely a
 //  heavier bar. Damping (linear drag, removes energy only, stronger than air as a lab
-//  pivot is) is the ONE tunable number. Integration: semi-implicit (symplectic) Euler,
+//  pivot is) is the one tunable number. Integration: semi-implicit (symplectic) Euler,
 //  substepped, as in ElasticSheet.
 
 import Foundation
@@ -59,7 +59,7 @@ public enum DipoleDynamics {
     // MARK: The step
 
     /// Advances one magnet by `dt`. `damping`: linear drag, 1/s, on v and ω; removes energy only.
-    /// Semi-implicit Euler — accelerate first, move with the NEW velocity: that ordering keeps
+    /// Semi-implicit Euler — accelerate first, move with the new velocity: that ordering keeps
     /// an oscillator's energy bounded where explicit Euler winds up.
     public static func step(
         body: inout DipoleBody,

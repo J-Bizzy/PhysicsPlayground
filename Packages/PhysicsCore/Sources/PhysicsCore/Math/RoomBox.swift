@@ -98,7 +98,7 @@ public struct RoomBox: Equatable, Sendable {
     // MARK: Polyline clipping
 
     /// Clips a polyline to the box. A line that leaves and re-enters returns
-    /// as SEPARATE runs, never joined; crossings land exactly on the wall.
+    /// as separate runs, never joined; crossings land exactly on the wall.
     public func clip(polyline: [SIMD3<Double>]) -> [[SIMD3<Double>]] {
         guard polyline.count >= 2 else {
             return polyline.count == 1 && contains(polyline[0]) ? [polyline] : []

@@ -14,7 +14,7 @@ import simd
 
 public enum Refraction {
     /// Refracts a unit `direction` crossing a surface whose unit
-    /// `normal` points TOWARD the incoming side (against the ray),
+    /// `normal` points toward the incoming side (against the ray),
     /// from index `n1` into `n2`. Returns nil on total internal
     /// reflection — beyond the critical angle there is no transmitted
     /// ray at all, not a dim one.
@@ -42,7 +42,7 @@ public enum Refraction {
         return simd_normalize(d - 2 * simd_dot(d, n) * n)
     }
 
-    /// The critical angle for light heading from the DENSER medium
+    /// The critical angle for light heading from the denser medium
     /// (n1) toward the rarer one (n2 < n1): past this, TIR.
     public static func criticalAngle(n1: Double, n2: Double) -> Double? {
         guard n1 > n2, n1 > 0 else { return nil }

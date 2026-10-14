@@ -1,7 +1,7 @@
 //
 //  ParticleDynamics.swift
 //  PhysicsCore — Math: velocity Verlet over an arbitrary a(r) field —
-//  symplectic, energy-stable for conservative forces. NOT suitable for
+//  symplectic, energy-stable for conservative forces. Not suitable for
 //  velocity-dependent forces (v×B); magnetism uses a Boris pusher.
 //
 

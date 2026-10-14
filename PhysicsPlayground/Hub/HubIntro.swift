@@ -1,6 +1,6 @@
 //  HubIntro.swift — the home's arrival choreography as pure functions of time (no RealityKit).
 //  The calibration bell is baked into a WAV at a fixed second: `landingTime` must equal it
-//  exactly (`HubIntroTests` pins the pair). The beat is a MINIMUM, not a loading measurement;
+//  exactly (`HubIntroTests` pins the pair). The beat is a minimum, not a loading measurement;
 //  Reduce Motion skips the whole timeline (root dissolve is the entrance then).
 
 import Foundation

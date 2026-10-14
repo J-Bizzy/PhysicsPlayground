@@ -16,7 +16,7 @@ import RenderKit
 final class StackLayoutTests: XCTestCase {
 
     /// The property that keeps callers honest: adding a switch grows the
-    /// column in BOTH directions, so the bank stays put beside the
+    /// column in both directions, so the bank stays put beside the
     /// apparatus instead of creeping downward.
     func testColumnStaysCentredAsItGrows() {
         let stack = StackLayout()

@@ -2,42 +2,14 @@
 //  Rotation.swift
 //  RenderKit
 //
-//  `simd_quatf(from:to:)` is undefined at both ends of its own domain:
-//  the two vectors exactly parallel (no rotation is determined, but the
-//  half-way construction divides by a zero-length bisector) and exactly
-//  antiparallel (every axis perpendicular to the pair is an equally
-//  valid π, so the library picks none). Both ends are REACHED by this
-//  app, not theoretically:
-//
-//  · every Bloom grip hangs its leader straight down, so `Callout`
-//    aimed a cylinder from [0,1,0] to exactly [0,-1,0];
-//  · a frozen gravity arrow points exactly [0,-1,0];
-//  · a hand compass under a magnet's south pole reads a field that does
-//    too;
-//  · a circuit part dragged end-for-end has axis exactly [-1,0,0]
-//    against a rest axis of [1,0,0];
-//  · the placement cross-hair and the motor's blades each build one bar
-//    from a vector to ITSELF.
-//
-//  The guard existed — `VectorFieldArrows.rotationFromYAxis(to:)` has
-//  carried it since the arrows shipped — and was never shared, so
-//  thirteen other sites re-made the same mistake. This file is that
-//  guard, promoted, and `rotationFromYAxis` now delegates to it.
-//
-//  The antiparallel axis is CHOSEN rather than arbitrary. Any axis
-//  perpendicular to the pair maps `a` to `b`; they differ in what they
-//  do to everything else. Taking the component of world up that is
-//  perpendicular to `a` keeps a flipped object's up pointing up — a
-//  resistor turned end-for-end stays the right way up instead of
-//  rolling onto its back — and degenerates, for a vertical `a`, to the
-//  [1,0,0] flip `rotationFromYAxis` already used.
-//
-//  `yaw(facing:from:)` is the other half. Seven instruments — both
-//  banks, the picker, Bloom, the palette bead, the time rail and the
-//  multimeter — turned to face a viewer with `from: [0,0,1]` and a
-//  y-flattened target. That is a one-degree-of-freedom problem solved
-//  with a three-degree-of-freedom tool: `atan2` is exact everywhere,
-//  states the intent, and cannot degenerate behind the instrument.
+//  `simd_quatf(from:to:)` is undefined for exactly parallel and exactly
+//  antiparallel vectors, and this app reaches both (a leader aimed
+//  straight down, a gravity arrow, a part dragged end-for-end, a bar
+//  built from a vector to itself). `rotation(from:to:)` is the shared
+//  guard; the antiparallel axis keeps world up pointing up, so a flipped
+//  object does not roll. `yaw(facing:from:)` is the level-facing case
+//  every instrument needs, solved with `atan2` rather than a
+//  three-degree-of-freedom tool.
 //
 
 import simd

@@ -24,7 +24,7 @@ final class MagnetismInertiaTests: XCTestCase {
         let swinger = model.magnets[1]
         model.setStrength(id: anchor.id, 12)
         model.move(id: anchor.id, to: MagnetismModel.regionCenter)
-        // OFF THE ANCHOR'S AXIS at 45°: straight out along +x the field is parallel
+        // Off the anchor's axis at 45°: straight out along +x the field is parallel
         // to the swinger's moment, m × B ≡ 0 and nothing swings (the first draft did exactly that).
         let reach = 0.30 / 2.0.squareRoot()
         model.move(id: swinger.id,
@@ -68,7 +68,7 @@ final class MagnetismInertiaTests: XCTestCase {
                              """)
     }
 
-    /// Counts direction reversals — a reversal IS an overshoot.
+    /// Counts direction reversals — a reversal is an overshoot.
     private func overshoots(in angles: [Double]) -> Int {
         var count = 0
         for index in 2..<max(angles.count, 2) where index < angles.count {
@@ -86,9 +86,9 @@ final class MagnetismInertiaTests: XCTestCase {
         XCTAssertFalse(MagnetismModel().inertiaOn)
     }
 
-    /// KNOWN LIMITATION, pinned as one: an inertial pair in CONTACT does not settle —
+    /// Known limitation, pinned as one: an inertial pair in contact does not settle —
     /// `separated()` moves a magnet, doing work the field claws back (a positional pump).
-    /// This asserts what IS true: bounded and finite, not settled. If the contact is
+    /// This asserts what is true: bounded and finite, not settled. If the contact is
     /// fixed, replace this with a settling test.
     func testTheInertialBenchIsBoundedEvenWhereItDoesNotSettle() {
         let model = MagnetismModel()

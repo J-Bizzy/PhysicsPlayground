@@ -97,7 +97,7 @@ public enum Prism {
             p = hit.point
             points.append(p)
             currentFace = hit.index
-            // Leaving: the refract normal must oppose the ray, i.e. point INTO the glass.
+            // Leaving: the refract normal must oppose the ray, i.e. point into the glass.
             if let out = Refraction.refract(
                 direction: SIMD3(d.x, d.y, 0),
                 normal: SIMD3(-hit.face.normal.x, -hit.face.normal.y, 0),

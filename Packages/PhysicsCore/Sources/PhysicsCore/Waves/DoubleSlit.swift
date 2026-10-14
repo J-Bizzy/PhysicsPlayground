@@ -5,7 +5,7 @@
 //  The double-slit screen pattern, exactly: two-slit interference
 //  cos²(π·d·sinθ/λ) under the single-slit envelope sinc²(π·w·sinθ/λ).
 //  The studio's floating fringe strip is painted with this; the
-//  WALKABLE field between barrier and screen comes from WaveField
+//  Walkable field between barrier and screen comes from WaveField
 //  with the slits as Huygens sources — same physics, two views.
 //
 

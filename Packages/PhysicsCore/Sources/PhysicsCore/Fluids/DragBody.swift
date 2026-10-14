@@ -51,7 +51,7 @@ public enum DragBody: String, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    /// Vehicles present 2.2× larger — the SINGLE knob renderer scale, frontal area, and deflection radius all share, so size and physics agree.
+    /// Vehicles present 2.2× larger — the single knob renderer scale, frontal area, and deflection radius all share, so size and physics agree.
     public var sizeMultiplier: Double { isVehicle ? 2.2 : 1 }
 
     /// Measured drag coefficient at high (subcritical) Reynolds number.
@@ -93,7 +93,7 @@ public enum DragBody: String, CaseIterable, Sendable, Identifiable {
     }
 
     /// Visualization-grade sphere silhouette for flow deflection (ObstacleField); local coords x
-    /// downstream, y up, z lateral, scaled by frontal half-width. Spheres must sit tightly INSIDE the visible model — radii proud of the silhouette read as invisible bulges. Cylinder returns none (keeps its analytic solution).
+    /// downstream, y up, z lateral, scaled by frontal half-width. Spheres must sit tightly inside the visible model — radii proud of the silhouette read as invisible bulges. Cylinder returns none (keeps its analytic solution).
     public func obstacleSpheres(center: SIMD3<Double>, halfWidth: Double) -> [ObstacleField.Sphere] {
         let layout: [(x: Double, y: Double, r: Double)]
         switch self {

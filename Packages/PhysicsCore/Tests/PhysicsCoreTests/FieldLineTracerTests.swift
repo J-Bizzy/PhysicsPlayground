@@ -52,7 +52,7 @@ final class FieldLineTracerTests: XCTestCase {
                                     "a healthy fraction of dipole lines must land on the negative charge")
     }
 
-    /// Every charge gets seeded all around, so a dipole draws lines from BOTH
+    /// Every charge gets seeded all around, so a dipole draws lines from both
     /// charges — including outward from the negative one's far side, which
     /// previously showed no lines at all.
     func testEveryChargeRadiatesLinesInAllDirections() {

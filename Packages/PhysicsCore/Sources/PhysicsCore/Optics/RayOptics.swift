@@ -6,7 +6,7 @@
 //  reflection in vector form, the thin-lens equation, and a segment
 //  tracer that carries rays through lenses, mirrors, and screens on an
 //  optical axis. Lenses use the exact paraxial transfer (slope' =
-//  slope − y/f), so images FORM where the traced rays actually cross —
+//  slope − y/f), so images form where the traced rays actually cross —
 //  the thin-lens equation is verified by the trace, not assumed.
 //
 //  SI units, no RealityKit.

@@ -2,33 +2,12 @@
 //  InstrumentReachCriterionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  CAN YOU ACTUALLY TOUCH THE CONTROLS?
-//
-//  `InstrumentClearance` has said since 2026-08-08 that furniture past
-//  `maximumReach` is "a step, not a reach", and until 2026-08-09 it was
-//  pointed at exactly one module. Electric Fields had a layout file, a
-//  declared station and tests; the other five put their bank anchor in a
-//  `SIMD3` literal inside a render closure, where nothing could measure
-//  it. Two of them were out of reach and had been for as long as they
-//  had existed.
-//
-//  ── WHY THE BOX MATTERS MORE THAN THE ANCHOR ──
-//
-//  Reach is measured to the NEAREST point of an instrument's box, so the
-//  answer depends on how big you say the box is — and it is easy to
-//  produce whichever answer you were hoping for. This file uses the
-//  convention `FieldInstrumentLayout` already ships and states: a
-//  DECLARED box, deliberately larger than the plates themselves, because
-//  a bank is not just its plates — nameplates hang beside and below
-//  them, and a confirming plate's label grows when it arms.
-//
-//  That convention is the GENEROUS one: a bigger box has a nearer near
-//  face, so it makes reach easier to pass, not harder. Anything this
-//  test still calls unreachable is unreachable under the most forgiving
-//  measurement the project uses. (Measured with the tight plate
-//  geometry instead, Pendulums also fails — at 1.39 m. It passes here at
-//  1.21 m, and the honest thing is to say the answer depends on where
-//  its nameplates actually end, which is a photograph's question.)
+//  Can you actually touch the controls? Every module's bank anchor is a
+//  named static so it can be measured. Reach is measured to the nearest
+//  point of a declared box, deliberately larger than the plates because
+//  nameplates hang beside and below them — the generous convention, so
+//  anything still called unreachable is unreachable under the most
+//  forgiving measurement.
 //
 
 import XCTest
@@ -68,12 +47,14 @@ final class InstrumentReachCriterionTests: XCTestCase {
             .init(name: "Magnetism layers",
                   anchor: MagnetismSpaceView.bankAnchor,
                   halfExtents: Self.bankHalfExtents),
-            .init(name: "Circuits layers",
+            // Circuits' and Orbital Mechanics' one standing layer instrument is a
+            // `SummonHandle` tab, measured on the tab's own tight box.
+            .init(name: "Circuits views tab",
                   anchor: CircuitsSpaceView.bankAnchor,
-                  halfExtents: Self.bankHalfExtents),
-            .init(name: "Gravity Lab layers",
-                  anchor: GravityLabSpaceView.bankAnchor,
-                  halfExtents: Self.bankHalfExtents),
+                  halfExtents: Self.summonTabHalfExtents),
+            .init(name: "Orbital Mechanics show tab",
+                  anchor: OrbitalMechanicsSpaceView.bankAnchor,
+                  halfExtents: Self.summonTabHalfExtents),
             .init(name: "Pendulums layers",
                   anchor: PendulumsSpaceView.bankAnchor,
                   halfExtents: Self.bankHalfExtents),
@@ -83,28 +64,47 @@ final class InstrumentReachCriterionTests: XCTestCase {
         ]
     }
 
-    /// Gravity Lab's fore column (on the left since 2026-08-29; it was
-    /// the right flank, which had TWO instruments out of reach) —
-    /// measured as a flank for the reason Projectiles is measured as a
-    /// wall.
+    /// Orbital Mechanics' fore column, measured as a flank for the reason
+    /// Projectiles is measured as a wall.
     private var verbBanks: [Instrument] {
         [
-            .init(name: "Gravity Lab verbs",
-                  anchor: GravityLabSpaceView.verbAnchor,
+            .init(name: "Orbital Mechanics verbs",
+                  anchor: OrbitalMechanicsSpaceView.verbAnchor,
                   halfExtents: Self.verbHalfExtents),
-            .init(name: "Gravity Lab clock tab",
-                  anchor: GravityLabSpaceView.clockAnchor,
+            .init(name: "Orbital Mechanics clock tab",
+                  anchor: OrbitalMechanicsSpaceView.clockAnchor,
                   halfExtents: Self.summonTabHalfExtents),
-            // The fan the tab unfolds. A folded instrument that would be
-            // unreachable when opened is still unreachable; it just
-            // waits for a pinch — the same argument
-            // `CircuitsInstrumentClearanceTests` makes for listing the
-            // presets column that only exists while its tab is open.
-            .init(name: "Gravity Lab clock fan",
-                  anchor: GravityLabSpaceView.clockAnchor + SIMD3(0, 0.13, 0),
+            // The fan the tab unfolds: a folded instrument that would be
+            // unreachable when opened is still unreachable.
+            .init(name: "Orbital Mechanics clock fan",
+                  anchor: OrbitalMechanicsSpaceView.clockAnchor + SIMD3(0, 0.13, 0),
                   halfExtents: SIMD3(0.15, 0.10, 0.15)),
+            // The deep flank's other objects: the Show column (only while open),
+            // the world well under the tab, and the G rail at the fore column's foot.
+            .init(name: "Orbital Mechanics show column",
+                  anchor: OrbitalMechanicsSpaceView.showColumnAnchor,
+                  halfExtents: Self.fivePlateHalfExtents),
+            .init(name: "Orbital Mechanics world well",
+                  anchor: OrbitalMechanicsRenderer.systemPosition
+                      + OrbitalMechanicsSpaceView.wellOffset,
+                  halfExtents: Self.wellHalfExtents),
+            .init(name: "Orbital Mechanics G rail",
+                  anchor: OrbitalMechanicsSpaceView.gravityRailAnchor,
+                  halfExtents: Self.railHalfExtents),
+            // And Circuits' column, for the same reason.
+            .init(name: "Circuits views column",
+                  anchor: CircuitsSpaceView.viewsColumnAnchor,
+                  halfExtents: Self.fivePlateHalfExtents),
         ]
     }
+
+    /// Five plates at 0.066 pitch plus a plate's own height — the box
+    /// `CircuitsInstrumentClearanceTests` sizes its columns with.
+    private static let fivePlateHalfExtents = SIMD3<Double>(0.15, 0.157, 0.05)
+    /// A rail's box, as `FieldInstrumentLayout` declares its own.
+    private static let railHalfExtents = SIMD3<Double>(0.16, 0.05, 0.07)
+    /// One well mouth — the preview and the nameplate under it.
+    private static let wellHalfExtents = SIMD3<Double>(0.06, 0.06, 0.06)
 
     /// A `SummonHandle` tab is one `PlateStyle` plate with a nameplate
     /// under it.
@@ -113,13 +113,9 @@ final class InstrumentReachCriterionTests: XCTestCase {
         Double(PlateStyle.height) / 2 + 0.010,
         Double(PlateStyle.depth) / 2)
 
-    /// Projectiles' whole instrument wall, measured as a wall.
-    ///
-    /// A BANK IS NOT A MODULE'S ONLY CONTROL, and checking only banks is
-    /// how this module passed while every one of its five instruments
-    /// was out of reach. The wall was rebuilt on 2026-08-09 — see
-    /// `KinematicsSpaceView` — and these are here so that "the bank is
-    /// reachable" can never again be mistaken for "the module is".
+    /// Projectiles' whole instrument wall: a bank is not a module's only
+    /// control, and checking only banks is how this module passed while
+    /// every one of its five instruments was out of reach.
     private var projectilesWall: [Instrument] {
         [
             .init(name: "Projectiles layers",
@@ -128,9 +124,7 @@ final class InstrumentReachCriterionTests: XCTestCase {
             .init(name: "Projectiles ball well",
                   anchor: KinematicsSpaceView.wellAnchor,
                   halfExtents: SIMD3(0.10, 0.10, 0.10)),
-            // The hoop's mouth (2026-09-01), outboard of the ball's on the
-            // same row — the one place a second mouth fits, and the one
-            // that had to be measured rather than reasoned.
+            // The hoop's mouth, outboard of the ball's on the same row.
             .init(name: "Projectiles hoop well",
                   anchor: KinematicsSpaceView.hoopWellAnchor,
                   halfExtents: SIMD3(0.10, 0.10, 0.10)),
@@ -190,29 +184,14 @@ final class InstrumentReachCriterionTests: XCTestCase {
         }
     }
 
-    /// Bringing something closer can push it off the side of the frame.
-    ///
-    /// Reach and off-axis angle pull in opposite directions: at a fixed
-    /// x, every metre of depth you give up to get inside arm's reach
-    /// buys degrees of azimuth. The first version of the Projectiles fix
-    /// pulled the wall to z = −0.78, fixed all five reaches, and moved
-    /// it from 43.7° to 49.1° — past the 48° that
-    /// `CircuitsPartsLayout` records as the point where nameplates
-    /// start being clipped, and visible in a screenshot as the rails
-    /// running off the left of the frame.
-    ///
-    /// A test that had only measured reach would have called that a
-    /// success. This is the other half.
+    /// Bringing something closer can push it off the side of the frame:
+    /// reach and off-axis angle pull in opposite directions, and a test
+    /// that measured only reach would call the trade a success.
     func testTheWallStaysInsideTheOffAxisLimit() {
         let limit = 48.0
         for instrument in projectilesWall {
             let anchor = SIMD3<Double>(instrument.anchor)
-            // FORWARD IS −Z, so the bearing is measured against −z and
-            // not against z. Written the other way round first, which
-            // reported every instrument at 136° — the third-quadrant
-            // answer to a question nobody asked, and the same shape of
-            // mistake `InstrumentClearance.violations` records making
-            // with nearest-vs-farthest.
+            // Forward is −Z, so the bearing is measured against −z.
             let degrees = atan2(abs(anchor.x), -anchor.z) * 180 / .pi
             XCTAssertLessThanOrEqual(degrees, limit, """
                 \(instrument.name) stands \(String(format: "%.1f", degrees))° off \
@@ -225,13 +204,8 @@ final class InstrumentReachCriterionTests: XCTestCase {
         }
     }
 
-    /// The wall must stay out of the shot.
-    ///
-    /// The reach fix moved five instruments toward the user, and the
-    /// launcher opens at x = −0.6 firing down −z. "Closer to the user"
-    /// and "into the firing line" are the same direction for four of
-    /// the five, so the constraint that shapes this module has to be
-    /// asserted next to the one that just moved everything.
+    /// The wall must stay out of the shot: closer to the user and into the
+    /// firing line are the same direction for four of the five.
     func testTheWallStaysBesideTheShotNotInFrontOfIt() {
         let launcherX = Double(KinematicsModel.launcherHome.x)
         for instrument in projectilesWall {
@@ -247,30 +221,19 @@ final class InstrumentReachCriterionTests: XCTestCase {
         }
     }
 
-    /// Moving something into reach can move it into something else.
-    ///
-    /// Gravity Lab's verb bank came in from 1.36 m on 2026-08-09, and
-    /// the only axis available to it was depth — its flank is shared
-    /// with the clock's folding tab, and at the system's own depth the
-    /// reach limit and the clock want the same air. So the fix is only
-    /// a fix if the gap survives it, and "I checked the arithmetic" is
-    /// how the 2 cm of slack in Electric Fields got spent twice.
-    func testGravityLabsForeColumnInstrumentsDoNotCrowd() {
-        let verbs = Instrument(name: "Gravity Lab verbs",
-                               anchor: GravityLabSpaceView.verbAnchor,
+    /// Moving something into reach can move it into something else: the
+    /// verb bank's flank is shared with the clock's tab.
+    func testOrbitalMechanicsForeColumnInstrumentsDoNotCrowd() {
+        let verbs = Instrument(name: "Orbital Mechanics verbs",
+                               anchor: OrbitalMechanicsSpaceView.verbAnchor,
                                halfExtents: Self.verbHalfExtents)
-        let clock = Instrument(name: "Gravity Lab clock tab",
-                               anchor: GravityLabSpaceView.clockAnchor,
+        let clock = Instrument(name: "Orbital Mechanics clock tab",
+                               anchor: OrbitalMechanicsSpaceView.clockAnchor,
                                halfExtents: Self.summonTabHalfExtents)
 
-        // ONLY THE GAP BETWEEN THEM. The obvious thing to also assert
-        // here — that neither stands inside the orrery — needs a
-        // DECLARED station box, and Gravity Lab does not have one: the
-        // module's extent is whatever preset is loaded, out to Neptune.
-        // Inventing a half-metre box for the test produced a violation
-        // against a number this file made up, which is a criterion
-        // measuring its own guess. That box belongs in the module, as a
-        // decision, not here.
+        // Only the gap between them: asserting neither stands inside the
+        // orrery needs a declared station box, and Orbital Mechanics' extent is
+        // whatever preset is loaded.
         let gap = verbs.box.separation(from: clock.box)
         XCTAssertGreaterThan(gap, InstrumentClearance.separation, """
             the verb bank clears the clock tab by \(String(format: "%.3f", gap)) m, \
@@ -279,6 +242,41 @@ final class InstrumentReachCriterionTests: XCTestCase {
             Exactly at the limit is not clearance, it is a coincidence — the \
             first draft of this move landed on 0.030 and read as fine.
             """)
+        // And the G rail at the column's foot clears the
+        // verbs above it — their labels, not just their plates.
+        let rail = Instrument(name: "Orbital Mechanics G rail",
+                              anchor: OrbitalMechanicsSpaceView.gravityRailAnchor,
+                              halfExtents: Self.railHalfExtents)
+        XCTAssertGreaterThan(rail.box.separation(from: verbs.box),
+                             InstrumentClearance.separation,
+                             "the G rail stands on the verb plates' labels")
+    }
+
+    /// The deep flank must not stand on itself: the tab, its column and
+    /// the well that hangs under the tab.
+    func testOrbitalMechanicsDeepFlankDoesNotStackOnItself() {
+        let tab = Instrument(name: "Orbital Mechanics show tab",
+                             anchor: OrbitalMechanicsSpaceView.bankAnchor,
+                             halfExtents: Self.summonTabHalfExtents)
+        let column = Instrument(name: "Orbital Mechanics show column",
+                                anchor: OrbitalMechanicsSpaceView.showColumnAnchor,
+                                halfExtents: Self.fivePlateHalfExtents)
+        let well = Instrument(name: "Orbital Mechanics world well",
+                              anchor: OrbitalMechanicsRenderer.systemPosition
+                                  + OrbitalMechanicsSpaceView.wellOffset,
+                              halfExtents: Self.wellHalfExtents)
+        for (a, b) in [(tab, column), (tab, well), (column, well)] {
+            let gap = a.box.separation(from: b.box)
+            XCTAssertGreaterThan(gap, InstrumentClearance.separation, """
+                \(a.name) and \(b.name) are \(String(format: "%.3f", gap)) m \
+                apart, not MORE than the \(InstrumentClearance.separation) m \
+                minimum — one stands on the other.
+                """)
+        }
+        // And the column, which opens upward, stays under a raised arm.
+        XCTAssertLessThan(column.box.maximum.y,
+                          InstrumentClearance.workingHeight.upperBound,
+                          "the unfolded Show column climbs out of the working band")
     }
 
     /// Not vacuous: the list has to actually cover the app.

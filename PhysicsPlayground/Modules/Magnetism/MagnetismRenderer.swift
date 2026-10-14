@@ -64,15 +64,14 @@ final class MagnetismRenderer {
     private let lineCasingMaterial =
         Materials.contrastLine(MagnetismRenderer.lineColor).casing
     private let lineGlowMaterial: UnlitMaterial = {
-        var m = UnlitMaterial(color: MagnetismRenderer.lineColor)
-        m.blending = .transparent(opacity: 0.2)
+        let m = Materials.unlit(MagnetismRenderer.lineColor, opacity: 0.2)
         return m
     }()
     private var linesPipeline: GeometryPipeline<LinesJob, LinesResult>?
     private var lastLineInputs: [BarMagnet]?
 
     init() {
-        let headMesh = MeshResource.generateCone(height: 0.02, radius: 0.0078)
+        let headMesh = Primitives.cone(height: 0.02, radius: 0.0078)
         let headMaterial = UnlitMaterial(color: MagnetismRenderer.lineColor)
         arrowHeads = EntityPool(budget: 600) { container in
             let head = ModelEntity(mesh: headMesh, materials: [headMaterial])
@@ -126,55 +125,34 @@ final class MagnetismRenderer {
     private func buildHandCompass() {
         handCompass.name = Self.handCompassName
 
-        // A SPHERE, not a flat dial: a magnetic field points wherever it
+        // A sphere, not a flat dial: a magnetic field points wherever it
         // likes (steeply up between two poles), and a flat dial can only
         // show the component lying in its plane. The needle aims in full
         // 3-D — `rotation(from:to:)` takes the whole vector.
         var shell = Materials.frostedGlass(
             UIColor(white: 0.62, alpha: 1), opacity: 0.20, frost: 0.35)
         shell.emissiveIntensity = 0.08
-        let orb = ModelEntity(mesh: .generateSphere(radius: Self.compassRadius),
+        let orb = ModelEntity(mesh: Primitives.sphere(radius: Self.compassRadius),
                               materials: [shell])
         handCompass.addChild(orb)
 
-        // NO GIMBAL RINGS. Two were tried here and they were a bug: a
-        // ring needs a torus, RealityKit has no `generateTorus`, and a
-        // thin box with `cornerRadius` equal to its half-width is not a
-        // ring — it is a rounded SLAB. So what rendered was two solid
-        // brass-coloured discs intersecting inside the glass, which the
-        // owner correctly reported as "an odd yellowish plane cutting
-        // through it."
-        //
-        // They were there to give the eye a reference for depth, so that
-        // "pointing 30 degrees up" and "pointing at you" would not look
-        // alike. The honest way to build one is a swept circle
-        // (`TubeMesh`, the way the reset orb's ring icon is made), but a
-        // clean glass ball with a needle in it reads well enough, and a
-        // ring is furniture until something proves it is needed.
-
-        // The needle: red north, white south, free to point ANYWHERE —
-        // the same alignment a free magnet finds, now in a case that
-        // admits it. Thicker and squarer in section than the flat blade
-        // it replaces, because a blade seen edge-on disappears, and
-        // edge-on is exactly the view a 3-D needle keeps giving you.
+        // The needle: red north, white south, free to point anywhere. Square
+        // in section, because a blade seen edge-on disappears.
         let needle = Entity()
         let north = ModelEntity(
-            mesh: .generateBox(size: [0.008, 0.040, 0.008], cornerRadius: 0.003),
+            mesh: Primitives.box(size: [0.008, 0.040, 0.008], cornerRadius: 0.003),
             materials: [Materials.energized(DesignTokens.Palette.positiveUI, glow: 0.35)])
         north.position = [0, 0.020, 0]
         let south = ModelEntity(
-            mesh: .generateBox(size: [0.008, 0.040, 0.008], cornerRadius: 0.003),
+            mesh: Primitives.box(size: [0.008, 0.040, 0.008], cornerRadius: 0.003),
             materials: [Materials.energized(UIColor(white: 0.9, alpha: 1),
                                             metallic: 0.6, glow: 0.0)])
         south.position = [0, -0.020, 0]
         needle.addChild(north)
         needle.addChild(south)
-        // The poles say their names (owner, 2026-08-03): the same
-        // extruded ivory letters the bar magnets wear, scaled to the
-        // needle and doubled back-to-back so they read from either side
-        // of the orb. They ride the needle, as painted labels would —
-        // when the needle dives, so do they, which is the honest
-        // behaviour for a label on a physical part.
+        // The poles say their names: the same extruded ivory letters the bar
+        // magnets wear, doubled back-to-back so they read from either side.
+        // They ride the needle, as painted labels would.
         for (text, tip) in [("N", Float(0.046)), ("S", Float(-0.046))] {
             for flip in [Float(0), .pi] {
                 let letter = Self.poleLetter(text)
@@ -187,7 +165,7 @@ final class MagnetismRenderer {
         // A dark bead at the pivot, so the needle reads as suspended at
         // the centre rather than as two bars floating in glass.
         let hub = ModelEntity(
-            mesh: .generateSphere(radius: 0.007),
+            mesh: Primitives.sphere(radius: 0.007),
             materials: [Materials.machined(UIColor(white: 0.22, alpha: 1))])
         needle.addChild(hub)
         handCompass.addChild(needle)
@@ -218,28 +196,14 @@ final class MagnetismRenderer {
         if handCompassNeedle == nil { buildHandCompass() }
         handCompass.isEnabled = model.compassOn
         guard model.compassOn else { return }
-        // EVERY frame, including while a hand owns it. This used to be
-        // gated on `isCarryingCompass`, so dragging the compass moved the
-        // MODEL and left the orb sitting where it was — you could swing
-        // the needle (it re-aims to the field at the model's new spot)
-        // and never move the instrument.
-        //
-        // The exact bug this module already fixed once, for the magnets,
-        // in 86106b9: these are RELATIVE drags, so the model owns motion
-        // and the renderer must follow it unconditionally. A guard of
-        // this shape only makes sense against a system-driven
-        // `ManipulationComponent`, and `configureTouchTarget` does not
-        // install one — it sets a collider and nothing else. The compass
-        // kept the defect for months because nobody had tried to carry
-        // it.
+        // Every frame, including while a hand owns it: these are relative
+        // drags, so the model owns motion and the renderer follows it
+        // unconditionally.
         handCompass.position = SIMD3<Float>(model.compassPosition)
         let field = model.compassField
         let magnitude = simd_length(field)
         if magnitude > 1e-12 {
-            // The WHOLE vector, which is what it always was — see
-            // `buildHandCompass` on the comment that used to sit here
-            // claiming a projection the code never did. The orb can show
-            // this honestly; the flat dial could not.
+            // The whole vector; the orb can show it, a flat dial could not.
             let direction = SIMD3<Float>(field / magnitude)
             // Under a south pole the field points straight down, which
             // is the antiparallel case.
@@ -247,11 +211,13 @@ final class MagnetismRenderer {
         }
         // Formatted only when the displayed decimal actually moves; the
         // anchor is a transform and stays per-frame.
+        // Recorded only once the callout takes it: a value its rate limit
+        // held back is offered again next frame, not frozen on the one before.
         let reading = (model.compassMicroTesla * 10).rounded()
-        if reading != lastCompassReading {
+        if reading != lastCompassReading,
+           handCompassCallout?.setText(
+               PhysicsFormat.measurement(model.compassMicroTesla, "µT", decimals: 1)) == true {
             lastCompassReading = reading
-            handCompassCallout?.setText(
-                PhysicsFormat.measurement(model.compassMicroTesla, "µT", decimals: 1))
         }
         handCompassCallout?.anchor(at: SIMD3(0, 0.05, 0))
     }
@@ -259,22 +225,12 @@ final class MagnetismRenderer {
     // MARK: Magnets
 
     // MARK: Sound — the module's first voice
-    //
-    // A pop as a magnet is born, a thud as two snap into contact —
-    // the only silent module finally answers the hand.
+    // A pop as a magnet is born, a thud as two snap into contact.
 
     private var knownMagnetIDs: Set<UUID> = []
     /// Which magnets are currently touching, so a thud plays once on
-    /// contact rather than every frame they stay together.
-    ///
-    /// KEYED ON A STRUCT, NOT A STRING. It was
-    /// `[a.id.uuidString, b.id.uuidString].sorted().joined(separator: "-")`
-    /// — and `UUID.uuidString` builds a fresh 36-character String every
-    /// access, so each pair cost two Strings, an array, a sorted array
-    /// and a joined String, then hashed 72 characters to look it up.
-    /// This loop is O(n²) over the bench and runs every frame: eight
-    /// magnets is 28 pairs, so 140 allocations a frame to answer a
-    /// question about two UUIDs that were already in hand.
+    /// contact. Keyed on a struct: building strings from two UUIDs per
+    /// pair, every frame, over an O(n²) loop, was 140 allocations a frame.
     private struct ContactPair: Hashable {
         let a: UUID, b: UUID
 
@@ -283,12 +239,8 @@ final class MagnetismRenderer {
             self.b = b
         }
 
-        /// SYMMETRIC rather than sorted, which is what `sorted()` was
-        /// buying. Ordering the two would mean comparing UUIDs, and the
-        /// only ordering `UUID` offers out of the box is on
-        /// `uuidString` — the allocation this type exists to remove.
-        /// Equality and the hash ignore which one arrived first, so the
-        /// pair is one key either way round without ever ordering it.
+        /// Symmetric rather than sorted: ordering UUIDs would mean the
+        /// `uuidString` allocation this type exists to remove.
         static func == (lhs: Self, rhs: Self) -> Bool {
             (lhs.a == rhs.a && lhs.b == rhs.b)
                 || (lhs.a == rhs.b && lhs.b == rhs.a)
@@ -302,21 +254,14 @@ final class MagnetismRenderer {
     private var contactPairs: Set<ContactPair> = []
 
     private func tickSounds(_ model: MagnetismModel) {
-        // The arrival set is rebuilt only when the census changes —
-        // but "unchanged count means unchanged roster" is false across
-        // a reset, which swaps the lone default magnet for a fresh id
-        // at the same count. Left stale, the roster then mis-pops the
-        // NEXT genuine add. The membership sweep below allocates
-        // nothing on the idle path; the Sets are only built on a
-        // change.
+        // The arrival set is rebuilt only when the census changes — by
+        // membership, not count: a reset swaps the lone default magnet for a
+        // fresh id at the same count.
         let rosterChanged = model.magnets.count != knownMagnetIDs.count
             || model.magnets.contains { !knownMagnetIDs.contains($0.id) }
         if rosterChanged {
             let ids = Set(model.magnets.map(\.id))
-            // Pop only for a roster that GREW: an add is an arrival,
-            // while a reset's identity swap is furniture being put
-            // back. And skip the opening scene: three pops at once is
-            // a fanfare nobody asked for.
+            // Pop only for a roster that grew, and not for the opening scene.
             if ids.count > knownMagnetIDs.count, !knownMagnetIDs.isEmpty {
                 for id in ids.subtracting(knownMagnetIDs) {
                     if let entity = magnetEntities[id] {
@@ -344,18 +289,15 @@ final class MagnetismRenderer {
     }
 
     private func syncMagnets(_ model: MagnetismModel) {
-        // The removal sweep only has work when an entity outlives its
-        // magnet. A count mismatch is one tell; a fresh id at an
-        // UNCHANGED count (a reset swapping the lone default magnet)
-        // is the other — the follow loop below notices that one for
-        // free when it mints the entity, so the swap's orphan is swept
-        // this frame instead of flashing as a doubled magnet for one.
+        // The removal sweep has work when an entity outlives its magnet: a
+        // count mismatch, or a fresh id at an unchanged count, which the follow
+        // loop notices when it mints the entity.
         var mintedNew = false
         for magnet in model.magnets {
             if magnetEntities[magnet.id] == nil { mintedNew = true }
             let entity = magnetEntities[magnet.id] ?? makeMagnet(magnet)
             // The model owns motion (relative drag, no system manipulation),
-            // so the entity follows it EVERY frame — including while held,
+            // so the entity follows it every frame — including while held,
             // or the magnet lags the hand until release.
             entity.position = SIMD3<Float>(magnet.position)
             // Orient the bar's +Y along the moment (S→N).
@@ -397,28 +339,20 @@ final class MagnetismRenderer {
         return pivot
     }
 
-    /// The magnet as the WELL shows it, before you have one.
-    ///
-    /// Built from the same halves, the same colours, the same chrome
-    /// waist band and the same embossed pole letters as the real thing —
-    /// the point of a preview is that pulling it out is recognisably
-    /// getting the object you were looking at. It is only the selection
-    /// halo and the collider that are missing, because a preview is not
-    /// selectable and the well owns the touch target.
-    ///
-    /// Static, and free of `magnet`-derived state, so `Well` can call it
-    /// without a model.
+    /// The magnet as the well shows it: the same halves, colours, chrome
+    /// band and pole letters as the real thing, minus the halo and the
+    /// collider. Static, so `Well` can call it without a model.
     static func magnetPreview() -> Entity {
         let container = Entity()
         let half = Float(MagnetismModel.magnetLength) / 2
         let w: Float = 0.05
 
         let north = ModelEntity(
-            mesh: .generateBox(size: [w, half, w], cornerRadius: 0.006),
+            mesh: Primitives.box(size: [w, half, w], cornerRadius: 0.006),
             materials: [Materials.energized(northColor, roughness: 0.28, glow: 0.16)])
         north.position = [0, half / 2, 0]
         let south = ModelEntity(
-            mesh: .generateBox(size: [w, half, w], cornerRadius: 0.006),
+            mesh: Primitives.box(size: [w, half, w], cornerRadius: 0.006),
             materials: [Materials.energized(southColor, roughness: 0.28, glow: 0.16)])
         south.position = [0, -half / 2, 0]
         container.addChild(north)
@@ -436,7 +370,7 @@ final class MagnetismRenderer {
         }
 
         let band = ModelEntity(
-            mesh: .generateBox(size: [w + 0.006, 0.014, w + 0.006], cornerRadius: 0.004),
+            mesh: Primitives.box(size: [w + 0.006, 0.014, w + 0.006], cornerRadius: 0.004),
             materials: [Materials.machined(UIColor(white: 0.86, alpha: 1))])
         container.addChild(band)
 
@@ -454,11 +388,11 @@ final class MagnetismRenderer {
         let w: Float = 0.05
 
         let north = ModelEntity(
-            mesh: .generateBox(size: [w, half, w], cornerRadius: 0.006),
+            mesh: Primitives.box(size: [w, half, w], cornerRadius: 0.006),
             materials: [Materials.energized(Self.northColor, roughness: 0.28, glow: 0.16)])
         north.position = [0, half / 2, 0]
         let south = ModelEntity(
-            mesh: .generateBox(size: [w, half, w], cornerRadius: 0.006),
+            mesh: Primitives.box(size: [w, half, w], cornerRadius: 0.006),
             materials: [Materials.energized(Self.southColor, roughness: 0.28, glow: 0.16)])
         south.position = [0, -half / 2, 0]
         container.addChild(north)
@@ -480,22 +414,19 @@ final class MagnetismRenderer {
         // A polished chrome band at the waist — the seam of a real bar
         // magnet, and a crisp divider between the poles.
         let band = ModelEntity(
-            mesh: .generateBox(size: [w + 0.006, 0.014, w + 0.006], cornerRadius: 0.004),
+            mesh: Primitives.box(size: [w + 0.006, 0.014, w + 0.006], cornerRadius: 0.004),
             materials: [Materials.machined(UIColor(white: 0.86, alpha: 1))])
         container.addChild(band)
 
         // Selection halo (a soft box shell), hidden until selected.
-        let halo = SelectionHalo.make(mesh: .generateBox(
+        let halo = SelectionHalo.make(mesh: Primitives.box(
             size: [w + 0.03, half * 2 + 0.03, w + 0.03], cornerRadius: 0.012))
         container.addChild(halo)
         magnetHalos[magnet.id] = halo
 
-        // A BAR IS NOT A BALL. `half * 1.6` = 0.128 m enclosed the long
-        // axis and then applied that radius sideways too, so two magnets
-        // at `contactDistance` 0.147 m shielded each other broadside and
-        // the near one took every pinch. The halo built just above is
-        // the magnet's own silhouette, so measuring from it costs
-        // nothing and follows any future change to the bar.
+        // A bar is not a ball: a sphere sized to the long axis shielded
+        // neighbouring magnets broadside. Measured from the halo, the magnet's
+        // own silhouette.
         Grabbable.configureTouchTarget(
             container, matchingVisualBoundsOf: container,
             activate: { [weak self, weak container] in
@@ -522,23 +453,21 @@ final class MagnetismRenderer {
         var glow = TubeBuffers()
         /// Sample points along the loops where arrowheads ride, with
         /// the local line direction — B points N→S outside the magnet,
-        /// and the arrows finally SAY so.
+        /// and the arrows finally say so.
         var arrowPoints: [SIMD3<Double>] = []
         var arrowDirections: [SIMD3<Double>] = []
     }
 
-    /// Arc-length spacing of the direction arrowheads riding each loop.
-    /// Widened 0.26 → 0.42 with the room-scale bounds: loops are metres
-    /// long now, and the head pool has to cover them all.
+    /// Arc-length spacing of the direction arrowheads riding each loop;
+    /// loops are metres long at room scale.
     private nonisolated static let arrowSpacing = 0.42
     /// No arrowheads this close to a magnet, where loops bunch tightly.
     private nonisolated static let arrowExclusion = 0.14
 
-    /// How many loops a bench this strong deserves. Monotonic in the
-    /// strongest magnet's |m|, so the strength bead visibly changes the
-    /// picture — the fixed budget of 26 did not, which read as a dead
-    /// control (owner, 2026-08-03). Clamped so a weak bench still draws
-    /// a legible field and a strong one does not drown the frame.
+    /// How many loops a bench this strong deserves — monotonic in the
+    /// strongest |m|, so the strength bead visibly changes the picture;
+    /// clamped so a weak bench still draws and a strong one does not drown
+    /// the frame.
     nonisolated static func lineBudget(forStrength strength: Double) -> Int {
         let scaled = 26.0 * strength / MagnetismModel.defaultStrength
         return Int(min(max(scaled, 12), 48).rounded())
@@ -547,25 +476,20 @@ final class MagnetismRenderer {
     private nonisolated static func computeLines(_ job: LinesJob) -> LinesResult {
         var config = MagneticFieldLineTracer.Config()
         config.boundsCenter = MagnetismModel.regionCenter
-        // ROOM-SCALE (owner, 2026-08-03): the loops used to be confined
-        // to a ~0.6 m box, which read as a field in a display case. The
-        // tracing bounds now span metres so the user stands inside the
-        // field; the coarser step keeps the longer far-field loops cheap
-        // while near loops still read as drawn curves.
+        // Room-scale bounds, so the user stands inside the field; the coarser
+        // step keeps the long far-field loops cheap.
         config.boundsRadius = 3.5
-        // The bar the lines belong to. Everything the tracer does with
-        // geometry — where seeds sit, where loops close, which field
-        // model it integrates — comes off this one number, so it must
-        // be the length the RENDERER actually draws.
+        // The bar the lines belong to: seeds, loop closure and the field model
+        // all come off this one number, so it must be the length the renderer
+        // draws.
         config.magnetLength = MagnetismModel.magnetLength
         config.seedsPerMagnet = 12
         config.referenceStrength = MagnetismModel.defaultStrength
         config.maxSteps = 2400
         config.stepSize = 0.008
-        // EVEN THROUGH THE ROOM, not bundled around the bar (owner,
-        // 2026-08-01). Seeds are spread through a room-scale box and
-        // each candidate loop is rejected if it mostly retraces one
-        // already drawn — see `traceThroughVolume`.
+        // Even through the room, not bundled around the bar: seeds spread
+        // through a room-scale box, and a loop that mostly retraces one already
+        // drawn is rejected.
         let strongest = job.magnets.map(\.strength).max()
             ?? MagnetismModel.defaultStrength
         let traced = MagneticFieldLineTracer.traceThroughVolume(
@@ -574,23 +498,10 @@ final class MagnetismRenderer {
             center: MagnetismModel.regionCenter,
             halfExtents: SIMD3(2.2, 1.2, 2.2),
             budget: lineBudget(forStrength: strongest))
-        // THIN THE POLYLINES BEFORE THEY BECOME TUBES.
-        //
-        // The tracer walks `stepSize` = 8 mm because that is what the
-        // integration wants; the tube it feeds has a 1.6 mm radius, and
-        // three of them are built from the same lines. At the top of
-        // the range — 48 loops that each ran the full 2400 steps — that
-        // is roughly 576 000 vertices per tube, uploaded on the main
-        // actor, three times.
-        //
-        // `decimated` keeps every point a curve needs and drops the
-        // ones a straight run does not, which is the right trade here
-        // because the budget is spent on LONG loops and long loops are
-        // the far-field ones that barely bend. Neither `maxSteps` nor
-        // `lineBudget` moves: dropping maxSteps would truncate loops
-        // mid-air instead of letting them close, and pinning the budget
-        // back to a constant is precisely the dead strength bead the
-        // owner rejected on 2026-08-03.
+        // Thin the polylines before they become tubes: the tracer walks 8 mm
+        // steps and three tubes are built from the same lines, so 48 full loops
+        // were ~576 000 vertices per tube. `decimated` keeps every point a
+        // curve needs.
         let lines = TubeMesh.decimated(
             traced.map { $0.map(SIMD3<Float>.init) },
             spacing: 0.05, maximumTurn: .pi / 18)
@@ -659,21 +570,10 @@ final class MagnetismRenderer {
         }
     }
 
-    /// Whether the bench has moved enough to be worth tracing again.
-    ///
-    /// EXACT INEQUALITY WAS THE WRONG TEST. `sources != lastLineInputs`
-    /// on an `Equatable` of `Double`s is true whenever the last bit
-    /// moved, and the module's DEFAULT motion is the overdamped glide —
-    /// magnets ease toward rest over a second or more, so every frame of
-    /// every settle resubmitted a full volume trace. The pipeline
-    /// coalesces, so this never queued up; it just meant the worker was
-    /// never idle and the main actor took three fresh mesh uploads as
-    /// fast as it could produce them.
-    ///
-    /// 2 mm and ~1.1° are below what the drawn field can express: loops
-    /// are traced on 8 mm steps through a 3.5 m volume, so a magnet
-    /// moving 2 mm cannot move a line by a pixel. Adding or removing a
-    /// magnet always retraces, whatever the geometry says.
+    /// Whether the bench has moved enough to be worth tracing again. Exact
+    /// inequality re-traced every frame of every glide; 2 mm and ~1.1° are
+    /// below what 8 mm steps through a 3.5 m volume can express. Adding or
+    /// removing a magnet always retraces.
     private nonisolated static func fieldLinesWorthRetracing(
         _ sources: [BarMagnet], versus previous: [BarMagnet]?
     ) -> Bool {
@@ -702,9 +602,4 @@ final class MagnetismRenderer {
         linesPipeline?.submit(LinesJob(magnets: sources))
     }
 
-    // The 245-needle compass grid stood here until 2026-08-03, when the
-    // owner cut it: with the field-line loops carrying the shape, the
-    // lattice of tiny arrows was noise, and it was the thing that grew
-    // when the strength bead moved while the loops did not. The hand
-    // compass — the same instrument, one of it, in your hand — stays.
 }

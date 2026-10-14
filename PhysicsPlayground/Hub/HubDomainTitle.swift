@@ -38,10 +38,9 @@ final class HubDomainTitle {
         let accent = UIColor(domain.color)
         let texts = Self.lines(for: domain)
 
-        // Wordmark lockup math: measure both lines, scale to common width, stack with
-        // cap-height leading, centre on the anchor. Milled if the asset exists; `generated`
-        // is a FALLBACK, not an equal — square-edged generateText loses its silhouette against
-        // a lit room, the milled chamfer carries its own rim. Accent applies either way.
+        // Wordmark lockup math: measure both lines, scale to a common width,
+        // stack with cap-height leading, centre on the anchor. Milled if the
+        // asset exists; generated is the fallback.
         let built = texts.map { text -> (entity: Entity, extents: SIMD3<Float>) in
             HubTitleStyle.milled(text, size: Self.reference, accent: accent)
                 ?? HubTitleStyle.generated(text, size: Self.reference,
@@ -49,7 +48,7 @@ final class HubDomainTitle {
         }
         let scales = built.map { width / max($0.extents.x, 1e-4) }
         let heights = zip(built, scales).map { $0.0.extents.y * $0.1 }
-        // Leading off the TALLEST line, not the average — the flush lockup scales a short
+        // Leading off the tallest line, not the average — the flush lockup scales a short
         // line up, and an average-derived gap lets the tall line collide with its neighbour.
         let gap = (heights.max() ?? 0) * HubTitleStyle.leadingFactor
         let blockHeight = heights.reduce(0, +) + gap * Float(heights.count - 1)
@@ -64,10 +63,9 @@ final class HubDomainTitle {
         lines = built.map(\.entity)
 
         // The rule, in the domain accent — same lit line as the slab hairline below it.
-        var ruleMaterial = UnlitMaterial(color: accent)
-        ruleMaterial.blending = .transparent(opacity: 0.7)
+        let ruleMaterial = Materials.unlit(accent, opacity: 0.7)
         rule = ModelEntity(
-            mesh: .generateBox(width: width * Self.ruleOverhang, height: 0.0035,
+            mesh: Primitives.box(width: width * Self.ruleOverhang, height: 0.0035,
                                depth: 0.0035, cornerRadius: 0.0017),
             materials: [ruleMaterial])
         rule.position = SIMD3(0, -blockHeight / 2 - 0.055, 0)

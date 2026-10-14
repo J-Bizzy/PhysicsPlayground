@@ -2,21 +2,9 @@
 //  ModulePanel.swift
 //  Physics Playground — Shell
 //
-//  Two shared building blocks. There used to be three, and there used to
-//  be module panels to build out of them.
-//
-//  · PanelSection — the standard material card. Its callers are now the
-//    NOTEBOOK and the settings window; no module has one.
-//  · LegendView — a module's legend items in the house legend style,
-//    rendered by the shell (from the title bar's Key popover) so that no
-//    module can restyle or forget it.
-//
-//  CollapsedSection is deleted, and it is worth saying which kind of
-//  corpse it is: a GRAVE, not a missing door. The disclosure card was not
-//  abandoned half-built — the surface it existed for was decided against
-//  (DECISIONS.md, 2026-08-01), and every one of the fourteen dropdowns it
-//  drew is either standing in the room now or was prose describing where
-//  a control had gone.
+//  Two shared building blocks: PanelSection, the material card the
+//  notebook and the settings window build from, and LegendView, a
+//  module's legend in the house style.
 //
 
 import SwiftUI
@@ -38,9 +26,7 @@ struct PanelSection<Content: View>: View {
                     Text(title)
                         .font(DesignTokens.TypeScale.sectionHeader)
                         .accessibilityAddTraits(.isHeader)
-                    // A quiet hairline under every section header — the
-                    // same designed underline the pods use, so the flat
-                    // panel and the spatial pods read as one system.
+                    // A quiet hairline under every section header.
                     LinearGradient(
                         colors: [.secondary.opacity(0.35), .secondary.opacity(0.04)],
                         startPoint: .leading, endPoint: .trailing
@@ -59,9 +45,8 @@ struct PanelSection<Content: View>: View {
     }
 }
 
-/// A module's legend, rendered by the shell in the one house style.
-/// Swatch shapes match how each concept is actually drawn in the scene,
-/// so the legend reads as a key, not prose.
+/// A module's legend in the one house style; swatch shapes match how
+/// each concept is drawn in the scene.
 struct LegendView: View {
     let items: [LegendItem]
 
