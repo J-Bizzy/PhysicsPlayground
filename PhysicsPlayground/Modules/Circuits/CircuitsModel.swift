@@ -1552,8 +1552,6 @@ final class CircuitsModel {
 
     /// Draw the magnetic field the bench's own current makes.
     var showMagneticField = false
-    /// The Electron View toggle: the whole bench swells around the user.
-    var electronView = false
 
     /// Puts a burned/blown part back in service.
     func replaceFailed(id: UUID) {
@@ -1976,7 +1974,6 @@ final class CircuitsModel {
         trueSpeedMode = false
         showVoltageHeights = false
         showMagneticField = false
-        electronView = false
         // The meter's `didSet` drops both probes.
         multimeterArmed = false
         meterMode = .voltsDC

@@ -422,12 +422,12 @@ final class CircuitsRenderer {
     }
     /// Set by the space view from the two-handed scale rig.
     var handZoom: Float = 1
-    static let electronViewZoom: Float = 4.0
 
-    /// Where the zoom is heading: the larger of the hands' zoom and the
-    /// Electron View floor, so enabling it while zoomed never shrinks the bench.
+    /// Where the zoom is heading: the hands' own. Into the copper is a
+    /// two-handed spread; the 4× Electron View switch that duplicated it
+    /// went in the subtraction pass.
     private func targetZoom(_ model: CircuitsModel) -> Float {
-        max(handZoom, model.electronView ? Self.electronViewZoom : 1)
+        handZoom
     }
 
     // MARK: The bench's hum

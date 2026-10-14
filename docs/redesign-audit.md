@@ -525,3 +525,44 @@ twice, sliders clamp, the dimming slider clamps, plus Fields' and
 Circuits' value rows from the old board tests. Screenshots:
 `docs/redesign-shots/step5-shell-more.jpg` (Projectiles with More open)
 and `step5-shell-closed.jpg`.
+
+### Step 5.1 — Circuit Workshop (2026-10-14)
+
+Removed from the room: the Views tab and its five plates, the Clear plate,
+and the Presets tab and its five plates. In More: Electron flow, True drift
+speed (disabled unless the flow is on, since it showed nothing without
+it), Magnetic field, Voltage skyline, Clear the bench (confirms, red), and
+Load × 5 (each confirms; not red, because loading is not the point of
+throwing away).
+
+Cut:
+- **Electron view** (`CircuitsModel.electronView`, the renderer's 4× zoom
+  floor, `-electronView`). It was the two-hand zoom with a floor.
+- **The ring's "Open or close"** on a switch. The lever does it.
+
+Replaced with direct manipulation (shared with every lab): Bloom's grip
+was a bead on a rail hanging under the object, and is now a handle on a
+stalk pulled out of the object. A part's value stalk leaves the part's
+underside, clear of the leads.
+
+Kept: the shelf and its crown, the meter, parts, leads, wires and the
+lever, the Replace / Detach / Delete petals, and the AC frequency slider
+under a selected source (a frequency has no extent). Values keep the bench
+counts and the selected part's V/I/P. When nothing is selected they show
+the first two parts, which the in-room readout card (selection only)
+never does.
+
+Retired arguments: `-electronView`, `-circViewsOpen`, `-circPresetsOpen`,
+`-circClear`.
+
+Controls: **17 visible at open → 9** (crown, six shelf slots, Home, More,
+Pause, counting the shelf as 7). **57 reachable → 34.**
+
+Tests: three clearance tests for the retired furniture are gone. The reach
+criterion now counts labs whose layers live in More. Screenshots:
+`docs/redesign-shots/step5-circuits.jpg`, `step5-circuits-more.jpg`,
+`step5-circuits-ring.jpg` (Detach and Delete petals, the value stalk).
+
+Noted, not changed: `CircuitsModelTests.testPresetsAndClearingAreSaved`
+waits on a 1 s debounced save with a 1.3 s timer, and failed once under
+the parallel run. It passes alone. It is pre-existing and timing-sensitive.

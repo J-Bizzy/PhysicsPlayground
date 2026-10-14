@@ -95,9 +95,9 @@ struct MoreItemView: View {
             ControlToggle(title, systemImage: symbol, presentation: .row,
                           isOn: isOn, set: set)
                 .disabled(!isEnabled())
-        case let .action(_, title, symbol, confirms, isEnabled, run):
+        case let .action(_, title, symbol, confirms, destructive, isEnabled, run):
             ControlButton(title, systemImage: symbol,
-                          emphasis: confirms ? .destructive : .standard,
+                          emphasis: destructive ? .destructive : .standard,
                           fillsWidth: true, confirms: confirms, action: run)
                 .disabled(!isEnabled())
         case let .choice(_, title, options, selected, select):

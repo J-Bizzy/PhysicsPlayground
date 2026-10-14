@@ -88,9 +88,10 @@ enum MoreItem: Identifiable {
                 isOn: () -> Bool, set: (Bool) -> Void,
                 isEnabled: () -> Bool = { true })
     /// A verb. `confirms` arms first ("Tap again"), for anything that
-    /// throws work away.
+    /// throws work away; `destructive` paints it red, for the one verb
+    /// whose whole point is to throw it away (Clear).
     case action(id: String, title: String, symbol: String,
-                confirms: Bool = false,
+                confirms: Bool = false, destructive: Bool = false,
                 isEnabled: () -> Bool = { true },
                 run: () -> Void)
     /// One of a few named choices, the current one selected.
@@ -103,7 +104,7 @@ enum MoreItem: Identifiable {
     var id: String {
         switch self {
         case .toggle(let id, _, _, _, _, _): id
-        case .action(let id, _, _, _, _, _): id
+        case .action(let id, _, _, _, _, _, _): id
         case .choice(let id, _, _, _, _): id
         case .slider(let adjustable, _): adjustable.id
         }

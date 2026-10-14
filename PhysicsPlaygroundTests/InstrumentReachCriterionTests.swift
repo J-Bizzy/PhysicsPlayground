@@ -47,11 +47,8 @@ final class InstrumentReachCriterionTests: XCTestCase {
             .init(name: "Magnetism layers",
                   anchor: MagnetismSpaceView.bankAnchor,
                   halfExtents: Self.bankHalfExtents),
-            // Circuits' and Orbital Mechanics' one standing layer instrument is a
+            // Orbital Mechanics' one standing layer instrument is a
             // `SummonHandle` tab, measured on the tab's own tight box.
-            .init(name: "Circuits views tab",
-                  anchor: CircuitsSpaceView.bankAnchor,
-                  halfExtents: Self.summonTabHalfExtents),
             .init(name: "Orbital Mechanics show tab",
                   anchor: OrbitalMechanicsSpaceView.bankAnchor,
                   halfExtents: Self.summonTabHalfExtents),
@@ -91,10 +88,6 @@ final class InstrumentReachCriterionTests: XCTestCase {
             .init(name: "Orbital Mechanics G rail",
                   anchor: OrbitalMechanicsSpaceView.gravityRailAnchor,
                   halfExtents: Self.railHalfExtents),
-            // And Circuits' column, for the same reason.
-            .init(name: "Circuits views column",
-                  anchor: CircuitsSpaceView.viewsColumnAnchor,
-                  halfExtents: Self.fivePlateHalfExtents),
         ]
     }
 
@@ -280,11 +273,15 @@ final class InstrumentReachCriterionTests: XCTestCase {
     }
 
     /// Not vacuous: the list has to actually cover the app.
+    /// The labs whose layers live in the title bar's More (2026-10-14):
+    /// nothing of theirs stands in the room to be out of reach.
+    private static let banksInMore: Set<String> = ["circuits"]
+
     func testTheCriterionCoversEveryModule() {
-        XCTAssertEqual(banks.count, ModuleCatalog.allIDs.count, """
-            \(banks.count) banks measured against \(ModuleCatalog.allIDs.count) \
-            modules. A module was added without its bank being measured, which \
-            is how the first two came to be out of reach.
+        XCTAssertEqual(banks.count + Self.banksInMore.count, ModuleCatalog.allIDs.count, """
+            \(banks.count) banks measured, \(Self.banksInMore.count) in More, against \
+            \(ModuleCatalog.allIDs.count) modules. A module was added without its \
+            bank being measured, which is how the first two came to be out of reach.
             """)
     }
 }

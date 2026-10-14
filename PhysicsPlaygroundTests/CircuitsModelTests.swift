@@ -501,7 +501,6 @@ final class CircuitsModelTests: XCTestCase {
         // which reset used to leave exactly as it found them.
         model.trueSpeedMode = true
         model.showVoltageHeights = true
-        model.electronView = true
         model.multimeterArmed = true
 
         model.reset()
@@ -516,7 +515,6 @@ final class CircuitsModelTests: XCTestCase {
         // Every lamp standing beside this bench, back where it started.
         XCTAssertFalse(model.trueSpeedMode)
         XCTAssertFalse(model.showVoltageHeights)
-        XCTAssertFalse(model.electronView, "the bench stayed inside the copper")
         XCTAssertFalse(model.multimeterArmed)
     }
 

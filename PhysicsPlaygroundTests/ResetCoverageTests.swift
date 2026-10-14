@@ -192,7 +192,6 @@ final class ResetCoverageTests: XCTestCase {
                 case "trueSpeedMode": model.trueSpeedMode.toggle()
                 case "showVoltageHeights": model.showVoltageHeights.toggle()
                 case "showMagneticField": model.showMagneticField.toggle()
-                case "electronView": model.electronView.toggle()
                 case "multimeterArmed": model.multimeterArmed.toggle()
                 case "isPaused": model.isPaused.toggle()
                 default:

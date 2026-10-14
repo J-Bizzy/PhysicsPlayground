@@ -2,9 +2,12 @@
 //  Bloom.swift
 //  Physics Playground — Design System
 //
-//  The object is the interface: look at a thing and its own controls
-//  unfold around it in place. A continuous quantity is pulled by a grip
-//  on the object's surface; a discrete action gets a petal.
+//  The object is the interface: tap a thing and its own controls unfold
+//  around it in place. A continuous quantity is pulled straight out of
+//  the object — a handle on its surface, on a short stalk that stretches
+//  as the value grows, or the object itself stretching (a charge swelling
+//  with its charge, a cable lengthening) where the lab says how; a
+//  discrete action gets a petal.
 //
 
 import RealityKit
@@ -53,8 +56,8 @@ final class Bloom {
     private var armedPetal: (index: Int, elapsed: Double)?
 
     /// A continuous quantity you pull out of the object itself.
-    /// `radius` reports how far from the centre the grip should sit,
-    /// so the handle rides the object's own surface as it grows.
+    /// `radius` reports how far from the centre the object's surface is,
+    /// so the handle rides it as it grows.
     struct Grip {
         let name: String
         let range: ClosedRange<Double>
@@ -62,6 +65,35 @@ final class Bloom {
         let write: (Double) -> Void
         let format: (Double) -> String
         let radius: () -> Float
+        /// The object's own geometry, when the lab knows it: the value is
+        /// then where the hand is, not how far it travelled.
+        var stretch: Stretch? = nil
+
+        /// How an object stretches, in the ring's parent frame — the frame
+        /// its anchor and the hands arrive in. `axis` is the ring's pull
+        /// direction (the viewer's right, level), handed in so an object
+        /// without a natural axis of its own can use it.
+        struct Stretch {
+            /// Where the handle's stalk leaves the object.
+            let origin: () -> SIMD3<Float>
+            /// Where the handle stands for the current value.
+            let handle: (_ axis: SIMD3<Float>) -> SIMD3<Float>
+            /// The value a hand at this point asks for.
+            let value: (_ hand: SIMD3<Float>, _ axis: SIMD3<Float>) -> Double
+        }
+
+        init(name: String, range: ClosedRange<Double>,
+             read: @escaping () -> Double, write: @escaping (Double) -> Void,
+             format: @escaping (Double) -> String,
+             radius: @escaping () -> Float, stretch: Stretch? = nil) {
+            self.name = name
+            self.range = range
+            self.read = read
+            self.write = write
+            self.format = format
+            self.radius = radius
+            self.stretch = stretch
+        }
     }
 
     let root = Entity()
@@ -72,10 +104,8 @@ final class Bloom {
     private var petalControls: [RoomControl] = []
     private var grip: Grip?
     private var gripEntity: ModelEntity?
-    /// The rail the bead travels: track line, end ticks, −/+ glyphs.
-    private var gripRig: Entity?
-    /// The bright segment from the rail's start to the bead.
-    private var gripFill: ModelEntity?
+    /// The stalk from the object's surface to the handle: the stretch.
+    private var gripStalk: ModelEntity?
     private var label: Callout?
     /// World metres per bloom-local unit, from the last update(); maps a
     /// hand's world pull onto the rail's local length.
@@ -98,8 +128,9 @@ final class Bloom {
     private var anchor: SIMD3<Float> = .zero
     /// The viewer's last known position, held for the same reason.
     private var lastViewer: SIMD3<Float>?
-    /// The rail's world-space direction, last frame. The grip drag
-    /// projects the hand onto this so a pull along the rail moves nothing else.
+    /// The pull direction in world space, last frame: the viewer's right,
+    /// level. A drag is projected onto it, so drift up, down or toward
+    /// you moves nothing.
     private var railAxis = SIMD3<Float>(1, 0, 0)
 
     // MARK: Geometry
@@ -108,12 +139,11 @@ final class Bloom {
     // bloom holds constant angular size at any range. Sized and placed to
     // Clear the physics, not sit beside it.
     private static let ringRadius: Float = 0.235
-    /// The visible rail the bead travels; the bead's position is the value
-    /// — min at the object, max at the far tick.
+    /// How far the handle travels from the low end of the range to the
+    /// high, at one metre: the stalk's full stretch.
     private static let gripTrackLength: Float = 0.14
-    /// How far below the object's surface the rail hangs, so it never
-    /// shares space with whatever is bolted to the object's sides. See `layoutGrip`.
-    private static let gripTrackDrop: Float = 0.048
+    /// Air between the object's surface and the handle at the low end.
+    private static let gripGap: Float = 0.018
     /// Nearly a horizontal row: petals sit above the object, spread just
     /// enough to separate.
     private static let ringArc: Float = 34 * .pi / 180
@@ -173,31 +203,28 @@ final class Bloom {
         }
 
         gripEntity?.removeFromParent()
-        gripRig?.removeFromParent()
+        gripStalk?.removeFromParent()
         if let grip {
             let handle = Self.makeGrip()
             root.addChild(handle)
             gripEntity = handle
-            // The bead is dragged, not pressed, so it needs VoiceOver
+            // The handle is dragged, not pressed, so it needs VoiceOver
             // increment/decrement.
             SpatialActions.attach(
                 to: handle, label: grip.name, value: grip.format(grip.read()),
                 adjust: { [weak self] delta in self?.nudgeGrip(by: delta) })
-            let rig = Self.makeGripRig()
-            root.addChild(rig.root)
-            gripRig = rig.root
-            gripFill = rig.fill
+            let stalk = Self.makeStalk()
+            root.addChild(stalk)
+            gripStalk = stalk
         } else {
             gripEntity = nil
-            gripRig = nil
-            gripFill = nil
+            gripStalk = nil
         }
 
         if label == nil {
-            // Below the bead: the rail hangs under the object, so a label
-            // above the bead would land in the gap that must stay clear.
+            // Under the handle, where nothing of the object stands.
             let callout = Callout(color: UIColor(white: 0.97, alpha: 1),
-                                  textSize: 0.019, offset: SIMD3(0, -0.046, 0))
+                                  textSize: 0.019, offset: SIMD3(0, -0.040, 0))
             root.addChild(callout.root)
             label = callout
         }
@@ -301,21 +328,34 @@ final class Bloom {
 
     private func layoutGrip(scale: Float) {
         guard let grip, let gripEntity else { return }
-        // The rail hangs under the object, centred and level. Under is the
-        // free direction: petals arc above (`layoutPetals`), giving a clean
-        // stack — actions overhead, the object, its rail, its number.
-        let surface = grip.radius() / max(scale, 0.001)
-        let drop = -(surface + Self.gripTrackDrop)
-        let start = -Self.gripTrackLength / 2
-        let span = grip.range.upperBound - grip.range.lowerBound
-        let t = Float(min(max((grip.read() - grip.range.lowerBound)
-                              / max(span, .leastNonzeroMagnitude), 0), 1))
+        // Where the stalk leaves the object and where the handle stands,
+        // in world space; the object's own geometry when the lab gave it,
+        // else straight out of the surface toward the viewer's right, the
+        // stalk as long as the value is far through its range.
+        let origin: SIMD3<Float>
+        let handle: SIMD3<Float>
+        if let stretch = grip.stretch {
+            origin = stretch.origin()
+            handle = stretch.handle(railAxis)
+        } else {
+            let span = grip.range.upperBound - grip.range.lowerBound
+            let t = Float(min(max((grip.read() - grip.range.lowerBound)
+                                  / max(span, .leastNonzeroMagnitude), 0), 1))
+            let surface = grip.radius()
+            origin = anchor + railAxis * surface
+            handle = anchor + railAxis * (surface + (Self.gripGap
+                + Self.gripTrackLength * t) * scale)
+        }
+        // Everything above is in the ring's parent frame — the frame its
+        // anchor and the hands arrive in — not world space: a lab's bench
+        // may be zoomed.
+        let localOrigin = root.convert(position: origin, from: root.parent)
+        let localHandle = root.convert(position: handle, from: root.parent)
 
-        // The bead sits on the rail at the value's position.
-        gripEntity.position = SIMD3(start + Self.gripTrackLength * t, drop, 0)
+        gripEntity.position = localHandle
         gripEntity.scale = SIMD3(repeating: max(reveal, 0.001))
         // Visible for the whole fold, but only a hit target once nearly
-        // fully open — a half-revealed grabbable bead steals grabs meant
+        // fully open — a half-revealed grabbable handle steals grabs meant
         // for the object it decorates.
         gripEntity.isEnabled = reveal > 0.02
         let interactive = reveal > 0.85
@@ -326,16 +366,16 @@ final class Bloom {
             gripEntity.components.remove(InputTargetComponent.self)
         }
 
-        if let gripRig {
-            gripRig.position = SIMD3(start, drop, 0)
-            gripRig.scale = SIMD3(repeating: max(reveal, 0.001))
-            gripRig.isEnabled = reveal > 0.02
-        }
-        if let gripFill {
-            // The fill grows from the rail's start to the bead.
-            let length = max(Self.gripTrackLength * t, 0.001)
-            gripFill.scale = SIMD3(1, length, 1)
-            gripFill.position = SIMD3(length / 2, 0, 0)
+        if let gripStalk {
+            // A unit cylinder along +y, stretched from the surface to the handle.
+            let run = localHandle - localOrigin
+            let length = simd_length(run)
+            gripStalk.isEnabled = reveal > 0.02 && length > 1e-4
+            if length > 1e-4 {
+                gripStalk.position = (localOrigin + localHandle) / 2
+                gripStalk.orientation = simd_quatf(from: [0, 1, 0], to: run / length)
+                gripStalk.scale = SIMD3(max(reveal, 0.001), length, max(reveal, 0.001))
+            }
         }
 
         label?.isEnabled = reveal > 0.02
@@ -438,12 +478,16 @@ final class Bloom {
         return true
     }
 
-    /// Pull along the rail: the hand's travel is projected onto the
-    /// track's direction, so drift up/down/toward-you doesn't move the
-    /// number. A radial mapping would run half the track backwards now
-    /// that the rail hangs under the object rather than out from it.
+    /// Pull the handle. A stretching object takes its value from where the
+    /// hand is; the plain stalk from how far the hand has travelled along
+    /// the pull axis, so drift up, down or toward you moves nothing.
     func updateGrip(hand: SIMD3<Float>) -> Bool {
         guard let grip, let gripDrag else { return false }
+        if let stretch = grip.stretch {
+            grip.write(min(max(stretch.value(hand, railAxis),
+                               grip.range.lowerBound), grip.range.upperBound))
+            return true
+        }
         let along = simd_dot(hand - gripDrag.startHand, railAxis)
         let span = grip.range.upperBound - grip.range.lowerBound
         let worldTrack = Double(Self.gripTrackLength * max(lastScale, 0.001))
@@ -486,49 +530,15 @@ final class Bloom {
     /// + at the strong end, and a bright fill that grows with the
     /// value. Origin at the rail's start; the fill is repositioned per
     /// frame as the value moves.
-    private static func makeGripRig() -> (root: Entity, fill: ModelEntity) {
-        let rig = Entity()
-        let alongX = simd_quatf(angle: -.pi / 2, axis: [0, 0, 1])
-
-        let trackMaterial = Materials.unlit(UIColor(white: 0.95, alpha: 1), opacity: 0.28)
-        let track = ModelEntity(
-            mesh: Primitives.cylinder(height: gripTrackLength, radius: 0.0012),
-            materials: [trackMaterial])
-        track.orientation = alongX
-        track.position = SIMD3(gripTrackLength / 2, 0, 0)
-        rig.addChild(track)
-
-        let fillMaterial = Materials.unlit(UIColor(white: 1.0, alpha: 1), opacity: 0.85)
-        let fill = ModelEntity(
-            mesh: Primitives.cylinder(height: 1, radius: 0.0022),
-            materials: [fillMaterial])
-        fill.orientation = alongX
-        rig.addChild(fill)
-
-        let tickMaterial = Materials.unlit(UIColor(white: 0.95, alpha: 1), opacity: 0.55)
-        for x in [Float(0), gripTrackLength] {
-            let tick = ModelEntity(
-                mesh: Primitives.box(width: 0.002, height: 0.014, depth: 0.002,
-                                   cornerRadius: 0.001),
-                materials: [tickMaterial])
-            tick.position = SIMD3(x, 0, 0)
-            rig.addChild(tick)
-        }
-
-        for (symbol, x) in [("minus", Float(0)), ("plus", gripTrackLength)] {
-            guard let texture = symbolTexture(symbol) else { continue }
-            var glyphMaterial = UnlitMaterial()
-            glyphMaterial.color = .init(tint: UIColor(white: 1, alpha: 0.8),
-                                        texture: .init(texture))
-            glyphMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
-            let glyph = ModelEntity(
-                mesh: Primitives.plane(width: 0.013, height: 0.013),
-                materials: [glyphMaterial])
-            glyph.position = SIMD3(x, -0.021, 0)
-            rig.addChild(glyph)
-        }
-
-        return (rig, fill)
+    /// The stalk: a thin bright line, the part of the object that
+    /// stretches. Scaled along +y by the layout; never a target.
+    private static func makeStalk() -> ModelEntity {
+        let stalk = ModelEntity(
+            mesh: Primitives.cylinder(height: 1, radius: 0.0018),
+            materials: [Materials.unlit(UIColor(white: 1.0, alpha: 1), opacity: 0.8)])
+        stalk.name = "bloom-stalk"
+        stalk.isEnabled = false
+        return stalk
     }
 
     private static func makeGrip() -> ModelEntity {

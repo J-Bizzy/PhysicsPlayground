@@ -56,62 +56,17 @@ struct CircuitsSpaceView: View {
     /// on it, and where the hand was, both in the renderer's frame.
     @State private var meterDrag: (start: SIMD3<Float>, hand: SIMD3<Float>)?
     @Environment(AppModel.self) private var appModel
-    /// Two-handed zoom on the bench. Electron View raises this same
-    /// number's floor rather than being a competing 1x/4x flip.
+    /// Two-handed zoom on the bench: into the copper is a pinch-and-spread.
     @State private var scaleRig = SpatialScaleRig(
         pivot: CircuitsRenderer.benchPivot, range: 0.6...8.0, allowsTurn: false)
-    /// The five views of the current — electron flow, true speed, the
-    /// wire's own field, the voltage skyline, Electron View — behind one
-    /// tab that reads out which are on.
-    @State private var viewsHandle = SummonHandle(
-        title: "Views", symbol: "eye",
-        accent: UIColor(DesignTokens.Palette.circuitsAccent))
-    /// The column the Views tab unfolds; also the door to Electron View
-    /// (`model.electronView`).
-    @State private var layers: SpatialLayerBank?
     /// The bench's meter — a tool, not a layer. See `Multimeter`.
     @State private var meter: Multimeter?
-    /// The bench's one standing verb: clear it. See `clearAnchor`.
-    @State private var verbs: SpatialActionBank?
-
-    /// The five authored circuits (`CircuitsModel.Preset`), behind a
-    /// `SummonHandle` that folds to one tab reading out the last loaded.
-    @State private var presetsHandle = SummonHandle(
-        title: "Presets", symbol: "square.grid.2x2",
-        accent: UIColor(DesignTokens.Palette.circuitsAccent))
-    @State private var presets: SpatialActionBank?
-    /// What the handle reads out when folded.
-    @State private var lastPreset: CircuitsModel.Preset?
-
     /// Identifies the floating readout above the selected part.
     private static let readoutCardID = "circuit-readout"
 
     /// Where the meter starts (right flank); it moves with the hand after.
     private static let meterAnchor = CircuitsRenderer.benchPivot
         + SIMD3<Float>(0.62, -0.03, 0.16)
-    /// The Clear plate, on the bench's far left flank. The most dangerous
-    /// verb: the bench persists across launches, so it `confirms`.
-    private static let clearAnchor = CircuitsRenderer.benchPivot
-        + SIMD3<Float>(-1.02, -0.02, 0.10)
-
-    /// The Views tab, on the bench's left flank: outside the build volume,
-    /// 39.6° off axis, clear of the Clear plate. A named static so the
-    /// placement tests can measure it.
-    static let bankAnchor = CircuitsRenderer.benchPivot
-        + SIMD3<Float>(-0.76, -0.06, -0.07)
-    /// The column the tab unfolds, above it like the presets: five plates
-    /// at 0.066 pitch centred 0.25 up, stopping at 1.60.
-    static let viewsColumnAnchor = bankAnchor + SIMD3<Float>(0, 0.25, 0)
-
-    /// Beside the Clear plate, unfolding upward: two five-plate columns
-    /// cannot stack inside the 0.70…1.80 band.
-    private static let presetsAnchor = CircuitsRenderer.benchPivot
-        + SIMD3<Float>(-1.02, 0.15, 0.10)
-    /// The column hangs above the tab, centred on this point: a bank
-    /// centres its plates on its anchor.
-    private static let presetsBankAnchor = CircuitsRenderer.benchPivot
-        + SIMD3<Float>(-1.02, 0.39, 0.10)
-
     var body: some View {
         RealityView { content, attachments in
             let renderer = CircuitsRenderer()
@@ -131,45 +86,11 @@ struct CircuitsSpaceView: View {
             }
             renderer.viewRoot.addChild(bloom.root)
 
-            let bank = SpatialLayerBank(
-                accent: UIColor(DesignTokens.Palette.circuitsAccent),
-                layers: [
-                    .init(id: "flow", label: "Electron flow", symbol: "circle.dotted",
-                          isOn: { model.showElectronFlow },
-                          toggle: { model.showElectronFlow.toggle() }),
-                    .init(id: "truespeed", label: "True speed", symbol: "tortoise",
-                          isOn: { model.trueSpeedMode },
-                          toggle: { model.trueSpeedMode.toggle() }),
-                    // The bench's own field: every wire here has one, not just a coil.
-                    .init(id: "bfield", label: "Magnetic field",
-                          symbol: "circle.hexagongrid",
-                          isOn: { model.showMagneticField },
-                          toggle: { model.showMagneticField.toggle() }),
-                    .init(id: "skyline", label: "Voltage skyline", symbol: "building.2",
-                          isOn: { model.showVoltageHeights },
-                          toggle: { model.showVoltageHeights.toggle() }),
-                    .init(id: "electron", label: "Electron view", symbol: "arrow.down.left.and.arrow.up.right",
-                          isOn: { model.electronView },
-                          toggle: { model.electronView.toggle() }),
-                ])
-            // Under `root`, not `viewRoot`: the zoom reaches 8×, and a control
-            // that grew with the bench would swell out of reach.
-            renderer.root.addChild(bank.root)
-            self.layers = bank
-            // The tab reads out what its column hides — "flow", "flow,
-            // field", "off" — so folding costs no information.
-            viewsHandle.summary = {
-                let on = [model.showElectronFlow ? "flow" : nil,
-                          model.trueSpeedMode ? "true speed" : nil,
-                          model.showMagneticField ? "field" : nil,
-                          model.showVoltageHeights ? "skyline" : nil,
-                          model.electronView ? "electron view" : nil]
-                    .compactMap { $0 }
-                return on.isEmpty ? "off" : on.joined(separator: ", ")
-            }
-            renderer.root.addChild(viewsHandle.root)
+            // The views of the current, Clear and the five authored circuits
+            // live in the title bar's More (`CircuitsModule.more`): the room
+            // holds the bench, the shelf and the meter.
 
-            // Under `root` for the same reason: an instrument that grew with the
+            // Under `root`, not `viewRoot`: an instrument that grew with the
             // bench would leave reach exactly when you zoomed in to use it.
             let multimeter = Multimeter(
                 accent: UIColor(DesignTokens.Palette.circuitsAccent),
@@ -179,44 +100,6 @@ struct CircuitsSpaceView: View {
                 _ = multimeter?.handleTap(entity, model: model)
             }
             self.meter = multimeter
-
-            // Under `root`, like everything above.
-            let benchVerbs = SpatialActionBank(
-                accent: UIColor(DesignTokens.Palette.circuitsAccent),
-                actions: [
-                    .init(id: "clear", label: "Clear bench",
-                          symbol: "trash.slash",
-                          isAvailable: { !model.components.isEmpty },
-                          confirms: true,
-                          fire: {
-                              model.clearBench()
-                              model.commitBench()
-                          }),
-                ])
-            renderer.root.addChild(benchVerbs.root)
-            self.verbs = benchVerbs
-
-            // Every preset confirms: `loadPreset` starts with `clearBench()` on a
-            // bench that persists across launches.
-            let presetBank = SpatialActionBank(
-                accent: UIColor(DesignTokens.Palette.circuitsAccent),
-                actions: CircuitsModel.Preset.allCases.map { preset in
-                    .init(id: preset.rawValue, label: preset.displayName,
-                          symbol: "bolt.horizontal",
-                          confirms: true,
-                          fire: {
-                              model.loadPreset(preset)
-                              lastPreset = preset
-                              presetsHandle.close()
-                          })
-                })
-            presetBank.root.isEnabled = false
-            renderer.root.addChild(presetBank.root)
-            self.presets = presetBank
-
-            // The handle reads out which circuit is on the bench.
-            presetsHandle.summary = { lastPreset?.displayName ?? "your bench" }
-            renderer.root.addChild(presetsHandle.root)
 
             // The parts in one column: `CircuitsPartsLayout` says which and in
             // what order (sources and interrupters, then loads).
@@ -276,16 +159,6 @@ struct CircuitsSpaceView: View {
                     renderer?.root.position = appModel.labPlacement.offset
                     model.step(dt: event.deltaTime)
                     let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
-                    viewsHandle.update(
-                        anchor: Self.bankAnchor, viewer: viewer,
-                        dt: event.deltaTime,
-                        nearestHand: appModel.room.nearestFingertip(
-                            to: Self.bankAnchor))
-                    layers?.root.isEnabled = viewsHandle.isOpen
-                    if viewsHandle.isOpen {
-                        layers?.update(anchor: Self.viewsColumnAnchor,
-                                       viewer: viewer, dt: event.deltaTime)
-                    }
                     meter?.update(viewer: viewer, model: model,
                                   resetNonce: appModel.resetNonce)
                     // Idle breath, recoil on giving up a part, and a
@@ -299,24 +172,6 @@ struct CircuitsSpaceView: View {
                     if !shelfArrived, renderer?.root.isEnabled == true {
                         shelfArrived = true
                         palette?.arrive()
-                    }
-                    verbs?.update(anchor: Self.clearAnchor, viewer: viewer,
-                                  dt: event.deltaTime,
-                                  resetNonce: appModel.resetNonce,
-                                  nearestHand: appModel.room.nearestFingertip(
-                                    to: Self.clearAnchor))
-                    presetsHandle.update(
-                        anchor: Self.presetsAnchor, viewer: viewer,
-                        dt: event.deltaTime,
-                        nearestHand: appModel.room.nearestFingertip(
-                            to: Self.presetsAnchor))
-                    presets?.root.isEnabled = presetsHandle.isOpen
-                    if presetsHandle.isOpen {
-                        presets?.update(anchor: Self.presetsBankAnchor,
-                                        viewer: viewer, dt: event.deltaTime,
-                                        resetNonce: appModel.resetNonce,
-                                        nearestHand: appModel.room.nearestFingertip(
-                                            to: Self.presetsBankAnchor))
                     }
                     // Ticked every frame, not via observation: a steady DC circuit mutates
                     // nothing, but its electrons must keep drifting.
@@ -332,12 +187,7 @@ struct CircuitsSpaceView: View {
             if UserDefaults.standard.double(forKey: "trueSpeed") > 0 {
                 model.trueSpeedMode = true
             }
-            // `-electronView 1` shrinks the bench into the copper (the
-            // switch is a bank plate the simulator can't press).
-            if UserDefaults.standard.bool(forKey: "electronView") {
-                model.electronView = true
-            }
-            // `-skyline 1` raises the voltage towers (bank toggle, needs a hand).
+            // `-skyline 1` raises the voltage towers (a More toggle, needs a hand).
             if UserDefaults.standard.bool(forKey: "skyline") {
                 model.showVoltageHeights = true
             }
@@ -394,7 +244,6 @@ struct CircuitsSpaceView: View {
             if let name = UserDefaults.standard.string(forKey: "circPreset"),
                let preset = CircuitsModel.Preset(rawValue: name) {
                 model.loadPreset(preset)
-                lastPreset = preset
             }
 
             // The index-naming arguments below must run after the bench-shaping
@@ -440,14 +289,6 @@ struct CircuitsSpaceView: View {
                     }
                 }
             }
-            // `-circPresetsOpen 1` unfolds the presets tab.
-            if UserDefaults.standard.bool(forKey: "circPresetsOpen") {
-                presetsHandle.setOpen(true)
-            }
-            // `-circViewsOpen 1` unfolds the Views tab's five plates.
-            if UserDefaults.standard.bool(forKey: "circViewsOpen") {
-                viewsHandle.setOpen(true)
-            }
             // `-circScroll <n>` scrolls the parts rack n slots.
             let scroll = UserDefaults.standard.integer(forKey: "circScroll")
             if scroll != 0 { parts.scroll(by: scroll) }
@@ -455,11 +296,6 @@ struct CircuitsSpaceView: View {
             // `-circField 1` switches on the bench's own magnetic field.
             if UserDefaults.standard.bool(forKey: "circField") {
                 model.showMagneticField = true
-            }
-            // `-circClear 1` arms the Clear plate without firing — firing
-            // photographs an empty bench, indistinguishable from an unused one.
-            if UserDefaults.standard.bool(forKey: "circClear") {
-                benchVerbs.arm("clear", holds: true)
             }
             #endif
             self.renderer = renderer
@@ -485,21 +321,13 @@ struct CircuitsSpaceView: View {
                 .targetedToAnyEntity()
                 .onEnded { value in
                     // Instruments first, then the bench's own tap grammar.
-                    if viewsHandle.handleTap(value.entity) { return }
-                    if viewsHandle.isOpen,
-                       layers?.handleTap(value.entity) == true { return }
                     // Meter before `handleTap(on:)`: its dial stands among the terminals
                     // and must not count as probing what is behind it.
                     if meter?.handleTap(value.entity, model: model) == true { return }
                     if bloom.handleTap(value.entity) { return }
-                    // A plate is never also a reach for the bench behind it.
-                    if verbs?.handleTap(value.entity) == true { return }
                     // The shelf's crown swallows a tap, so a miss at a part
                     // does not fold the ring behind it.
                     if palette?.handleTap(value.entity) == true { return }
-                    if presetsHandle.handleTap(value.entity) { return }
-                    if presetsHandle.isOpen,
-                       presets?.handleTap(value.entity) == true { return }
                     handleTap(on: value.entity)
                 }
         )
@@ -719,13 +547,9 @@ struct CircuitsSpaceView: View {
             return
         }
 
+        // A switch is opened and closed by its lever; the ring does not
+        // offer the same act twice.
         var petals: [Bloom.Petal] = []
-        if part.kind == .switcher {
-            petals.append(.init(name: "Open or close", symbol: "power",
-                                tint: DesignTokens.Palette.neutralActionUI) {
-                model.toggleSwitch(id: uuid)
-            })
-        }
         if part.failed {
             // A blown bulb's most-wanted action, finally reachable.
             petals.append(.init(name: "Replace", symbol: "arrow.triangle.2.circlepath",
@@ -753,7 +577,13 @@ struct CircuitsSpaceView: View {
                         read: { model.componentValue(id: uuid) },
                         write: { model.setComponentValue(id: uuid, $0) },
                         format: { CircuitsModel.formatValue($0, for: part.kind) },
-                        radius: { 0.05 })
+                        radius: { 0.05 },
+                        stretch: Self.valueStretch(range: range, read: {
+                            model.componentValue(id: uuid)
+                        }, center: {
+                            model.components.first { $0.id == uuid }
+                                .map { SIMD3<Float>($0.position) } ?? .zero
+                        }))
                 : nil)
 
         let viewer = appModel.room.headPosition.map {
@@ -761,6 +591,29 @@ struct CircuitsSpaceView: View {
         }
         bloom.update(anchor: SIMD3<Float>(part.position),
                      viewer: viewer, revealTarget: 1, dt: dt)
+    }
+
+    /// A part's value is pulled out from under it: the stalk leaves the
+    /// part's underside — clear of its leads, which run along its own
+    /// axis into the wires — and runs toward the viewer's right, as long as
+    /// the value is far through its range.
+    static func valueStretch(range: ClosedRange<Double>,
+                             read: @escaping () -> Double,
+                             center: @escaping () -> SIMD3<Float>) -> Bloom.Grip.Stretch {
+        let drop = SIMD3<Float>(0, -0.065, 0)
+        let gap: Float = 0.018
+        let reach: Float = 0.14
+        let span = max(range.upperBound - range.lowerBound, .leastNonzeroMagnitude)
+        return Bloom.Grip.Stretch(
+            origin: { center() + drop },
+            handle: { axis in
+                let t = Float(min(max((read() - range.lowerBound) / span, 0), 1))
+                return center() + drop + axis * (gap + reach * t)
+            },
+            value: { hand, axis in
+                let along = simd_dot(hand - (center() + drop), axis) - gap
+                return range.lowerBound + Double(min(max(along / reach, 0), 1)) * span
+            })
     }
 
     /// What a pinch landed on: a pure static over entity names (the
