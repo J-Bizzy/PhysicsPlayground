@@ -40,6 +40,7 @@ final class FieldRenderer {
         subscriptions.forEach { $0.cancel() }
         subscriptions = []
         geometryPipeline?.cancel()
+        shellPipeline?.cancel()
     }
 
     /// The charge in a hand, copied from the model every tick, so a grab is
@@ -137,6 +138,14 @@ final class FieldRenderer {
     private var geometryPipeline: GeometryPipeline<GeometryJob, GeometryResult>?
     private let fieldFlowRoot = Entity()
 
+    // The equipotential shells: meshed on their own pipeline, under their own
+    // root, so a lone dragged charge carries them rigidly (exact, as for the
+    // lines) while the re-mesh catches up.
+    private var shellPipeline: GeometryPipeline<ShellJob, ShellResult>?
+    private let shellRoot = Entity()
+    private var shellEntities: [ModelEntity] = []
+    private var appliedShellCharges: [PointCharge] = []
+
     /// The charge layout the currently-applied geometry was traced from.
     private var appliedCharges: [PointCharge] = []
 
@@ -171,6 +180,18 @@ final class FieldRenderer {
             compute: { Self.computeGeometry($0) },
             apply: { [weak self] in self?.applyGeometry($0) }
         )
+
+        viewRoot.addChild(shellRoot)
+        shellEntities = (0..<Self.shellBudget).map { _ in
+            let shell = ModelEntity()
+            shell.isEnabled = false
+            shellRoot.addChild(shell)
+            return shell
+        }
+        shellPipeline = GeometryPipeline(
+            compute: { Self.computeShells($0) },
+            apply: { [weak self] in self?.applyShells($0) }
+        )
     }
 
     // MARK: Render loop
@@ -199,6 +220,8 @@ final class FieldRenderer {
                 magneticFieldOn: model.magneticFieldOn,
                 room: room
         )
+        syncShells(show: model.showEquipotentials, charges: model.charges,
+                   region: model.samplingRegion)
     }
 
     /// Re-syncs all visuals to the given state.
@@ -321,13 +344,132 @@ final class FieldRenderer {
     /// centered on the charge), and it makes the lines stick to the hand
     /// instead of trailing the background re-trace.
     private func syncFieldFlowWarp(_ charges: [PointCharge]) {
-        if charges.count == 1, appliedCharges.count == 1,
-           charges[0].id == appliedCharges[0].id {
-            fieldFlowRoot.position = SIMD3<Float>(charges[0].position - appliedCharges[0].position)
-        } else {
-            fieldFlowRoot.position = .zero
-        }
+        fieldFlowRoot.position = Self.warp(charges, applied: appliedCharges)
+        shellRoot.position = Self.warp(charges, applied: appliedShellCharges)
     }
+
+    private static func warp(_ charges: [PointCharge], applied: [PointCharge]) -> SIMD3<Float> {
+        guard charges.count == 1, applied.count == 1, charges[0].id == applied[0].id else {
+            return .zero
+        }
+        return SIMD3<Float>(charges[0].position - applied[0].position)
+    }
+
+    // MARK: Equipotential shells (background, change-gated)
+
+    /// At most four surfaces round each sign and the 0 V surface.
+    static let shellBudget = 9
+    /// Grid cells across the sampling region: 3 cm or so at room scale, fine
+    /// enough with normals from the exact field.
+    nonisolated static let shellResolution = 44
+    nonisolated static let shellTriangleBudget = 60_000
+
+    private nonisolated struct ShellJob: Sendable, Equatable {
+        var charges: [PointCharge]
+        var region: FieldModel.SamplingRegion
+    }
+
+    private nonisolated struct ShellResult: Sendable {
+        var sourceCharges: [PointCharge] = []
+        var step: Double = 0
+        var shells: [(level: Double, buffers: TubeBuffers)] = []
+    }
+
+    private func syncShells(show: Bool, charges: [PointCharge], region: FieldModel.SamplingRegion) {
+        let visible = show && !charges.isEmpty
+        shellRoot.isEnabled = visible
+        guard visible else {
+            // Off forgets what was submitted, so turning them on re-meshes.
+            submittedShells = nil
+            return
+        }
+        // What was last SUBMITTED, not applied: a drag changes the charges
+        // every frame, and the pipeline keeps only the newest job anyway.
+        let job = ShellJob(charges: charges, region: region)
+        guard job != submittedShells else { return }
+        submittedShells = job
+        shellPipeline?.submit(job)
+    }
+
+    private var submittedShells: ShellJob?
+
+    /// The surfaces to draw for these charges: the ladder's levels meshed
+    /// over the sampling region, keeping only those that close inside it.
+    /// A surface the box cuts — the infinite 0 V plane between equal and
+    /// opposite charges, or a shell pushed through the floor — would draw
+    /// the box's flat face, not the field's.
+    nonisolated static func shellMeshes(_ charges: [PointCharge],
+                                        region: FieldModel.SamplingRegion) -> [Isosurface.Mesh] {
+        let ladder = FieldModel.equipotentialLevels(charges)
+        guard !ladder.levels.isEmpty else { return [] }
+        // The potential is clamped well past the innermost surface, so the
+        // grid never carries the singularities at the charges.
+        let ceiling = 2 * (ladder.levels.map(abs).max() ?? 1)
+        return Isosurface.meshes(
+            levels: ladder.levels,
+            scalar: { point in
+                min(max(ElectricField.potential(at: point, dueTo: charges), -ceiling), ceiling)
+            },
+            gradient: { -ElectricField.vector(at: $0, dueTo: charges) },
+            center: region.center, extents: region.extents,
+            resolution: shellResolution, maxTriangles: shellTriangleBudget)
+        .filter(\.isClosed)
+    }
+
+    private nonisolated static func computeShells(_ job: ShellJob) -> ShellResult {
+        ShellResult(
+            sourceCharges: job.charges,
+            step: FieldModel.equipotentialLevels(job.charges).step,
+            shells: shellMeshes(job.charges, region: job.region).map { mesh in
+                (mesh.level, TubeBuffers(positions: mesh.positions, normals: mesh.normals,
+                                         indices: mesh.indices))
+            })
+    }
+
+    private func applyShells(_ result: ShellResult) {
+        for (index, shell) in shellEntities.enumerated() {
+            guard index < result.shells.count,
+                  let mesh = TubeMesh.mesh(from: result.shells[index].buffers) else {
+                shell.isEnabled = false
+                shell.model = nil
+                continue
+            }
+            let rank = result.step > 0 ? Int((result.shells[index].level / result.step).rounded()) : 0
+            shell.model = ModelComponent(mesh: mesh, materials: [Self.shellMaterial(rank: rank)])
+            shell.isEnabled = true
+        }
+        appliedShellCharges = result.sourceCharges
+        if let model { syncFieldFlowWarp(model.charges) }
+    }
+
+    /// Glass-thin and double-sided: red where the potential is positive,
+    /// blue where negative (the charges' own colours), a fainter white for
+    /// a 0 V surface. `rank` is the level in steps, signed: the outer,
+    /// larger shells are the fainter ones, so nine nested surfaces read as
+    /// depth rather than fog. Clearcoat catches the room's light along each
+    /// rim, which is what reads a shell as a surface rather than a coloured
+    /// haze. It writes no depth, so nested shells all show.
+    private static func shellMaterial(rank: Int) -> PhysicallyBasedMaterial {
+        if let cached = shellMaterials[rank] { return cached }
+        let tint: UIColor = rank > 0 ? DesignTokens.Palette.positiveUI
+            : rank < 0 ? DesignTokens.Palette.negativeUI : UIColor(white: 0.95, alpha: 1)
+        let opacity: Float = rank == 0 ? 0.08 : 0.05 + 0.025 * Float(min(abs(rank), 4))
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: tint)
+        material.metallic = .init(floatLiteral: 0)
+        material.roughness = .init(floatLiteral: 0.18)
+        material.clearcoat = .init(floatLiteral: 1)
+        material.clearcoatRoughness = .init(floatLiteral: 0.05)
+        material.emissiveColor = .init(color: tint)
+        material.emissiveIntensity = 0.12
+        material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+        material.faceCulling = .none
+        material.writesDepth = false
+        shellMaterials[rank] = material
+        return material
+    }
+
+    private static var shellMaterials: [Int: PhysicallyBasedMaterial] = [:]
 
     // MARK: Uniform B field — the same visual language as the E lines:
     // Uniform B: continuous vertical lines with arrowheads riding them,

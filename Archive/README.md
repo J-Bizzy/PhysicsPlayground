@@ -45,7 +45,7 @@ every `swift test`.
 | Waves | `DoubleSlit`, `WaveField`, `EmissionTrail` | 17 |
 | Fluids | `FluidGrid`, `SurfacePressure`, `PotentialFlow` | 29 + `FluidGridBench` |
 | Magnetism (unused half) | `Induction`, `CurrentLoop` | 12 |
-| Math | `MarchingSquares`, `Isosurface`, `StreamlineTracer` | 28 |
+| Math | `MarchingSquares`, `StreamlineTracer` (and `Isosurface.triangles`) | 28 |
 | Oscillations | `ElasticSheet` | 13 |
 
 Kept on purpose, for the reason the Fluids line gives — reviving a
@@ -56,7 +56,10 @@ of it is linked into anything the six modules reach.
 
 Two things that are NOT in that table, because they look archived and
 are not: `DragBody` is live (`ObstacleField`, in `Shell/RoomModel`),
-and `StationBox` is live (`DesignSystem/InstrumentRail`). Deleting
+and `StationBox` is live (`DesignSystem/InstrumentRail`). Since
+2026-10-15 so is `Isosurface.meshes`, which draws Electric Fields'
+equipotential shells; only the older single-level `triangles` beside it
+is archive-only. Deleting
 either while "pruning the wind tunnel" would break the shipping app.
 
 `FluidGridBench` is the one genuinely stale item — a timing probe

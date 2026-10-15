@@ -100,6 +100,43 @@ final class FieldModel {
 
     // MARK: Display options
     var showLines = true
+    /// The equipotential surfaces: off until asked for, so the room opens on
+    /// the lines alone.
+    var showEquipotentials = false
+
+    /// Surfaces of equal potential at equal steps of voltage, so where they
+    /// crowd the field is strong. The step is a round 1-2-5 number of volts,
+    /// a quarter of the potential just outside the strongest charge's ball;
+    /// four surfaces round each sign of charge, and the 0 V surface — the
+    /// plane between the two halves of a dipole — when both signs are here.
+    /// Point charges only: the capacitor's potential is a line integral per
+    /// point, too dear for a grid, and its gap has its own field lines.
+    nonisolated static func equipotentialLevels(_ charges: [PointCharge])
+        -> (step: Double, levels: [Double]) {
+        guard let strongest = charges.map({ abs($0.charge) }).max(), strongest > 0 else {
+            return (0, [])
+        }
+        let near = ElectricField.k * strongest / 0.08
+        let step = roundStep(near / 4)
+        var levels: [Double] = []
+        let hasPositive = charges.contains { $0.charge > 0 }
+        let hasNegative = charges.contains { $0.charge < 0 }
+        for index in 1...4 {
+            if hasPositive { levels.append(Double(index) * step) }
+            if hasNegative { levels.append(-Double(index) * step) }
+        }
+        if hasPositive && hasNegative { levels.append(0) }
+        return (step, levels)
+    }
+
+    /// The largest 1, 2 or 5 times a power of ten not above `value`.
+    nonisolated static func roundStep(_ value: Double) -> Double {
+        guard value > 0 else { return 0 }
+        let power = pow(10, floor(log10(value)))
+        let mantissa = value / power
+        let nice: Double = mantissa >= 5 ? 5 : mantissa >= 2 ? 2 : 1
+        return nice * power
+    }
 
     /// Clamps to `probeChargeRange`, so a hand that keeps pulling past the
     /// end of the bead's rail pins there instead of running off the scale.
@@ -376,6 +413,8 @@ final class FieldModel {
         if defaults.object(forKey: "emLines") != nil {
             showLines = defaults.bool(forKey: "emLines")
         }
+        // `-emShells 1` lights the equipotential surfaces.
+        if defaults.bool(forKey: "emShells") { showEquipotentials = true }
         // `-emParticle plus|minus` — the probe's sign.
         if let particle = defaults.string(forKey: "emParticle") {
             probeIsPositive = particle == "plus"
@@ -419,6 +458,7 @@ final class FieldModel {
         probeTrail = []
         probeIsPositive = true
         showLines = true
+        showEquipotentials = false
         capacitorOn = false
         plateVoltage = 20_000
         capacitorCenter = samplingRegion.center

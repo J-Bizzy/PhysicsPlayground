@@ -16,6 +16,27 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-15 — Equipotential shells, closed and exact
+
+**Decision:** Electric Fields gains Equipotentials in More, off by default. It draws the surfaces of equal potential as nested glass shells: four round each sign present, at equal steps of potential on a 1-2-5 ladder, and the 0 V surface wherever it closes. Red shells surround +, blue surround −, and the outer, larger shells are the fainter ones.
+
+**Context:** This is the third of the three deeper-lab additions. Field lines show the field's direction, but not the potential the field is the gradient of. Equal steps of V crowd where |E| is large, so the spacing is the strength, and every shell meets every line at a right angle. Both are visible in the room with no text.
+
+**Consequences:**
+- **One sampling, many surfaces.** `Isosurface.meshes` samples the potential once on a 44-cell grid and meshes every level from it with marching tetrahedra. Each vertex is welded by the grid edge it lies on, so each surface is a closed, indexed, smooth-shaded mesh.
+  - Normals come from the exact field, not the facets.
+  - The 60k-triangle budget drops the outermost shells first.
+  - The older single-level `Isosurface.triangles` is unchanged.
+- **Vertices on the true surface.** Linear interpolation of a 1/r potential put a vertex up to centimetres off an 11 cm shell, which showed as a ripple. So each vertex takes three Newton steps along the exact gradient, each held to half a cell. Every vertex of a point charge's shell is now within 1e-6 m of r = kq/V.
+- **What `IsosurfaceMeshTests` checks:**
+  - the shells sit at r = kq/V;
+  - each shell is closed, with χ = 2;
+  - the faces' own normals, measured from the triangles, cross a dipole's field at right angles (area-weighted |cos| > 0.99);
+  - the budget drops the outermost shells first.
+- **Only closed surfaces are drawn.** Equal and opposite charges have an infinite 0 V plane, and the sampling box would cut it into a flat pane: the box's shape, not the field's. Unequal charges have a closed 0 V surface, Apollonius' sphere round the weaker charge, and it is drawn. `FieldEquipotentialTests` holds it to its closed-form radius d·q₁q₂/(q₂² − q₁²).
+- **Point charges only.** The capacitor's plates are not in the potential the shells are drawn from. Its gap would need a second sampling scale, and More says nothing to suggest otherwise.
+- **Glass, with its glints.** The material is PBR, double-sided, with no depth writes and a clearcoat. Transparent PBR brightens at grazing angles even with specular at 0, so a field line glints where it crosses a shell's silhouette. An unlit material loses that glint but also the rim that makes a shell read as a surface, so the glint stays and the device check judges it.
+
 ## 2026-10-15 — A magnet through a coil lights an LED
 
 **Decision:** Magnetism gains a pickup coil from its well: a milled copper coil with a bicolour LED that lights red for one direction of the induced current and green for the other. The physics is Faraday's law, exactly, in `PhysicsCore.PickupCoil`. The room still opens with only the two magnets and the compass.

@@ -616,6 +616,28 @@ can be tested at all.**
       stay reachable. And per the same-object rule: a charge in each
       hand moves two charges, resizes nothing.
 
+### Equipotential shells (2026-10-15)
+
+- [ ] **The room opens without them.** More › Equipotentials: four glass
+      shells round each charge, red round +, blue round −, closer
+      together near the charges where the field is strong. No flat pane
+      between the two: the 0 V surface of an equal pair is an infinite
+      plane, and a surface the sampling box would cut is not drawn.
+- [ ] **Pull one charge's handle out** (unequal charges): a faint white
+      0 V sphere closes round the WEAKER charge. Judge: is it visible
+      without being a fog?
+- [ ] **Drag a charge with the shells on.** They follow; how far they
+      lag a brisk hand is the re-mesh time on the device. Judge: does it
+      read as following, or as a stutter? (A lone charge's shells move
+      rigidly with it, exactly.)
+- [ ] **With field lines on too**, each line glints white where it
+      crosses a shell's silhouette — the glass's rim catching the line.
+      Judge: polish or noise? If noise, the lever is the shells'
+      opacity, not the lines.
+- [ ] **Look from beside and from above.** Nested shells all show, none
+      hides another (no depth writes), and the frame rate holds: the
+      shells are at most 60k triangles, meshed off the main thread.
+
 ## Projectiles — the one that is 1:1 with your room
 
 **The whole-module improvement pass is deferred** (see the top of this

@@ -56,6 +56,9 @@ enum ElectromagnetismModule {
         return [
             .toggle(id: "lines", title: "Field lines", symbol: "scribble",
                     isOn: { model.showLines }, set: { model.showLines = $0 }),
+            // Surfaces of equal voltage, everywhere at right angles to the lines.
+            .toggle(id: "equipotentials", title: "Equipotentials", symbol: "circle.circle",
+                    isOn: { model.showEquipotentials }, set: { model.showEquipotentials = $0 }),
             .toggle(id: "free", title: "Free charges", symbol: "arrow.left.and.right",
                     isOn: { model.chargesRespond }, set: { model.chargesRespond = $0 }),
             // "Capacitor", not "Parallel plates": it names the apparatus.
@@ -125,6 +128,13 @@ enum ElectromagnetismModule {
         // ΔV and B are More's own sliders; E between the plates is the
         // capacitor's callout, measured — V/d here contradicted it, since the
         // real plates fringe.
+        if model.showEquipotentials {
+            let step = FieldModel.equipotentialLevels(model.charges).step
+            if step > 0 {
+                rows.append(.init("Equipotentials every ΔV",
+                                  PhysicsFormat.fixed(step / 1000, decimals: 0), "kV"))
+            }
+        }
         if model.capacitorOn {
             rows.append(.init("Plate gap",
                               PhysicsFormat.fixed(model.plateSeparation, decimals: 3), "m"))

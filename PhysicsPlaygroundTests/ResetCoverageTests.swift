@@ -108,6 +108,7 @@ final class ResetCoverageTests: XCTestCase {
                 switch name {
                 case "chargesRespond": model.chargesRespond.toggle()
                 case "showLines": model.showLines.toggle()
+                case "showEquipotentials": model.showEquipotentials.toggle()
                 case "capacitorOn": model.capacitorOn.toggle()
                 case "magneticFieldOn": model.magneticFieldOn.toggle()
                 case "probeIsPositive": model.probeIsPositive.toggle()
