@@ -16,6 +16,23 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-14 — Pendulums couple by a spring
+
+**Decision:** Two simple pendulums can be joined by a spring between their bobs. Coupling is a ring petal (Couple / Uncouple), a More verb hangs a ready pair, and a More slider sets the spring constant. A coupled pair is stepped jointly by `PhysicsCore.CoupledPendulums`, and More › Values shows ω₁ = √(g/L), ω₂ = √(g/L + 2k/m) and the beat 2π/(ω₂ − ω₁) for an identical pair.
+
+**Context:** This is one of the three deeper-lab additions the owner chose for the two-week portfolio push. The single pendulum's integrator sets each bob's speed from the work-energy theorem using gravity and drag alone. A spring moves energy between the bobs, so it cannot simply be added there.
+
+**Consequences:**
+- **RATTLE.** The pair uses velocity Verlet, with each position pulled back onto its cable's sphere along the constraint gradient (SHAKE) and each velocity made tangent. This is symplectic and time-reversible: over a minute the energy wanders by 7e-6 and does not drift. `CoupledPendulumsTests` also check:
+  - each mode's frequency to 1e-3;
+  - a 99.5% transfer at half a beat;
+  - under 1% transfer for a swing across the spring;
+  - a held bob still pulling its partner.
+- **A bug the tests caught before it shipped.** "Coupled pair" coupled to the *nearest* free pendulum, and the cradle's end bob (35 cm away) beat the pair's own partner (40 cm). The spring went to the cradle and wrecked it. The pair now names its partner, and coupling needs a pivot at least 30 cm away, beyond the cradle's 28 cm.
+- **Collisions resolve per cluster of bobs that can touch.** One sweep over the room let any pendulum change the cradle's sort axis and iteration budget. `PendulumsCoupledTests` holds the cradle bit-identical beside a pair.
+- **The force layer includes the spring.** Tension adds the spring's pull along the cable, and the net arrow includes the spring. The helix is the spring's own picture, so there is no separate spring arrow.
+- **The release preview of a coupled bob simulates the pair.**
+
 ## 2026-10-14 — Light & Optics returns, in three dimensions
 
 **Decision:** A seventh lab, Light & Optics. It has:

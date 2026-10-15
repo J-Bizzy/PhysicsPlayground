@@ -104,6 +104,135 @@ final class PendulumsModel {
     private(set) var pendulums: [Pendulum] = []
     private(set) var selectedID: UUID?
 
+    // MARK: Springs — two pendulums coupled
+
+    /// A spring joining two simple pendulums' bobs. Natural length: the
+    /// distance between the bobs when both hang still, so a coupled pair at
+    /// rest has a slack-free, unstretched spring.
+    struct Spring: Identifiable, Equatable {
+        let id: UUID
+        let a: UUID
+        let b: UUID
+        var restLength: Double
+    }
+
+    private(set) var springs: [Spring] = []
+    /// Every spring's constant, N/m — More's slider.
+    var springStiffness = PendulumsModel.defaultStiffness
+    nonisolated static let stiffnessRange = 0.5...8.0
+    /// 2 N/m on two 1 kg, 0.6 m pendulums: a beat of about thirteen seconds,
+    /// slow enough to watch the swing pass across.
+    nonisolated static let defaultStiffness = 2.0
+    /// How far apart two pivots may be to be coupled: closer and the spring
+    /// would run through a cradle's other balls (the cradle spans 28 cm),
+    /// further and it is a rope across the room.
+    nonisolated static let couplingRange = 0.3...0.9
+
+    /// The spring a pendulum is on, if any.
+    func spring(of id: UUID) -> Spring? {
+        springs.first { $0.a == id || $0.b == id }
+    }
+
+    func partner(of id: UUID) -> UUID? {
+        guard let spring = spring(of: id) else { return nil }
+        return spring.a == id ? spring.b : spring.a
+    }
+
+    /// The uncoupled simple pendulum this one would couple to: the nearest
+    /// whose pivot is within reach of a spring.
+    func couplingCandidate(for id: UUID) -> UUID? {
+        guard let me = pendulums.first(where: { $0.id == id }),
+              me.kind == .simple, spring(of: id) == nil else { return nil }
+        return pendulums
+            .filter { other in
+                other.id != id && other.kind == .simple && spring(of: other.id) == nil
+                    && Self.couplingRange.contains(simd_distance(other.pivot, me.pivot))
+            }
+            .min { simd_distance($0.pivot, me.pivot) < simd_distance($1.pivot, me.pivot) }?
+            .id
+    }
+
+    /// Joins this pendulum to `other`, or to its nearest free neighbour, with
+    /// a spring.
+    @discardableResult
+    func couple(id: UUID, to partner: UUID? = nil) -> Bool {
+        guard let other = partner ?? couplingCandidate(for: id),
+              other != id, spring(of: id) == nil, spring(of: other) == nil,
+              let a = pendulums.first(where: { $0.id == id }),
+              let b = pendulums.first(where: { $0.id == other }) else { return false }
+        let hangingA = a.pivot - SIMD3(0, a.length, 0)
+        let hangingB = b.pivot - SIMD3(0, b.length, 0)
+        springs.append(Spring(id: UUID(), a: id, b: other,
+                              restLength: simd_distance(hangingA, hangingB)))
+        emitSound(.pop, at: (a.bobWorld + b.bobWorld) / 2, volume: 0.4)
+        return true
+    }
+
+    func uncouple(id: UUID) {
+        springs.removeAll { $0.a == id || $0.b == id }
+    }
+
+    func setSpringStiffness(_ value: Double) {
+        springStiffness = min(max(value, Self.stiffnessRange.lowerBound),
+                              Self.stiffnessRange.upperBound)
+    }
+
+    /// Two pendulums and a spring, hung beside the cradle and 15 cm behind
+    /// its line (so the cradle's end ball can never reach them), the outer
+    /// one pulled back along the spring, away from the cradle: the swing
+    /// passes to the inner one and back. Far enough right that the cradle's
+    /// end ball, swinging out, does not pass in front of the pair.
+    @discardableResult
+    func addCoupledPair() -> Bool {
+        guard pendulums.count + 2 <= Self.pendulumBudget else { return false }
+        let length = 0.6
+        let left = Self.defaultPivot + SIMD3(0.62, 0, -0.15)
+        let right = left + SIMD3(0.4, 0, 0)
+        guard let a = addPendulum(length: length, angle: 0, mass: 1.0, at: left),
+              let b = addPendulum(length: length, angle: 0, mass: 1.0, at: right) else { return false }
+        if let index = pendulums.firstIndex(where: { $0.id == b }) {
+            pendulums[index].state = SphericalPendulum(length: length, angle: 0.3)
+        }
+        // Its own partner, by name: nearest-first would hand the spring to
+        // the cradle's end bob, 35 cm away against the partner's 40.
+        couple(id: a, to: b)
+        selectedID = b
+        return true
+    }
+
+    /// The rig `CoupledPendulums` steps for this spring.
+    private func coupledRig(_ spring: Spring, _ a: Pendulum, _ b: Pendulum) -> CoupledPendulums.Rig {
+        CoupledPendulums.Rig(pivotA: a.pivot, pivotB: b.pivot,
+                             lengthA: a.length, lengthB: b.length,
+                             massA: a.mass, massB: b.mass,
+                             stiffness: springStiffness, restLength: spring.restLength,
+                             dampingA: frictionOn ? a.damping : 0,
+                             dampingB: frictionOn ? b.damping : 0)
+    }
+
+    /// The forces on a bob, as the Force layer draws them: gravity, the
+    /// cable's tension (including what it takes to hold the spring), the
+    /// spring, and their sum with the air's drag.
+    func forces(on pendulum: Pendulum)
+        -> (gravity: SIMD3<Double>, tension: SIMD3<Double>, spring: SIMD3<Double>, net: SIMD3<Double>) {
+        let gravityForce = SIMD3(0, -gravity * pendulum.mass, 0)
+        let radial = simd_normalize(pendulum.state.position)
+        var springForce = SIMD3<Double>.zero
+        var tension = pendulum.state.tension(length: pendulum.length, gravity: gravity,
+                                             mass: pendulum.mass)
+        if pendulum.kind == .simple, let spring = spring(of: pendulum.id),
+           let other = pendulums.first(where: { $0.id == (spring.a == pendulum.id ? spring.b : spring.a) }) {
+            springForce = CoupledPendulums.springForceOnA(
+                bobA: pendulum.bobWorld, bobB: other.bobWorld,
+                stiffness: springStiffness, restLength: spring.restLength)
+            tension += simd_dot(springForce, radial)
+        }
+        let tensionForce = -radial * tension
+        let drag = -(frictionOn ? pendulum.damping : 0) * pendulum.state.velocity
+        return (gravityForce, tensionForce, springForce,
+                gravityForce + tensionForce + springForce + drag)
+    }
+
     // MARK: Global knobs
 
     var gravity = 9.81
@@ -212,6 +341,7 @@ final class PendulumsModel {
 
     func removePendulum(id: UUID) {
         pendulums.removeAll { $0.id == id }
+        uncouple(id: id)
         if selectedID == id { selectedID = pendulums.last?.id }
     }
 
@@ -305,7 +435,23 @@ final class PendulumsModel {
         while accumulator >= substep, steps < 400 {
             accumulator -= substep
             steps += 1
-            for index in pendulums.indices where !pendulums[index].isGrabbed {
+            // Coupled pairs move together; a held bob still pulls on its partner.
+            var coupled = Set<UUID>()
+            for spring in springs {
+                guard let ia = pendulums.firstIndex(where: { $0.id == spring.a }),
+                      let ib = pendulums.firstIndex(where: { $0.id == spring.b }) else { continue }
+                coupled.formUnion([spring.a, spring.b])
+                let heldA = pendulums[ia].isGrabbed, heldB = pendulums[ib].isGrabbed
+                guard !(heldA && heldB) else { continue }
+                let next = CoupledPendulums.step(
+                    CoupledPendulums(a: pendulums[ia].state, b: pendulums[ib].state),
+                    dt: substep, rig: coupledRig(spring, pendulums[ia], pendulums[ib]),
+                    gravity: gravity, heldA: heldA, heldB: heldB)
+                if !heldA { pendulums[ia].state = next.a }
+                if !heldB { pendulums[ib].state = next.b }
+            }
+            for index in pendulums.indices
+            where !pendulums[index].isGrabbed && !coupled.contains(pendulums[index].id) {
                 switch pendulums[index].kind {
                 case .simple:
                     pendulums[index].state = SphericalPendulum.step(
@@ -340,11 +486,42 @@ final class PendulumsModel {
     /// Elastic bob collisions along the line of centres. Simple pendulums only
     /// (a rod's impulse response couples both angles — a 1-D exchange injects
     /// energy). Sorted sweep: the cradle's impulse must cross one contact at a time.
+    ///
+    /// Resolved per cluster of bobs near enough to touch, so rigs that cannot
+    /// meet do not share a sweep: with one sweep over the whole room, a
+    /// pendulum hung anywhere tilted the cradle's sort axis and changed its
+    /// iteration budget. `PendulumsCoupledTests` holds the cradle to swinging
+    /// exactly as it would alone beside a coupled pair.
     private func resolveBobCollisions() {
         let movable = pendulums.indices.filter {
             pendulums[$0].kind == .simple && !pendulums[$0].isGrabbed
         }
         guard movable.count > 1 else { return }
+        // Union-find over bobs within a hand's width of contact.
+        var parent = Array(movable.indices)
+        func root(_ i: Int) -> Int {
+            var i = i
+            while parent[i] != i { parent[i] = parent[parent[i]]; i = parent[i] }
+            return i
+        }
+        for i in movable.indices {
+            for j in movable.indices where j > i {
+                let a = pendulums[movable[i]], b = pendulums[movable[j]]
+                let reach = a.bobRadius + b.bobRadius + BobCollision.contactSlop + 0.05
+                if simd_distance(a.bobWorld, b.bobWorld) <= reach {
+                    parent[root(i)] = root(j)
+                }
+            }
+        }
+        var clusters: [Int: [Int]] = [:]
+        for i in movable.indices { clusters[root(i), default: []].append(movable[i]) }
+        for cluster in clusters.values.sorted(by: { $0[0] < $1[0] }) where cluster.count > 1 {
+            resolveCollisions(among: cluster)
+        }
+    }
+
+    /// The sorted sweep over one cluster of bobs that can touch.
+    private func resolveCollisions(among movable: [Int]) {
 
         // Sweep axis: first→last pivot; if pivots coincide, fall back to bobs.
         // A degenerate axis skips the sort, never the resolution.
@@ -406,6 +583,19 @@ final class PendulumsModel {
             position: direction * pendulum.length, velocity: .zero)
         var path: [SIMD3<Double>] = []
         let stepsPerPoint = max(Int(seconds / Double(points) / Self.substep), 1)
+        // A coupled bob is let go into its spring: its partner swings on too.
+        if let spring = spring(of: id),
+           let other = pendulums.first(where: { $0.id == partner(of: id) }) {
+            let rig = coupledRig(spring, pendulum, other)
+            var pair = CoupledPendulums(a: state, b: other.state)
+            for _ in 0..<points {
+                for _ in 0..<stepsPerPoint {
+                    pair = CoupledPendulums.step(pair, dt: Self.substep, rig: rig, gravity: gravity)
+                }
+                path.append(pendulum.pivot + pair.a.position)
+            }
+            return path
+        }
         for _ in 0..<points {
             for _ in 0..<stepsPerPoint {
                 state = SphericalPendulum.step(
@@ -440,6 +630,8 @@ final class PendulumsModel {
         timeScale = 1.0
         showVelocity = true
         showForces = false
+        springs = []
+        springStiffness = Self.defaultStiffness
         // Reset must restore every plate-backed flag — ResetCoverageTests
         // reflects over Bools.
         frictionOn = true
@@ -450,6 +642,13 @@ final class PendulumsModel {
 
     init() {
         reset()
+        #if DEBUG
+        // `-penCoupled 1` hangs the coupled pair beside the cradle;
+        // `-penSpringK <N/m>` sets its spring.
+        if UserDefaults.standard.bool(forKey: "penCoupled") { addCoupledPair() }
+        let stiffness = UserDefaults.standard.double(forKey: "penSpringK")
+        if stiffness > 0 { setSpringStiffness(stiffness) }
+        #endif
     }
 }
 
@@ -463,11 +662,15 @@ extension PendulumsModel: TimeCapsuleRecording {
         var accumulator: Double
         var gravity: Double
         var bobRestitution: Double
+        /// The springs and their constant: they change how the bobs move.
+        var springs: [Spring]
+        var springStiffness: Double
     }
 
     func captureCapsuleSnapshot() -> CapsuleSnapshot {
         CapsuleSnapshot(pendulums: pendulums, accumulator: accumulator,
-                        gravity: gravity, bobRestitution: bobRestitution)
+                        gravity: gravity, bobRestitution: bobRestitution,
+                        springs: springs, springStiffness: springStiffness)
     }
 
     func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
@@ -486,6 +689,10 @@ extension PendulumsModel: TimeCapsuleRecording {
         accumulator = snapshot.accumulator
         gravity = snapshot.gravity
         bobRestitution = snapshot.bobRestitution
+        springs = snapshot.springs.filter { spring in
+            pendulums.contains { $0.id == spring.a } && pendulums.contains { $0.id == spring.b }
+        }
+        springStiffness = snapshot.springStiffness
         if let selectedID, !pendulums.contains(where: { $0.id == selectedID }) {
             self.selectedID = nil
         }

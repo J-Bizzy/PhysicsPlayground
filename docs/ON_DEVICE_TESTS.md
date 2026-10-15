@@ -652,6 +652,27 @@ file). The new well and the standing script:
 
 ## Pendulums
 
+### Coupled pendulums (2026-10-14)
+
+- [ ] **More › Coupled pair** hangs two pendulums and a steel spring to
+      the right of the cradle, the outer one already pulled back. Watch for a
+      minute: the swing passes wholly to the inner bob, stops the outer, and
+      comes back, about every 13 seconds. The cradle beside it is
+      undisturbed.
+- [ ] **The spring reads as a spring**: a fine steel helix from bob to
+      bob, its coils spreading as it stretches. No flicker at the bobs'
+      surfaces.
+- [ ] **Swing a coupled bob across the spring** (toward or away from you)
+      instead of along it: almost nothing passes across. That is the 3-D
+      result a one-dimensional model cannot show.
+- [ ] **Couple two of your own.** Pull two pendulums from the well about
+      half a metre apart; tap one, Couple; the spring appears between them.
+      Uncouple (scissors) takes it away. A cradle bob never offers Couple.
+- [ ] **The Spring slider**: stiffer and the beat quickens. More ›
+      Values gives ω₁, ω₂ and the beat period for an identical pair.
+- [ ] **Hold one coupled bob still**: the other is pulled about by the
+      spring alone, and the release preview (ghost) swings both.
+
 - [ ] Grab a bob and throw it sideways → a true 3-D orbit, not a plane.
 - [ ] ⟳ **A pendulum pulled from the well hangs STILL** — plumb, at
       rest, until your hand swings it. It used to be born mid-swing.

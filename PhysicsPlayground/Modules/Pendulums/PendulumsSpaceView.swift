@@ -132,10 +132,10 @@ struct PendulumsSpaceView: View {
                 }
             )
             #if DEBUG
-            // `-penRing 1` opens the first bob's control ring at
-            // launch, for CLI screenshots.
+            // `-penRing 1` opens the selected bob's control ring at launch (the
+            // first bob's when none is), for CLI screenshots.
             if UserDefaults.standard.bool(forKey: "penRing"),
-               let first = model.pendulums.first {
+               let first = model.selected ?? model.pendulums.first {
                 ring.openID = first.id
             }
             // Each instrument argument sets a value: `-penGravity 1.62` is the Moon.
@@ -342,9 +342,24 @@ struct PendulumsSpaceView: View {
             return
         }
 
+        // A simple pendulum offers a spring to its nearest neighbour, or to let
+        // go of the one it has. The ring is keyed on whether it is coupled,
+        // because a petal cannot rename itself.
+        let coupled = model.partner(of: uuid) != nil
+        var couplePetal: [Bloom.Petal] = []
+        if pendulum.kind == .simple {
+            couplePetal = [coupled
+                ? .init(name: "Uncouple", symbol: "scissors",
+                        tint: DesignTokens.Palette.neutralActionUI) { model.uncouple(id: uuid) }
+                : .init(name: "Couple", symbol: "link",
+                        tint: DesignTokens.Palette.neutralActionUI,
+                        isAvailable: { model.couplingCandidate(for: uuid) != nil }) {
+                    model.couple(id: uuid)
+                }]
+        }
         bloom.retarget(
-            uuid,
-            petals: [
+            "\(uuid.uuidString)-\(coupled)",
+            petals: couplePetal + [
                 .init(name: "Mass", symbol: "scalemass",
                       tint: DesignTokens.Palette.neutralActionUI) {
                     // Cycle light → medium → heavy → light. The period

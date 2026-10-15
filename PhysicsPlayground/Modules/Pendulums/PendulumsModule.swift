@@ -46,6 +46,18 @@ enum PendulumsModule {
             // is ideal and swings for ever.
             .toggle(id: "friction", title: "Air resistance", symbol: "wind",
                     isOn: { model.frictionOn }, set: { model.frictionOn = $0 }),
+            // Two pendulums and a spring, ready to trade their swing.
+            .action(id: "coupledPair", title: "Coupled pair", symbol: "link",
+                    isEnabled: { model.pendulums.count + 2 <= PendulumsModel.pendulumBudget },
+                    run: { model.addCoupledPair() }),
+            // A spring has no handle of its own to stretch, so its constant is a
+            // slider — and only while there is a spring to set.
+            .slider(PhysicsAdjustable(id: "springStiffness", label: "Spring",
+                                      unit: "N/m", range: PendulumsModel.stiffnessRange,
+                                      decimals: 1,
+                                      read: { model.springStiffness },
+                                      write: { model.setSpringStiffness($0) }),
+                    isEnabled: { !model.springs.isEmpty }),
         ]
     }
 
@@ -69,8 +81,33 @@ enum PendulumsModule {
             rows.append(.init("Speed",
                               PhysicsFormat.fixed(simd_length(selected.state.velocity),
                                                   decimals: 3), "m/s"))
+            rows.append(contentsOf: coupledReadings(selected, model: model))
         }
         return rows
     }
 
+    /// For a coupled bob: the spring, the two normal modes and the beat. The
+    /// closed forms are for two identical pendulums, so they are shown only
+    /// when the pair is one.
+    static func coupledReadings(_ selected: PendulumsModel.Pendulum,
+                                model: PendulumsModel) -> [Reading] {
+        guard let partnerID = model.partner(of: selected.id),
+              let partner = model.pendulums.first(where: { $0.id == partnerID }) else { return [] }
+        var rows: [Reading] = [
+            .init("Spring k", PhysicsFormat.fixed(model.springStiffness, decimals: 1), "N/m"),
+        ]
+        let identical = abs(partner.length - selected.length) < 0.005
+            && abs(partner.mass - selected.mass) < 0.005
+        guard identical else { return rows }
+        let modes = CoupledPendulums.normalModes(length: selected.length, mass: selected.mass,
+                                                 stiffness: model.springStiffness,
+                                                 gravity: model.gravity)
+        rows.append(.init("In step ω₁ = √(g/L)", PhysicsFormat.fixed(modes.inPhase, decimals: 3), "rad/s"))
+        rows.append(.init("Against ω₂ = √(g/L + 2k/m)",
+                          PhysicsFormat.fixed(modes.antiPhase, decimals: 3), "rad/s"))
+        rows.append(.init("Beat 2π/(ω₂ − ω₁)",
+                          PhysicsFormat.fixed(2 * .pi / (modes.antiPhase - modes.inPhase),
+                                              decimals: 2), "s"))
+        return rows
+    }
 }

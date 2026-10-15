@@ -211,14 +211,13 @@ final class PendulumsRenderer {
                             speed / (2 * (model.gravity * length).squareRoot()), 1)),
                         kind: .velocity))
                 }
-                // Net force = gravity + cable tension. Tension points at
-                // the pivot with magnitude m(g·cosθ + v²/L) — the same
-                // constraint the simulation enforces, shown, not told.
-                let radial = pendulum.state.position / length
-                let cosTheta = max(-radial.y, 0)
-                let tension = model.gravity * cosTheta + speed * speed / length
-                let acceleration = SIMD3<Double>(0, -model.gravity, 0)
-                    - radial * tension
+                // Net force = gravity + cable tension (+ the spring, on a
+                // coupled bob). Tension points at the pivot with magnitude
+                // m(g·cosθ + v²/L) plus the spring's pull along the cable —
+                // the same constraint the simulation enforces, shown, not told.
+                let forces = model.forces(on: pendulum)
+                let acceleration = (forces.gravity + forces.tension + forces.spring)
+                    / max(pendulum.mass, 1e-6)
                 let a = simd_length(acceleration)
                 if a > 0.01 {
                     samples.append(.init(
@@ -240,6 +239,7 @@ final class PendulumsRenderer {
         }
 
         syncPendulums(model)
+        syncSprings(model)
         syncTrail(dt: dt, model: model)
         syncGhost(model)
 
@@ -347,13 +347,10 @@ final class PendulumsRenderer {
             if model.showVelocity {
                 visual.velocityArrow.update(origin: origin, vector: velocity, reference: 0.5)
             }
-            let gravityForce = SIMD3(0, -model.gravity * pendulum.mass, 0)
-            let direction = simd_normalize(pendulum.state.position)
-            let tensionMagnitude = pendulum.state.tension(
-                length: pendulum.length, gravity: model.gravity, mass: pendulum.mass)
-            let tensionForce = -direction * tensionMagnitude
-            let netForce = gravityForce + tensionForce
-                - pendulum.damping * velocity
+            let forces = model.forces(on: pendulum)
+            let gravityForce = forces.gravity
+            let tensionForce = forces.tension
+            let netForce = forces.net
             let showForces = model.showForces
             Fade.tick(visual.gravityArrow.holder, visible: showForces)
             Fade.tick(visual.tensionArrow.holder, visible: showForces)
@@ -515,6 +512,57 @@ final class PendulumsRenderer {
          visual.tensionArrow, visual.netArrow].forEach { root.addChild($0.holder) }
         visuals[pendulum.id] = visual
         return visual
+    }
+
+    // MARK: Springs
+
+    /// A steel helix between two coupled bobs, surface to surface. Built
+    /// once at unit length along +y; each frame only its transform moves,
+    /// and the stretch is the coils spreading, as a real spring's do.
+    private var springVisuals: [UUID: ModelEntity] = [:]
+
+    static let springMesh: MeshResource? = {
+        let turns = 12.0, samples = 24 * 12
+        let coil = 0.011
+        var points: [SIMD3<Float>] = [[0, 0, 0], [0, 0.04, 0]]
+        for step in 0...samples {
+            let t = Double(step) / Double(samples)
+            let angle = 2 * Double.pi * turns * t
+            points.append(SIMD3(Float(coil * cos(angle)), Float(0.04 + 0.92 * t),
+                                Float(coil * sin(angle))))
+        }
+        points += [[0, 0.96, 0], [0, 1, 0]]
+        return TubeMesh.tube(lines: [points], radius: 0.0011, sides: 6)
+    }()
+
+    private func syncSprings(_ model: PendulumsModel) {
+        let live = Set(model.springs.map(\.id))
+        for (id, entity) in springVisuals where !live.contains(id) {
+            entity.removeFromParent()
+            springVisuals[id] = nil
+        }
+        for spring in model.springs {
+            guard let a = model.pendulums.first(where: { $0.id == spring.a }),
+                  let b = model.pendulums.first(where: { $0.id == spring.b }),
+                  let mesh = Self.springMesh else { continue }
+            let entity = springVisuals[spring.id] ?? {
+                let made = ModelEntity(mesh: mesh, materials: [steelMaterial])
+                made.name = "spring-\(spring.id.uuidString)"
+                root.addChild(made)
+                springVisuals[spring.id] = made
+                return made
+            }()
+            let from = SIMD3<Float>(a.bobWorld), to = SIMD3<Float>(b.bobWorld)
+            let gap = simd_distance(from, to)
+            guard gap > 1e-4 else { entity.isEnabled = false; continue }
+            let along = (to - from) / gap
+            let start = from + along * Float(a.bobRadius)
+            let length = max(gap - Float(a.bobRadius + b.bobRadius), 0.005)
+            entity.isEnabled = true
+            entity.position = start
+            entity.orientation = VectorFieldArrows.rotationFromYAxis(to: along)
+            entity.scale = [1, length, 1]
+        }
     }
 
     // MARK: Trail
