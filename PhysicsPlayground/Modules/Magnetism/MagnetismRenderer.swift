@@ -105,8 +105,176 @@ final class MagnetismRenderer {
     func tick(_ model: MagnetismModel, viewer: SIMD3<Double>? = nil) {
         tickSounds(model)
         syncMagnets(model)
+        syncCoils(model)
         syncFieldLines(model)
         syncHandCompass(model)
+    }
+
+    // MARK: Pickup coils
+
+    /// The milled coil (`Tools/pickupcoil.py`) and the LED Swift lights in
+    /// its socket. The asset's bore runs along +x.
+    private struct CoilVisual {
+        let container: Entity
+        let dome: ModelEntity
+        let glow: ModelEntity
+        /// The LED's light on the copper beside it: the winding blushes red
+        /// or green as the current runs.
+        let light: Entity
+        let halo: Entity
+        /// The LED's drawn state: 0 dark, ±1…±8 red or green levels.
+        var level: Int = 0
+    }
+
+    private var coilVisuals: [UUID: CoilVisual] = [:]
+
+    /// Where the LED's dome stands on the coil: the socket's top, as the
+    /// asset is milled (`LED_SEAT` in the script).
+    nonisolated static let ledSeat: Float = 0.077
+    nonisolated static let ledRadius: Float = 0.0065
+    /// A red LED at 625 nm and a green one at 565 nm: the colours are the
+    /// wavelengths a bicolour LED actually emits.
+    static let ledRed = Spectrum.color(nanometers: 625)
+    static let ledGreen = Spectrum.color(nanometers: 565)
+
+    /// How bright the LED draws for a current: the square root of its share
+    /// of a full 10 mA, so the faint glow of a slow push still shows.
+    nonisolated static func ledLevel(current: Double) -> Int {
+        let share = (abs(current) / 0.010).squareRoot()
+        guard abs(current) > 5e-5 else { return 0 }
+        let level = max(1, min(8, Int((share * 8).rounded())))
+        return current > 0 ? level : -level
+    }
+
+    /// The coil's body, unlit: the milled asset, or a plain copper drum if
+    /// it is missing (`VignettePropTests` would say so).
+    static func coilBody() -> Entity {
+        if let prototype = PropCache.prototype(named: "PickupCoil") {
+            return prototype.clone(recursive: true)
+        }
+        let drum = ModelEntity(
+            mesh: Primitives.cylinder(height: Float(MagnetismModel.coilLength),
+                                      radius: Float(MagnetismModel.coilFlangeRadius)),
+            materials: [Materials.machined(UIColor(red: 0.74, green: 0.43, blue: 0.22, alpha: 1))])
+        drum.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+        return drum
+    }
+
+    /// The LED as it stands in its socket: a short body and a domed lens.
+    static func ledDome() -> ModelEntity {
+        let dome = ModelEntity(mesh: Primitives.sphere(radius: ledRadius),
+                               materials: [ledOffMaterial])
+        dome.position = [0, ledSeat + ledRadius * 0.85, 0]
+        let body = ModelEntity(mesh: Primitives.cylinder(height: ledRadius, radius: ledRadius),
+                               materials: [ledOffMaterial])
+        body.position = [0, -ledRadius * 0.5, 0]
+        dome.addChild(body)
+        return dome
+    }
+
+    private static let ledOffMaterial = Materials.opticalGlass(
+        UIColor(red: 0.96, green: 0.93, blue: 0.90, alpha: 1), opacity: 0.7)
+
+    /// The coil as the well shows it: the real thing with its LED dark.
+    static func coilPreview() -> Entity {
+        let holder = Entity()
+        let body = coilBody()
+        body.addChild(ledDome())
+        // Turned a little toward the viewer, so the bore reads as a bore.
+        body.orientation = simd_quatf(angle: -0.5, axis: [0, 1, 0])
+        holder.addChild(body)
+        return holder
+    }
+
+    private func makeCoil(_ coil: MagnetismModel.Coil) -> CoilVisual {
+        let container = Entity()
+        container.name = coil.id.uuidString
+        let body = Self.coilBody()
+        container.addChild(body)
+        let dome = Self.ledDome()
+        container.addChild(dome)
+        let glow = GlowSprite.make(size: 0.13)
+        glow.position = dome.position
+        glow.isEnabled = false
+        container.addChild(glow)
+        let light = Entity()
+        light.position = dome.position + SIMD3(0, 0.012, 0)
+        container.addChild(light)
+
+        // A halo the coil's own shape — a drum along the bore — not a box,
+        // which on a round part read as a frosted crate around it.
+        let halo = SelectionHalo.make(mesh: Primitives.cylinder(
+            height: Float(MagnetismModel.coilLength) + 0.03,
+            radius: Float(MagnetismModel.coilFlangeRadius) + 0.01))
+        halo.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+        container.addChild(halo)
+
+        Grabbable.configureTouchTarget(container, matchingVisualBoundsOf: body,
+                                       activate: { [weak self, weak container] in
+                                           guard let container else { return }
+                                           self?.onObjectTap?(container)
+                                       })
+        var accessibility = AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = "Coil. Push a magnet through it and its light shows the current: red one way, green the other."
+        container.components.set(accessibility)
+        viewRoot.addChild(container)
+        return CoilVisual(container: container, dome: dome, glow: glow, light: light, halo: halo)
+    }
+
+    private func syncCoils(_ model: MagnetismModel) {
+        let live = Set(model.coils.map(\.id))
+        for (id, visual) in coilVisuals where !live.contains(id) {
+            visual.container.removeFromParent()
+            coilVisuals[id] = nil
+        }
+        for coil in model.coils {
+            var visual = coilVisuals[coil.id] ?? makeCoil(coil)
+            visual.container.position = SIMD3<Float>(coil.position)
+            visual.container.orientation = simd_quatf(from: [1, 0, 0], to: SIMD3<Float>(coil.axis))
+            Fade.tick(visual.halo, visible: coil.id == model.selectedID)
+            let level = Self.ledLevel(current: coil.current)
+            if level != visual.level {
+                visual.level = level
+                Self.light(visual, level: level)
+            }
+            coilVisuals[coil.id] = visual
+        }
+    }
+
+    private static func mix(_ a: UIColor, _ b: UIColor, _ t: CGFloat) -> UIColor {
+        var ar: CGFloat = 0, ag: CGFloat = 0, ab: CGFloat = 0, aa: CGFloat = 0
+        var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+        a.getRed(&ar, green: &ag, blue: &ab, alpha: &aa)
+        b.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+        return UIColor(red: ar + (br - ar) * t, green: ag + (bg - ag) * t,
+                       blue: ab + (bb - ab) * t, alpha: 1)
+    }
+
+    /// The LED at a level: the lens itself goes from milky to its colour,
+    /// and a soft glow swells round it.
+    private static func light(_ visual: CoilVisual, level: Int) {
+        guard level != 0 else {
+            visual.dome.model?.materials = [ledOffMaterial]
+            visual.dome.children.compactMap { $0 as? ModelEntity }
+                .forEach { $0.model?.materials = [ledOffMaterial] }
+            visual.glow.isEnabled = false
+            visual.light.components.remove(PointLightComponent.self)
+            return
+        }
+        let strength = Float(abs(level)) / 8
+        let colour = level > 0 ? ledRed : ledGreen
+        // Brighter is whiter at the core, as a real LED's lens saturates.
+        let lit = Materials.unlit(mix(colour, .white, CGFloat(0.35 * strength)))
+        visual.dome.model?.materials = [lit]
+        visual.dome.children.compactMap { $0 as? ModelEntity }
+            .forEach { $0.model?.materials = [lit] }
+        visual.glow.isEnabled = true
+        GlowSprite.paint(visual.glow, colour, strength: strength)
+        // A few centimetres of reach: enough to colour the winding and the
+        // flanges, not the room.
+        visual.light.components.set(PointLightComponent(
+            color: colour, intensity: 900 * strength, attenuationRadius: 0.30))
     }
 
     // MARK: The compass you carry

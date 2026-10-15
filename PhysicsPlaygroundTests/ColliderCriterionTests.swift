@@ -199,6 +199,8 @@ final class ColliderCriterionTests: XCTestCase {
 
     func testMagnetismCollidersFit() {
         let model = MagnetismModel()
+        // With a coil out of the well, selected, so its halo stands too.
+        model.addCoil(at: SIMD3(0, 1.3, -0.5))
         let renderer = MagnetismRenderer()
         for _ in 0..<3 { renderer.tick(model) }
         assertCollidersFit(renderer.root, "Magnetism")

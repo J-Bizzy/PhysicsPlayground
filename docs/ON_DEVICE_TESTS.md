@@ -485,6 +485,23 @@ ARKit has found them: the light lands only on walls it knows.
 
 ## Magnetism
 
+### The pickup coil (2026-10-15)
+
+- [ ] **The room opens without a coil.** Pull one from the well above the
+      magnet's: a copper coil on a graphite bobbin, its LED dark.
+- [ ] **Push a magnet through it briskly**: the LED flashes red as the
+      north pole goes in and green as it comes out (or the reverse,
+      pushed south first), with a soft glow and a tint on the copper.
+      Slowly, nothing: the LED needs its 1.8 V. Judge: does the flash read
+      from where you stand, and does the coil look like a real one up
+      close?
+- [ ] **Hold the magnet still inside it**: dark. Move the coil over a
+      still magnet instead: it lights just the same (relative motion).
+- [ ] **Ring › Turns** to 1000 and the same push no longer lights it;
+      4000 again and it does. **Turn** stands the bore toward you.
+- [ ] **More › Values** with the coil selected: the linkage, ε = −dΛ/dt
+      swinging through a pass, the LED current and the winding's ~490 Ω.
+
 - [ ] **THE FIELD LINES ARE PINK NOW, AND THIS IS THE JUDGEMENT CALL.**
       ⟳ 2026-08-26: they were a hardcoded lavender, ΔE 46 from the accent
       on every plate in the lab; they now derive from `magnetismAccent`

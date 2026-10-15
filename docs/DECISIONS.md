@@ -16,6 +16,24 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-15 — A magnet through a coil lights an LED
+
+**Decision:** Magnetism gains a pickup coil from its well: a milled copper coil with a bicolour LED that lights red for one direction of the induced current and green for the other. The physics is Faraday's law, exactly, in `PhysicsCore.PickupCoil`. The room still opens with only the two magnets and the compass.
+
+**Context:** This is one of the three deeper-lab additions for the portfolio push. It is not the cross-lab coil annex cut on 2026-08-02, which wired Circuits to Magnetism: this coil is self-contained. The owner asked for no clutter in the opening room and for polished, smooth models.
+
+**Consequences:**
+- **Flux is ∮A·dl, not a disc sum.** `Induction.flux(throughDiscAt:)` sums B over the disc, and a point dipole crossing the disc is a singularity among the samples. The loop integral of the dipole's vector potential is exact anywhere off the wire, and the trapezoid rule converges exponentially on it. `PickupCoilTests` check:
+  - the coaxial closed form to 1e-9, including at the loop's centre;
+  - a thin coil's peak EMF against N·0.42933 μ₀mv/R² to 1e-3;
+  - a full pass integrating to zero, with opposite signs going in and coming out;
+  - the LED pair's Kirchhoff residual;
+  - the winding's ρL/A.
+- **No inductance and no Lenz drag.** L/R is microseconds against a 90 Hz frame, and the drag on the magnet is about 0.05 N, below what a hand can feel. Both are recorded here, not modelled.
+- **4000 turns by default.** With the default 6 A·m² magnet that lights at a brisk 1 m/s; 1000 turns needs about 3 m/s. The ring's Turns petal makes ε ∝ N something you see.
+- **The model is milled, not generated** (`Tools/pickupcoil.py`): a graphite bobbin with champagne keylines, 36 turns of real helical copper over a copper core, two leads, and a terminal block with a steel socket. `PickupCoilPropTests` hold the asset to the physics' dimensions and the LED's seat. Swift lights the LED itself, and adds a glow and a 30 cm point light so the flash reads in a lit room.
+- **The selection halo is a drum, the coil's own shape**, not the box the magnets wear. On a round part the box read as a crate.
+
 ## 2026-10-14 — Pendulums couple by a spring
 
 **Decision:** Two simple pendulums can be joined by a spring between their bobs. Coupling is a ring petal (Couple / Uncouple), a More verb hangs a ready pair, and a More slider sets the spring constant. A coupled pair is stepped jointly by `PhysicsCore.CoupledPendulums`, and More › Values shows ω₁ = √(g/L), ω₂ = √(g/L + 2k/m) and the beat 2π/(ω₂ − ω₁) for an identical pair.

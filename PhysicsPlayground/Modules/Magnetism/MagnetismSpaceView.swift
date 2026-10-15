@@ -29,6 +29,9 @@ struct MagnetismSpaceView: View {
     /// render loop (see RingState's header for why it's a reference).
     @State private var ring = RingState()
     @State private var wells: Well?
+    #if DEBUG
+    @State private var staged = StagedPass()
+    #endif
     /// Two-hand scale and turn: grow the dipole field from a desk demo
     /// to loops you stand inside, or turn the whole field to see it
     /// side-on. A pure view transform — the tesla stay honest.
@@ -39,6 +42,9 @@ struct MagnetismSpaceView: View {
     /// magnets are free are in More.
     static let wellAnchor = SIMD3<Float>(MagnetismModel.regionCenter)
         + SIMD3(-0.72, -0.20, 0.34)
+    /// The coil's mouth, above the magnet's on the same flank: nothing
+    /// stands in the room until it is pulled out.
+    static let coilWellAnchor = wellAnchor + SIMD3(0, 0.30, 0)
 
     var body: some View {
         RealityView { content in
@@ -57,6 +63,12 @@ struct MagnetismSpaceView: View {
                       preview: { MagnetismRenderer.magnetPreview() },
                       position: Self.wellAnchor,
                       spawn: { point in model.addMagnet(at: point) }),
+                .init(name: "Coil",
+                      tint: UIColor(DesignTokens.Palette.magnetismAccent),
+                      label: "Add coil",
+                      preview: { MagnetismRenderer.coilPreview() },
+                      position: Self.coilWellAnchor,
+                      spawn: { point in model.addCoil(at: point) }),
             ])
             renderer.viewRoot.addChild(sources.root)
             renderer.viewRoot.addChild(bloom.root)
@@ -79,6 +91,9 @@ struct MagnetismSpaceView: View {
                     if let renderer {
                         syncBloom(renderer: renderer, dt: event.deltaTime)
                     }
+                    #if DEBUG
+                    driveStagedPass(dt: event.deltaTime)
+                    #endif
                     model.step(dt: event.deltaTime)
                     renderer?.tick(model, viewer: appModel.room.headPosition.map {
                         renderer?.displayPoint(fromWorld: SIMD3<Float>($0)) ?? $0
@@ -112,6 +127,7 @@ struct MagnetismSpaceView: View {
                 model.compassOn = false
                 model.dynamicsOn = false
             }
+            stageCoil()
             #endif
             renderer.tick(model, viewer: appModel.room.headPosition)
             self.renderer = renderer
@@ -128,7 +144,10 @@ struct MagnetismSpaceView: View {
             // Released, not merely forgotten: a magnet left `held` stays frozen out
             // of the dynamics, and the model outlives this view.
             for session in grabs.values {
-                if case .magnet(let id) = session.target { model.release(id: id) }
+                switch session.target {
+                case .magnet(let id), .coil(let id): model.release(id: id)
+                case .compass: break
+                }
             }
             grabs.removeAll()
         }
@@ -174,7 +193,11 @@ struct MagnetismSpaceView: View {
                     }
                     guard let drag else { return }
                     if let id = UUID(uuidString: drag.name) {
-                        model.move(id: id, to: drag.position(forHand: hand))
+                        if model.coils.contains(where: { $0.id == id }) {
+                            model.moveCoil(id: id, to: drag.position(forHand: hand))
+                        } else {
+                            model.move(id: id, to: drag.position(forHand: hand))
+                        }
                     }
                 }
                 .onEnded { _ in
@@ -200,7 +223,7 @@ struct MagnetismSpaceView: View {
     /// One hand's live hold: what it grabbed, and the relative drag
     /// anchored where it grabbed it.
     private struct GrabSession {
-        enum Target { case magnet(UUID), compass }
+        enum Target { case magnet(UUID), coil(UUID), compass }
         var target: Target
         var drag: RelativeDrag
         /// When this pinch was last heard from. See `expireStaleGrabs`.
@@ -233,7 +256,10 @@ struct MagnetismSpaceView: View {
         for (id, session) in grabs where now - session.lastSeen >= Self.grabStaleAfter {
             grabs.removeValue(forKey: id)
             Self.acknowledgeRelease(session)
-            if case .magnet(let magnetID) = session.target { model.release(id: magnetID) }
+            switch session.target {
+            case .magnet(let magnetID), .coil(let magnetID): model.release(id: magnetID)
+            case .compass: break
+            }
         }
     }
 
@@ -250,8 +276,9 @@ struct MagnetismSpaceView: View {
             guard event.phase == .active else {
                 if let ended = grabs.removeValue(forKey: event.id) {
                     Self.acknowledgeRelease(ended)
-                    if case .magnet(let id) = ended.target {
-                        model.release(id: id)
+                    switch ended.target {
+                    case .magnet(let id), .coil(let id): model.release(id: id)
+                    case .compass: break
                     }
                 }
                 continue
@@ -267,6 +294,8 @@ struct MagnetismSpaceView: View {
                 switch session.target {
                 case .magnet(let id):
                     model.move(id: id, to: session.drag.position(forHand: hand))
+                case .coil(let id):
+                    model.moveCoil(id: id, to: session.drag.position(forHand: hand))
                 case .compass:
                     model.moveCompass(to: session.drag.position(forHand: hand))
                 }
@@ -299,6 +328,17 @@ struct MagnetismSpaceView: View {
                     entity: candidate)
             }
             if let id = UUID(uuidString: candidate.name),
+               let coil = model.coils.first(where: { $0.id == id }) {
+                guard !model.heldIDs.contains(id) else { return nil }
+                model.grab(id: id)
+                Self.acknowledgeGrab(candidate)
+                return GrabSession(
+                    target: .coil(id),
+                    drag: RelativeDrag(name: candidate.name, target: coil.position, hand: hand),
+                    lastSeen: now,
+                    entity: candidate)
+            }
+            if let id = UUID(uuidString: candidate.name),
                let magnet = model.magnets.first(where: { $0.id == id }) {
                 // A second hand on a held magnet is the resize gesture,
                 // not a second grab.
@@ -323,8 +363,13 @@ struct MagnetismSpaceView: View {
     /// which is the only readout that matters.
     private func syncBloom(renderer: MagnetismRenderer, dt: Double) {
         if let openID = ring.openID,
-           !model.magnets.contains(where: { $0.id == openID }) {
+           !model.magnets.contains(where: { $0.id == openID }),
+           !model.coils.contains(where: { $0.id == openID }) {
             ring.openID = nil     // deleted out from under the ring
+        }
+        if let openID = ring.openID, let coil = model.coils.first(where: { $0.id == openID }) {
+            syncCoilBloom(coil, renderer: renderer, dt: dt)
+            return
         }
         guard let uuid = ring.openID,
               let magnet = model.magnets.first(where: { $0.id == uuid }) else {
@@ -367,6 +412,28 @@ struct MagnetismSpaceView: View {
     }
 
 
+    /// A coil offers its winding, a quarter turn, and to go. What it does
+    /// is shown by its LED, not by a number.
+    private func syncCoilBloom(_ coil: MagnetismModel.Coil, renderer: MagnetismRenderer, dt: Double) {
+        let id = coil.id
+        bloom.retarget(
+            id,
+            petals: [
+                .init(name: "Turns", symbol: "circle.dotted.circle",
+                      tint: DesignTokens.Palette.neutralActionUI) { model.cycleTurns(id: id) },
+                .init(name: "Turn", symbol: "rotate.right",
+                      tint: DesignTokens.Palette.neutralActionUI) { model.turnCoil(id: id) },
+                .init(name: "Delete", symbol: "trash",
+                      tint: DesignTokens.Palette.destructiveUI) { model.removeCoil(id: id) },
+            ],
+            grip: nil)
+        let viewer = appModel.room.headPosition.map {
+            renderer.viewRoot.convert(position: SIMD3<Float>($0), from: nil)
+        }
+        bloom.update(anchor: SIMD3<Float>(coil.position) + SIMD3(0, 0.03, 0),
+                     viewer: viewer, revealTarget: 1, dt: dt)
+    }
+
     /// The tap routing, out of the gesture closure so VoiceOver reaches it
     /// too.
     private func handleTap(on entity: Entity) {
@@ -376,7 +443,8 @@ struct MagnetismSpaceView: View {
         var current: Entity? = entity
         while let candidate = current {
             if let id = UUID(uuidString: candidate.name),
-               model.magnets.contains(where: { $0.id == id }) {
+               model.magnets.contains(where: { $0.id == id })
+                || model.coils.contains(where: { $0.id == id }) {
                 if ring.openID == id {
                     ring.openID = nil
                     SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
@@ -398,4 +466,46 @@ struct MagnetismSpaceView: View {
         ring.openID = nil
     }
 
+
+    #if DEBUG
+    // MARK: Staging for the CLI
+
+    /// The staged pass's clock: a reference, because a render closure reads
+    /// `@State` values stale.
+    final class StagedPass { var clock = 0.0 }
+
+    /// `-magCoil 1` stands a coil in front of the wearer, its bore across
+    /// the room; `-magCoilRing 1` also opens its ring.
+    private func stageCoil() {
+        guard UserDefaults.standard.bool(forKey: "magCoil")
+                || UserDefaults.standard.double(forKey: "magCoilPass") > 0 else { return }
+        if let id = model.addCoil(at: MagnetismModel.regionCenter + SIMD3(0, 0.02, -0.05)),
+           UserDefaults.standard.bool(forKey: "magCoilRing") {
+            ring.openID = id
+        }
+    }
+
+    /// `-magCoilPass <m/s>` carries the first magnet back and forth through
+    /// the coil along its bore, north first, peaking at that speed — the
+    /// pass a hand would make, which the simulator has no hand for. The
+    /// other magnets are set aside and the glide frozen, so nothing but the
+    /// staged magnet moves.
+    private func driveStagedPass(dt: Double) {
+        let speed = UserDefaults.standard.double(forKey: "magCoilPass")
+        guard speed > 0, let coil = model.coils.first, let magnet = model.magnets.first else { return }
+        if model.dynamicsOn {
+            model.dynamicsOn = false
+            // The lines would re-trace every frame behind a magnet this fast;
+            // the coil and its light are the picture.
+            model.showFieldLines = false
+            for other in model.magnets.dropFirst() { model.removeMagnet(id: other.id) }
+            if ring.openID == nil { model.select(id: magnet.id) }
+        }
+        let amplitude = 0.32
+        staged.clock += dt
+        let offset = amplitude * sin(speed / amplitude * staged.clock)
+        model.move(id: magnet.id, to: coil.position + coil.axis * offset)
+        model.setStrength(id: magnet.id, magnet.strength, along: coil.axis)
+    }
+    #endif
 }

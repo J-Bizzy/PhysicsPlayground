@@ -79,6 +79,16 @@ enum MagnetismModule {
                                   PhysicsFormat.scientific(energy), "J"))
             }
         }
+        if let coil = model.selectedCoil {
+            // Faraday's law, as the numbers it relates: the linkage, how fast
+            // it is changing, and what that drives through the LED.
+            let resistance = MagnetismModel.pickupCoil(coil).resistance
+            rows.append(.init("Coil turns", "\(coil.turns)"))
+            rows.append(.init("Flux linkage NΦ", PhysicsFormat.fixed(coil.linkage * 1000, decimals: 2), "mWb"))
+            rows.append(.init("EMF ε = −dΛ/dt", PhysicsFormat.fixed(coil.emf, decimals: 2), "V"))
+            rows.append(.init("LED current", PhysicsFormat.fixed(coil.current * 1000, decimals: 2), "mA"))
+            rows.append(.init("Winding resistance", PhysicsFormat.fixed(resistance, decimals: 0), "Ω"))
+        }
         return rows
     }
 

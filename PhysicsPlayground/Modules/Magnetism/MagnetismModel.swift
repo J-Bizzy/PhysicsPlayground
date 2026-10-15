@@ -94,6 +94,109 @@ final class MagnetismModel {
         return magnets.first { $0.id == selectedID }
     }
 
+    // MARK: Pickup coils — Faraday's law, lit
+
+    /// A coil with a bicolour LED across it. Push a magnet through and the
+    /// LED lights: red one way, green the other.
+    struct Coil: Identifiable, Equatable {
+        let id: UUID
+        var position: SIMD3<Double>
+        /// Unit vector along the bore.
+        var axis: SIMD3<Double>
+        var turns: Int
+        /// Flux linkage at the last step, Wb·turns: what the next EMF is a
+        /// difference from.
+        var linkage: Double
+        /// ε = −dΛ/dt, V.
+        var emf: Double = 0
+        /// Through the LED pair, A; positive lights red.
+        var current: Double = 0
+    }
+
+    private(set) var coils: [Coil] = []
+    /// The winding `Tools/pickupcoil.py` mills: mean radius, length, and the
+    /// wire it is wound with.
+    nonisolated static let coilRadius = 0.0565
+    nonisolated static let coilLength = 0.080
+    nonisolated static let coilWireDiameter = 0.25e-3
+    /// The bore a magnet passes through, and the flanges' radius.
+    nonisolated static let coilBoreRadius = 0.048
+    nonisolated static let coilFlangeRadius = 0.072
+    nonisolated static let coilBudget = 2
+    /// Fewer turns, a faster push: the EMF goes as N.
+    nonisolated static let turnOptions = [1000, 2000, 4000]
+    nonisolated static let defaultTurns = 4000
+
+    var selectedCoil: Coil? {
+        guard let selectedID else { return nil }
+        return coils.first { $0.id == selectedID }
+    }
+
+    /// The coil as PhysicsCore sees it.
+    nonisolated static func pickupCoil(_ coil: Coil) -> PickupCoil {
+        PickupCoil(center: coil.position, axis: coil.axis, radius: coilRadius,
+                   length: coilLength, turns: coil.turns, wireDiameter: coilWireDiameter)
+    }
+
+    @discardableResult
+    func addCoil(at position: SIMD3<Double>) -> UUID? {
+        guard coils.count < Self.coilBudget else { return nil }
+        var coil = Coil(id: UUID(), position: floored(position), axis: SIMD3(1, 0, 0),
+                        turns: Self.defaultTurns, linkage: 0)
+        coil.linkage = Self.pickupCoil(coil).linkage(magnets: magnets)
+        coils.append(coil)
+        selectedID = coil.id
+        return coil.id
+    }
+
+    func moveCoil(id: UUID, to point: SIMD3<Double>) {
+        guard let index = coils.firstIndex(where: { $0.id == id }) else { return }
+        coils[index].position = floored(point)
+    }
+
+    func removeCoil(id: UUID) {
+        coils.removeAll { $0.id == id }
+        heldIDs.remove(id)
+        if selectedID == id { selectedID = magnets.last?.id }
+    }
+
+    /// 1000 → 2000 → 4000 turns, and round again. The linkage is measured
+    /// afresh, so changing the winding is not itself a jolt of EMF.
+    func cycleTurns(id: UUID) {
+        guard let index = coils.firstIndex(where: { $0.id == id }) else { return }
+        let options = Self.turnOptions
+        let next = options.first { $0 > coils[index].turns } ?? options[0]
+        coils[index].turns = next
+        coils[index].linkage = Self.pickupCoil(coils[index]).linkage(magnets: magnets)
+    }
+
+    /// A quarter turn about the vertical: the bore that ran left to right
+    /// now runs toward you. A real coil turned by hand this fast would
+    /// flash, so the linkage is re-measured rather than differenced.
+    func turnCoil(id: UUID) {
+        guard let index = coils.firstIndex(where: { $0.id == id }) else { return }
+        let a = coils[index].axis
+        coils[index].axis = simd_normalize(SIMD3(-a.z, a.y, a.x))
+        coils[index].linkage = Self.pickupCoil(coils[index]).linkage(magnets: magnets)
+    }
+
+    /// Faraday's law for every coil, once the magnets have moved this step:
+    /// ε = −ΔΛ/Δt over the frame, and the current that EMF drives through
+    /// the winding's resistance and the LED pair. The coil's own inductance
+    /// is millihenries against hundreds of ohms — microseconds — so the
+    /// current is the EMF's within the frame.
+    private func stepCoils(dt: Double) {
+        guard !coils.isEmpty, dt > 1e-6 else { return }
+        for index in coils.indices {
+            let coil = Self.pickupCoil(coils[index])
+            let now = coil.linkage(magnets: magnets)
+            let emf = -(now - coils[index].linkage) / dt
+            coils[index].linkage = now
+            coils[index].emf = emf
+            coils[index].current = BicolourLED.current(emf: emf, resistance: coil.resistance)
+        }
+    }
+
     // MARK: Clock — the overdamped magnetic dynamics
 
     /// Whether the magnets translate and turn under their mutual forces.
@@ -128,6 +231,10 @@ final class MagnetismModel {
     func step(dt: Double) {
         guard !isPaused else { return }
         defer { recordCapsuleFrame(dt: min(dt, 1.0 / 30.0)) }
+        // After the magnets have moved (defers run last-declared first), and
+        // before the frame is recorded — and whether or not they move freely:
+        // a magnet carried by hand induces just the same.
+        defer { stepCoils(dt: dt) }
         guard dynamicsOn else {
             // Frozen: no forces, but contact separation still holds so a
             // dragged magnet can't be parked inside another.
@@ -343,7 +450,8 @@ final class MagnetismModel {
     // MARK: Manipulation
 
     func grab(id: UUID) {
-        guard magnets.contains(where: { $0.id == id }) else { return }
+        guard magnets.contains(where: { $0.id == id })
+                || coils.contains(where: { $0.id == id }) else { return }
         heldIDs.insert(id)
         selectedID = id
     }
@@ -360,7 +468,8 @@ final class MagnetismModel {
     func release() { heldIDs.removeAll() }
 
     func select(id: UUID) {
-        guard magnets.contains(where: { $0.id == id }) else { return }
+        guard magnets.contains(where: { $0.id == id })
+                || coils.contains(where: { $0.id == id }) else { return }
         selectedID = id
     }
 
@@ -414,6 +523,15 @@ final class MagnetismModel {
                                            Self.strengthRange.upperBound)
     }
 
+    #if DEBUG
+    /// Turns a magnet to point along `axis` at its strength — the staged
+    /// coil pass's, which the simulator has no hand to make.
+    func setStrength(id: UUID, _ value: Double, along axis: SIMD3<Double>) {
+        guard let index = magnets.firstIndex(where: { $0.id == id }) else { return }
+        magnets[index].moment = simd_normalize(axis) * value
+    }
+    #endif
+
     // MARK: Field readout for the Physics box
 
     /// |B| in millitesla at the region centre — a live sense of the field.
@@ -448,6 +566,8 @@ final class MagnetismModel {
                                     Self.defaultStrength * sin(1.05), 0)),
         ]
         selectedID = magnets.last?.id
+        // No coil in the opening room: one comes out of the well when wanted.
+        coils = []
         heldIDs.removeAll()
         isPaused = false
         showFieldLines = true
@@ -482,11 +602,14 @@ extension MagnetismModel: TimeCapsuleRecording {
         var magnets: [BarMagnet]
         var bodies: [UUID: DipoleBody]
         var compassPosition: SIMD3<Double>
+        /// The coils, with the linkage the next EMF differences from: a
+        /// restore without it would flash every LED.
+        var coils: [Coil]
     }
 
     func captureCapsuleSnapshot() -> CapsuleSnapshot {
         CapsuleSnapshot(magnets: magnets, bodies: bodies,
-                        compassPosition: compassPosition)
+                        compassPosition: compassPosition, coils: coils)
     }
 
     func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
@@ -508,7 +631,15 @@ extension MagnetismModel: TimeCapsuleRecording {
         // A held magnet's stored motion is the hand's, not the recording's.
         for held in heldIDs { bodies[held] = DipoleBody() }
         compassPosition = snapshot.compassPosition
-        if let selectedID, !magnets.contains(where: { $0.id == selectedID }) {
+        var restoredCoils = snapshot.coils
+        for index in restoredCoils.indices where heldIDs.contains(restoredCoils[index].id) {
+            if let live = coils.first(where: { $0.id == restoredCoils[index].id }) {
+                restoredCoils[index] = live
+            }
+        }
+        coils = restoredCoils
+        if let selectedID, !magnets.contains(where: { $0.id == selectedID }),
+           !coils.contains(where: { $0.id == selectedID }) {
             self.selectedID = nil
         }
     }
