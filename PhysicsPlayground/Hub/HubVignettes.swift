@@ -434,22 +434,33 @@ enum HubVignettes {
         puck.position.y = -reach * 0.03
         frame.addChild(puck)
 
-        // The hoop the shot drops through, lying where the arc lands.
+        // The hoop the shot drops through, lying where the arc lands. It sits
+        // in a holder of its own so its landing pulse never fights `fit`.
         let landing = at(0.985)
+        let hoopHolder = Entity()
+        hoopHolder.position = landing
+        frame.addChild(hoopHolder)
         if let hoop = ring(radius: reach * 0.13, tube: reach * 0.02,
                            UIColor(red: 0.35, green: 0.95, blue: 0.6, alpha: 1)) {
-            hoop.position = landing
-            frame.addChild(hoop)
+            hoopHolder.addChild(hoop)
         }
 
         let ballEntity = ball(reach * 0.09, DesignTokens.Palette.projectileUI, glow: 0.55)
         frame.addChild(ballEntity)
 
+        // The ball fades in leaving the barrel and out into the hoop, where it
+        // used to blink on and off; the hoop answers the landing with a short
+        // swell.
         let period = Double(duration) + 0.6
+        let fade: Float = 0.08
         return fit(root: root, frame: frame, cycle: period) { time in
             let t = Float((time.truncatingRemainder(dividingBy: period)) / Double(duration))
             ballEntity.position = at(min(t, 1))
-            ballEntity.components.set(OpacityComponent(opacity: t <= 1 ? 1 : 0))
+            let visible = t <= 1 ? min(1, t / fade, (1 - t) / fade) : 0
+            ballEntity.components.set(OpacityComponent(opacity: max(visible, 0)))
+            let since = (t - 1) * duration
+            let pulse = since > 0 && since < 0.45 ? sin(.pi * since / 0.45) : 0
+            hoopHolder.scale = SIMD3(repeating: 1 + 0.14 * pulse)
         }
     }
 

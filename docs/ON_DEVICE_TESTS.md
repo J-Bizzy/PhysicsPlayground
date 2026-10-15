@@ -244,7 +244,17 @@ working session:
       portals are simply there.
 - [ ] **Reduce Motion:** no particles at all — the portals fade in.
 - [ ] **Each portal previews its physics in a loop** and its short name
-      is legible from where you stand, all six at a glance.
+      is legible from where you stand, all six at a glance — system type
+      on a glass capsule with the lab's colour as a dot.
+- [ ] **The particles are points of light**, not beads or tiles: soft
+      halos, no square around any of them, and the room's dimming intact
+      behind them. They draw each portal's ring as its glass grows the
+      last few per cent into place, and the wordmark rises into its spot.
+- [ ] **The bezels are one clean ring each** — the wordmark's champagne
+      alloy, no notch or tick anywhere round it, the glass meeting it with
+      no gap at any angle you look from.
+- [ ] **At rest the portals float** a few millimetres, never in step —
+      felt rather than seen. Under Reduce Motion they hang still.
 - [ ] **Hover a portal:** the system highlight. Pinch it: you are in
       that lab.
 - [ ] **More** under the wordmark opens Lab list, Settings and About in

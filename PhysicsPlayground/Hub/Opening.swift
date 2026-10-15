@@ -195,6 +195,33 @@ enum Opening {
         ramp(time, from: labelFadeStart, over: labelFadeDuration)
     }
 
+    // MARK: Arrival
+
+    /// 0 → 1 over [start, start + span] on a cubic ease-out: fast away,
+    /// soft into place — how a thing settles rather than how it switches on.
+    static func easeOut(_ time: Double, from start: Double, over span: Double) -> Float {
+        let x = min(max((time - start) / max(span, 1e-6), 0), 1)
+        return Float(1 - pow(1 - x, 3))
+    }
+
+    /// How much smaller a portal is when its glass begins to fade up.
+    static let portalGrowth: Float = 0.08
+
+    /// A portal's scale as it arrives: it grows the last few per cent into
+    /// place while its glass fades up, and is exactly 1 once that is done.
+    static func portalScale(at time: Double) -> Float {
+        1 - portalGrowth * (1 - easeOut(time, from: portalFadeStart, over: portalFadeDuration))
+    }
+
+    /// How far below its place the wordmark starts, metres.
+    static let titleRiseDistance: Float = 0.035
+
+    /// The wordmark's offset as it arrives: it rises into place while it
+    /// fades up, and is exactly 0 once that is done.
+    static func titleOffset(at time: Double) -> Float {
+        -titleRiseDistance * (1 - easeOut(time, from: labelFadeStart, over: labelFadeDuration))
+    }
+
     static func isFinished(at time: Double) -> Bool { time >= duration }
 
     // MARK: The cloud

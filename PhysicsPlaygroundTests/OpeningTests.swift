@@ -196,4 +196,38 @@ final class OpeningTests: XCTestCase {
                                  2 * PortalLayout.rimRadius + 0.2)
         }
     }
+
+    // MARK: Arriving
+
+    /// The portals grow the last few per cent into place as their glass
+    /// fades up — smaller before, monotonically larger, and exactly full
+    /// size by the time the opening hands over (or `finishOpening` would
+    /// snap them).
+    func testThePortalsGrowIntoPlaceAndFinishFullSize() {
+        XCTAssertEqual(Opening.portalScale(at: 0), 1 - Opening.portalGrowth, accuracy: 1e-6)
+        var previous: Float = 0
+        for step in 0...400 {
+            let t = Opening.duration * Double(step) / 400
+            let scale = Opening.portalScale(at: t)
+            XCTAssertGreaterThanOrEqual(scale, previous - 1e-6, "a portal shrank at \(t) s")
+            XCTAssertLessThanOrEqual(scale, 1 + 1e-6, "a portal overshot at \(t) s")
+            previous = scale
+        }
+        XCTAssertEqual(Opening.portalScale(at: Opening.duration), 1, accuracy: 1e-6)
+    }
+
+    /// The wordmark rises into place as it fades up, and is exactly in
+    /// place when the opening ends.
+    func testTheWordmarkRisesIntoPlace() {
+        XCTAssertEqual(Opening.titleOffset(at: 0), -Opening.titleRiseDistance, accuracy: 1e-6)
+        var previous = -Float.infinity
+        for step in 0...400 {
+            let t = Opening.duration * Double(step) / 400
+            let offset = Opening.titleOffset(at: t)
+            XCTAssertGreaterThanOrEqual(offset, previous - 1e-6)
+            XCTAssertLessThanOrEqual(offset, 1e-6, "the wordmark rose past its place")
+            previous = offset
+        }
+        XCTAssertEqual(Opening.titleOffset(at: Opening.duration), 0, accuracy: 1e-6)
+    }
 }

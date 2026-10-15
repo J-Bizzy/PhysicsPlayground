@@ -168,19 +168,66 @@ private struct HomeMore: View {
     }
 }
 
-/// A portal's pane: stock glass, a shade darker inside so the lab running
-/// in front of it has depth. A backdrop, never a target — the portal's own
-/// collider takes the pinch.
+/// A portal's pane: stock glass, darkening softly toward its rim like a
+/// lens, so the lab running in front of it sits in depth rather than on a
+/// flat grey plate. A backdrop, never a target — the portal's own collider
+/// takes the pinch.
 private struct PortalPane: View {
     let diameter: CGFloat
 
     var body: some View {
         Circle()
-            .fill(Color.black.opacity(0.22))
+            .fill(RadialGradient(colors: [.black.opacity(0.04), .black.opacity(0.14),
+                                          .black.opacity(0.34)],
+                                 center: .center, startRadius: 0,
+                                 endRadius: diameter / 2))
             .frame(width: diameter, height: diameter)
             .glassBackgroundEffect(in: Circle())
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+    }
+}
+
+/// A portal's name: the system's own type on a glass capsule, with a dot
+/// of the lab's colour — crisp at any distance, legible against any wall,
+/// and native where extruded neon on a dark pill was not. Never a target:
+/// the portal's collider covers it.
+private struct PortalLabel: View {
+    let title: String
+    let accent: Color
+
+    static let fontSize: CGFloat = 36
+    static let dot: CGFloat = 14
+    static let gap: CGFloat = 10
+    static let padding = (horizontal: CGFloat(22), vertical: CGFloat(10))
+
+    var body: some View {
+        HStack(spacing: Self.gap) {
+            Circle()
+                .fill(accent)
+                .frame(width: Self.dot, height: Self.dot)
+            Text(title)
+                .font(.system(size: Self.fontSize, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .padding(.horizontal, Self.padding.horizontal)
+        .padding(.vertical, Self.padding.vertical)
+        .glassBackgroundEffect(in: Capsule())
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// The capsule's size in metres, measured with the font it draws in,
+    /// so the portal's target and its measuring proxy fit the real label.
+    static func size(for title: String) -> SIMD2<Float> {
+        let base = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let font = base.fontDescriptor.withDesign(.rounded)
+            .map { UIFont(descriptor: $0, size: fontSize) } ?? base
+        let text = (title as NSString).size(withAttributes: [.font: font])
+        let width = text.width + dot + gap + 2 * padding.horizontal
+        let height = max(text.height, dot) + 2 * padding.vertical
+        return SIMD2(ControlMetrics.meters(width), ControlMetrics.meters(height))
     }
 }
 
@@ -208,6 +255,9 @@ final class HubScene {
     private struct Portal {
         let moduleID: String
         let anchor: Entity
+        /// Everything you see. It floats and grows in; the anchor, which
+        /// carries the target, does not.
+        let body: Entity
         let label: Entity
         let animate: (Double) -> Void
         /// Each preview runs on its own phase, so six loops never pulse together.
@@ -279,26 +329,36 @@ final class HubScene {
         anchor.name = module.id
         anchor.position = SIMD3<Float>(slot.position)
         anchor.orientation = simd_quatf(angle: Float(slot.yaw), axis: [0, 1, 0])
+        let body = Entity()
+        body.name = "portal-body"
+        anchor.addChild(body)
 
-        // The pane: glass, behind everything.
-        let diameter = CGFloat(2 * radius) * CGFloat(ControlMetrics.pointsPerMeter)
+        // The pane: glass in the bezel's own plane, its edge just inside the
+        // ring's inner edge, so the two meet without parallax at any angle.
+        let diameter = CGFloat(2 * radius - 0.008) * CGFloat(ControlMetrics.pointsPerMeter)
         let pane = ControlAttachment.entity(PortalPane(diameter: diameter),
                                             name: "portal-pane")
-        pane.position.z = -0.03
-        anchor.addChild(pane)
+        body.addChild(pane)
 
-        // The rim the opening's particles draw: a thin white frame, not a glow —
-        // the glow means a hand is on something.
-        let points = (0...72).map { step -> SIMD3<Float> in
-            let angle = Float(step) / 72 * 2 * .pi
-            return SIMD3(cos(angle) * radius, sin(angle) * radius, 0)
+        // The bezel the opening's particles draw: a fine ring of the
+        // wordmark's own champagne alloy — round in section (sixteen sides,
+        // where six read as a faceted tube) and lit as metal, so it belongs
+        // to the title above it. Not a glow: the glow means a hand is on
+        // something.
+        //
+        // Swept lying flat and stood up by rotation: a tube swept round a
+        // vertical circle pinches where its path runs straight up or down
+        // (the sweep's frame loses its reference there), which drew two dark
+        // ticks on every ring.
+        let points = (0...128).map { step -> SIMD3<Float> in
+            let angle = Float(step) / 128 * 2 * .pi
+            return SIMD3(cos(angle) * radius, 0, sin(angle) * radius)
         }
-        if let mesh = TubeMesh.tube(lines: [points], radius: 0.0035, sides: 6) {
-            let rim = ModelEntity(mesh: mesh,
-                                  materials: [Materials.unlit(UIColor(white: 0.94, alpha: 1),
-                                                              opacity: 0.9)])
+        if let mesh = TubeMesh.tube(lines: [points], radius: 0.0024, sides: 16) {
+            let rim = ModelEntity(mesh: mesh, materials: [Self.bezelMaterial])
             rim.name = "portal-rim"
-            anchor.addChild(rim)
+            rim.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
+            body.addChild(rim)
         }
 
         // The lab's own physics, looping: what the portal says it does.
@@ -307,17 +367,28 @@ final class HubScene {
         let largest = max(bounds.x, max(bounds.y, 1e-4))
         built.entity.scale = SIMD3(repeating: Self.previewSize / largest)
         built.entity.position = [0, 0, 0.03]
-        anchor.addChild(built.entity)
+        body.addChild(built.entity)
 
-        // One short word under it, in the lab's own accent.
-        let label = HubScene.namePlate(module.shortTitle ?? module.title,
-                                       accent: UIColor(module.accent),
-                                       size: PlateStyle.exhibitLabelSize)
-        label.position = [0, -(radius + Self.labelDrop), 0.01]
-        anchor.addChild(label)
+        // Its name under it: system type on glass, with the lab's colour as a
+        // dot. A transparent proxy the label's size stands with it, so the
+        // portal's target is measured against the label it covers.
+        let title = module.shortTitle ?? module.title
+        let labelSize = PortalLabel.size(for: title)
+        let label = Entity()
+        label.name = "portal-label"
+        label.position = [0, -(radius + Self.labelDrop + labelSize.y / 2), 0.01]
+        label.addChild(ControlAttachment.entity(
+            PortalLabel(title: title, accent: module.accent), name: "portal-label-text"))
+        let proxy = ModelEntity(
+            mesh: Primitives.plane(width: labelSize.x, height: labelSize.y, cornerRadius: 0),
+            materials: [Materials.unlit(.white, opacity: 0)])
+        proxy.name = "portal-label-extent"
+        proxy.components.set(OpacityComponent(opacity: 0))
+        label.addChild(proxy)
+        body.addChild(label)
 
         // The whole portal is the target, its name included.
-        let bottom = radius + Self.labelDrop + Float(PlateStyle.exhibitLabelSize)
+        let bottom = radius + Self.labelDrop + labelSize.y
         let top = radius + 0.01
         anchor.components.set(InputTargetComponent())
         anchor.components.set(CollisionComponent(shapes: [
@@ -330,15 +401,34 @@ final class HubScene {
             label: "\(module.title). \(HubDomain.promise(for: module.id))",
             activate: { [weak self] in self?.onEnter?(module.id) })
         root.addChild(anchor)
-        portals.append(Portal(moduleID: module.id, anchor: anchor, label: label,
-                              animate: built.animate, phase: phase))
+        portals.append(Portal(moduleID: module.id, anchor: anchor, body: body,
+                              label: label, animate: built.animate, phase: phase))
     }
 
-    /// The preview's largest extent, metres — inside the 34 cm rim with air
-    /// around it.
-    private static let previewSize: Float = 0.22
-    /// From the rim to the label's centre: clear of the rim's tube.
-    private static let labelDrop: Float = 0.075
+    /// The preview's largest extent, metres. Its square's corners reach
+    /// 0.71 of this from the centre, so 20 cm keeps even a corner 3 cm
+    /// inside the 17 cm rim (at 22 cm, the pendulum's beam touched it).
+    private static let previewSize: Float = 0.20
+    /// From the rim to the label's top edge.
+    private static let labelDrop: Float = 0.035
+
+    /// The wordmark's keyline alloy (`HubTitleStyle.milled`'s rim), here on
+    /// the portals' bezels so the home is one material family.
+    private static let bezelMaterial: PhysicallyBasedMaterial = {
+        var metal = PhysicallyBasedMaterial()
+        metal.baseColor = .init(tint: HubTitleStyle.champagne)
+        metal.metallic = .init(floatLiteral: 0.30)
+        metal.roughness = .init(floatLiteral: 0.50)
+        metal.clearcoat = .init(floatLiteral: 0.0)
+        metal.emissiveColor = .init(color: HubTitleStyle.champagne)
+        metal.emissiveIntensity = 0.45
+        return metal
+    }()
+
+    /// The portals' idle float: a few millimetres over several seconds, so
+    /// the home breathes rather than hangs. Never under stillness.
+    private static let floatHeight: Float = 0.004
+    private static let floatPeriod = 7.5
 
     /// Seats the More attachment under the wordmark.
     func seatMore(_ entity: Entity) {
@@ -370,14 +460,25 @@ final class HubScene {
         openingStart = time
         presence = 1
 
-        // The cloud: one shared mesh, two charges' worth of light.
-        let mesh = Primitives.sphere(radius: Self.particleRadius)
-        let positive = Materials.unlit(UIColor(red: 1.0, green: 0.62, blue: 0.56, alpha: 1))
-        let negative = Materials.unlit(UIColor(red: 0.58, green: 0.75, blue: 1.0, alpha: 1))
-        for particle in Opening.particles(for: layout) {
+        // The cloud: points of light, not beads — one soft glow sprite
+        // (a bright core in a fading halo), turned to face the wearer, in a
+        // warm and a cool tint for the two charges. Sizes vary a little, so
+        // the sheet has depth instead of reading as a printed pattern.
+        let mesh = Primitives.plane(width: Self.particleSpan, height: Self.particleSpan,
+                                    cornerRadius: 0)
+        let warm = UIColor(red: 1.0, green: 0.70, blue: 0.58, alpha: 1)
+        let cool = UIColor(red: 0.62, green: 0.80, blue: 1.0, alpha: 1)
+        let mask = Self.glowMask()
+        let positive = Self.particleMaterial(warm, mask: mask)
+        let negative = Self.particleMaterial(cool, mask: mask)
+        for (index, particle) in Opening.particles(for: layout).enumerated() {
             let entity = ModelEntity(mesh: mesh,
                                      materials: [particle.charge > 0 ? positive : negative])
             entity.position = SIMD3<Float>(particle.start)
+            entity.components.set(BillboardComponent())
+            // A fixed, irregular spread of sizes (golden-ratio steps), 0.7–1.3×.
+            let spread = (Double(index) * 0.618_034).truncatingRemainder(dividingBy: 1)
+            entity.scale = SIMD3(repeating: Float(0.7 + 0.6 * spread))
             particleRoot.addChild(entity)
             particles.append((entity, particle))
         }
@@ -394,8 +495,73 @@ final class HubScene {
         updateOpening()
     }
 
-    /// Each particle's radius, metres: a point of light at two metres.
-    private static let particleRadius: Float = 0.0085
+    /// Each particle's sprite, metres across: its bright core is about a
+    /// fifth of that — a point of light at two metres — and the rest halo.
+    private static let particleSpan: Float = 0.05
+
+    /// How bright the glow is at each radius, centre (0) to edge (1):
+    /// a hot core, a soft halo, nothing at the sprite's edge.
+    private static let glowStops: [(at: CGFloat, level: CGFloat)] = [
+        (0, 1), (0.16, 0.85), (0.34, 0.22), (0.62, 0.06), (1, 0),
+    ]
+
+    /// Draws the glow's radial profile into a square image: `colour(level)`
+    /// at each stop, on an opaque ground of `colour(0)`.
+    private static func radialImage(size: Int, _ colour: (CGFloat) -> UIColor) -> CGImage? {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size),
+                                               format: format)
+        let image = renderer.image { context in
+            colour(0).setFill()
+            context.fill(CGRect(x: 0, y: 0, width: size, height: size))
+            let colours = glowStops.map { colour($0.level).cgColor } as CFArray
+            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                            colors: colours,
+                                            locations: glowStops.map(\.at)) else { return }
+            let centre = CGPoint(x: size / 2, y: size / 2)
+            context.cgContext.drawRadialGradient(
+                gradient, startCenter: centre, startRadius: 0,
+                endCenter: centre, endRadius: CGFloat(size) / 2, options: [])
+        }
+        return image.cgImage
+    }
+
+    /// The glow's shape as an opacity mask: white where it is lit, black
+    /// where it is not. RealityKit reads transparency from a mask like this,
+    /// not from a colour texture's alpha (which drew every particle as a
+    /// pale square).
+    private static func glowMask() -> TextureResource? {
+        guard let image = radialImage(size: 128, { UIColor(white: $0, alpha: 1) }) else { return nil }
+        return try? TextureResource(image: image, options: .init(semantic: .raw))
+    }
+
+    /// The particle's light: its tint, running white-hot at the core.
+    private static func particleMaterial(_ tint: UIColor, mask: TextureResource?) -> UnlitMaterial {
+        var material = UnlitMaterial(color: tint)
+        let hot = radialImage(size: 64) { level in
+            // White at the very centre, the tint everywhere the halo is.
+            let white = max(0, (level - 0.85) / 0.15)
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            tint.getRed(&r, green: &g, blue: &b, alpha: &a)
+            return UIColor(red: r + (1 - r) * white, green: g + (1 - g) * white,
+                           blue: b + (1 - b) * white, alpha: 1)
+        }
+        if let hot, let colour = try? TextureResource(image: hot, options: .init(semantic: .color)) {
+            material.color = .init(tint: .white, texture: .init(colour))
+        }
+        if let mask {
+            material.blending = .transparent(opacity: .init(scale: 1, texture: .init(mask)))
+        } else {
+            material.blending = .transparent(opacity: .init(floatLiteral: 0.85))
+        }
+        // Light, not a surface: a sprite that wrote depth cut its whole square
+        // out of the room's dimming shell behind it (and out of its neighbours'
+        // halos), so each particle stood in a pale, undimmed tile.
+        material.writesDepth = false
+        return material
+    }
 
     /// Drives every curve of the opening, then clears it away and goes quiet.
     private func updateOpening() {
@@ -415,11 +581,16 @@ final class HubScene {
         }
         let portalLight = Opening.portalOpacity(at: t)
         let labelLight = Opening.labelOpacity(at: t)
+        // The portals grow the last few per cent into place as their glass
+        // comes up; the wordmark rises the last few centimetres as it does.
+        let growth = SIMD3<Float>(repeating: Opening.portalScale(at: t))
         for portal in portals {
             portal.anchor.components.set(OpacityComponent(opacity: portalLight))
             portal.label.components.set(OpacityComponent(opacity: labelLight))
+            portal.body.scale = growth
         }
         titleAnchor.components.set(OpacityComponent(opacity: labelLight))
+        titleAnchor.position = titlePosition + SIMD3(0, Opening.titleOffset(at: t), 0)
         moreSeat?.components.set(OpacityComponent(opacity: labelLight))
     }
 
@@ -440,8 +611,10 @@ final class HubScene {
         for portal in portals {
             portal.anchor.components.remove(OpacityComponent.self)
             portal.label.components.remove(OpacityComponent.self)
+            portal.body.scale = .one
         }
         titleAnchor.components.remove(OpacityComponent.self)
+        titleAnchor.position = titlePosition
         moreSeat?.components.remove(OpacityComponent.self)
         // The opening has been seen — only now does it count against the session.
         onOpeningPlayed?()
@@ -482,9 +655,14 @@ final class HubScene {
         fadePresence(dt: dt)
         updateOpening()
 
-        // Every portal runs its lab's physics. Under stillness they park.
+        // Every portal runs its lab's physics and floats a few millimetres,
+        // each on its own phase so the six never rise together. Under
+        // stillness they park.
         for portal in portals {
             portal.animate(stillness ? 0 : time + portal.phase)
+            portal.body.position.y = stillness ? 0
+                : Self.floatHeight * Float(sin(2 * .pi * time / Self.floatPeriod
+                                               + portal.phase * 2.1))
         }
         for (index, line) in titleLines.enumerated() {
             line.orientation = stillness ? simd_quatf(angle: 0, axis: [0, 1, 0])
@@ -600,8 +778,10 @@ final class HubScene {
         titleAnchor.components.set(accessibility)
         root.addChild(titleAnchor)
 
-        // The More seat: below the rule, clear of the lockup whatever its metrics.
-        moreSeatPosition = titlePosition + SIMD3(0, -blockHeight / 2 - 0.15, 0.02)
+        // The More seat: below the rule with air between them — at 0.15 the
+        // button's glass sat on the rule — clear of the lockup whatever its
+        // metrics.
+        moreSeatPosition = titlePosition + SIMD3(0, -blockHeight / 2 - 0.21, 0.02)
     }
 
 }

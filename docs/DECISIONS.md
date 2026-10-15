@@ -16,6 +16,55 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-14 — The home is polished, not redesigned
+
+**Decision:** The home keeps its layout, its opening's physics and its
+wordmark, which stays exactly as chosen on 2026-09-07. What changed is
+finish and motion:
+- **Bezels:** each portal's rim is a fine bezel of the wordmark's
+  champagne alloy (2.4 mm, 16-sided, lit as metal) where it was a
+  six-sided white unlit tube.
+- **Panes:** stock glass darkening toward the edge like a lens, instead
+  of a flat grey fill, set in the bezel's own plane.
+- **Labels:** system type on a glass capsule with the lab's colour as a
+  dot, where they were extruded neon on a dark pill.
+- **Previews:** 20 cm, so their square's corners clear the rim.
+- **The opening's particles:** soft glowing sprites of varied size
+  instead of flat beads.
+- **Arrival:** the portals grow from 92 % into place as their glass
+  fades up, and the wordmark rises 3.5 cm into place as it does (both
+  pure functions in `Opening`, tested to end exactly at rest).
+- **At rest:** the portals float ±4 mm on their own phases, never under
+  stillness.
+- **More** sits clear of the rule; the projectile preview's ball fades
+  rather than blinking, and its hoop answers the landing.
+
+**Context:** The owner asked for the title screen's models and animations
+to be smoother, more polished and cleaner. The memory of the 2026-09-07
+auditions says not to touch the wordmark unprompted, so every change is
+around it. Three defects only showed in photographs:
+- **The sprites first drew as pale squares.** RealityKit takes
+  transparency from an opacity mask, not from a colour texture's alpha,
+  and a sprite that writes depth cuts its square out of the dimming shell
+  behind it. They now use a mask and `writesDepth = false`.
+- **Every rim, old and new, had two dark ticks.** A tube swept round a
+  vertical circle pinches where its path runs straight up or down. The
+  bezel is now swept flat and rotated upright.
+- **The glass pane showed parallax.** Set 3 cm behind the rim, its edge
+  was the obvious suspect for the ticks and was moved into the rim's
+  plane on the way to finding the real cause.
+
+**Consequences:**
+- The portal's visible parts hang off a `body`, which floats and scales.
+  The anchor keeps the transform, the target and the entering swell.
+- The label is a SwiftUI attachment, which visual bounds do not measure,
+  so a transparent proxy of the label's measured size stands with it.
+  The collider-fit criterion then checks the target against the real
+  label.
+- Any other transparent sprite in the app that writes depth will cut
+  the same square from the dimming shell. The opening was the one place
+  it showed.
+
 ## 2026-10-14 — The sound effects join the music's family
 
 **Decision:** Every one-shot and looping tone is re-voiced in
