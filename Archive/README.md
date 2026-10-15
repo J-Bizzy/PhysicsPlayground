@@ -14,8 +14,10 @@ the "strongly three-dimensional" test:
   729-dot budget over a 2.4 m region. `PhysicsCore/Waves` keeps the
   physics: exact retarded-time Doppler, the phasor decomposition,
   `DoubleSlit`. Its tests live in `Archive/Tests`.
-- **Optics** — stays archived; not returning with the two-lab scope.
-  `PhysicsCore/Optics` still holds full 3-D ray tracing, tested.
+- **Optics** — stayed archived until 2026-10-14, when Light & Optics
+  returned as a new lab (`Modules/Optics`) built on a new room-scale
+  tracer, `PhysicsCore/Optics/LightTracer`. The bench files here stay
+  archived: they assume the line of elements that got them cut.
 - **WindTunnel** — cut 2026-07-30, owner's call, and the only one here
   removed for scope rather than for a defect: the app ships two labs,
   Electricity & Magnetism and Mechanics & Energy, and a wind tunnel

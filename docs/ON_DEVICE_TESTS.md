@@ -121,7 +121,7 @@ contradicts this section, this section is current.
 - [ ] **9 · More and Studio Mode.** Pinch More: the lab's switches, its
       live numbers, the room. Studio Mode: a night sky over a dark floor
       with a soft pool of light, and nothing on it glowing.
-- [ ] **10 · Close.** Home: dissolve, and the six portals stand around
+- [ ] **10 · Close.** Home: dissolve, and the seven portals stand around
       you again under the wordmark.
 - [ ] **Judgement calls, answered in writing:** the pink field lines
       through passthrough; whether 45 % recession is legible in your
@@ -135,9 +135,9 @@ contradicts this section, this section is current.
       pops and chime read as one family with the music, does the cradle
       CLACK like steel and the launcher THUMP, does the mains hum still
       read as a hum and the orbital chord as glass; whether the title bar
-      clears the apparatus in all six labs — Pendulums' cradle hangs from
+      clears the apparatus in all seven labs — Pendulums' cradle hangs from
       1.62 m since 2026-09-04 because at 2.0 m the bar crossed its cables.
-- [ ] **The cut test:** enter all six labs in sequence; the room's
+- [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
 ## The 2026-10-14 polish pass
@@ -237,14 +237,14 @@ working session:
 
 - [ ] **The opening plays once and ends as the home.** The room dims a
       little; particles fall under gravity, swirl in a crossed field,
-      ripple like a wave and settle into six portals in an arc around
+      ripple like a wave and settle into seven portals in an arc around
       you. It takes about three seconds and the bell lands as they
       settle.
 - [ ] **A pinch skips it.** Pinch anywhere during the opening: the
       portals are simply there.
 - [ ] **Reduce Motion:** no particles at all — the portals fade in.
 - [ ] **Each portal previews its physics in a loop** and its short name
-      is legible from where you stand, all six at a glance — system type
+      is legible from where you stand, all seven at a glance — system type
       on a glass capsule with the lab's colour as a dot.
 - [ ] **The particles are points of light**, not beads or tiles: soft
       halos, no square around any of them, and the room's dimming intact
@@ -273,7 +273,7 @@ working session:
       that lab.
 - [ ] **More** under the wordmark opens Lab list, Settings and About in
       one row; nothing hides behind the portals.
-- [ ] **Coming home** from a lab stands the six portals around you again
+- [ ] **Coming home** from a lab stands the seven portals around you again
       without replaying the whole opening.
 
 ## Circuit Workshop
@@ -442,6 +442,46 @@ file). What follows is the standing script.
       size with only Electron flow lit.
 - [ ] **Nothing but the bench is in the room.** No coil, no cable, no
       second apparatus — Circuit Workshop stands alone.
+
+## Light & Optics (2026-10-14)
+
+Nothing here can be judged from the simulator, which has no walls (the
+CLI stages one with `-roomWall 2.6`). Look at the room's walls first, so
+ARKit has found them: the light lands only on walls it knows.
+
+- [ ] **It opens alive.** A torch's white beam enters the prism and leaves
+      as a spectrum straight ahead, landing on the wall in front of you as
+      a row of colours, violet bent furthest. The green laser turns off the
+      mirror into the end of the glass bar, zig-zags inside it without
+      leaking out of the sides, and leaves a green spot on the wall.
+- [ ] **The beams read.** A millimetre core with a soft glow, at the house
+      dimming (0.35), in a bright room and a dim one. Judge: do they hold
+      against a sunlit wall, or does the lab need its own dimming (the one
+      exception the atmosphere test allows is already Orbital's)?
+- [ ] **Carry anything.** A mirror, the prism, the bar, either light: it
+      comes with your hand and the light re-traces as you move it, with no
+      stutter. Two at once, one in each hand.
+- [ ] **The laser points where you point.** Pick it up: the beam goes
+      from your eyes through your hand. Sweep it across the walls.
+- [ ] **Turn a piece by its bead.** Tap the mirror: its ring opens and a
+      bead stands out along the way it faces. Move the bead and the mirror
+      turns to face it. The prism's bead stays level — it turns about the
+      vertical only. Judge the biggest risk in the lab: does a bead feel
+      like turning a thing, or like a fiddly handle?
+- [ ] **Least deviation, by hand.** Turn the prism slowly by its bead:
+      the spectrum on the wall swings one way, stops, and comes back. More
+      › Values shows Deviation meeting Least deviation at the turn.
+- [ ] **The lens.** Pull a lens from the well, set the torch to Open (its
+      ring), and put the lens in the broad beam: the rays cross near
+      15 cm behind it, the rim ones a little short of the middle ones
+      (spherical aberration), and the colours a little apart.
+- [ ] **More.** Weak reflections shows the partial reflections every glass
+      face makes (15 % at the prism's first face); Angles draws each
+      surface's normal; Glass › Crown narrows the spectrum about three
+      times; Clear all asks first and leaves the two lights.
+- [ ] **The home.** Light stands in the middle of the arc between
+      Magnetism and Projectiles; its emblem is a prism fanning a beam into
+      a spectrum, rocking through least deviation.
 
 ## Magnetism
 
@@ -1482,7 +1522,7 @@ in a room.
 
 ### The catalog, and the numbers
 
-- [ ] **Open the flat catalog.** Two domains, six labs, and nothing that
+- [ ] **Open the flat catalog.** Two domains, seven labs, and nothing that
       counts your progress. (This said "a tally and ONE next step —
       complete that experiment" until 2026-08-09; the experiments system
       was deleted and the check outlived it.)
@@ -1504,7 +1544,7 @@ proves nothing about the room.
 
 ### The cut test (the whole point of the atmosphere change)
 
-- [ ] **Enter all six labs in sequence, as a demo would cut between
+- [ ] **Enter all seven labs in sequence, as a demo would cut between
       them.** The room's brightness should not change from lab to lab.
       Five now open at 0.35; Orbital Mechanics alone goes to 0.85 and that
       one step should read as *entering space*, not as a bug.

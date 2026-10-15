@@ -1,6 +1,6 @@
 # Physics Playground
 
-Room-scale physics labs for Apple Vision Pro. Six labs, each one
+Room-scale physics labs for Apple Vision Pro. Seven labs, each one
 fully volumetric and grabbable in your actual room — you throw the
 pendulum bob, you carry the magnet, you reshape the orbit by pulling on
 it.
@@ -13,13 +13,14 @@ solver is written from scratch in Swift and tested.
 
 ---
 
-## The six labs
+## The seven labs
 
 | | |
 |---|---|
 | **Electric Fields** | Pull charges out of a well and watch the field redraw. A capacitor whose plates you carry, a uniform **B** you can switch on, and a charged test ball that circles in it — the cyclotron, drawn live in your room. |
 | **Circuit Workshop** | Build circuits from racks of real parts you pull out of the air — a resistor that scorches past its rating, an AC source you tune by hand, a coil whose field the bench draws. Nodal analysis every frame, a multimeter you probe with, and a true-speed view you can zoom into the copper to watch — the drift velocity is millimetres per second, and that is the misconception the lab exists to kill. |
 | **Magnetism** | Bar magnets that attract, repel and align. Field lines that close on themselves, and a compass you carry. |
+| **Light & Optics** | A laser, a torch of white light, and mirrors, a prism, a lens and a glass bar you place anywhere and turn by hand. The light is traced exactly — Snell, Fresnel, each colour through the glass's real Sellmeier index — and lands on your actual walls: a spectrum from the prism, a beam trapped in the bar by total internal reflection. |
 | **Projectile Motion** | Throw anything. Real drag, real restitution, and bounces off *your* walls, floor, ceiling and table. Stand a hoop in the room and the launcher solves for it — both arcs, exactly — or arm it to drop as you fire, and the ball meets it in the air on every world. |
 | **Pendulums** | Full nonlinear swings, a Newton's cradle to break apart, a chaotic double pendulum, and a true 3-D orbit you throw a bob into above your own floor. |
 | **Orbital Mechanics** | An orrery you can walk into. Tap a planet and its orbit becomes a ring with beads at each end — pull one and the orbit reshapes under your hand. |

@@ -160,13 +160,13 @@ enum ModuleCatalog {
     /// Every module in the playground, in display order. New modules
     /// register by adding one line here.
     static func all(appModel: AppModel) -> [ModuleDescriptor] {
-        // Six experiences behind two doors (`HubDomain`); each gets the room to
+        // Seven experiences behind two doors (`HubDomain`); each gets the room to
         // itself. Cut modules are archived and return with one line here plus a
         // HubDomains entry.
         registry.map { $0.make(appModel) }
     }
 
-    /// One descriptor without building the other five — `activeModule` is
+    /// One descriptor without building the others — `activeModule` is
     /// read every frame. Built from the same `registry` as `all`, so a
     /// module cannot be in the catalog and unopenable by id.
     static func descriptor(id: String, appModel: AppModel) -> ModuleDescriptor? {
@@ -179,6 +179,7 @@ enum ModuleCatalog {
         (ElectromagnetismModule.id, ElectromagnetismModule.descriptor),
         (CircuitsModule.id, CircuitsModule.descriptor),
         (MagnetismModule.id, MagnetismModule.descriptor),
+        (OpticsModule.id, OpticsModule.descriptor),
         (KinematicsModule.id, KinematicsModule.descriptor),
         (PendulumsModule.id, PendulumsModule.descriptor),
         (OrbitalMechanicsModule.id, OrbitalMechanicsModule.descriptor),

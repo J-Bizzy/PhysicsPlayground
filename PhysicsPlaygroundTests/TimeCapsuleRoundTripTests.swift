@@ -352,6 +352,26 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
 
     /// Every module's reset empties its capsule — a fresh bench must not
     /// carry the old bench's past.
+    /// The optics bench has no dynamics — its past is where the pieces
+    /// stood and how the lights were set — and what a hand holds stays put.
+    func testOpticsRoundTripLeavesAHeldPieceAlone() throws {
+        let model = OpticsModel()
+        model.clearCapsule()
+        for _ in 0..<10 { model.step(dt: dt) }
+        let snapshot = model.captureCapsuleSnapshot()
+        let prism = try XCTUnwrap(model.pieces.first { $0.kind == .prism })
+        let bar = try XCTUnwrap(model.pieces.first { $0.kind == .block })
+        model.move(id: prism.id, to: prism.position + SIMD3(0.2, 0, 0))
+        model.grab(id: bar.id)
+        let held = bar.position + SIMD3(0, 0.1, 0)
+        model.move(id: bar.id, to: held)
+        model.cycleLaserColour()
+        model.restoreCapsuleSnapshot(snapshot)
+        XCTAssertEqual(model.pieces.first { $0.id == prism.id }?.position, prism.position)
+        XCTAssertEqual(model.pieces.first { $0.id == bar.id }?.position, held)
+        XCTAssertEqual(model.laserNanometers, snapshot.laserNanometers)
+    }
+
     func testResetClearsEveryCapsule() {
         let pendulums = PendulumsModel()
         for _ in 0..<30 { pendulums.step(dt: dt) }
@@ -377,6 +397,11 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
         for _ in 0..<30 { circuits.step(dt: dt) }
         circuits.reset()
         XCTAssertNil(circuits.capsuleSpan)
+
+        let optics = OpticsModel()
+        for _ in 0..<30 { optics.step(dt: dt) }
+        optics.reset()
+        XCTAssertNil(optics.capsuleSpan)
     }
 
     // MARK: The feature switched off

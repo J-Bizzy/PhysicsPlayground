@@ -5,7 +5,7 @@
 //  App-wide state: the active module, the shared immersive space, the
 //  room and the atmosphere. Module models are created on
 //  first entry and retained, so switching labs keeps their state. (The
-//  catalog's `timeScrub` closures force all six models the first time a
+//  catalog's `timeScrub` closures force every model the first time a
 //  descriptor is built.)
 //
 
@@ -170,7 +170,7 @@ final class AppModel {
         #if DEBUG
         if let id = UserDefaults.standard.string(forKey: "openModule") {
             // An unknown id is refused by name rather than silently showing the
-            // hub. `allIDs` validates without building six modules' closures.
+            // hub. `allIDs` validates without building every module's closures.
             let known = ModuleCatalog.allIDs
             if known.contains(id) {
                 activeModuleID = id
@@ -277,6 +277,15 @@ final class AppModel {
         if let magnetism { return magnetism }
         let model = MagnetismModel()
         magnetism = model
+        return model
+    }
+
+    private var optics: OpticsModel?
+
+    var opticsModel: OpticsModel {
+        if let optics { return optics }
+        let model = OpticsModel()
+        optics = model
         return model
     }
 }

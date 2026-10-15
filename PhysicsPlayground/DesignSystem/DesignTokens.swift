@@ -120,6 +120,10 @@ enum DesignTokens {
         static let pendulumsAccentUI = UIColor(pendulumsAccent)
         static let circuitsAccent = Color(red: 0.19, green: 0.82, blue: 0.35)      // #30D158, the E&M door
         static let magnetismAccent = Color(red: 0.85, green: 0.3, blue: 0.62)
+        /// Pearl: white light with a breath of violet — the beams themselves wear
+        /// their wavelengths. ΔE ≥ 40 from every other accent and every
+        /// `VectorPalette` arrow; an ice blue was ΔE 13 from the gravity arrow.
+        static let opticsAccent = Color(red: 0.902, green: 0.863, blue: 1.0)       // #E6DCFF
     }
 
     // MARK: Panel metrics

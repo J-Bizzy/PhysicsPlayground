@@ -4,7 +4,7 @@
 //
 //  The opening, as pure functions of time (no RealityKit, so it is
 //  tested on numbers). About three seconds in which a field of glowing
-//  particles visibly obeys physics, then settles into the six portals
+//  particles visibly obeys physics, then settles into the labs' portals
 //  that are the home screen:
 //
 //    1. GATHER   The room dims; the particles fade up at rest on a
@@ -247,7 +247,7 @@ enum Opening {
             let charge: Double = portal.position.x < 0 ? 1 : -1
             for slot in 0..<perPortal {
                 // Wide enough that neighbouring portals' particles meet, so
-                // the sheet the wave crosses is one sheet, not six clusters.
+                // the sheet the wave crosses is one sheet, not a cluster per portal.
                 let start = SIMD3(
                     portal.position.x + charge * driftPerArch + (random() - 0.5) * 0.62,
                     sheetHeight + (random() - 0.5) * 0.10,
@@ -264,7 +264,7 @@ enum Opening {
     }
 }
 
-/// Where the six portals stand: one arc at eye level around the wearer,
+/// Where the portals stand: one arc at eye level around the wearer,
 /// facing them. Pure geometry, so it is tested on numbers.
 enum PortalLayout {
     struct Portal: Equatable {
@@ -276,7 +276,7 @@ enum PortalLayout {
         let right: SIMD3<Double>
     }
 
-    /// Far enough that six fit the field of view with a turn of the head,
+    /// Far enough that seven fit the field of view with a turn of the head,
     /// near enough to read a 30 cm portal.
     static let radius = 1.75
     /// Eye height for a standing wearer, a little low for a seated one.

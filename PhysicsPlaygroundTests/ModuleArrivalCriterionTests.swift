@@ -36,8 +36,8 @@ final class ModuleArrivalCriterionTests: XCTestCase {
     /// The guard: if this finds nothing, everything below is vacuously true.
     func testTheSearchActuallyReachesTheSource() throws {
         let views = try moduleSpaceViews()
-        XCTAssertEqual(views.count, 6,
-                       "expected six module SpaceViews, found \(views.map(\.name))")
+        XCTAssertEqual(views.count, 7,
+                       "expected seven module SpaceViews, found \(views.map(\.name))")
     }
 
     /// The criterion. Add a module tomorrow and it is covered tomorrow.

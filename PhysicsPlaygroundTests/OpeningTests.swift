@@ -14,7 +14,7 @@ import simd
 
 final class OpeningTests: XCTestCase {
 
-    private let portals = PortalLayout.portals(count: 6)
+    private let portals = PortalLayout.portals(count: 7)
     private var cloud: [Opening.Particle] { Opening.particles(for: portals) }
 
     // MARK: The clock
@@ -177,14 +177,14 @@ final class OpeningTests: XCTestCase {
             XCTAssertEqual(Opening.position(of: particle, at: Opening.duration),
                            particle.target)
         }
-        XCTAssertEqual(Set(cloud.map(\.portal)), Set(0..<6))
+        XCTAssertEqual(Set(cloud.map(\.portal)), Set(0..<7))
     }
 
     // MARK: The portals
 
-    /// Six portals on one arc, each facing the wearer, none touching.
+    /// Seven portals on one arc, each facing the wearer, none touching.
     func testThePortalsFaceTheWearerAndDoNotTouch() {
-        XCTAssertEqual(portals.count, 6)
+        XCTAssertEqual(portals.count, 7)
         for portal in portals {
             // The face's normal (+z rotated by yaw) points at the wearer.
             let normal = SIMD3(sin(portal.yaw), 0, cos(portal.yaw))

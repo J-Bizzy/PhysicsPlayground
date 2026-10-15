@@ -14,7 +14,7 @@ import XCTest
 @MainActor
 final class AtmosphereCriterionTests: XCTestCase {
 
-    /// The value five of six modules share.
+    /// The value every module but one shares.
     private static let houseDimming = 0.35
 
     private func descriptors() -> [ModuleDescriptor] {
@@ -23,20 +23,23 @@ final class AtmosphereCriterionTests: XCTestCase {
 
     func testTheLabsShareOneRoomBrightness() {
         let modules = descriptors()
-        XCTAssertEqual(modules.count, 6, "the catalog changed shape")
+        XCTAssertEqual(modules.count, ModuleCatalog.allIDs.count, "the catalog changed shape")
+        XCTAssertGreaterThanOrEqual(modules.count, 7, "the catalog lost a lab")
 
         let conforming = modules.filter { $0.preferredDimming == Self.houseDimming }
         let departing = modules.filter { $0.preferredDimming != Self.houseDimming }
 
-        XCTAssertGreaterThanOrEqual(conforming.count, 5, """
+        // Exactly one departure is allowed, however many labs there are: a
+        // fixed count would quietly allow a second the day a lab was added.
+        XCTAssertGreaterThanOrEqual(conforming.count, modules.count - 1, """
             only \(conforming.count) of \(modules.count) modules open at the \
             house dimming of \(Self.houseDimming).
 
             Departing: \(departing.map { "\($0.id) @ \($0.preferredDimming)" }
                 .joined(separator: ", ")).
 
-            A per-module brightness is a per-module ROOM, and the six labs \
-            are meant to read as one place seen six times. If a lab genuinely \
+            A per-module brightness is a per-module ROOM, and the labs \
+            are meant to read as one place seen from every door. If a lab genuinely \
             needs its own atmosphere, say why in its descriptor and raise the \
             allowance here deliberately — do not let a fourth number appear \
             because somebody typed one.

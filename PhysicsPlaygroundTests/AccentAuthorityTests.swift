@@ -221,7 +221,7 @@ final class AccentAuthorityTests: XCTestCase {
         }
     }
 
-    /// Every module accent, by name — a fixed set of six doors.
+    /// Every module accent, by name — one per lab.
     private static let moduleAccents: [(String, UIColor)] = [
         ("electrostaticsAccent", UIColor(DesignTokens.Palette.electrostaticsAccent)),
         ("magnetismAccent", UIColor(DesignTokens.Palette.magnetismAccent)),
@@ -229,6 +229,7 @@ final class AccentAuthorityTests: XCTestCase {
         ("kinematicsAccent", UIColor(DesignTokens.Palette.kinematicsAccent)),
         ("circuitsAccent", UIColor(DesignTokens.Palette.circuitsAccent)),
         ("pendulumsAccent", UIColor(DesignTokens.Palette.pendulumsAccent)),
+        ("opticsAccent", UIColor(DesignTokens.Palette.opticsAccent)),
     ]
 
     /// The domain doors read the palette, never a literal of their own.

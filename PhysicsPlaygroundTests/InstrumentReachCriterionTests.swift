@@ -63,6 +63,10 @@ final class InstrumentReachCriterionTests: XCTestCase {
                        + OrbitalMechanicsSpaceView.wellOffset,
                    halfExtents: Self.wellHalfExtents)),
         ] + projectilesWall.map { ("kinematics", $0) }
+            + OpticsSpaceView.wellAnchors.enumerated().map { index, anchor in
+                ("optics", Instrument(name: "Light & Optics well \(index + 1)",
+                                      anchor: anchor, halfExtents: Self.wellHalfExtents))
+            }
     }
 
     /// Nothing is exempt. The list stays so the shape of the test still

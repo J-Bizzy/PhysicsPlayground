@@ -57,10 +57,10 @@ final class PanelControlCriterionTests: XCTestCase {
         let modules = sources.filter { $0.lastPathComponent.hasSuffix("Module.swift") }
         let scenes = sources.filter { $0.lastPathComponent.hasSuffix("SpaceView.swift") }
 
-        XCTAssertEqual(modules.count, 6,
-                       "expected six module descriptors; found \(modules.map(\.lastPathComponent))")
+        XCTAssertEqual(modules.count, 7,
+                       "expected seven module descriptors; found \(modules.map(\.lastPathComponent))")
         XCTAssertGreaterThanOrEqual(
-            scenes.count, 6,
+            scenes.count, 7,
             "expected a scene per module; found \(scenes.map(\.lastPathComponent))")
     }
 

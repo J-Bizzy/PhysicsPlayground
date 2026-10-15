@@ -16,6 +16,39 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-14 — Light & Optics returns, in three dimensions
+
+**Decision:** A seventh lab, Light & Optics. It has:
+- a laser and a torch of white light;
+- mirrors, prisms, a converging lens and a glass bar, from a well on the left.
+
+Each piece can be carried anywhere and turned by an aim bead. The light is traced by a new `PhysicsCore.LightTracer` and lands on the room's real walls. It opens on white light through a flint prism at least deviation, fanned straight ahead into a spectrum on the wall, and the green laser turned by a mirror into the glass bar, which traps it by total internal reflection.
+
+**Context:** The owner's two-week brief for the admissions portfolio asked for new labs as well as deeper ones, and chose optics. This reverses two calls at the owner's request:
+- "Optics stays archived" (2026-07-28/29). The bench was cut for being "a line of elements in a row", so the new lab assumes no axis: every piece has a full pose and the light goes wherever the room sends it.
+- "No new modules" (earlier on 2026-10-14).
+
+**Consequences:**
+- **The tracer is new physics, and is tested to the textbook.** Each glass piece is a convex solid made of half-spaces, spheres and a cylinder. A ray meets it on one interval, so one routine serves the prism, block and lens. Every face splits the light by Fresnel. Each wavelength goes through Schott's Sellmeier index. Power is accounted for to 1e-12. `LightTracerTests` check, among other things:
+  - catalogue indices and Abbe numbers;
+  - Fresnel's 4% at normal incidence, Brewster's angle and reciprocity;
+  - Snell and the slab's exact shift at an arbitrary pose;
+  - TIR switching on at n = √2 in a right-angle prism;
+  - minimum deviation recovering n to 1e-7;
+  - a thick lens's back focal distance and its h² spherical aberration;
+  - frame invariance.
+- **Two first builds got the geometry wrong, and the fixes are recorded where they live.**
+  - Aimed at the prism's centroid, the torch's beam entered through the base. It now aims at the entry face's middle, the least-deviation path.
+  - `-roomWall -2.6` was silently dropped, because an argument value starting with "-" is read as a key. It takes a distance now.
+- **The light lands only on walls ARKit has found** (`collisionWalls`), plus the floor. It never lands on the unscanned box: a spectrum painted on a wall that is not there would be the one lie in the lab.
+- **Weak reflections are off until asked for.** They are real (15% at the prism's first face), but the opening view has to read as the main path first.
+- **The seventh portal stands in the middle of the arc**, in the electricity group after Magnetism. Its emblem is the lab's own prism and tracer, rocking through least deviation.
+- **What changed because there are seven labs:**
+  - Every test that counted six now counts seven. `AtmosphereCriterionTests` counts "all but one" rather than a number, so adding a lab cannot quietly allow a second dimming exception.
+  - The VoiceOver hints no longer name a number.
+  - The accent is pearl (#E6DCFF). The first choice, ice blue, failed the arrow-separation test: it was ΔE 13 from the gravity arrow.
+- **The archived bench files stay archived.** `Refraction` is the one piece of the old optics code the new tracer uses.
+
 ## 2026-10-14 — The wordmark speaks the app's language
 
 **Decision:** The home's 3-D title is now set the way every label in the

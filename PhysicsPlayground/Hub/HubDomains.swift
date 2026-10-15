@@ -1,4 +1,4 @@
-//  HubDomains.swift — the app's two doors: six experiences grouped into two domains.
+//  HubDomains.swift — the app's two doors: seven experiences grouped into two domains.
 //  Wayfinding only: the domain colour appears in exactly two places (terrace hairline,
 //  door sign); experiences keep their own accents everywhere else.
 
@@ -30,7 +30,7 @@ enum HubDomain: String, CaseIterable, Identifiable {
     /// The experiences behind this door, in their display order.
     var moduleIDs: [String] {
         switch self {
-        case .electricity: ["electrostatics", "circuits", "magnetism"]
+        case .electricity: ["electrostatics", "circuits", "magnetism", "optics"]
         case .mechanics: ["kinematics", "pendulums", "gravitylab"]
         }
     }
@@ -48,6 +48,7 @@ enum HubDomain: String, CaseIterable, Identifiable {
         case "electrostatics": "Place charges and walk through the field they make"
         case "circuits": "Build a live circuit and watch charge become current and light"
         case "magnetism": "Carry bar magnets and feel their field reorganize the room"
+        case "optics": "Aim a laser around your room and split white light into a rainbow"
         case "kinematics": "Fire projectiles and bend their arcs with gravity and drag"
         case "pendulums": "Throw a pendulum into a true 3-D orbit above your floor"
         case "gravitylab": "Grow a solar system and hear its orbits as a chord"

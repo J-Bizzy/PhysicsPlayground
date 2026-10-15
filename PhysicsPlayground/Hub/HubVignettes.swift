@@ -2,9 +2,9 @@
 //  HubVignettes.swift
 //  Physics Playground — Hub
 //
-//  The six lab emblems the home's portals run. Each is one bold object —
-//  the charges, the loop, the magnet, the launcher, the pendulum, the star
-//  — built from a few big parts and thick lines, so it reads at twenty-two
+//  The lab emblems the home's portals run. Each is one bold object —
+//  the charges, the loop, the magnet, the prism, the launcher, the
+//  pendulum, the star — built from a few big parts and thick lines, so it reads at twenty-two
 //  centimetres across the room. Solid parts load from
 //  usdz; lines, arcs and orbits stay procedural. Three rules:
 //    1. A vignette NEVER writes its own root transform; content hangs off
@@ -15,6 +15,7 @@
 //
 
 import Foundation
+import PhysicsCore
 import RealityKit
 import RenderKit
 import SwiftUI
@@ -41,7 +42,7 @@ enum HubVignettes {
     }
 
     /// The half-extent of the square every miniature is normalised into, so
-    /// six differently shaped exhibits read as one set whatever a host
+    /// differently shaped exhibits read as one set whatever a host
     /// divides by.
     static let frameHalf: Float = 0.085
 
@@ -50,6 +51,7 @@ enum HubVignettes {
         case "electrostatics": fields()
         case "circuits": circuits()
         case "magnetism": magnetism()
+        case "optics": optics()
         case "kinematics": projectile()
         case "pendulums": pendulums()
         case "gravitylab": gravity()
@@ -656,6 +658,78 @@ enum HubVignettes {
         return fit(root: root, frame: frame, cycle: period) { time in
             let rock = 0.45 * Float(sin(2 * .pi * time / period))
             turntable.orientation = simd_quatf(angle: rock, axis: [0, 1, 0])
+        }
+    }
+
+    // MARK: Light — white light through a prism, fanned into a spectrum
+
+    private static func optics() -> Built {
+        let root = Entity()
+        let frame = Entity()
+        root.addChild(frame)
+
+        // The lab's own prism, face-on, and its light traced live by the lab's
+        // own tracer: a white beam in, a spectrum out. It rocks through its
+        // least deviation, so the fan visibly swings out and turns back.
+        let holder = Entity()
+        holder.addChild(ModelEntity(mesh: OpticsMeshes.prism,
+                                    materials: [Materials.opticalGlass(opacity: 0.4)]))
+        frame.addChild(holder)
+        let unit = Primitives.cylinder(height: 1, radius: 1)
+        // Born parked: a unit cylinder is a metre across, and an unused one left
+        // at full size would set the emblem's measured bounds.
+        let beams = (0..<20).map { _ -> ModelEntity in
+            let beam = ModelEntity(mesh: unit, materials: [])
+            beam.scale = SIMD3(repeating: 1e-5)
+            beam.isEnabled = false
+            return beam
+        }
+        for beam in beams { frame.addChild(beam) }
+
+        let glass = Glass.sf11
+        let apex = OpticsModel.prismApex
+        let delta = LightTracer.minimumDeviation(apexAngle: apex, index: glass.index(nanometers: 550))
+        let incoming = SIMD3<Double>(cos(delta / 2), sin(delta / 2), 0)
+        let corners = OpticalElement.prismCorners(apexAngle: apex, side: OpticsModel.prismSide)
+        let face = (corners[0] + corners[1]) / 2
+        let start = SIMD3(face.x, face.y, 0) - 0.12 * incoming
+        let colours: [Double] = [410, 450, 490, 530, 570, 610, 650]
+        let period = 9.0
+
+        return fit(root: root, frame: frame, cycle: period) { time in
+            let rock = 0.10 * sin(2 * .pi * time / period)
+            let turn = simd_quatd(angle: rock, axis: SIMD3(0, 0, 1))
+            holder.orientation = simd_quatf(ix: Float(turn.imag.x), iy: Float(turn.imag.y),
+                                            iz: Float(turn.imag.z), r: Float(turn.real))
+            let prism = OpticalElement(position: .zero, orientation: turn,
+                                       shape: .prism(apexAngle: apex, side: OpticsModel.prismSide,
+                                                     length: OpticsModel.prismHeight),
+                                       glass: glass)
+            let trace = LightTracer.trace(
+                colours.map { LightTracer.Ray(origin: start, direction: incoming,
+                                              nanometers: $0, power: 1 / 7) },
+                elements: [prism], room: LightTracer.Room(maxSegment: 0.13),
+                options: .init(followsPartialReflections: false))
+            let strokes = OpticsBeamLayout.strokes(trace)
+            for (index, beam) in beams.enumerated() {
+                guard index < strokes.count else {
+                    beam.isEnabled = false
+                    beam.scale = SIMD3(repeating: 1e-5)
+                    continue
+                }
+                let stroke = strokes[index]
+                let length = simd_distance(stroke.a, stroke.b)
+                beam.isEnabled = length > 1e-5
+                beam.position = (stroke.a + stroke.b) / 2
+                beam.orientation = rotation(from: [0, 1, 0], to: (stroke.b - stroke.a) / max(length, 1e-5))
+                beam.scale = [0.0026, length, 0.0026]
+                let rgb = stroke.color
+                func encode(_ v: Double) -> CGFloat {
+                    CGFloat(v <= 0.0031308 ? 12.92 * v : 1.055 * pow(v, 1 / 2.4) - 0.055)
+                }
+                beam.model?.materials = [Materials.unlit(UIColor(
+                    red: encode(rgb.x), green: encode(rgb.y), blue: encode(rgb.z), alpha: 1))]
+            }
         }
     }
 

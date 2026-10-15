@@ -402,14 +402,14 @@ final class TimeRailTests: XCTestCase {
             "The nameplate turned with the reel")
     }
 
-    /// All six modules answer the scrub contract — the rail is shell
+    /// Every module answers the scrub contract — the rail is shell
     /// chrome, and a lab where pause did nothing but freeze would be the
     /// one place the feature was missing. A fresh model has recorded
     /// nothing, so every span starts nil and the rail stays folded.
     func testEveryModuleAnswersTheScrubContract() {
         let appModel = AppModel()
         let modules = ModuleCatalog.all(appModel: appModel)
-        XCTAssertEqual(modules.count, 6)
+        XCTAssertEqual(modules.count, 7)
         for module in modules {
             XCTAssertNil(module.timeScrub.span(),
                          "\(module.id) reports a recording before anything ran")

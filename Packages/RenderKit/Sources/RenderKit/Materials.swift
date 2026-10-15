@@ -131,6 +131,41 @@ public enum Materials {
         }
     }
 
+    /// Optical glass you can see through: a faint cool tint, near-zero
+    /// roughness under a full clearcoat, so the room's light catches its
+    /// faces and edges while the beam inside stays visible. Not
+    /// `frostedGlass`, which is a panel's scrim and hides what is behind it.
+    public static func opticalGlass(_ tint: UIColor = UIColor(red: 0.86, green: 0.95, blue: 1.0, alpha: 1),
+                                    opacity: Float = 0.22) -> PhysicallyBasedMaterial {
+        memo(key("opticalGlass", colors: [tint], [opacity])) {
+            var material = PhysicallyBasedMaterial()
+            material.baseColor = .init(tint: tint)
+            material.metallic = .init(floatLiteral: 0)
+            material.roughness = .init(floatLiteral: 0.04)
+            material.clearcoat = .init(floatLiteral: 1.0)
+            material.clearcoatRoughness = .init(floatLiteral: 0.02)
+            material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+            return material
+        }
+    }
+
+    /// A front-surface mirror: bright, fully metallic, almost smooth. The one
+    /// place a mirror finish is the point (see `machined` for why parts are
+    /// not mirrors): it is what the light bounces off.
+    public static func opticalMirror() -> PhysicallyBasedMaterial {
+        memo(key("opticalMirror")) {
+            var material = PhysicallyBasedMaterial()
+            material.baseColor = .init(tint: UIColor(white: 0.94, alpha: 1))
+            material.metallic = .init(floatLiteral: 1.0)
+            material.roughness = .init(floatLiteral: 0.07)
+            material.clearcoat = .init(floatLiteral: 1.0)
+            material.clearcoatRoughness = .init(floatLiteral: 0.02)
+            material.emissiveColor = .init(color: UIColor(white: 1, alpha: 1))
+            material.emissiveIntensity = 0.08
+            return material
+        }
+    }
+
     /// The bright hairline rim that sells a glass pane, swept as slightly
     /// larger geometry. Unlit on purpose — it must hold its brightness
     /// under any room IBL.

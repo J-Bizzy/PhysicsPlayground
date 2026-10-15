@@ -25,7 +25,7 @@ Real physics, in your room
 
 Alternates, all within limit:
 - `Room-scale physics labs` (23)
-- `Six labs. Real constants.` (25)
+- `Seven labs. Real constants.` (27)
 
 *`Experiments you can hold` (24) was a fourth alternate until 2026-08-09.
 It was coined while the app shipped an experiments system, and when that
@@ -73,7 +73,7 @@ Rules this follows, because they cost ranking if broken:
 ```
 Physics Playground turns your room into a laboratory.
 
-Six labs stand at full size in the space around you. You don't
+Seven labs stand at full size in the space around you. You don't
 watch them — you reach in. Throw a pendulum bob and it swings from the
 hand speed you gave it. Carry a bar magnet toward another and feel the
 field reorganise. Grab a planet and hurl it out of orbit, then watch the
@@ -94,7 +94,7 @@ bends a half-gram ball is about a thousand times the strongest magnet ever
 built — and it tells you that, because a lab that hides its fictions is
 teaching the wrong thing.
 
-THE SIX LABS
+THE SEVEN LABS
 
 Electric Fields — Pull charges out of a well and watch the field redraw
 around them. Add parallel plates you carry by hand, switch on a uniform
@@ -112,6 +112,12 @@ introductory electricity.
 Magnetism — Bar magnets that attract, repel and snap into alignment,
 their looping field closing on itself in real time. Carry a compass
 through it.
+
+Light & Optics — A laser, a torch of white light, and mirrors, a prism,
+a lens and a glass bar you set anywhere in the room and turn by hand.
+White light through the prism fans into a spectrum on your own wall; the
+laser, aimed into the glass bar, cannot get out through its sides. Every
+ray is traced exactly, each colour through the glass's real index.
 
 Projectile Motion — Throw anything. Real drag and restitution, gravity
 from zero-g to Jupiter, and bounces off your actual walls, floor,
@@ -248,7 +254,7 @@ The first two do almost all the work; most people never swipe past three.
 | 3 | **Electric Fields — lines + capacitor + B** | The densest "this is real physics" frame — field lines filling the room, the carried capacitor plates with their sign glyphs, the uniform B switched on. (Reframed 2026-08-05: the flux instrument this slot was built around left the app on 2026-08-03 — DECISIONS.md has the story.) Slightly busy, which is why it is third rather than first. |
 | 4 | **Orbital Mechanics — binary star** | Conceptually the best story (two suns, every orbit reshaped) and the weakest *simulator* frame: the orrery sits low, so two-thirds of the image is black. **Shoot this one on device**, standing closer and looking down. |
 | 5 | **Orbital Mechanics — the orbit ring** | Depth, for the person who has already decided to look: Earth's orbit as a ring in the room, apoapsis pulled out to 2.2× under a hand. The module's documented centrepiece. (Reframed 2026-08-05: the previous subject left the app on 2026-08-03 — DECISIONS.md has the story. If two Gravity frames read as repetitive against shot 4, the alternate is Magnetism's room-filling field lines — `-openModule magnetism`, defaults.) |
-| 6 | **Home Screen** | Shows the scope — six portals standing around you, each looping its own physics, under the wordmark. A closer, not an opener: it is the least *spatial* frame, because nothing in it is an experiment. |
+| 6 | **Home Screen** | Shows the scope — seven portals standing around you, each looping its own physics, under the wordmark. A closer, not an opener: it is the least *spatial* frame, because nothing in it is an experiment. |
 | 7 | **Time Capsule** — the reel with its tape out, a ball rewound mid-arc | The feature nothing else in the category has, photographed as the object it is: the reel, the rail drawn out of it, the recorded path hanging as a tube and the ball frozen part-way back along it. Added 2026-09-01 when the capsule started shipping on. |
 
 ## Staging commands
@@ -351,7 +357,7 @@ In App Store Connect the record is: name from this file, bundle
 notes, verbatim:
 
 > Physics Playground opens in an immersive space: a short particle
-> animation settles into six portals around you (pinch anywhere to skip
+> animation settles into seven portals around you (pinch anywhere to skip
 > it). visionOS will ask for World Sensing and Hand Tracking — both are
 > needed for the labs to stand in the room and be grabbed; nothing is
 > collected or transmitted. To enter a lab, pinch its portal. In a lab,

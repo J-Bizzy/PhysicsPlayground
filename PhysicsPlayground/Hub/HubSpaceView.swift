@@ -1,4 +1,4 @@
-//  HubSpaceView.swift — the home: six portals standing around the wearer, each running its
+//  HubSpaceView.swift — the home: the labs' portals standing around the wearer, each running its
 //  lab's physics in a loop. A pinch on a portal enters that lab. The home is the end state of
 //  the opening (`Opening`): particles that fall, swirl and ripple, then settle onto the
 //  portals' rims. Any pinch skips the opening; Reduce Motion fades the portals in instead.
@@ -262,7 +262,7 @@ final class HubScene {
         let body: Entity
         let label: Entity
         let animate: (Double) -> Void
-        /// Each preview runs on its own phase, so six loops never pulse together.
+        /// Each preview runs on its own phase, so the loops never pulse together.
         let phase: Double
     }
     private var portals: [Portal] = []
@@ -679,7 +679,7 @@ final class HubScene {
         updateOpening()
 
         // Every portal runs its lab's physics and floats a few millimetres,
-        // each on its own phase so the six never rise together. Under
+        // each on its own phase so they never rise together. Under
         // stillness they park.
         for portal in portals {
             portal.animate(stillness ? 0 : time + portal.phase)

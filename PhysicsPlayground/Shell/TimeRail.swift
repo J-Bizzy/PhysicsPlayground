@@ -6,7 +6,7 @@
 //  paused; a pinch draws a rail off it that scrubs the whole experiment
 //  back through its recorded past, with buttons to step one recorded
 //  tick either way. Resuming from the instant on screen is the title
-//  bar's Resume — every lab's pause resumes from a scrub. One implementation serves all six modules,
+//  bar's Resume — every lab's pause resumes from a scrub. One implementation serves every module,
 //  mounted by `PlaygroundSpaceView` and speaking to the module only
 //  through `ModuleDescriptor.timeScrub`. It operates only while paused
 //  and only over the recorded past; it never changes how fast physics

@@ -18,9 +18,8 @@ import simd
 @MainActor
 final class HubVignetteTests: XCTestCase {
 
-    /// Every id the two hosts can ask for: the six modules plus the labs
-    /// emblem in the palette bead.
-    private static let ids = ["electrostatics", "circuits", "magnetism",
+    /// Every id the home can ask for: one per lab.
+    private static let ids = ["electrostatics", "circuits", "magnetism", "optics",
                               "kinematics", "pendulums", "gravitylab"]
 
     private static let side = HubVignettes.frameHalf * 2

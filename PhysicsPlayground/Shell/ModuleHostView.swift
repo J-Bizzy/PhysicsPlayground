@@ -32,7 +32,7 @@ struct ModuleHostView: View {
                 ControlButton("Home", systemImage: "chevron.left", iconOnly: true) {
                     appModel.go(to: nil)
                 }
-                .accessibilityHint("Leaves this lab for the home and its six portals")
+                .accessibilityHint("Leaves this lab for the home and its portals")
                 MoreButton(isExpanded: $appModel.moreOpen)
 
                 Spacer(minLength: 12)

@@ -200,6 +200,8 @@ public enum LightTracer {
         public var element: UUID
         public var kind: Kind
         public var point: SIMD3<Double>
+        /// The arriving light's direction.
+        public var direction: SIMD3<Double>
         /// The surface normal, turned to face the arriving light.
         public var normal: SIMD3<Double>
         /// The angle of incidence, from the normal.
@@ -223,6 +225,8 @@ public enum LightTracer {
         public var escaped: Double = 0
         /// Power on branches too faint or too deep to follow.
         public var dropped: Double = 0
+
+        public init() {}
 
         public var landed: Double { landings.reduce(0) { $0 + $1.power } }
         /// Everything accounted for: equals the sources' total power.
@@ -417,6 +421,7 @@ private struct Tracer {
                 let cosI = min(1, abs(simd_dot(work.direction, hit.normal)))
                 let kept = hit.front ? reflectance : 0
                 result.events.append(.init(element: candidate.id, kind: .mirror, point: end,
+                                           direction: work.direction,
                                            normal: hit.normal, incidence: acos(cosI),
                                            refraction: nil, nanometers: work.nanometers,
                                            power: work.power, reflectance: kept))
@@ -460,7 +465,8 @@ private struct Tracer {
         let kind: LightTracer.Event.Kind = refracted == nil ? .totalInternalReflection
             : (entering ? .enter : .exit)
         result.events.append(.init(
-            element: element.id, kind: kind, point: point, normal: facing,
+            element: element.id, kind: kind, point: point, direction: work.direction,
+            normal: facing,
             incidence: acos(cosI),
             refraction: refracted.map { acos(min(1, abs(simd_dot($0, facing)))) },
             nanometers: work.nanometers, power: work.power, reflectance: reflectance))

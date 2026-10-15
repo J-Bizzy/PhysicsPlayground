@@ -55,7 +55,7 @@ struct HubView: View {
                               emphasis: .prominent) {
                     Task { await openRoom() }
                 }
-                .accessibilityHint("Places the six labs' portals around you")
+                .accessibilityHint("Places the labs' portals around you")
 
                 RoomSensingNote()
                 HubCatalogList()

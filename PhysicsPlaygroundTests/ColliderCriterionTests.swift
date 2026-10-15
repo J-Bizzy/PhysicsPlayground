@@ -204,6 +204,15 @@ final class ColliderCriterionTests: XCTestCase {
         assertCollidersFit(renderer.root, "Magnetism")
     }
 
+    func testOpticsCollidersFit() {
+        let model = OpticsModel()
+        // Selected, so the aim bead stands and is measured too.
+        model.select(id: model.pieces.first?.id)
+        let renderer = OpticsRenderer()
+        for _ in 0..<3 { renderer.tick(model) }
+        assertCollidersFit(renderer.root, "Light & Optics")
+    }
+
     func testCircuitsCollidersFit() {
         let model = CircuitsModel()
         let renderer = CircuitsRenderer()

@@ -116,8 +116,22 @@ final class RoomModel {
             hasScannedRoom = true
             recomputeCollisionWalls()
         }
+        // `-roomWall <m>` stands a 6 × 3 m wall across the room that far in front
+        // of the wearer and marks the room scanned — what Light & Optics' beams
+        // land on in a simulator that has no walls. A distance, not a z: an
+        // argument value starting with "-" is read as the next key.
+        let wallDistance = UserDefaults.standard.double(forKey: "roomWall")
+        if wallDistance > 0 {
+            wallsByAnchor[Self.debugWallID] = RoomWalls.Wall(
+                center: SIMD3(0, 1.5, -wallDistance), normal: SIMD3(0, 0, 1),
+                uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 1, 0), halfU: 3, halfV: 1.5)
+            walls = Array(wallsByAnchor.values)
+            hasScannedRoom = true
+            recomputeCollisionWalls()
+        }
     }
     private static let debugTableID = UUID()
+    private static let debugWallID = UUID()
     #endif
 
     // MARK: Session

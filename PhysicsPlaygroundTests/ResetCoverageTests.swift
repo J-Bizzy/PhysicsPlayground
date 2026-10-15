@@ -76,7 +76,7 @@ final class ResetCoverageTests: XCTestCase {
         }
     }
 
-    // MARK: The six
+    // MARK: The labs
 
     /// The two found behind lit plates are first, because they are the ones
     /// this mechanism exists to have caught.
@@ -157,6 +157,27 @@ final class ResetCoverageTests: XCTestCase {
                     XCTFail("MagnetismModel gained a flag this test cannot "
                             + "flip: `\(name)`. Add a case — do not delete "
                             + "the assertion.")
+                }
+            },
+            reset: { $0.reset() })
+    }
+
+    func testOpticsResetRestoresEveryFlag() {
+        assertResetRestoresEveryFlag(
+            fresh: { OpticsModel() },
+            flip: { model, name in
+                switch name {
+                case "isPaused": model.isPaused.toggle()
+                case "showsWeakReflections": model.showsWeakReflections.toggle()
+                case "showsAngles": model.showsAngles.toggle()
+                // The two lights' switches, inside their `Source` values.
+                case "isOn":
+                    model.laser.isOn.toggle()
+                    model.torch.isOn.toggle()
+                default:
+                    XCTFail("OpticsModel gained a flag this test cannot flip: "
+                            + "`\(name)`. Add a case — do not delete the "
+                            + "assertion.")
                 }
             },
             reset: { $0.reset() })
