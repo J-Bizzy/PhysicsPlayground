@@ -203,7 +203,13 @@ field it draws carries the warning.)
 - **Wordmark.** "Physics / Playground", **persistent** — it is the app's
   nameplate, not an intro. (`hasSeenWordmark` and the one-shot behaviour were
   deleted on 2026-07-29.)
-- **Voice.** The machined plaque, and it is the only thing `HubTitleStyle` can
+- **Voice (2026-10-14).** The app's own: SF Pro Rounded Semibold, title
+  case, soft white solids standing 3 cm off a glass plaque the shape of every
+  panel, the i's dot a particle of champagne light (`Hub/HubTitleGlyphs`,
+  milled by `Tools/hubwordmark.py`). Both lines share one type size, centred.
+  The machined plaque below is the fallback, drawn only when the
+  `HubWordmark_*` assets are missing.
+- **The fallback.** The machined plaque, and it is the only thing `HubTitleStyle` can
   draw. There is no setting and no enum: the four-case taxonomy, the
   `shipping` constant, the `current` global and the `switch` in every method
   were deleted on 2026-08-02, because a choice mechanism with one reachable
@@ -249,7 +255,7 @@ All hub motion ticks from `SceneEvents.Update` — never `RealityView`'s
 |---|---|---|
 | Opening | Particles fall and swirl (crossed-field cycloid), ripple (deep-water wave), and settle onto the portal rims (critically damped); the glass fades up under them (`Hub/Opening.swift`) | ~3.1 s; any pinch skips |
 | Idle portal | The lab's own physics loops in front of the glass — the portal **is** the demo; each on its own phase | — |
-| Wordmark | Each line rakes on its own phase | ±0.028 rad |
+| Wordmark | Arrives by physics (Physics drops and bounces, Playground swings in, the dot lands last), then a travelling wave a few millimetres high and a glint every 9 s; a pinch hops a letter (`Hub/HubTitleMotion.swift`) | wave 3.5 mm, hop 7 cm |
 | Enter | The portal swells toward you and the home dissolves — an arrival, never a hard cut | scale 1.35, +0.25 m, 0.42 s |
 | Live | `LiveGlow` fades up around what the hand takes and out when it lets go | 0.15 s |
 
@@ -258,7 +264,7 @@ All hub motion ticks from `SceneEvents.Update` — never `RealityView`'s
 **Reduce motion** follows the **system** setting only — `accessibilityReduceMotion`.
 The in-app duplicate was deleted; there is no `reduceMotion` in `AppSettings`.
 Under stillness there is no opening — the portals fade in — the previews
-park at their rest pose, and the wordmark stops raking.
+park at their rest pose, and the wordmark's letters hold still.
 
 *(Until 2026-08-03 this paragraph described the setting as app-wide while it
 was read in exactly one file, `HubSpaceView` — so the bead, which is the one

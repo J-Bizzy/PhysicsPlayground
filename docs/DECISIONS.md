@@ -16,6 +16,85 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-14 — The wordmark speaks the app's language
+
+**Decision:** The home's 3-D title is now set the way every label in the
+room is set: SF Pro Rounded Semibold, title case, "Physics" over
+"Playground" at one type size, centred. The letters are soft white solids
+with a rounded edge, standing 3 cm off a glass plaque that has the shape
+and material of every panel in the app. The dot of the i is a particle of
+champagne light, the colour of the opening's particles and the portals'
+bezels and the one accent the title keeps. All of the motion from the
+entry below stays, and the dot drops onto its i last.
+
+**Context:** The owner did not like the machined plaque's style and asked
+for the title to follow the design language of the whole app while staying
+a 3-D model. That reverses the 2026-09-07 "back to the old style", at the
+owner's own request. The plaque was the one surface in the app that did not
+speak visionOS: uppercase SF Pro Display Bold, a milled champagne chamfer,
+and no glass, where everything else is rounded system type on glass.
+
+**Consequences:**
+- `Tools/hubwordmark.py` mills the letters, one mesh each. A glyph's face
+  is dissolved to one polygon before it is bevelled. Blender fills a glyph
+  as a fan of slivers, and the bevel slid along them: the first build grew
+  spikes up to 0.069 em at every stroke end. The round is 0.020 em, because
+  past about 0.022 the inset folds in the crotch where an arch leaves its
+  stem. The tool's docstring has the measurements.
+- `Tools/hubtitleglyphs.py` and its `HubTitleGlyphs_*` assets are deleted.
+  The per-letter machined glyphs had no other use.
+- The machined plaque is still the fallback (`HubTitleStyle.milled`, with
+  `hubtitles.py` and its assets untouched). Deleting `HubTitleGlyphs.swift`,
+  `HubTitleMotion.swift` and the two `HubWordmark_*` assets restores the
+  still machined plaque exactly.
+- The plaque is a SwiftUI glass attachment and never a target. It fades in
+  with the portal labels while the letters bring themselves in, and More
+  stands below it. The glass now keeps white letters legible on a white
+  wall, which was the chamfer's job.
+
+## 2026-10-14 — The wordmark comes alive, letter by letter
+
+**Decision:** The machined plaque stays exactly as it looks. What changes
+is that its letters now move, each by physics (`Hub/HubTitleMotion`):
+- **PHYSICS** letters are dropped from 30 cm in turn and bounce to rest
+  (restitution 0.42, every arc a parabola). The line lands across the
+  opening's bell.
+- **PLAYGROUND** letters hang from their top edges like signs and swing
+  in, each a damped physical pendulum whose ω₀² = g·(h/2)/(h²/3 + w²/12)
+  comes from the letter's own size.
+- **At rest**, a travelling wave a few millimetres high rolls along both
+  lines, and each letter tilts with its slope.
+- **A glint** runs along the champagne keylines, white-hot at its centre:
+  first as the bell strikes, then every nine seconds.
+- **A pinch on any letter hops it** 7 cm, and it bounces back down to
+  exactly where it stood.
+- **Reduce Motion** holds every letter still; a walk back from a lab
+  skips the arrival.
+
+**Context:** The owner asked for the title to look cooler and more
+animated, creatively. The 2026-09-07 auditions say what not to do: they
+rejected typeface swaps and novelty constructions (neon, chalkboard,
+hologram) and kept the machined plaque. So the look is untouched and the
+life is all motion, in the app's own language. `Tools/hubtitleglyphs.py`
+exports the same milled glyphs one letter at a time, reusing
+`hubtitles.py`'s recipe unchanged, so the chamfer, the font cut and the
+rim split are identical; each letter gets a hinge.
+
+**Consequences:**
+- It is removable by construction. `HubScene.buildBubbleTitle` asks
+  `HubTitleGlyphs` for a line first and falls back to the still milled
+  line. Deleting `HubTitleGlyphs.swift`, `HubTitleMotion.swift` and the
+  two `HubTitleGlyphs_*` assets restores the still wordmark exactly.
+  `HubTitleStyle` and the per-line assets are untouched. (Superseded the
+  same day by the entry above: the letters are now `HubWordmark_*`, and
+  `hubtitleglyphs.py` and its assets are deleted.)
+- Each letter is a pinch target with the system hover. Its collider is
+  its ink, so the collider-fit criterion measures it.
+- `HubTitleMotionTests` pins the physics: free fall, e² per bounce, the
+  rod limit of the swing rate (3g/2L), the tilt being the wave's slope,
+  and that everything ends at rest. `HubTitleGlyphsTests` checks the 17
+  letters, the hop and stillness in the real scene.
+
 ## 2026-10-14 — The home is polished, not redesigned
 
 **Decision:** The home keeps its layout, its opening's physics and its

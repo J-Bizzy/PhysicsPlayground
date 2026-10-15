@@ -623,4 +623,7 @@ def main():
         print("  %-24s %s  %d verts" % (filename, body.upper(), verts))
 
 
-main()
+# Guarded so `hubwordmark.py` can borrow its helpers without re-milling
+# these lines. Blender runs a `--python` script as `__main__`.
+if __name__ == "__main__":
+    main()

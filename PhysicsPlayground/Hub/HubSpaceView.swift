@@ -95,6 +95,8 @@ struct HubSpaceView: View {
                         scene.skipOpening()
                         return
                     }
+                    // A pinch on a letter of the wordmark hops it.
+                    if scene.hopTitleLetter(value.entity) { return }
                     guard let id = scene.moduleID(for: value.entity) else { return }
                     enter(id)
                 }
@@ -289,10 +291,24 @@ final class HubScene {
     /// Behind and above the centre of the arc.
     private var titlePosition = SIMD3<Float>(0, 2.12, -2.15)
     private static let titleRimColor = HubTitleStyle.champagne
-    /// The lockup's overall width, metres. Both lines are scaled to exactly this.
+    /// The lockup's overall width, metres. The machined lines are each scaled to
+    /// exactly this; the living wordmark's longer line is.
     private static let titleWidth: Float = 0.52
+    /// The living wordmark's leading, as a fraction of a line's height.
+    private static let livingLeading: Float = 0.08
+    /// The glass round the living wordmark, metres either side and above/below.
+    private static let plaquePadding = SIMD2<Float>(0.075, 0.055)
     private var titleLines: [Entity] = []
-    /// Where the More stands: under the wordmark's rule.
+    /// The wordmark's letters on hinges (`HubTitleGlyphs`), when the
+    /// per-letter assets are bundled; nil means the still milled lines.
+    private var livingTitle: HubTitleGlyphs?
+    /// What the lockup stands on — the glass plaque, or the machined lines'
+    /// rule — faded on its own while the letters arrive.
+    private var titleRule: Entity?
+    /// Whether the letters arrive with this opening (false on a walk back
+    /// or under Reduce Motion, where they are simply there).
+    private var titleArrives = false
+    /// Where the More stands: under the wordmark's footing.
     private var moreSeatPosition = SIMD3<Float>(0, 1.80, -2.13)
     private var moreSeat: Entity?
     /// An attachment renders at SwiftUI's natural size (1 pt ≈ 0.74 mm); at
@@ -458,6 +474,7 @@ final class HubScene {
         }
         openingPhase = .running
         openingStart = time
+        titleArrives = true
         presence = 1
 
         // The cloud: points of light, not beads — one soft glow sprite
@@ -589,8 +606,13 @@ final class HubScene {
             portal.label.components.set(OpacityComponent(opacity: labelLight))
             portal.body.scale = growth
         }
-        titleAnchor.components.set(OpacityComponent(opacity: labelLight))
-        titleAnchor.position = titlePosition + SIMD3(0, Opening.titleOffset(at: t), 0)
+        if livingTitle != nil {
+            // The letters bring themselves in; only their footing fades.
+            titleRule?.components.set(OpacityComponent(opacity: labelLight))
+        } else {
+            titleAnchor.components.set(OpacityComponent(opacity: labelLight))
+            titleAnchor.position = titlePosition + SIMD3(0, Opening.titleOffset(at: t), 0)
+        }
         moreSeat?.components.set(OpacityComponent(opacity: labelLight))
     }
 
@@ -615,6 +637,7 @@ final class HubScene {
         }
         titleAnchor.components.remove(OpacityComponent.self)
         titleAnchor.position = titlePosition
+        titleRule?.components.remove(OpacityComponent.self)
         moreSeat?.components.remove(OpacityComponent.self)
         // The opening has been seen — only now does it count against the session.
         onOpeningPlayed?()
@@ -664,6 +687,12 @@ final class HubScene {
                 : Self.floatHeight * Float(sin(2 * .pi * time / Self.floatPeriod
                                                + portal.phase * 2.1))
         }
+        // The living title runs on the opening's clock while it arrives —
+        // pinned with it for a screenshot — and on the scene's after.
+        livingTitle?.update(
+            now: time,
+            arrival: titleArrives ? (openingFrozenAt ?? (time - openingStart)) : nil,
+            stillness: stillness)
         for (index, line) in titleLines.enumerated() {
             line.orientation = stillness ? simd_quatf(angle: 0, axis: [0, 1, 0])
                 : HubTitleStyle.rake(time: time, phase: Double(index) * 1.3)
@@ -718,6 +747,14 @@ final class HubScene {
         return true
     }
 
+    /// A pinch on one of the wordmark's letters: it hops. True when it was one.
+    func hopTitleLetter(_ entity: Entity) -> Bool {
+        livingTitle?.hop(entity, now: time, stillness: stillness) ?? false
+    }
+
+    /// The wordmark's letters, when it is alive — for tests.
+    var titleLetters: [Entity] { livingTitle?.letterEntities ?? [] }
+
     /// The portals, in arc order — for tests and the debug arguments.
     var portalIDs: [String] { portals.map(\.moduleID) }
     /// A portal's anchor, by lab.
@@ -734,18 +771,34 @@ final class HubScene {
         // Build at a reference size, then scale to the common width. Extents come from
         // what was built (the milled asset's numbers, not the font's).
         let reference: CGFloat = 0.17
-        // Milled if the asset is there, generated if not; both return a centred
-        // (entity, extents) pair.
+        // Alive if the per-letter assets are there (`HubTitleGlyphs`), else
+        // milled, else generated; all three return a centred (entity,
+        // extents) pair, so the lockup below is the same for each.
+        let living = HubTitleGlyphs()
         let built = lines.map { text in
-            HubTitleStyle.milled(text, size: reference, accent: nil)
+            living.line(text)
+                ?? HubTitleStyle.milled(text, size: reference, accent: nil)
                 ?? HubTitleStyle.generated(text, size: reference, accent: nil)
         }
-        let scales = built.map { Self.titleWidth / max($0.extents.x, 1e-4) }
+        // The machined plaque forces both lines flush to one width. The living
+        // wordmark is set the way every label in the room is: one type size,
+        // lines centred, the longer line taking the width.
+        let scales: [Float]
+        if living.isAlive {
+            let widest = built.map(\.extents.x).max() ?? 1
+            scales = built.map { _ in Self.titleWidth / max(widest, 1e-4) }
+            living.lineScales = scales
+            livingTitle = living
+        } else {
+            scales = built.map { Self.titleWidth / max($0.extents.x, 1e-4) }
+        }
         // Cap heights after scaling — a wider scale makes taller letters.
         let heights = zip(built, scales).map { $0.0.extents.y * $0.1 }
         // Leading off the tallest line, not the average — an average-derived gap lets
-        // the scaled-up short line collide with its neighbour.
-        let gap = (heights.max() ?? 0) * HubTitleStyle.leadingFactor
+        // the scaled-up short line collide with its neighbour. Title case carries its
+        // own air in its ascenders and descenders, so it needs far less.
+        let leading = living.isAlive ? Self.livingLeading : HubTitleStyle.leadingFactor
+        let gap = (heights.max() ?? 0) * leading
         let blockHeight = heights.reduce(0, +) + gap * Float(heights.count - 1)
 
         // Walk down from the block's top, so the lockup centres on the anchor.
@@ -761,27 +814,45 @@ final class HubScene {
         // Kept for the rake. The lines turn, not the anchor.
         titleLines = built.map(\.entity)
 
-        // A thin champagne rule under the lockup. No backing plate: the milled
-        // chamfer holds a bright rim against a wall of any brightness.
-
-        let ruleMaterial = Materials.unlit(Self.titleRimColor, opacity: 0.65)
-        let rule = ModelEntity(
-            mesh: Primitives.box(width: 0.5, height: 0.004, depth: 0.004,
-                               cornerRadius: 0.002),
-            materials: [ruleMaterial])
-        rule.position = SIMD3(0, -blockHeight / 2 - 0.09, 0)
-        titleAnchor.addChild(rule)
+        // What the lockup stands on, which fades in with the portals' glass while
+        // the letters bring themselves in. The living wordmark stands on glass,
+        // like every label and panel in the room — the glass is also what keeps
+        // white letters legible on a white wall. The machined plaque has a thin
+        // champagne rule and no backing: its chamfer holds a bright rim on any wall.
+        let footing: Entity
+        let footingBottom: Float
+        if let livingTitle {
+            let width = Self.titleWidth + 2 * Self.plaquePadding.x
+            let height = blockHeight + 2 * Self.plaquePadding.y
+            footing = livingTitle.plaque(width: width, height: height)
+            // Behind the letters' backs, so they stand off it.
+            footing.position = SIMD3(0, 0, -0.03)
+            footingBottom = -height / 2
+        } else {
+            let ruleMaterial = Materials.unlit(Self.titleRimColor, opacity: 0.65)
+            footing = ModelEntity(
+                mesh: Primitives.box(width: 0.5, height: 0.004, depth: 0.004,
+                                   cornerRadius: 0.002),
+                materials: [ruleMaterial])
+            footing.position = SIMD3(0, -blockHeight / 2 - 0.09, 0)
+            footingBottom = -blockHeight / 2 - 0.09
+        }
+        titleAnchor.addChild(footing)
+        titleRule = footing
 
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true
         accessibility.label = "Physics Playground"
         titleAnchor.components.set(accessibility)
+        livingTitle?.makeOperable(titleAnchor, label: "Physics Playground",
+                                  now: { [weak self] in self?.time ?? 0 },
+                                  stillness: { [weak self] in self?.stillness ?? true })
         root.addChild(titleAnchor)
 
-        // The More seat: below the rule with air between them — at 0.15 the
-        // button's glass sat on the rule — clear of the lockup whatever its
-        // metrics.
-        moreSeatPosition = titlePosition + SIMD3(0, -blockHeight / 2 - 0.21, 0.02)
+        // The More seat: below the footing with air between them — at 0.06 under
+        // the rule the button's glass sat on it — clear of the lockup whatever
+        // its metrics.
+        moreSeatPosition = titlePosition + SIMD3(0, footingBottom - 0.12, 0.02)
     }
 
 }

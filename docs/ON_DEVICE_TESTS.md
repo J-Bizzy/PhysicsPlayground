@@ -250,11 +250,25 @@ working session:
       halos, no square around any of them, and the room's dimming intact
       behind them. They draw each portal's ring as its glass grows the
       last few per cent into place, and the wordmark rises into its spot.
-- [ ] **The bezels are one clean ring each** — the wordmark's champagne
-      alloy, no notch or tick anywhere round it, the glass meeting it with
-      no gap at any angle you look from.
+- [ ] **The bezels are one clean ring each** — champagne alloy, the
+      colour of the i's dot, no notch or tick anywhere round it, the glass
+      meeting it with no gap at any angle you look from.
 - [ ] **At rest the portals float** a few millimetres, never in step —
       felt rather than seen. Under Reduce Motion they hang still.
+- [ ] **The wordmark is the app's own type** (2026-10-14): rounded white
+      letters standing a few centimetres off a glass plaque the shape of
+      every panel, the i's dot a point of champagne light. Walk round it:
+      the letters are solids with soft rounded edges, with no spike, nick
+      or hole anywhere, and they hold white against a bright wall. Judge:
+      does it read as the same app as the labs' title bars?
+- [ ] **The wordmark arrives by physics.** "Physics" drops in letter by
+      letter and bounces to rest across the bell; "Playground" swings in
+      from its top edges like hung signs and settles; the i's dot drops
+      onto its stem last. The plaque fades up with the portals' labels.
+      Then a slow wave rolls through both lines and a glint brightens the
+      letters every few seconds. Judge: playful, or too much for a title?
+- [ ] **Pinch a letter**: it hops and bounces back to exactly its place,
+      with a pop. Gaze at one first: it highlights like any button.
 - [ ] **Hover a portal:** the system highlight. Pinch it: you are in
       that lab.
 - [ ] **More** under the wordmark opens Lab list, Settings and About in
@@ -1453,9 +1467,9 @@ in a room.
       anywhere in them.
 - [ ] **The gyroscope bead and the modelled miniatures** at real
       passthrough contrast, in a bright room and a dim one.
-- [ ] **The wordmark.** If the machined plaque reads as faint against a
-      real wall too, that is a real finding about the one piece of type
-      every visitor sees first.
+- [ ] **The wordmark.** If the white letters read as faint against
+      their glass on a real wall too, that is a real finding about the one
+      piece of type every visitor sees first.
 
 ### Accessibility
 
