@@ -2,8 +2,8 @@
 //  SoundPalette.swift
 //  Physics Playground — Design system
 //
-//  All sounds are synthesized, written once as WAVs into Caches, and loaded
-//  as AudioFileResources. Models publish SpatialSoundEvents; renderers
+//  All sounds are synthesized (`SoundEffects`, `AmbientScore`), written once
+//  as WAVs into Caches, and loaded as AudioFileResources. Models publish SpatialSoundEvents; renderers
 //  position an emitter and play. The one sound that is not in the room is
 //  the house music (`AmbientScore`), a head-locked stereo bed. No-ops if
 //  loading fails.
@@ -23,6 +23,7 @@ struct SpatialSoundEvent: Equatable {
 
 @MainActor
 enum SoundPalette {
+    /// Each recipe is in `SoundEffects`, under the same name.
     enum Sound: String, CaseIterable {
         case pop, whoosh, thud, chime, boom
         /// Grab acknowledgement; `releaseTick` answers a set-down and closes
@@ -31,10 +32,14 @@ enum SoundPalette {
         /// The opening's swell. Its bell time and `Opening.landingTime` are
         /// pinned to each other in `OpeningTests` — they must not drift.
         case calibration
+        /// Steel on steel: Newton's cradle (it borrowed `pop` until 2026-10-14).
+        case clack
+        /// The launcher's pneumatic thump (it borrowed `pop` too).
+        case launch
     }
 
     /// When `calibration`'s bell strikes, seconds into the file — must match `Opening.landingTime`.
-    nonisolated static let calibrationLanding = 2.65
+    nonisolated static let calibrationLanding = SoundEffects.calibrationLanding
 
     private static var resources: [Sound: AudioFileResource] = [:]
     private static var warmed = false
@@ -42,7 +47,7 @@ enum SoundPalette {
     /// Every WAV this palette needs, once they exist on disk.
     private nonisolated struct CachedSounds: Sendable {
         var oneShots: [Sound: URL] = [:]
-        var resonanceTone: URL?
+        var tones: [Tone: URL] = [:]
     }
 
     /// Synthesize (if needed) and load every sound. Call once, early.
@@ -62,7 +67,9 @@ enum SoundPalette {
                 for sound in Sound.allCases {
                     cached.oneShots[sound] = try? writeIfNeeded(sound)
                 }
-                cached.resonanceTone = try? writeResonanceToneIfNeeded()
+                for tone in Tone.allCases {
+                    cached.tones[tone] = try? writeIfNeeded(tone)
+                }
                 return cached
             }.value
 
@@ -71,8 +78,8 @@ enum SoundPalette {
                     resources[sound] = resource
                 }
             }
-            if let url = cached.resonanceTone {
-                resonanceToneResource = try? await AudioFileResource(
+            for (tone, url) in cached.tones {
+                toneResources[tone] = try? await AudioFileResource(
                     contentsOf: url,
                     configuration: .init(shouldLoop: true))
             }
@@ -98,40 +105,54 @@ enum SoundPalette {
         return directory
     }
 
-    // MARK: Resonance tone (elastic-field drumhead)
+    /// Deletes earlier versions of a cached file — `pop-1.wav` once
+    /// `pop-2.wav` exists — so a re-voiced sound does not leave the old
+    /// one behind in Caches for ever.
+    private nonisolated static func removeOlderVersions(of prefix: String, keeping current: String,
+                                                        in directory: URL) {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        for name in names where name.hasPrefix(prefix) && name != current {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        }
+    }
 
-    private static var resonanceToneResource: AudioFileResource?
-    /// The base pitch (Hz) the tone is synthesized at; the caller shifts
-    /// it with the controller's `speed` to sing the swept drive.
-    nonisolated static let resonanceToneBaseHz = 220.0
+    // MARK: Looping tones (sonification)
 
-    /// Starts the looping resonance tone on `entity`, silent. The caller
-    /// sets `gain` from ring amplitude and `speed` from drive frequency.
-    static func startResonanceTone(on entity: Entity) -> AudioPlaybackController? {
-        guard let resonanceToneResource else { return nil }
+    /// The two continuous voices. `glass` sings the orbital chord; `hum`
+    /// is Circuit Workshop's mains, played slowed to ~52 Hz. They were one
+    /// tone until 2026-10-14, which made the chord buzz or the hum ring.
+    enum Tone: String, CaseIterable {
+        case glass, hum
+    }
+
+    private static var toneResources: [Tone: AudioFileResource] = [:]
+    /// The base pitch (Hz) both tones are synthesized at; the caller shifts
+    /// it with the controller's `speed`.
+    nonisolated static let resonanceToneBaseHz = SoundEffects.toneBaseHz
+
+    /// Starts a looping tone on `entity`, silent. The caller sets `gain`
+    /// from loudness and `speed` from pitch.
+    static func startTone(_ tone: Tone, on entity: Entity) -> AudioPlaybackController? {
+        guard let resource = toneResources[tone] else { return nil }
         entity.components.set(SpatialAudioComponent(gain: Audio.Decibel(-80)))
-        let controller = entity.playAudio(resonanceToneResource)
+        let controller = entity.playAudio(resource)
         controller.gain = -80
         return controller
     }
 
-    private nonisolated static func writeResonanceToneIfNeeded() throws -> URL {
-        let url = try soundsDirectory().appendingPathComponent("resonance-tone-1.wav")
+    private nonisolated static func writeIfNeeded(_ tone: Tone) throws -> URL {
+        let directory = try soundsDirectory()
+        let name = "tone-\(tone.rawValue)-1.wav"
+        let url = directory.appendingPathComponent(name)
         if !FileManager.default.fileExists(atPath: url.path) {
-            try wavData(samples: synthesizeResonanceTone()).write(to: url)
+            let samples = tone == .glass ? SoundEffects.glassTone(sampleRate: sampleRate)
+                                         : SoundEffects.humTone(sampleRate: sampleRate)
+            try wavData(samples: samples).write(to: url)
         }
+        removeOlderVersions(of: "tone-\(tone.rawValue)-", keeping: name, in: directory)
+        // The single tone both voices shared before they were split.
+        removeOlderVersions(of: "resonance-tone-", keeping: "", in: directory)
         return url
-    }
-
-    /// A 1 s seamless loop: 220 Hz fundamental plus soft harmonics — all
-    /// integer cycles per second, so the loop seam vanishes.
-    private nonisolated static func synthesizeResonanceTone() -> [Float] {
-        render(duration: 1.0) { t, _ in
-            let f = resonanceToneBaseHz
-            return 0.7 * sin(2 * .pi * f * t)
-                + 0.22 * sin(2 * .pi * 2 * f * t)
-                + 0.09 * sin(2 * .pi * 3 * f * t)
-        }
     }
 
     // MARK: The house music
@@ -208,95 +229,21 @@ enum SoundPalette {
 
     private nonisolated static let sampleRate = 44_100.0
 
+    /// Cache names carry the recipe's version: bump it whenever
+    /// `SoundEffects` changes a sound, or nobody who has launched before
+    /// will hear the change. Version 2 is the 2026-10-14 re-voicing.
+    private nonisolated static let oneShotVersion = 2
+
     private nonisolated static func writeIfNeeded(_ sound: Sound) throws -> URL {
-        let url = try soundsDirectory().appendingPathComponent("\(sound.rawValue)-1.wav")
+        let directory = try soundsDirectory()
+        let name = "\(sound.rawValue)-\(oneShotVersion).wav"
+        let url = directory.appendingPathComponent(name)
         if !FileManager.default.fileExists(atPath: url.path) {
-            try wavData(samples: synthesize(sound)).write(to: url)
+            try wavData(samples: SoundEffects.oneShot(sound.rawValue, sampleRate: sampleRate))
+                .write(to: url)
         }
+        removeOlderVersions(of: "\(sound.rawValue)-", keeping: name, in: directory)
         return url
-    }
-
-    private nonisolated static func synthesize(_ sound: Sound) -> [Float] {
-        switch sound {
-        case .pop:
-            // A quick downward pluck: 700 → 320 Hz over 0.1 s.
-            return render(duration: 0.10) { t, _ in
-                let frequency = 700 - 3800 * t
-                return sin(2 * .pi * max(frequency, 320) * t) * exp(-t * 38)
-            }
-        case .whoosh:
-            // Low-passed noise with a swelling envelope.
-            var lowPassed: Double = 0
-            return render(duration: 0.32) { t, duration in
-                let noise = Double.random(in: -1...1)
-                lowPassed += 0.08 * (noise - lowPassed)
-                return lowPassed * 3 * sin(.pi * t / duration)
-            }
-        case .thud:
-            // A soft body hitting the floor: 85 Hz with a dash of noise.
-            return render(duration: 0.18) { t, _ in
-                (sin(2 * .pi * 85 * t) + 0.18 * .random(in: -1...1)) * exp(-t * 24)
-            }
-        case .chime:
-            // E5 + B5 + E6, gently decaying — the score sound.
-            return render(duration: 0.7) { t, _ in
-                (0.5 * sin(2 * .pi * 659.26 * t)
-                    + 0.3 * sin(2 * .pi * 987.77 * t)
-                    + 0.2 * sin(2 * .pi * 1318.51 * t)) * exp(-t * 5.5)
-            }
-        case .boom:
-            // Deep and round, for mergers: 55 Hz + filtered noise.
-            var lowPassed: Double = 0
-            return render(duration: 0.6) { t, _ in
-                let noise = Double.random(in: -1...1)
-                lowPassed += 0.05 * (noise - lowPassed)
-                return (sin(2 * .pi * 55 * t) + 1.6 * lowPassed) * exp(-t * 7)
-            }
-        case .calibration:
-            // A warm low fifth swelling in, a soft bell at the landing,
-            // a shared tail out under the cascade.
-            let landing = calibrationLanding
-            return render(duration: 3.4) { t, _ in
-                let swell = min(t / 2.0, 1)
-                let pad = (sin(2 * .pi * 110 * t)
-                           + 0.7 * sin(2 * .pi * 165.05 * t)
-                           + 0.35 * sin(2 * .pi * 220.3 * t))
-                    * 0.2 * swell * swell * exp(-max(t - landing, 0) * 2.2)
-                var bell = 0.0
-                if t > landing {
-                    let struck = t - landing
-                    bell = (0.5 * sin(2 * .pi * 440 * struck)
-                            + 0.3 * sin(2 * .pi * 659.26 * struck)
-                            + 0.15 * sin(2 * .pi * 880 * struck))
-                        * exp(-struck * 4.5) * 0.8
-                }
-                return pad + bell
-            }
-        case .grabTick:
-            // A short bright pluck: 1200 → 900 Hz over 40 ms.
-            return render(duration: 0.04) { t, _ in
-                let frequency = 1200 - 7500 * t
-                return sin(2 * .pi * max(frequency, 900) * t) * exp(-t * 70)
-            }
-        case .releaseTick:
-            // The set-down: lower, softer, slightly longer.
-            return render(duration: 0.055) { t, _ in
-                let frequency = 900 - 3600 * t
-                return sin(2 * .pi * max(frequency, 700) * t) * exp(-t * 55)
-            }
-        }
-    }
-
-    private nonisolated static func render(duration: Double, _ sample: (Double, Double) -> Double) -> [Float] {
-        let count = Int(duration * sampleRate)
-        var peak = 1e-6
-        var raw = [Double](repeating: 0, count: count)
-        for index in 0..<count {
-            raw[index] = sample(Double(index) / sampleRate, duration)
-            peak = max(peak, abs(raw[index]))
-        }
-        // Normalize to a polite −6 dBFS.
-        return raw.map { Float($0 / peak * 0.5) }
     }
 
     /// Minimal mono 16-bit PCM WAV container.

@@ -131,8 +131,11 @@ contradicts this section, this section is current.
       word; the house music (2026-10-14 score) — it should fade up, sit
       UNDER the room rather than in front of you, never click at its
       64 s seam, and be quiet enough to forget (−22 dB head-locked; say
-      if it wants more or less); whether the title bar clears the
-      apparatus in all six labs — Pendulums' cradle hangs from
+      if it wants more or less); the re-voiced effects — do the ticks,
+      pops and chime read as one family with the music, does the cradle
+      CLACK like steel and the launcher THUMP, does the mains hum still
+      read as a hum and the orbital chord as glass; whether the title bar
+      clears the apparatus in all six labs — Pendulums' cradle hangs from
       1.62 m since 2026-09-04 because at 2.0 m the bar crossed its cables.
 - [ ] **The cut test:** enter all six labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.

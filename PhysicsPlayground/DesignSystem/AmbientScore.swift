@@ -408,12 +408,19 @@ nonisolated enum AmbientScore {
             a3 = g * a2
         }
         mutating func lowpass(_ v0: Double) -> Double {
+            process(v0).low
+        }
+        /// The same filter's band-pass output (`SoundEffects`' whooshes).
+        mutating func bandpass(_ v0: Double) -> Double {
+            process(v0).band
+        }
+        private mutating func process(_ v0: Double) -> (low: Double, band: Double) {
             let v3 = v0 - ic2
             let v1 = a1 * ic1 + a2 * v3
             let v2 = ic2 + a2 * ic1 + a3 * v3
             ic1 = 2 * v1 - ic1
             ic2 = 2 * v2 - ic2
-            return v2
+            return (v2, v1)
         }
     }
 
@@ -452,14 +459,16 @@ nonisolated enum AmbientScore {
         private var lowCutState = 0.0
         private let lowCut: Double
 
-        init(sampleRate: Double) {
+        /// `size` is the combs' feedback: 0.93 is the score's long room;
+        /// a one-shot's room is smaller.
+        init(sampleRate: Double, size: Double = 0.93) {
             let scale = sampleRate / 44_100
             let combs = [1_116, 1_188, 1_277, 1_356, 1_422, 1_491, 1_557, 1_617]
             let passes = [556, 441, 341, 225]
             let spread = 23
             func length(_ n: Int) -> Int { max(Int(Double(n) * scale), 1) }
-            combsL = combs.map { Comb(length: length($0), feedback: 0.93, damp: 0.42) }
-            combsR = combs.map { Comb(length: length($0 + spread), feedback: 0.93, damp: 0.42) }
+            combsL = combs.map { Comb(length: length($0), feedback: size, damp: 0.42) }
+            combsR = combs.map { Comb(length: length($0 + spread), feedback: size, damp: 0.42) }
             passesL = passes.map { AllPass(length: length($0)) }
             passesR = passes.map { AllPass(length: length($0 + spread)) }
             preDelay = [Double](repeating: 0, count: max(Int(0.035 * sampleRate), 1))

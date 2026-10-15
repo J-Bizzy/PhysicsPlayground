@@ -15,6 +15,8 @@ import RealityKit
 final class ToneVoice {
     private var controller: AudioPlaybackController?
     private let emitter: Entity
+    /// Which loop it sings with: glass for a chord, hum for machinery.
+    private let tone: SoundPalette.Tone
     /// The frequency the underlying loop was synthesized at.
     private let baseHz: Double
     private let floorDecibels: Double
@@ -26,12 +28,15 @@ final class ToneVoice {
     /// - Parameters:
     ///   - emitter: an entity in the scene; the tone is spatial, so it
     ///     comes from wherever the physics actually is.
+    ///   - tone: which looping voice to sing with.
     ///   - baseHz: the synthesized loop's fundamental.
     ///   - range: quiet-to-loud decibel range this voice sweeps.
     init(on emitter: Entity,
+         tone: SoundPalette.Tone = .glass,
          baseHz: Double = SoundPalette.resonanceToneBaseHz,
          range: ClosedRange<Double> = (-72)...(-16)) {
         self.emitter = emitter
+        self.tone = tone
         self.baseHz = baseHz
         self.floorDecibels = range.lowerBound
         self.ceilingDecibels = range.upperBound
@@ -44,7 +49,7 @@ final class ToneVoice {
     @discardableResult
     func start() -> Bool {
         guard controller == nil else { return true }
-        controller = SoundPalette.startResonanceTone(on: emitter)
+        controller = SoundPalette.startTone(tone, on: emitter)
         return controller != nil
     }
 

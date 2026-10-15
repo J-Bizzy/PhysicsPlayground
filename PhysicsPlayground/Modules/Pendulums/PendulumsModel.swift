@@ -389,7 +389,7 @@ final class PendulumsModel {
                 pendulums[j].state.velocity += normal * (nb - vb)
                 touched = true
                 if abs(na - va) > 0.05 {
-                    emitSound(.pop, at: a.bobWorld,
+                    emitSound(.clack, at: a.bobWorld,
                               volume: min(abs(na - va) * 0.4, 0.8))
                 }
             }

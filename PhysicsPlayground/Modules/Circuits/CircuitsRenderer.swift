@@ -437,7 +437,7 @@ final class CircuitsRenderer {
     private var hum: ToneVoice?
 
     private func tickHum(_ model: CircuitsModel) {
-        if hum == nil { hum = ToneVoice(on: audioEmitter, range: (-58)...(-26)) }
+        if hum == nil { hum = ToneVoice(on: audioEmitter, tone: .hum, range: (-58)...(-26)) }
         guard hum?.start() == true else { return }
         guard !model.isPaused else { hum?.mute(); return }
 

@@ -584,7 +584,7 @@ final class KinematicsModelTests: XCTestCase {
         model.fire()
         let event = try! XCTUnwrap(model.soundEvent)
         XCTAssertNotEqual(event.id, before)
-        XCTAssertEqual(event.kind, .pop)
+        XCTAssertEqual(event.kind, .launch)
         XCTAssertEqual(simd_distance(event.position, model.muzzlePoint), 0, accuracy: 1e-9)
     }
 

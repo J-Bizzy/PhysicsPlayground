@@ -361,7 +361,7 @@ final class KinematicsModel {
         flight.maxHeight = muzzlePoint.y
         flight.launchPoint = muzzlePoint
         insertFlight(flight)
-        emitSound(.pop, at: muzzlePoint, volume: 0.8)
+        emitSound(.launch, at: muzzlePoint, volume: 0.8)
     }
 
     /// Spawns a fresh ball hovering at `ballSpawnPoint`, ready to grab and throw.

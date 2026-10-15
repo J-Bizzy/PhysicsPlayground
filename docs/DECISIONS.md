@@ -16,6 +16,48 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-14 — The sound effects join the music's family
+
+**Decision:** Every one-shot and looping tone is re-voiced in
+`DesignSystem/SoundEffects`, built from the score's oscillators, filters
+and room.
+- **Interface sounds are in the music's key:** the grab tick on E6, the
+  release on B5, the pop a glass droplet on A5, and the chime a rolled
+  A-major triad of the score's FM bells.
+- **Physical sounds are shaped from falling pitch and filtered, seeded
+  noise:** the thud (150 → 62 Hz with a muffled contact), the whoosh (two
+  swept bands, softened), the boom (a falling sub under a two-stage
+  rumble).
+- **The opening's swell is the score's first chord rising** through an
+  opening filter under an airy crest, and it lets go as the bell strikes
+  at 2.65 s.
+- **Two sounds that borrowed the UI pop now have their own:** the
+  cradle's `clack` (three steel-sphere modes) and the launcher's `launch`
+  (a pneumatic thump).
+- **The one looping tone is split in two:** `glass` sings the orbital
+  chord, and `hum` (a full harmonic series, odd harmonics forward) is
+  Circuits' mains.
+
+**Context:** After the score, the owner asked for the same treatment on
+the effects. A spectrogram of the old set showed full-band vertical
+lines. The chirps stopped mid-cycle, so every pop and tick ended on a
+click. The thud, whoosh and boom were raw white noise. Several unrelated
+events shared one UI pop, and one 220 Hz loop was both a chord and a
+mains hum.
+
+**Consequences:**
+- Every one-shot opens on a raised-cosine onset and closes on a
+  raised-cosine fade, so none clicks; `SoundEffectsTests` holds both
+  ends.
+- Levels stay within a few dB of the old sounds, so the call sites'
+  volumes keep their meaning. Boom is trimmed 3.4 dB because it now
+  sustains, and clack is lifted because it is short.
+- The cache names carry `oneShotVersion` (2) and the tones' own version.
+  Older versions are deleted on launch. **Change a recipe, bump its
+  version.**
+- The score renders bit-for-bit as before. Its filter gained a band-pass
+  output and its room a size parameter, both defaulting to what it used.
+
 ## 2026-10-14 — The house music becomes a score
 
 **Decision:** The ambient loop is now `DesignSystem/AmbientScore`: a 64 s
