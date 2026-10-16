@@ -16,6 +16,46 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-16 — The home's portals hold their labs in miniature; the icon is a prism
+
+**Decision:** Each of the home's seven portals now holds its lab in miniature: the lab's own apparatus, built from the parts the lab itself draws, standing on one shared stage and moved by the lab's real physics.
+
+**The seven dioramas:**
+- **Pendulums:** a Newton's cradle.
+- **Light:** a torch, a flint prism and a screen.
+- **Electric Fields:** a dipole inside its glass equipotentials.
+- **Magnetism:** a magnet through the pickup coil, lighting its LED.
+- **Projectiles:** a launcher, an arc and a hoop.
+- **Circuits:** a battery, a switch and a bulb.
+- **Orbital Mechanics:** an orrery.
+
+The app icon is now a rendered SF11 prism splitting white light. The owner chose both directions from options offered on 2026-10-16.
+
+**Context:** The portals had held one-object emblems: a brass bob, a magnet in pink loops, a prism, a hairline arc. They were small in their glass, mixed in style (brass, glowing dots, flat lines), and shared nothing with the glass-and-champagne look the wordmark took on 2026-10-14. The old icon was the orbit ring drawn flat in PIL.
+
+**Consequences:**
+- **One stage, the same size and scale in every portal** (`Tools/hubdioramas.py` → `HubStage.usdz`: a graphite disc on a champagne foot, with a champagne keyline). This is what makes seven differently shaped labs read as a row of exhibits. A lab built at its own size in the lab's own metres hangs off a `bench` that `fitStage` scales to fill the stage, measured over its whole motion. Each diorama is centred in its portal by its own height. `HubDioramaTests` holds the stages equal to 0.2 %.
+- **The labs' own parts and physics, never a lookalike:**
+  - the wells' previews (`chargePreview`, `magnetPreview`, `coilBody`, `ledDome`, `partPreview`, `pieceModel`, `torchModel`);
+  - the milled props (`PickupCoil`, `LauncherBarrel`, the circuit bodies);
+  - `LightTracer` for the light, `PickupCoil`/`BicolourLED` for the LED, `Isosurface.meshes` for the shells;
+  - the exact large-amplitude swing of the lab's 0.55 m cradle, so the miniature plays at the period of the cradle it models, not a desk toy's;
+  - the orrery's real a, e, longitude of perihelion and period ratios, placed by Kepler's equation.
+
+  `HubDioramaTests` checks:
+  - the period against 4√(L/g)·K(sin θ₀/2);
+  - the spectrum's order on its screen;
+  - both LED colours, and dark at the magnet's turning points;
+  - T² = a³, and the true anomaly against Kepler's equation.
+- **The cradle frame is milled** (`HubCradle.usdz`: bent champagne tube on turned feet). Its rails clear the end ball's 0.55 rad release, and its feet stand on the stage. `VignettePropTests` holds both files to the numbers Swift places them by, since they are placed at their authored origin, not recentred.
+- **The eleven props the old emblems used are gone,** along with `Tools/moduleprops.py`: BarMagnet, PendulumStand/Bob, Compass body and needle, LauncherCarriage, QuadrantPointer, TargetStand, CometNucleus, ChargePlus/Minus. `PropCache` warms every bundled `.usdz` at launch, so dead assets cost start-up time. Git has them.
+- **A diorama has depth:** it stands 12 mm clear in front of the pane, and the portal's pinch target reaches its front.
+- **`-hubYaw <degrees>`** turns the home about the wearer, so the outer portals can be photographed (positive only; 300 brings the leftmost to the front).
+- **The icon** (`Tools/appicon.py`, now a Blender script):
+  - The prism is the lab's 60° SF11 at least deviation for 550 nm. Every wavelength is refracted by vector Snell's law with its own Sellmeier index (n_d 1.7847, δ_min 67.2°, the fan 8.25° from 420 to 680 nm), and each is weighted by the eye's sensitivity.
+  - The prism and the white beam are the Middle layer; the spectrum is the Front, rendered additively on black and turned into a light layer, so the colours overlap to white at the glass; the graphite ground is the Back.
+  - It is unavoidably the textbook image of dispersion, and close kin to a famous album cover. The 3-D glass and the house ground are what make it this app's.
+
 ## 2026-10-16 — The charm pass: Electric Fields' voice, the meter's beep, three remarks
 
 **Decision:** Three restrained additions to what the labs sound like. Each follows from the physics and fires once, on the frame the event begins, never while a state merely holds.

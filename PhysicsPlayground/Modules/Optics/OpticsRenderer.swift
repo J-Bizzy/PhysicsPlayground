@@ -207,7 +207,7 @@ final class OpticsRenderer {
         return marks
     }
 
-    private static func color(_ linear: SIMD3<Double>) -> UIColor {
+    static func color(_ linear: SIMD3<Double>) -> UIColor {
         func encode(_ v: Double) -> CGFloat {
             let c = min(max(v, 0), 1)
             return CGFloat(c <= 0.0031308 ? 12.92 * c : 1.055 * pow(c, 1 / 2.4) - 0.055)

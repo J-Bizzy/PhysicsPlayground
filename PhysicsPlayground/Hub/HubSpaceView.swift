@@ -38,6 +38,14 @@ struct HubSpaceView: View {
             #endif
             scene.build(modules: modules)
             #if DEBUG
+            // `-hubYaw <degrees>` turns the whole home about the wearer, so a
+            // portal off the simulator's view can be photographed: 300 brings
+            // the leftmost to the front (positive only — a value starting
+            // with "-" is read as the next key).
+            let yaw = UserDefaults.standard.double(forKey: "hubYaw")
+            if yaw != 0 { scene.root.orientation = simd_quatf(angle: Float(yaw) * .pi / 180, axis: [0, 1, 0]) }
+            #endif
+            #if DEBUG
             LaunchTrace.mark("home built in "
                              + String(format: "%.2f", (ContinuousClock.now - buildStarted) / .seconds(1))
                              + " s")
@@ -377,12 +385,16 @@ final class HubScene {
             body.addChild(rim)
         }
 
-        // The lab's own physics, looping: what the portal says it does.
+        // The lab in miniature, looping its own physics: what the portal says
+        // it does. A diorama has depth, so it stands just in front of the
+        // pane with its back clear of the glass.
         let built = HubVignettes.make(for: module.id)
         let bounds = built.entity.visualBounds(relativeTo: nil).extents
         let largest = max(bounds.x, max(bounds.y, 1e-4))
         built.entity.scale = SIMD3(repeating: Self.previewSize / largest)
-        built.entity.position = [0, 0, 0.03]
+        let depth = built.entity.visualBounds(relativeTo: nil)
+        built.entity.position = [0, 0, Self.paneClearance - depth.min.z]
+        let front = built.entity.position.z + depth.max.z
         body.addChild(built.entity)
 
         // Its name under it: system type on glass, with the lab's colour as a
@@ -407,9 +419,11 @@ final class HubScene {
         let bottom = radius + Self.labelDrop + labelSize.y
         let top = radius + 0.01
         anchor.components.set(InputTargetComponent())
+        // Deep enough to take a pinch on the front of the diorama.
+        let back: Float = 0.04
         anchor.components.set(CollisionComponent(shapes: [
-            Primitives.collisionBox(size: [2 * radius + 0.02, top + bottom, 0.08],
-                                    offset: [0, (top - bottom) / 2, 0]),
+            Primitives.collisionBox(size: [2 * radius + 0.02, top + bottom, front + back],
+                                    offset: [0, (top - bottom) / 2, (front - back) / 2]),
         ]))
         anchor.components.set(HoverEffectComponent())
         SpatialActions.attach(
@@ -424,7 +438,9 @@ final class HubScene {
     /// The preview's largest extent, metres. Its square's corners reach
     /// 0.71 of this from the centre, so 20 cm keeps even a corner 3 cm
     /// inside the 17 cm rim (at 22 cm, the pendulum's beam touched it).
-    private static let previewSize: Float = 0.20
+    private static let previewSize: Float = 0.26
+    /// How far in front of the pane a diorama's back stands.
+    private static let paneClearance: Float = 0.012
     /// From the rim to the label's top edge.
     private static let labelDrop: Float = 0.035
 

@@ -467,7 +467,7 @@ final class FieldRenderer {
     /// depth rather than fog. Clearcoat catches the room's light along each
     /// rim, which is what reads a shell as a surface rather than a coloured
     /// haze. It writes no depth, so nested shells all show.
-    private static func shellMaterial(rank: Int) -> PhysicallyBasedMaterial {
+    static func shellMaterial(rank: Int) -> PhysicallyBasedMaterial {
         if let cached = shellMaterials[rank] { return cached }
         let tint: UIColor = rank > 0 ? DesignTokens.Palette.positiveUI
             : rank < 0 ? DesignTokens.Palette.negativeUI : UIColor(white: 0.95, alpha: 1)

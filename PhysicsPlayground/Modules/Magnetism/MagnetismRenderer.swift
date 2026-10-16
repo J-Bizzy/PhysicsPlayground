@@ -254,27 +254,35 @@ final class MagnetismRenderer {
     /// The LED at a level: the lens itself goes from milky to its colour,
     /// and a soft glow swells round it.
     private static func light(_ visual: CoilVisual, level: Int) {
+        paintLED(dome: visual.dome, glow: visual.glow, light: visual.light, level: level)
+    }
+
+    /// Lights an LED dome at `ledLevel` — the lab's coil and the home's
+    /// miniature of it, one look. `reach` is the point light's radius,
+    /// which a miniature shrinks with itself.
+    static func paintLED(dome: ModelEntity, glow: ModelEntity, light: Entity, level: Int,
+                         reach: Float = 0.30) {
         guard level != 0 else {
-            visual.dome.model?.materials = [ledOffMaterial]
-            visual.dome.children.compactMap { $0 as? ModelEntity }
+            dome.model?.materials = [ledOffMaterial]
+            dome.children.compactMap { $0 as? ModelEntity }
                 .forEach { $0.model?.materials = [ledOffMaterial] }
-            visual.glow.isEnabled = false
-            visual.light.components.remove(PointLightComponent.self)
+            glow.isEnabled = false
+            light.components.remove(PointLightComponent.self)
             return
         }
         let strength = Float(abs(level)) / 8
         let colour = level > 0 ? ledRed : ledGreen
         // Brighter is whiter at the core, as a real LED's lens saturates.
         let lit = Materials.unlit(mix(colour, .white, CGFloat(0.35 * strength)))
-        visual.dome.model?.materials = [lit]
-        visual.dome.children.compactMap { $0 as? ModelEntity }
+        dome.model?.materials = [lit]
+        dome.children.compactMap { $0 as? ModelEntity }
             .forEach { $0.model?.materials = [lit] }
-        visual.glow.isEnabled = true
-        GlowSprite.paint(visual.glow, colour, strength: strength)
+        glow.isEnabled = true
+        GlowSprite.paint(glow, colour, strength: strength)
         // A few centimetres of reach: enough to colour the winding and the
         // flanges, not the room.
-        visual.light.components.set(PointLightComponent(
-            color: colour, intensity: 900 * strength, attenuationRadius: 0.30))
+        light.components.set(PointLightComponent(
+            color: colour, intensity: 900 * strength, attenuationRadius: reach))
     }
 
     // MARK: The compass you carry

@@ -271,6 +271,26 @@ working session:
 
 ## The home
 
+### The labs in miniature, and the icon (2026-10-16)
+
+- [ ] **Each portal holds its lab, small, on the same graphite stage.**
+      The cradle clacks, the magnet slides through the coil and the LED
+      flashes red then green, the prism's spectrum sweeps its screen, the
+      charges sit in their glass shells with heads riding the lines, the
+      launcher's ball drops through the hoop, the switch closes and the
+      bulb lights, the planets go round the orrery. Judge from where you
+      stand, 1.75 m off: does each read as its lab at a glance, and do the
+      seven stages read as one set?
+- [ ] **Walk up to a portal.** Up close the models should hold: the
+      cradle's bent champagne frame and bifilar threads, the coil's copper
+      turns, the prism's glass. Nothing pokes through the glass pane
+      behind it, and a pinch on the front of a diorama still enters the lab.
+- [ ] **Frame time on the home with all seven running.** The Light
+      diorama re-traces seven rays every frame; it should not be felt.
+- [ ] **The app icon**, on the Home View: the prism and its white beam on
+      one layer, the spectrum floating in front of it on another. Look
+      around it: the parallax should separate them by depth.
+
 - [ ] **The opening plays once and ends as the home.** The room dims a
       little; particles fall under gravity, swirl in a crossed field,
       ripple like a wave and settle into seven portals in an arc around

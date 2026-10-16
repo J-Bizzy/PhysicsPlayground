@@ -37,10 +37,10 @@ final class PropCacheTests: XCTestCase {
         async let first: Void = PropCache.warmUp()
         async let second: Void = PropCache.warmUp()
         _ = await (first, second)
-        let before = PropCache.prototype(named: "BarMagnet")
+        let before = PropCache.prototype(named: "HubStage")
         await PropCache.warmUp()
         XCTAssertNotNil(before)
-        XCTAssertTrue(before === PropCache.prototype(named: "BarMagnet"),
+        XCTAssertTrue(before === PropCache.prototype(named: "HubStage"),
                       "a second warm-up reloaded a prototype it already had")
     }
 
@@ -48,8 +48,8 @@ final class PropCacheTests: XCTestCase {
     /// entity would steal it from the cache.
     func testInstanceIsACloneOfThePrototype() async {
         await PropCache.warmUp()
-        let prototype = PropCache.prototype(named: "BarMagnet")
-        let instance = PropCache.instance(named: "BarMagnet")
+        let prototype = PropCache.prototype(named: "HubStage")
+        let instance = PropCache.instance(named: "HubStage")
         XCTAssertNotNil(instance)
         XCTAssertFalse(prototype === instance)
         XCTAssertNil(instance?.parent)
