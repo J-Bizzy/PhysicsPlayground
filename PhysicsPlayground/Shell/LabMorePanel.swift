@@ -28,6 +28,7 @@ struct LabMorePanel: View {
         @Bindable var appModel = appModel
         @Bindable var placement = appModel.labPlacement
         ControlPanel {
+            ScrollViewReader { scroller in
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     if !module.more.isEmpty || !module.adjustables.isEmpty {
@@ -46,6 +47,7 @@ struct LabMorePanel: View {
                         ControlSection("Values") {
                             ReadingsGrid(module: module)
                         }
+                        .id(Self.valuesID)
                     }
 
                     ControlSection("Room") {
@@ -80,9 +82,22 @@ struct LabMorePanel: View {
             }
             .frame(maxHeight: Self.maxHeight)
             .scrollBounceBehavior(.basedOnSize)
+            #if DEBUG
+            // `-moreValues 1` opens More scrolled to its Values: in a lab
+            // with a long list of controls they are below the fold, and
+            // the simulator cannot scroll.
+            .onAppear {
+                if UserDefaults.standard.bool(forKey: "moreValues") {
+                    scroller.scrollTo(Self.valuesID, anchor: .top)
+                }
+            }
+            #endif
+            }
         }
         .frame(width: Self.width)
     }
+
+    private static let valuesID = "values"
 }
 
 /// One `MoreItem`, in the family's controls.
@@ -154,9 +169,21 @@ private struct ChoiceRow: View {
 struct ReadingsGrid: View {
     let module: ModuleDescriptor
 
+    /// What VoiceOver says for a row: the reading, then its law, spoken
+    /// without the subscript markup.
+    static func spoken(_ row: Reading) -> String {
+        let reading = "\(row.name): \(row.value) \(row.unit)"
+        guard let formula = row.formula else { return reading }
+        return reading + ". " + Formula.plain(formula)
+    }
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1.0 / 8)) { _ in
             let rows = module.readings()
+            // Leading, explicitly: a timeline stacks its children centred,
+            // which set the grid in from the edge whenever a note below it
+            // ran wider.
+            VStack(alignment: .leading, spacing: ControlMetrics.spacing) {
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     GridRow {
@@ -174,7 +201,22 @@ struct ReadingsGrid: View {
                             .lineLimit(1)
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(row.name): \(row.value) \(row.unit)")
+                    .accessibilityLabel(Self.spoken(row))
+                    // The law, under the number it governs: smaller and
+                    // dimmer than the reading, so the column of numbers
+                    // still reads first.
+                    if let formula = row.formula {
+                        GridRow {
+                            Text(Formula.attributed(formula))
+                                .font(.footnote.monospacedDigit())
+                                .foregroundStyle(.tertiary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .gridCellColumns(3)
+                                .padding(.top, -3)
+                                .padding(.bottom, 2)
+                        }
+                        .accessibilityHidden(true)
+                    }
                 }
             }
             if let note = module.physicsNote() {
@@ -182,6 +224,7 @@ struct ReadingsGrid: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
             }
         }
     }

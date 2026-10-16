@@ -46,9 +46,16 @@ enum OrbitalMechanicsModule {
                                                           decimals: 2), "Suns"))
                 }
                 if let body = model.selectedBody, let readout = model.readout(for: body) {
+                    let r = PhysicsFormat.fixed(readout.distanceAU, decimals: 2)
+                    // Newton's law of gravitation, from the star, and the
+                    // speed at which the orbit's energy reaches zero.
+                    rows.append(.init("Gravity from the star",
+                                      PhysicsFormat.scientific(readout.forceNewtons), "N",
+                                      formula: "F = GMm/r², r = \(r) AU"))
                     rows.append(.init("Escape speed",
                                       PhysicsFormat.fixed(readout.escapeSpeedKmPerS,
-                                                          decimals: 3), "km/s"))
+                                                          decimals: 3), "km/s",
+                                      formula: "v = √(2G(M + m)/r)"))
                 }
                 return rows
             },

@@ -74,9 +74,12 @@ enum PendulumsModule {
             // A double pendulum writes no period: the formula is the
             // upper rod's alone and the system has none.
             if selected.kind != .double {
-                rows.append(.init("Period 2π√(L/g)",
+                let length = PhysicsFormat.fixed(selected.length, decimals: 3)
+                let g = PhysicsFormat.fixed(model.gravity, decimals: 2)
+                rows.append(.init("Period",
                                   PhysicsFormat.fixed(selected.period(gravity: model.gravity),
-                                                      decimals: 3), "s"))
+                                                      decimals: 3), "s",
+                                  formula: "T = 2π√(L/g) = 2π√(\(length) m ÷ \(g) m/s²)"))
             }
             rows.append(.init("Speed",
                               PhysicsFormat.fixed(simd_length(selected.state.velocity),
@@ -102,12 +105,20 @@ enum PendulumsModule {
         let modes = CoupledPendulums.normalModes(length: selected.length, mass: selected.mass,
                                                  stiffness: model.springStiffness,
                                                  gravity: model.gravity)
-        rows.append(.init("In step ω₁ = √(g/L)", PhysicsFormat.fixed(modes.inPhase, decimals: 3), "rad/s"))
-        rows.append(.init("Against ω₂ = √(g/L + 2k/m)",
-                          PhysicsFormat.fixed(modes.antiPhase, decimals: 3), "rad/s"))
-        rows.append(.init("Beat 2π/(ω₂ − ω₁)",
+        let g = PhysicsFormat.fixed(model.gravity, decimals: 2)
+        let length = PhysicsFormat.fixed(selected.length, decimals: 3)
+        let k = PhysicsFormat.fixed(model.springStiffness, decimals: 1)
+        let mass = PhysicsFormat.fixed(selected.mass, decimals: 3)
+        let inPhase = PhysicsFormat.fixed(modes.inPhase, decimals: 3)
+        let antiPhase = PhysicsFormat.fixed(modes.antiPhase, decimals: 3)
+        rows.append(.init("In step", inPhase, "rad/s",
+                          formula: "ω₁ = √(g/L) = √(\(g) ÷ \(length))"))
+        rows.append(.init("Against", antiPhase, "rad/s",
+                          formula: "ω₂ = √(g/L + 2k/m) = √(\(g) ÷ \(length) + 2 × \(k) ÷ \(mass))"))
+        rows.append(.init("Beat",
                           PhysicsFormat.fixed(2 * .pi / (modes.antiPhase - modes.inPhase),
-                                              decimals: 2), "s"))
+                                              decimals: 2), "s",
+                          formula: "T = 2π/(ω₂ − ω₁) = 2π/(\(antiPhase) − \(inPhase))"))
         return rows
     }
 }

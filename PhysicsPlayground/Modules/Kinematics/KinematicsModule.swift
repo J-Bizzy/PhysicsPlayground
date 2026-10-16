@@ -83,19 +83,46 @@ enum KinematicsModule {
     }
 
     /// The numbers the room does not already draw: what is being thrown,
-    /// and what the last throw measured. Angle and speed ride the
-    /// protractor; g, wind and air are More's own controls.
+    /// what the law of its flight predicts, and what the last throw
+    /// measured. Angle and speed ride the protractor; g, wind and air are
+    /// More's own controls.
     static func readings(appModel: AppModel) -> [Reading] {
         let model = appModel.kinematicsModel
         var rows: [Reading] = [
             .init("Projectile", model.kind.displayName),
             .init("Mass", PhysicsFormat.fixed(model.projectile.mass, decimals: 3), "kg"),
         ]
+        rows.append(contentsOf: lawReadings(model))
         if let last = model.lastFlight {
             rows.append(.init("Measured range", PhysicsFormat.fixed(last.range, decimals: 3), "m"))
             rows.append(.init("Apex height", PhysicsFormat.fixed(last.apexHeight, decimals: 3), "m"))
             rows.append(.init("Flight time", PhysicsFormat.fixed(last.flightTime, decimals: 3), "s"))
         }
         return rows
+    }
+
+    /// The closed form the flight obeys. In a vacuum, the range of the
+    /// current aim back to the height it leaves from; in air, the speed
+    /// at which drag holds up the ball's weight, which is what makes a
+    /// table tennis ball and a cannonball fly differently.
+    static func lawReadings(_ model: KinematicsModel) -> [Reading] {
+        let g = model.gravity
+        if model.airResistance {
+            let ball = model.projectile
+            let speed = ProjectileMotion.terminalSpeed(projectile: ball, gravity: g)
+            guard speed.isFinite, speed > 0 else { return [] }
+            return [.init("Terminal speed", PhysicsFormat.fixed(speed, decimals: 1), "m/s",
+                          formula: "mg = ½ρC_DAv², C_D = "
+                            + PhysicsFormat.fixed(ball.dragCoefficient, decimals: 2))]
+        }
+        let elevation = asin(min(1, max(-1, model.aimDirection.y)))
+        guard elevation > 0, g > 0 else { return [] }
+        let range = ProjectileMotion.dragFreeRange(speed: model.launchSpeed, angle: elevation,
+                                                   gravity: g)
+        let v = PhysicsFormat.fixed(model.launchSpeed, decimals: 1)
+        let doubled = PhysicsFormat.angle(2 * elevation * 180 / .pi)
+        return [.init("Range to launch height", PhysicsFormat.fixed(range, decimals: 2), "m",
+                      formula: "R = v² sin 2θ / g = \(v)² × sin \(doubled) ÷ "
+                        + PhysicsFormat.fixed(g, decimals: 2))]
     }
 }

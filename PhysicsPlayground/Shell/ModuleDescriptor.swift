@@ -142,16 +142,24 @@ struct TimeScrubControls {
         stepFrames: { _ in }, resume: {})
 }
 
-/// One live number: a name, a formatted value and its unit.
+/// One live number: a name, a formatted value and its unit, and the law
+/// it obeys when there is one.
 struct Reading: Equatable {
     var name: String
     var value: String
     var unit: String
+    /// The equation behind the number, drawn under its name in More and
+    /// nowhere in the room. Where the law is one product or quotient of
+    /// quantities the lab can name, the live values follow it:
+    /// "T = 2π√(L/g) = 2π√(0.800 m ÷ 9.81 m/s²)". `_x` and `_{xy}` set a
+    /// subscript (`Formula`), for the ones Unicode has no glyph for.
+    var formula: String?
 
-    init(_ name: String, _ value: String, _ unit: String = "") {
+    init(_ name: String, _ value: String, _ unit: String = "", formula: String? = nil) {
         self.name = name
         self.value = value
         self.unit = unit
+        self.formula = formula
     }
 }
 

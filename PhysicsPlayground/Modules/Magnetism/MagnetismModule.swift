@@ -60,7 +60,8 @@ enum MagnetismModule {
             .init("Magnets", "\(model.magnets.count)"),
             .init("|B| at center",
                   PhysicsFormat.metric(model.centerFieldMilliTesla / 1000, "T",
-                                       decimals: 2)),
+                                       decimals: 2),
+                  formula: "B = Σ (μ₀/4π)(3(m·r̂)r̂ − m)/r³"),
         ]
         if let selected = model.selectedMagnet {
             rows.append(.init("Selected moment",
@@ -76,18 +77,24 @@ enum MagnetismModule {
                     $0 + MagneticField.potentialEnergy(of: selected, in: $1)
                 }
                 rows.append(.init("Potential energy",
-                                  PhysicsFormat.scientific(energy), "J"))
+                                  PhysicsFormat.scientific(energy), "J",
+                                  formula: "U = −m·B"))
             }
         }
         if let coil = model.selectedCoil {
             // Faraday's law, as the numbers it relates: the linkage, how fast
             // it is changing, and what that drives through the LED.
-            let resistance = MagnetismModel.pickupCoil(coil).resistance
+            let winding = MagnetismModel.pickupCoil(coil)
+            let wire = Double(winding.turns) * 2 * .pi * winding.radius
             rows.append(.init("Coil turns", "\(coil.turns)"))
-            rows.append(.init("Flux linkage NΦ", PhysicsFormat.fixed(coil.linkage * 1000, decimals: 2), "mWb"))
-            rows.append(.init("EMF ε = −dΛ/dt", PhysicsFormat.fixed(coil.emf, decimals: 2), "V"))
-            rows.append(.init("LED current", PhysicsFormat.fixed(coil.current * 1000, decimals: 2), "mA"))
-            rows.append(.init("Winding resistance", PhysicsFormat.fixed(resistance, decimals: 0), "Ω"))
+            rows.append(.init("Flux linkage", PhysicsFormat.fixed(coil.linkage * 1000, decimals: 2), "mWb",
+                              formula: "Λ = NΦ = N∮A·dl"))
+            rows.append(.init("EMF", PhysicsFormat.fixed(coil.emf, decimals: 2), "V",
+                              formula: "ε = −dΛ/dt"))
+            rows.append(.init("LED current", PhysicsFormat.fixed(coil.current * 1000, decimals: 2), "mA",
+                              formula: "ε = IR + V_{LED}(I)"))
+            rows.append(.init("Winding resistance", PhysicsFormat.fixed(winding.resistance, decimals: 0), "Ω",
+                              formula: "R = ρL/A, L = \(PhysicsFormat.fixed(wire, decimals: 0)) m of copper"))
         }
         return rows
     }

@@ -89,11 +89,29 @@ enum CircuitsModule {
         for component in shown {
             guard let readout = model.readouts[component.id] else { continue }
             let name = component.kind.displayName
-            rows.append(.init("\(name) current", PhysicsFormat.metric(readout.amps, "A", decimals: 2)))
+            let amps = PhysicsFormat.metric(readout.amps, "A", decimals: 2)
+            // Auto-ranged in the formulas, so a closed switch's 0.4 mV is
+            // not a "0.00 V" that its 140 µW cannot be the product of.
+            let volts = PhysicsFormat.metric(readout.volts, "V", decimals: 2)
+            rows.append(.init("\(name) current", amps, formula: ohm(component, volts: volts)))
             rows.append(.init("\(name) voltage", PhysicsFormat.fixed(readout.volts, decimals: 2), "V"))
-            rows.append(.init("\(name) power", PhysicsFormat.metric(readout.watts, "W", decimals: 2)))
+            // P = IV for every part, exactly: the solver's own definition.
+            rows.append(.init("\(name) power", PhysicsFormat.metric(readout.watts, "W", decimals: 2),
+                              formula: "P = IV = \(amps) × \(volts)"))
         }
         return rows
+    }
+
+    /// Ohm's law, for the parts the solver models as a plain resistance —
+    /// a resistor (unscorched) and a bulb. Nothing for a source, a
+    /// capacitor, an inductor, a diode or a motor, which obey other laws.
+    static func ohm(_ component: CircuitsModel.Component, volts: String) -> String? {
+        switch component.kind {
+        case .resistor where !component.failed, .bulb:
+            "I = V/R = \(volts) ÷ \(PhysicsFormat.fixed(component.value, decimals: 0)) Ω"
+        default:
+            nil
+        }
     }
 
 }

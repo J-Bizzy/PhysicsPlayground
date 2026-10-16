@@ -96,14 +96,20 @@ enum OpticsModule {
         case .mirror:
             if let hit = readingEvent(mine.filter { $0.reflectance > 0 }, model: model) {
                 // The law of reflection: the two angles are one number.
-                rows.append(.init("Incidence = reflection",
-                                  PhysicsFormat.angle(hit.incidence * 180 / .pi)))
+                rows.append(.init("Reflection",
+                                  PhysicsFormat.angle(hit.incidence * 180 / .pi),
+                                  formula: "θ_r = θ_i"))
             }
         case .prism:
-            rows.append(.init("Index n at 550 nm", PhysicsFormat.fixed(n, decimals: 4)))
+            let apex = PhysicsFormat.angle(OpticsModel.prismApex * 180 / .pi, decimals: 0)
+            let halfApex = PhysicsFormat.angle(OpticsModel.prismApex * 90 / .pi, decimals: 0)
+            rows.append(.init("Index n at 550 nm", PhysicsFormat.fixed(n, decimals: 4),
+                              formula: sellmeier))
             rows.append(.init("Least deviation",
                               PhysicsFormat.angle(LightTracer.minimumDeviation(
-                                apexAngle: OpticsModel.prismApex, index: n) * 180 / .pi)))
+                                apexAngle: OpticsModel.prismApex, index: n) * 180 / .pi),
+                              formula: "δ_{min} = 2 arcsin(n sin(A/2)) − A"
+                                + " = 2 arcsin(\(PhysicsFormat.fixed(n, decimals: 4)) sin \(halfApex)) − \(apex)"))
             if let deviation = deviation(through: piece.id, events: mine, model: model) {
                 rows.append(.init("Deviation", PhysicsFormat.angle(deviation * 180 / .pi)))
             }
@@ -111,23 +117,35 @@ enum OpticsModule {
             let f = LightTracer.focalLength(frontRadius: OpticsModel.lensRadius,
                                             backRadius: OpticsModel.lensRadius,
                                             thickness: OpticsModel.lensThickness, index: n)
-            rows.append(.init("Focal length at 550 nm", PhysicsFormat.fixed(f * 100, decimals: 1), "cm"))
+            rows.append(.init("Focal length at 550 nm", PhysicsFormat.fixed(f * 100, decimals: 1), "cm",
+                              formula: "1/f = (n − 1)[2/R − (n − 1)d/nR²], R = "
+                                + PhysicsFormat.fixed(OpticsModel.lensRadius * 100, decimals: 1) + " cm, d = "
+                                + PhysicsFormat.fixed(OpticsModel.lensThickness * 100, decimals: 1) + " cm"))
         case .block:
-            rows.append(.init("Index n at 550 nm", PhysicsFormat.fixed(n, decimals: 4)))
-            rows.append(.init("Critical angle", PhysicsFormat.angle(asin(1 / n) * 180 / .pi)))
+            rows.append(.init("Index n at 550 nm", PhysicsFormat.fixed(n, decimals: 4),
+                              formula: sellmeier))
+            rows.append(.init("Critical angle", PhysicsFormat.angle(asin(1 / n) * 180 / .pi),
+                              formula: "θ_c = arcsin(1/n) = arcsin(1 ÷ \(PhysicsFormat.fixed(n, decimals: 4)))"))
             let trapped = mine.filter { $0.kind == .totalInternalReflection }.count
             rows.append(.init("Total internal reflections", "\(trapped)"))
         }
         if piece.kind != .mirror,
            let entry = readingEvent(mine.filter { $0.kind == .enter }, model: model),
            let refracted = entry.refraction {
-            // Snell's law, as the two angles it relates.
-            rows.append(.init("Refraction θ₁ → θ₂",
+            // Snell's law, as the two angles it relates, at the index of
+            // the wavelength the angles were measured in.
+            let index = model.glass.index(nanometers: entry.nanometers)
+            rows.append(.init("Refraction",
                               "\(PhysicsFormat.angle(entry.incidence * 180 / .pi)) → "
-                                + PhysicsFormat.angle(refracted * 180 / .pi)))
+                                + PhysicsFormat.angle(refracted * 180 / .pi),
+                              formula: "sin θ₁ = n sin θ₂, n = \(PhysicsFormat.fixed(index, decimals: 4))"
+                                + " at \(PhysicsFormat.fixed(entry.nanometers, decimals: 0)) nm"))
         }
         return rows
     }
+
+    /// Sellmeier's dispersion formula, the glass's index at any wavelength.
+    static let sellmeier = "n² = 1 + Σ B_iλ²/(λ² − C_i)"
 
     /// The turn a prism gives the reading's wavelength: the angle between
     /// the light that entered it and the light that left by refraction.

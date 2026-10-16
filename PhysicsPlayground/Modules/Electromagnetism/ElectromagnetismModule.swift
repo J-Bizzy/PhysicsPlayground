@@ -103,16 +103,22 @@ enum ElectromagnetismModule {
         ]
         // The test charge's own physics, while one is in the room: the field
         // at it, the potential, the two force terms, and its motion.
+        // Coulomb's law, summed, is written once: under the first field
+        // reading the panel shows.
         if let readout = model.probeReadout {
+            let q = PhysicsFormat.fixed(model.probeChargeMagnitude * 1e9, decimals: 0)
             rows.append(.init("Test charge q",
-                              "\(model.probeIsPositive ? "+" : "−")"
-                              + PhysicsFormat.fixed(model.probeChargeMagnitude * 1e9, decimals: 0),
+                              "\(model.probeIsPositive ? "+" : "−")" + q,
                               "nC"))
-            rows.append(.init("E at charge", PhysicsFormat.scientific(readout.fieldMagnitude), "N/C"))
-            rows.append(.init("Potential", PhysicsFormat.scientific(readout.potential), "V"))
-            rows.append(.init("Force qE", PhysicsFormat.scientific(readout.electricForce), "N"))
+            rows.append(.init("E at charge", PhysicsFormat.scientific(readout.fieldMagnitude), "N/C",
+                              formula: coulomb))
+            rows.append(.init("Potential", PhysicsFormat.scientific(readout.potential), "V",
+                              formula: "V = Σ kq_i/r_i"))
+            rows.append(.init("Electric force", PhysicsFormat.scientific(readout.electricForce), "N",
+                              formula: "F = qE = \(q) nC × \(PhysicsFormat.scientific(readout.fieldMagnitude)) N/C"))
             if model.magneticFieldOn {
-                rows.append(.init("Force qv×B", PhysicsFormat.scientific(readout.magneticForce), "N"))
+                rows.append(.init("Magnetic force", PhysicsFormat.scientific(readout.magneticForce), "N",
+                                  formula: "F = qv × B"))
             }
             rows.append(.init("Acceleration", PhysicsFormat.fixed(readout.acceleration), "m/s²"))
             rows.append(.init("Speed", PhysicsFormat.fixed(readout.speed), "m/s"))
@@ -123,7 +129,8 @@ enum ElectromagnetismModule {
             rows.append(.init("|E| 10 cm away",
                 PhysicsFormat.scientific(
                     simd_length(model.fieldVector(
-                        at: selected.position + SIMD3(0.1, 0, 0)))), "N/C"))
+                        at: selected.position + SIMD3(0.1, 0, 0)))), "N/C",
+                formula: model.probeReadout == nil ? coulomb : nil))
         }
         // ΔV and B are More's own sliders; E between the plates is the
         // capacitor's callout, measured — V/d here contradicted it, since the
@@ -132,7 +139,8 @@ enum ElectromagnetismModule {
             let step = FieldModel.equipotentialLevels(model.charges).step
             if step > 0 {
                 rows.append(.init("Equipotentials every ΔV",
-                                  PhysicsFormat.fixed(step / 1000, decimals: 0), "kV"))
+                                  PhysicsFormat.fixed(step / 1000, decimals: 0), "kV",
+                                  formula: "E = −∇V"))
             }
         }
         if model.capacitorOn {
@@ -141,9 +149,13 @@ enum ElectromagnetismModule {
         }
         if model.magneticFieldOn {
             rows.append(.init("Cyclotron radius",
-                              PhysicsFormat.fixed(model.cyclotronRadius, decimals: 3), "m"))
+                              PhysicsFormat.fixed(model.cyclotronRadius, decimals: 3), "m",
+                              formula: "r = mv/|q|B"))
         }
         return rows
     }
+
+    /// Coulomb's law for every charge in the room, superposed.
+    static let coulomb = "E = Σ kq_i r̂_i/r_i²"
 
 }

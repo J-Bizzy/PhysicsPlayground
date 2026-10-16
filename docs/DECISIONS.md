@@ -16,6 +16,35 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-15 — The laws behind the numbers, in More only
+
+**Decision:** Every reading in More › Values can carry the law it obeys (`Reading.formula`). The law is drawn under the number, smaller and dimmer. Where the law is one product or quotient of quantities the lab can name, the live values follow it, so the substitution is the computation:
+- T = 2π√(L/g) = 2π√(0.600 m ÷ 9.81 m/s²);
+- P = IV = −187.30 mA × 8.99 V;
+- δ_min = 2 arcsin(n sin(A/2)) − A = 2 arcsin(1.7912 sin 30°) − 60°.
+
+Formulas that had been written into names ("Period 2π√(L/g)", "EMF ε = −dΛ/dt", "Incidence = reflection") moved out of them.
+
+**Context:** The owner left equations to me. The room stays wordless, a standing rule since 2026-09-04: no prose, no teach. But a reviewer who opens More should be able to see that the numbers are the physics and not decoration.
+
+**Consequences:**
+- **One or two governing laws per lab, each on the number it governs:**
+  - Pendulums: the small-angle period, the two normal modes and the beat.
+  - Electric Fields: Coulomb superposition (written once per panel), V, F = qE, the Lorentz term, r = mv/|q|B and E = −∇V.
+  - Magnetism: the dipole field and U = −m·B, plus Faraday, the LED's Kirchhoff loop and ρL/A for the coil.
+  - Optics: reflection, Snell at the measured wavelength's index, Sellmeier, least deviation, the thick lensmaker and θc.
+  - Projectiles: the vacuum range R = v² sin 2θ/g with air off, or the terminal speed mg = ½ρC_DAv² with air on. These are new readings, because the measured flight lands below its launch height.
+  - Orbital Mechanics: Newton's gravitation (a new reading) and the escape speed.
+  - Circuits: P = IV for every part, which is the solver's own definition, and I = V/R only for a plain resistance. A source, a capacitor, an inductor, a diode and a scorched resistor don't obey Ohm's law, so none of them claims it.
+- **A formula's numbers are the numbers shown.** `ReadingFormulaTests` checks:
+  - the period re-evaluated from its own substituted strings;
+  - R against v² sin 2θ/g;
+  - P = IV on every part of the bench.
+  Circuits' formulas auto-range their values, so a closed switch's 0.4 mV isn't a "0.00 V" that its 140 µW couldn't be the product of.
+- **Typesetting.** Unicode's subscript ᵢ and ᵣ come from a fallback font and sit apart from their letter. So subscripts are marked `_x`/`_{xy}` and set in the same face (`Shell/Formula.swift`). A line breaks only at a comma or before the "=" where the numbers start.
+- **Fixed in passing:** the Values grid sat centred, set in from the edge, whenever a note below it ran wider. `TimelineView` stacks its children centred; it is an explicit leading stack now.
+- `-moreValues 1` opens More scrolled to Values.
+
 ## 2026-10-15 — Equipotential shells, closed and exact
 
 **Decision:** Electric Fields gains Equipotentials in More, off by default. It draws the surfaces of equal potential as nested glass shells: four round each sign present, at equal steps of potential on a 1-2-5 ladder, and the 0 V surface wherever it closes. Red shells surround +, blue surround −, and the outer, larger shells are the fainter ones.

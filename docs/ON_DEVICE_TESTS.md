@@ -162,6 +162,21 @@ contradicts this section, this section is current.
 - [ ] **Settings › Effects volume** wears a quiet speaker at the left end
       and a loud one at the right.
 
+### The laws in More › Values (2026-10-15)
+
+- [ ] **Open More in each lab with something selected** (a bob, a charge
+      with a test charge out, a magnet and a coil, a prism, a circuit
+      part, a planet; Projectiles with air off, then on). Under the
+      numbers, smaller and dimmer: the law each one obeys, with the live
+      values in it where it is one product or quotient. Judge at arm's
+      length, in a bright room: legible without leaning in, and still
+      plainly secondary to the column of numbers?
+- [ ] **A long formula breaks before its numbers**, never in the middle
+      of a term: Optics' least deviation, Pendulums' "Against".
+- [ ] **VoiceOver on a reading** speaks the value and then the law.
+- [ ] **Nothing in the room changed.** The laws are in More only; no lab
+      writes an equation into the space.
+
 ### The labs, same day
 
 - [ ] **Every lab answers a grab.** Pick up a ball, a planet, a charge, a

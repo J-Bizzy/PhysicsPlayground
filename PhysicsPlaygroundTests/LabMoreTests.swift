@@ -59,7 +59,7 @@ final class LabMoreTests: XCTestCase {
         XCTAssertFalse(module.readings().contains { $0.name == "E at charge" })
         appModel.electromagnetismModel.dropProbe()
         let rows = module.readings()
-        for name in ["Test charge q", "E at charge", "Potential", "Force qE", "Speed"] {
+        for name in ["Test charge q", "E at charge", "Potential", "Electric force", "Speed"] {
             XCTAssertTrue(rows.contains { $0.name == name }, "missing \(name)")
         }
     }
