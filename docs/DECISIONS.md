@@ -16,6 +16,36 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-16 — The charm pass: Electric Fields' voice, the meter's beep, three remarks
+
+**Decision:** Three restrained additions to what the labs sound like. Each follows from the physics and fires once, on the frame the event begins, never while a state merely holds.
+- **Electric Fields gains a voice.** It was the only lab with no sounds of its own:
+  - a clack when two free charges first meet, louder the faster they closed;
+  - a pop when the test charge is captured by a charge or a plate, or a thud if it lands on the floor, louder the faster it came in;
+  - a whoosh when a probe is actually launched (let go with B on, or the Deflect shot).
+
+  A probe let go at rest, a charge parked against another while not free, and a probe leaving for infinity are all silent.
+- **The multimeter beeps on continuity.** `MultimeterReading.beeping` had been computed since the meter was built, and nothing played it. Now a steady A6 (the key's own note, with a little of its third harmonic for a piezo's edge) sounds from the meter's case while the probes find a path. It starts and stops over about 60 ms so neither edge clicks, it is silent while paused, and it follows Settings' effects volume.
+- **`Remark`: a gleam, once a session, for each of three moments a lab can reach but never stages:**
+  - **`beamHome`:** the laser's own beam sent back into its aperture, by a mirror set within about half a degree of square. Traced on its own so the torch can't fake it, with at least 20 % of the power, inside the 12.5 mm collar, heading back along the laser.
+  - **`swingPassedAcross`:** a coupled pair's swing passing wholly (above 95 % of the two bobs' energy) into the bob that started at rest.
+  - **`firstLight`:** the pickup coil's LED plainly lit (1 mA, a third of its rated current).
+
+**Context:** This is the plan's restrained-charm item. The owner asked for playful reactions "but remember to not go overboard here and maintain the very polished feel".
+
+**Consequences:**
+- **The gleam is sound only.** The plan had a 0.6 s glow with it, but the house allows one glow, `LiveGlow`, on what a hand holds. Each of the three moments is already something to see; the gleam only says "look".
+- **The gleam's voice.** The score's FM bells high above the chime (E7, C♯7, A6, struck softly downward with a felt-hammer onset) over a held A5 and a breath of air, in the largest room of the family. It peaks below the chime, which it must never outrank, and lingers past a second.
+- **The tests** (`CharmTests`, `SoundEffectsTests`) drive the real models:
+  - the opening dipole set free clacks exactly once, and not again after a scrub restores a moment it already touched;
+  - a captured probe pops once;
+  - a probe let go at rest never whooshes;
+  - the coupled pair gleams once in thirty seconds of beating, and never without its spring;
+  - a slow magnet never lights the coil, and a brisk one gleams once;
+  - a mirror tilted 3° sends the beam beside the laser and stays silent, while a square one gleams.
+- **No Bool flags were added**, so `ResetCoverageTests` is unchanged. The rising edges are a set of touching pairs, a map of quiet bobs, and the session's claimed moments.
+- `LightTracer.Segment` gained a public initializer, so a test can build the geometry of "home" directly.
+
 ## 2026-10-15 — The laws behind the numbers, in More only
 
 **Decision:** Every reading in More › Values can carry the law it obeys (`Reading.formula`). The law is drawn under the number, smaller and dimmer. Where the law is one product or quotient of quantities the lab can name, the live values follow it, so the substitution is the computation:

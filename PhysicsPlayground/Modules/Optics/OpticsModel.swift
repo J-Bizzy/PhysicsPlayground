@@ -147,7 +147,58 @@ final class OpticsModel {
         trace = LightTracer.trace(rays(), elements: elements(), room: room,
                                   options: .init(followsPartialReflections: showsWeakReflections))
         traceVersion &+= 1
+        listenForTheBeamComingHome()
         return trace
+    }
+
+    // MARK: The beam home (`Remark`)
+
+    /// The laser's collar, m: the returning beam must land inside it.
+    nonisolated static let apertureRadius = 0.0125
+
+    /// The first time this session the laser's own beam comes back into
+    /// its aperture, a gleam from the laser. Traced on its own, so the
+    /// torch's light can never be mistaken for it; once heard, never
+    /// traced again.
+    private func listenForTheBeamComingHome() {
+        guard laser.isOn, !Remark.isClaimed(.beamHome) else { return }
+        let aperture = Self.aperture(of: laser, length: Self.laserLength)
+        let own = LightTracer.trace(
+            [.init(origin: aperture, direction: laser.aim, nanometers: laserNanometers)],
+            elements: elements(), room: room)
+        guard Self.beamComesHome(own.segments, aperture: aperture, aim: laser.aim),
+              Remark.claim(.beamHome) else { return }
+        emitSound(.gleam, at: aperture, volume: Remark.volume)
+    }
+
+    /// Whether some stretch of the light, heading back the way the laser
+    /// points and carrying most of its power, passes through the aperture
+    /// within the collar. The outgoing beam heads the other way, so it
+    /// never counts.
+    nonisolated static func beamComesHome(_ segments: [LightTracer.Segment],
+                                          aperture: SIMD3<Double>,
+                                          aim: SIMD3<Double>) -> Bool {
+        let forward = simd_normalize(aim)
+        return segments.contains { segment in
+            let length = simd_distance(segment.a, segment.b)
+            guard length > 1e-6, segment.power > 0.2,
+                  simd_dot(segment.direction, forward) < -0.94 else { return false }
+            let along = simd_dot(aperture - segment.a, segment.direction)
+            guard along > 0, along <= length else { return false }
+            return simd_distance(segment.a + segment.direction * along, aperture)
+                < apertureRadius
+        }
+    }
+
+    // MARK: Sound events (the renderer plays them spatially)
+
+    private(set) var soundEvent: SpatialSoundEvent?
+    @ObservationIgnored private var soundCounter = 0
+
+    private func emitSound(_ kind: SoundPalette.Sound, at position: SIMD3<Double>, volume: Double) {
+        soundCounter += 1
+        soundEvent = SpatialSoundEvent(id: soundCounter, kind: kind,
+                                       position: position, volume: volume)
     }
 
     /// The optics as the tracer sees them.

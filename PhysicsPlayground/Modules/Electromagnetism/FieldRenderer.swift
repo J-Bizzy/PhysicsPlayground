@@ -36,6 +36,23 @@ final class FieldRenderer {
     /// outlives the view and holds the entity graph alive, and a
     /// `GeometryPipeline` job in flight would upload into a scene being
     /// torn down.
+    // MARK: Sound
+
+    /// Where the model's sounds come from: moved to each one as it plays.
+    private let audioEmitter = Entity()
+    /// The last event played. Nil until the first frame, which adopts
+    /// whatever the model last emitted rather than replaying it on entry.
+    private var lastSoundID: Int?
+
+    private func playSound(_ model: FieldModel) {
+        guard let event = model.soundEvent else { lastSoundID = 0; return }
+        defer { lastSoundID = event.id }
+        guard let lastSoundID, event.id != lastSoundID else { return }
+        if audioEmitter.parent == nil { viewRoot.addChild(audioEmitter) }
+        audioEmitter.position = SIMD3<Float>(event.position)
+        SoundPalette.play(event.kind, on: audioEmitter, volume: event.volume)
+    }
+
     func teardown() {
         subscriptions.forEach { $0.cancel() }
         subscriptions = []
@@ -222,6 +239,7 @@ final class FieldRenderer {
         )
         syncShells(show: model.showEquipotentials, charges: model.charges,
                    region: model.samplingRegion)
+        playSound(model)
     }
 
     /// Re-syncs all visuals to the given state.

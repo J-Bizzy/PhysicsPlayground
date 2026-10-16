@@ -162,6 +162,27 @@ contradicts this section, this section is current.
 - [ ] **Settings › Effects volume** wears a quiet speaker at the left end
       and a loud one at the right.
 
+### The charm pass (2026-10-16) — sound, so judge with the volume up
+
+- [ ] **Electric Fields, More › Free charges.** The dipole drifts together
+      and meets with one soft clack, not a buzz while they touch. Pull a
+      test charge, let it go beside the negative charge: one glassy pop as
+      it lands. With Uniform B on, let a probe go: a whoosh as it leaves;
+      with B off, letting go is silent (it starts at rest).
+- [ ] **Circuit Workshop, the meter on continuity.** Touch the probes to
+      both ends of a wire: a steady soft A6 from the meter's case for as
+      long as they touch, no click as it starts or stops. Lift a probe: it
+      stops. Pause: it stops. Judge: a real meter's beep, or a shriek?
+- [ ] **The three gleams — each once a session.**
+      - Light & Optics: set a mirror square to the laser so the beam comes
+        straight back into it. Judge: is it findable by hand with the aim
+        bead (about half a degree)? If not, the collar tolerance is the lever.
+      - Pendulums: More › Coupled pair, then wait about seven seconds for
+        the swing to pass wholly into the inner bob.
+      - Magnetism: a coil from the well, a magnet pushed briskly through.
+      Judge: is the gleam a quiet "look", under the hoop's chime — or does
+      it compete with the moment it marks?
+
 ### The laws in More › Values (2026-10-15)
 
 - [ ] **Open More in each lab with something selected** (a bob, a charge

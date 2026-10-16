@@ -290,6 +290,7 @@ final class FieldModel {
         state.velocity = SIMD3(0, 0, -Self.deflectionLaunchSpeed)
         probe = state
         probeStatus = .running
+        emitSound(.whoosh, at: state.position, volume: 0.3)
         // Each shot is its own flight — else the new trail's first point
         // bridges back to where the last parabola ended.
         probeTrail = []
@@ -390,6 +391,63 @@ final class FieldModel {
     /// Counts placements so each new charge lands at a different spot.
     private var placementIndex = 1
 
+    // MARK: Sound events (the renderer plays them spatially)
+
+    private(set) var soundEvent: SpatialSoundEvent?
+    @ObservationIgnored private var soundCounter = 0
+
+    private func emitSound(_ kind: SoundPalette.Sound, at position: SIMD3<Double>, volume: Double) {
+        soundCounter += 1
+        soundEvent = SpatialSoundEvent(id: soundCounter, kind: kind,
+                                       position: position, volume: volume)
+    }
+
+    /// Two charges, either way round.
+    struct ChargePair: Hashable {
+        let first: UUID
+        let second: UUID
+
+        init(_ a: UUID, _ b: UUID) {
+            (first, second) = a.uuidString < b.uuidString ? (a, b) : (b, a)
+        }
+    }
+
+    /// The pairs touching after the last frame, so a clack sounds when two
+    /// first meet and not on every frame they stay together.
+    @ObservationIgnored private(set) var touchingPairs: Set<ChargePair> = []
+
+    /// Every pair of charges within a hair of contact.
+    nonisolated static func contacts(_ charges: [PointCharge]) -> Set<ChargePair> {
+        var touching = Set<ChargePair>()
+        for a in charges.indices {
+            for b in charges.indices where b > a
+                && simd_distance(charges[a].position, charges[b].position) <= chargeContact + 0.002 {
+                touching.insert(ChargePair(charges[a].id, charges[b].id))
+            }
+        }
+        return touching
+    }
+
+    /// A clack when two free charges first touch, louder the faster they
+    /// closed: the spheres meeting, steel-bright and brief.
+    private func soundContacts(before: [PointCharge], dt: Double) {
+        let now = Self.contacts(charges)
+        defer { touchingPairs = now }
+        guard chargesRespond, dt > 0 else { return }
+        for pair in now.subtracting(touchingPairs) {
+            guard let a = charges.first(where: { $0.id == pair.first }),
+                  let b = charges.first(where: { $0.id == pair.second }) else { continue }
+            var was = Self.chargeContact
+            if let oldA = before.first(where: { $0.id == pair.first }),
+               let oldB = before.first(where: { $0.id == pair.second }) {
+                was = simd_distance(oldA.position, oldB.position)
+            }
+            let closing = max(0, was - simd_distance(a.position, b.position)) / dt
+            emitSound(.clack, at: (a.position + b.position) / 2,
+                      volume: 0.1 + 0.3 * min(closing / Self.chargeMaxSpeed, 1))
+        }
+    }
+
     init() {
         charges = []
         reset()
@@ -468,6 +526,7 @@ final class FieldModel {
         magneticFieldOn = false
         magneticFieldTesla = 5e4
         isPaused = false
+        touchingPairs = []
         placementIndex = 2
         clearCapsule()
     }
@@ -677,6 +736,9 @@ final class FieldModel {
             // releasing gently must not mean releasing into a dead scene.
             let direction = speed > 0.05 ? flick / speed : SIMD3(1, 0, 0)
             probe?.velocity = direction * launchSpeed
+            if let position = probe?.position {
+                emitSound(.whoosh, at: position, volume: 0.3)
+            }
         }
         probeStatus = .running
     }
@@ -688,7 +750,9 @@ final class FieldModel {
         guard !isPaused else { return }
         defer { recordCapsuleFrame(dt: min(dt, 1.0 / 30.0)) }
         stepProbe(dt: dt)
+        let before = charges
         stepFreeCharges(dt: dt)
+        soundContacts(before: before, dt: min(dt, 1.0 / 30.0))
     }
 
     func stepProbe(dt: Double) {
@@ -713,15 +777,21 @@ final class FieldModel {
             && abs(plateOffset.x) < plateSeparation / 2 + 0.06
             && abs(plateOffset.y) < Self.plateSize / 2
             && abs(plateOffset.z) < Self.plateSize / 2
+        // A landing sounds once, as it happens, louder the faster it came:
+        // glass meeting glass on a charge or a plate, a soft body on the
+        // floor. Leaving for infinity is silent.
+        let impact = 0.15 + 0.3 * min(simd_length(state.velocity) / 2, 1)
         if hitPlate
             || charges.contains(where: { simd_distance($0.position, state.position) < Self.probeCaptureRadius }) {
             probeStatus = .captured
+            emitSound(.pop, at: state.position, volume: impact)
         } else if simd_distance(state.position, samplingRegion.center) > Self.probeEscapeDistance {
             // Off to infinity, as a real unbound charge would be.
             probeStatus = .escaped
         } else if state.position.y < Self.regionFloor {
             state.position.y = Self.regionFloor
             probeStatus = .captured
+            emitSound(.thud, at: state.position, volume: impact)
         }
         probe = state
         recordTrail(at: state.position)
@@ -860,6 +930,9 @@ extension FieldModel: TimeCapsuleRecording {
            !charges.contains(where: { $0.id == selectedChargeID }) {
             self.selectedChargeID = nil
         }
+        // A pair the restore left touching has already met: resuming must
+        // not clack it again.
+        touchingPairs = Self.contacts(charges)
     }
 
     /// The probe's recorded path, rebuilt under the live spacing and

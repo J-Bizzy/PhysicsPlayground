@@ -55,7 +55,8 @@ final class SoundEffectsTests: XCTestCase {
     /// The tones loop for as long as a body orbits or a circuit runs: the
     /// jump from the last sample back to the first must be an ordinary step.
     func testTheLoopingTonesHaveNoSeam() {
-        for (name, tone) in [("glass", SoundEffects.glassTone()), ("hum", SoundEffects.humTone())] {
+        for (name, tone) in [("glass", SoundEffects.glassTone()), ("hum", SoundEffects.humTone()),
+                             ("beep", SoundEffects.beepTone())] {
             var largest: Float = 0
             for i in 1..<tone.count { largest = max(largest, abs(tone[i] - tone[i - 1])) }
             let seam = abs(tone[0] - tone[tone.count - 1])
@@ -66,7 +67,7 @@ final class SoundEffectsTests: XCTestCase {
     /// The cache is keyed by file name, so a sound that differed between
     /// renders would differ between devices.
     func testNoiseIsSeeded() {
-        for name in ["whoosh", "thud", "boom", "clack", "launch", "calibration"] {
+        for name in ["whoosh", "thud", "boom", "clack", "launch", "calibration", "gleam"] {
             XCTAssertEqual(SoundEffects.oneShot(name), SoundEffects.oneShot(name), name)
         }
     }
@@ -85,5 +86,30 @@ final class SoundEffectsTests: XCTestCase {
         }
         XCTAssertEqual(pitch("grabTick"), 1_318.5, accuracy: 1_318.5 * 0.04)
         XCTAssertEqual(pitch("releaseTick"), 987.8, accuracy: 987.8 * 0.04)
+    }
+
+    /// The continuity beep is A6, the key's own note, and every tone the
+    /// palette names has a loop.
+    func testTheBeepIsAnA() {
+        let beep = SoundEffects.beepTone()
+        var crossings = 0
+        for (a, b) in zip(beep, beep.dropFirst()) where (a < 0) != (b < 0) { crossings += 1 }
+        let hertz = Double(crossings) / 2 / (Double(beep.count) / rate)
+        XCTAssertEqual(hertz, 1_760, accuracy: 1_760 * 0.02)
+        XCTAssertEqual(SoundEffects.beepHz, AmbientScore.hertz(93), accuracy: 0.5)
+        XCTAssertEqual(Set(SoundPalette.Tone.allCases.map(\.rawValue)), ["glass", "hum", "beep"])
+    }
+
+    /// The gleam is quieter than the chime it must never outrank, and it
+    /// rings: a remark lingers where a tick does not.
+    func testTheGleamSitsUnderTheChimeAndLingers() {
+        func rms(_ samples: [Float]) -> Double {
+            sqrt(samples.reduce(0) { $0 + Double($1) * Double($1) } / Double(samples.count))
+        }
+        let gleam = SoundEffects.oneShot("gleam"), chime = SoundEffects.oneShot("chime")
+        XCTAssertLessThan(gleam.map { abs($0) }.max() ?? 1, chime.map { abs($0) }.max() ?? 0)
+        XCTAssertGreaterThan(Double(gleam.count) / rate, 2)
+        XCTAssertGreaterThan(rms(Array(gleam[Int(1.0 * rate)..<Int(1.2 * rate)])), 0.005,
+                             "the gleam is gone within a second")
     }
 }

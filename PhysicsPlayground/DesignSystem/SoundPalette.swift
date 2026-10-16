@@ -36,6 +36,8 @@ enum SoundPalette {
         case clack
         /// The launcher's pneumatic thump (it borrowed `pop` too).
         case launch
+        /// A remarkable moment, through `Remark` and nowhere else.
+        case gleam
     }
 
     /// When `calibration`'s bell strikes, seconds into the file — must match `Opening.landingTime`.
@@ -118,11 +120,12 @@ enum SoundPalette {
 
     // MARK: Looping tones (sonification)
 
-    /// The two continuous voices. `glass` sings the orbital chord; `hum`
-    /// is Circuit Workshop's mains, played slowed to ~52 Hz. They were one
-    /// tone until 2026-10-14, which made the chord buzz or the hum ring.
+    /// The continuous voices. `glass` sings the orbital chord; `hum` is
+    /// Circuit Workshop's mains, played slowed to ~52 Hz (they were one
+    /// tone until 2026-10-14, which made the chord buzz or the hum ring);
+    /// `beep` is the multimeter's continuity tone, at its own pitch.
     enum Tone: String, CaseIterable {
-        case glass, hum
+        case glass, hum, beep
     }
 
     private static var toneResources: [Tone: AudioFileResource] = [:]
@@ -145,8 +148,11 @@ enum SoundPalette {
         let name = "tone-\(tone.rawValue)-1.wav"
         let url = directory.appendingPathComponent(name)
         if !FileManager.default.fileExists(atPath: url.path) {
-            let samples = tone == .glass ? SoundEffects.glassTone(sampleRate: sampleRate)
-                                         : SoundEffects.humTone(sampleRate: sampleRate)
+            let samples = switch tone {
+            case .glass: SoundEffects.glassTone(sampleRate: sampleRate)
+            case .hum: SoundEffects.humTone(sampleRate: sampleRate)
+            case .beep: SoundEffects.beepTone(sampleRate: sampleRate)
+            }
             try wavData(samples: samples).write(to: url)
         }
         removeOlderVersions(of: "tone-\(tone.rawValue)-", keeping: name, in: directory)

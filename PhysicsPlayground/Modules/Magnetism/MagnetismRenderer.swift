@@ -421,7 +421,24 @@ final class MagnetismRenderer {
 
     private var contactPairs: Set<ContactPair> = []
 
+    /// Where the model's own sounds come from, moved to each as it plays.
+    private let audioEmitter = Entity()
+    /// Nil until the first frame, which adopts the model's last event
+    /// rather than replaying it on entry.
+    private var lastSoundID: Int?
+
     private func tickSounds(_ model: MagnetismModel) {
+        if let event = model.soundEvent {
+            if let lastSoundID, event.id != lastSoundID {
+                if audioEmitter.parent == nil { viewRoot.addChild(audioEmitter) }
+                audioEmitter.position = SIMD3<Float>(event.position)
+                SoundPalette.play(event.kind, on: audioEmitter, volume: event.volume)
+            }
+            lastSoundID = event.id
+        } else {
+            lastSoundID = 0
+        }
+
         // The arrival set is rebuilt only when the census changes — by
         // membership, not count: a reset swaps the lone default magnet for a
         // fresh id at the same count.

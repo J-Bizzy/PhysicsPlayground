@@ -111,6 +111,22 @@ final class OpticsRenderer {
             drawLight(trace, angles: model.showsAngles)
         }
         syncAimBead(model)
+        playSound(model)
+    }
+
+    /// Where the model's sounds come from, moved to each as it plays.
+    private let audioEmitter = Entity()
+    /// Nil until the first frame, which adopts the model's last event
+    /// rather than replaying it on entry.
+    private var lastSoundID: Int?
+
+    private func playSound(_ model: OpticsModel) {
+        guard let event = model.soundEvent else { lastSoundID = 0; return }
+        defer { lastSoundID = event.id }
+        guard let lastSoundID, event.id != lastSoundID else { return }
+        if audioEmitter.parent == nil { viewRoot.addChild(audioEmitter) }
+        audioEmitter.position = SIMD3<Float>(event.position)
+        SoundPalette.play(event.kind, on: audioEmitter, volume: event.volume)
     }
 
     // MARK: The light

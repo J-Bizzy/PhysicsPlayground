@@ -170,6 +170,15 @@ public enum LightTracer {
         /// The element whose glass this stretch runs through, if any.
         public var inside: UUID?
 
+        public init(a: SIMD3<Double>, b: SIMD3<Double>, nanometers: Double, power: Double,
+                    inside: UUID? = nil) {
+            self.a = a
+            self.b = b
+            self.nanometers = nanometers
+            self.power = power
+            self.inside = inside
+        }
+
         public var direction: SIMD3<Double> { simd_normalize(b - a) }
     }
 

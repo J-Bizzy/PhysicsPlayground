@@ -479,6 +479,49 @@ final class PendulumsModel {
             }
             resolveBobCollisions()
         }
+        if steps > 0 { watchSwingsPassing() }
+    }
+
+    // MARK: A swing passed across (`Remark`)
+
+    /// For each spring, the bob that was at rest when its pair's swing
+    /// began. The whole swing arriving in it is a moment worth a gleam.
+    @ObservationIgnored private var quietBob: [UUID: UUID] = [:]
+
+    /// The swing energy a bob carries above hanging still: ½mv² + mg(y + L),
+    /// y measured from the pivot.
+    func swingEnergy(_ pendulum: Pendulum) -> Double {
+        0.5 * pendulum.mass * simd_length_squared(pendulum.state.velocity)
+            + pendulum.mass * gravity * (pendulum.state.position.y + pendulum.length)
+    }
+
+    /// Below 5 % of the pair's swing a bob is the quiet one; above 95 %,
+    /// the swing has passed wholly into it. The spring's own small energy
+    /// is left out, so the shares are the two bobs' alone.
+    private func watchSwingsPassing() {
+        for spring in springs {
+            guard let a = pendulums.first(where: { $0.id == spring.a }),
+                  let b = pendulums.first(where: { $0.id == spring.b }),
+                  !a.isGrabbed, !b.isGrabbed else {
+                quietBob[spring.id] = nil
+                continue
+            }
+            let energyA = swingEnergy(a), energyB = swingEnergy(b)
+            let total = energyA + energyB
+            guard total > 1e-4 else { quietBob[spring.id] = nil; continue }
+            if let quiet = quietBob[spring.id] {
+                let receiver = quiet == a.id ? a : b
+                guard swingEnergy(receiver) / total > 0.95 else { continue }
+                quietBob[spring.id] = nil
+                if Remark.claim(.swingPassedAcross) {
+                    emitSound(.gleam, at: receiver.bobWorld, volume: Remark.volume)
+                }
+            } else if energyA / total < 0.05 {
+                quietBob[spring.id] = a.id
+            } else if energyB / total < 0.05 {
+                quietBob[spring.id] = b.id
+            }
+        }
     }
 
     // MARK: Bobs that meet
@@ -625,6 +668,7 @@ final class PendulumsModel {
     func reset() {
         pendulums = []
         selectedID = nil
+        quietBob = [:]
         gravity = 9.81
         isPaused = false
         timeScale = 1.0

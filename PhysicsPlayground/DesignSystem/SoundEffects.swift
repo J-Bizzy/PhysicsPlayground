@@ -26,7 +26,7 @@ nonisolated enum SoundEffects {
 
     /// Every one-shot, by the name `SoundPalette.Sound` uses.
     static let names = ["pop", "whoosh", "thud", "chime", "boom",
-                        "grabTick", "releaseTick", "calibration", "clack", "launch"]
+                        "grabTick", "releaseTick", "calibration", "clack", "launch", "gleam"]
 
     /// One-shot samples, mono, peak-normalised to −6 dBFS (what every
     /// call site's volume was tuned against) times the sound's own trim.
@@ -46,6 +46,8 @@ nonisolated enum SoundEffects {
         // Twenty milliseconds of ring reads quieter than its peak says.
         case "clack": raw = clack(sampleRate); trim = 1.5
         case "launch": raw = launch(sampleRate)
+        // Rare and meant to be noticed, but never louder than a success.
+        case "gleam": raw = gleam(sampleRate); trim = 0.8
         default: raw = []
         }
         return normalise(fadeOut(raw, sampleRate), peak: 0.5 * trim)
@@ -109,6 +111,41 @@ nonisolated enum SoundEffects {
             }
         }
         return withRoom(dry, rate, size: 0.8, wet: 0.22, tail: 0.6)
+    }
+
+    /// A remarkable moment (`Remark`): the score's bells high above the
+    /// chime and struck softly downward — E7, C♯7, A6, 80 ms apart — over
+    /// a held A5 and a breath of air, in the largest room of the family.
+    /// The chime says "done"; this says "look". Three moments only, once a
+    /// session each: a laser beam home in its own aperture, a coupled
+    /// swing passed wholly across, a coil's first light.
+    static func gleam(_ rate: Double) -> [Double] {
+        let length = 1.6
+        var dry = [Double](repeating: 0, count: Int(length * rate))
+        let notes: [(at: Double, midi: Int, gain: Double)] = [
+            (0, 100, 0.55), (0.08, 97, 0.7), (0.16, 93, 0.85),
+        ]
+        for note in notes {
+            let bell = fmBell(rate, frequency: hz(note.midi), length: length - note.at, ring: 3.2)
+            let start = Int(note.at * rate)
+            for i in bell.indices where start + i < dry.count {
+                // A slower onset than the chime's: struck with a felt
+                // hammer, not a metal one.
+                let t = Double(i) / rate
+                dry[start + i] += bell[i] * note.gain * onset(t, 0.012)
+            }
+        }
+        let floor = fmBell(rate, frequency: hz(81), length: length, ring: 1.6)
+        var noise = AmbientScore.SplitMix64(seed: 0x6_1EA)
+        var air = AmbientScore.SVF()
+        air.tune(cutoff: 6_500, sampleRate: rate, damping: 1.1)
+        for i in dry.indices {
+            let t = Double(i) / rate
+            let breath = sin(.pi * min(t / 0.5, 1)) * exp(-t * 2.5)
+            dry[i] += floor[i] * 0.3 * onset(t, 0.03)
+                + air.bandpass(noise.next() * 2 - 1) * 0.06 * breath
+        }
+        return withRoom(dry, rate, size: 0.9, wet: 0.32, tail: 0.9)
     }
 
     /// The opening: the score's first chord rising out of nothing — warm
@@ -289,6 +326,20 @@ nonisolated enum SoundEffects {
                 + 0.2 * sin(2 * .pi * 2 * f * t)
                 + 0.06 * sin(2 * .pi * 3 * f * t)
                 + 0.025 * sin(2 * .pi * 4 * f * t)
+        }
+        return normalise(raw, peak: 0.5)
+    }
+
+    /// The multimeter's continuity beep: A6, a sine with a little of its
+    /// own third harmonic — the edge of the piezo a real meter beeps
+    /// through, without its shriek. Half a second is 880 whole cycles of
+    /// the fundamental (and of the third), so the loop has no seam.
+    static let beepHz = 1_760.0
+
+    static func beepTone(sampleRate rate: Double = 44_100) -> [Float] {
+        let f = beepHz
+        let raw = samples(0.5, rate) { t in
+            sin(2 * .pi * f * t) + 0.12 * sin(2 * .pi * 3 * f * t)
         }
         return normalise(raw, peak: 0.5)
     }

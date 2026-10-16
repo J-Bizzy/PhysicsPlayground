@@ -40,6 +40,23 @@ final class Multimeter {
     private var lastFault = false
     private var appliedMode: CircuitsModel.MeterMode?
 
+    // MARK: The continuity beep
+
+    private let beepEmitter = Entity()
+    /// A steady A6 for as long as the probes find a path, the way a real
+    /// meter beeps; Settings' effects volume scales it like any effect.
+    private lazy var beep = ToneVoice(on: beepEmitter, tone: .beep,
+                                      baseHz: SoundEffects.beepHz, range: (-44)...(-22))
+
+    private func sound(beeping: Bool) {
+        guard beep.start() else { return }
+        // Quick enough to start and stop with the probe, slow enough
+        // (about 60 ms) that neither edge clicks.
+        beep.update(pitchHz: SoundEffects.beepHz,
+                    loudness: beeping ? SoundPalette.masterVolume : 0,
+                    smoothing: 0.35)
+    }
+
     /// Where each jack sits on the case, in the meter's own frame —
     /// taken from the same numbers `Tools/multimeter.py` builds from.
     private static let jack: [CircuitsModel.ProbeSlot: SIMD3<Float>] = [
@@ -134,6 +151,9 @@ final class Multimeter {
         chassis.addChild(screen)
         noteText.position = [0, 0.026, 0.019]
         chassis.addChild(noteText)
+        // The beep comes from the case, where a real meter's piezo is.
+        beepEmitter.position = [0, 0.04, 0]
+        chassis.addChild(beepEmitter)
 
         for slot in [CircuitsModel.ProbeSlot.red, .black] {
             let probe = Entity()
@@ -315,6 +335,7 @@ final class Multimeter {
         setScreen(reading?.display ?? model.meterMode.label,
                   note: reading?.note ?? model.meterMode.longLabel,
                   fault: reading?.fault ?? false)
+        sound(beeping: reading?.beeping == true && !model.isPaused)
 
         for slot in [CircuitsModel.ProbeSlot.red, .black] {
             guard let probe = probes[slot], let lead = leads[slot] else { continue }

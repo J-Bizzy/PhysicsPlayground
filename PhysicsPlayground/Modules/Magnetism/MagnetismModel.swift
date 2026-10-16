@@ -194,7 +194,25 @@ final class MagnetismModel {
             coils[index].linkage = now
             coils[index].emf = emf
             coils[index].current = BicolourLED.current(emf: emf, resistance: coil.resistance)
+            // The first time this session an LED plainly lights.
+            if abs(coils[index].current) >= Self.firstLightCurrent, Remark.claim(.firstLight) {
+                emitSound(.gleam, at: coils[index].position, volume: Remark.volume)
+            }
         }
+    }
+
+    /// A third of the LED's rated 10 mA: plainly lit, not a flicker.
+    nonisolated static let firstLightCurrent = 0.001
+
+    // MARK: Sound events (the renderer plays them spatially)
+
+    private(set) var soundEvent: SpatialSoundEvent?
+    @ObservationIgnored private var soundCounter = 0
+
+    private func emitSound(_ kind: SoundPalette.Sound, at position: SIMD3<Double>, volume: Double) {
+        soundCounter += 1
+        soundEvent = SpatialSoundEvent(id: soundCounter, kind: kind,
+                                       position: position, volume: volume)
     }
 
     // MARK: Clock — the overdamped magnetic dynamics
