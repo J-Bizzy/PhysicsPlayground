@@ -143,8 +143,13 @@ struct ModuleHostView: View {
         .ornament(visibility: appModel.moreOpen ? .visible : .hidden,
                   attachmentAnchor: .scene(.topLeading),
                   contentAlignment: .topTrailing) {
-            LabMorePanel(module: module)
-                .padding(.trailing, ControlMetrics.spacing)
+            // Mounted only while open: a hidden ornament keeps its content
+            // live, and behind a closed More the Values timeline re-derived
+            // every reading eight times a second.
+            if appModel.moreOpen {
+                LabMorePanel(module: module)
+                    .padding(.trailing, ControlMetrics.spacing)
+            }
         }
         // Top-aligned in the tall frame the window claims, so the bar rides
         // above the apparatus band instead of inside it. The wearer can still

@@ -16,6 +16,29 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-17 — Orbital Mechanics' trails stop holding the main thread, and a closed More stops working
+
+**Decision:** I sampled every lab's main thread in the simulator. Orbital Mechanics was the only one never idle: 0.1 % idle, against 46–96 % in the other labs. The fix has three parts.
+- **One mesh.** The trails are now one `RenderKit.TrailRibbons`: a single `LowLevelMesh` with a part per body, whose changes are staged and committed once.
+- **Fewer commits.** The mesh is committed at up to 30 Hz while a trail is growing and 10 Hz when only the fades and the heads move.
+- **A leader.** Between commits, a thin unit cylinder per body, moved by its transform every frame, carries each trail from its last written head to the planet.
+
+Separately, More's panel is now mounted only while More is open.
+
+**Context — what the samples said** (`sample` on the simulator process, six seconds a lab):
+- **Most of the main thread was waiting on the renderer.** 58 % of it was in `__REALITYKIT_WAITING_ON_RENDERER__`, inside `TrailRibbon.updateHead`'s first buffer write.
+- **The trails were the cause.** In a throwaway build with the trails switched off, the main thread was 59 % idle.
+- **Merging the meshes was not enough.** Merging the ten meshes into one only cut the wait to 45 %. The limit is bytes, not payloads: a `LowLevelMesh` write ships the whole buffer, 16 slots × 512 samples, about 1.3 MB, ninety times a second.
+- **Committing less often removes the wait.** At 30 Hz and below, the main thread is 34–38 % idle at both 100× and 1×, with no waits.
+- **The stall was there at the default clock.** At 1× the wait was 42 % before the fix, so this was not a 100× problem.
+
+**Consequences:**
+- **The ribbon still ends on its body every frame.** At 1× the leader is sub-millimetre and hidden. At 100× it is at most a few centimetres of chord on Mercury, about 1.4 mm off the arc.
+- **The fades now step at 10 Hz.** At 1× that is invisible: Mercury's fade slides 1/66 of its trail a second.
+- **A paused lab settles.** One more commit lands the head on the body, so no leader is left showing.
+- **The old class is gone.** `TrailRibbon` is deleted. `OrbitalMechanicsRendererTests` holds a slot's capacity and its emptying below two points, and that rewriting, moving or clearing one slot leaves the others drawn.
+- **More, behind a closed panel.** A `.hidden` ornament keeps its content alive, so with More closed, its 8 Hz timeline had been recomputing every lab's readings. That was 1–2 % of the main thread in Magnetism and Pendulums, plus the SwiftUI graph work behind it. The panel is now built when More opens, so its scroll position and any armed button reset on each opening.
+
 ## 2026-10-17 — The coil lights at a hand's pace: a full winding, and a bore that guides
 
 **Decision:** The owner tried the magnet in the coil on device and "it didn't seem to work". There were two causes, and I fixed both.

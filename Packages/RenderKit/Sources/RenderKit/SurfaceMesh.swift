@@ -7,7 +7,7 @@
 //  re-meshed many times a second (Electric Fields' equipotential shells,
 //  while a charge is dragged) costs a buffer write on the main thread, never
 //  a `MeshResource` regeneration per surface. The same exception to "the
-//  per-frame path touches only transforms" that `TrailRibbon` is: a buffer
+//  per-frame path touches only transforms" that `TrailRibbons` is: a buffer
 //  updated in place is not regeneration.
 //
 //  Capacity is fixed when it is made. A set larger than that keeps the

@@ -833,6 +833,17 @@ file). The new well and the standing script:
 
 ## Orbital Mechanics
 
+### ⟳ 2026-10-17 — the trails are one mesh, written at most 30 times a second
+
+- [ ] **Run the clock at 100× and watch Mercury.** Its trail must end on the
+      planet with no gap and no visible kink where the thin leader carries
+      it from the last written point. Then pause: the leader settles away.
+- [ ] **Smoothness.** Is the lab smooth at 1× and at 100×, with every world
+      trailing? Before this it held the main thread on the renderer for
+      nearly half of every frame in the simulator.
+- [ ] **The fade.** Does the tail still slide away smoothly at 1×? It now
+      steps ten times a second.
+
 ### The quiet arrival (2026-08-29)
 
 - [ ] **Open the module and touch nothing.** The sky is QUIET: planets,

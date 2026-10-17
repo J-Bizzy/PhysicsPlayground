@@ -3,7 +3,7 @@
 //  Renders the solar system diorama: Sun light, pooled planets, trails, prediction, arrows.
 //
 //  Frame-rate contract: pools built once; per-frame work is transform writes, plus the trails,
-//  which are ring buffers rewritten in place (`TrailRibbon`). The prediction and ring tubes are
+//  which are ring buffers rewritten in place (`TrailRibbons`, one mesh). The prediction and ring tubes are
 //  computed on a GeometryPipeline worker; the main thread only uploads finished buffers.
 //  Ticked from SceneEvents.Update — observation loops starve during grabs.
 //
@@ -166,16 +166,24 @@ final class OrbitalMechanicsRenderer {
     static let glowBaseRadius: Double = 0.105
     static let glowReferenceRadius: Double = 0.075
 
-    /// One ribbon per body slot, keyed by body id: a merge frees the dead
-    /// body's ribbon the frame its id goes, so no slot draws a dead path.
+    /// One ribbon slot per body, keyed by body id: a merge frees the dead
+    /// body's slot the frame its id goes, so no slot draws a dead path. All
+    /// the slots are parts of one mesh, written once a frame.
     private let trailsRoot = Entity()
-    private var ribbons: [TrailRibbon] = []
+    private var ribbons: TrailRibbons?
+    private var ribbonCount: Int { ribbons?.slots ?? 0 }
     private var ribbonSlots: [UUID: Int] = [:]
     private var ribbonGenerations: [UInt32?] = []
     private var ribbonRadii: [Float] = []
     private var ribbonHeads: [SIMD3<Float>] = []
     private var ribbonMaterialKeys: [String] = []
     private var ribbonScrubNonce = -1
+    /// When the trail mesh last went to the renderer, wall-clock seconds.
+    private var lastTrailCommit = -Double.infinity
+    /// Per slot: the head the mesh was last written with, and the thin unit
+    /// cylinder that carries the trail on from it to the body each frame.
+    private var committedHeads: [SIMD3<Float>?] = []
+    private var leaders: [ModelEntity] = []
     /// The opacity ramp every ribbon reads; nil until the loader delivers it.
     private var fadeRamp: TextureResource?
     private var predictionPipeline: GeometryPipeline<PredictionJob, PredictionBuffers>?
@@ -265,17 +273,26 @@ final class OrbitalMechanicsRenderer {
         systemRoot.addChild(audioEmitter)
         CelestialTextures.warmUp()
 
-        // Trails: one ribbon per body slot, rewritten in place.
+        // Trails: one ribbon slot per body, rewritten in place.
         systemRoot.addChild(trailsRoot)
-        for _ in 0..<OrbitalMechanicsModel.bodyBudget {
-            guard let ribbon = TrailRibbon(capacity: OrbitTrail.capacity) else { continue }
-            trailsRoot.addChild(ribbon.entity)
-            ribbons.append(ribbon)
+        let trails = TrailRibbons(slots: OrbitalMechanicsModel.bodyBudget, capacity: OrbitTrail.capacity)
+        if let trails { trailsRoot.addChild(trails.entity) }
+        ribbons = trails
+        let slots = trails?.slots ?? 0
+        ribbonGenerations = Array(repeating: nil, count: slots)
+        ribbonRadii = Array(repeating: 0, count: slots)
+        ribbonHeads = Array(repeating: .zero, count: slots)
+        ribbonMaterialKeys = Array(repeating: "", count: slots)
+        committedHeads = Array(repeating: nil, count: slots)
+        let leaderMesh = Primitives.cylinder(height: 1, radius: 1)
+        var leaderPool: [ModelEntity] = []
+        for _ in 0..<slots {
+            let leader = ModelEntity(mesh: leaderMesh, materials: [Materials.unlit(.white)])
+            leader.isEnabled = false
+            trailsRoot.addChild(leader)
+            leaderPool.append(leader)
         }
-        ribbonGenerations = Array(repeating: nil, count: ribbons.count)
-        ribbonRadii = Array(repeating: 0, count: ribbons.count)
-        ribbonHeads = Array(repeating: .zero, count: ribbons.count)
-        ribbonMaterialKeys = Array(repeating: "", count: ribbons.count)
+        leaders = leaderPool
 
         // Held-body orbit prediction: two passes from one recipe so the casing and core
         // opacities stay the house numbers.
@@ -953,21 +970,35 @@ final class OrbitalMechanicsRenderer {
 
     /// Which ribbon each body is drawing on, for a test.
     func trailSlot(for id: UUID) -> Int? { ribbonSlots[id] }
-    var liveTrailRibbons: Int { ribbons.filter { !$0.isEmpty }.count }
+    var liveTrailRibbons: Int { ribbons?.liveCount ?? 0 }
+
+    /// How often the trail mesh goes to the renderer: at most this often
+    /// while a trail is growing, and this often when only the fades and the
+    /// heads move. Every frame was 1.3 MB ninety times a second — sixteen
+    /// slots of 512 samples, and a `LowLevelMesh` write ships the whole
+    /// buffer — and the simulator's main thread spent nearly half of every
+    /// frame waiting on the renderer and none of it idle.
+    nonisolated static let trailGrowInterval = 1.0 / 30
+    nonisolated static let trailDriftInterval = 1.0 / 10
 
     private func syncTrails(_ model: OrbitalMechanicsModel) {
-        guard !ribbons.isEmpty else { return }
+        guard let ribbons else { return }
+        let wall = CACurrentMediaTime()
         let now = model.simulatedSeconds
         let radius = Self.trailRadius(rigScale: rigScale)
         let scrubbed = ribbonScrubNonce != model.scrubNonce
         ribbonScrubNonce = model.scrubNonce
 
+        var drawn: [(slot: Int, body: OrbitalMechanicsModel.OrbitingBody, head: SIMD3<Float>,
+                     reshaped: Bool)] = []
         var live = Set<UUID>()
+        var growing = scrubbed
+        var moving = false
         for orbiting in model.bodies {
             let slot: Int
             if let existing = ribbonSlots[orbiting.id] {
                 slot = existing
-            } else if let free = ribbons.indices.first(where: { index in
+            } else if let free = (0..<ribbonCount).first(where: { index in
                 !ribbonSlots.values.contains(index)
             }) {
                 slot = free
@@ -978,48 +1009,88 @@ final class OrbitalMechanicsRenderer {
                 continue
             }
             live.insert(orbiting.id)
-            let ribbon = ribbons[slot]
             let trail = orbiting.trail
             guard !trail.isEmpty else {
-                ribbon.clear()
+                ribbons.clear(slot: slot)
+                committedHeads[slot] = nil
                 ribbonGenerations[slot] = trail.generation
                 continue
             }
 
             // The body's own colour; the material changes only when the ramp
-            // lands or the slot changes bodies.
+            // lands or the slot changes bodies. The leader is the ribbon's
+            // head: the ramp's full opacity, or the flat 0.6 before it lands.
             let materialKey = orbiting.body.name + (fadeRamp == nil ? "|flat" : "|faded")
             if ribbonMaterialKeys[slot] != materialKey {
                 ribbonMaterialKeys[slot] = materialKey
                 let colour = DesignTokens.Palette.celestialUI(orbiting.body.name)
-                ribbon.setMaterial(fadeRamp.map { Materials.fadedLine(colour, ramp: $0) }
-                                   ?? Materials.unlit(colour, opacity: 0.6))
+                ribbons.setMaterial(fadeRamp.map { Materials.fadedLine(colour, ramp: $0) }
+                                    ?? Materials.unlit(colour, opacity: 0.6), slot: slot)
+                leaders[slot].model?.materials = [fadeRamp == nil
+                    ? Materials.unlit(colour, opacity: 0.6) : Materials.unlit(colour)]
             }
 
             let head = SIMD3<Float>(orbiting.body.position) * scale
-            let shapeChanged = ribbonGenerations[slot] != trail.generation
+            let reshaped = ribbonGenerations[slot] != trail.generation
                 || ribbonRadii[slot] != radius || scrubbed
-            guard shapeChanged || ribbonHeads[slot] != head || !model.isPaused else { continue }
-
-            let window = model.trailWindow(for: orbiting)
-            // Samples, then the body itself as the head: the ribbon ends on the planet every frame.
-            let points = trail.samples.map { SIMD3<Float>($0.position) * scale } + [head]
-            let ages = trail.samples.map { Float(trail.age($0, now: now, window: window)) } + [1]
-            if shapeChanged {
-                ribbon.update(points: points, ages: ages, radius: radius)
-            } else {
-                ribbon.updateHead(points: points, ages: ages, radius: radius)
-            }
-            ribbonGenerations[slot] = trail.generation
-            ribbonRadii[slot] = radius
+            growing = growing || reshaped
+            moving = moving || ribbonHeads[slot] != head
             ribbonHeads[slot] = head
+            drawn.append((slot, orbiting, head, reshaped))
         }
         // A body that merged or was deleted takes its ribbon with it.
         for (id, slot) in ribbonSlots where !live.contains(id) {
-            ribbons[slot].clear()
+            ribbons.clear(slot: slot)
+            committedHeads[slot] = nil
             ribbonSlots.removeValue(forKey: id)
             ribbonGenerations[slot] = nil
             ribbonMaterialKeys[slot] = ""
+        }
+
+        // A trail still led by its leader settles onto its body once paused.
+        let trailing = drawn.contains { committedHeads[$0.slot] != $0.head }
+        let interval = growing ? Self.trailGrowInterval : Self.trailDriftInterval
+        let due = scrubbed
+            || ((growing || moving || trailing || !model.isPaused)
+                && wall - lastTrailCommit >= interval)
+        if due {
+            lastTrailCommit = wall
+            for entry in drawn {
+                let trail = entry.body.trail
+                let window = model.trailWindow(for: entry.body)
+                // Samples, then the body itself as the head.
+                let points = trail.samples.map { SIMD3<Float>($0.position) * scale } + [entry.head]
+                let ages = trail.samples.map { Float(trail.age($0, now: now, window: window)) } + [1]
+                if entry.reshaped {
+                    ribbons.update(slot: entry.slot, points: points, ages: ages, radius: radius)
+                } else {
+                    ribbons.updateHead(slot: entry.slot, points: points, ages: ages, radius: radius)
+                }
+                ribbonGenerations[entry.slot] = trail.generation
+                ribbonRadii[entry.slot] = radius
+                committedHeads[entry.slot] = entry.head
+            }
+        }
+        // Clears go at once; the rest only when due.
+        ribbons.commit()
+
+        // Every frame, by transform alone: the leader carries each trail from
+        // the head it was last written with to where the body is now, so the
+        // ribbon ends on the planet at any clock between commits.
+        var leading = Set<Int>()
+        for entry in drawn {
+            guard let from = committedHeads[entry.slot] else { continue }
+            let span = entry.head - from
+            let length = simd_length(span)
+            guard length > 0.0005 else { continue }
+            let leader = leaders[entry.slot]
+            leader.position = from + span / 2
+            leader.orientation = VectorFieldArrows.rotationFromYAxis(to: span / length)
+            leader.scale = SIMD3(radius, length, radius)
+            leading.insert(entry.slot)
+        }
+        for slot in leaders.indices {
+            leaders[slot].isEnabled = leading.contains(slot)
         }
     }
 

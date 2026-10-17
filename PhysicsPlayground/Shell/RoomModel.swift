@@ -153,8 +153,24 @@ final class RoomModel {
     /// Where the user is looking, as a ray from between the eyes. Head
     /// direction, not eye gaze: visionOS never reports gaze to an app.
     var lookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)? {
+        // Asked for by a dozen things a frame, and each query is a round trip
+        // to world tracking: within one frame the answer is the same.
+        let now = CACurrentMediaTime()
+        if now - lookRayTime < Self.lookRayLifetime { return cachedLookRay }
+        let ray = queryLookRay(at: now)
+        lookRayTime = now
+        cachedLookRay = ray
+        return ray
+    }
+
+    /// Shorter than a 90 Hz frame, so no frame reads its predecessor's head.
+    private static let lookRayLifetime = 0.004
+    @ObservationIgnored private var lookRayTime = -Double.infinity
+    @ObservationIgnored private var cachedLookRay: (origin: SIMD3<Double>, direction: SIMD3<Double>)?
+
+    private func queryLookRay(at now: Double) -> (origin: SIMD3<Double>, direction: SIMD3<Double>)? {
         guard worldTracking.state == .running,
-              let anchor = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime())
+              let anchor = worldTracking.queryDeviceAnchor(atTimestamp: now)
         else { return nil }
         let m = anchor.originFromAnchorTransform
         let origin = SIMD3(Double(m.columns.3.x), Double(m.columns.3.y),
