@@ -3,14 +3,17 @@
 //  PhysicsPlaygroundTests
 //
 //  Electric Fields' equipotential shells as the lab draws them: off in the
-//  opening room; equal steps of potential on a 1-2-5 ladder, four each side
-//  of every sign present and the 0 V surface between opposite charges; and
-//  the opening dipole's nine surfaces meshed whole within the renderer's
-//  triangle budget at the renderer's resolution.
+//  opening room; equal steps of potential on a 1-2-5 ladder, the three inner
+//  surfaces round every sign present and the 0 V surface between opposite
+//  charges; the coarse grid while charges move and the fine one once they
+//  are still, both exact where they have vertices; and the in-place mesh
+//  that draws them, which drops whole shells, never parts of one.
 //
 
 import XCTest
 import PhysicsCore
+import RealityKit
+import RenderKit
 import simd
 @testable import PhysicsPlayground
 
@@ -30,15 +33,16 @@ final class FieldEquipotentialTests: XCTestCase {
         XCTAssertEqual(FieldModel.roundStep(0), 0)
     }
 
-    /// The opening dipole: four surfaces round each charge and the 0 V plane
-    /// between them, all at whole multiples of one step.
-    func testTheOpeningDipoleGetsFourShellsEachSideAndZeroVolts() {
+    /// The opening dipole: three surfaces round each charge — two, three and
+    /// four steps out — and the 0 V plane between them, all at whole
+    /// multiples of one step.
+    func testTheOpeningDipoleGetsThreeShellsEachSideAndZeroVolts() {
         let model = FieldModel()
         let ladder = FieldModel.equipotentialLevels(model.charges)
-        XCTAssertEqual(ladder.levels.count, 9)
+        XCTAssertEqual(ladder.levels.count, 7)
         XCTAssertTrue(ladder.levels.contains(0))
-        XCTAssertEqual(ladder.levels.filter { $0 > 0 }.count, 4)
-        XCTAssertEqual(ladder.levels.filter { $0 < 0 }.count, 4)
+        XCTAssertEqual(ladder.levels.filter { $0 > 0 }.sorted(), [2, 3, 4].map { $0 * ladder.step })
+        XCTAssertEqual(ladder.levels.filter { $0 < 0 }.count, 3)
         for level in ladder.levels {
             let multiple = level / ladder.step
             XCTAssertEqual(multiple, multiple.rounded(), accuracy: 1e-12)
@@ -60,18 +64,87 @@ final class FieldEquipotentialTests: XCTestCase {
         XCTAssertTrue(FieldModel.equipotentialLevels([]).levels.isEmpty)
     }
 
-    /// What the renderer meshes for the opening room: the four closed
+    /// What the renderer meshes for the opening room: the three closed
     /// shells round each charge, within the budget, and NOT the 0 V plane
     /// between them — infinite for equal and opposite charges, so the box
     /// would cut it into a flat pane.
-    func testTheOpeningDipoleDrawsItsEightShellsAndNoPane() {
+    func testTheOpeningDipoleDrawsItsSixShellsAndNoPane() {
         let model = FieldModel()
         let meshes = FieldRenderer.shellMeshes(model.charges, region: model.samplingRegion)
-        XCTAssertEqual(meshes.count, 8, "a shell was dropped, or the cut 0 V plane drawn")
+        XCTAssertEqual(meshes.count, 6, "a shell was dropped, or the cut 0 V plane drawn")
         XCTAssertFalse(meshes.contains { $0.level == 0 })
-        XCTAssertLessThanOrEqual(meshes.count, FieldRenderer.shellBudget)
         XCTAssertLessThanOrEqual(meshes.map(\.triangleCount).reduce(0, +),
                                  FieldRenderer.shellTriangleBudget)
+    }
+
+    // MARK: Cheap while moving, fine when still
+
+    /// The coarse grid the moment the charges move, the fine one once they
+    /// have been still a quarter of a second, nothing while they rest
+    /// meshed, and the fine one at once when the shells are switched on.
+    func testTheShellsMeshCoarseWhileMovingAndFineWhenStill() {
+        let fine = FieldRenderer.shellResolution, coarse = FieldRenderer.movingShellResolution
+        XCTAssertLessThan(coarse, fine)
+        XCTAssertEqual(FieldRenderer.shellResolution(changed: false, firstShow: true,
+                                                     stillFor: 0, fineDone: false), fine)
+        XCTAssertEqual(FieldRenderer.shellResolution(changed: true, firstShow: false,
+                                                     stillFor: 0, fineDone: true), coarse)
+        XCTAssertNil(FieldRenderer.shellResolution(changed: false, firstShow: false,
+                                                   stillFor: 0.1, fineDone: false),
+                     "re-meshed fine while the hand was still moving")
+        XCTAssertEqual(FieldRenderer.shellResolution(changed: false, firstShow: false,
+                                                     stillFor: 0.3, fineDone: false), fine)
+        XCTAssertNil(FieldRenderer.shellResolution(changed: false, firstShow: false,
+                                                   stillFor: 5, fineDone: true),
+                     "re-meshed a still room")
+    }
+
+    /// The coarse grid a drag shows is coarser between vertices, not wrong
+    /// at them: every vertex still on its sphere r = kq/V. The charge sits
+    /// exactly on a grid node here, which is what found the 0 V a charge
+    /// reads at itself.
+    func testACoarseShellIsStillExactAtItsVertices() {
+        let charge = PointCharge(position: SIMD3(0, 1.35, -0.9), charge: 1e-6)
+        let region = FieldModel.SamplingRegion(center: charge.position, extents: SIMD3(repeating: 1.3))
+        let meshes = FieldRenderer.shellMeshes([charge], region: region,
+                                               resolution: FieldRenderer.movingShellResolution)
+        XCTAssertFalse(meshes.isEmpty)
+        for mesh in meshes {
+            let radius = ElectricField.k * charge.charge / mesh.level
+            for position in mesh.positions {
+                XCTAssertEqual(simd_length(SIMD3<Double>(position) - charge.position), radius,
+                               accuracy: 1e-5)
+            }
+        }
+    }
+
+    /// At a charge the shells' potential is that charge's ceiling, not the
+    /// 0 V `ElectricField` answers there.
+    func testAChargeReadsItsCeilingAtItself() {
+        let plus = PointCharge(position: SIMD3(0, 1, 0), charge: 1e-6)
+        let minus = PointCharge(position: SIMD3(0.3, 1, 0), charge: -1e-6)
+        XCTAssertEqual(FieldRenderer.shellPotential(at: plus.position, charges: [plus, minus], ceiling: 5), 5)
+        XCTAssertEqual(FieldRenderer.shellPotential(at: minus.position, charges: [plus, minus], ceiling: 5), -5)
+    }
+
+    // MARK: The mesh they are drawn from
+
+    /// One in-place mesh, a part per shell wearing its rank's material; a set
+    /// that would overflow it keeps the shells that fit, whole.
+    func testTheSurfaceMeshDropsWholeShellsNeverPartsOfOne() throws {
+        let triangle = SurfaceMesh.Surface(positions: [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+                                           normals: Array(repeating: [0, 0, 1], count: 3),
+                                           indices: [0, 1, 2], material: 2)
+        let surface = try XCTUnwrap(SurfaceMesh(vertexCapacity: 7, indexCapacity: 9,
+                                                materials: [UnlitMaterial(), UnlitMaterial(), UnlitMaterial()]))
+        surface.update([triangle, triangle])
+        XCTAssertEqual(surface.drawn, 2)
+        XCTAssertTrue(surface.entity.isEnabled)
+        surface.update([triangle, triangle, triangle])
+        XCTAssertEqual(surface.drawn, 2, "a third shell overflows the vertices; it goes whole")
+        surface.update([])
+        XCTAssertEqual(surface.drawn, 0)
+        XCTAssertFalse(surface.entity.isEnabled)
     }
 
     /// Unequal and opposite: the 0 V surface closes, a sphere round the

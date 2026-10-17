@@ -16,6 +16,30 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-16 — The equipotential shells, made cheap; and a negative charge's own well
+
+**Decision:** The shells were "kind of laggy" (the owner, on device), so I cut each of their three costs. Electric Fields also gains a third well mouth, Charge −, so a negative charge is one pull. The old way was a pull and a flip, which the owner asked to change.
+
+**Context — measured on the simulator (this Mac; the device is slower):**
+- Meshing the opening dipole took 52 ms on the background pipeline at 44 cells.
+- Building nine fresh `MeshResource`s took 3–9 ms on the main thread.
+- Both repeated many times a second while a charge was dragged.
+- On the GPU, nine nested, double-sided, transparent PBR surfaces with clearcoat cover much of the view at once, and the outermost pair is the largest.
+
+**Consequences:**
+- **Main thread.** One `RenderKit.SurfaceMesh` (a `LowLevelMesh` with a part per shell, each wearing its rank's material) is rewritten in place. A re-mesh landing costs a buffer copy, not mesh generation. Part offsets are in bytes, as `LowLevelMesh.Part` wants.
+- **Background.**
+  - `Isosurface.meshes` computes each cell's range of f once, so a level visits only the cells it crosses. It no longer allocates per tetrahedron.
+  - The grid is 24 cells while the charges move and 40 once they have been still for 0.25 s (`FieldRenderer.shellResolution(changed:firstShow:stillFor:fineDone:)`, a pure function under test).
+  - Every vertex is still Newton-refined onto the exact surface, so the coarse mesh is coarser between vertices, never wrong at them.
+  - The opening dipole now meshes in 8 ms at 44 cells (from 52) and 1 ms at 24.
+- **GPU.**
+  - There are three shells per sign, at two, three and four steps; the one-step pair, the largest and the dearest to draw, is gone.
+  - The clearcoat is gone too. Earlier stills showed it changed nothing visible: the rim is the transparent material's own grazing reflection.
+  - Triangles fell from 42k to 27k at full resolution.
+- **A bug found on the way.** `ElectricField.potential` answers 0 V exactly at a charge, as its guard against dividing by zero, so a grid node landing on a charge grew a false little surface round it at every level. `FieldRenderer.shellPotential` reads a point on a charge as that charge's ceiling. The home's Fields diorama uses it too.
+- **The well column** keeps its first two mouths where hands learned them. Its head moved down half a pitch; Charge − stands where Test charge was, and Test charge stands one pitch lower. `FieldInstrumentLayoutTests` holds the literals, and the reach and recession criteria still pass.
+
 ## 2026-10-16 — The home's portals hold their labs in miniature; the icon is a prism
 
 **Decision:** Each of the home's seven portals now holds its lab in miniature: the lab's own apparatus, built from the parts the lab itself draws, standing on one shared stage and moved by the lab's real physics.

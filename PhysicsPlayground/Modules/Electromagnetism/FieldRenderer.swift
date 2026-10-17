@@ -11,6 +11,7 @@
 
 import Foundation
 import PhysicsCore
+import QuartzCore
 import RealityKit
 import RenderKit
 import SwiftUI
@@ -157,10 +158,11 @@ final class FieldRenderer {
 
     // The equipotential shells: meshed on their own pipeline, under their own
     // root, so a lone dragged charge carries them rigidly (exact, as for the
-    // lines) while the re-mesh catches up.
+    // lines) while the re-mesh catches up. Drawn from one mesh rewritten in
+    // place, every shell a part wearing its rank's material.
     private var shellPipeline: GeometryPipeline<ShellJob, ShellResult>?
     private let shellRoot = Entity()
-    private var shellEntities: [ModelEntity] = []
+    private var shellSurface: SurfaceMesh?
     private var appliedShellCharges: [PointCharge] = []
 
     /// The charge layout the currently-applied geometry was traced from.
@@ -199,12 +201,11 @@ final class FieldRenderer {
         )
 
         viewRoot.addChild(shellRoot)
-        shellEntities = (0..<Self.shellBudget).map { _ in
-            let shell = ModelEntity()
-            shell.isEnabled = false
-            shellRoot.addChild(shell)
-            return shell
-        }
+        shellSurface = SurfaceMesh(
+            vertexCapacity: Self.shellTriangleBudget / 2 + 4_000,
+            indexCapacity: Self.shellTriangleBudget * 3,
+            materials: Self.shellRanks.map { Self.shellMaterial(rank: $0) })
+        if let surface = shellSurface { shellRoot.addChild(surface.entity) }
         shellPipeline = GeometryPipeline(
             compute: { Self.computeShells($0) },
             apply: { [weak self] in self?.applyShells($0) }
@@ -375,41 +376,71 @@ final class FieldRenderer {
 
     // MARK: Equipotential shells (background, change-gated)
 
-    /// At most four surfaces round each sign and the 0 V surface.
-    static let shellBudget = 9
-    /// Grid cells across the sampling region: 3 cm or so at room scale, fine
-    /// enough with normals from the exact field.
-    nonisolated static let shellResolution = 44
-    nonisolated static let shellTriangleBudget = 60_000
+    /// The ranks a shell can have — its level in steps, signed — and so the
+    /// surface mesh's materials, in this order.
+    static let shellRanks = Array(-4...4)
+    /// The grid at rest: cells of 3 cm or so at room scale, fine enough
+    /// with every vertex on the exact surface and normals from the field.
+    nonisolated static let shellResolution = 40
+    /// The grid while the charges move: a third of the cells' cost, and still
+    /// exact where it has vertices — only coarser between them. The fine
+    /// mesh follows once the charges have been still for `settleTime`.
+    nonisolated static let movingShellResolution = 24
+    static let settleTime = 0.25
+    nonisolated static let shellTriangleBudget = 40_000
 
     private nonisolated struct ShellJob: Sendable, Equatable {
         var charges: [PointCharge]
         var region: FieldModel.SamplingRegion
+        var resolution: Int
     }
 
     private nonisolated struct ShellResult: Sendable {
         var sourceCharges: [PointCharge] = []
         var step: Double = 0
-        var shells: [(level: Double, buffers: TubeBuffers)] = []
+        var shells: [Isosurface.Mesh] = []
+    }
+
+    /// Which grid to mesh this frame, if any: nothing while the charges are
+    /// where they were last meshed at full resolution; the coarse grid as
+    /// soon as they move (a drag must never wait for the fine one); the
+    /// fine grid once they have been still for `settleTime`, or at once
+    /// when the shells are first switched on.
+    nonisolated static func shellResolution(changed: Bool, firstShow: Bool,
+                                            stillFor: Double, fineDone: Bool) -> Int? {
+        if firstShow { return shellResolution }
+        if changed { return movingShellResolution }
+        if !fineDone, stillFor >= settleTime { return shellResolution }
+        return nil
     }
 
     private func syncShells(show: Bool, charges: [PointCharge], region: FieldModel.SamplingRegion) {
         let visible = show && !charges.isEmpty
         shellRoot.isEnabled = visible
         guard visible else {
-            // Off forgets what was submitted, so turning them on re-meshes.
-            submittedShells = nil
+            // Off forgets what was meshed, so turning them on re-meshes.
+            meshedShells = nil
             return
         }
-        // What was last SUBMITTED, not applied: a drag changes the charges
-        // every frame, and the pipeline keeps only the newest job anyway.
-        let job = ShellJob(charges: charges, region: region)
-        guard job != submittedShells else { return }
-        submittedShells = job
+        let now = CACurrentMediaTime()
+        let target = ShellJob(charges: charges, region: region, resolution: 0)
+        let changed = meshedShells.map { $0 != target } ?? false
+        if changed { shellsMovedAt = now }
+        guard let resolution = Self.shellResolution(
+            changed: changed, firstShow: meshedShells == nil,
+            stillFor: now - shellsMovedAt, fineDone: shellsFine) else { return }
+        meshedShells = target
+        shellsFine = resolution == Self.shellResolution
+        var job = target
+        job.resolution = resolution
         shellPipeline?.submit(job)
     }
 
-    private var submittedShells: ShellJob?
+    /// The charges and region last sent to be meshed (resolution aside),
+    /// whether that was the fine grid, and when the charges last moved.
+    private var meshedShells: ShellJob?
+    private var shellsFine = false
+    private var shellsMovedAt = 0.0
 
     /// The surfaces to draw for these charges: the ladder's levels meshed
     /// over the sampling region, keeping only those that close inside it.
@@ -417,45 +448,51 @@ final class FieldRenderer {
     /// opposite charges, or a shell pushed through the floor — would draw
     /// the box's flat face, not the field's.
     nonisolated static func shellMeshes(_ charges: [PointCharge],
-                                        region: FieldModel.SamplingRegion) -> [Isosurface.Mesh] {
+                                        region: FieldModel.SamplingRegion,
+                                        resolution: Int = shellResolution) -> [Isosurface.Mesh] {
         let ladder = FieldModel.equipotentialLevels(charges)
         guard !ladder.levels.isEmpty else { return [] }
-        // The potential is clamped well past the innermost surface, so the
-        // grid never carries the singularities at the charges.
         let ceiling = 2 * (ladder.levels.map(abs).max() ?? 1)
         return Isosurface.meshes(
             levels: ladder.levels,
-            scalar: { point in
-                min(max(ElectricField.potential(at: point, dueTo: charges), -ceiling), ceiling)
-            },
+            scalar: { shellPotential(at: $0, charges: charges, ceiling: ceiling) },
             gradient: { -ElectricField.vector(at: $0, dueTo: charges) },
             center: region.center, extents: region.extents,
-            resolution: shellResolution, maxTriangles: shellTriangleBudget)
+            resolution: resolution, maxTriangles: shellTriangleBudget)
         .filter(\.isClosed)
     }
 
+    /// The potential the shells are meshed from: clamped well past the
+    /// innermost surface, so the grid never carries the singularities at the
+    /// charges — and AT a charge, that charge's own ceiling. `ElectricField`
+    /// answers 0 V exactly on a charge (its guard against dividing by zero),
+    /// and a grid node that landed there grew a little false surface round
+    /// the charge at every level (found 2026-10-16, a coarse grid centred on
+    /// a lone charge).
+    nonisolated static func shellPotential(at point: SIMD3<Double>, charges: [PointCharge],
+                                           ceiling: Double) -> Double {
+        if let on = charges.first(where: { simd_distance_squared($0.position, point) < 1e-12 }) {
+            return on.charge > 0 ? ceiling : -ceiling
+        }
+        return min(max(ElectricField.potential(at: point, dueTo: charges), -ceiling), ceiling)
+    }
+
     private nonisolated static func computeShells(_ job: ShellJob) -> ShellResult {
-        ShellResult(
-            sourceCharges: job.charges,
-            step: FieldModel.equipotentialLevels(job.charges).step,
-            shells: shellMeshes(job.charges, region: job.region).map { mesh in
-                (mesh.level, TubeBuffers(positions: mesh.positions, normals: mesh.normals,
-                                         indices: mesh.indices))
-            })
+        ShellResult(sourceCharges: job.charges,
+                    step: FieldModel.equipotentialLevels(job.charges).step,
+                    shells: shellMeshes(job.charges, region: job.region, resolution: job.resolution))
     }
 
     private func applyShells(_ result: ShellResult) {
-        for (index, shell) in shellEntities.enumerated() {
-            guard index < result.shells.count,
-                  let mesh = TubeMesh.mesh(from: result.shells[index].buffers) else {
-                shell.isEnabled = false
-                shell.model = nil
-                continue
-            }
-            let rank = result.step > 0 ? Int((result.shells[index].level / result.step).rounded()) : 0
-            shell.model = ModelComponent(mesh: mesh, materials: [Self.shellMaterial(rank: rank)])
-            shell.isEnabled = true
-        }
+        // Innermost first, as meshed: if the buffers ever run short, the
+        // outermost (largest, faintest) shell is the one left out.
+        shellSurface?.update(result.shells.map { mesh in
+            let rank = result.step > 0 ? Int((mesh.level / result.step).rounded()) : 0
+            let clamped = min(max(rank, Self.shellRanks.first!), Self.shellRanks.last!)
+            return SurfaceMesh.Surface(positions: mesh.positions, normals: mesh.normals,
+                                       indices: mesh.indices,
+                                       material: clamped - Self.shellRanks.first!)
+        })
         appliedShellCharges = result.sourceCharges
         if let model { syncFieldFlowWarp(model.charges) }
     }
@@ -463,10 +500,12 @@ final class FieldRenderer {
     /// Glass-thin and double-sided: red where the potential is positive,
     /// blue where negative (the charges' own colours), a fainter white for
     /// a 0 V surface. `rank` is the level in steps, signed: the outer,
-    /// larger shells are the fainter ones, so nine nested surfaces read as
-    /// depth rather than fog. Clearcoat catches the room's light along each
-    /// rim, which is what reads a shell as a surface rather than a coloured
-    /// haze. It writes no depth, so nested shells all show.
+    /// larger shells are the fainter ones, so nested surfaces read as depth
+    /// rather than fog. The rim that reads a shell as a surface is the
+    /// transparent material's own grazing reflection; a clearcoat over it
+    /// added a second specular lobe on every pixel of every shell and
+    /// changed nothing you could see (2026-10-16). It writes no depth, so
+    /// nested shells all show.
     static func shellMaterial(rank: Int) -> PhysicallyBasedMaterial {
         if let cached = shellMaterials[rank] { return cached }
         let tint: UIColor = rank > 0 ? DesignTokens.Palette.positiveUI
@@ -476,8 +515,6 @@ final class FieldRenderer {
         material.baseColor = .init(tint: tint)
         material.metallic = .init(floatLiteral: 0)
         material.roughness = .init(floatLiteral: 0.18)
-        material.clearcoat = .init(floatLiteral: 1)
-        material.clearcoatRoughness = .init(floatLiteral: 0.05)
         material.emissiveColor = .init(color: tint)
         material.emissiveIntensity = 0.12
         material.blending = .transparent(opacity: .init(floatLiteral: opacity))

@@ -112,19 +112,24 @@ struct FieldSpaceView: View {
     private func install(into renderer: FieldRenderer) {
         // Wells hang off `viewRoot`: a charge is born at the fingertips and
         // handed to a drag, so mouth and hand must agree about where they are.
-        // One of each: a charge comes out positive and its ring flips it, so
-        // the sign is a property of the thing you hold, not of where it came
-        // from.
+        // A positive mouth and a negative one (2026-10-16, the owner's call:
+        // a negative charge should not take a pull and a flip), and the
+        // ring still flips either.
         let wells = Well([
-            .init(name: "Charge", tint: DesignTokens.Palette.positiveUI,
-                  label: "Charge",
+            .init(name: "Positive charge", tint: DesignTokens.Palette.positiveUI,
+                  label: "Charge +",
                   preview: { FieldRenderer.chargePreview(isPositive: true) },
                   position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 0)),
                   spawn: { model.addCharge(positive: true, at: $0) }),
+            .init(name: "Negative charge", tint: DesignTokens.Palette.negativeUI,
+                  label: "Charge −",
+                  preview: { FieldRenderer.chargePreview(isPositive: false) },
+                  position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 1)),
+                  spawn: { model.addCharge(positive: false, at: $0) }),
             .init(name: "Test charge", tint: DesignTokens.Palette.probePositiveUI,
                   label: "Test charge",
                   preview: { FieldRenderer.probePreview(isPositive: true) },
-                  position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 1)),
+                  position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 2)),
                   spawn: { point in
                       // Positive out of the well, as its preview promises.
                       model.probeIsPositive = true
@@ -143,7 +148,7 @@ struct FieldSpaceView: View {
         // world positions.
         let hand = appModel.room.nearestFingertip(
             to: renderer.viewRoot.convert(
-                position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 0)), to: nil))
+                position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 1)), to: nil))
         wells?.update(dt: dt, nearestHand: hand)
     }
 

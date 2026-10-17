@@ -24,10 +24,11 @@ final class FieldInstrumentLayoutTests: XCTestCase {
 
     // MARK: The wells stand where the hands placed them
 
-    /// The column stands where the hands placed it: the two mouths hang
+    /// The column stands where the hands placed it: the charge mouths hang
     /// at the middle of where the four stood until 2026-10-14, at the same
-    /// x and depth. If a change means to move them, update the literal in
-    /// the same commit.
+    /// x and depth, and since 2026-10-16 the negative charge's mouth stands
+    /// where the test charge's was, the test charge's one pitch below. If a
+    /// change means to move them, update the literal in the same commit.
     func testTheWellsStandWhereTheyWerePlaced() {
         func same(_ derived: SIMD3<Double>, _ historical: SIMD3<Double>,
                   _ what: String) {
@@ -36,9 +37,11 @@ final class FieldInstrumentLayoutTests: XCTestCase {
             XCTAssertEqual(derived.z, historical.z, accuracy: 1e-9, "\(what) z")
         }
         same(FieldInstrumentLayout.wellAnchor(index: 0),
-             SIMD3(-1.02, 1.58, -0.60), "charge well")
+             SIMD3(-1.02, 1.58, -0.60), "positive charge well")
         same(FieldInstrumentLayout.wellAnchor(index: 1),
-             SIMD3(-1.02, 1.58 - 0.095, -0.60), "test-charge well")
+             SIMD3(-1.02, 1.58 - 0.095, -0.60), "negative charge well")
+        same(FieldInstrumentLayout.wellAnchor(index: 2),
+             SIMD3(-1.02, 1.58 - 2 * 0.095, -0.60), "test-charge well")
     }
 
     /// The spacing must now come from the neighbours' own sizes — that is

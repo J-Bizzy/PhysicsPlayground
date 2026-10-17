@@ -498,7 +498,7 @@ extension HubVignettes {
         let ceiling = 2 * (ladder.levels.map(abs).max() ?? 1)
         let meshes = Isosurface.meshes(
             levels: ladder.levels,
-            scalar: { min(max(ElectricField.potential(at: $0, dueTo: charges), -ceiling), ceiling) },
+            scalar: { FieldRenderer.shellPotential(at: $0, charges: charges, ceiling: ceiling) },
             gradient: { -ElectricField.vector(at: $0, dueTo: charges) },
             center: SIMD3(0, height, 0), extents: SIMD3(0.52, 0.44, 0.44),
             resolution: 30, maxTriangles: 30_000)
@@ -560,8 +560,8 @@ extension HubVignettes {
 
     /// The magnet's stroke through the coil, in the lab's metres and
     /// seconds: a brisk push in and out, 1.0 m/s through the bore.
-    static let coilStroke = (amplitude: 0.12, period: 0.75)
-    static let coilHeight = 0.076
+    nonisolated static let coilStroke = (amplitude: 0.12, period: 0.75)
+    nonisolated static let coilHeight = 0.076
 
     /// The LED's level across one stroke, sampled: the coil's real linkage
     /// to the moving dipole, ε = −dΛ/dt, and the current the LED pair lets

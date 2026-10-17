@@ -115,6 +115,17 @@ final class FieldSpatialControlTests: XCTestCase {
         XCTAssertTrue(charge?.isPositive ?? false)
     }
 
+    /// The negative mouth makes a negative charge, of the same size: a
+    /// negative is one pull, not a pull and a flip.
+    func testTheNegativeMouthMakesANegativeCharge() throws {
+        let model = FieldModel()
+        model.removeAllCharges()
+        let id = model.addCharge(positive: false, at: FieldModel.regionCenter)
+        let charge = try XCTUnwrap(model.charges.first { $0.id == id })
+        XCTAssertEqual(charge.charge, -FieldModel.defaultMagnitude)
+        XCTAssertEqual(model.selectedChargeID, id)
+    }
+
     /// The probe's well has no UUID to hand back, so the view uses a fixed
     /// sentinel that must never collide with a real charge.
     func testThePulledProbeIsHeldAtTheHand() {

@@ -107,8 +107,10 @@ final class FieldModel {
     /// Surfaces of equal potential at equal steps of voltage, so where they
     /// crowd the field is strong. The step is a round 1-2-5 number of volts,
     /// a quarter of the potential just outside the strongest charge's ball;
-    /// four surfaces round each sign of charge, and the 0 V surface — the
-    /// plane between the two halves of a dipole — when both signs are here.
+    /// three surfaces round each sign of charge — two, three and four steps
+    /// out, the crowded inner ones, since the one-step surface is the
+    /// largest and so the dearest to draw (2026-10-16) — and the 0 V
+    /// surface when both signs are here.
     /// Point charges only: the capacitor's potential is a line integral per
     /// point, too dear for a grid, and its gap has its own field lines.
     nonisolated static func equipotentialLevels(_ charges: [PointCharge])
@@ -121,7 +123,7 @@ final class FieldModel {
         var levels: [Double] = []
         let hasPositive = charges.contains { $0.charge > 0 }
         let hasNegative = charges.contains { $0.charge < 0 }
-        for index in 1...4 {
+        for index in 2...4 {
             if hasPositive { levels.append(Double(index) * step) }
             if hasNegative { levels.append(-Double(index) * step) }
         }

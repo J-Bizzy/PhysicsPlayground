@@ -32,17 +32,22 @@ enum FieldInstrumentLayout {
     /// Off the left shoulder, fore of the station's plane: what you make.
     /// x −1.02 matches Circuits' Clear plate, so the column stands where a
     /// hand already reaches in both labs.
+    /// The head sits at the column's centre; it moved down half a pitch when
+    /// the third mouth came, so the first two stayed where hands had learned
+    /// them and the new one hangs below.
     static let foreRail = InstrumentRail(
-        head: SIMD3(-1.02, 1.5325, -0.60),
+        head: SIMD3(-1.02, 1.5325 - wellPitch / 2, -0.60),
         gap: 0.04,
         items: [
-            // The two mouths as one object: one pitch plus a 0.06 mouth radius.
+            // The mouths as one object: their pitches plus a 0.06 mouth radius.
             .init(name: "wells", halfExtents: wellHalfExtents),
         ])
 
-    /// The mouths' pitch. Two mouths: a charge, and a test charge.
+    /// The mouths' pitch. Three mouths: a positive charge, a negative one
+    /// and a test charge.
     static let wellPitch = 0.095
-    static let wellHalfExtents = SIMD3<Double>(0.06, 0.06 + wellPitch / 2, 0.06)
+    static let wellCount = 3
+    static let wellHalfExtents = SIMD3<Double>(0.06, 0.06 + wellPitch * Double(wellCount - 1) / 2, 0.06)
 
     static func wellAnchor(index: Int) -> SIMD3<Double> {
         let column = foreRail.anchor("wells")!

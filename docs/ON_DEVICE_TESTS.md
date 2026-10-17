@@ -635,9 +635,11 @@ B, Deflect shot and Clear all are in More (2026-10-14). A charge's sign
 and size are the charge's own, so **this section is the only place they
 can be tested at all.**
 
-- [ ] **Two wells, Charge and Test charge.** Pull each: the new charge
-      or probe is IN YOUR HAND and STAYS there all the way in. Both come
-      out positive, as their previews show.
+- [ ] **Three mouths: Charge +, Charge − and Test charge.** Pull each:
+      the new charge or probe is IN YOUR HAND and STAYS there all the
+      way in. The charges come out the sign their previews show; the test
+      charge comes out positive. (⟳ 2026-10-16: the negative mouth is new,
+      and the test charge's mouth moved one pitch down to make room.)
 - [ ] **Tap a charge → its ring: Flip, Delete, and a handle on its
       surface.** Flip: the sphere turns blue with a −, and the field
       lines reverse at once. Pull the handle outward: the sphere SWELLS
@@ -682,10 +684,16 @@ can be tested at all.**
 - [ ] **Pull one charge's handle out** (unequal charges): a faint white
       0 V sphere closes round the WEAKER charge. Judge: is it visible
       without being a fog?
-- [ ] **Drag a charge with the shells on.** They follow; how far they
-      lag a brisk hand is the re-mesh time on the device. Judge: does it
-      read as following, or as a stutter? (A lone charge's shells move
-      rigidly with it, exactly.)
+- [ ] **Drag a charge with the shells on.** ⟳ 2026-10-16, after "it's
+      kind of laggy": they should follow smoothly, slightly faceted while
+      the hand moves (the coarse grid) and smoothing a quarter-second
+      after it stops (the fine one). Judge both: is the drag smooth now,
+      and is the coarse look acceptable while it moves? (A lone charge's
+      shells move rigidly with it, exactly.)
+- [ ] **Frame rate with the shells on and the room still.** Three shells
+      per sign now, not four: the outermost, largest pair is gone, and with
+      it most of the overdraw. If it still drops frames standing close,
+      the next lever is opacity, or culling each shell's far half.
 - [ ] **With field lines on too**, each line glints white where it
       crosses a shell's silhouette — the glass's rim catching the line.
       Judge: polish or noise? If noise, the lever is the shells'

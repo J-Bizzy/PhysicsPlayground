@@ -209,10 +209,34 @@ public enum Isosurface {
             [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
             [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1],
         ]
+        let cornerStep = cornerOffsets.map { ($0.x * stride + $0.y) * stride + $0.z }
         let tetrahedra = [
             [0, 5, 1, 6], [0, 1, 2, 6], [0, 2, 3, 6],
             [0, 3, 7, 6], [0, 7, 4, 6], [0, 4, 5, 6],
         ]
+
+        // Each cell's range of f, once: a level then visits only the cells
+        // it crosses, instead of reading all eight corners of every cell
+        // again for every level. A cell no level reaches is never listed.
+        let lowest = levels.min() ?? 0, highest = levels.max() ?? 0
+        var active: [Int] = [], cellLow: [Double] = [], cellHigh: [Double] = []
+        for i in 0..<n {
+            for j in 0..<n {
+                for k in 0..<n {
+                    let origin = index(i, j, k)
+                    var low = Double.infinity, high = -Double.infinity
+                    for step in cornerStep {
+                        let v = values[origin + step]
+                        low = min(low, v)
+                        high = max(high, v)
+                    }
+                    guard low <= highest, high > lowest else { continue }
+                    active.append(origin)
+                    cellLow.append(low)
+                    cellHigh.append(high)
+                }
+            }
+        }
 
         var meshes: [Mesh] = []
         var total = 0
@@ -255,43 +279,43 @@ public enum Isosurface {
                 let face = simd_cross(pb - pa, pc - pa)
                 let wanted = mesh.normals[Int(a)] + mesh.normals[Int(b)] + mesh.normals[Int(c)]
                 if simd_dot(face, wanted) >= 0 {
-                    mesh.indices += [a, b, c]
+                    mesh.indices.append(a); mesh.indices.append(b); mesh.indices.append(c)
                 } else {
-                    mesh.indices += [a, c, b]
+                    mesh.indices.append(a); mesh.indices.append(c); mesh.indices.append(b)
                 }
             }
 
-            for i in 0..<n {
-                for j in 0..<n {
-                    for k in 0..<n {
-                        var corners = [Int](repeating: 0, count: 8)
-                        var anyAbove = false, anyBelow = false
-                        for (c, offset) in cornerOffsets.enumerated() {
-                            let flat = index(i + offset.x, j + offset.y, k + offset.z)
-                            corners[c] = flat
-                            if values[flat] > level { anyAbove = true } else { anyBelow = true }
+            // Reused for every tetrahedron: the march allocates nothing per cell.
+            var corners = [Int](repeating: 0, count: 8)
+            var up = [0, 0, 0, 0], down = [0, 0, 0, 0]
+            for (slot, origin) in active.enumerated() {
+                // "Some corner above the level, some at or below it."
+                guard cellHigh[slot] > level, cellLow[slot] <= level else { continue }
+                for c in 0..<8 { corners[c] = origin + cornerStep[c] }
+                for tet in tetrahedra {
+                    var above = 0, below = 0
+                    for c in tet {
+                        let flat = corners[c]
+                        if values[flat] > level {
+                            up[above] = flat
+                            above += 1
+                        } else {
+                            down[below] = flat
+                            below += 1
                         }
-                        guard anyAbove && anyBelow else { continue }
-                        for tet in tetrahedra {
-                            let grid = tet.map { corners[$0] }
-                            let above = grid.filter { values[$0] > level }
-                            let below = grid.filter { values[$0] <= level }
-                            switch above.count {
-                            case 1:
-                                triangle(vertex(above[0], below[0]), vertex(above[0], below[1]),
-                                         vertex(above[0], below[2]))
-                            case 3:
-                                triangle(vertex(below[0], above[0]), vertex(below[0], above[1]),
-                                         vertex(below[0], above[2]))
-                            case 2:
-                                let p0 = vertex(above[0], below[0]), p1 = vertex(above[0], below[1])
-                                let p2 = vertex(above[1], below[1]), p3 = vertex(above[1], below[0])
-                                triangle(p0, p1, p2)
-                                triangle(p0, p2, p3)
-                            default:
-                                break
-                            }
-                        }
+                    }
+                    switch above {
+                    case 1:
+                        triangle(vertex(up[0], down[0]), vertex(up[0], down[1]), vertex(up[0], down[2]))
+                    case 3:
+                        triangle(vertex(down[0], up[0]), vertex(down[0], up[1]), vertex(down[0], up[2]))
+                    case 2:
+                        let p0 = vertex(up[0], down[0]), p1 = vertex(up[0], down[1])
+                        let p2 = vertex(up[1], down[1]), p3 = vertex(up[1], down[0])
+                        triangle(p0, p1, p2)
+                        triangle(p0, p2, p3)
+                    default:
+                        break
                     }
                 }
             }

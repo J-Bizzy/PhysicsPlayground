@@ -40,6 +40,14 @@ final class LabPlacement {
         } else {
             offset = .zero
         }
+        #if DEBUG
+        // `-labShift <metres>` slides the lab that far to the right for one
+        // launch, unsaved, so what stands off the left shoulder — the wells —
+        // comes into the simulator's view (positive only: a value starting
+        // with "-" is read as the next key).
+        let shift = UserDefaults.standard.double(forKey: "labShift")
+        if shift > 0 { offset.x += Float(shift) }
+        #endif
     }
 
     func move(to newOffset: SIMD3<Float>) {
