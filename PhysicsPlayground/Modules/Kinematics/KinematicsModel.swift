@@ -49,7 +49,7 @@ final class KinematicsModel {
 
     // MARK: Projectile selection
 
-    enum ProjectileKind: String, CaseIterable, Identifiable {
+    nonisolated enum ProjectileKind: String, CaseIterable, Identifiable {
         case tableTennisBall, basketball, golfBall, cannonball, custom
         var id: String { rawValue }
 
@@ -238,7 +238,7 @@ final class KinematicsModel {
 
     // MARK: Flights
 
-    struct Flight: Identifiable, Equatable {
+    nonisolated struct Flight: Identifiable, Equatable {
         let id: UUID
         var projectile: Projectile
         var state: ParticleDynamics.State
@@ -267,7 +267,7 @@ final class KinematicsModel {
 
     private(set) var flights: [Flight] = []
 
-    struct FlightSummary: Equatable {
+    nonisolated struct FlightSummary: Equatable {
         var projectileName: String
         var range: Double
         var apexHeight: Double
@@ -283,7 +283,7 @@ final class KinematicsModel {
     nonisolated static let catchRadius = 0.14
 
     /// The last catch, for the callout that appears at the caught ball.
-    struct Catch: Equatable {
+    nonisolated struct Catch: Equatable {
         var id: UUID
         var speed: Double
         var height: Double
@@ -442,7 +442,7 @@ final class KinematicsModel {
 
     // MARK: Hoops
 
-    struct Ring: Identifiable, Equatable {
+    nonisolated struct Ring: Identifiable, Equatable {
         let id: UUID
         /// Where the user placed it (the orbit's center when hoops move).
         var anchor: SIMD3<Double>
@@ -977,7 +977,7 @@ final class KinematicsModel {
 extension KinematicsModel: TimeCapsuleRecording {
     /// The experiment, not the observer: flights, hoops, aim, environment.
     /// Excluded: room walls/bounds (the live room feeds them), settings, sounds.
-    struct CapsuleSnapshot: Equatable {
+    nonisolated struct CapsuleSnapshot: Equatable {
         var flights: [Flight]
         var rings: [Ring]
         var lastFlight: FlightSummary?

@@ -113,9 +113,9 @@ final class FieldRenderer {
     }
     /// Arrowheads are hidden inside this distance of a charge, where the
     /// 1/r² field diverges and a finite arrow is meaningless.
-    static let arrowExclusionRadius = 0.09
+    nonisolated static let arrowExclusionRadius = 0.09
     /// Arc-length spacing of the arrowheads riding each field line.
-    static let arrowSpacing: Float = 0.17
+    nonisolated static let arrowSpacing: Float = 0.17
 
     private var model: FieldModel?
     /// Bare arrowhead cones riding the field lines. The line itself is
@@ -136,7 +136,7 @@ final class FieldRenderer {
     private let lineCasingEntity = ModelEntity()
     private let lineGlowEntity = ModelEntity()
     /// Core radius of a field line; the casing is swept from it.
-    static let lineRadius: Float = 0.0016
+    nonisolated static let lineRadius: Float = 0.0016
     private let lineMaterial = UnlitMaterial(color: FieldRenderer.lineColor)
     private let lineCasingMaterial =
         Materials.contrastLine(FieldRenderer.lineColor).casing
@@ -386,7 +386,7 @@ final class FieldRenderer {
     /// exact where it has vertices — only coarser between them. The fine
     /// mesh follows once the charges have been still for `settleTime`.
     nonisolated static let movingShellResolution = 24
-    static let settleTime = 0.25
+    nonisolated static let settleTime = 0.25
     nonisolated static let shellTriangleBudget = 40_000
 
     private nonisolated struct ShellJob: Sendable, Equatable {

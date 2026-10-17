@@ -20,7 +20,7 @@ struct RoomDimmerView: View {
 
     /// The house radius. `AppModel.dimmingRadius` carries the live value:
     /// Orbital Mechanics puts Jupiter 2.6 m out, so its shell stands at 16 m.
-    static let defaultRadius: Float = 3.4
+    nonisolated static let defaultRadius: Float = 3.4
 
     /// How fast the shell answers a new target; 9 settles in ~0.25 s,
     /// beside the hub's own dissolve.

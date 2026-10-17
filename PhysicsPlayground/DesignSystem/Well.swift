@@ -375,7 +375,7 @@ final class Well {
         shelf = nil
         crownMount = nil
         spindle = nil
-        guard let visibleCount, let head = specs.first?.position, let track else { return }
+        guard visibleCount != nil, let head = specs.first?.position, let track else { return }
 
         // The shelf's own frame: on the first slot, turned to face the viewer.
         let shelf = Entity()

@@ -137,7 +137,7 @@ final class CircuitsModel {
         var end: Int  // 0 = left (battery +), 1 = right
     }
 
-    struct Component: Identifiable, Equatable, Codable {
+    nonisolated struct Component: Identifiable, Equatable, Codable {
         let id: UUID
         let kind: ComponentKind
         var position: SIMD3<Double>
@@ -215,7 +215,7 @@ final class CircuitsModel {
         }
     }
 
-    struct Wire: Identifiable, Equatable, Codable {
+    nonisolated struct Wire: Identifiable, Equatable, Codable {
         let id: UUID
         let from: Terminal
         let to: Terminal
@@ -2067,7 +2067,7 @@ extension CircuitsModel: TimeCapsuleRecording {
     /// quantity, and the wires restore mid-window rewirings; the per-frame
     /// solve re-derives readouts. Out: the half-made wire and the meter's
     /// arming.
-    struct CapsuleSnapshot: Equatable {
+    nonisolated struct CapsuleSnapshot: Equatable {
         var components: [Component]
         var wires: [Wire]
         var simTime: Double

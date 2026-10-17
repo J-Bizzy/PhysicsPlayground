@@ -98,7 +98,7 @@ final class MagnetismModel {
 
     /// A coil with a bicolour LED across it. Push a magnet through and the
     /// LED lights: red one way, green the other.
-    struct Coil: Identifiable, Equatable {
+    nonisolated struct Coil: Identifiable, Equatable {
         let id: UUID
         var position: SIMD3<Double>
         /// Unit vector along the bore.
@@ -712,7 +712,7 @@ extension MagnetismModel: TimeCapsuleRecording {
     /// in the snapshot to carry the inertial regime's velocities — a
     /// needle restored without them loses the overshoot-and-ring. Out:
     /// the bank's flags and the selection.
-    struct CapsuleSnapshot: Equatable {
+    nonisolated struct CapsuleSnapshot: Equatable {
         var magnets: [BarMagnet]
         var bodies: [UUID: DipoleBody]
         var compassPosition: SIMD3<Double>

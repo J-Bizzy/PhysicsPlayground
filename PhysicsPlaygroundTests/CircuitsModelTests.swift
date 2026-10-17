@@ -971,7 +971,7 @@ final class CircuitsModelTests: XCTestCase {
         let model = CircuitsModel()
         model.clearBench()
         let battery = try XCTUnwrap(model.add(.battery))
-        let bulb = try XCTUnwrap(model.add(.bulb))
+        _ = try XCTUnwrap(model.add(.bulb))
 
         let before = model.wires.count
 

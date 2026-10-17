@@ -112,7 +112,7 @@ enum InstrumentClearance {
     static let stationMargin = 0.12
 
     /// Where a standing user's head is taken to be.
-    static let viewer = SIMD3<Double>(0, 1.5, 0)
+    nonisolated static let viewer = SIMD3<Double>(0, 1.5, 0)
 
     /// Past this you are stepping toward your own controls.
     static let maximumReach = 1.25

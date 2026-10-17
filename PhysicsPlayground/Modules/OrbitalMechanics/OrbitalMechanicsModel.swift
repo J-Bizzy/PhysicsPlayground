@@ -71,7 +71,7 @@ final class OrbitalMechanicsModel {
     // MARK: Predict, then run — the ghost marker
 
     /// Predict-then-run: place a ghost where you think the body will be one sweep window from now.
-    struct Prediction: Equatable {
+    nonisolated struct Prediction: Equatable {
         var bodyID: UUID
         /// The guess, sim metres. The user drags this.
         var position: SIMD3<Double>
@@ -80,7 +80,7 @@ final class OrbitalMechanicsModel {
         var resolvesAt: Double
     }
 
-    struct PredictionVerdict: Equatable {
+    nonisolated struct PredictionVerdict: Equatable {
         let bodyPosition: SIMD3<Double>
         let guess: SIMD3<Double>
         let missAU: Double
@@ -1076,8 +1076,8 @@ extension OrbitalMechanicsModel: TimeCapsuleRecording {
     /// The sky in sim units plus its clock. Trails are not snapshotted
     /// (never an unbounded array); they are rebuilt from the capsule under
     /// the live spacing rule. `timeScale` and display layers stay out.
-    struct CapsuleSnapshot: Equatable {
-        struct Body: Equatable {
+    nonisolated struct CapsuleSnapshot: Equatable {
+        nonisolated struct Body: Equatable {
             var id: UUID
             var body: CelestialBody
             var displayRadius: Double

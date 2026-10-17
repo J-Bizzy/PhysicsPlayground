@@ -83,7 +83,7 @@ final class FieldModel {
     var selectedChargeID: UUID?
 
     // MARK: Probe state
-    enum ProbeStatus: Equatable {
+    nonisolated enum ProbeStatus: Equatable {
         case none, running, held, captured, escaped
     }
     var probe: TestChargeDynamics.ProbeState?
@@ -405,7 +405,7 @@ final class FieldModel {
     }
 
     /// Two charges, either way round.
-    struct ChargePair: Hashable {
+    nonisolated struct ChargePair: Hashable {
         let first: UUID
         let second: UUID
 
@@ -874,7 +874,7 @@ extension FieldModel: TimeCapsuleRecording {
     /// The charges, the probe, and the apparatus flags that change the
     /// physics (`capacitorOn`, `magneticFieldOn`, `chargesRespond`);
     /// `showLines` stays out, and `probeTrail` is rebuilt from the capsule.
-    struct CapsuleSnapshot: Equatable {
+    nonisolated struct CapsuleSnapshot: Equatable {
         var charges: [PointCharge]
         var probe: TestChargeDynamics.ProbeState?
         var probeStatus: ProbeStatus

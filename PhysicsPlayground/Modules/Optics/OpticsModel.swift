@@ -28,7 +28,7 @@ final class OpticsModel {
         case mirror, prism, lens, block
     }
 
-    struct Piece: Identifiable, Equatable, Sendable {
+    nonisolated struct Piece: Identifiable, Equatable, Sendable {
         let id: UUID
         var kind: Kind
         var position: SIMD3<Double>
@@ -38,14 +38,14 @@ final class OpticsModel {
     }
 
     /// A light: where it stands, where it points, whether it is lit.
-    struct Source: Equatable, Sendable {
+    nonisolated struct Source: Equatable, Sendable {
         var position: SIMD3<Double>
         var aim: SIMD3<Double>
         var isOn: Bool
     }
 
     /// How the torch's light leaves it.
-    enum TorchBeam: String, Equatable, Sendable {
+    nonisolated enum TorchBeam: String, Equatable, Sendable {
         /// One narrow white beam, every colour together — a prism fans it.
         case slit
         /// A broad parallel beam of a few colours — a lens focuses it, and
@@ -426,7 +426,7 @@ final class OpticsModel {
     /// step only records the bench for the Time Capsule.
     func step(dt: Double) {
         guard !isPaused else { return }
-        defer { recordCapsuleFrame(dt: min(dt, 1.0 / 30.0)) }
+        recordCapsuleFrame(dt: min(dt, 1.0 / 30.0))
     }
 
     func togglePause() { togglePauseRespectingScrub() }
@@ -524,7 +524,7 @@ final class OpticsModel {
 extension OpticsModel: TimeCapsuleRecording {
     /// The bench: every piece and both lights, and the glass, which changes
     /// where the light goes. Out: the display layers and the selection.
-    struct CapsuleSnapshot: Equatable {
+    nonisolated struct CapsuleSnapshot: Equatable {
         var pieces: [Piece]
         var laser: Source
         var torch: Source

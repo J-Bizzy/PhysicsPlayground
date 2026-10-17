@@ -284,7 +284,7 @@ final class RoomModel {
         shutdown = Task { [weak self] in
             try? await Task.sleep(for: .seconds(Self.lingerSeconds))
             guard !Task.isCancelled else { return }
-            await self?.stopNow()
+            self?.stopNow()
         }
     }
 
@@ -313,7 +313,7 @@ final class RoomModel {
             } else {
                 if anchor.alignment == .vertical {
                     wallsByAnchor[anchor.id] = Self.wall(from: anchor)
-                } else if anchor.classification == .table || anchor.classification == .seat {
+                } else if anchor.surfaceClassification == .table || anchor.surfaceClassification == .seat {
                     // A classified table or seat is a finite two-sided wall like any other,
                     // so a ball lands on it and rolls off. Unclassified horizontal planes
                     // would be invisible shelves; the floor is the model's own contact law.

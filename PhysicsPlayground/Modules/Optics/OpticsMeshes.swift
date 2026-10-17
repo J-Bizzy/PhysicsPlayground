@@ -151,7 +151,7 @@ enum OpticsMeshes {
     /// Collects triangles and winds each so its face agrees with the normal
     /// it was given: a winding slip shows as a missing face, which is
     /// exactly what a transparent piece of glass cannot hide.
-    private struct Builder {
+    private nonisolated struct Builder {
         var positions: [SIMD3<Float>] = []
         var normals: [SIMD3<Float>] = []
         var indices: [UInt32] = []
@@ -188,7 +188,7 @@ enum OpticsMeshes {
             indices += [base, base + 1, base + 2]
         }
 
-        func mesh(name: String) -> MeshResource {
+        @MainActor func mesh(name: String) -> MeshResource {
             var descriptor = MeshDescriptor(name: name)
             descriptor.positions = MeshBuffers.Positions(positions)
             descriptor.normals = MeshBuffers.Normals(normals)

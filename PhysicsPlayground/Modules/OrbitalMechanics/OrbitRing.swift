@@ -32,12 +32,12 @@ final class OrbitRing {
     /// Visual (and collision) radius of a bead, before rig compensation.
     static let beadRadius: Float = 0.014
     /// The core tube's radius in the room, metres.
-    static let roomCoreRadius: Float = 0.0014
+    nonisolated static let roomCoreRadius: Float = 0.0014
     /// A change of eccentricity this large rebuilds the mesh; below it the
     /// drawn conic and the beads disagree by less than a tube width.
-    static let eccentricityThreshold = 0.002
+    nonisolated static let eccentricityThreshold = 0.002
     /// How many points a conic is sampled at.
-    static let sampleCount = 256
+    nonisolated static let sampleCount = 256
 
     /// What the current mesh was built for.
     private var applied: RingKey?

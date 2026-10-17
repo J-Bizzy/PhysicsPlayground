@@ -55,7 +55,7 @@ final class MagnetismRenderer {
     private let lineCasingEntity = ModelEntity()
     private let lineGlowEntity = ModelEntity()
     /// Core radius of a field loop; the casing is swept from it.
-    static let lineRadius: Float = 0.0016
+    nonisolated static let lineRadius: Float = 0.0016
     /// Direction cones riding the field loops, N→S outside the magnet.
     private let arrowHeads: EntityPool<ModelEntity>
     private let lineMaterial = UnlitMaterial(color: MagnetismRenderer.lineColor)

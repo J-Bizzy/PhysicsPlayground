@@ -29,7 +29,7 @@ final class ModuleArrivalCriterionTests: XCTestCase {
             .filter { $0.lastPathComponent.hasSuffix("SpaceView.swift") } ?? []
 
         return try files
-            .map { (name: $0.lastPathComponent, source: try String(contentsOf: $0)) }
+            .map { (name: $0.lastPathComponent, source: try String(contentsOf: $0, encoding: .utf8)) }
             .sorted { $0.name < $1.name }
     }
 

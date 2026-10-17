@@ -193,7 +193,7 @@ final class OrbitalMechanicsRenderer {
     private let predictionCasingEntity = ModelEntity()
     private let predictionCasingMaterial: UnlitMaterial
     /// Shared by the core tube and `casingRadius`, so the two cannot change apart.
-    private static let predictionRadius: Float = 0.002
+    private nonisolated static let predictionRadius: Float = 0.002
     private let flashEntity: ModelEntity
 
     private struct Arrow {

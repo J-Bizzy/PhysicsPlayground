@@ -34,12 +34,12 @@ final class PendulumsModel {
 
     /// Rig kind — genuinely different physics: simple = taut cable on a
     /// sphere (Verlet); double = two-angle exact Lagrangian (RK4).
-    enum Kind: Equatable {
+    nonisolated enum Kind: Equatable {
         case simple
         case double
     }
 
-    struct Pendulum: Identifiable, Equatable {
+    nonisolated struct Pendulum: Identifiable, Equatable {
         let id: UUID
         var kind: Kind = .simple
         var length: Double
@@ -109,7 +109,7 @@ final class PendulumsModel {
     /// A spring joining two simple pendulums' bobs. Natural length: the
     /// distance between the bobs when both hang still, so a coupled pair at
     /// rest has a slack-free, unstretched spring.
-    struct Spring: Identifiable, Equatable {
+    nonisolated struct Spring: Identifiable, Equatable {
         let id: UUID
         let a: UUID
         let b: UUID
@@ -701,7 +701,7 @@ final class PendulumsModel {
 extension PendulumsModel: TimeCapsuleRecording {
     /// Dynamical state only. `accumulator` is genuine physics state — dropping it
     /// restores up to one substep out of phase. Out: frictionOn, layers, selection.
-    struct CapsuleSnapshot: Equatable {
+    nonisolated struct CapsuleSnapshot: Equatable {
         var pendulums: [Pendulum]
         var accumulator: Double
         var gravity: Double

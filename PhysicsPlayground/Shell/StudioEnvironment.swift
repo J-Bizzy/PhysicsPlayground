@@ -189,7 +189,7 @@ struct StudioEnvironmentView: View {
             }
         }
         guard let cgImage = image.cgImage else { return nil }
-        return try? TextureResource.generate(from: cgImage, options: .init(semantic: .color))
+        return try? TextureResource(image: cgImage, options: .init(semantic: .color))
     }
 
     /// The floor's lit centre: a champagne pool fading through charcoal to
@@ -215,6 +215,6 @@ struct StudioEnvironmentView: View {
             }
         }
         guard let cgImage = image.cgImage else { return nil }
-        return try? TextureResource.generate(from: cgImage, options: .init(semantic: .color))
+        return try? TextureResource(image: cgImage, options: .init(semantic: .color))
     }
 }
