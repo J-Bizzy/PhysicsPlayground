@@ -114,18 +114,32 @@ final class MagnetismModel {
     }
 
     private(set) var coils: [Coil] = []
-    /// The winding `Tools/pickupcoil.py` mills: mean radius, length, and the
-    /// wire it is wound with.
+    /// The winding `Tools/pickupcoil.py` mills: copper from `windingInner`
+    /// to `windingOuter`, `coilLength` long, and its mean radius.
+    nonisolated static let windingInner = 0.051
+    nonisolated static let windingOuter = 0.062
     nonisolated static let coilRadius = 0.0565
     nonisolated static let coilLength = 0.080
-    nonisolated static let coilWireDiameter = 0.25e-3
+    /// The share of the winding's cross-section that is copper: round
+    /// enamelled wire wound in layers leaves the rest to enamel and gaps.
+    nonisolated static let copperFill = 0.55
     /// The bore a magnet passes through, and the flanges' radius.
     nonisolated static let coilBoreRadius = 0.048
     nonisolated static let coilFlangeRadius = 0.072
     nonisolated static let coilBudget = 2
-    /// Fewer turns, a faster push: the EMF goes as N.
-    nonisolated static let turnOptions = [1000, 2000, 4000]
-    nonisolated static let defaultTurns = 4000
+    /// Every option fills the same bobbin, so fewer turns are thicker wire:
+    /// the EMF goes as N and the resistance as N², and only the finest
+    /// winding clears the LED's 1.6 V at a hand's pace.
+    nonisolated static let turnOptions = [2500, 5000, 10_000]
+    nonisolated static let defaultTurns = 10_000
+
+    /// The wire a winding of `turns` is wound with: the gauge that fills the
+    /// drawn winding — 0.25 mm for 10 000 turns, 0.50 mm for 2500.
+    nonisolated static func wireDiameter(turns: Int) -> Double {
+        let copper = copperFill * (windingOuter - windingInner) * coilLength
+            / Double(max(turns, 1))
+        return (4 * copper / .pi).squareRoot()
+    }
 
     var selectedCoil: Coil? {
         guard let selectedID else { return nil }
@@ -135,7 +149,8 @@ final class MagnetismModel {
     /// The coil as PhysicsCore sees it.
     nonisolated static func pickupCoil(_ coil: Coil) -> PickupCoil {
         PickupCoil(center: coil.position, axis: coil.axis, radius: coilRadius,
-                   length: coilLength, turns: coil.turns, wireDiameter: coilWireDiameter)
+                   length: coilLength, turns: coil.turns,
+                   wireDiameter: wireDiameter(turns: coil.turns))
     }
 
     @discardableResult
@@ -160,7 +175,7 @@ final class MagnetismModel {
         if selectedID == id { selectedID = magnets.last?.id }
     }
 
-    /// 1000 → 2000 → 4000 turns, and round again. The linkage is measured
+    /// 2500 → 5000 → 10 000 turns, and round again. The linkage is measured
     /// afresh, so changing the winding is not itself a jolt of EMF.
     func cycleTurns(id: UUID) {
         guard let index = coils.firstIndex(where: { $0.id == id }) else { return }
@@ -178,6 +193,84 @@ final class MagnetismModel {
         let a = coils[index].axis
         coils[index].axis = simd_normalize(SIMD3(-a.z, a.y, a.x))
         coils[index].linkage = Self.pickupCoil(coils[index]).linkage(magnets: magnets)
+    }
+
+    // MARK: The bore is a sleeve
+
+    /// Half the magnet's widest section, corner to corner: its chrome band,
+    /// 5.6 cm square with 4 mm corners.
+    nonisolated static let magnetHalfDiagonal = 0.038
+    /// How far off the axis a magnet inside the bore can sit: a centimetre.
+    nonisolated static var boreClearance: Double { coilBoreRadius - magnetHalfDiagonal }
+    /// How fast the bore turns a carried magnet into line at full weight,
+    /// rad/s: a quarter turn in about a sixth of a second.
+    private static let boreAlignRate = 10.0
+
+    /// Where a carried magnet stands for where the hand carries it. A bar
+    /// can only be inside a coil lying along the bore, a centimetre off its
+    /// axis at most; so over the coil's length, fading through the half
+    /// magnet past each end, the bore draws it in toward the axis, and off
+    /// the bore it goes where the hand does. Continuous everywhere and
+    /// monotonic across the axis, so a hand drawn sideways out of the mouth
+    /// never makes the magnet jump.
+    nonisolated static func sleeved(_ point: SIMD3<Double>, through coil: Coil) -> SIMD3<Double> {
+        let offset = point - coil.position
+        let along = simd_dot(offset, coil.axis)
+        let across = offset - along * coil.axis
+        let r = simd_length(across)
+        let weight = (1 - smoothstep(coilLength / 2, coilLength / 2 + magnetLength / 2, abs(along)))
+            * borePull(r)
+        guard r > 1e-9, weight > 0 else { return point }
+        let held = boreClearance * tanh(r / boreClearance)
+        let radius = r - (r - held) * weight
+        return coil.position + along * coil.axis + across * (radius / r)
+    }
+
+    /// How strongly a carried magnet's aim is turned toward a coil's bore,
+    /// 0…1: full from the moment its leading end reaches either mouth, fading
+    /// out a magnet's length beyond; full within the bore's radius of the
+    /// axis, gone a little past the flanges, so a magnet held beside the
+    /// coil keeps its aim.
+    nonisolated static func boreAim(of point: SIMD3<Double>, toward coil: Coil) -> Double {
+        let offset = point - coil.position
+        let along = simd_dot(offset, coil.axis)
+        let r = simd_length(offset - along * coil.axis)
+        let mouth = coilLength / 2 + magnetLength / 2
+        return (1 - smoothstep(mouth, mouth + magnetLength, abs(along))) * borePull(r)
+    }
+
+    /// Full inside the bore's radius of the axis, nothing 2 cm past the flanges.
+    private nonisolated static func borePull(_ r: Double) -> Double {
+        1 - smoothstep(coilBoreRadius, coilFlangeRadius + 0.02, r)
+    }
+
+    private nonisolated static func smoothstep(_ low: Double, _ high: Double, _ x: Double) -> Double {
+        let t = min(max((x - low) / (high - low), 0), 1)
+        return t * t * (3 - 2 * t)
+    }
+
+    /// A carried bar nearing a coil's mouth turns to lie along the bore,
+    /// keeping whichever pole already led: it could not go in otherwise, and
+    /// a hand that cannot turn what it holds needs the bore to do it. The
+    /// turn is real motion of the magnet, so it induces like any other.
+    private func alignHeldMagnetsWithBores(dt: Double) {
+        guard !coils.isEmpty, !heldIDs.isEmpty else { return }
+        for index in magnets.indices where heldIDs.contains(magnets[index].id) {
+            for coil in coils {
+                let weight = Self.boreAim(of: magnets[index].position, toward: coil)
+                let moment = magnets[index].moment
+                let strength = simd_length(moment)
+                guard weight > 0, strength > 1e-12 else { continue }
+                let aim = moment / strength
+                let target = simd_dot(aim, coil.axis) < 0 ? -coil.axis : coil.axis
+                let remaining = acos(min(max(simd_dot(aim, target), -1), 1))
+                let pivot = simd_cross(aim, target)
+                guard remaining > Self.restAngle, simd_length(pivot) > 1e-12 else { continue }
+                let turn = min(remaining, Self.boreAlignRate * weight * dt)
+                magnets[index].moment = simd_quatd(angle: turn, axis: simd_normalize(pivot))
+                    .act(moment)
+            }
+        }
     }
 
     /// Faraday's law for every coil, once the magnets have moved this step:
@@ -201,7 +294,7 @@ final class MagnetismModel {
         }
     }
 
-    /// A third of the LED's rated 10 mA: plainly lit, not a flicker.
+    /// A tenth of the LED's rated 10 mA: plainly lit, not a flicker.
     nonisolated static let firstLightCurrent = 0.001
 
     // MARK: Sound events (the renderer plays them spatially)
@@ -253,6 +346,7 @@ final class MagnetismModel {
         // before the frame is recorded — and whether or not they move freely:
         // a magnet carried by hand induces just the same.
         defer { stepCoils(dt: dt) }
+        alignHeldMagnetsWithBores(dt: min(dt, 1.0 / 30.0))
         guard dynamicsOn else {
             // Frozen: no forces, but contact separation still holds so a
             // dragged magnet can't be parked inside another.
@@ -476,7 +570,9 @@ final class MagnetismModel {
 
     func move(id: UUID, to point: SIMD3<Double>) {
         guard let index = magnets.firstIndex(where: { $0.id == id }) else { return }
-        magnets[index].position = floored(point)
+        // Through a coil's bore, the bore guides it (`sleeved`).
+        let guided = coils.reduce(floored(point)) { Self.sleeved($0, through: $1) }
+        magnets[index].position = floored(guided)
     }
 
     /// One hand lets go; whatever the other hand holds stays held.

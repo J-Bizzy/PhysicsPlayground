@@ -16,6 +16,30 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-17 — The coil lights at a hand's pace: a full winding, and a bore that guides
+
+**Decision:** The owner tried the magnet in the coil on device and "it didn't seem to work". There were two causes, and I fixed both.
+- **The winding is now as full as it is drawn.** The default is 10 000 turns of 0.25 mm wire. The options are 2500, 5000 and 10 000 turns, and each fills the same bobbin with a different gauge of wire.
+- **The bore is a sleeve.** A carried magnet turns to lie along the bore as its end reaches either mouth, keeping whichever pole already led. Inside the bore it is drawn toward the axis, within the centimetre of play a 5.6 cm bar has in a 9.6 cm bore.
+
+**Context — what the numbers said:**
+- **The coil was too slow to light.** At 4000 turns the LED gave no visible light until the magnet passed at about 0.6 m/s, and a gleam at 0.8. A hand guiding a magnet into a coil moves at 0.2–0.4 m/s, so a careful push left it dark.
+- **4000 turns did not match the drawing.** The milled winding runs from 51 to 62 mm in radius over 80 mm, and the physics already used its 56.5 mm mean radius. Copper filling 55 % of that cross-section, typical for layer-wound enamelled wire, makes 10 000 turns of 0.25 mm. So the 4000-turn coil was a bobbin drawn full and wound a third full.
+- **A crosswise magnet induced nothing.** A dipole lying across the bore links no net flux, by symmetry. A hand in this app cannot turn what it holds. The magnet's only way to turn was the glide toward the other magnet, and its only way through the wall was straight through the copper.
+
+**Consequences:**
+- **Speeds.** At 10 000 turns, 0.25 m/s glows faintly, 0.35 m/s plainly (about 0.6 mA) and 1 m/s brightly (about 4 mA). A creep at 0.15 m/s is still dark: the LED's 1.6 V threshold still decides.
+- **Physics in the turn options.** Because every option is the same copper, the EMF goes as N and the resistance as N². So ε²/R, the power a pass could deliver into a matched load, does not depend on the winding. Only the LED's threshold makes the finest wire the one that lights. The More reading names the gauge.
+- **The sleeve, as a function.** `MagnetismModel.sleeved` is continuous everywhere and monotonic across the axis. It is the identity 2 cm past the flanges and half a magnet beyond either end, so pulling a magnet out sideways never jumps. `boreAim` turns the aim from a magnet's length out of the mouth.
+- **The turn is real motion of the magnet,** so it induces like any other motion. Only a held magnet is guided. A free one is the glide's.
+- **Tests:** `MagnetismCoilTests` holds:
+  - a gentle pass lights the LED and a creeping one does not;
+  - a crosswise magnet is turned into line, keeping its lead, and lights the LED both ways;
+  - a magnet beside the coil keeps its aim;
+  - the sleeve's continuity;
+  - every winding fills the bobbin, with R going as N².
+- **The home's coil** uses the same winding as the lab's, so its stroke now lights at level 5.
+
 ## 2026-10-16 — The equipotential shells, made cheap; and a negative charge's own well
 
 **Decision:** The shells were "kind of laggy" (the owner, on device), so I cut each of their three costs. Electric Fields also gains a third well mouth, Charge −, so a negative charge is one pull. The old way was a pull and a flip, which the owner asked to change.

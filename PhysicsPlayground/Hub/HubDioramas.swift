@@ -565,12 +565,13 @@ extension HubVignettes {
 
     /// The LED's level across one stroke, sampled: the coil's real linkage
     /// to the moving dipole, ε = −dΛ/dt, and the current the LED pair lets
-    /// through (`PickupCoil`, `BicolourLED`), at the lab's 4000 turns.
+    /// through (`PickupCoil`, `BicolourLED`), wound as the lab's coil opens.
     static let coilLEDLevels: [Int] = {
         let samples = 180
         let coil = PickupCoil(center: SIMD3(0, coilHeight, 0), axis: SIMD3(1, 0, 0),
                               radius: MagnetismModel.coilRadius, length: MagnetismModel.coilLength,
-                              turns: 4000, wireDiameter: MagnetismModel.coilWireDiameter)
+                              turns: MagnetismModel.defaultTurns,
+                              wireDiameter: MagnetismModel.wireDiameter(turns: MagnetismModel.defaultTurns))
         let dt = coilStroke.period / Double(samples)
         func linkage(_ t: Double) -> Double {
             let x = coilStroke.amplitude * sin(2 * .pi * t / coilStroke.period)

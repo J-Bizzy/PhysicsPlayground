@@ -555,8 +555,31 @@ ARKit has found them: the light lands only on walls it knows.
       still magnet instead: it lights just the same (relative motion).
 - [ ] **Ring › Turns** to 1000 and the same push no longer lights it;
       4000 again and it does. **Turn** stands the bore toward you.
+      (⟳ 2026-10-17: now 2500 / 5000 / 10 000 — see below.)
 - [ ] **More › Values** with the coil selected: the linkage, ε = −dΛ/dt
       swinging through a pass, the LED current and the winding's ~490 Ω.
+      (⟳ 2026-10-17: ~1230 Ω at 10 000 turns of 0.25 mm.)
+
+### ⟳ 2026-10-17 — "it didn't seem to work": the full winding and the sleeve
+
+- [ ] **A gentle push lights it now.** Carry the magnet through at the pace
+      you would guide it into a real coil — about a third of a metre a
+      second. The LED should glow plainly, red one way and green the other.
+      At 4000 turns it needed more than twice that, and a careful push left
+      it dark. Creeping through, it should still stay dark.
+- [ ] **Bring the magnet in crosswise.** Hold it across the bore and carry
+      it at the mouth. As its end reaches the mouth it should swing round to
+      lie along the bore, keeping whichever pole already led, and slide
+      through the middle rather than through the winding. Judge: does the
+      swing read as the bore taking it, or as the magnet being yanked? Is a
+      sixth of a second too quick, or too slow at a brisk push?
+- [ ] **Hold the magnet beside the coil, not at its mouth.** It must keep
+      its aim; only the mouth turns it.
+- [ ] **Pull it out sideways from inside.** It should leave the bore
+      steadily, never in a jump.
+- [ ] **Ring › Turns** to 2500: the same gentle push leaves it dark,
+      because thicker wire of the same copper makes a quarter of the EMF.
+      10 000 again and it lights.
 
 - [ ] **THE FIELD LINES ARE PINK NOW, AND THIS IS THE JUDGEMENT CALL.**
       ⟳ 2026-08-26: they were a hardcoded lavender, ΔE 46 from the accent

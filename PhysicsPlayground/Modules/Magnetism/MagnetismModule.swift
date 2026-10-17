@@ -86,15 +86,16 @@ enum MagnetismModule {
             // it is changing, and what that drives through the LED.
             let winding = MagnetismModel.pickupCoil(coil)
             let wire = Double(winding.turns) * 2 * .pi * winding.radius
-            rows.append(.init("Coil turns", "\(coil.turns)"))
+            rows.append(.init("Coil turns", coil.turns.formatted()))
             rows.append(.init("Flux linkage", PhysicsFormat.fixed(coil.linkage * 1000, decimals: 2), "mWb",
                               formula: "Λ = NΦ = N∮A·dl"))
             rows.append(.init("EMF", PhysicsFormat.fixed(coil.emf, decimals: 2), "V",
                               formula: "ε = −dΛ/dt"))
             rows.append(.init("LED current", PhysicsFormat.fixed(coil.current * 1000, decimals: 2), "mA",
                               formula: "ε = IR + V_{LED}(I)"))
+            let gauge = PhysicsFormat.fixed(winding.wireDiameter * 1000, decimals: 2)
             rows.append(.init("Winding resistance", PhysicsFormat.fixed(winding.resistance, decimals: 0), "Ω",
-                              formula: "R = ρL/A, L = \(PhysicsFormat.fixed(wire, decimals: 0)) m of copper"))
+                              formula: "R = ρL/A, L = \(PhysicsFormat.fixed(wire, decimals: 0)) m of \(gauge) mm copper"))
         }
         return rows
     }
