@@ -16,6 +16,26 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-17 — Throwing is Projectiles' main act
+
+**Decision:** This answers the owner's "it just seems uninspired" from 2026-08-03. Of three directions offered, the owner chose making throwing the main act. They also chose to open quiet and to show the release in the room. Four changes:
+- **The room opens quiet.** There is no welcome shot. The launcher stands still and a ball waits at your hand, so the first flight in the room is the one you throw.
+- **A ball always waits at chest height on the left.** The ball well's mouth came down from the hoop's row at 1.70 m to (−0.76, 1.18, −0.70). It holds a 6 cm token of the current ball in that ball's own skin, and it is full again the moment a ball is taken.
+- **A throw leaves at the hand's peak.** The release velocity is the hand's fastest 50 ms in the 160 ms before the pinch is reported open (`ThrowSampler.releaseVelocity`).
+- **Your throw is read out.** At the release point, the throw's own "angle · speed" hangs for the flight, and More › Values adds the release speed and angle.
+
+**Context:**
+- **Most of throwing already existed.** A ball pulled from the well is in your hand from the first frame. Release velocity came from the hand's motion, open hands catch, fast hands swat, strobe dots trace the flight, and balls bounce off real walls and land on real tables.
+- **The release estimate was the risk.** It was the endpoint difference over the last 120 ms. A pinch is reported open after the fingers have opened, by which point a throwing hand is slowing, so that average counted the follow-through. On a modelled throw that peaks at 6 m/s and is reported 60 ms later, it throws below 5 m/s. The new estimate throws within 5 % of 6, never above it.
+- **Within each stretch the velocity is a least-squares fit, not two points.** Gesture events are stamped on arrival. A two-point slope from one mis-stamped event swings by a fifth, and taking the fastest would pick exactly that one. With events stamped up to 3 ms off, the fit holds within 6 %.
+
+**Consequences:**
+- **Where the ball can wait.** "As near the hand as possible" was limited by two existing rules, kept unchanged: the wall stays left of the launcher's line (x < −0.65, `testTheWallStaysBesideTheShotNotInFrontOfIt`), and within 48° of straight ahead. That leaves the ball about 1.1 m from the eyes, a lean from the left shoulder. If it is too far on device, the lever is moving the launcher right, not the rules.
+- **The token, and a clash removed.** The token's size is fixed because `Well` measures its target and name plate from the preview once. The old basketball token fell back to orange before the textures loaded, which is the aim bead's orange, so the ball you throw and the bead you aim with read as one object. `KinematicsRenderer.readyBall` follows the ball fan.
+- **What the launcher is for now.** It is the precise second act, for hoops' aim solutions, the monkey and the hunter, and air against vacuum. `reset()` no longer fires. `ColdOpenTests` and `KinematicsModelTests` hold the quiet opening, `testTheBallWaitsAtChestHeight` holds the mouth below the shoulder and nearer than the hoop's row, and `testAThrowLeavesAtTheHandsPeakAndRemembersItsRelease` holds the release.
+- **The new estimate is Projectiles' only.** Electric Fields' probe flick, Pendulums' release and Orbital Mechanics' throw keep the endpoint estimate. Whether they should change is a separate call, best made after throwing has been judged on device.
+- **`-kinThrow <m/s>`** stages a throw: 35° up and straight ahead, from a right hand at full stretch.
+
 ## 2026-10-17 — Orbital Mechanics' trails stop holding the main thread, and a closed More stops working
 
 **Decision:** I sampled every lab's main thread in the simulator. Orbital Mechanics was the only one never idle: 0.1 % idle, against 46–96 % in the other labs. The fix has three parts.

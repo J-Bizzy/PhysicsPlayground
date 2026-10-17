@@ -126,4 +126,91 @@ final class ThrowSamplerTests: XCTestCase {
         sampler.record(SIMD3(0.13, 0, 0), at: 0.13)
         XCTAssertEqual(sampler.velocity(at: 0.13)!.x, 1.0, accuracy: 1e-12)
     }
+
+    // MARK: The release
+
+    /// A hand at 90 Hz whose speed rises to `peak` and falls away again
+    /// along +x, the pinch reported open `lag` seconds after the peak.
+    private func throwing(peak: Double, lag: Double, jitter: Double = 0,
+                          window: Double = 0.16) -> (ThrowSampler, Double) {
+        var sampler = ThrowSampler(window: window)
+        // speed(t) = peak · sin²(πt/T): a bell 0.3 s long, fastest at 0.15 s.
+        let T = 0.3
+        let release = 0.15 + lag
+        var x = 0.0
+        var t = 0.0
+        let dt = 1.0 / 90.0
+        var index = 0
+        while t <= release + 1e-9 {
+            // Stamped a little off where the event says it happened.
+            let stamp = t + jitter * sin(Double(index) * 2.7)
+            sampler.record(SIMD3(x, 0, 0), at: stamp)
+            let s = sin(.pi * (t + dt / 2) / T)
+            x += peak * s * s * dt
+            t += dt
+            index += 1
+        }
+        return (sampler, release)
+    }
+
+    func testReleaseVelocityRecoversAConstantVelocity() {
+        var sampler = ThrowSampler(window: 0.16)
+        for step in 0...14 {
+            let t = Double(step) / 90
+            sampler.record(SIMD3(t * 4, t * 2, 0), at: t)
+        }
+        let velocity = try! XCTUnwrap(sampler.releaseVelocity(at: 14.0 / 90))
+        XCTAssertEqual(velocity.x, 4, accuracy: 1e-9)
+        XCTAssertEqual(velocity.y, 2, accuracy: 1e-9)
+    }
+
+    /// The pinch is reported 60 ms after the hand's fastest: the endpoint
+    /// estimate has averaged the follow-through in and throws short; the
+    /// release estimate finds the peak and never overshoots it.
+    func testTheReleaseIsThePeakNotTheFollowThrough() {
+        let (sampler, release) = throwing(peak: 6, lag: 0.06)
+        let endpoint = try! XCTUnwrap(sampler.velocity(at: release)).x
+        let thrown = try! XCTUnwrap(sampler.releaseVelocity(at: release)).x
+        XCTAssertLessThan(endpoint, 5.0, "the follow-through was not in the endpoint estimate")
+        XCTAssertGreaterThan(thrown, 0.95 * 6, "the release lost the peak")
+        XCTAssertLessThanOrEqual(thrown, 6 * 1.001, "the release overshot the fastest the hand went")
+    }
+
+    /// Events stamped up to 3 ms off where they happened: a two-point
+    /// slope would swing by a fifth, and the fastest of those would be
+    /// what threw. The fit holds it within a few percent.
+    func testMisstampedEventsDoNotInflateTheRelease() {
+        let (sampler, release) = throwing(peak: 6, lag: 0.03, jitter: 0.003)
+        let thrown = try! XCTUnwrap(sampler.releaseVelocity(at: release)).x
+        XCTAssertEqual(thrown, 6, accuracy: 6 * 0.06)
+    }
+
+    /// The direction is the fastest stretch's: a hand that turns down after
+    /// letting go does not drag the throw down with it.
+    func testTheReleaseKeepsTheDirectionTheHandWasMoving() {
+        var sampler = ThrowSampler(window: 0.16)
+        var position = SIMD3<Double>.zero
+        for step in 0...14 {
+            let t = Double(step) / 90
+            sampler.record(position, at: t)
+            // Up and forward at 5 m/s, then, for the last 40 ms, down at 2 m/s.
+            let velocity: SIMD3<Double> = t < 0.115 ? SIMD3(3, 4, 0) : SIMD3(1, -2, 0)
+            position += velocity / 90
+        }
+        let thrown = try! XCTUnwrap(sampler.releaseVelocity(at: 14.0 / 90))
+        XCTAssertEqual(atan2(thrown.y, thrown.x), atan2(4.0, 3.0), accuracy: 0.05)
+    }
+
+    /// Too little recorded to fit a stretch: the endpoint estimate throws,
+    /// and too little to mean anything is still no throw.
+    func testAShortFlickStillThrowsAndATwitchDoesNot() {
+        var flick = ThrowSampler(window: 0.16)
+        flick.record(.zero, at: 0)
+        flick.record(SIMD3(0.09, 0, 0), at: 0.03)
+        XCTAssertEqual(try! XCTUnwrap(flick.releaseVelocity(at: 0.03)).x, 3, accuracy: 1e-12)
+        var twitch = ThrowSampler(window: 0.16)
+        twitch.record(.zero, at: 0)
+        twitch.record(SIMD3(0.01, 0, 0), at: 0.005)
+        XCTAssertNil(twitch.releaseVelocity(at: 0.005))
+    }
 }

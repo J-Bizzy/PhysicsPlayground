@@ -76,4 +76,49 @@ public struct ThrowSampler: Sendable {
         guard span >= minimumSpan else { return nil }
         return (last.position - first.position) / span
     }
+
+    /// How long a stretch of travel `releaseVelocity` fits a velocity to.
+    public static let releaseSpan = 0.05
+
+    /// The velocity the hand let go at, for a throw: the fastest
+    /// `releaseSpan` of travel in the window before `now`, each stretch's
+    /// velocity the least-squares slope of the samples inside it.
+    ///
+    /// WHY NOT THE ENDPOINT. A pinch is reported open after the fingers
+    /// have opened, and a throwing hand is slowing by then — the
+    /// follow-through. The endpoint difference averages that slowing into
+    /// the throw and the ball leaves slower than it was thrown. A hand lets
+    /// go near its fastest, so the fastest stretch just before the report
+    /// is the release. A fit inside each stretch rather than two points:
+    /// an event stamped a few milliseconds off swings a two-point slope,
+    /// and taking the fastest would pick exactly that one.
+    ///
+    /// Falls back to `velocity(at:)` when no stretch fits in what was
+    /// recorded, so a short flick still throws.
+    public func releaseVelocity(at now: Double) -> SIMD3<Double>? {
+        let recent = samples.filter { now - $0.time <= window + 1e-9 }
+        var fastest: SIMD3<Double>?
+        for end in recent.indices {
+            let stretch = recent[...end].filter { recent[end].time - $0.time <= Self.releaseSpan + 1e-9 }
+            guard stretch.count >= 3,
+                  let first = stretch.first,
+                  recent[end].time - first.time >= 0.8 * Self.releaseSpan else { continue }
+            let meanTime = stretch.reduce(0) { $0 + $1.time } / Double(stretch.count)
+            let meanPosition = stretch.reduce(SIMD3<Double>.zero) { $0 + $1.position }
+                / Double(stretch.count)
+            var spread = 0.0
+            var covariance = SIMD3<Double>.zero
+            for sample in stretch {
+                let dt = sample.time - meanTime
+                spread += dt * dt
+                covariance += dt * (sample.position - meanPosition)
+            }
+            guard spread > 1e-12 else { continue }
+            let slope = covariance / spread
+            if fastest.map({ simd_length(slope) > simd_length($0) }) ?? true {
+                fastest = slope
+            }
+        }
+        return fastest ?? velocity(at: now)
+    }
 }

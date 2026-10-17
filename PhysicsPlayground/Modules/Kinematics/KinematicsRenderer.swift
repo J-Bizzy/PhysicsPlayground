@@ -662,6 +662,8 @@ final class KinematicsRenderer {
 
     func tick(_ model: KinematicsModel) {
         tickFlightCallout(model)
+        tickReleaseCallout(model)
+        syncReadyBall(model)
         frozenVectors.update(frozen: model.isPaused, dt: 1.0 / 90) {
             var samples: [FrozenVectors.Sample] = []
             for flight in model.flights
@@ -831,6 +833,50 @@ final class KinematicsRenderer {
         }
     }
 
+    // MARK: The throw's own protractor
+
+    /// Where your hand let the ball go, with the angle and speed it set:
+    /// the launcher's "45° · 6.0 m/s", read off your arm (2026-10-17). It
+    /// hangs at the release point while that ball flies and rolls — the
+    /// readout riding the ball is the ball now, this is the throw then —
+    /// and below it, so the two never sit on one another as the ball leaves.
+    private var releaseCallout: Callout?
+    private var releaseCalloutReveal: Float = 0
+    private var appliedReleaseCalloutReveal: Float = -1
+    private var releaseCalloutText = ""
+
+    nonisolated static func releaseText(_ release: KinematicsModel.Flight.Release) -> String {
+        PhysicsFormat.angle(release.elevationDegrees, decimals: 0) + " · "
+            + PhysicsFormat.measurement(release.speed, "m/s", decimals: 1)
+    }
+
+    private func tickReleaseCallout(_ model: KinematicsModel) {
+        let thrown = model.latestThrow
+        let live = thrown.map { $0.status == .flying || $0.status == .rolling } ?? false
+        releaseCalloutReveal += ((live ? 1 : 0) - releaseCalloutReveal) * 0.12
+        guard let release = thrown?.release, releaseCalloutReveal > 0.02 else {
+            releaseCallout?.isEnabled = false
+            return
+        }
+        if releaseCallout == nil {
+            let callout = Callout(color: UIColor(DesignTokens.Palette.kinematicsAccent),
+                                  textSize: 0.022, offset: SIMD3(0, -0.10, 0))
+            callout.setAccessibilityName("Your throw")
+            root.addChild(callout.root)
+            releaseCallout = callout
+        }
+        releaseCallout?.isEnabled = true
+        if abs(releaseCalloutReveal - appliedReleaseCalloutReveal) > 0.0005 {
+            appliedReleaseCalloutReveal = releaseCalloutReveal
+            releaseCallout?.root.components.set(OpacityComponent(opacity: releaseCalloutReveal))
+        }
+        releaseCallout?.anchor(at: SIMD3<Float>(release.position))
+        let text = Self.releaseText(release)
+        if text != releaseCalloutText, releaseCallout?.setText(text) == true {
+            releaseCalloutText = text
+        }
+    }
+
     private func syncFlights(_ flights: [KinematicsModel.Flight]) {
         // The ball in a hand, read off the model. Until 2026-10-14 this keyed
         // on a manipulation flag nothing set, so a grab here never flashed or
@@ -956,18 +1002,21 @@ final class KinematicsRenderer {
                                             roughness: 0.2, glow: 0.3)])
     }
 
-    static func ballPreview() -> Entity {
-        var material = PhysicallyBasedMaterial()
-        if let texture = BallTextures.texture(for: Projectile.basketball.name) {
-            material.baseColor = .init(tint: .white, texture: .init(texture))
-        } else {
-            material.baseColor = .init(tint: DesignTokens.Palette.projectileUI)
-        }
-        material.roughness = .init(floatLiteral: 0.6)
-        // A 3.5 cm token wearing the basketball's skin: beside the hoop's mouth
-        // 13 cm away, a full-size ball ran into it.
-        return ModelEntity(mesh: Primitives.sphere(radius: 0.035),
-                           materials: [material])
+    /// What waits in the ball well's mouth: a 6 cm token of the ball you will
+    /// throw, in that ball's own skin, following the ball fan (2026-10-17).
+    /// The renderer keeps it because the well builds its preview once; the
+    /// size is fixed because the well measures its target and name plate
+    /// from it. Until then it was a basketball token that fell back to
+    /// orange before the textures loaded — the aim bead's orange, so the
+    /// ball you throw and the bead you aim with looked like one thing.
+    let readyBall = ModelEntity(mesh: Primitives.sphere(radius: 0.03), materials: [])
+    private var readyBallKey = ""
+
+    private func syncReadyBall(_ model: KinematicsModel) {
+        let key = model.projectile.name + "|\(BallTextures.version)"
+        guard key != readyBallKey else { return }
+        readyBallKey = key
+        readyBall.model?.materials = [ballMaterial(for: model.projectile)]
     }
 
     private func ballMaterial(for projectile: Projectile) -> RealityKit.Material {

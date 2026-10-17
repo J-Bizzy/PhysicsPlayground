@@ -168,8 +168,7 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
 
         model.reset()
         XCTAssertNil(model.scrubTime)
-        // reset() fires the welcome shot but does not step — nothing has
-        // been recorded since the clear.
+        // reset() does not step — nothing has been recorded since the clear.
         XCTAssertNil(model.capsuleSpan)
     }
 

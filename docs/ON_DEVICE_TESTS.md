@@ -256,7 +256,11 @@ working session:
       graze whose v·n flipped mid-frame skipped its own strike; the
       post-bounce remainder of the frame was discarded, deadening fast
       bounces). The check is below in the module section. The
-      INSPIRATION half is still owed.
+      INSPIRATION half: **on 2026-10-17 throwing became the main act**
+      (owner's pick of three) — the room opens quiet with a ball waiting
+      at your hand, throws leave at the hand's peak, and a throw reads out
+      its own angle and speed. Judge it on device (module section) before
+      ticking this.
 - [ ] **The capacitor ΔV rail.** "We will revisit this later. please
       remind me about it because I want to improve it." The
       cannot-switch-off bug got a fix (see the module section), and
@@ -726,6 +730,31 @@ can be tested at all.**
       shells are at most 60k triangles, meshed off the main thread.
 
 ## Projectiles — the one that is 1:1 with your room
+
+### ⟳ 2026-10-17 — throwing is the main act
+
+- [ ] **The room opens quiet.** No welcome shot: the launcher stands still,
+      and a golf ball waits at chest height on your left (the ball well's
+      mouth, "Add ball"). Is it in easy reach? It is about 1.1 m from your
+      eyes — a lean from the left shoulder — because the house rules keep it
+      left of the launcher's line and within 48° of straight ahead. If it is
+      too far, say so: moving the launcher right is the next lever.
+- [ ] **Take it and throw it.** Pinch the waiting ball, swing, let go. The
+      mouth is full again at once. Throw ten times at your real wall, hard and
+      soft: **do the balls leave as hard as you threw them?** The release now
+      reads the hand's fastest 50 ms just before the pinch was reported open,
+      not the average over the slowing follow-through. A throw that goes
+      FARTHER than you meant is as much a failure as one that drops short.
+- [ ] **The waiting ball is the ball you will throw.** Open the launcher's
+      ring › Balls and pick the basketball: the token in the mouth wears its
+      skin. It never looks like the orange aim bead.
+- [ ] **Your throw, read out.** Where the ball left your hand, "32° · 7.4
+      m/s" hangs under a dot while the ball flies and rolls, then fades. Is it
+      in a place you look? The readout riding the ball is a different number
+      (the ball now, not the throw then). More › Values shows Release speed
+      and Release angle.
+- [ ] **A throw's arc.** The strobe dots trace the parabola you threw, a
+      fifteenth of a second apart.
 
 **The whole-module improvement pass is deferred** (see the top of this
 file). The new well and the standing script:

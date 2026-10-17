@@ -93,6 +93,12 @@ enum KinematicsModule {
             .init("Mass", PhysicsFormat.fixed(model.projectile.mass, decimals: 3), "kg"),
         ]
         rows.append(contentsOf: lawReadings(model))
+        // The initial conditions your arm set, for the latest ball thrown by hand.
+        if let release = model.latestThrow?.release {
+            rows.append(.init("Release speed", PhysicsFormat.fixed(release.speed, decimals: 2), "m/s"))
+            rows.append(.init("Release angle", PhysicsFormat.angle(release.elevationDegrees, decimals: 1),
+                              formula: "θ = atan(v_y / v_h)"))
+        }
         if let last = model.lastFlight {
             rows.append(.init("Measured range", PhysicsFormat.fixed(last.range, decimals: 3), "m"))
             rows.append(.init("Apex height", PhysicsFormat.fixed(last.apexHeight, decimals: 3), "m"))

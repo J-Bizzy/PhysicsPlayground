@@ -68,20 +68,22 @@ struct KinematicsSpaceView: View {
     /// the launcher stops being the only way a ball enters the room.
     @State private var wells: Well?
 
-    // The wells stand left of the launcher's home, at its depth — never in
-    // the firing line. Its world, its air and its walls are in More.
+    // The wells stand left of the launcher's home — never in the firing
+    // line. Its world, its air and its walls are in More.
     private static let wallX: Float = -0.90
     private static let wallZ: Float = -0.94
 
-    /// The ball's mouth, inboard on the well row; the hoop's is outboard.
-    /// The row is the only place a second mouth fits: toward the launcher
-    /// is the firing line, further outboard fails reach, a sixth row falls
-    /// below the knee. The pitch is 0.13, wider than Electric Fields'
-    /// 0.095, because these previews are larger.
-    static let wellAnchor = SIMD3<Float>(wallX + 0.065, 1.70, wallZ)
-    /// The hoop's mouth, beside the ball you throw at it. Hoops are
-    /// materials, not instruments: pulled from a well, nothing standing at
-    /// rest.
+    /// The ball's mouth: a ball always waiting at chest height on your left,
+    /// taken and thrown and there again (2026-10-17, throwing the main act).
+    /// It came down from the hoop's row at 1.70 m, head height, which is
+    /// where you reach for a part, not where you pick up a ball to throw. As
+    /// near as two house rules allow: clear of the launcher's line
+    /// (x < −0.65) and within 48° of straight ahead — about 1.1 m from the
+    /// eyes, a lean from the left shoulder.
+    static let wellAnchor = SIMD3<Float>(-0.76, 1.18, -0.70)
+    /// The hoop's mouth, up on the row above the ball you throw at it.
+    /// Hoops are materials, not instruments: pulled from a well, nothing
+    /// standing at rest.
     static let hoopWellAnchor = SIMD3<Float>(wallX - 0.065, 1.70, wallZ)
     @Environment(AppModel.self) private var appModel
 
@@ -94,10 +96,8 @@ struct KinematicsSpaceView: View {
             // rather than appears.
             renderer.root.isEnabled = false
 
-            // The welcome shot on every entry: the model is retained on `AppModel`,
-            // so `reset()`'s shot fires once per process. Guarded on an empty range
-            // rather than calling `reset()`, which would discard the wearer's setup.
-            if model.flights.isEmpty { model.fire() }
+            // No welcome shot (2026-10-17): the room opens quiet, a ball waiting
+            // in the ball well's mouth, and the first flight is the one you throw.
 
             renderer.root.addChild(bloom.root)
             renderer.root.addChild(ballPicker.root)
@@ -114,15 +114,15 @@ struct KinematicsSpaceView: View {
             // a reset moves it too.
             ballPicker.selectedID = { model.kind.rawValue }
 
-            // The ball well, out of the firing line and not
-            // riding the launcher. A ball pulled from it is born at the fingertips,
-            // staged and inert, and rides the same grab/hold/release path a caught
-            // ball does.
+            // The ball well, out of the firing line and not riding the launcher:
+            // the ball return. A ball pulled from it is born at the fingertips,
+            // already held, and rides the same grab/hold/release path a caught
+            // ball does; the mouth is full again the moment it is taken.
             let sources = Well([
                 .init(name: "Ball",
                       tint: UIColor(DesignTokens.Palette.kinematicsAccent),
                       label: "Add ball",
-                      preview: { KinematicsRenderer.ballPreview() },
+                      preview: { renderer.readyBall },
                       position: Self.wellAnchor,
                       spawn: { point in
                           let id = model.spawnBall(at: point)
@@ -218,6 +218,15 @@ struct KinematicsSpaceView: View {
                 let speed = UserDefaults.standard.double(forKey: "kinSpeed")
                 model.launchSpeed = min(max(speed, KinematicsModel.speedRange.lowerBound),
                                         KinematicsModel.speedRange.upperBound)
+            }
+            // `-kinThrow 6` throws a ball at 6 m/s, 35° up and straight ahead, from
+            // a right hand at full stretch — far enough out for the simulator's
+            // camera to hold the release callout — for a still of a throw.
+            let thrown = UserDefaults.standard.double(forKey: "kinThrow")
+            if thrown > 0 {
+                let angle = 35.0 * .pi / 180
+                model.stageThrow(from: SIMD3(0.20, 1.40, -0.70),
+                                 velocity: thrown * SIMD3(0, sin(angle), -cos(angle)))
             }
             #endif
 

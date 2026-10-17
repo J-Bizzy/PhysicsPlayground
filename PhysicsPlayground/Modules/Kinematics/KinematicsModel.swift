@@ -252,6 +252,20 @@ final class KinematicsModel {
         var wasThrown = false
         /// Each flight can pass each hoop once — a bounce back up through the rim must not count again.
         var passedRings: Set<UUID> = []
+        /// Where and how a hand let this ball go; nil for a launcher's shot,
+        /// and cleared while the ball is held again.
+        var release: Release?
+
+        /// A throw's initial conditions: the ones your arm set.
+        nonisolated struct Release: Equatable {
+            var position: SIMD3<Double>
+            var velocity: SIMD3<Double>
+            var speed: Double { simd_length(velocity) }
+            /// Above the horizontal, degrees.
+            var elevationDegrees: Double {
+                atan2(velocity.y, simd_length(SIMD2(velocity.x, velocity.z))) * 180 / .pi
+            }
+        }
 
         enum Status: Equatable {
             /// Hovering, waiting to be grabbed.
@@ -322,9 +336,19 @@ final class KinematicsModel {
         return caught
     }
 
-    /// Hand-motion samples for the held ball (shared `PhysicsCore.ThrowSampler`).
-    private var throwSampler = ThrowSampler()
+    /// Hand-motion samples for the held ball (shared `PhysicsCore.ThrowSampler`),
+    /// kept long enough for `releaseVelocity` to look back past the
+    /// follow-through.
+    private var throwSampler = ThrowSampler(window: 0.16)
     private var heldFlightID: UUID?
+    /// The ball most recently thrown by hand — what the release callout and
+    /// More's release readings read. A pointer into `flights`, so out of
+    /// the snapshot: a restore that loses the ball loses the readout.
+    private(set) var latestThrowID: UUID?
+    var latestThrow: Flight? {
+        guard let latestThrowID else { return nil }
+        return flights.first { $0.id == latestThrowID && $0.release != nil }
+    }
     /// Release-velocity multiplier — ×1 is a physically honest throw.
     var throwBoost = 1.0
 
@@ -387,9 +411,29 @@ final class KinematicsModel {
         return flight.id
     }
 
+    #if DEBUG
+    /// A throw without a hand: the ball leaves `point` at `velocity`, exactly
+    /// as `releaseBall` would have let it go. `-kinThrow`'s, for a still of a
+    /// thrown ball and its release callout, which the simulator has no hand for.
+    @discardableResult
+    func stageThrow(from point: SIMD3<Double>, velocity: SIMD3<Double>) -> UUID {
+        let id = spawnBall(at: point)
+        guard let index = flights.firstIndex(where: { $0.id == id }) else { return id }
+        flights[index].state.velocity = velocity
+        flights[index].status = .flying
+        flights[index].maxHeight = point.y
+        flights[index].launchPoint = point
+        flights[index].wasThrown = true
+        flights[index].release = Flight.Release(position: point, velocity: velocity)
+        latestThrowID = id
+        return id
+    }
+    #endif
+
     func clearFlights() {
         flights.removeAll()
         lastFlight = nil
+        latestThrowID = nil
         heldFlightID = nil
         throwSampler.reset()
     }
@@ -407,6 +451,7 @@ final class KinematicsModel {
         flights[index].nextDotTime = Self.dotInterval
         flights[index].bounces = 0
         flights[index].passedRings.removeAll()
+        flights[index].release = nil
     }
 
     /// `timestamp` defaults to the wall clock; tests inject exact times.
@@ -417,7 +462,9 @@ final class KinematicsModel {
         throwSampler.record(position, at: timestamp)
     }
 
-    /// Releases the held ball with the hand's velocity over the final ~0.1 s of motion.
+    /// Releases the held ball with the velocity the hand let go at — its
+    /// fastest stretch just before the pinch was reported open, not the
+    /// follow-through after (`ThrowSampler.releaseVelocity`).
     func releaseBall(id: UUID, timestamp: Double = CACurrentMediaTime()) {
         guard let index = flights.firstIndex(where: { $0.id == id }) else { return }
         defer {
@@ -425,7 +472,7 @@ final class KinematicsModel {
             throwSampler.reset()
         }
 
-        guard let handVelocity = throwSampler.velocity(at: timestamp) else {
+        guard let handVelocity = throwSampler.releaseVelocity(at: timestamp) else {
             flights[index].status = .staged
             return
         }
@@ -436,6 +483,9 @@ final class KinematicsModel {
         flights[index].maxHeight = flights[index].state.position.y
         flights[index].launchPoint = flights[index].state.position
         flights[index].wasThrown = true
+        flights[index].release = Flight.Release(position: flights[index].state.position,
+                                                velocity: velocity)
+        latestThrowID = id
         emitSound(.whoosh, at: flights[index].state.position,
                   volume: min(simd_length(velocity) / 8, 1))
     }
@@ -963,9 +1013,9 @@ final class KinematicsModel {
         aimTargetID = nil
         aimCache = nil
         clearCapsule()
-
-        // Welcome scene: one shot already in the air, born at the muzzle — every ball comes from the barrel tip, never mid-air.
-        fire()
+        // No welcome shot since 2026-10-17 (owner's call): throwing is the
+        // main act, so the room opens quiet with a ball waiting at the hand
+        // (the ball well's mouth) and the first flight is the one you throw.
     }
 
     /// Launch speed whose 45° range (v²/g) is 2.5 m, so the whole parabola fits a typical room.

@@ -102,7 +102,7 @@ final class InstrumentReachCriterionTests: XCTestCase {
             .init(name: "Projectiles ball well",
                   anchor: KinematicsSpaceView.wellAnchor,
                   halfExtents: SIMD3(0.10, 0.10, 0.10)),
-            // The hoop's mouth, outboard of the ball's on the same row.
+            // The hoop's mouth, up on the row above the ball's.
             .init(name: "Projectiles hoop well",
                   anchor: KinematicsSpaceView.hoopWellAnchor,
                   halfExtents: SIMD3(0.10, 0.10, 0.10)),
@@ -144,6 +144,18 @@ final class InstrumentReachCriterionTests: XCTestCase {
                 muzzle is one the user shoots.
                 """)
         }
+    }
+
+    /// The ball you throw waits where a hand picks up a ball to throw it:
+    /// below the shoulder and nearer than the hoop's row, not up at head
+    /// height where you reach for a part (2026-10-17).
+    func testTheBallWaitsAtChestHeight() {
+        let ball = KinematicsSpaceView.wellAnchor
+        XCTAssertGreaterThan(ball.y, 0.95)
+        XCTAssertLessThan(ball.y, 1.35, "the ball waits above the shoulder")
+        let viewer = SIMD3<Float>(InstrumentClearance.viewer)
+        XCTAssertLessThan(simd_distance(ball, viewer),
+                          simd_distance(KinematicsSpaceView.hoopWellAnchor, viewer))
     }
 
     /// Not vacuous: the list has to actually cover the app. Every lab

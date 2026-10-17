@@ -78,6 +78,48 @@ final class KinematicsModelTests: XCTestCase {
                        "1 m/s hand motion × boost 2 = 2 m/s release")
     }
 
+    /// The pinch is reported after the fingers open, the hand slowing by
+    /// then: a throw whose hand peaked at 6 m/s 50 ms before the report
+    /// leaves at the peak, not at the follow-through's average, and
+    /// remembers where and how it was let go.
+    func testAThrowLeavesAtTheHandsPeakAndRemembersItsRelease() throws {
+        let model = bareModel()
+        let start = SIMD3<Double>(0, 1.2, -0.5)
+        let id = model.spawnBall(at: start)
+        model.grabBall(id: id)
+        // speed(t) = 6 sin²(πt/0.3), up and forward at 30°: fastest at 0.15 s.
+        let direction = SIMD3<Double>(0, sin(.pi / 6), -cos(.pi / 6))
+        var position = start
+        let dt = 1.0 / 90
+        var last = 0.0
+        for step in 0...18 {
+            let t = Double(step) * dt
+            model.holdBall(id: id, at: position, timestamp: 300 + t)
+            let s = sin(.pi * (t + dt / 2) / 0.3)
+            position += 6 * s * s * dt * direction
+            last = t
+        }
+        model.releaseBall(id: id, timestamp: 300 + last)
+
+        let flight = try XCTUnwrap(model.flights.first { $0.id == id })
+        let release = try XCTUnwrap(flight.release)
+        XCTAssertEqual(model.latestThrowID, id)
+        XCTAssertGreaterThan(release.speed, 0.95 * 6, "the throw left at the follow-through's speed")
+        XCTAssertLessThanOrEqual(release.speed, 6 * 1.001, "the throw left faster than the hand went")
+        XCTAssertEqual(simd_length(flight.state.velocity), release.speed, accuracy: 1e-12)
+        XCTAssertEqual(release.elevationDegrees, 30, accuracy: 0.5)
+        XCTAssertEqual(release.position, flight.launchPoint)
+        let text = KinematicsRenderer.releaseText(release)
+        XCTAssertTrue(text.hasPrefix("30° · ") && text.hasSuffix(" m/s"), "the throw reads \(text)")
+
+        // Taken in hand again, it is no longer a throw until it is thrown.
+        model.grabBall(id: id)
+        XCTAssertNil(model.flights.first { $0.id == id }?.release)
+        XCTAssertNil(model.latestThrow)
+        model.reset()
+        XCTAssertNil(model.latestThrowID)
+    }
+
     /// A well-spawned ball is born at the hand, staged and inert until thrown.
     func testAWellSpawnedBallIsBornAtTheHandAndHangsStill() {
         let model = bareModel()
@@ -644,12 +686,12 @@ final class KinematicsModelTests: XCTestCase {
 
         model.reset()
 
-        // The opening scene: no hoops, one shot already flying from the muzzle.
+        // The opening scene: no hoops and nothing flying — throwing is the
+        // main act, so the first flight is the one you throw (2026-10-17;
+        // a welcome shot flew from the muzzle until then).
         XCTAssertTrue(model.rings.isEmpty, "hoops are retired from the opening scene")
-        XCTAssertEqual(model.flights.count, 1)
-        XCTAssertTrue(model.flights.contains { $0.status == .flying },
-                      "the module is alive the instant it appears")
-        // The default launch must land inside a room: range = v²/g at 45°.
+        XCTAssertTrue(model.flights.isEmpty, "the launcher fired before anyone threw")
+        // The launcher's default shot must land inside a room: range = v²/g at 45°.
         let range = model.launchSpeed * model.launchSpeed / model.gravity
         XCTAssertLessThan(range, 3.0,
                           "a first shot must not leave through the far wall")
